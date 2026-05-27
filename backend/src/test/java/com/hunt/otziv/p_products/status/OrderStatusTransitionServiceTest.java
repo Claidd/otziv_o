@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -206,7 +207,10 @@ class OrderStatusTransitionServiceTest {
 
         assertSame(archive, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Архив");
-        verify(reviewArchiveService, never()).saveNewReviewArchive(org.mockito.ArgumentMatchers.anyLong());
+        verify(reviewArchiveService, never()).saveNewReviewArchive(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
         verify(orderBotLifecycleService).detachBots(order);
         verify(orderRepository).save(order);
     }
@@ -223,7 +227,7 @@ class OrderStatusTransitionServiceTest {
         assertTrue(service.changeStatusForOrder(42L, "Архив"));
 
         InOrder inOrder = inOrder(reviewArchiveService, orderBotLifecycleService, orderRepository);
-        inOrder.verify(reviewArchiveService).saveNewReviewArchive(420L);
+        inOrder.verify(reviewArchiveService).saveNewReviewArchive(420L, ReviewArchiveSourceReason.ORDER_ARCHIVED);
         inOrder.verify(orderBotLifecycleService).detachBots(order);
         inOrder.verify(orderRepository).save(order);
     }
@@ -340,6 +344,52 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void manualInCheckAllowsShortCommonReviewTextWithoutHistoryLookup() throws Exception {
+        OrderStatusTransitionService service = service();
+        String shortText = "Спасибо, все было отлично";
+        Order order = orderWithReview(55L, "В проверку", 550L, shortText);
+        OrderStatus inCheck = status("На проверке");
+
+        when(orderRepository.findById(55L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(inCheck);
+
+        assertTrue(service.changeStatusForOrder(55L, "На проверке"));
+
+        assertSame(inCheck, order.getStatus());
+        verify(reviewRepository, never()).existsPublishedByTextExcludingReviewId(shortText, 550L);
+        verify(reviewArchiveService, never()).existsByTextExcludingOwnSource(shortText, 550L, 55L);
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "На проверке");
+        verify(orderRepository).save(order);
+        verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, orderReviewCheckMessageBuilder);
+    }
+
+    @Test
+    void manualInCheckRejectsPreviouslyPublishedReviewTextWithoutSideEffects() {
+        OrderStatusTransitionService service = service();
+        String duplicateText = "Клиент подробно описал услугу, отметил качество работы специалиста, скорость выполнения и удобство общения с компанией";
+        Order order = orderWithReview(53L, "В проверку", 530L, duplicateText);
+        OrderStatus originalStatus = order.getStatus();
+
+        when(orderRepository.findById(53L)).thenReturn(Optional.of(order));
+        when(reviewRepository.existsPublishedByTextExcludingReviewId(duplicateText, 530L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(53L, "На проверке")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Нельзя отправить заказ на проверку: текст отзыва уже опубликован ранее. Измените текст отзыва и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #530).",
+                exception.getReason()
+        );
+        assertSame(originalStatus, order.getStatus());
+        verify(orderStatusService, never()).getOrderStatusByTitle("На проверке");
+        verifyNoInteractions(orderCompanyStatusService, orderBotLifecycleService, orderStatusNotificationService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
     void toCheckRejectsBlankReviewTextWithoutSideEffects() {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(50L, "Новый", 500L, "");
@@ -363,11 +413,12 @@ class OrderStatusTransitionServiceTest {
     @Test
     void toCheckRejectsPreviouslyPublishedReviewTextWithoutSideEffects() {
         OrderStatusTransitionService service = service();
-        Order order = orderWithReview(51L, "Новый", 510L, "Уже опубликованный текст");
+        String duplicateText = "Клиент подробно описал услугу, отметил качество работы специалиста, скорость выполнения и удобство общения с компанией";
+        Order order = orderWithReview(51L, "Новый", 510L, duplicateText);
         OrderStatus originalStatus = order.getStatus();
 
         when(orderRepository.findById(51L)).thenReturn(Optional.of(order));
-        when(reviewRepository.existsPublishedByTextExcludingReviewId("Уже опубликованный текст", 510L)).thenReturn(true);
+        when(reviewRepository.existsPublishedByTextExcludingReviewId(duplicateText, 510L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -376,7 +427,33 @@ class OrderStatusTransitionServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "Нельзя отправить заказ на проверку: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #510).",
+                "Нельзя отправить заказ на проверку: текст отзыва уже опубликован ранее. Измените текст отзыва и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #510).",
+                exception.getReason()
+        );
+        assertSame(originalStatus, order.getStatus());
+        verify(orderStatusService, never()).getOrderStatusByTitle("В проверку");
+        verifyNoInteractions(orderCompanyStatusService, orderBotLifecycleService, orderStatusNotificationService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void toCheckRejectsArchivedReviewTextWithoutSideEffects() {
+        OrderStatusTransitionService service = service();
+        String duplicateText = "Клиент подробно описал услугу, отметил качество работы специалиста, скорость выполнения и удобство общения с компанией";
+        Order order = orderWithReview(54L, "Новый", 540L, duplicateText);
+        OrderStatus originalStatus = order.getStatus();
+
+        when(orderRepository.findById(54L)).thenReturn(Optional.of(order));
+        when(reviewArchiveService.existsByTextExcludingOwnSource(duplicateText, 540L, 54L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(54L, "В проверку")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Нельзя отправить заказ на проверку: текст отзыва уже есть в архиве текстов. Он может быть зарезервирован или использован ранее. Измените текст отзыва и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #540).",
                 exception.getReason()
         );
         assertSame(originalStatus, order.getStatus());
@@ -549,6 +626,69 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void toPublishFromInCheckSendsPublicationStartedMessageToClientChat() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithReview(84L, "На проверке", 840L, "Готовый текст отзыва");
+        OrderStatus toPublish = status("Публикация");
+
+        when(orderRepository.findById(84L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
+        when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
+                .thenReturn("Компания. Филиал\n\nОтзывы переданы в публикацию");
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
+                same(order),
+                eq("client"),
+                eq("group"),
+                contains("Отзывы переданы в публикацию"),
+                eq("заказ передан в публикацию")
+        )).thenReturn(true);
+
+        assertTrue(service.changeStatusForOrder(84L, "Публикация"));
+
+        assertSame(toPublish, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Публикация");
+        verify(orderRepository).save(order);
+        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
+                same(order),
+                eq("client"),
+                eq("group"),
+                contains("Отзывы переданы в публикацию"),
+                eq("заказ передан в публикацию")
+        );
+    }
+
+    @Test
+    void toPublishFromInCheckKeepsStatusWhenPublicationStartedMessageFails() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithReview(85L, "На проверке", 850L, "Готовый текст отзыва");
+        OrderStatus toPublish = status("Публикация");
+
+        when(orderRepository.findById(85L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
+        when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
+                .thenReturn("Компания. Филиал\n\nОтзывы переданы в публикацию");
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
+                same(order),
+                eq("client"),
+                eq("group"),
+                contains("Отзывы переданы в публикацию"),
+                eq("заказ передан в публикацию")
+        )).thenReturn(false);
+
+        assertTrue(service.changeStatusForOrder(85L, "Публикация"));
+
+        assertSame(toPublish, order.getStatus());
+        verify(orderRepository).save(order);
+        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
+                same(order),
+                eq("client"),
+                eq("group"),
+                contains("Отзывы переданы в публикацию"),
+                eq("заказ передан в публикацию")
+        );
+    }
+
+    @Test
     void toPublishRejectsPlaceholderReviewTextWithoutSideEffects() {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(81L, "На проверке", 810L, " Текст отзыва ");
@@ -585,6 +725,32 @@ class OrderStatusTransitionServiceTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
                 "Нельзя отправить заказ в публикацию: в заказе есть одинаковые тексты отзывов. Измените повторяющийся текст и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #821), №2 (отзыв #822).",
+                exception.getReason()
+        );
+        assertSame(originalStatus, order.getStatus());
+        verify(orderStatusService, never()).getOrderStatusByTitle("Публикация");
+        verifyNoInteractions(orderCompanyStatusService, orderBotLifecycleService, orderStatusNotificationService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void toPublishRejectsArchivedReviewTextWithoutSideEffects() {
+        OrderStatusTransitionService service = service();
+        String duplicateText = "Клиент подробно описал услугу, отметил качество работы специалиста, скорость выполнения и удобство общения с компанией";
+        Order order = orderWithReview(83L, "На проверке", 830L, duplicateText);
+        OrderStatus originalStatus = order.getStatus();
+
+        when(orderRepository.findById(83L)).thenReturn(Optional.of(order));
+        when(reviewArchiveService.existsByTextExcludingOwnSource(duplicateText, 830L, 83L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(83L, "Публикация")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Нельзя отправить заказ в публикацию: текст отзыва уже есть в архиве текстов. Он может быть зарезервирован или использован ранее. Измените текст отзыва и сохраните его дискеткой. Проблемные карточки: №1 (отзыв #830).",
                 exception.getReason()
         );
         assertSame(originalStatus, order.getStatus());

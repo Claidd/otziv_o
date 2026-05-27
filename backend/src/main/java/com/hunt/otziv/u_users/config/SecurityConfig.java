@@ -162,6 +162,8 @@ public class SecurityConfig {
         auth.requestMatchers("/api/cabinet/user-info", "/api/cabinet/analyse").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/cabinet/team").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/cabinet/score").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG");
+        auth.requestMatchers("/api/cabinet/payment-profile/manual", "/api/cabinet/manual-payment-tasks", "/api/cabinet/manual-payment-tasks/**")
+                .hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.POST, "/api/ai/reputation/prompts/*/presets/*").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers(HttpMethod.PUT, "/api/ai/reputation/prompts/*").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/ai/reputation/prompts/*").hasAnyRole("ADMIN", "OWNER");
@@ -217,6 +219,7 @@ public class SecurityConfig {
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*").authenticated();
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/recovery-tasks/*").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/bots/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");

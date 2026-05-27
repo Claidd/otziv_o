@@ -742,6 +742,10 @@ public class ReviewServiceImpl implements ReviewService {
         Product currentProduct = saveReview.getProduct();
         Long dtoProductId = dtoProduct != null ? dtoProduct.getId() : null;
         Long currentProductId = currentProduct != null ? currentProduct.getId() : null;
+        Filial currentFilial = saveReview.getFilial();
+        Long dtoFilialId = reviewDTO.getFilial() != null ? reviewDTO.getFilial().getId() : null;
+        Long currentFilialId = currentFilial != null ? currentFilial.getId() : null;
+        boolean reassignBotAfterSave = false;
 
         log.info("text: {}", !Objects.equals(reviewDTO.getText(), saveReview.getText()));
         log.info("answer: {}", !Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer()));
@@ -751,6 +755,7 @@ public class ReviewServiceImpl implements ReviewService {
         log.info("date isPublish: {}", !Objects.equals(reviewDTO.isPublish(), saveReview.isPublish()));
         log.info("Выгул: {}", !Objects.equals(reviewDTO.isVigul(), saveReview.isVigul()));
         log.info("product id: {}", !Objects.equals(dtoProductId, currentProductId));
+        log.info("filial id: {}", !Objects.equals(dtoFilialId, currentFilialId));
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
             log.info("Обновляем текст отзыва");
@@ -799,6 +804,15 @@ public class ReviewServiceImpl implements ReviewService {
         if (!Objects.equals(reviewDTO.getUrl(), saveReview.getUrl())) {
             log.info("Обновляем url отзыва");
             saveReview.setUrl(reviewDTO.getUrl());
+            isChanged = true;
+        }
+
+        if (dtoFilialId != null && !Objects.equals(dtoFilialId, currentFilialId)) {
+            log.info("Обновляем филиал отзыва");
+            Filial newFilial = filialService.getFilial(dtoFilialId);
+            validateReviewFilial(saveReview, newFilial);
+            reassignBotAfterSave = filialCityChanged(currentFilial, newFilial);
+            saveReview.setFilial(newFilial);
             isChanged = true;
         }
 
@@ -874,9 +888,43 @@ public class ReviewServiceImpl implements ReviewService {
         if (isChanged) {
             reviewRepository.save(saveReview);
         }
+        if (reassignBotAfterSave) {
+            reviewBotChangeService.changeBot(reviewId);
+        }
         if (publishChanged) {
             synchronizeOrderCounter(saveReview);
         }
+    }
+
+    private void validateReviewFilial(Review review, Filial filial) {
+        if (filial == null || filial.getId() == null) {
+            throw new IllegalArgumentException("Филиал не найден");
+        }
+
+        Long orderCompanyId = Optional.ofNullable(review)
+                .map(Review::getOrderDetails)
+                .map(OrderDetails::getOrder)
+                .map(Order::getCompany)
+                .map(company -> company.getId())
+                .orElse(null);
+        Long filialCompanyId = Optional.of(filial)
+                .map(Filial::getCompany)
+                .map(company -> company.getId())
+                .orElse(null);
+
+        if (orderCompanyId == null || filialCompanyId == null || !Objects.equals(orderCompanyId, filialCompanyId)) {
+            throw new IllegalArgumentException("Филиал не принадлежит компании заказа");
+        }
+    }
+
+    private boolean filialCityChanged(Filial currentFilial, Filial newFilial) {
+        Long currentCityId = currentFilial != null && currentFilial.getCity() != null
+                ? currentFilial.getCity().getId()
+                : null;
+        Long newCityId = newFilial != null && newFilial.getCity() != null
+                ? newFilial.getCity().getId()
+                : null;
+        return !Objects.equals(currentCityId, newCityId);
     }
 
     private boolean canManageReviewVigul(String userRole) {

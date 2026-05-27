@@ -2,6 +2,8 @@ package com.hunt.otziv.payments;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -32,6 +34,7 @@ import java.time.LocalDateTime;
 public class PaymentProfile {
 
     public static final String PROVIDER_TBANK = "T_BANK";
+    public static final long DEFAULT_MANUAL_MONTHLY_LIMIT_KOPECKS = 19_100_000L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -60,6 +63,32 @@ public class PaymentProfile {
 
     @Column(name = "test_mode", nullable = false)
     private boolean testMode = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_policy", nullable = false, length = 48)
+    private PaymentPolicy paymentPolicy = PaymentPolicy.T_BANK_ONLY;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "manual_payment_type", nullable = false, length = 32)
+    private ManualPaymentType manualPaymentType = ManualPaymentType.MOBILE_BANK;
+
+    @Column(name = "manual_phone", length = 32)
+    private String manualPhone;
+
+    @Column(name = "manual_recipient_name", length = 160)
+    private String manualRecipientName = ManualPaymentType.DEFAULT_MANUAL_RECIPIENT_NAME;
+
+    @Column(name = "manual_payment_url", length = 512)
+    private String manualPaymentUrl = ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL;
+
+    @Column(name = "manual_payment_button_label", length = 80)
+    private String manualPaymentButtonLabel = ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_BUTTON_LABEL;
+
+    @Column(name = "manual_monthly_soft_limit_kopecks")
+    private Long manualMonthlySoftLimitKopecks = DEFAULT_MANUAL_MONTHLY_LIMIT_KOPECKS;
+
+    @Column(name = "manual_monthly_hard_limit_kopecks")
+    private Long manualMonthlyHardLimitKopecks = DEFAULT_MANUAL_MONTHLY_LIMIT_KOPECKS;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

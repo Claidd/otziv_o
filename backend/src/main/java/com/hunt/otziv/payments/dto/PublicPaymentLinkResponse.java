@@ -14,11 +14,19 @@ public record PublicPaymentLinkResponse(
         String description,
         String payerEmail,
         String status,
+        String paymentMethod,
         LocalDateTime expiresAt,
         boolean payable,
         String paymentPageMode,
         boolean tpayEnabled,
         boolean sberpayEnabled,
-        boolean mirpayEnabled
+        boolean mirpayEnabled,
+        String manualPaymentType,
+        String manualPhone,
+        String manualRecipientName,
+        String manualPaymentUrl,
+        String manualPaymentButtonLabel,
+        String manualComment,
+        String receiptStatus
 ) {
 }

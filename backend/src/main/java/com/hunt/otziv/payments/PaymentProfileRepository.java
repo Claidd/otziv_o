@@ -1,6 +1,10 @@
 package com.hunt.otziv.payments;
 
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,4 +20,8 @@ public interface PaymentProfileRepository extends CrudRepository<PaymentProfile,
     Optional<PaymentProfile> findByTerminalKey(String terminalKey);
 
     Optional<PaymentProfile> findFirstByDefaultProfileTrueOrderByIdAsc();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT profile FROM PaymentProfile profile WHERE profile.id = :id")
+    Optional<PaymentProfile> findByIdForUpdate(@Param("id") Long id);
 }

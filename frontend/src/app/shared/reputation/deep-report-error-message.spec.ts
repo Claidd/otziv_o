@@ -1,9 +1,9 @@
 import { deepReportErrorMessage } from './deep-report-error-message';
 
 describe('deepReportErrorMessage', () => {
-  it('explains OpenAI quota and billing failures', () => {
+  it('explains AI provider quota and billing failures', () => {
     expect(deepReportErrorMessage('insufficient_quota: check your plan and billing details')).toBe(
-      'OpenAI не запустил отчёт из-за оплаты или квоты. Проверьте баланс, лимиты и billing проекта в OpenAI, затем запустите отчёт повторно.'
+      'AI-провайдер не запустил отчёт из-за оплаты или квоты. Проверьте баланс и лимиты проекта активного провайдера, затем запустите отчёт повторно.'
     );
   });
 

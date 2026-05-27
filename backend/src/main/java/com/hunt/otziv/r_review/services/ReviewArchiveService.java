@@ -8,5 +8,11 @@ import java.util.List;
 public interface ReviewArchiveService {
     void saveNewReviewArchive(Long review);
 
+    void saveNewReviewArchive(Long review, String sourceReason);
+
+    boolean existsByText(String text);
+
+    boolean existsByTextExcludingOwnSource(String text, Long reviewId, Long orderId);
+
     Iterable<ReviewArchive> findAllReviews();
 }

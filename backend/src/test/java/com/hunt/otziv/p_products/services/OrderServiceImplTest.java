@@ -21,6 +21,7 @@ import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -136,7 +137,7 @@ class OrderServiceImplTest {
 
         assertTrue(reviewToPublish.isPublish());
         verify(reviewRepository).save(reviewToPublish);
-        verify(reviewArchiveService).saveNewReviewArchive(2L);
+        verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
         verify(reviewRepository).countPublishedByOrderId(10L);
         verify(orderStatusCheckerService).validateCounterConsistency(order, 2);
         verify(orderStatusNotificationService).sendProgressMessageToClientChat(
@@ -181,15 +182,16 @@ class OrderServiceImplTest {
         OrderDetails details = new OrderDetails();
         details.setOrder(order);
 
+        String duplicateText = "Клиент подробно описал услугу, отметил качество работы специалиста, скорость выполнения и удобство общения с компанией";
         Review firstReview = review(1L, false, "Первый отзыв", details);
-        Review duplicateReview = review(2L, false, "Уже был", details);
+        Review duplicateReview = review(2L, false, duplicateText, details);
         details.setReviews(List.of(firstReview, duplicateReview));
         order.setDetails(List.of(details));
 
         when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(duplicateReview));
-        when(reviewRepository.existsPublishedByTextExcludingReviewId("Уже был", 2L)).thenReturn(true);
+        when(reviewRepository.existsPublishedByTextExcludingReviewId(duplicateText, 2L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -197,10 +199,67 @@ class OrderServiceImplTest {
         );
 
         assertEquals(
-                "Такой текст уже публиковался ранее. Измените текст отзыва перед публикацией. Проблемная карточка: №2 (отзыв #2).",
+                "Такой текст уже опубликован ранее. Измените текст отзыва перед публикацией. Проблемная карточка: №2 (отзыв #2).",
                 exception.getReason()
         );
         verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService);
+    }
+
+    @Test
+    void changeStatusAndOrderCounterReportsArchivedDuplicateCardNumber() {
+        Order order = order(11L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        String duplicateText = "Клиент подробно описал услугу, отметил качество работы специалиста, скорость выполнения и удобство общения с компанией";
+        Review firstReview = review(1L, false, "Первый отзыв", details);
+        Review duplicateReview = review(2L, false, duplicateText, details);
+        details.setReviews(List.of(firstReview, duplicateReview));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(11L));
+        when(orderRepository.findByIdForCounterUpdate(11L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(duplicateReview));
+        when(reviewArchiveService.existsByTextExcludingOwnSource(duplicateText, 2L, 11L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> orderService.changeStatusAndOrderCounter(2L)
+        );
+
+        assertEquals(
+                "Такой текст уже есть в архиве текстов. Возможно, он был зарезервирован или использован ранее. Измените текст отзыва перед публикацией. Проблемная карточка: №2 (отзыв #2).",
+                exception.getReason()
+        );
+        verify(reviewRepository, never()).save(duplicateReview);
+        verify(reviewArchiveService, never()).saveNewReviewArchive(eq(2L), org.mockito.ArgumentMatchers.anyString());
+        verifyNoInteractions(orderBotLifecycleService, orderStatusCheckerService);
+    }
+
+    @Test
+    void changeStatusAndOrderCounterAllowsShortCommonReviewTextWithoutHistoryLookup() throws Exception {
+        Order order = order(12L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        String shortText = "Спасибо, все было отлично";
+        Review reviewToPublish = review(2L, false, shortText, details);
+        details.setReviews(List.of(reviewToPublish));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(12L));
+        when(orderRepository.findByIdForCounterUpdate(12L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
+        when(reviewRepository.countPublishedByOrderId(12L)).thenReturn(5);
+
+        assertTrue(orderService.changeStatusAndOrderCounter(2L));
+
+        assertTrue(reviewToPublish.isPublish());
+        verify(reviewRepository, never()).existsPublishedByTextExcludingReviewId(shortText, 2L);
+        verify(reviewArchiveService, never()).existsByTextExcludingOwnSource(shortText, 2L, 12L);
+        verify(reviewRepository).save(reviewToPublish);
+        verify(reviewArchiveService).saveNewReviewArchive(2L, ReviewArchiveSourceReason.PUBLISHED);
+        verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
     }
 
     private Order order(Long id, int counter) {

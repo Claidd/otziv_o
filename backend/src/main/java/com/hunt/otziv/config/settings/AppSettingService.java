@@ -22,6 +22,7 @@ public class AppSettingService {
     public static final String WHATSAPP_GROUP_SYNC_LAST_RUN_AT = "whatsapp.group-sync.last-run-at";
     public static final String WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT = "whatsapp.group-sync.last-linked-count";
     public static final String CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED = "client.publication-progress-reports.enabled";
+    public static final String CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT = "client.publication-progress-reports.text";
     public static final String ARCHIVE_ORDERS_RETENTION_DAYS = "archive.orders.retention.days";
     public static final String ARCHIVE_ORDERS_BATCH_SIZE = "archive.orders.batch.size";
     public static final String ARCHIVE_ORDERS_APPLY_ENABLED = "archive.orders.apply.enabled";
@@ -64,6 +65,7 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES = "client.messages.open-next-order-request-statuses";
     public static final String CLIENT_MESSAGES_REVIEW_LINK_BASE_URL = "client.messages.review-link-base-url";
     public static final String CLIENT_MESSAGES_REVIEW_REMINDER_TEXT = "client.messages.review-reminder-text";
+    public static final String CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT = "client.messages.publication-started-text";
     public static final String CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE = "client.messages.payment-instruction-source";
     public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT = "client.messages.payment-reminder-text";
     public static final String CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT = "client.messages.archive-offer-text";

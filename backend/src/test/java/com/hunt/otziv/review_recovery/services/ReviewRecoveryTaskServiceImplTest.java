@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -184,6 +185,7 @@ class ReviewRecoveryTaskServiceImplTest {
         when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
         when(taskRepository.save(task)).thenReturn(task);
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.PLANNED)).thenReturn(0L);
+        when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.DONE)).thenReturn(1L);
         when(batchRepository.save(batch)).thenReturn(batch);
 
         ReviewRecoveryTask completed = service.completeTask(40L, actor);
@@ -201,6 +203,41 @@ class ReviewRecoveryTaskServiceImplTest {
                 30L,
                 10L
         );
+    }
+
+    @Test
+    void cancelTaskMarksPlannedTaskCancelled() {
+        ReviewRecoveryBatch batch = batch(30L, order(10L), ReviewRecoveryBatchStatus.OPEN);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(40L)
+                .batch(batch)
+                .order(batch.getOrder())
+                .sourceReview(review(100L, "текст", batch.getOrder(), null))
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .build();
+
+        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(task)).thenReturn(task);
+        when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.PLANNED)).thenReturn(0L);
+        when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.DONE)).thenReturn(0L);
+
+        ReviewRecoveryTask cancelled = service.cancelTask(40L);
+
+        assertEquals(ReviewRecoveryTaskStatus.CANCELLED, cancelled.getStatus());
+        verify(batchRepository, never()).save(batch);
+    }
+
+    @Test
+    void cancelTaskCannotCancelDoneTask() {
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(40L)
+                .status(ReviewRecoveryTaskStatus.DONE)
+                .build();
+
+        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+
+        assertThrows(ResponseStatusException.class, () -> service.cancelTask(40L));
+        verify(taskRepository, never()).save(any(ReviewRecoveryTask.class));
     }
 
     @Test
@@ -253,11 +290,15 @@ class ReviewRecoveryTaskServiceImplTest {
     }
 
     @Test
-    void getTasksByOrderIdLoadsOnlyVisibleBatches() {
+    void getTasksByOrderIdLoadsVisibleNonCancelledTasks() {
         ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(40L).build();
+        ReviewRecoveryTask cancelled = ReviewRecoveryTask.builder()
+                .id(41L)
+                .status(ReviewRecoveryTaskStatus.CANCELLED)
+                .build();
 
         when(taskRepository.findByOrderIdAndBatchStatusIn(eq(10L), anyCollection()))
-                .thenReturn(List.of(task));
+                .thenReturn(List.of(task, cancelled));
 
         List<ReviewRecoveryTask> tasks = service.getTasksByOrderId(10L);
 

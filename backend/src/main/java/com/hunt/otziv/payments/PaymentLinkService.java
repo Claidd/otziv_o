@@ -4,6 +4,7 @@ import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.client_messages.ClientMessageSendResult;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
@@ -11,6 +12,7 @@ import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.PublicSbpBankResponse;
 import com.hunt.otziv.u_users.model.Manager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +28,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -44,7 +48,13 @@ public class PaymentLinkService {
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
             PaymentLinkStatus.INITIATED,
-            PaymentLinkStatus.AUTHORIZED
+            PaymentLinkStatus.AUTHORIZED,
+            PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
+            PaymentLinkStatus.MANUAL_REPORTED
+    );
+    private static final Set<PaymentLinkStatus> MUTABLE_REUSABLE_STATUSES = Set.of(
+            PaymentLinkStatus.CREATED,
+            PaymentLinkStatus.WAITING_MANUAL_PAYMENT
     );
     private static final Set<PaymentLinkStatus> REFUNDABLE_STATUSES = Set.of(
             PaymentLinkStatus.AUTHORIZED,
@@ -54,6 +64,32 @@ public class PaymentLinkService {
     private static final Set<PaymentLinkStatus> SYNCABLE_BANK_STATUSES = Set.of(
             PaymentLinkStatus.INITIATED,
             PaymentLinkStatus.AUTHORIZED
+    );
+    private static final Set<PaymentLinkStatus> MANUAL_USAGE_STATUSES = Set.of(
+            PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
+            PaymentLinkStatus.MANUAL_REPORTED,
+            PaymentLinkStatus.CONFIRMED
+    );
+    private static final Set<PaymentMethod> MANUAL_PAYMENT_METHODS = Set.of(
+            PaymentMethod.MANUAL_MOBILE_BANK,
+            PaymentMethod.MANUAL_EXTERNAL_LINK
+    );
+    private static final List<String> FEATURED_SBP_BANK_PATTERNS = List.of(
+            "сбер",
+            "т-банк",
+            "t-bank",
+            "тинькофф",
+            "альфа",
+            "втб",
+            "газпром",
+            "райфф",
+            "совком",
+            "мтс",
+            "ozon",
+            "озон",
+            "яндекс",
+            "псб",
+            "промсвяз"
     );
     private static final ZoneId MOSCOW_ZONE = ZoneId.of("Europe/Moscow");
 
@@ -66,6 +102,8 @@ public class PaymentLinkService {
     private final PaymentProfileService paymentProfileService;
     private final TbankClient tbankClient;
     private final TbankTokenSigner tokenSigner;
+    private final PaymentSuccessClientNotifier paymentSuccessClientNotifier;
+    private final ManualPaymentTaskService manualPaymentTaskService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -75,13 +113,7 @@ public class PaymentLinkService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        Optional<PaymentLink> existing = paymentLinkRepository
-                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(orderId, REUSABLE_STATUSES, now);
-        if (existing.isPresent()) {
-            PaymentLink link = existing.get();
-            ensurePaymentProfile(link);
-            return toManagerResponse(link);
-        }
+        expireStaleManualLinks(now);
 
         Order order = orderRepository.findByIdForMutation(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
@@ -91,29 +123,157 @@ public class PaymentLinkService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У заказа нет суммы к оплате");
         }
 
+        Manager manager = orderManager(order);
+        PaymentProfile profile = paymentProfileService.selectForManager(manager);
+        profile = paymentProfileService.lockForRouting(profile);
+
+        Optional<PaymentLink> existing = paymentLinkRepository
+                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(orderId, REUSABLE_STATUSES, now);
+        if (existing.isPresent()) {
+            PaymentLink link = existing.get();
+            ensurePaymentProfile(link);
+            if (!MUTABLE_REUSABLE_STATUSES.contains(link.getStatus())) {
+                return toManagerResponse(link);
+            }
+
+            PaymentLink candidate = newPaymentLink(order, amountKopecks, now);
+            applyPaymentProfile(candidate, profile);
+            routePayment(candidate, manager, profile, amountKopecks, now, link.getId());
+            if (canReuseLink(link, candidate)) {
+                return toManagerResponse(link);
+            }
+
+            retireStaleReusableLink(link);
+        }
+
+        PaymentLink link = newPaymentLink(order, amountKopecks, now);
+        applyPaymentProfile(link, profile);
+        routePayment(link, manager, profile, amountKopecks, now, null);
+        return toManagerResponse(paymentLinkRepository.save(link));
+    }
+
+    private PaymentLink newPaymentLink(Order order, long amountKopecks, LocalDateTime now) {
         PaymentLink link = new PaymentLink();
         link.setToken(newToken());
         link.setOrder(order);
         link.setAmountKopecks(amountKopecks);
+        link.setReservedAmountKopecks(amountKopecks);
         link.setDescription(description(order));
         String defaultEmail = defaultPayerEmail(order);
         if (!defaultEmail.isBlank()) {
             link.setPayerEmail(defaultEmail);
         }
         link.setExpiresAt(now.plus(properties.getLinkTtl()));
-        link.setStatus(PaymentLinkStatus.CREATED);
-        applyPaymentProfile(link, selectProfile(order));
-        return toManagerResponse(paymentLinkRepository.save(link));
+        return link;
+    }
+
+    private void routePayment(
+            PaymentLink link,
+            Manager manager,
+            PaymentProfile profile,
+            long amountKopecks,
+            LocalDateTime now,
+            Long excludedLinkId
+    ) {
+        Optional<ManualPaymentTask> manualTask = manualPaymentTaskService.findRoutableTask(
+                manager,
+                profile,
+                amountKopecks,
+                excludedLinkId
+        );
+        if (manualTask.isPresent()) {
+            applyManualTaskPayment(link, manualTask.get());
+        } else if (shouldUseManualPayment(profile, amountKopecks, now, excludedLinkId)) {
+            applyManualProfilePayment(link, profile);
+        } else {
+            link.setStatus(PaymentLinkStatus.CREATED);
+            link.setPaymentMethod(PaymentMethod.BANK_FORM);
+            link.setManualSource(null);
+            link.setManualPaymentTask(null);
+            link.setManualPaymentType(null);
+            link.setManualPaymentUrl(null);
+            link.setManualPaymentButtonLabel(null);
+        }
+    }
+
+    private boolean canReuseLink(PaymentLink current, PaymentLink candidate) {
+        return current.getAmountKopecks() == candidate.getAmountKopecks()
+                && current.getReservedAmountKopecks() == candidate.getReservedAmountKopecks()
+                && current.getPaymentMethod() == candidate.getPaymentMethod()
+                && sameId(current.getPaymentProfile(), candidate.getPaymentProfile())
+                && current.getManualSource() == candidate.getManualSource()
+                && sameId(current.getManualPaymentTask(), candidate.getManualPaymentTask())
+                && current.getManualPaymentType() == candidate.getManualPaymentType()
+                && normalize(current.getManualPhone()).equals(normalize(candidate.getManualPhone()))
+                && normalize(current.getManualRecipientName()).equals(normalize(candidate.getManualRecipientName()))
+                && normalize(current.getManualPaymentUrl()).equals(normalize(candidate.getManualPaymentUrl()))
+                && normalize(current.getManualPaymentButtonLabel()).equals(normalize(candidate.getManualPaymentButtonLabel()))
+                && normalize(current.getManualComment()).equals(normalize(candidate.getManualComment()));
+    }
+
+    private boolean sameId(PaymentProfile left, PaymentProfile right) {
+        Long leftId = left == null ? null : left.getId();
+        Long rightId = right == null ? null : right.getId();
+        return leftId == null ? rightId == null : leftId.equals(rightId);
+    }
+
+    private boolean sameId(ManualPaymentTask left, ManualPaymentTask right) {
+        Long leftId = left == null ? null : left.getId();
+        Long rightId = right == null ? null : right.getId();
+        return leftId == null ? rightId == null : leftId.equals(rightId);
+    }
+
+    private void retireStaleReusableLink(PaymentLink link) {
+        link.setStatus(PaymentLinkStatus.EXPIRED);
+        link.setLastError("Платежная ссылка пересоздана из-за изменения суммы или маршрута оплаты");
+        paymentLinkRepository.save(link);
+    }
+
+    private void expireStaleManualLinks(LocalDateTime now) {
+        paymentLinkRepository.expireManualLinks(
+                MANUAL_PAYMENT_METHODS,
+                Set.of(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, PaymentLinkStatus.MANUAL_REPORTED),
+                PaymentLinkStatus.EXPIRED,
+                "Срок действия ручной платежной ссылки истек",
+                now
+        );
+    }
+
+    @Transactional
+    public PublicPaymentLinkResponse publicLink(String token) {
+        PaymentLink link = findPublicLink(token);
+        syncTbankStateIfNeeded(link);
+        expireIfPastDue(link);
+        return toPublicResponse(link);
     }
 
     @Transactional(readOnly = true)
-    public PublicPaymentLinkResponse publicLink(String token) {
+    public List<PublicSbpBankResponse> publicSbpBanks(String token, String deviceType, String os) {
         PaymentLink link = findPublicLink(token);
-        return toPublicResponse(link);
+        validatePayable(link);
+        validateTbankPayment(link);
+
+        PaymentProfile profile = resolvePaymentProfile(link);
+        TbankPaymentProfile runtimeProfile = runtimeProfileForLink(profile, link);
+        TbankGetQrBankListResponse response = tbankClient.getQrBankList(runtimeProfile, new TbankGetQrBankListCommand(
+                "qr",
+                cleanDeviceType(deviceType),
+                limit(os, 255)
+        ));
+
+        return response.safeBanks().stream()
+                .map(this::toPublicSbpBankResponse)
+                .filter(bank -> !bank.bankId().isBlank() && !bank.name().isBlank())
+                .sorted(Comparator
+                        .comparingInt((PublicSbpBankResponse bank) -> featuredBankRank(bank.name()))
+                        .thenComparing(bank -> bank.order() == null ? Integer.MAX_VALUE : bank.order())
+                        .thenComparing(PublicSbpBankResponse::name, String.CASE_INSENSITIVE_ORDER))
+                .toList();
     }
 
     @Transactional
     public List<AdminPaymentLinkResponse> adminLinks() {
+        expireStaleManualLinks(LocalDateTime.now());
         List<PaymentLink> links = paymentLinkRepository.findTop100ByOrderByCreatedAtDesc();
         links.forEach(this::syncTbankStateIfNeeded);
         return links.stream()
@@ -142,6 +302,69 @@ public class PaymentLinkService {
         return toAdminResponse(link);
     }
 
+    @Transactional
+    public AdminPaymentLinkResponse confirmManual(Long linkId, String confirmedBy) {
+        PaymentLink link = paymentLinkRepository.findByIdWithOrder(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        ensureManualPayment(link);
+        validateManualConfirmable(link);
+
+        try {
+            orderTransactionService.handlePaymentStatus(link.getOrder());
+            LocalDateTime now = LocalDateTime.now();
+            link.setStatus(PaymentLinkStatus.CONFIRMED);
+            link.setPaidAt(now);
+            link.setManualConfirmedAt(now);
+            link.setManualConfirmedBy(limit(confirmedBy, 160));
+            link.setConfirmedAmountKopecks(link.getAmountKopecks());
+            link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+            link.setLastError(null);
+            paymentLinkRepository.save(link);
+            manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
+            return toAdminResponse(link);
+        } catch (Exception e) {
+            link.setStatus(PaymentLinkStatus.FAILED);
+            link.setLastError("Manual payment transition failed");
+            paymentLinkRepository.save(link);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось подтвердить ручную оплату", e);
+        }
+    }
+
+    @Transactional
+    public AdminPaymentLinkResponse markManualReceipt(Long linkId, String confirmedBy) {
+        PaymentLink link = paymentLinkRepository.findByIdWithOrder(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        ensureManualPayment(link);
+        if (link.getStatus() != PaymentLinkStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала подтвердите ручную оплату");
+        }
+        if (normalize(link.getManualConfirmedBy()).isBlank()) {
+            link.setManualConfirmedBy(limit(confirmedBy, 160));
+        }
+        link.setReceiptStatus(PaymentReceiptStatus.MARKED);
+        link.setLastError(null);
+        paymentLinkRepository.save(link);
+        return toAdminResponse(link);
+    }
+
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public PublicPaymentLinkResponse reportManualPayment(String token) {
+        PaymentLink link = findPublicLink(token);
+        validatePayable(link);
+        ensureManualPayment(link);
+        if (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT) {
+            LocalDateTime now = LocalDateTime.now();
+            link.setStatus(PaymentLinkStatus.MANUAL_REPORTED);
+            link.setManualReportedAt(now);
+            if (link.getInitiatedAt() == null) {
+                link.setInitiatedAt(now);
+            }
+            link.setLastError(null);
+            paymentLinkRepository.save(link);
+        }
+        return toPublicResponse(link);
+    }
+
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public PublicPaymentInitResponse init(
             String token,
@@ -154,6 +377,7 @@ public class PaymentLinkService {
     ) {
         PaymentLink link = findPublicLink(token);
         validatePayable(link);
+        validateTbankPayment(link);
         validateConsents(offerConsent, privacyConsent, receiptConsent);
 
         String cleanEmail = normalizeEmail(email);
@@ -222,11 +446,13 @@ public class PaymentLinkService {
             boolean offerConsent,
             boolean privacyConsent,
             boolean receiptConsent,
+            String sbpBankId,
             String clientIp,
             String userAgent
     ) {
         PaymentLink link = findPublicLink(token);
         validatePayable(link);
+        validateTbankPayment(link);
         validateConsents(offerConsent, privacyConsent, receiptConsent);
 
         String cleanEmail = normalizeEmail(email);
@@ -235,6 +461,7 @@ public class PaymentLinkService {
         }
 
         PaymentProfile profile = ensurePaymentProfile(link);
+        String cleanBankId = normalize(sbpBankId);
         link.setPayerEmail(cleanEmail);
         applyConsentTrace(link, clientIp, userAgent);
 
@@ -264,7 +491,7 @@ public class PaymentLinkService {
                 link.setLastError(reason.isBlank() ? "T-Bank Init failed" : reason);
                 paymentLinkRepository.save(link);
                 log.warn(
-                        "T-Bank Init before SBP QR failed: linkId={}, orderId={}, profile={}, terminal={}, status={}, reason={}",
+                        "T-Bank Init before SBP payload failed: linkId={}, orderId={}, profile={}, terminal={}, status={}, reason={}",
                         link.getId(),
                         link.getOrder() == null ? null : link.getOrder().getId(),
                         profile.getCode(),
@@ -279,7 +506,8 @@ public class PaymentLinkService {
         }
 
         if (link.getPaymentMethod() == PaymentMethod.SBP_QR
-                && !normalize(link.getSbpQrImage()).isBlank()
+                && !normalize(link.getSbpQrPayload()).isBlank()
+                && cleanBankId.isBlank()
                 && link.getStatus() == PaymentLinkStatus.INITIATED) {
             paymentLinkRepository.save(link);
             return new PublicPaymentInitResponse(
@@ -288,7 +516,7 @@ public class PaymentLinkService {
                     link.getStatus().name(),
                     PaymentMethod.SBP_QR.name(),
                     link.getSbpQrPayload(),
-                    link.getSbpQrImage()
+                    null
             );
         }
 
@@ -296,8 +524,8 @@ public class PaymentLinkService {
         try {
             qrResponse = tbankClient.getQr(runtimeProfile, new TbankGetQrCommand(
                     link.getTbankPaymentId(),
-                    "IMAGE",
-                    null
+                    "PAYLOAD",
+                    cleanBankId.isBlank() ? null : cleanBankId
             ));
         } catch (ResponseStatusException e) {
             String reason = normalize(e.getReason());
@@ -316,19 +544,19 @@ public class PaymentLinkService {
             throw e;
         }
 
-        String qrImage = normalize(qrResponse.data());
-        if (qrImage.isBlank()) {
-            link.setLastError("T-Bank GetQr returned empty QR data");
+        String qrPayload = normalize(qrResponse.data());
+        if (qrPayload.isBlank()) {
+            link.setLastError("T-Bank GetQr returned empty SBP payload");
             paymentLinkRepository.save(link);
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк не вернул QR-код СБП");
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк не вернул ссылку СБП");
         }
 
         link.setStatus(PaymentLinkStatus.INITIATED);
         link.setPaymentMethod(PaymentMethod.SBP_QR);
         link.setTbankTerminalKey(runtimeProfile.terminalKey());
-        link.setSbpQrImage(qrImage);
-        link.setSbpQrPayload(null);
-        link.setSbpQrDataType("IMAGE");
+        link.setSbpQrImage(null);
+        link.setSbpQrPayload(qrPayload);
+        link.setSbpQrDataType("PAYLOAD");
         link.setSbpQrCreatedAt(LocalDateTime.now());
         link.setLastError(null);
         paymentLinkRepository.save(link);
@@ -338,8 +566,8 @@ public class PaymentLinkService {
                 link.getTbankPaymentId(),
                 link.getStatus().name(),
                 PaymentMethod.SBP_QR.name(),
-                null,
-                qrImage
+                qrPayload,
+                null
         );
     }
 
@@ -485,7 +713,12 @@ public class PaymentLinkService {
     }
 
     private void confirmPayment(PaymentLink link) {
-        if (link.getStatus() == PaymentLinkStatus.CONFIRMED || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED) {
+        if (link.getStatus() == PaymentLinkStatus.CONFIRMED) {
+            rememberCompanyPayerEmail(link);
+            notifyPaymentSuccessIfNeeded(link);
+            return;
+        }
+        if (link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED) {
             rememberCompanyPayerEmail(link);
             return;
         }
@@ -493,6 +726,7 @@ public class PaymentLinkService {
                 || paymentProfileService.isTestTerminal(link.getTbankTerminalKey())) {
             link.setStatus(PaymentLinkStatus.TEST_CONFIRMED);
             link.setPaidAt(LocalDateTime.now());
+            link.setConfirmedAmountKopecks(link.getAmountKopecks());
             link.setLastError(null);
             rememberCompanyPayerEmail(link);
             log.info(
@@ -506,13 +740,70 @@ public class PaymentLinkService {
             orderTransactionService.handlePaymentStatus(link.getOrder());
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(LocalDateTime.now());
+            link.setConfirmedAmountKopecks(link.getAmountKopecks());
             link.setLastError(null);
             rememberCompanyPayerEmail(link);
+            notifyPaymentSuccessIfNeeded(link);
         } catch (Exception e) {
             link.setStatus(PaymentLinkStatus.FAILED);
             link.setLastError("Order payment transition failed");
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось перевести заказ в оплату", e);
         }
+    }
+
+    private void notifyPaymentSuccessIfNeeded(PaymentLink link) {
+        if (link == null
+                || link.getStatus() != PaymentLinkStatus.CONFIRMED
+                || link.getPaymentSuccessNotifiedAt() != null) {
+            return;
+        }
+
+        try {
+            ClientMessageSendResult result = paymentSuccessClientNotifier.notifySuccess(link);
+            if (result != null && result.sent()) {
+                link.setPaymentSuccessNotifiedAt(LocalDateTime.now());
+                link.setPaymentSuccessNotificationError(null);
+                log.info(
+                        "Payment success notification sent: linkId={}, orderId={}, channel={}",
+                        link.getId(),
+                        link.getOrder() == null ? null : link.getOrder().getId(),
+                        result.channel()
+                );
+                return;
+            }
+
+            String error = paymentNotificationError(result);
+            link.setPaymentSuccessNotificationError(limit(error, 512));
+            log.warn(
+                    "Payment success notification was not sent: linkId={}, orderId={}, error={}",
+                    link.getId(),
+                    link.getOrder() == null ? null : link.getOrder().getId(),
+                    error
+            );
+        } catch (Exception e) {
+            String error = e.getMessage() == null || e.getMessage().isBlank()
+                    ? e.getClass().getSimpleName()
+                    : e.getMessage();
+            link.setPaymentSuccessNotificationError(limit(error, 512));
+            log.warn(
+                    "Payment success notification failed: linkId={}, orderId={}",
+                    link.getId(),
+                    link.getOrder() == null ? null : link.getOrder().getId(),
+                    e
+            );
+        }
+    }
+
+    private String paymentNotificationError(ClientMessageSendResult result) {
+        if (result == null) {
+            return "notification_result_empty";
+        }
+        String code = normalize(result.errorCode());
+        String message = normalize(result.errorMessage());
+        if (code.isBlank()) {
+            return message.isBlank() ? "notification_not_sent" : message;
+        }
+        return message.isBlank() ? code : code + ": " + message;
     }
 
     private VerifiedWebhookProfile verifyWebhook(Map<String, String> payload) {
@@ -582,6 +873,40 @@ public class PaymentLinkService {
         }
     }
 
+    private void expireIfPastDue(PaymentLink link) {
+        if (link.getExpiresAt() != null
+                && link.getExpiresAt().isBefore(LocalDateTime.now())
+                && (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT
+                || link.getStatus() == PaymentLinkStatus.MANUAL_REPORTED
+                || link.getStatus() == PaymentLinkStatus.CREATED)) {
+            link.setStatus(PaymentLinkStatus.EXPIRED);
+            link.setLastError("Срок действия платежной ссылки истек");
+            paymentLinkRepository.save(link);
+        }
+    }
+
+    private void validateTbankPayment(PaymentLink link) {
+        if (isManualPayment(link)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Эта ссылка создана для ручной оплаты");
+        }
+    }
+
+    private void ensureManualPayment(PaymentLink link) {
+        if (!isManualPayment(link)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Это не ручной платеж");
+        }
+    }
+
+    private void validateManualConfirmable(PaymentLink link) {
+        if (link.getStatus() == PaymentLinkStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ручная оплата уже подтверждена");
+        }
+        if (link.getStatus() != PaymentLinkStatus.WAITING_MANUAL_PAYMENT
+                && link.getStatus() != PaymentLinkStatus.MANUAL_REPORTED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ручная оплата недоступна для подтверждения");
+        }
+    }
+
     private void validateConsents(boolean offerConsent, boolean privacyConsent, boolean receiptConsent) {
         if (!offerConsent || !privacyConsent || !receiptConsent) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подтвердите оферту, политику персональных данных и согласие на электронный чек");
@@ -617,12 +942,32 @@ public class PaymentLinkService {
                 link.getDescription(),
                 payerEmail,
                 link.getStatus().name(),
+                paymentMethodName(link),
                 link.getExpiresAt(),
                 isPayable(link),
                 paymentPageModeName(),
                 runtimeSettingsService.isTpayEnabled(),
                 runtimeSettingsService.isSberpayEnabled(),
-                runtimeSettingsService.isMirpayEnabled()
+                runtimeSettingsService.isMirpayEnabled(),
+                manualPaymentTypeName(link),
+                normalize(link.getManualPhone()),
+                manualRecipientName(link),
+                normalize(link.getManualPaymentUrl()),
+                manualButtonLabel(link),
+                normalize(link.getManualComment()),
+                link.getReceiptStatus() == null ? null : link.getReceiptStatus().name()
+        );
+    }
+
+    private PublicSbpBankResponse toPublicSbpBankResponse(TbankGetQrBankListResponse.TbankSbpBank bank) {
+        String name = normalize(bank.bankName());
+        return new PublicSbpBankResponse(
+                normalize(bank.bankId()),
+                normalize(bank.nspkBankId()),
+                name,
+                normalize(bank.bankLogo()),
+                bank.bankOrder(),
+                featuredBankRank(name) < FEATURED_SBP_BANK_PATTERNS.size()
         );
     }
 
@@ -640,7 +985,9 @@ public class PaymentLinkService {
                 amountRubles(link.getAmountKopecks()),
                 link.getAmountKopecks(),
                 link.getStatus().name(),
+                paymentMethodName(link),
                 link.getExpiresAt(),
+                paymentInstructionText(link, url),
                 paymentCopyText(link, url)
         );
     }
@@ -657,15 +1004,35 @@ public class PaymentLinkService {
                 link.getDescription(),
                 amountRubles(link.getAmountKopecks()),
                 link.getAmountKopecks(),
+                link.getReservedAmountKopecks(),
+                link.getConfirmedAmountKopecks(),
                 link.getStatus().name(),
-                link.getPaymentMethod() == null ? PaymentMethod.BANK_FORM.name() : link.getPaymentMethod().name(),
+                paymentMethodName(link),
                 paymentProfileCode(link),
                 paymentProfileName(link),
+                manualSourceName(link),
+                manualTaskId(link),
+                manualTaskTitle(link),
                 normalize(link.getTbankTerminalKey()),
                 link.getTbankPaymentId(),
                 link.getTbankOrderId(),
                 link.getPayerEmail(),
                 link.getPaymentUrl(),
+                manualPaymentTypeName(link),
+                normalize(link.getManualPhone()),
+                manualRecipientName(link),
+                normalize(link.getManualPaymentUrl()),
+                manualButtonLabel(link),
+                normalize(link.getManualComment()),
+                link.getManualReportedAt(),
+                normalize(link.getManualConfirmedBy()),
+                link.getManualConfirmedAt(),
+                link.getReceiptStatus() == null ? null : link.getReceiptStatus().name(),
+                link.getPaymentSuccessNotifiedAt(),
+                normalize(link.getPaymentSuccessNotificationError()),
+                clientChatPlatform(order),
+                clientChatReady(order),
+                clientChatWarning(order),
                 link.getLastError(),
                 link.getCreatedAt(),
                 link.getUpdatedAt(),
@@ -675,6 +1042,72 @@ public class PaymentLinkService {
                 link.getSbpQrCreatedAt(),
                 isRefundable(link)
         );
+    }
+
+    private String clientChatPlatform(Order order) {
+        Company company = order == null ? null : order.getCompany();
+        String value = company == null ? "" : normalize(company.getUrlChat());
+        if (value.isBlank()) {
+            return "UNKNOWN";
+        }
+
+        String normalized = value.toLowerCase(Locale.ROOT);
+        if (normalized.matches("^(?:https?://)?chat\\.whatsapp\\.com/.+")) {
+            return "WHATSAPP";
+        }
+        if (normalized.matches("^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/.+")
+                || normalized.startsWith("tg://resolve?")) {
+            return "TELEGRAM";
+        }
+        if (normalized.matches("^(?:https?://)?(?:web\\.)?max\\.ru/.+")) {
+            return "MAX";
+        }
+        return "UNKNOWN";
+    }
+
+    private boolean clientChatReady(Order order) {
+        Company company = order == null ? null : order.getCompany();
+        return switch (clientChatPlatform(order)) {
+            case "WHATSAPP" -> company != null
+                    && !normalize(company.getGroupId()).isBlank()
+                    && !normalize(clientChatManager(order, company).map(Manager::getClientId).orElse(null)).isBlank();
+            case "TELEGRAM" -> company != null && company.getTelegramGroupChatId() != null;
+            case "MAX" -> company != null && company.getMaxGroupChatId() != null;
+            default -> false;
+        };
+    }
+
+    private String clientChatWarning(Order order) {
+        Company company = order == null ? null : order.getCompany();
+        String platform = clientChatPlatform(order);
+        if ("UNKNOWN".equals(platform)) {
+            return company == null || normalize(company.getUrlChat()).isBlank()
+                    ? "ссылка на чат не указана"
+                    : "ссылка на чат не распознана";
+        }
+        if (clientChatReady(order)) {
+            return "";
+        }
+        return switch (platform) {
+            case "WHATSAPP" -> {
+                boolean hasGroup = company != null && !normalize(company.getGroupId()).isBlank();
+                boolean hasClient = !normalize(clientChatManager(order, company).map(Manager::getClientId).orElse(null)).isBlank();
+                if (!hasGroup && !hasClient) {
+                    yield "для WhatsApp нужны groupId компании и clientId менеджера";
+                }
+                yield hasGroup ? "для WhatsApp не задан clientId менеджера" : "для WhatsApp не задан groupId компании";
+            }
+            case "TELEGRAM" -> "для Telegram не сохранен chatId группы";
+            case "MAX" -> "для MAX не сохранен chatId группы";
+            default -> "чат не готов";
+        };
+    }
+
+    private Optional<Manager> clientChatManager(Order order, Company company) {
+        if (order != null && order.getManager() != null) {
+            return Optional.of(order.getManager());
+        }
+        return Optional.ofNullable(company == null ? null : company.getManager());
     }
 
     private boolean isPayable(PaymentLink link) {
@@ -687,7 +1120,8 @@ public class PaymentLinkService {
                 && link.getStatus() != PaymentLinkStatus.REFUNDED
                 && link.getStatus() != PaymentLinkStatus.PARTIAL_REFUNDED
                 && link.getStatus() != PaymentLinkStatus.REJECTED
-                && link.getStatus() != PaymentLinkStatus.EXPIRED;
+                && link.getStatus() != PaymentLinkStatus.EXPIRED
+                && link.getStatus() != PaymentLinkStatus.FAILED;
     }
 
     private boolean isRefundable(PaymentLink link) {
@@ -737,12 +1171,141 @@ public class PaymentLinkService {
     }
 
     private PaymentProfile selectProfile(Order order) {
+        return paymentProfileService.selectForManager(orderManager(order));
+    }
+
+    private Manager orderManager(Order order) {
         Manager manager = order == null ? null : order.getManager();
         if (manager == null && order != null) {
             Company company = order.getCompany();
             manager = company == null ? null : company.getManager();
         }
-        return paymentProfileService.selectForManager(manager);
+        return manager;
+    }
+
+    private boolean shouldUseManualPayment(
+            PaymentProfile profile,
+            long amountKopecks,
+            LocalDateTime now,
+            Long excludedLinkId
+    ) {
+        if (profile == null
+                || profile.getPaymentPolicy() != PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK
+                || !hasManualPaymentTarget(profile)) {
+            return false;
+        }
+        long monthlyLimit = manualMonthlyHardLimit(profile);
+        if (monthlyLimit <= 0 || amountKopecks <= 0 || profile.getId() == null) {
+            return false;
+        }
+
+        LocalDateTime periodStart = now.toLocalDate().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime periodEnd = periodStart.plusMonths(1);
+        long alreadyUsed = paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
+                profile.getId(),
+                MANUAL_PAYMENT_METHODS,
+                MANUAL_USAGE_STATUSES,
+                periodStart,
+                periodEnd,
+                now,
+                PaymentLinkStatus.CONFIRMED,
+                excludedLinkId
+        );
+        return alreadyUsed + amountKopecks <= monthlyLimit;
+    }
+
+    private long manualMonthlyHardLimit(PaymentProfile profile) {
+        Long hardLimit = profile.getManualMonthlyHardLimitKopecks();
+        if (hardLimit != null && hardLimit > 0) {
+            return hardLimit;
+        }
+        Long softLimit = profile.getManualMonthlySoftLimitKopecks();
+        return softLimit == null || softLimit <= 0
+                ? PaymentProfile.DEFAULT_MANUAL_MONTHLY_LIMIT_KOPECKS
+                : softLimit;
+    }
+
+    private boolean hasManualPaymentTarget(PaymentProfile profile) {
+        if (manualPaymentType(profile) == ManualPaymentType.MOBILE_BANK) {
+            return !normalize(profile.getManualPhone()).isBlank()
+                    && !normalize(profile.getManualRecipientName()).isBlank();
+        }
+        return !normalize(profile.getManualPaymentUrl()).isBlank();
+    }
+
+    private ManualPaymentType manualPaymentType(PaymentProfile profile) {
+        return profile.getManualPaymentType() == null ? ManualPaymentType.MOBILE_BANK : profile.getManualPaymentType();
+    }
+
+    private ManualPaymentType manualPaymentType(ManualPaymentTask task) {
+        return task.getManualPaymentType() == null ? ManualPaymentType.MOBILE_BANK : task.getManualPaymentType();
+    }
+
+    private PaymentMethod paymentMethodFor(ManualPaymentType type) {
+        return type == ManualPaymentType.MOBILE_BANK
+                ? PaymentMethod.MANUAL_MOBILE_BANK
+                : PaymentMethod.MANUAL_EXTERNAL_LINK;
+    }
+
+    private String manualPaymentUrl(String value) {
+        String clean = limit(value, 512);
+        return clean.isBlank() ? ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL : clean;
+    }
+
+    private String manualButtonLabel(String value) {
+        String clean = limit(value, 80);
+        return clean.isBlank() ? ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_BUTTON_LABEL : clean;
+    }
+
+    private String manualButtonLabel(PaymentLink link) {
+        if (!isManualPayment(link)) {
+            return "";
+        }
+        return manualButtonLabel(link.getManualPaymentButtonLabel());
+    }
+
+    private String manualRecipientName(String value) {
+        String clean = limit(value, 160);
+        return clean.isBlank() || ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_BUTTON_LABEL.equals(clean)
+                ? ManualPaymentType.DEFAULT_MANUAL_RECIPIENT_NAME
+                : clean;
+    }
+
+    private String manualRecipientName(PaymentLink link) {
+        if (!isManualPayment(link)) {
+            return "";
+        }
+        return manualRecipientName(link.getManualRecipientName());
+    }
+
+    private void applyManualProfilePayment(PaymentLink link, PaymentProfile profile) {
+        ManualPaymentType type = manualPaymentType(profile);
+        link.setPaymentMethod(paymentMethodFor(type));
+        link.setManualPaymentType(type);
+        link.setManualSource(ManualPaymentSource.PROFILE_MONTHLY_LIMIT);
+        link.setManualPaymentTask(null);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setManualPhone(limit(profile.getManualPhone(), 32));
+        link.setManualRecipientName(manualRecipientName(profile.getManualRecipientName()));
+        link.setManualPaymentUrl(manualPaymentUrl(profile.getManualPaymentUrl()));
+        link.setManualPaymentButtonLabel(manualButtonLabel(profile.getManualPaymentButtonLabel()));
+        link.setManualComment(manualComment(link));
+        link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+    }
+
+    private void applyManualTaskPayment(PaymentLink link, ManualPaymentTask task) {
+        ManualPaymentType type = manualPaymentType(task);
+        link.setPaymentMethod(paymentMethodFor(type));
+        link.setManualPaymentType(type);
+        link.setManualSource(ManualPaymentSource.MANUAL_TASK);
+        link.setManualPaymentTask(task);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setManualPhone(limit(task.getManualPhone(), 32));
+        link.setManualRecipientName(manualRecipientName(task.getManualRecipientName()));
+        link.setManualPaymentUrl(manualPaymentUrl(task.getManualPaymentUrl()));
+        link.setManualPaymentButtonLabel(manualButtonLabel(task.getManualPaymentButtonLabel()));
+        link.setManualComment(manualComment(link));
+        link.setReceiptStatus(PaymentReceiptStatus.PENDING);
     }
 
     private void applyPaymentProfile(PaymentLink link, PaymentProfile profile) {
@@ -765,6 +1328,44 @@ public class PaymentLinkService {
             return profileName;
         }
         return profileForDisplay(link).getName();
+    }
+
+    private String manualSourceName(PaymentLink link) {
+        return link.getManualSource() == null ? null : link.getManualSource().name();
+    }
+
+    private String manualPaymentTypeName(PaymentLink link) {
+        if (!isManualPayment(link)) {
+            return null;
+        }
+        return manualPaymentType(link).name();
+    }
+
+    private ManualPaymentType manualPaymentType(PaymentLink link) {
+        if (link.getManualPaymentType() != null) {
+            return link.getManualPaymentType();
+        }
+        return link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK
+                ? ManualPaymentType.EXTERNAL_LINK
+                : ManualPaymentType.MOBILE_BANK;
+    }
+
+    private Long manualTaskId(PaymentLink link) {
+        ManualPaymentTask task = link.getManualPaymentTask();
+        return task == null ? null : task.getId();
+    }
+
+    private String manualTaskTitle(PaymentLink link) {
+        ManualPaymentTask task = link.getManualPaymentTask();
+        if (task == null) {
+            return "";
+        }
+        String recipient = normalize(task.getManualRecipientName());
+        if (!recipient.isBlank()) {
+            return recipient;
+        }
+        String label = normalize(task.getManualPaymentButtonLabel());
+        return label.isBlank() ? "Ручное задание #" + task.getId() : label;
     }
 
     private PaymentProfile profileForDisplay(PaymentLink link) {
@@ -839,13 +1440,44 @@ public class PaymentLinkService {
     }
 
     private String paymentCopyText(PaymentLink link, String url) {
-        return String.join("\n\n",
-                heading(link.getOrder()),
-                "Здравствуйте, ваш заказ выполнен. К оплате: "
-                        + amountRubles(link.getAmountKopecks()).stripTrailingZeros().toPlainString()
-                        + " руб.",
-                "Ссылка на оплату: " + url
+        String greeting = "Здравствуйте, ваш заказ выполнен. К оплате: "
+                + amountRubles(link.getAmountKopecks()).stripTrailingZeros().toPlainString()
+                + " руб.";
+        String afterword = paymentAfterword(link);
+        if (afterword.isBlank()) {
+            return String.join("\n\n", heading(link.getOrder()), greeting, paymentInstructionText(link, url));
+        }
+        return String.join("\n\n", heading(link.getOrder()), greeting, paymentInstructionText(link, url), afterword);
+    }
+
+    private String paymentInstructionText(PaymentLink link, String url) {
+        if (!isManualPayment(link)) {
+            return "Ссылка на оплату: " + url;
+        }
+        if (manualPaymentType(link) == ManualPaymentType.EXTERNAL_LINK) {
+            return String.join("\n",
+                    "Ссылка на оплату: " + manualPaymentUrl(link.getManualPaymentUrl()),
+                    "Получатель: " + manualRecipientName(link),
+                    "Комментарий: " + manualComment(link)
+            );
+        }
+        return String.join("\n",
+                "Ссылка на оплату: " + normalize(link.getManualPhone()),
+                "Получатель: " + manualRecipientName(link),
+                "Комментарий: " + manualComment(link)
         );
+    }
+
+    private String paymentAfterword(PaymentLink link) {
+        if (!isManualPayment(link)) {
+            return "";
+        }
+        return "После оплаты отправьте чек менеджеру.";
+    }
+
+    private String manualComment(PaymentLink link) {
+        Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
+        return orderId == null ? "Оплата заказа" : "Оплата заказа №" + orderId;
     }
 
     private String heading(Order order) {
@@ -910,6 +1542,14 @@ public class PaymentLinkService {
         return ("o" + orderId + "-" + suffix).substring(0, Math.min(36, ("o" + orderId + "-" + suffix).length()));
     }
 
+    private String paymentMethodName(PaymentLink link) {
+        return link.getPaymentMethod() == null ? PaymentMethod.BANK_FORM.name() : link.getPaymentMethod().name();
+    }
+
+    private boolean isManualPayment(PaymentLink link) {
+        return link != null && MANUAL_PAYMENT_METHODS.contains(link.getPaymentMethod());
+    }
+
     private String newToken() {
         byte[] bytes = new byte[24];
         secureRandom.nextBytes(bytes);
@@ -922,6 +1562,21 @@ public class PaymentLinkService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String cleanDeviceType(String value) {
+        String clean = normalize(value).toLowerCase(Locale.ROOT);
+        return "desktop".equals(clean) ? "desktop" : "mobile";
+    }
+
+    private int featuredBankRank(String bankName) {
+        String clean = normalize(bankName).toLowerCase(Locale.ROOT);
+        for (int i = 0; i < FEATURED_SBP_BANK_PATTERNS.size(); i++) {
+            if (clean.contains(FEATURED_SBP_BANK_PATTERNS.get(i))) {
+                return i;
+            }
+        }
+        return FEATURED_SBP_BANK_PATTERNS.size();
     }
 
     private String limit(String value, int maxLength) {

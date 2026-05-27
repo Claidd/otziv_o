@@ -47,6 +47,7 @@ export interface WorkerReviewItem {
   companyTitle: string;
   commentCompany: string;
   orderComments: string;
+  filialId?: number | null;
   filialCity: string;
   filialTitle: string;
   filialUrl: string;

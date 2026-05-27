@@ -328,7 +328,7 @@ class ReputationSingleReviewDraftServiceTest {
                         )
                 ))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("OpenAI");
+                .hasMessageContaining("AI-провайдер");
 
         ArgumentCaptor<List<String>> factsCaptor = ArgumentCaptor.forClass(List.class);
         verify(aiSingleReviewDraftFactory).create(any(), any(), any(), any(), any(), any(), any(), factsCaptor.capture());
@@ -871,7 +871,7 @@ class ReputationSingleReviewDraftServiceTest {
 
         assertThat(result.provider()).isEqualTo("openai");
         assertThat(result.drafts()).isEmpty();
-        assertThat(result.safetyNotes()).anyMatch(note -> note.contains("OpenAI не вернул подходящие тексты"));
+        assertThat(result.safetyNotes()).anyMatch(note -> note.contains("AI-провайдер не вернул подходящие тексты"));
     }
 
     @Test

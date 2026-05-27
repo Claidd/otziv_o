@@ -148,9 +148,11 @@ export class OrderDetailsComponent {
     .filter(({ review }) => this.reviewMatchesQuickFilter(review, this.reviewQuickFilter()))
     .map(({ index }) => index));
   readonly productOptions = computed(() => this.details()?.products ?? []);
+  readonly reviewFilialOptions = computed(() => this.details()?.filials ?? []);
   readonly badReviewTasks = computed(() => [...(this.details()?.badReviewTasks ?? [])]
     .sort((left, right) => (left.id ?? 0) - (right.id ?? 0)));
   readonly recoveryTasks = computed(() => [...(this.details()?.recoveryTasks ?? [])]
+    .filter((task) => task.statusCode !== 'CANCELLED')
     .sort((left, right) => (left.id ?? 0) - (right.id ?? 0)));
   readonly recoveryBatchesToNotify = computed(() => {
     const batches = new Map<number, ReviewRecoveryBatchItem>();
@@ -1627,6 +1629,11 @@ export class OrderDetailsComponent {
     return task.statusCode === 'PLANNED';
   }
 
+  canDeleteRecoveryTask(task: ReviewRecoveryTaskItem): boolean {
+    return this.canEditRecoveryTask(task)
+      && (this.auth.hasRealmRole('ADMIN') || this.auth.hasRealmRole('OWNER') || this.auth.hasRealmRole('MANAGER'));
+  }
+
   recoveryTaskTextValue(task: ReviewRecoveryTaskItem): string {
     return this.recoveryTaskDraft(task).recoveryText;
   }
@@ -1705,6 +1712,26 @@ export class OrderDetailsComponent {
       this.managerApi.completeReviewRecoveryTask(orderId, task.id),
       'Восстановление отмечено',
       `Задача #${task.id} закрыта`
+    );
+  }
+
+  deleteRecoveryTask(task: ReviewRecoveryTaskItem): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canDeleteRecoveryTask(task)) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Удалить задачу восстановления #${task.id}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `recovery-delete-${task.id}`,
+      this.managerApi.deleteReviewRecoveryTask(orderId, task.id),
+      'Восстановление удалено',
+      `Задача #${task.id} убрана из списка`,
+      () => this.clearRecoveryTaskDraft(task.id)
     );
   }
 
@@ -2130,6 +2157,7 @@ export class OrderDetailsComponent {
       botName: review.botFio ?? '',
       botPassword: review.botPassword ?? '',
       productId: review.productId ?? null,
+      filialId: review.filialId ?? null,
       url: review.url || review.urlPhoto || ''
     };
   }

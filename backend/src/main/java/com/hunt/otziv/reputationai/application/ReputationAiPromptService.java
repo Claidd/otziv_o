@@ -496,7 +496,7 @@ public class ReputationAiPromptService {
 
     private String contentPackCompactRetryPrompt() {
         return """
-                Предыдущий ответ OpenAI был невалидным JSON или оборвался по лимиту output tokens.
+                Предыдущий ответ AI-провайдера был невалидным JSON или оборвался по лимиту output tokens.
                 Ошибка парсинга: {{parseError}}
 
                 Верни новый компактный JSON по той же схеме. Требования:

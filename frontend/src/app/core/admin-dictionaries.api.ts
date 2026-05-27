@@ -125,6 +125,8 @@ export interface AdminClientMessageSettings {
   openNextOrderRequestStatuses: string;
   reviewLinkBaseUrl: string;
   reviewReminderText: string;
+  publicationStartedText: string;
+  publicationProgressReportText: string;
   paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
   paymentReminderText: string;
   archiveOfferText: string;

@@ -6,7 +6,10 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
+import com.hunt.otziv.reputationai.domain.CompanyResearchAnswer;
+import com.hunt.otziv.reputationai.domain.CompanySource;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
+import com.hunt.otziv.reputationai.domain.ResearchSnapshot;
 import com.hunt.otziv.reputationai.infrastructure.ai.AiRequest;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.OpenAiResponseResult;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.OpenAiResponsesClient;
@@ -30,12 +33,13 @@ public class DeepCompanyResearchService {
 
     private final CompanyRepository companyRepository;
     private final OpenAiResponsesClient openAiResponsesClient;
+    private final CompanyResearchService companyResearchService;
     private final ObjectMapper objectMapper;
     private final ReputationAiPromptService promptService;
 
     public DeepCompanyResearchReport createReport(Long companyId, ReputationResearchRequest request) {
         if (!openAiResponsesClient.isAvailable()) {
-            throw new IllegalStateException("OpenAI не настроен: укажите OPENAI_API_KEY и REPUTATION_AI_PROVIDER=openai.");
+            throw new IllegalStateException(activeProviderDisplayName() + " не настроен: проверьте ключи AI-провайдера.");
         }
 
         ReputationResearchRequest safeRequest = request == null
@@ -45,16 +49,17 @@ public class DeepCompanyResearchService {
                 .orElseThrow(() -> new UsernameNotFoundException(
                         String.format("Компания '%d' не найден", companyId)
                 ));
+        ResearchSnapshot sourceSnapshot = externalSearchSnapshot(companyId, safeRequest);
 
         OpenAiResponseResult response = openAiResponsesClient.createResearchReportResponse(
                 instructions(),
-                researchInput(company, safeRequest),
+                researchInput(company, safeRequest, sourceSnapshot),
                 safeRequest.deepResearchProfile()
         );
         if (response.text().isBlank()) {
             String errorMessage = response.errorMessage();
             throw new IllegalStateException(errorMessage.isBlank()
-                    ? "OpenAI не вернул текст глубокого исследования."
+                    ? activeProviderDisplayName() + " не вернул текст глубокого исследования."
                     : errorMessage);
         }
 
@@ -81,7 +86,7 @@ public class DeepCompanyResearchService {
             DeepCompanyResearchReport baseReport
     ) {
         if (!openAiResponsesClient.isAvailable()) {
-            throw new IllegalStateException("OpenAI не настроен: укажите OPENAI_API_KEY и REPUTATION_AI_PROVIDER=openai.");
+            throw new IllegalStateException(activeProviderDisplayName() + " не настроен: проверьте ключи AI-провайдера.");
         }
         if (baseReport == null) {
             throw new IllegalStateException("Нет базового отчёта для обновления источников.");
@@ -94,13 +99,14 @@ public class DeepCompanyResearchService {
                 .orElseThrow(() -> new UsernameNotFoundException(
                         String.format("Компания '%d' не найден", companyId)
                 ));
+        ResearchSnapshot sourceSnapshot = externalSearchSnapshot(companyId, safeRequest);
 
         OpenAiResponseResult response = openAiResponsesClient.createSourceRefreshResponse(
                 sourceRefreshInstructions(),
-                sourceRefreshInput(company, safeRequest, baseReport),
+                sourceRefreshInput(company, safeRequest, baseReport, sourceSnapshot),
                 safeRequest.deepResearchProfile()
         );
-        ensureResponseText(response, "OpenAI не вернул список обновлённых источников.");
+        ensureResponseText(response, activeProviderDisplayName() + " не вернул список обновлённых источников.");
 
         try {
             JsonNode root = readReportJson(response.text());
@@ -123,7 +129,7 @@ public class DeepCompanyResearchService {
                     company.getId(),
                     company.getTitle(),
                     company.getCity(),
-                    "openai",
+                    response.provider(),
                     response.model(),
                     response.responseId(),
                     markdown,
@@ -135,7 +141,7 @@ public class DeepCompanyResearchService {
                     LocalDateTime.now()
             );
         } catch (Exception exception) {
-            throw new IllegalStateException("OpenAI вернул источники не в ожидаемом JSON-формате.", exception);
+            throw new IllegalStateException(activeProviderDisplayName() + " вернул источники не в ожидаемом JSON-формате.", exception);
         }
     }
 
@@ -145,7 +151,7 @@ public class DeepCompanyResearchService {
             DeepCompanyResearchReport baseReport
     ) {
         if (!openAiResponsesClient.isAvailable()) {
-            throw new IllegalStateException("OpenAI не настроен: укажите OPENAI_API_KEY и REPUTATION_AI_PROVIDER=openai.");
+            throw new IllegalStateException(activeProviderDisplayName() + " не настроен: проверьте ключи AI-провайдера.");
         }
         if (baseReport == null) {
             throw new IllegalStateException("Нет базового отчёта для пересборки текста.");
@@ -164,7 +170,7 @@ public class DeepCompanyResearchService {
                 textRebuildInput(company, safeRequest, baseReport),
                 safeRequest.deepResearchProfile()
         );
-        ensureResponseText(response, "OpenAI не вернул пересобранный текст отчёта.");
+        ensureResponseText(response, activeProviderDisplayName() + " не вернул пересобранный текст отчёта.");
 
         try {
             return parseReport(
@@ -183,7 +189,7 @@ public class DeepCompanyResearchService {
             DeepCompanyResearchReport baseReport
     ) {
         if (!openAiResponsesClient.isAvailable()) {
-            throw new IllegalStateException("OpenAI не настроен: укажите OPENAI_API_KEY и REPUTATION_AI_PROVIDER=openai.");
+            throw new IllegalStateException(activeProviderDisplayName() + " не настроен: проверьте ключи AI-провайдера.");
         }
         if (baseReport == null) {
             throw new IllegalStateException("Нет базового отчёта для пересборки раздела.");
@@ -207,7 +213,7 @@ public class DeepCompanyResearchService {
                 sectionRewriteInput(company, safeRequest, baseReport, originalSection, sectionIndex),
                 safeRequest.deepResearchProfile()
         );
-        ensureResponseText(response, "OpenAI не вернул пересобранный раздел отчёта.");
+        ensureResponseText(response, activeProviderDisplayName() + " не вернул пересобранный раздел отчёта.");
 
         try {
             JsonNode root = readReportJson(response.text());
@@ -216,7 +222,7 @@ public class DeepCompanyResearchService {
                 parsedSections = parseSections(root.path("sections"));
             }
             if (parsedSections.isEmpty()) {
-                throw new IllegalStateException("OpenAI не вернул section с title/body.");
+                throw new IllegalStateException(activeProviderDisplayName() + " не вернул section с title/body.");
             }
 
             DeepCompanyResearchReport.Section parsedSection = parsedSections.get(0);
@@ -225,7 +231,7 @@ public class DeepCompanyResearchService {
                     parsedSection.body()
             );
             if (rewrittenSection.body().isBlank()) {
-                throw new IllegalStateException("OpenAI вернул пустой текст раздела.");
+                throw new IllegalStateException(activeProviderDisplayName() + " вернул пустой текст раздела.");
             }
 
             List<DeepCompanyResearchReport.Section> sections = new ArrayList<>(baseReport.sections());
@@ -248,7 +254,7 @@ public class DeepCompanyResearchService {
                     company.getId(),
                     company.getTitle(),
                     company.getCity(),
-                    "openai",
+                    response.provider(),
                     response.model(),
                     response.responseId(),
                     markdown,
@@ -262,7 +268,7 @@ public class DeepCompanyResearchService {
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new IllegalStateException("OpenAI вернул раздел не в ожидаемом JSON-формате.", exception);
+            throw new IllegalStateException(activeProviderDisplayName() + " вернул раздел не в ожидаемом JSON-формате.", exception);
         }
     }
 
@@ -270,13 +276,14 @@ public class DeepCompanyResearchService {
         return promptService.content(ReputationAiPromptKeys.DEEP_REPORT_INSTRUCTIONS);
     }
 
-    private String researchInput(Company company, ReputationResearchRequest request) {
+    private String researchInput(Company company, ReputationResearchRequest request, ResearchSnapshot sourceSnapshot) {
         return profileGuidance(request) + "\n\n" + promptService.content(ReputationAiPromptKeys.DEEP_REPORT_INPUT)
                 .replace("{{companyFacts}}", companyFacts(company))
                 .replace("{{manualDescription}}", blankToDash(request.manualDescription()))
                 .replace("{{productsOrServices}}", listToText(request.productsOrServices()))
                 .replace("{{publicUrls}}", listToText(request.publicUrls()))
-                .replace("{{crmPriorityUrls}}", crmPriorityUrls(company, request));
+                .replace("{{crmPriorityUrls}}", crmPriorityUrls(company, request))
+                + sourceSnapshotPrompt(sourceSnapshot);
     }
 
     private String profileGuidance(ReputationResearchRequest request) {
@@ -311,7 +318,8 @@ public class DeepCompanyResearchService {
     private String sourceRefreshInput(
             Company company,
             ReputationResearchRequest request,
-            DeepCompanyResearchReport baseReport
+            DeepCompanyResearchReport baseReport,
+            ResearchSnapshot sourceSnapshot
     ) {
         return """
                 Компания и CRM-факты:
@@ -331,13 +339,114 @@ public class DeepCompanyResearchService {
 
                 Краткое содержание базового отчёта, чтобы понять, какие факты нужно перепроверить:
                 %s
+
+                Свежий публичный сбор через локальный/Yandex Search:
+                %s
                 """.formatted(
                 companyFacts(company),
                 blankToDash(request.manualDescription()),
                 listToText(request.publicUrls()),
                 crmPriorityUrls(company, request),
                 sourcesToPrompt(baseReport.sources()),
-                sectionsToPrompt(baseReport.sections(), baseReport.reportMarkdown(), 14000)
+                sectionsToPrompt(baseReport.sections(), baseReport.reportMarkdown(), 14000),
+                sourceSnapshot == null ? "-" : snapshotToPrompt(sourceSnapshot)
+        );
+    }
+
+    private ResearchSnapshot externalSearchSnapshot(Long companyId, ReputationResearchRequest request) {
+        if (openAiResponsesClient == null || !openAiResponsesClient.usesExternalSearchContext() || companyResearchService == null) {
+            return null;
+        }
+        return companyResearchService.createSnapshot(companyId, request);
+    }
+
+    private String activeProviderDisplayName() {
+        return openAiResponsesClient == null ? "AI-провайдер" : openAiResponsesClient.activeProviderDisplayName();
+    }
+
+    private String sourceSnapshotPrompt(ResearchSnapshot snapshot) {
+        if (snapshot == null) {
+            return "";
+        }
+        return "\n\nПредварительно собранные публичные источники и выдержки через локальный/Yandex Search:\n"
+                + snapshotToPrompt(snapshot);
+    }
+
+    private String snapshotToPrompt(ResearchSnapshot snapshot) {
+        if (snapshot == null) {
+            return "-";
+        }
+        String answers = snapshot.researchAnswers().stream()
+                .limit(24)
+                .map(this::researchAnswerToPrompt)
+                .filter(value -> !value.isBlank())
+                .toList()
+                .stream()
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("-");
+        String sources = snapshot.sources().stream()
+                .limit(28)
+                .map(this::companySourceToPrompt)
+                .filter(value -> !value.isBlank())
+                .toList()
+                .stream()
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("-");
+        return """
+                Компания: %s
+                Город: %s
+                Провайдер поиска: %s, доступен: %s, результатов: %d, страниц сайта прочитано: %d
+                Поисковые запросы:
+                %s
+
+                Найденные товары/услуги:
+                %s
+
+                Выводы локального фактчека:
+                %s
+
+                Источники и выдержки:
+                %s
+
+                Предупреждения сбора:
+                %s
+                """.formatted(
+                snapshot.companyName(),
+                snapshot.city(),
+                snapshot.searchProvider(),
+                snapshot.searchAvailable(),
+                snapshot.searchResultsCount(),
+                snapshot.websitePagesRead(),
+                listToText(snapshot.searchQueries()),
+                listToText(snapshot.products()),
+                answers,
+                sources,
+                listToText(snapshot.warnings())
+        );
+    }
+
+    private String researchAnswerToPrompt(CompanyResearchAnswer answer) {
+        if (answer == null) {
+            return "";
+        }
+        return "- %s: %s | confidence=%d | evidence=%s | urls=%s".formatted(
+                firstNonBlank(answer.question(), answer.key()),
+                limitForPrompt(answer.answer(), 700),
+                answer.confidence(),
+                limitForPrompt(String.join("; ", answer.evidence()), 700),
+                String.join(", ", answer.sourceUrls())
+        );
+    }
+
+    private String companySourceToPrompt(CompanySource source) {
+        if (source == null) {
+            return "";
+        }
+        return "- [%s] %s | %s | %s".formatted(
+                source.type(),
+                source.title(),
+                source.url(),
+                limitForPrompt(source.excerpt(), 900)
         );
     }
 
@@ -452,7 +561,7 @@ public class DeepCompanyResearchService {
         );
         if (response.text().isBlank()) {
             String detail = response.errorMessage().isBlank()
-                    ? "OpenAI не вернул текст дополнительного дозапроса."
+                    ? activeProviderDisplayName() + " не вернул текст дополнительного дозапроса."
                     : response.errorMessage();
             return reportWithCollectionGapEnrichmentStatus(
                     company,
@@ -471,9 +580,9 @@ public class DeepCompanyResearchService {
             if (parsedSections.isEmpty() || parsedSections.get(0).body().isBlank()) {
                 return reportWithCollectionGapEnrichmentStatus(
                         company,
-                        reportWithWarnings(report, List.of("Автодосбор по рекомендациям не добавлен: OpenAI не вернул section с title/body.")),
+                        reportWithWarnings(report, List.of("Автодосбор по рекомендациям не добавлен: AI-провайдер не вернул section с title/body.")),
                         "warn",
-                        "Автодосбор не добавлен: OpenAI не вернул section с title/body."
+                        "Автодосбор не добавлен: AI-провайдер не вернул section с title/body."
                 );
             }
 
@@ -817,7 +926,7 @@ public class DeepCompanyResearchService {
                     company.getId(),
                     company.getTitle(),
                     company.getCity(),
-                    "openai",
+                    response.provider(),
                     response.model(),
                     response.responseId(),
                     markdown,
@@ -831,7 +940,7 @@ public class DeepCompanyResearchService {
         } catch (ReportParseException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new ReportParseException("OpenAI вернул отчёт не в ожидаемом JSON-формате.", exception);
+            throw new ReportParseException(activeProviderDisplayName() + " вернул отчёт не в ожидаемом JSON-формате.", exception);
         }
     }
 
@@ -850,7 +959,7 @@ public class DeepCompanyResearchService {
                         confidence: high, medium или low. usedFor — массив коротких тем, которые подтверждает источник.
                         Не добавляй новые факты. Если часть ответа была обычным markdown, разложи её на sections.
                         """,
-                "Повреждённый JSON-ответ OpenAI:\n" + limitForRepair(response.text()),
+                "Повреждённый JSON-ответ AI-провайдера:\n" + limitForRepair(response.text()),
                 0.0,
                 true
         ));
@@ -864,6 +973,7 @@ public class DeepCompanyResearchService {
             OpenAiResponseResult repaired = new OpenAiResponseResult(
                     response.responseId(),
                     repairResponse.text(),
+                    response.provider(),
                     response.model(),
                     response.inputTokens(),
                     response.outputTokens()
@@ -871,7 +981,7 @@ public class DeepCompanyResearchService {
             return parseReport(
                     company,
                     repaired,
-                    List.of("JSON отчёта был восстановлен повторным форматированием OpenAI.")
+                    List.of("JSON отчёта был восстановлен повторным форматированием AI-провайдера.")
             );
         } catch (ReportParseException secondException) {
             throw new IllegalStateException(
@@ -1208,7 +1318,7 @@ public class DeepCompanyResearchService {
                     "sources",
                     "Источники",
                     "fail",
-                    "OpenAI не вернул список источников. Перед использованием отчёта проверьте факты вручную."
+                    "AI-провайдер не вернул список источников. Перед использованием отчёта проверьте факты вручную."
             ));
         } else if (sources.size() < 3) {
             checks.add(new DeepCompanyResearchReport.QualityCheck(
@@ -1489,7 +1599,7 @@ public class DeepCompanyResearchService {
         }
 
         if (!sources.isEmpty()) {
-            addFact(confirmed, "Источники отчёта", String.valueOf(sources.size()), "Список источников OpenAI", "medium");
+            addFact(confirmed, "Источники отчёта", String.valueOf(sources.size()), "Список источников AI-провайдера", "medium");
         }
         if (hasSectionWith(sections, "цен", "прайс", "услуг", "товар", "предлож", "стоимост", "пакет")) {
             addFact(confirmed, "Коммерческие детали", "упомянуты", "Разделы глубокого отчёта", "medium");
@@ -1883,6 +1993,18 @@ public class DeepCompanyResearchService {
 
     private String blankToDash(String value) {
         return value == null || value.isBlank() ? "-" : value.trim();
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     private String listToText(List<String> values) {

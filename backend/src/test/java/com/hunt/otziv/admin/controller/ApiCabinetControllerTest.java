@@ -12,6 +12,8 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService.AggregateTeam;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.payments.ManualPaymentTaskService;
+import com.hunt.otziv.payments.PaymentProfileService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -70,6 +72,12 @@ class ApiCabinetControllerTest {
     @Mock
     private AnalyticsAggregateTeamService analyticsAggregateTeamService;
 
+    @Mock
+    private PaymentProfileService paymentProfileService;
+
+    @Mock
+    private ManualPaymentTaskService manualPaymentTaskService;
+
     private ApiCabinetController controller;
     private Principal principal;
     private Authentication authentication;
@@ -85,7 +93,9 @@ class ApiCabinetControllerTest {
                 analyticsAggregateStatsService,
                 analyticsAggregateScoreService,
                 analyticsAggregateUserStatsService,
-                analyticsAggregateTeamService
+                analyticsAggregateTeamService,
+                paymentProfileService,
+                manualPaymentTaskService
         );
         principal = () -> "alex";
         authentication = new UsernamePasswordAuthenticationToken(

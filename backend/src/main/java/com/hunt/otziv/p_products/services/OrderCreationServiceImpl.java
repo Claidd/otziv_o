@@ -15,7 +15,6 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
-import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -28,7 +27,6 @@ import com.hunt.otziv.p_products.services.service.*;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
@@ -37,6 +35,7 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +52,6 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final OrderDetailsService orderDetailsService;
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
-    private final TelegramService telegramService;
     private final ProductService productService;
     private final ReviewService reviewService;
     private final BotService botService;
@@ -66,7 +64,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final ReviewRepository reviewRepository;
     private final BotAssignmentService botAssignmentService;
     private final NextOrderRequestService nextOrderRequestService;
-    private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
 
@@ -108,8 +106,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             log.info("7. Обновили счётчики компании");
             nextOrderRequestService.completeOpenRequestForCreatedOrder(order);
 
-            // 8. Оповещение
-            notifyWorker(order);
+            eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()));
+            log.info("8. Уведомление работнику по заказу {} запланировано после коммита", order.getId());
 
             return true;
         } catch (Exception e) {
@@ -726,28 +724,6 @@ public class OrderCreationServiceImpl implements OrderCreationService {
         companyService.save(company);
     }
 
-    private void notifyWorker(Order order) {
-        log.info("8. Отправляем уведомление работнику...");
-
-        if (order.getWorker() != null && order.getWorker().getUser() != null) {
-            Long chatId = order.getWorker().getUser().getTelegramChatId();
-            if (chatId != null) {
-                String msg = "У вас новый заказ для: " + order.getCompany().getTitle();
-                try {
-                    telegramService.sendMessage(chatId, msg);
-                    log.info("Уведомление отправлено работнику (ChatID: {})", chatId);
-                } catch (Exception e) {
-                    log.error("Ошибка при отправке уведомления работнику: {}", e.getMessage());
-                }
-            } else {
-                log.warn("У работника ID {} не указан chatId в Telegram", order.getWorker().getId());
-            }
-        } else {
-            log.warn("У заказа нет работника или пользователя для уведомления");
-        }
-
-        mobilePushBusinessNotificationService.notifyWorkerNewOrder(order);
-    }
     //    ================================================== CONVERTER =====================================================
 
     private Worker convertWorkerDTOToWorker(WorkerDTO workerDTO) { // Конвертер из DTO для работника
@@ -811,10 +787,26 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .manager(convertToManagerDTO(order.getManager()))
                 .company(convertToCompanyDTO(order.getCompany()))
                 .filial(convertToFilialDTO(order.getFilial()))
+                .reviewFilialIds(reviewFilialIds(order))
                 .commentsCompany(order.getCompany().getCommentsCompany())
                 .status(convertToStatusDTO("Новый"))
                 .build();
     } // Конвертер DTO для создания нового заказа после завершения предыдущего
+
+    private List<Long> reviewFilialIds(Order order) {
+        if (order == null || order.getDetails() == null || order.getDetails().isEmpty()) {
+            return List.of();
+        }
+
+        return order.getDetails().stream()
+                .filter(Objects::nonNull)
+                .flatMap(detail -> Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList()).stream())
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(Review::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(review -> review.getFilial() != null ? review.getFilial().getId() : null)
+                .filter(Objects::nonNull)
+                .toList();
+    }
 
     private WorkerDTO convertToWorkerDTO(Worker worker) {// Конвертер DTO для работника
         return WorkerDTO.builder()

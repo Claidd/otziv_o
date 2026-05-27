@@ -109,7 +109,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
     }
 
     ion-toolbar {
-      --min-height: 3.55rem;
+      --min-height: 3.28rem;
       --padding-end: max(0.35rem, env(safe-area-inset-right));
       --padding-start: max(0.35rem, env(safe-area-inset-left));
     }
@@ -119,8 +119,8 @@ const HEADER_LINKS: MobileHeaderLink[] = [
       grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
       align-items: center;
       gap: 0.5rem;
-      min-height: 3.55rem;
-      padding: 0 0.45rem;
+      min-height: 3.28rem;
+      padding: 0 0.38rem;
     }
 
     .mobile-brand {
@@ -129,7 +129,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
       min-width: 0;
       color: var(--otziv-dark);
       font-family: var(--otziv-card-title-font);
-      font-size: clamp(1.03rem, 4.6vw, 1.26rem);
+      font-size: clamp(0.96rem, 4.2vw, 1.16rem);
       font-weight: 900;
       line-height: 1;
       text-decoration: none;
@@ -150,7 +150,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
       min-width: 0;
       overflow: hidden;
       color: var(--otziv-info);
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       font-weight: 900;
       text-align: center;
       text-overflow: ellipsis;
@@ -161,14 +161,14 @@ const HEADER_LINKS: MobileHeaderLink[] = [
     .mobile-header-controls {
       display: inline-flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.32rem;
       min-width: 0;
     }
 
     .mobile-mode-switch {
       display: inline-flex;
-      width: 3.55rem;
-      height: 1.55rem;
+      width: 3.28rem;
+      height: 1.42rem;
       align-items: center;
       justify-content: space-between;
       border-radius: var(--otziv-small-radius);
@@ -194,13 +194,13 @@ const HEADER_LINKS: MobileHeaderLink[] = [
     }
 
     .mobile-mode-switch .material-icons-sharp {
-      font-size: 1rem;
+      font-size: 0.92rem;
     }
 
     .mobile-menu-trigger {
       display: grid;
-      width: 2.25rem;
-      height: 2.25rem;
+      width: 2.08rem;
+      height: 2.08rem;
       place-items: center;
       border: 1px solid rgba(108, 155, 207, 0.22);
       border-radius: 0.75rem;

@@ -63,6 +63,8 @@ public class OrderDTO {
     //    филиал содержащий название и url
     private FilialDTO filial;
 
+    private List<Long> reviewFilialIds;
+
     private String groupId;
 
     private Long telegramGroupChatId;

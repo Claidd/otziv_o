@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class DeepCompanyResearchServiceTest {
 
-    private final DeepCompanyResearchService service = new DeepCompanyResearchService(null, null, new ObjectMapper(), null);
+    private final DeepCompanyResearchService service = new DeepCompanyResearchService(null, null, null, new ObjectMapper(), null);
 
     @Test
     void parsesReportWhenModelOmitsSectionsArrayBrackets() {

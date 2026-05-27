@@ -23,6 +23,7 @@ import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -45,6 +46,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
+import static com.hunt.otziv.client_messages.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isShortCommonReviewText;
 
 @Service
 @Slf4j
@@ -373,7 +376,7 @@ public class OrderServiceImpl implements OrderService {
 
         for (Review review : reviews) {
             if (review != null && review.getId() != null) {
-                reviewArchiveService.saveNewReviewArchive(review.getId());
+                reviewArchiveService.saveNewReviewArchive(review.getId(), ReviewArchiveSourceReason.ORDER_ARCHIVED);
             }
         }
     }
@@ -414,10 +417,19 @@ public class OrderServiceImpl implements OrderService {
             log.info("Достали отзыв id={} для компании: {}", reviewId,
                     order.getCompany() != null ? order.getCompany().getTitle() : "null");
 
-            if (reviewRepository.existsPublishedByTextExcludingReviewId(review.getText(), review.getId())) {
+            if (isPublishedReviewText(review)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
-                        "Такой текст уже публиковался ранее. Измените текст отзыва перед публикацией. Проблемная карточка: "
+                        "Такой текст уже опубликован ранее. Измените текст отзыва перед публикацией. Проблемная карточка: "
+                                + reviewCardLabel(order, review) + "."
+                );
+            }
+
+            if (isArchivedReviewText(review, order)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Такой текст уже есть в архиве текстов. Возможно, он был зарезервирован или использован ранее. "
+                                + "Измените текст отзыва перед публикацией. Проблемная карточка: "
                                 + reviewCardLabel(order, review) + "."
                 );
             }
@@ -432,7 +444,7 @@ public class OrderServiceImpl implements OrderService {
             review.setPublish(true);
             reviewRepository.save(review);
             log.info("Сохранили отзыв, публикация установлена в true");
-            reviewArchiveService.saveNewReviewArchive(review.getId());
+            reviewArchiveService.saveNewReviewArchive(review.getId(), ReviewArchiveSourceReason.PUBLISHED);
             log.info("Сохранили опубликованный отзыв в архив текстов");
 
             int actualPublished = countPublishedReviews(order);
@@ -451,6 +463,23 @@ public class OrderServiceImpl implements OrderService {
             log.error("Ошибка при смене статуса отзыва id={}", reviewId, e);
             throw e;
         }
+    }
+
+    private boolean isPublishedReviewText(Review review) {
+        String text = review.getText();
+        if (isShortCommonReviewText(text)) {
+            return false;
+        }
+        return reviewRepository.existsPublishedByTextExcludingReviewId(text, review.getId());
+    }
+
+    private boolean isArchivedReviewText(Review review, Order order) {
+        String text = review.getText();
+        if (isShortCommonReviewText(text)) {
+            return false;
+        }
+        Long orderId = order == null ? null : order.getId();
+        return reviewArchiveService.existsByTextExcludingOwnSource(text, review.getId(), orderId);
     }
 
     private void notifyClientAboutPublishedReviewProgress(Order order, int actualPublished) {
@@ -547,10 +576,24 @@ public class OrderServiceImpl implements OrderService {
         }
 
         if (subject.isEmpty()) {
-            return "Опубликован новый отзыв " + progress + ".";
+            subject = "Компания";
         }
 
-        return subject + ". Опубликован новый отзыв " + progress + ".";
+        String template = appSettingService.getString(
+                AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT,
+                DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT
+        );
+        if (template == null || template.isBlank()) {
+            template = DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
+        }
+        return template
+                .replace("{company}", companyTitle)
+                .replace("{filial}", filialTitle)
+                .replace("{companyAndFilial}", subject)
+                .replace("{published}", String.valueOf(actualPublished))
+                .replace("{total}", String.valueOf(total))
+                .replace("{progress}", progress)
+                .trim();
     }
 
     private ReviewPublicationTarget validateAndRetrievePublicationTarget(Long reviewId) {

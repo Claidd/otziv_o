@@ -11,6 +11,11 @@ Default session lifespans in realm configs:
 - `accessTokenLifespan`: `600` seconds (10 minutes)
 - `ssoSessionIdleTimeout`: `28800` seconds (8 hours)
 - `ssoSessionMaxLifespan`: `86400` seconds (24 hours)
+- mobile app `offline_access` session: `2592000` seconds (30 days)
+
+The mobile app requests `offline_access` and stores the refresh token in native secure storage.
+That keeps the app session alive for up to 30 days while leaving regular web SSO sessions short.
+Explicit logout, admin session reset, password changes, or clearing app storage still require a new login.
 
 For an already existing local Keycloak database volume, apply the theme and session settings once:
 
@@ -28,8 +33,8 @@ On a running production Docker Compose stack, apply the same values directly:
 
 ```sh
 docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/keycloak --realm master --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD"
-docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh update realms/otziv -s accessTokenLifespan=600 -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=86400
-docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh get realms/otziv --fields accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan
+docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh update realms/otziv -s accessTokenLifespan=600 -s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=86400 -s offlineSessionIdleTimeout=2592000 -s offlineSessionMaxLifespanEnabled=true -s offlineSessionMaxLifespan=2592000
+docker compose --env-file .env.prod -f docker-compose.yaml exec keycloak /opt/keycloak/bin/kcadm.sh get realms/otziv --fields accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan,offlineSessionIdleTimeout,offlineSessionMaxLifespanEnabled,offlineSessionMaxLifespan
 ```
 
 Local Angular development on `localhost:4200` still talks to Keycloak directly on `http://localhost:8180`.

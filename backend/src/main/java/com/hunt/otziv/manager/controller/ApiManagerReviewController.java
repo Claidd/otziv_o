@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.manager.dto.api.BadReviewTaskUpdateRequest;
@@ -150,6 +151,9 @@ public class ApiManagerReviewController {
                 .botPassword(normalize(request.botPassword()))
                 .orderDetailsId(current.getOrderDetailsId())
                 .orderDetails(current.getOrderDetails())
+                .filial(FilialDTO.builder()
+                        .id(firstValue(request.filialId(), current.getFilial() != null ? current.getFilial().getId() : null))
+                        .build())
                 .product(product)
                 .url(normalize(request.url()))
                 .build();
@@ -715,6 +719,18 @@ public class ApiManagerReviewController {
     ) {
         requireRecoveryTaskForOrder(orderId, taskId);
         reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
+        return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @DeleteMapping("/orders/{orderId}/recovery-tasks/{taskId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public OrderDetailsResponse cancelReviewRecoveryTask(
+            @PathVariable Long orderId,
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+        requireRecoveryTaskForOrder(orderId, taskId);
+        reviewRecoveryTaskService.cancelTask(taskId);
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 

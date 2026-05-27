@@ -123,8 +123,11 @@
   box-shadow: 0 0.65rem 1.3rem rgba(239, 63, 60, 0.22);
 }
 
+.checkout-card,
 .quick-pay-card,
+.manual-card,
 .bank-card,
+.payment-complete-card,
 .payment-state,
 .pay-side-head,
 .pay-side-card,
@@ -136,12 +139,24 @@
   box-shadow: 0 1.2rem 2rem rgba(34, 40, 52, 0.08);
 }
 
+.checkout-card,
 .quick-pay-card,
-.bank-card {
+.manual-card,
+.bank-card,
+.payment-complete-card {
   padding: 1rem;
 }
 
+.checkout-card,
 .quick-pay-card {
+  display: grid;
+  gap: 0.72rem;
+  order: 1;
+}
+
+.manual-card {
+  display: grid;
+  gap: 0.72rem;
   order: 1;
 }
 
@@ -152,6 +167,14 @@
 
 .bank-card {
   order: 3;
+}
+
+.payment-complete-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.78rem;
+  order: 1;
 }
 
 .payment-widget.bank-first .bank-card {
@@ -220,6 +243,175 @@
   white-space: nowrap;
 }
 
+.checkout-card .method-title {
+  margin-bottom: 0;
+}
+
+.payment-complete-icon {
+  display: inline-grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #31bd6f;
+  background: rgba(49, 189, 111, 0.12);
+}
+
+.payment-complete-icon .material-icons-sharp {
+  font-size: 1.55rem;
+}
+
+.payment-complete-card h2,
+.payment-complete-card p {
+  margin: 0;
+}
+
+.payment-complete-card h2 {
+  color: #176d4d;
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.18;
+}
+
+.payment-complete-card p {
+  margin-top: 0.24rem;
+  color: #68717d;
+  font-size: 0.73rem;
+  font-weight: 760;
+  line-height: 1.34;
+}
+
+.sbp-section {
+  display: grid;
+  gap: 0.58rem;
+  min-width: 0;
+}
+
+.sbp-bank-picker {
+  display: grid;
+  gap: 0.58rem;
+  min-width: 0;
+}
+
+.sbp-bank-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.payment-widget .sbp-bank-option.sbp-bank-option {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.7rem;
+  border: 1px solid #e4e9ef;
+  border-radius: 0.48rem;
+  padding: 0.35rem 0.48rem;
+  color: #374151;
+  background: #fbfcfd;
+  box-shadow: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.payment-widget .sbp-bank-option.active {
+  border-color: rgba(49, 189, 111, 0.65);
+  color: #176d4d;
+  background: #f0fff6;
+}
+
+.sbp-bank-logo {
+  display: inline-grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  color: #176d4d;
+  background: #eef4f7;
+  font-size: 0.66rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.sbp-bank-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.sbp-bank-option strong {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sbp-bank-select {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.sbp-bank-select span {
+  color: #7b828e;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.sbp-bank-select select {
+  width: 100%;
+  min-height: 2.45rem;
+  border: 1px solid #d6dbe1;
+  border-radius: 0.42rem;
+  padding: 0 0.65rem;
+  color: #1f2430;
+  background: #fff;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.sbp-bank-select select:focus {
+  border-color: #55c987;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(85, 201, 135, 0.15);
+}
+
+.sbp-bank-state,
+.sbp-bank-error {
+  min-width: 0;
+  border-radius: 0.55rem;
+  padding: 0.62rem 0.72rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.sbp-bank-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: #5c6673;
+  background: #f4f7fb;
+}
+
+.sbp-bank-state .material-icons-sharp {
+  color: #31bd6f;
+  font-size: 1rem;
+}
+
+.sbp-bank-error {
+  margin: 0;
+  color: #8a5a18;
+  background: #fff8e7;
+}
+
 .payment-widget .quick-pay-button.quick-pay-button.quick-pay-button {
   display: inline-flex;
   width: 100%;
@@ -238,7 +430,7 @@
   cursor: pointer;
 }
 
-.sbp-qr-panel {
+.sbp-link-panel {
   display: grid;
   justify-items: center;
   gap: 0.75rem;
@@ -249,35 +441,25 @@
   background: linear-gradient(180deg, #f7fff9, #ffffff);
 }
 
-.sbp-qr-panel > div:first-child {
+.sbp-link-panel > div:first-child {
   display: grid;
   gap: 0.18rem;
   width: 100%;
   text-align: center;
 }
 
-.sbp-qr-panel strong {
+.sbp-link-panel strong {
   color: #176d4d;
   font-size: 0.88rem;
   font-weight: 900;
   line-height: 1.2;
 }
 
-.sbp-qr-panel small {
+.sbp-link-panel small {
   color: #68717d;
   font-size: 0.7rem;
   font-weight: 760;
   line-height: 1.35;
-}
-
-.sbp-qr-panel img {
-  display: block;
-  width: min(100%, 15.5rem);
-  aspect-ratio: 1;
-  border: 0.55rem solid #fff;
-  border-radius: 0.8rem;
-  background: #fff;
-  box-shadow: 0 1rem 2rem rgba(34, 40, 52, 0.12);
 }
 
 .sbp-actions {
@@ -326,6 +508,101 @@
 .bank-card {
   display: grid;
   gap: 0.78rem;
+}
+
+.manual-details {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.manual-details button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.22rem 0.55rem;
+  min-height: 3.2rem;
+  border: 1px solid #eceef0;
+  border-radius: 0.5rem;
+  padding: 0.62rem 0.72rem;
+  color: #1f2430;
+  background: #fbfbfc;
+  box-shadow: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manual-details .manual-external-pay {
+  display: inline-flex;
+  width: 100%;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 0;
+  color: #fff;
+  background: #2f7fdf;
+  text-align: center;
+}
+
+.manual-details .manual-external-pay .material-icons-sharp {
+  position: static;
+  grid-column: auto;
+  grid-row: auto;
+  color: inherit;
+  font-size: 1.05rem;
+}
+
+.manual-details small,
+.manual-details strong {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.manual-details small {
+  color: #9aa0a9;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.manual-details strong {
+  overflow-wrap: anywhere;
+  color: #68717d;
+  font-size: 0.84rem;
+  font-weight: 900;
+  line-height: 1.22;
+}
+
+.manual-details .material-icons-sharp {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: #31bd6f;
+  font-size: 1rem;
+}
+
+.payment-widget .manual-paid-button.manual-paid-button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: #fff;
+  background: #32c56f;
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.payment-widget .manual-paid-button:disabled {
+  color: #7b828e;
+  background: #eef8f1;
+  cursor: not-allowed;
 }
 
 .bank-card > header {
@@ -499,8 +776,114 @@
   cursor: pointer;
 }
 
+.payment-widget .checkout-card .primary-pay-button.primary-pay-button.primary-pay-button {
+  min-height: 3.12rem;
+  background: linear-gradient(92deg, #99f225 0%, #67df70 45%, #70dccf 100%);
+  font-size: 1.02rem;
+}
+
+.payment-widget .checkout-card .primary-pay-button.primary-pay-button.primary-pay-button:disabled {
+  color: #a4a9b0;
+  background: #f1f1f1;
+}
+
 .payment-widget .primary-pay-button .material-icons-sharp {
   font-size: 1.08rem;
+}
+
+.fast-bank-methods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.42rem;
+  min-width: 0;
+  margin-top: -0.12rem;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method.fast-bank-method {
+  display: inline-flex;
+  width: auto;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.36rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0 0.72rem 0 0.38rem;
+  color: #2d3748;
+  background: #fff;
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method.fast-bank-method span {
+  display: inline-grid;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #1f2430;
+  background: #ffdf3f;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method--sberpay.fast-bank-method--sberpay span {
+  color: #fff;
+  background: #36ad5a;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method--mirpay.fast-bank-method--mirpay span {
+  color: #fff;
+  background: #338057;
+  font-size: 0.52rem;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method.fast-bank-method:disabled {
+  color: #a4a9b0;
+  background: #fff;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.alternative-pay-link.alternative-pay-link {
+  justify-self: center;
+  width: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0.02rem 0.22rem;
+  color: #4aa46f;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
+  cursor: pointer;
+}
+
+:host ::ng-deep app-admin-layout .admin-layout button.alternative-pay-link.alternative-pay-link:disabled {
+  color: #a4a9b0;
+  background: transparent;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.sbp-inline-note {
+  margin: -0.12rem 0 0;
+  color: #7b828e;
+  font-size: 0.66rem;
+  font-weight: 760;
+  line-height: 1.32;
+  text-align: center;
 }
 
 .pay-message,
@@ -684,7 +1067,8 @@
   }
 
   .pay-shell {
-    padding-top: 0.15rem;
+    padding-top: 0;
+    padding-bottom: 0.45rem;
   }
 
   .payment-widget,
@@ -695,20 +1079,175 @@
 
   .payment-head {
     padding-top: 0;
+    padding-bottom: 0.1rem;
   }
 
   .payment-head strong {
-    font-size: 1.85rem;
+    font-size: 1.72rem;
   }
 
+  .merchant-name,
+  .payment-head small {
+    font-size: 0.68rem;
+  }
+
+  .payment-head small {
+    margin-top: 0.28rem;
+  }
+
+  .checkout-card,
   .quick-pay-card,
   .bank-card {
-    padding: 0.86rem;
+    padding: 0.72rem;
+  }
+
+  .checkout-card,
+  .pay-form {
+    gap: 0.52rem;
+  }
+
+  .method-title {
+    gap: 0.55rem;
+  }
+
+  .method-title h2,
+  .bank-card h2 {
+    font-size: 0.94rem;
+  }
+
+  .method-title p {
+    margin-top: 0.18rem;
+    font-size: 0.68rem;
+    line-height: 1.22;
+  }
+
+  .method-title > span {
+    min-height: 1.2rem;
+    padding: 0 0.42rem;
+    font-size: 0.62rem;
+  }
+
+  .order-summary {
+    gap: 0.34rem;
   }
 
   .order-summary div {
-    grid-template-columns: 1fr;
-    gap: 0.18rem;
+    grid-template-columns: minmax(4.25rem, 0.34fr) minmax(0, 1fr);
+    gap: 0.38rem;
+    padding: 0.46rem 0.56rem;
+  }
+
+  .order-summary small {
+    font-size: 0.63rem;
+  }
+
+  .order-summary strong {
+    font-size: 0.72rem;
+    line-height: 1.18;
+  }
+
+  .email-field {
+    gap: 0.24rem;
+  }
+
+  .email-field span {
+    font-size: 0.68rem;
+  }
+
+  .email-field input {
+    min-height: 2.58rem;
+    padding-inline: 0.66rem;
+    font-size: 0.78rem;
+  }
+
+  .consent-stack {
+    gap: 0.3rem;
+  }
+
+  .consent {
+    gap: 0.35rem;
+    font-size: 0.6rem;
+    line-height: 1.22;
+  }
+
+  .consent input {
+    width: 0.82rem;
+    height: 0.82rem;
+    margin-top: 0.03rem;
+  }
+
+  .sbp-section,
+  .sbp-bank-picker {
+    gap: 0.42rem;
+  }
+
+  .sbp-bank-grid {
+    gap: 0.38rem;
+  }
+
+  .payment-widget .sbp-bank-option.sbp-bank-option {
+    grid-template-columns: 1.55rem minmax(0, 1fr);
+    gap: 0.35rem;
+    min-height: 2.32rem;
+    padding: 0.28rem 0.42rem;
+  }
+
+  .sbp-bank-logo {
+    width: 1.55rem;
+    height: 1.55rem;
+    font-size: 0.58rem;
+  }
+
+  .sbp-bank-option strong {
+    font-size: 0.66rem;
+  }
+
+  .sbp-bank-select {
+    gap: 0.24rem;
+  }
+
+  .sbp-bank-select span {
+    font-size: 0.63rem;
+  }
+
+  .sbp-bank-select select {
+    min-height: 2.2rem;
+    padding-inline: 0.55rem;
+    font-size: 0.72rem;
+  }
+
+  .payment-widget .checkout-card .primary-pay-button.primary-pay-button.primary-pay-button {
+    min-height: 2.62rem;
+    font-size: 0.92rem;
+  }
+
+  .fast-bank-methods {
+    gap: 0.34rem;
+  }
+
+  :host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method.fast-bank-method {
+    min-height: 1.78rem;
+    padding-right: 0.58rem;
+    font-size: 0.66rem;
+  }
+
+  :host ::ng-deep app-admin-layout .admin-layout button.fast-bank-method.fast-bank-method span {
+    min-width: 1.16rem;
+    height: 1.16rem;
+    font-size: 0.6rem;
+  }
+
+  :host ::ng-deep app-admin-layout .admin-layout button.alternative-pay-link.alternative-pay-link {
+    font-size: 0.7rem;
+  }
+
+  .payment-badges {
+    gap: 0.3rem;
+    font-size: 0.58rem;
+  }
+
+  .payment-badges span {
+    min-height: 0.82rem;
   }
 }
 
@@ -728,5 +1267,9 @@
   .bank-card > header > span {
     width: max-content;
     max-width: 100%;
+  }
+
+  .sbp-bank-grid {
+    grid-template-columns: 1fr;
   }
 }

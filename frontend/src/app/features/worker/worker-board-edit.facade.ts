@@ -395,6 +395,7 @@ export class WorkerBoardEditFacade {
       botName: review.botFio ?? '',
       botPassword: review.botPassword ?? '',
       productId: review.productId ?? null,
+      filialId: review.filialId ?? null,
       url: review.url || review.urlPhoto || ''
     };
   }

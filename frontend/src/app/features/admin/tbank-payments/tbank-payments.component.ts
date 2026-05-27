@@ -2,12 +2,17 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, switchMap } from 'rxjs';
 import { PaymentsApi } from '../../../core/payments.api';
 import type {
   AdminPaymentLinkResponse,
+  ManualPaymentTaskResponse,
+  ManualPaymentTaskStatus,
+  ManualPaymentType,
   ManagerPaymentProfileResponse,
   PaymentInstructionSource,
+  PaymentPolicy,
+  PaymentProfilePolicyRequest,
   PaymentProfileResponse,
   TbankPaymentPageMode,
   TbankPaymentStatus,
@@ -27,7 +32,17 @@ type PaymentMetric = {
   tone: 'blue' | 'green' | 'yellow' | 'red' | 'gray';
 };
 
-type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created';
+type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created' | 'manual';
+
+type ProfilePolicyDraft = {
+  paymentPolicy: PaymentPolicy;
+  manualPaymentType: ManualPaymentType;
+  manualPhone: string;
+  manualRecipientName: string;
+  manualPaymentUrl: string;
+  manualPaymentButtonLabel: string;
+  manualMonthlyLimitRubles: string;
+};
 
 type StatusFilterOption = {
   key: PaymentStatusFilter;
@@ -42,6 +57,11 @@ type StatusFilterOption = {
   styleUrl: './tbank-payments.component.scss'
 })
 export class TbankPaymentsComponent {
+  private static readonly DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES = 191000;
+  private static readonly DEFAULT_MANUAL_RECIPIENT_NAME = 'Сивохин И.И.';
+  private static readonly DEFAULT_MANUAL_PAYMENT_URL = 'https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR';
+  private static readonly DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Альфа-Банк';
+
   private readonly paymentsApi = inject(PaymentsApi);
   private readonly toastService = inject(ToastService);
 
@@ -49,13 +69,27 @@ export class TbankPaymentsComponent {
   readonly status = signal<TbankPaymentStatus | null>(null);
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
+  readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly adminTaskManagerId = signal<number | null>(null);
+  readonly adminTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
+  readonly adminTaskPhone = signal('');
+  readonly adminTaskRecipient = signal(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly adminTaskPaymentUrl = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+  readonly adminTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+  readonly adminTaskAmountRubles = signal('');
+  readonly adminTaskComment = signal('');
   readonly profileAssignments = signal<Record<number, number | null>>({});
+  readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
   readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
+  readonly mutatingTaskId = signal<number | null>(null);
+  readonly savingManualTask = signal(false);
   readonly savingProfiles = signal(false);
+  readonly savingProfilePolicies = signal(false);
   readonly savingRuntimeSettings = signal(false);
+  readonly savingRoutingSettings = computed(() => this.savingProfiles() || this.savingProfilePolicies());
   readonly copied = signal<string | null>(null);
   readonly search = signal('');
   readonly statusFilter = signal<PaymentStatusFilter>('all');
@@ -68,7 +102,8 @@ export class TbankPaymentsComponent {
     { key: 'paid', label: 'Оплачены', icon: 'check_circle' },
     { key: 'refunded', label: 'Возвраты', icon: 'assignment_return' },
     { key: 'failed', label: 'Ошибки', icon: 'error' },
-    { key: 'created', label: 'Созданы', icon: 'schedule' }
+    { key: 'created', label: 'Созданы', icon: 'schedule' },
+    { key: 'manual', label: 'Ручные', icon: 'phone_iphone' }
   ];
 
   readonly filteredLinks = computed(() => {
@@ -88,6 +123,22 @@ export class TbankPaymentsComponent {
       || this.statusFilter() !== 'all'
       || Boolean(this.dateFrom())
       || Boolean(this.dateTo());
+  });
+
+  readonly manualLinks = computed(() => this.links().filter((link) => this.isManualPayment(link)));
+
+  readonly manualPendingLinks = computed(() => this.manualLinks().filter((link) => {
+    return link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED';
+  }));
+
+  readonly canCreateManualTask = computed(() => {
+    const hasTarget = this.adminTaskPaymentType() === 'MOBILE_BANK'
+      ? Boolean(this.adminTaskPhone().trim()) && Boolean(this.adminTaskRecipient().trim())
+      : Boolean(this.adminTaskPaymentUrl().trim()) && Boolean(this.adminTaskRecipient().trim());
+    return !this.savingManualTask()
+      && this.adminTaskManagerId() != null
+      && hasTarget
+      && this.adminTaskTargetKopecks() > 0;
   });
 
   readonly tbankClientPaymentEnabled = computed(() => {
@@ -120,7 +171,7 @@ export class TbankPaymentsComponent {
       case 'BANK_PRIMARY':
         return 'На странице оплаты сначала показываем форму банка, СБП остается запасным способом.';
       case 'SBP_ONLY':
-        return 'На странице оплаты доступен только динамический QR СБП. Форма банка скрыта.';
+        return 'На странице оплаты доступна только кнопка СБП. Форма банка скрыта.';
       case 'BANK_ONLY':
         return 'На странице оплаты доступна только форма банка: карта, T-Pay и способы, включенные в T-Bank.';
       default:
@@ -196,9 +247,15 @@ export class TbankPaymentsComponent {
     const paid = links.filter((link) => this.isPaid(link.status)).length;
     const refunded = links.filter((link) => this.isRefunded(link.status) || link.status === 'CANCELED').length;
     const rejected = links.filter((link) => link.status === 'REJECTED' || link.status === 'FAILED').length;
+    const manualPending = this.manualPendingLinks().length;
+    const confirmedLinks = links.filter((link) => link.status === 'CONFIRMED');
+    const notificationsSent = confirmedLinks.filter((link) => Boolean(link.paymentSuccessNotifiedAt)).length;
+    const notificationErrors = confirmedLinks.filter((link) => !link.paymentSuccessNotifiedAt && Boolean(link.paymentSuccessNotificationError)).length;
     return [
       { label: 'Показано', value: `${filtered.length}/${links.length}`, icon: 'filter_list', tone: 'blue' },
       { label: 'Оплачено', value: paid, icon: 'check_circle', tone: 'green' },
+      { label: 'Ручные ждут', value: manualPending, icon: 'phone_iphone', tone: manualPending ? 'yellow' : 'gray' },
+      { label: 'Уведомления', value: confirmedLinks.length ? `${notificationsSent}/${confirmedLinks.length}` : 0, icon: notificationErrors ? 'sms_failed' : 'mark_chat_read', tone: notificationErrors ? 'red' : notificationsSent ? 'green' : 'gray' },
       { label: 'Можно вернуть', value: links.filter((link) => link.refundable).length, icon: 'undo', tone: 'yellow' },
       { label: 'Возвращено', value: refunded, icon: 'assignment_return', tone: 'green' },
       { label: 'Ошибки', value: rejected, icon: 'priority_high', tone: rejected ? 'red' : 'gray' },
@@ -218,11 +275,13 @@ export class TbankPaymentsComponent {
       status: this.paymentsApi.getTbankStatus(),
       links: this.paymentsApi.getAdminTbankPaymentLinks(),
       profiles: this.paymentsApi.getAdminTbankPaymentProfiles(),
+      manualTasks: this.paymentsApi.getAdminManualPaymentTasks(),
       runtimeSettings: this.paymentsApi.getAdminTbankRuntimeSettings()
     }).subscribe({
-      next: ({ status, links, profiles, runtimeSettings }) => {
+      next: ({ status, links, profiles, manualTasks, runtimeSettings }) => {
         this.status.set(status);
         this.links.set(links);
+        this.manualTasks.set(manualTasks ?? []);
         this.runtimeSettings.set(runtimeSettings);
         this.applyProfilesState(profiles.profiles, profiles.managers);
         this.loading.set(false);
@@ -408,6 +467,130 @@ export class TbankPaymentsComponent {
     });
   }
 
+  setProfilePolicy(profileId: number, value: PaymentPolicy): void {
+    this.profilePolicies.update((policies) => ({
+      ...policies,
+      [profileId]: {
+        ...this.policyDraft(profileId),
+        paymentPolicy: value
+      }
+    }));
+  }
+
+  setProfileManualPaymentType(profileId: number, value: ManualPaymentType): void {
+    const patch: Partial<ProfilePolicyDraft> = { manualPaymentType: value };
+    if (value === 'EXTERNAL_LINK' && !this.policyDraft(profileId).manualPaymentUrl.trim()) {
+      patch.manualPaymentUrl = TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL;
+    }
+    if (!this.policyDraft(profileId).manualRecipientName.trim()) {
+      patch.manualRecipientName = TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME;
+    }
+    this.updateProfilePolicyDraft(profileId, patch);
+  }
+
+  setProfileManualPhone(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualPhone: value ?? '' });
+  }
+
+  setProfileManualRecipient(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualRecipientName: value ?? '' });
+  }
+
+  setProfileManualPaymentUrl(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualPaymentUrl: value ?? '' });
+  }
+
+  setProfileManualPaymentButtonLabel(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualPaymentButtonLabel: value ?? '' });
+  }
+
+  setProfileManualLimit(
+    profileId: number,
+    value: string | number | null
+  ): void {
+    this.updateProfilePolicyDraft(profileId, {
+      manualMonthlyLimitRubles: value == null ? '' : String(value)
+    });
+  }
+
+  saveProfilePolicies(): void {
+    if (this.savingProfilePolicies()) {
+      return;
+    }
+    const request: PaymentProfilePolicyRequest[] = this.profiles().map((profile) => {
+      const draft = this.policyDraft(profile.id);
+      const manualMonthlyLimitKopecks = this.manualLimitKopecksFromDraft(draft.manualMonthlyLimitRubles);
+      return {
+        profileId: profile.id,
+        paymentPolicy: draft.paymentPolicy,
+        manualPaymentType: draft.manualPaymentType,
+        manualPhone: draft.manualPhone.trim(),
+        manualRecipientName: draft.manualRecipientName.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+        manualPaymentUrl: draft.manualPaymentUrl.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
+        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
+      };
+    });
+    this.savingProfilePolicies.set(true);
+    this.paymentsApi.updateAdminPaymentProfilePolicies(request).subscribe({
+      next: (state) => {
+        this.applyProfilesState(state.profiles, state.managers);
+        this.savingProfilePolicies.set(false);
+        this.toastService.success('Политики оплаты сохранены');
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось сохранить политики оплаты');
+        this.savingProfilePolicies.set(false);
+        this.toastService.error('Политики не сохранены', message);
+      }
+    });
+  }
+
+  saveRoutingSettings(): void {
+    if (this.savingRoutingSettings()) {
+      return;
+    }
+    const policyRequest: PaymentProfilePolicyRequest[] = this.profiles().map((profile) => {
+      const draft = this.policyDraft(profile.id);
+      const manualMonthlyLimitKopecks = this.manualLimitKopecksFromDraft(draft.manualMonthlyLimitRubles);
+      return {
+        profileId: profile.id,
+        paymentPolicy: draft.paymentPolicy,
+        manualPaymentType: draft.manualPaymentType,
+        manualPhone: draft.manualPhone.trim(),
+        manualRecipientName: draft.manualRecipientName.trim(),
+        manualPaymentUrl: draft.manualPaymentUrl.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
+        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
+      };
+    });
+    const assignments = this.managerProfiles().map((manager) => ({
+      managerId: manager.managerId,
+      paymentProfileId: this.selectedProfileId(manager)
+    }));
+
+    this.savingProfilePolicies.set(true);
+    this.savingProfiles.set(true);
+    this.paymentsApi.updateAdminPaymentProfilePolicies(policyRequest).pipe(
+      switchMap(() => this.paymentsApi.updateAdminTbankPaymentProfileAssignments(assignments))
+    ).subscribe({
+      next: (state) => {
+        this.applyProfilesState(state.profiles, state.managers);
+        this.savingProfilePolicies.set(false);
+        this.savingProfiles.set(false);
+        this.toastService.success('Маршрутизация оплат сохранена');
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось сохранить маршрутизацию оплат');
+        this.savingProfilePolicies.set(false);
+        this.savingProfiles.set(false);
+        this.toastService.error('Маршрутизация не сохранена', message);
+      }
+    });
+  }
+
   cancel(link: AdminPaymentLinkResponse): void {
     if (!link.refundable || this.mutatingId()) {
       return;
@@ -429,6 +612,145 @@ export class TbankPaymentsComponent {
         const message = apiErrorDetail(err, 'Не удалось выполнить возврат');
         this.mutatingId.set(null);
         this.toastService.error('Возврат не выполнен', message);
+      }
+    });
+  }
+
+  confirmManual(link: AdminPaymentLinkResponse): void {
+    if (!this.canConfirmManual(link) || this.mutatingId()) {
+      return;
+    }
+    const confirmed = window.confirm(`Подтвердить ручную оплату по заказу №${link.orderId ?? '-'} на сумму ${link.amount} руб.?`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.paymentsApi.confirmAdminManualPaymentLink(link.id).subscribe({
+      next: (updated) => {
+        this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+        this.mutatingId.set(null);
+        this.toastService.success('Ручная оплата подтверждена', `Статус: ${this.statusLabel(updated.status)}`);
+        this.loadProfilesOnly();
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось подтвердить ручную оплату');
+        this.mutatingId.set(null);
+        this.toastService.error('Оплата не подтверждена', message);
+      }
+    });
+  }
+
+  markManualReceipt(link: AdminPaymentLinkResponse): void {
+    if (!this.canMarkManualReceipt(link) || this.mutatingId()) {
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.paymentsApi.markAdminManualPaymentReceipt(link.id).subscribe({
+      next: (updated) => {
+        this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+        this.mutatingId.set(null);
+        this.toastService.success('Статус чека обновлен');
+        this.loadProfilesOnly();
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось отметить чек');
+        this.mutatingId.set(null);
+        this.toastService.error('Чек не обновлен', message);
+      }
+    });
+  }
+
+  updateManualTaskStatus(task: ManualPaymentTaskResponse, status: ManualPaymentTaskStatus): void {
+    if (!task?.id || this.mutatingTaskId()) {
+      return;
+    }
+    this.mutatingTaskId.set(task.id);
+    this.paymentsApi.updateAdminManualPaymentTaskStatus(task.id, status).subscribe({
+      next: (updated) => {
+        this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+        this.mutatingTaskId.set(null);
+        this.toastService.success('Статус задания сохранен');
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось обновить ручное задание');
+        this.mutatingTaskId.set(null);
+        this.toastService.error('Задание не сохранено', message);
+      }
+    });
+  }
+
+  setAdminTaskManagerId(value: number | string | null): void {
+    const id = value == null || value === '' ? NaN : Number(value);
+    this.adminTaskManagerId.set(Number.isFinite(id) && id > 0 ? id : null);
+  }
+
+  setAdminTaskPaymentType(value: ManualPaymentType): void {
+    this.adminTaskPaymentType.set(value);
+    if (value === 'EXTERNAL_LINK' && !this.adminTaskPaymentUrl().trim()) {
+      this.adminTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+    }
+    if (!this.adminTaskRecipient().trim()) {
+      this.adminTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+    }
+  }
+
+  setAdminTaskPhone(value: string | null): void {
+    this.adminTaskPhone.set(value ?? '');
+  }
+
+  setAdminTaskRecipient(value: string | null): void {
+    this.adminTaskRecipient.set(value ?? '');
+  }
+
+  setAdminTaskPaymentUrl(value: string | null): void {
+    this.adminTaskPaymentUrl.set(value ?? '');
+  }
+
+  setAdminTaskPaymentButtonLabel(value: string | null): void {
+    this.adminTaskPaymentButtonLabel.set(value ?? '');
+  }
+
+  setAdminTaskAmountRubles(value: string | number | null): void {
+    this.adminTaskAmountRubles.set(value == null ? '' : String(value));
+  }
+
+  setAdminTaskComment(value: string | null): void {
+    this.adminTaskComment.set(value ?? '');
+  }
+
+  createManualTask(): void {
+    if (!this.canCreateManualTask()) {
+      return;
+    }
+    this.savingManualTask.set(true);
+    this.paymentsApi.createAdminManualPaymentTask({
+      managerId: this.adminTaskManagerId(),
+      manualPaymentType: this.adminTaskPaymentType(),
+      manualPhone: this.adminTaskPhone().trim(),
+      manualRecipientName: this.adminTaskRecipient().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: this.adminTaskPaymentUrl().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      targetAmountKopecks: this.adminTaskTargetKopecks(),
+      comment: this.adminTaskComment().trim() || null
+    }).subscribe({
+      next: (task) => {
+        this.manualTasks.update((tasks) => [task, ...tasks]);
+        this.adminTaskPhone.set('');
+        this.adminTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+        this.adminTaskPaymentType.set('MOBILE_BANK');
+        this.adminTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+        this.adminTaskPaymentButtonLabel.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+        this.adminTaskAmountRubles.set('');
+        this.adminTaskComment.set('');
+        this.savingManualTask.set(false);
+        this.toastService.success('Ручное задание создано');
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось создать ручное задание');
+        this.savingManualTask.set(false);
+        this.toastService.error('Задание не создано', message);
       }
     });
   }
@@ -455,6 +777,8 @@ export class TbankPaymentsComponent {
       CREATED: 'Создана',
       INITIATED: 'Открыта форма',
       AUTHORIZED: 'Авторизован',
+      WAITING_MANUAL_PAYMENT: 'Ждет перевод',
+      MANUAL_REPORTED: 'Клиент оплатил',
       TEST_CONFIRMED: 'Тест оплачен',
       CONFIRMED: 'Оплачен',
       REJECTED: 'Отклонен',
@@ -472,6 +796,9 @@ export class TbankPaymentsComponent {
   statusClass(status: string): string {
     if (status === 'TEST_CONFIRMED' || status === 'CONFIRMED' || status === 'AUTHORIZED') {
       return 'status-pill paid';
+    }
+    if (status === 'WAITING_MANUAL_PAYMENT' || status === 'MANUAL_REPORTED') {
+      return 'status-pill manual';
     }
     if (this.isRefunded(status) || status === 'CANCELED') {
       return 'status-pill refunded';
@@ -492,7 +819,157 @@ export class TbankPaymentsComponent {
   }
 
   paymentMethodLabel(link: AdminPaymentLinkResponse): string {
-    return link.paymentMethod === 'SBP_QR' ? 'СБП QR' : 'Форма банка';
+    if (this.isManualPayment(link)) {
+      return this.isExternalManualPayment(link) ? 'Ссылка Альфа' : 'Телефон';
+    }
+    return link.paymentMethod === 'SBP_QR' ? 'СБП' : 'Форма банка';
+  }
+
+  manualTaskTargetLine(task: ManualPaymentTaskResponse): string {
+    if (this.isExternalManualTask(task)) {
+      return `${task.manualPaymentUrl || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL} · ${task.managerTitle || task.username}`;
+    }
+    return `${task.manualPhone || 'телефон не указан'} · ${task.managerTitle || task.username}`;
+  }
+
+  manualTaskTitle(task: ManualPaymentTaskResponse): string {
+    return task.manualRecipientName || 'Получатель не указан';
+  }
+
+  receiptStatusLabel(link: AdminPaymentLinkResponse): string {
+    if (!this.isManualPayment(link)) {
+      return '';
+    }
+    return link.receiptStatus === 'MARKED' ? 'Чек отмечен' : 'Чек ожидает';
+  }
+
+  manualSourceLabel(link: AdminPaymentLinkResponse): string {
+    if (link.manualSource === 'MANUAL_TASK') {
+      return link.manualTaskTitle ? `Задание: ${link.manualTaskTitle}` : 'Ручное задание';
+    }
+    if (this.isManualPayment(link)) {
+      return 'Лимит профиля';
+    }
+    return '';
+  }
+
+  hasPaymentNotificationInfo(link: AdminPaymentLinkResponse): boolean {
+    return link.status === 'CONFIRMED'
+      || Boolean(link.paymentSuccessNotifiedAt)
+      || Boolean(link.paymentSuccessNotificationError);
+  }
+
+  paymentNotificationLabel(link: AdminPaymentLinkResponse): string {
+    if (link.paymentSuccessNotifiedAt) {
+      return 'Уведомление отправлено';
+    }
+    if (link.paymentSuccessNotificationError) {
+      return 'Уведомление не отправлено';
+    }
+    if (link.status === 'CONFIRMED') {
+      return 'Уведомление ожидает отправки';
+    }
+    return '';
+  }
+
+  paymentNotificationClass(link: AdminPaymentLinkResponse): string {
+    if (link.paymentSuccessNotifiedAt) {
+      return 'status-pill paid';
+    }
+    if (link.paymentSuccessNotificationError) {
+      return 'status-pill failed';
+    }
+    return 'status-pill neutral';
+  }
+
+  clientChatInfo(link: AdminPaymentLinkResponse): string {
+    const platform = this.chatPlatformLabel(link.clientChatPlatform);
+    if (link.clientChatReady) {
+      return `Чат ${platform} готов`;
+    }
+    const warning = link.clientChatWarning?.trim();
+    return warning ? `Чат: ${warning}` : 'Чат не готов';
+  }
+
+  clientChatClass(link: AdminPaymentLinkResponse): string {
+    return link.clientChatReady ? 'method-line' : 'error-text';
+  }
+
+  isManualPayment(link: AdminPaymentLinkResponse): boolean {
+    return link.paymentMethod === 'MANUAL_MOBILE_BANK' || link.paymentMethod === 'MANUAL_EXTERNAL_LINK';
+  }
+
+  isExternalManualPayment(link: AdminPaymentLinkResponse): boolean {
+    return this.isManualPayment(link)
+      && (link.manualPaymentType === 'EXTERNAL_LINK' || link.paymentMethod === 'MANUAL_EXTERNAL_LINK');
+  }
+
+  isExternalManualTask(task: ManualPaymentTaskResponse): boolean {
+    return task.manualPaymentType === 'EXTERNAL_LINK';
+  }
+
+  canConfirmManual(link: AdminPaymentLinkResponse): boolean {
+    return this.isManualPayment(link)
+      && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
+  }
+
+  canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {
+    return this.isManualPayment(link) && link.status === 'CONFIRMED' && link.receiptStatus !== 'MARKED';
+  }
+
+  profilePolicy(profileId: number): ProfilePolicyDraft {
+    return this.policyDraft(profileId);
+  }
+
+  profilePolicyLabel(profile: PaymentProfileResponse): string {
+    const policy = this.policyDraft(profile.id).paymentPolicy;
+    if (policy !== 'MANUAL_UNTIL_LIMIT_THEN_TBANK') {
+      return 'Только T-Bank';
+    }
+    return this.policyDraft(profile.id).manualPaymentType === 'EXTERNAL_LINK'
+      ? 'Ссылка до лимита'
+      : 'Телефон до лимита';
+  }
+
+  profileManualUsagePercent(profile: PaymentProfileResponse): number {
+    const limit = this.profileManualLimitKopecks(profile);
+    if (!limit) {
+      return 0;
+    }
+    return Math.min(100, Math.round((profile.manualMonthlyUsedKopecks / limit) * 100));
+  }
+
+  profileManualLimitKopecks(profile: PaymentProfileResponse): number {
+    return this.manualLimitKopecksFromDraft(this.policyDraft(profile.id).manualMonthlyLimitRubles);
+  }
+
+  manualTaskProgressPercent(task: ManualPaymentTaskResponse): number {
+    if (!task.targetAmountKopecks) {
+      return 0;
+    }
+    return Math.min(100, Math.round((task.reservedAmountKopecks / task.targetAmountKopecks) * 100));
+  }
+
+  manualTaskStatusLabel(status: string): string {
+    switch (status) {
+      case 'ACTIVE':
+        return 'Активно';
+      case 'PAUSED':
+        return 'Пауза';
+      case 'COMPLETED':
+        return 'Выполнено';
+      case 'CANCELED':
+        return 'Отменено';
+      default:
+        return status || 'Неизвестно';
+    }
+  }
+
+  formatKopecks(value?: number | null): string {
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format((value ?? 0) / 100)} руб.`;
   }
 
   isMutating(link: AdminPaymentLinkResponse): boolean {
@@ -519,6 +996,10 @@ export class TbankPaymentsComponent {
     return manager.managerId;
   }
 
+  trackManualTask(_index: number, task: ManualPaymentTaskResponse): number {
+    return task.id;
+  }
+
   totalAmount(links: AdminPaymentLinkResponse[]): number {
     return links.reduce((sum, link) => sum + Number(link.amount || 0), 0);
   }
@@ -529,6 +1010,9 @@ export class TbankPaymentsComponent {
     }
     if (this.isRefunded(link.status) || link.status === 'CANCELED') {
       return 'refunded';
+    }
+    if (this.isManualPayment(link) && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED')) {
+      return 'manual';
     }
     if (link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED') {
       return 'failed';
@@ -570,6 +1054,11 @@ export class TbankPaymentsComponent {
     });
   }
 
+  private adminTaskTargetKopecks(): number {
+    const value = Number(this.adminTaskAmountRubles());
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
   private matchesSearch(link: AdminPaymentLinkResponse, search: string): boolean {
     if (!search) {
       return true;
@@ -584,6 +1073,14 @@ export class TbankPaymentsComponent {
       link.paymentProfileName,
       link.tbankTerminalKey,
       link.payerEmail,
+      link.manualPhone,
+      link.manualRecipientName,
+      link.manualPaymentUrl,
+      link.manualPaymentButtonLabel,
+      link.manualComment,
+      link.paymentSuccessNotificationError,
+      link.clientChatPlatform,
+      link.clientChatWarning,
       link.lastError,
       this.statusLabel(link.status)
     ].join(' ').toLowerCase();
@@ -593,7 +1090,11 @@ export class TbankPaymentsComponent {
   private matchesStatusFilter(link: AdminPaymentLinkResponse, filter: PaymentStatusFilter): boolean {
     switch (filter) {
       case 'active':
-        return link.status === 'CREATED' || link.status === 'INITIATED' || link.status === 'AUTHORIZED';
+        return link.status === 'CREATED'
+          || link.status === 'INITIATED'
+          || link.status === 'AUTHORIZED'
+          || link.status === 'WAITING_MANUAL_PAYMENT'
+          || link.status === 'MANUAL_REPORTED';
       case 'paid':
         return this.isPaid(link.status);
       case 'refunded':
@@ -602,6 +1103,8 @@ export class TbankPaymentsComponent {
         return link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED';
       case 'created':
         return link.status === 'CREATED';
+      case 'manual':
+        return this.isManualPayment(link);
       default:
         return true;
     }
@@ -636,6 +1139,67 @@ export class TbankPaymentsComponent {
     this.profileAssignments.set(Object.fromEntries(
       (managers ?? []).map((manager) => [manager.managerId, manager.paymentProfileId ?? null])
     ));
+    this.profilePolicies.set(Object.fromEntries(
+      (profiles ?? []).map((profile) => [profile.id, this.profileToPolicyDraft(profile)])
+    ));
+  }
+
+  private loadProfilesOnly(): void {
+    this.paymentsApi.getAdminTbankPaymentProfiles().subscribe({
+      next: (profiles) => this.applyProfilesState(profiles.profiles, profiles.managers),
+      error: () => {}
+    });
+  }
+
+  private updateProfilePolicyDraft(profileId: number, patch: Partial<ProfilePolicyDraft>): void {
+    this.profilePolicies.update((policies) => ({
+      ...policies,
+      [profileId]: {
+        ...this.policyDraft(profileId),
+        ...patch
+      }
+    }));
+  }
+
+  private policyDraft(profileId: number): ProfilePolicyDraft {
+    return this.profilePolicies()[profileId] ?? {
+      paymentPolicy: 'T_BANK_ONLY',
+      manualPaymentType: 'MOBILE_BANK',
+      manualPhone: '',
+      manualRecipientName: TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualMonthlyLimitRubles: String(TbankPaymentsComponent.DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
+    };
+  }
+
+  private profileToPolicyDraft(profile: PaymentProfileResponse): ProfilePolicyDraft {
+    return {
+      paymentPolicy: profile.paymentPolicy ?? 'T_BANK_ONLY',
+      manualPaymentType: (profile.manualPaymentType as ManualPaymentType | undefined) ?? 'MOBILE_BANK',
+      manualPhone: profile.manualPhone ?? '',
+      manualRecipientName: profile.manualRecipientName ?? TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: profile.manualPaymentUrl ?? TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: profile.manualPaymentButtonLabel ?? TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualMonthlyLimitRubles: String(this.kopecksToRubles(profile.manualMonthlyHardLimitKopecks)
+        ?? this.kopecksToRubles(profile.manualMonthlySoftLimitKopecks)
+        ?? TbankPaymentsComponent.DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
+    };
+  }
+
+  private manualLimitKopecksFromDraft(value: string): number {
+    const numeric = Number(value);
+    return this.rublesToKopecks(Number.isFinite(numeric) ? numeric : null)
+      ?? this.rublesToKopecks(TbankPaymentsComponent.DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
+      ?? 0;
+  }
+
+  private rublesToKopecks(value: number | null | undefined): number | null {
+    return value && value > 0 ? Math.round(value * 100) : null;
+  }
+
+  private kopecksToRubles(value?: number | null): number | null {
+    return value && value > 0 ? value / 100 : null;
   }
 
   private isPaid(status: string): boolean {
@@ -647,5 +1211,18 @@ export class TbankPaymentsComponent {
       || status === 'PARTIAL_REFUNDED'
       || status === 'REVERSED'
       || status === 'PARTIAL_REVERSED';
+  }
+
+  private chatPlatformLabel(platform?: string | null): string {
+    switch ((platform ?? '').toUpperCase()) {
+      case 'WHATSAPP':
+        return 'WhatsApp';
+      case 'TELEGRAM':
+        return 'Telegram';
+      case 'MAX':
+        return 'MAX';
+      default:
+        return 'не настроен';
+    }
   }
 }

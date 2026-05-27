@@ -1186,8 +1186,8 @@ type CompanyPreservedFields = Pick<
       margin: 0 auto;
       overflow: hidden;
       flex-direction: column;
-      gap: 0.65rem;
-      padding: 0.75rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom));
+      gap: var(--otziv-page-gap, 0.46rem);
+      padding: var(--otziv-page-padding-y, 0.55rem) var(--otziv-page-padding-x, 0.62rem) calc(var(--otziv-page-padding-bottom, 0.45rem) + env(safe-area-inset-bottom));
     }
 
     .manager-search-strip {
@@ -1252,8 +1252,11 @@ type CompanyPreservedFields = Pick<
     .manager-list {
       flex: 1 1 0;
       min-height: 0;
-      gap: 0.72rem;
+      align-items: stretch;
+      gap: var(--otziv-list-gap, 0.56rem);
+      margin-inline: calc(var(--otziv-page-padding-x, 0.62rem) * -1);
       overflow-y: hidden;
+      padding: 0 var(--otziv-page-padding-x, 0.62rem) 0.12rem;
     }
 
     .manager-list .manager-card {

@@ -349,6 +349,7 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/manager/orders/{orderId}/reviews/help-drafts", "создание AI-помощи для всех отзывов заказа {orderId}");
         put(actions, "PUT", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "редактирование восстановления {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}/complete", "выполнение восстановления {taskId}");
+        put(actions, "DELETE", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "удаление восстановления {taskId}");
         put(actions, "POST", "/api/manager/orders/{orderId}/recovery-batches/{batchId}/client-notified", "отметка клиента уведомленным по восстановлению {batchId}");
         put(actions, "GET", "/api/manager/archive/orders", "загрузка архива заказов");
         put(actions, "GET", "/api/manager/archive/orders/{orderId}", "загрузка архивного заказа {orderId}");

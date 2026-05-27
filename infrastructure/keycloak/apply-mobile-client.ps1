@@ -10,7 +10,8 @@ param(
     [string]$AppBaseUrl = "",
     [string]$DevAppBaseUrl = "http://localhost:4300",
     [string]$NativeRedirectUri = "otziv://auth/callback",
-    [string]$NativeLogoutRedirectUri = "otziv://logout"
+    [string]$NativeLogoutRedirectUri = "otziv://logout",
+    [int]$MobileSessionSeconds = 2592000
 )
 
 Set-StrictMode -Version Latest
@@ -205,6 +206,13 @@ Invoke-Kcadm -Arguments @(
     "--password", $AdminPassword
 ) | Out-Null
 
+Invoke-Kcadm -Arguments @(
+    "update", "realms/$Realm",
+    "-s", "offlineSessionIdleTimeout=$MobileSessionSeconds",
+    "-s", "offlineSessionMaxLifespanEnabled=true",
+    "-s", "offlineSessionMaxLifespan=$MobileSessionSeconds"
+) | Out-Null
+
 $clientUuid = Get-ClientUuid -LookupClientId $ClientId
 if (-not $clientUuid) {
     Invoke-Kcadm -Arguments @(
@@ -265,8 +273,11 @@ $clientBody = [ordered]@{
     frontchannelLogout = $true
     redirectUris = $redirectUris
     webOrigins = $webOrigins
+    optionalClientScopes = @("offline_access")
     attributes = [ordered]@{
         "pkce.code.challenge.method" = "S256"
+        "client.session.idle.timeout" = "$MobileSessionSeconds"
+        "client.session.max.lifespan" = "$MobileSessionSeconds"
         "post.logout.redirect.uris" = $logoutUrisValue
     }
 }

@@ -39,9 +39,12 @@
               [class.review-card--fluid]="isReviewTextOpen(review) || isReviewFieldEditing(review, 'answer')"
             >
             <header>
-              <a [href]="review.filialUrl || '#'" target="_blank" rel="noopener">
-                {{ review.companyTitle || details.companyTitle || 'Компания' }}
-              </a>
+              <div class="review-card-title">
+                <a [href]="review.filialUrl || '#'" target="_blank" rel="noopener">
+                  {{ review.companyTitle || details.companyTitle || 'Компания' }}
+                </a>
+                <span>{{ review.filialTitle || 'Филиал не указан' }}</span>
+              </div>
               <div class="review-id-line">
                 @if (hasReviewPhoto(review)) {
                   <a
@@ -781,6 +784,16 @@
                     >
                       {{ isMutating('recovery-complete-' + task.id) ? 'Отмечаю...' : 'Восстановил' }}
                     </button>
+                    @if (canDeleteRecoveryTask(task)) {
+                      <button
+                        type="button"
+                        class="delete"
+                        (click)="deleteRecoveryTask(task)"
+                        [disabled]="isMutating('recovery-delete-' + task.id)"
+                      >
+                        {{ isMutating('recovery-delete-' + task.id) ? 'Удаляю...' : 'Удалить' }}
+                      </button>
+                    }
                   </div>
                 } @else {
                   <em>{{ task.status || 'Готово' }}</em>
@@ -1083,6 +1096,16 @@
                   >
                     {{ isMutating('recovery-complete-' + task.id) ? 'Отмечаю...' : 'Восстановил' }}
                   </button>
+                  @if (canDeleteRecoveryTask(task)) {
+                    <button
+                      type="button"
+                      class="delete"
+                      (click)="deleteRecoveryTask(task)"
+                      [disabled]="isMutating('recovery-delete-' + task.id)"
+                    >
+                      {{ isMutating('recovery-delete-' + task.id) ? 'Удаляю...' : 'Удалить' }}
+                    </button>
+                  }
                 </div>
               } @else {
                 <em>{{ task.status || 'Готово' }}</em>
@@ -1281,6 +1304,20 @@
                   <option [ngValue]="null">-- Выберите продукт --</option>
                   @for (product of productOptions(); track product.id) {
                     <option [ngValue]="product.id">{{ product.label }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="lead-edit-field">
+                <span>Филиал</span>
+                <select
+                  name="reviewFilial"
+                  [ngModel]="draft.filialId"
+                  (ngModelChange)="setReviewEditField('filialId', $event)"
+                >
+                  <option [ngValue]="null">-- Выберите филиал --</option>
+                  @for (filial of reviewFilialOptions(); track filial.id) {
+                    <option [ngValue]="filial.id">{{ filial.label }}</option>
                   }
                 </select>
               </label>

@@ -195,6 +195,8 @@ import {
             } @else {
               @for (review of board()?.reviews?.content ?? []; track reviewKey(review)) {
                 <app-mobile-review-card-shell
+                  class="mobile-worker-review-card"
+                  [class.expanded-text]="isReviewTextExpanded(review)"
                   [title]="reviewTitle(review)"
                   [titleHref]="review.filialUrl || reviewDetailsHref(review)"
                   [idLabel]="'#' + review.id"
@@ -462,8 +464,8 @@ import {
       margin: 0 auto;
       overflow: hidden;
       flex-direction: column;
-      gap: 0.65rem;
-      padding: 0.75rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom));
+      gap: var(--otziv-page-gap, 0.46rem);
+      padding: var(--otziv-page-padding-y, 0.55rem) var(--otziv-page-padding-x, 0.62rem) calc(var(--otziv-page-padding-bottom, 0.45rem) + env(safe-area-inset-bottom));
     }
 
     .worker-search-line {
@@ -655,11 +657,12 @@ import {
       display: flex;
       flex: 1 1 0;
       min-height: 0;
-      gap: 0.72rem;
-      margin-inline: -0.75rem;
+      align-items: stretch;
+      gap: var(--otziv-list-gap, 0.56rem);
+      margin-inline: calc(var(--otziv-page-padding-x, 0.62rem) * -1);
       overflow-x: auto;
       overflow-y: hidden;
-      padding: 0 0.75rem 0.2rem;
+      padding: 0 var(--otziv-page-padding-x, 0.62rem) 0.12rem;
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
     }
@@ -703,16 +706,16 @@ import {
     .review-notes-panel button {
       display: inline-flex;
       min-width: 0;
-      min-height: 1.95rem;
+      min-height: var(--otziv-card-control-height, 1.5rem);
       align-items: center;
       justify-content: center;
       overflow: hidden;
       border: 1px solid rgba(103, 116, 131, 0.24);
       border-radius: 999px;
-      padding: 0 0.35rem;
+      padding: 0 var(--otziv-card-control-padding-x, 0.42rem);
       color: var(--otziv-dark);
       background: var(--otziv-white);
-      font: 900 0.62rem/1 var(--otziv-font-family);
+      font: 900 var(--otziv-card-control-font-size, 0.6rem)/1 var(--otziv-card-title-font);
       text-decoration: none;
       text-overflow: ellipsis;
       white-space: nowrap;

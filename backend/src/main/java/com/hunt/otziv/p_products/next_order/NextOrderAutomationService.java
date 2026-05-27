@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 @Slf4j
@@ -38,7 +39,8 @@ public class NextOrderAutomationService {
 
         Long companyId = sourceOrder.getCompany() != null ? sourceOrder.getCompany().getId() : null;
         Long filialId = sourceOrder.getFilial() != null ? sourceOrder.getFilial().getId() : null;
-        List<Order> existingActiveOrders = requestService.findActiveOrdersForFilial(companyId, filialId);
+        Set<Long> filialIds = requestService.orderFilialIds(sourceOrder);
+        List<Order> existingActiveOrders = requestService.findActiveOrdersForFilials(companyId, filialIds, filialId);
         if (!existingActiveOrders.isEmpty()) {
             Order activeOrder = existingActiveOrders.getFirst();
             request.setCreatedOrder(activeOrder);

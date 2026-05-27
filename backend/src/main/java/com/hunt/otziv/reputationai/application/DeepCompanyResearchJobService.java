@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchJobStatus;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
+import com.hunt.otziv.reputationai.infrastructure.ai.AiProviderRouter;
 import com.hunt.otziv.reputationai.persistence.DeepReportJobStatus;
 import com.hunt.otziv.reputationai.persistence.ReputationDeepReportJobEntity;
 import com.hunt.otziv.reputationai.persistence.ReputationDeepReportJobRepository;
@@ -40,6 +41,7 @@ public class DeepCompanyResearchJobService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final TaskExecutor reputationDeepReportExecutor;
+    private final AiProviderRouter aiProviderRouter;
 
     public DeepCompanyResearchJobStatus start(Long companyId, ReputationResearchRequest request) {
         return startWithOperation(companyId, request, OPERATION_FULL_REPORT);
@@ -77,7 +79,7 @@ public class DeepCompanyResearchJobService {
             entity.setCompanyId(company.getId());
             entity.setCompanyTitle(company.getTitle());
             entity.setStatus(DeepReportJobStatus.QUEUED);
-            entity.setProvider("openai");
+            entity.setProvider(aiProviderRouter.activeProviderName());
             entity.setModel("");
             entity.setResponseId("");
             entity.setRequestJson(writeJson(safeRequest));

@@ -78,7 +78,7 @@ public class ReputationSingleReviewDraftService {
                     safeRequest.targetReviewId(),
                     shortText(idea, 120)
             );
-            return new IllegalStateException("OpenAI не вернул подходящий черновик для карточки.");
+            return new IllegalStateException("AI-провайдер не вернул подходящий черновик для карточки.");
         });
         log.info(
                 "REVIEW_SINGLE_ROUTE source=openai companyId={} reviewId={} provider={} model={} idea=\"{}\"",
@@ -208,8 +208,8 @@ public class ReputationSingleReviewDraftService {
                     brief,
                     fallbackTargets,
                     generated,
-                    "Для части карточек OpenAI не вернул подходящий текст: недостающие карточки закрыты коротким локальным rescue fallback.",
-                    "Короткий локальный rescue fallback: OpenAI не вернул подходящий текст для этой карточки.",
+                    "Для части карточек AI-провайдер не вернул подходящий текст: недостающие карточки закрыты коротким локальным rescue fallback.",
+                    "Короткий локальный rescue fallback: AI-провайдер не вернул подходящий текст для этой карточки.",
                     false
             );
             generated = mergeOpenAiBatchResults(generated, shortFallbackResult, targets);
@@ -410,7 +410,7 @@ public class ReputationSingleReviewDraftService {
         draft = applyEmojiMode(draft, request.emojiMode());
         String sourceLabel = packEnvelope.jobId() == null ? "глубокому отчёту" : "текущему AI-пакету";
         List<String> safetyNotes = List.of(
-                "OpenAI недоступен или не вернул результат: создан локальный вариант по " + sourceLabel + ".",
+                "AI-провайдер недоступен или не вернул результат: создан локальный вариант по " + sourceLabel + ".",
                 "Перед публикацией клиент должен проверить, что реальный опыт совпадает с текстом."
         );
         return new ReputationSingleReviewDraftResult(
@@ -2874,7 +2874,7 @@ public class ReputationSingleReviewDraftService {
                 "local",
                 "fallback",
                 drafts,
-                List.of("OpenAI недоступен или не вернул пакет: тексты собраны локально по глубокому отчёту."),
+                List.of("AI-провайдер недоступен или не вернул пакет: тексты собраны локально по глубокому отчёту."),
                 LocalDateTime.now()
         );
     }
@@ -2892,7 +2892,7 @@ public class ReputationSingleReviewDraftService {
                 "openai",
                 "",
                 List.of(),
-                List.of("OpenAI не вернул подходящие тексты: для недостающих карточек может быть использован короткий локальный rescue fallback."),
+                List.of("AI-провайдер не вернул подходящие тексты: для недостающих карточек может быть использован короткий локальный rescue fallback."),
                 LocalDateTime.now()
         );
     }

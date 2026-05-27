@@ -243,6 +243,234 @@ small {
   margin-top: 0;
 }
 
+.panel-note {
+  color: var(--otziv-info);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.manual-payment-panel {
+  gap: 0.85rem;
+}
+
+.manual-payment-grid {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.8fr) repeat(2, minmax(0, 1fr)) auto;
+  gap: 0.85rem;
+  align-items: end;
+}
+
+.manual-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: var(--otziv-small-radius);
+  background: var(--otziv-field-background);
+}
+
+.manual-mode-toggle button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 2.55rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  border: 0;
+  border-right: 1px solid rgba(103, 116, 131, 0.16);
+  color: var(--otziv-info);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1.05;
+  cursor: pointer;
+}
+
+.manual-mode-toggle button:last-child {
+  border-right: 0;
+}
+
+.manual-mode-toggle button.active {
+  color: #fff;
+  background: #6d97d1;
+}
+
+.manual-mode-toggle .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+.manual-payment-grid label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--otziv-info);
+  font-weight: 800;
+}
+
+.manual-payment-grid label span {
+  font-size: 0.82rem;
+}
+
+.manual-payment-grid input {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.25);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+  font-weight: 800;
+}
+
+.manual-payment-save {
+  min-height: 2.55rem;
+  white-space: nowrap;
+}
+
+.manual-task-panel {
+  gap: 0.9rem;
+}
+
+.manual-task-form {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.8fr) repeat(4, minmax(0, 1fr)) auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.manual-task-form label {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  color: var(--otziv-info);
+  font-weight: 800;
+}
+
+.manual-task-form label span {
+  font-size: 0.82rem;
+}
+
+.manual-task-form input {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.25);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.8rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+  font-weight: 800;
+}
+
+.manual-task-create {
+  min-height: 2.55rem;
+  white-space: nowrap;
+}
+
+.manual-task-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.manual-task-card {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.manual-task-card.inactive {
+  opacity: 0.72;
+}
+
+.manual-task-card header,
+.manual-task-card footer,
+.manual-task-progress > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.manual-task-card header > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.manual-task-card strong,
+.manual-task-card small,
+.manual-task-card p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.manual-task-card small,
+.manual-task-card p {
+  color: var(--otziv-info);
+  font-weight: 800;
+}
+
+.task-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.35rem 0.55rem;
+  color: #2f7563;
+  background: rgba(69, 158, 133, 0.14);
+  font-weight: 900;
+  font-size: 0.82rem;
+}
+
+.manual-task-progress {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.task-bar {
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(103, 116, 131, 0.14);
+}
+
+.task-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6d97d1, #45a982);
+}
+
+.manual-task-card footer {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.manual-task-card footer button {
+  min-height: 2.35rem;
+}
+
+.manual-task-card footer .danger {
+  color: #a83f47;
+}
+
+.manual-task-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3.5rem;
+  border: 1px dashed rgba(103, 116, 131, 0.25);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.8rem;
+  color: var(--otziv-info);
+  font-weight: 900;
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -409,7 +637,9 @@ dd {
   .dashboard-grid,
   .action-grid,
   .public-link-grid,
-  .chart-grid {
+  .chart-grid,
+  .manual-payment-grid,
+  .manual-task-form {
     grid-template-columns: 1fr;
   }
 
@@ -431,11 +661,24 @@ dd {
 }
 
 @media (max-width: 860px) {
+  :host ::ng-deep app-admin-layout.public-home-layout .admin-layout.sidebar-hidden .admin-content {
+    display: contents;
+  }
+
+  :host ::ng-deep app-admin-layout.public-home-layout .admin-layout.sidebar-hidden .admin-right {
+    order: 3;
+  }
+
   .start-illustration-panel.panel {
+    order: 2;
     height: clamp(16rem, 38svh, 21rem);
     margin-top: 0.65rem;
     border-radius: 1.35rem;
     padding: clamp(1rem, 3.5vw, 1.35rem);
+  }
+
+  .public-entry {
+    order: 4;
   }
 
   .start-illustration-heading {

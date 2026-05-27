@@ -46,8 +46,8 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         List<Review> reviewList = new ArrayList<>();
 
         // 1. Получаем филиал
-        Filial filial = orderDetails.getOrder().getFilial();
-        if (filial == null) {
+        Filial defaultFilial = orderDetails.getOrder().getFilial();
+        if (defaultFilial == null) {
             throw new IllegalArgumentException("Филиал не может быть null");
         }
 
@@ -57,23 +57,67 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
         log.info("Назначение ботов для новых отзывов: vigul={}, требуется {} ботов", vigul, neededForOrder);
 
-        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
-
-        // 3. Получаем доступных ботов по правилам
-        List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededForOrder, usedBotIdsInCompany);
-
-        // 4. Создаем отзывы с УНИКАЛЬНЫМИ ботами
+        Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(defaultFilial);
         Set<Long> usedBotIdsInThisOrder = new HashSet<>(usedBotIdsInCompany);
 
+        if (hasPerReviewFilials(orderDTO)) {
+            for (int i = 0; i < neededForOrder; i++) {
+                Filial reviewFilial = reviewFilialAt(orderDTO, i, defaultFilial);
+                List<Bot> availableBots = getAvailableBotsByRules(reviewFilial, vigul, 1, usedBotIdsInThisOrder);
+                Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, reviewFilial);
+
+                Review review = createReviewWithBot(orderDTO, orderDetails, reviewFilial, assignedBot, vigul);
+                reviewList.add(review);
+            }
+
+            return reviewList;
+        }
+
+        // 3. Получаем доступных ботов по правилам
+        List<Bot> availableBots = getAvailableBotsByRules(defaultFilial, vigul, neededForOrder, usedBotIdsInCompany);
+
+        // 4. Создаем отзывы с УНИКАЛЬНЫМИ ботами
         for (int i = 0; i < neededForOrder; i++) {
-            Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, filial);
+            Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, defaultFilial);
 
             // Создаем отзыв
-            Review review = createReviewWithBot(orderDTO, orderDetails, filial, assignedBot, vigul);
+            Review review = createReviewWithBot(orderDTO, orderDetails, defaultFilial, assignedBot, vigul);
             reviewList.add(review);
         }
 
         return reviewList;
+    }
+
+    private boolean hasPerReviewFilials(OrderDTO orderDTO) {
+        return orderDTO != null
+                && orderDTO.getReviewFilialIds() != null
+                && !orderDTO.getReviewFilialIds().isEmpty();
+    }
+
+    private Filial reviewFilialAt(OrderDTO orderDTO, int index, Filial defaultFilial) {
+        List<Long> filialIds = orderDTO.getReviewFilialIds();
+        if (filialIds == null || index >= filialIds.size() || filialIds.get(index) == null) {
+            return defaultFilial;
+        }
+
+        Filial filial = filialService.getFilial(filialIds.get(index));
+        if (filial == null || !sameCompany(defaultFilial, filial)) {
+            log.warn(
+                    "Филиал {} для отзыва {} не подходит компании заказа, используется филиал заказа {}",
+                    filialIds.get(index),
+                    index + 1,
+                    defaultFilial.getId()
+            );
+            return defaultFilial;
+        }
+
+        return filial;
+    }
+
+    private boolean sameCompany(Filial left, Filial right) {
+        Long leftCompanyId = left != null && left.getCompany() != null ? left.getCompany().getId() : null;
+        Long rightCompanyId = right != null && right.getCompany() != null ? right.getCompany().getId() : null;
+        return leftCompanyId != null && Objects.equals(leftCompanyId, rightCompanyId);
     }
 
     @Override

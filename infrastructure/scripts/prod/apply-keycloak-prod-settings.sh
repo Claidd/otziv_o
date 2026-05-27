@@ -47,6 +47,7 @@ BACKEND_CLIENT_SECRET="${KEYCLOAK_ADMIN_CLIENT_SECRET:-$(env_value KEYCLOAK_ADMI
 MOBILE_CLIENT_ID="${OTZIV_MOBILE_CLIENT_ID:-$(env_value OTZIV_MOBILE_CLIENT_ID)}"
 MOBILE_NATIVE_REDIRECT_URI="${OTZIV_MOBILE_NATIVE_REDIRECT_URI:-$(env_value OTZIV_MOBILE_NATIVE_REDIRECT_URI)}"
 MOBILE_NATIVE_LOGOUT_REDIRECT_URI="${OTZIV_MOBILE_NATIVE_LOGOUT_REDIRECT_URI:-$(env_value OTZIV_MOBILE_NATIVE_LOGOUT_REDIRECT_URI)}"
+MOBILE_SESSION_SECONDS="${OTZIV_MOBILE_SESSION_SECONDS:-$(env_value OTZIV_MOBILE_SESSION_SECONDS)}"
 
 APP_BASE_URL="${APP_BASE_URL:-https://o-ogo.ru}"
 KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-https://o-ogo.ru/keycloak}"
@@ -55,6 +56,7 @@ BACKEND_CLIENT_ID="${BACKEND_CLIENT_ID:-otziv-backend}"
 MOBILE_CLIENT_ID="${MOBILE_CLIENT_ID:-otziv-mobile}"
 MOBILE_NATIVE_REDIRECT_URI="${MOBILE_NATIVE_REDIRECT_URI:-otziv://auth/callback}"
 MOBILE_NATIVE_LOGOUT_REDIRECT_URI="${MOBILE_NATIVE_LOGOUT_REDIRECT_URI:-otziv://logout}"
+MOBILE_SESSION_SECONDS="${MOBILE_SESSION_SECONDS:-2592000}"
 
 ALT_APP_BASE_URL=""
 case "$APP_BASE_URL" in
@@ -111,7 +113,10 @@ kc update "realms/$REALM" \
   -s loginTheme=otziv \
   -s accessTokenLifespan=600 \
   -s ssoSessionIdleTimeout=28800 \
-  -s ssoSessionMaxLifespan=86400
+  -s ssoSessionMaxLifespan=86400 \
+  -s "offlineSessionIdleTimeout=$MOBILE_SESSION_SECONDS" \
+  -s offlineSessionMaxLifespanEnabled=true \
+  -s "offlineSessionMaxLifespan=$MOBILE_SESSION_SECONDS"
 
 frontend_client_uuid="$(
   kc get clients -r "$REALM" -q clientId=otziv-frontend --fields id --format csv --noquotes \
@@ -168,11 +173,14 @@ if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
     -s directAccessGrantsEnabled=false \
     -s serviceAccountsEnabled=false \
     -s frontchannelLogout=true \
+    -s 'optionalClientScopes=["offline_access"]' \
     -s "redirectUris=$MOBILE_REDIRECT_URIS" \
     -s "webOrigins=$MOBILE_WEB_ORIGINS"
 
   kc update "clients/$mobile_client_uuid" -r "$REALM" \
     -s "attributes.\"pkce.code.challenge.method\"=S256" \
+    -s "attributes.\"client.session.idle.timeout\"=$MOBILE_SESSION_SECONDS" \
+    -s "attributes.\"client.session.max.lifespan\"=$MOBILE_SESSION_SECONDS" \
     -s "attributes.\"post.logout.redirect.uris\"=$MOBILE_LOGOUT_REDIRECT_URIS" \
     || echo "Warning: could not update optional mobile client attributes." >&2
 

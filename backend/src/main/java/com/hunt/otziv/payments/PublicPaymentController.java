@@ -3,6 +3,7 @@ package com.hunt.otziv.payments;
 import com.hunt.otziv.payments.dto.PublicPaymentInitRequest;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.PublicSbpBankResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentStatusResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -46,6 +49,18 @@ public class PublicPaymentController {
         return paymentLinkService.publicLink(token);
     }
 
+    @GetMapping("/api/payments/public/{token}/sbp/banks")
+    public List<PublicSbpBankResponse> sbpBanks(
+            @PathVariable String token,
+            HttpServletRequest servletRequest
+    ) {
+        return paymentLinkService.publicSbpBanks(
+                token,
+                clientDeviceType(servletRequest),
+                clientOs(servletRequest)
+        );
+    }
+
     @PostMapping("/api/payments/public/{token}/init")
     public PublicPaymentInitResponse initPayment(
             @PathVariable String token,
@@ -75,9 +90,15 @@ public class PublicPaymentController {
                 Boolean.TRUE.equals(request.offerConsent()),
                 Boolean.TRUE.equals(request.privacyConsent()),
                 Boolean.TRUE.equals(request.receiptConsent()),
+                request.sbpBankId(),
                 clientIp(servletRequest),
                 userAgent(servletRequest)
         );
+    }
+
+    @PostMapping("/api/payments/public/{token}/manual-paid")
+    public PublicPaymentLinkResponse reportManualPayment(@PathVariable String token) {
+        return paymentLinkService.reportManualPayment(token);
     }
 
     private TbankRuntimeSettingsResponseSafe settings() {
@@ -114,6 +135,36 @@ public class PublicPaymentController {
     private String userAgent(HttpServletRequest request) {
         String value = request.getHeader("User-Agent");
         return value == null ? "" : value.trim();
+    }
+
+    private String clientDeviceType(HttpServletRequest request) {
+        String value = userAgent(request).toLowerCase();
+        return value.contains("mobile")
+                || value.contains("android")
+                || value.contains("iphone")
+                || value.contains("ipad")
+                ? "mobile"
+                : "desktop";
+    }
+
+    private String clientOs(HttpServletRequest request) {
+        String value = userAgent(request).toLowerCase();
+        if (value.contains("android")) {
+            return "Android";
+        }
+        if (value.contains("iphone") || value.contains("ipad") || value.contains("ios")) {
+            return "iOS";
+        }
+        if (value.contains("windows")) {
+            return "Windows";
+        }
+        if (value.contains("mac os")) {
+            return "macOS";
+        }
+        if (value.contains("linux")) {
+            return "Linux";
+        }
+        return "";
     }
 
     private record TbankRuntimeSettingsResponseSafe(

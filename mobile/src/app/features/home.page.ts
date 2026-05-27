@@ -8,6 +8,7 @@ import {
   CabinetProfile,
   DictionarySummary,
   DictionarySummaryItem,
+  ManagerManualPaymentSettings,
   ScoreResponse,
   ScoreUser,
   TeamMember,
@@ -138,6 +139,65 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
                     </div>
                     <button type="button" class="role-pill" (click)="openSectionSheet()">{{ primaryRoleLabel() }}</button>
                   </article>
+
+                  @if (showManualPaymentSettings()) {
+                    <article class="manual-payment-card">
+                      <header>
+                        <span class="material-icons-sharp">phone_iphone</span>
+                        <div>
+                          <p class="eyebrow">PAYMENT PROFILE</p>
+                          <h3>Реквизиты оплаты на телефон</h3>
+                          <small>{{ manualPaymentSettings()?.profileName || 'Платежный профиль' }} · новые ссылки возьмут эти данные</small>
+                        </div>
+                      </header>
+
+                      <label>
+                        <span>Телефон</span>
+                        <input
+                          type="text"
+                          autocomplete="tel"
+                          [ngModel]="manualPaymentPhone()"
+                          (ngModelChange)="setManualPaymentPhone($event)"
+                          placeholder="+7..."
+                        >
+                      </label>
+
+                      <label>
+                        <span>Получатель</span>
+                        <input
+                          type="text"
+                          autocomplete="name"
+                          [ngModel]="manualPaymentRecipient()"
+                          (ngModelChange)="setManualPaymentRecipient($event)"
+                          placeholder="Имя в банке"
+                        >
+                      </label>
+
+                      @if (manualPaymentMessage()) {
+                        <small class="manual-payment-message">{{ manualPaymentMessage() }}</small>
+                      }
+
+                      <button
+                        class="manual-payment-save"
+                        type="button"
+                        (click)="saveManualPaymentSettings()"
+                        [disabled]="manualPaymentSaving() || !manualPaymentChanged()"
+                      >
+                        <span class="material-icons-sharp">{{ manualPaymentSaving() ? 'hourglass_top' : 'save' }}</span>
+                        {{ manualPaymentSaving() ? 'Сохраняю' : 'Сохранить реквизиты' }}
+                      </button>
+                    </article>
+                  } @else if (manualPaymentLoading()) {
+                    <article class="manual-payment-card manual-payment-card--loading">
+                      <header>
+                        <span class="material-icons-sharp">hourglass_top</span>
+                        <div>
+                          <p class="eyebrow">PAYMENT PROFILE</p>
+                          <h3>Проверяю режим оплаты</h3>
+                        </div>
+                      </header>
+                    </article>
+                  }
 
                   <section class="metric-grid">
                     @for (row of profileRows(); track row.label) {
@@ -580,6 +640,7 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
     .home-toolbar,
     .period-row,
     .identity-card,
+    .manual-payment-card,
     .data-card,
     .group-block,
     .notice,
@@ -728,6 +789,11 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
       padding-bottom: 0.65rem;
     }
 
+    .profile-view {
+      overflow-y: auto;
+      padding-bottom: 0.35rem;
+    }
+
     .people-view {
       overflow-y: auto;
       padding-bottom: 0.2rem;
@@ -740,6 +806,111 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
       gap: 0.75rem;
       border-radius: 1rem;
       padding: 0.82rem;
+    }
+
+    .manual-payment-card {
+      display: grid;
+      gap: 0.52rem;
+      flex: 0 0 auto;
+      border-color: rgba(27, 156, 133, 0.24);
+      border-radius: 1rem;
+      padding: 0.72rem;
+      background: linear-gradient(155deg, var(--otziv-white) 0%, rgba(234, 250, 246, 0.96) 100%);
+    }
+
+    .manual-payment-card header {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 0.55rem;
+      min-width: 0;
+    }
+
+    .manual-payment-card header > .material-icons-sharp {
+      display: grid;
+      width: 2.2rem;
+      height: 2.2rem;
+      place-items: center;
+      border-radius: 0.78rem;
+      color: var(--otziv-success);
+      background: rgba(27, 156, 133, 0.14);
+      font-size: 1.18rem;
+    }
+
+    .manual-payment-card h3,
+    .manual-payment-card small {
+      margin: 0;
+      min-width: 0;
+    }
+
+    .manual-payment-card h3 {
+      overflow: hidden;
+      color: var(--otziv-dark);
+      font-size: 0.94rem;
+      line-height: 1.08;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .manual-payment-card header small,
+    .manual-payment-message {
+      display: block;
+      overflow: hidden;
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 850;
+      line-height: 1.18;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .manual-payment-card label {
+      display: grid;
+      gap: 0.24rem;
+      min-width: 0;
+    }
+
+    .manual-payment-card label span {
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 900;
+    }
+
+    .manual-payment-card input {
+      width: 100%;
+      min-width: 0;
+      min-height: 2.25rem;
+      border: 1px solid rgba(103, 116, 131, 0.16);
+      border-radius: 0.78rem;
+      padding: 0 0.72rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font-size: 0.76rem;
+      font-weight: 900;
+      box-sizing: border-box;
+    }
+
+    .manual-payment-save {
+      display: inline-flex;
+      min-height: 2.25rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.32rem;
+      border: 1px solid rgba(27, 156, 133, 0.32);
+      border-radius: 999px;
+      color: var(--otziv-success);
+      background: var(--otziv-white);
+      font-size: 0.72rem;
+      font-weight: 900;
+    }
+
+    .manual-payment-save:disabled {
+      opacity: 0.58;
+    }
+
+    .manual-payment-card--loading {
+      border-color: rgba(108, 155, 207, 0.22);
+      background: var(--otziv-white);
     }
 
     .identity-card span,
@@ -1033,19 +1204,18 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
     .bar-chart {
       display: grid;
       grid-auto-flow: column;
-      grid-auto-columns: minmax(1.05rem, 1fr);
+      grid-auto-columns: minmax(0, 1fr);
       max-width: 100%;
       box-sizing: border-box;
       height: 13.2rem;
       align-items: stretch;
-      gap: 0.12rem;
-      overflow-x: auto;
+      gap: 0.08rem;
+      overflow-x: hidden;
       overflow-y: hidden;
       border: 1px solid rgba(103, 116, 131, 0.14);
       border-radius: 0.9rem;
-      padding: 0.8rem 0.45rem 0.55rem 2.6rem;
+      padding: 0.8rem 0.25rem 0.5rem 2.42rem;
       background: linear-gradient(180deg, transparent 0, transparent 24%, rgba(103, 116, 131, 0.08) 25%, transparent 26%, transparent 49%, rgba(103, 116, 131, 0.08) 50%, transparent 51%, transparent 74%, rgba(103, 116, 131, 0.08) 75%, transparent 76%);
-      scrollbar-width: thin;
     }
 
     .bar-item {
@@ -1053,7 +1223,7 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
       grid-template-rows: minmax(0, 1fr) 1.1rem;
       align-items: end;
       min-width: 0;
-      gap: 0.3rem;
+      gap: 0.22rem;
     }
 
     .bar {
@@ -1071,10 +1241,30 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
     .bar-label {
       overflow: hidden;
       color: var(--otziv-info);
-      font-size: 0.56rem;
+      font-size: 0.48rem;
       font-weight: 900;
       text-align: center;
       white-space: nowrap;
+    }
+
+    :host-context(body.otziv-compact-phone) .bar-chart,
+    :host-context(body.otziv-short-phone) .bar-chart {
+      height: 11.7rem;
+      gap: 0.05rem;
+      padding: 0.72rem 0.18rem 0.45rem 2.22rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .bar-chart-frame .y-axis,
+    :host-context(body.otziv-short-phone) .bar-chart-frame .y-axis {
+      width: 1.95rem;
+      height: 11.7rem;
+      padding: 0.12rem 0 1.55rem;
+      font-size: 0.54rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .bar-label,
+    :host-context(body.otziv-short-phone) .bar-label {
+      font-size: 0.4rem;
     }
 
     .section-caption,
@@ -1222,10 +1412,11 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
 
     .section-choice-list {
       display: grid;
-      gap: 0.42rem;
+      gap: 0.34rem;
       min-height: 0;
       overflow-y: auto;
-      padding-right: 0.12rem;
+      padding: 0 0.12rem 0.55rem 0;
+      overscroll-behavior: contain;
       scrollbar-width: none;
     }
 
@@ -1237,11 +1428,11 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
-      gap: 0.65rem;
-      min-height: 3.05rem;
+      gap: 0.55rem;
+      min-height: 2.64rem;
       border: 1px solid rgba(103, 116, 131, 0.16);
-      border-radius: 1rem;
-      padding: 0.54rem 0.62rem;
+      border-radius: 0.86rem;
+      padding: 0.42rem 0.56rem;
       color: var(--otziv-dark);
       background: var(--otziv-white);
       text-align: left;
@@ -1254,6 +1445,7 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
 
     .section-choice-list .material-icons-sharp {
       color: var(--otziv-primary);
+      font-size: 1.16rem;
     }
 
     .section-choice-list strong,
@@ -1264,10 +1456,16 @@ const TEAM_SECTIONS: Array<{ key: TeamKey; title: string; icon: string }> = [
       white-space: nowrap;
     }
 
+    .section-choice-list strong {
+      font-size: 0.92rem;
+      line-height: 1.05;
+    }
+
     .section-choice-list small {
       color: var(--otziv-info);
-      font-size: 0.68rem;
+      font-size: 0.62rem;
       font-weight: 800;
+      line-height: 1.05;
     }
   `]
 })
@@ -1293,6 +1491,12 @@ export class HomePage implements OnInit, OnDestroy {
   readonly score = signal<ScoreResponse | null>(null);
   readonly analytics = signal<AnalyticsResponse | null>(null);
   readonly dictionarySummary = signal<DictionarySummary | null>(null);
+  readonly manualPaymentSettings = signal<ManagerManualPaymentSettings | null>(null);
+  readonly manualPaymentLoading = signal(false);
+  readonly manualPaymentSaving = signal(false);
+  readonly manualPaymentPhone = signal('');
+  readonly manualPaymentRecipient = signal('');
+  readonly manualPaymentMessage = signal<string | null>(null);
 
   readonly teamSections = TEAM_SECTIONS;
 
@@ -1455,6 +1659,7 @@ export class HomePage implements OnInit, OnDestroy {
       switch (this.activeSection()) {
         case 'profile':
           this.profile.set(await firstValueFrom(this.api.getCabinetProfile(this.selectedDate(), { forceRefresh })));
+          await this.loadManualPaymentSettings(forceRefresh);
           break;
         case 'team':
           this.team.set(await firstValueFrom(this.api.getCabinetTeam(this.selectedDate(), { forceRefresh })));
@@ -1518,6 +1723,59 @@ export class HomePage implements OnInit, OnDestroy {
       { label: 'За месяц', value: this.money(stats?.sum1Month ?? 0) },
       { label: 'За год', value: this.money(stats?.sum1Year ?? 0) }
     ];
+  }
+
+  showManualPaymentSettings(): boolean {
+    return this.isManagerUser() && Boolean(this.manualPaymentSettings()?.manualPaymentEnabled);
+  }
+
+  manualPaymentChanged(): boolean {
+    const settings = this.manualPaymentSettings();
+    if (!settings) {
+      return false;
+    }
+    return this.manualPaymentPhone().trim() !== (settings.manualPhone ?? '')
+      || this.manualPaymentRecipient().trim() !== (settings.manualRecipientName ?? '');
+  }
+
+  setManualPaymentPhone(value: string): void {
+    this.manualPaymentPhone.set(value ?? '');
+    this.manualPaymentMessage.set(null);
+  }
+
+  setManualPaymentRecipient(value: string): void {
+    this.manualPaymentRecipient.set(value ?? '');
+    this.manualPaymentMessage.set(null);
+  }
+
+  async saveManualPaymentSettings(): Promise<void> {
+    if (!this.showManualPaymentSettings() || this.manualPaymentSaving() || !this.manualPaymentChanged()) {
+      return;
+    }
+
+    const manualPhone = this.manualPaymentPhone().trim();
+    const manualRecipientName = this.manualPaymentRecipient().trim();
+    if (!manualPhone || !manualRecipientName) {
+      this.manualPaymentMessage.set('Заполните телефон и получателя.');
+      return;
+    }
+
+    this.manualPaymentSaving.set(true);
+    this.manualPaymentMessage.set(null);
+    try {
+      const settings = await firstValueFrom(this.api.updateManagerManualPaymentSettings({
+        manualPhone,
+        manualRecipientName
+      }));
+      this.applyManualPaymentSettings(settings);
+      this.manualPaymentMessage.set('Реквизиты сохранены.');
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.manualPaymentMessage.set(message);
+      this.error.set(message);
+    } finally {
+      this.manualPaymentSaving.set(false);
+    }
   }
 
   analyticsPayRows(): Row[] {
@@ -1707,6 +1965,45 @@ export class HomePage implements OnInit, OnDestroy {
 
   logout(): void {
     void this.auth.logout();
+  }
+
+  private async loadManualPaymentSettings(forceRefresh = false): Promise<void> {
+    if (!this.isManagerUser()) {
+      this.clearManualPaymentSettings();
+      return;
+    }
+
+    this.manualPaymentLoading.set(true);
+    this.manualPaymentMessage.set(null);
+    try {
+      const settings = await firstValueFrom(this.api.getManagerManualPaymentSettings({ forceRefresh }));
+      this.applyManualPaymentSettings(settings);
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.clearManualPaymentSettings();
+      this.error.set(message);
+    } finally {
+      this.manualPaymentLoading.set(false);
+    }
+  }
+
+  private applyManualPaymentSettings(settings: ManagerManualPaymentSettings): void {
+    this.manualPaymentSettings.set(settings);
+    this.manualPaymentPhone.set(settings.manualPhone ?? '');
+    this.manualPaymentRecipient.set(settings.manualRecipientName ?? '');
+  }
+
+  private clearManualPaymentSettings(): void {
+    this.manualPaymentSettings.set(null);
+    this.manualPaymentPhone.set('');
+    this.manualPaymentRecipient.set('');
+    this.manualPaymentMessage.set(null);
+    this.manualPaymentLoading.set(false);
+    this.manualPaymentSaving.set(false);
+  }
+
+  private isManagerUser(): boolean {
+    return this.auth.hasRealmRole('MANAGER');
   }
 
   private applyRouteSection(params: ParamMap): boolean {

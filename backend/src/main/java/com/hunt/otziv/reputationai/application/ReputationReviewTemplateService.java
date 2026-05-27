@@ -49,7 +49,7 @@ public class ReputationReviewTemplateService {
                 )
                 .orElseGet(() -> {
                     if (aiReviewTemplateFactory.isOpenAiAvailable()) {
-                        throw new IllegalStateException("OpenAI не подготовил улучшенные отзывы. Проверьте маршрут, модель и лимиты OpenAI.");
+                        throw new IllegalStateException("AI-провайдер не подготовил улучшенные отзывы. Проверьте маршрут, модель и лимиты активного провайдера.");
                     }
                     return localResult(companyId, reportEnvelope, packEnvelope, safeRequest);
                 });
@@ -125,7 +125,7 @@ public class ReputationReviewTemplateService {
                 topics,
                 drafts,
                 List.of(
-                        "OpenAI недоступен или не вернул результат: создан локальный вариант на основе текущего AI-пакета.",
+                        "AI-провайдер недоступен или не вернул результат: создан локальный вариант на основе текущего AI-пакета.",
                         "Перед публикацией клиент должен добавить только реальный личный опыт."
                 ),
                 LocalDateTime.now()

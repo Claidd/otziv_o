@@ -7,6 +7,10 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.p_products.dto.OrderDTO;
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -83,6 +87,48 @@ class BotAssignmentServiceImplTest {
         verify(botService).claimReserveBotForCity(eq(city), excludedIdsCaptor.capture());
         assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 9L)));
         assertSame(stubBot, assigned);
+    }
+
+    @Test
+    void assignBotsToNewReviewsUsesPerReviewFilialsWhenRepeatingMixedOrder() {
+        BotAssignmentServiceImpl service = service();
+        Company company = company(10L);
+        City cityA = city(5L, "Иркутск");
+        City cityB = city(6L, "Ангарск");
+        Filial filialA = filial(20L, company, cityA);
+        Filial filialB = filial(21L, company, cityB);
+        Bot botA = bot(101L, "А", 0);
+        Bot botB = bot(102L, "Б", 0);
+
+        Order order = new Order();
+        order.setCompany(company);
+        order.setFilial(filialA);
+        Product product = Product.builder().id(1L).build();
+        OrderDetails details = OrderDetails.builder()
+                .order(order)
+                .product(product)
+                .build();
+
+        OrderDTO orderDTO = OrderDTO.builder()
+                .amount(2)
+                .reviewFilialIds(List.of(20L, 21L))
+                .build();
+
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(filialService.getFilial(20L)).thenReturn(filialA);
+        when(filialService.getFilial(21L)).thenReturn(filialB);
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(botA));
+        when(botService.getFindAllByFilialCityId(6L)).thenReturn(List.of(botB));
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filialA));
+        when(filialService.findByCityId(6L)).thenReturn(List.of(filialB));
+
+        List<Review> reviews = service.assignBotsToNewReviews(orderDTO, details);
+
+        assertEquals(2, reviews.size());
+        assertSame(filialA, reviews.get(0).getFilial());
+        assertSame(botA, reviews.get(0).getBot());
+        assertSame(filialB, reviews.get(1).getFilial());
+        assertSame(botB, reviews.get(1).getBot());
     }
 
     private BotAssignmentServiceImpl service() {

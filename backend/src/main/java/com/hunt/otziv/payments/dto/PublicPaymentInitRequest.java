@@ -9,6 +9,7 @@ public record PublicPaymentInitRequest(
         String email,
         Boolean offerConsent,
         Boolean privacyConsent,
-        Boolean receiptConsent
+        Boolean receiptConsent,
+        String sbpBankId
 ) {
 }

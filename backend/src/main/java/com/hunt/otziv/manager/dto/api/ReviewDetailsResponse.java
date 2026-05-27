@@ -20,6 +20,7 @@ public record ReviewDetailsResponse(
         String companyTitle,
         String commentCompany,
         String orderComments,
+        Long filialId,
         String filialCity,
         String filialTitle,
         String filialUrl,

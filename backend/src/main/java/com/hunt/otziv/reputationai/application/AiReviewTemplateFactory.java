@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewTemplatesRequest;
 import com.hunt.otziv.reputationai.config.ContentPackProfile;
+import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
 import com.hunt.otziv.reputationai.domain.ReputationContentPack;
 import com.hunt.otziv.reputationai.domain.ReputationReviewTemplatesResult;
@@ -28,6 +29,7 @@ public class AiReviewTemplateFactory {
 
     private final OpenAiProvider openAiProvider;
     private final ObjectMapper objectMapper;
+    private final ReputationAiProperties properties;
 
     public boolean isOpenAiAvailable() {
         return openAiProvider.isAvailable();
@@ -224,7 +226,20 @@ public class AiReviewTemplateFactory {
     }
 
     private String modelLabel(String profileKey) {
+        if (isYandexActive()) {
+            return properties.getYandex().getModel();
+        }
         ContentPackProfile profile = ContentPackProfile.fromKey(profileKey);
         return profile == null ? profileKey : profile.model();
+    }
+
+    private boolean isYandexActive() {
+        String provider = properties.getProvider();
+        if (provider == null) {
+            return false;
+        }
+        return "yandex".equalsIgnoreCase(provider.trim())
+                || "yandexgpt".equalsIgnoreCase(provider.trim())
+                || "yandex-gpt".equalsIgnoreCase(provider.trim());
     }
 }

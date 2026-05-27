@@ -23,6 +23,8 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryTask completeTask(Long taskId, User completedBy);
 
+    ReviewRecoveryTask cancelTask(Long taskId);
+
     ReviewRecoveryTask changeTaskBot(Long taskId);
 
     ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId);

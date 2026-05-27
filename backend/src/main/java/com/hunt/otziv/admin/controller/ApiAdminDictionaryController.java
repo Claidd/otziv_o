@@ -650,6 +650,8 @@ public class ApiAdminDictionaryController {
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, requiredSettingText(request.openNextOrderRequestStatuses(), "Укажите открытые статусы заявок"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_LINK_BASE_URL, requiredSettingText(request.reviewLinkBaseUrl(), "Укажите базовую ссылку проверки отзывов"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT, requiredSettingText(request.reviewReminderText(), "Укажите текст проверки отзывов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT, requiredSettingText(request.publicationStartedText(), "Укажите текст передачи в публикацию"));
+        appSettingService.setString(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, requiredSettingText(request.publicationProgressReportText(), "Укажите текст отчёта о публикации отзыва"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, requiredPaymentInstructionSource(request.paymentInstructionSource()));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
@@ -1047,6 +1049,14 @@ public class ApiAdminDictionaryController {
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT,
                         ScheduledClientMessageService.DEFAULT_REVIEW_REMINDER_TEXT
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PUBLICATION_STARTED_TEXT
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT
                 ),
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE,
@@ -1452,6 +1462,8 @@ public class ApiAdminDictionaryController {
             String openNextOrderRequestStatuses,
             String reviewLinkBaseUrl,
             String reviewReminderText,
+            String publicationStartedText,
+            String publicationProgressReportText,
             String paymentInstructionSource,
             String paymentReminderText,
             String archiveOfferText
@@ -1495,6 +1507,8 @@ public class ApiAdminDictionaryController {
             String openNextOrderRequestStatuses,
             String reviewLinkBaseUrl,
             String reviewReminderText,
+            String publicationStartedText,
+            String publicationProgressReportText,
             String paymentInstructionSource,
             String paymentReminderText,
             String archiveOfferText

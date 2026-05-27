@@ -1910,6 +1910,16 @@
                   <textarea rows="5" formControlName="reviewReminderText"></textarea>
                 </label>
 
+                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {sum}. Отправляется, когда клиент разрешил публикацию и заказ перешёл из На проверке в Публикация.">
+                  <span>Текст передачи в публикацию</span>
+                  <textarea rows="5" formControlName="publicationStartedText"></textarea>
+                </label>
+
+                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {published}, {total}, {progress}. Отправляется, когда специалист публикует очередной отзыв.">
+                  <span>Текст отчёта о публикации</span>
+                  <textarea rows="5" formControlName="publicationProgressReportText"></textarea>
+                </label>
+
                 <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
                   <span>Текст оплаты</span>
                   <textarea rows="5" formControlName="paymentReminderText"></textarea>

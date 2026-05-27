@@ -130,7 +130,7 @@ type PersonalReminderDraft = {
             }
 
             @if (canCreateLead()) {
-              <button mobileSearchActions type="button" (click)="openCreateLead()" aria-label="Создать лид">
+              <button mobileSearchActions class="lead-create-inline-button" type="button" (click)="openCreateLead()" aria-label="Добавить лид">
                 <span class="material-icons-sharp">add</span>
               </button>
             }
@@ -1396,11 +1396,11 @@ type PersonalReminderDraft = {
     .leads-page {
       display: flex;
       flex-direction: column;
-      gap: 0.65rem;
+      gap: var(--otziv-page-gap, 0.65rem);
       height: 100%;
       max-width: 760px;
       margin: 0 auto;
-      padding: 0.75rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+      padding: var(--otziv-page-padding-y, 0.75rem) var(--otziv-page-padding-x, 0.75rem) calc(var(--otziv-page-padding-bottom, 0.75rem) + env(safe-area-inset-bottom));
       overflow: hidden;
     }
 
@@ -1494,6 +1494,12 @@ type PersonalReminderDraft = {
       font-size: 0.78rem;
       font-weight: 800;
       text-align: left;
+    }
+
+    .lead-create-inline-button {
+      border-color: rgba(108, 155, 207, 0.28) !important;
+      background: linear-gradient(145deg, rgba(108, 155, 207, 0.2), rgba(255, 255, 255, 0.96)) !important;
+      color: var(--otziv-primary) !important;
     }
 
     .lead-list {

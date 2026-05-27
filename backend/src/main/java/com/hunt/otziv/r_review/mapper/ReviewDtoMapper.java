@@ -134,6 +134,10 @@ public class ReviewDtoMapper {
                     .map(City::getTitle)
                     .orElse("");
 
+            Long filialId = Optional.ofNullable(review.getFilial())
+                    .map(Filial::getId)
+                    .orElse(null);
+
             String filialTitle = Optional.ofNullable(review.getFilial())
                     .map(Filial::getTitle)
                     .orElse("");
@@ -184,6 +188,7 @@ public class ReviewDtoMapper {
                     .botCounter(botCounter)
                     .companyTitle(companyTitle)
                     .productTitle(productTitle)
+                    .filialId(filialId)
                     .filialCity(filialCity)
                     .filialTitle(filialTitle)
                     .filialUrl(filialUrl)

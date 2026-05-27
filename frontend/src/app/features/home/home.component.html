@@ -1,4 +1,5 @@
 <app-admin-layout
+  [class.public-home-layout]="!auth.authenticated()"
   title="Компания О!"
   active="dashboard"
   [profileImageUrl]="profileImageUrl()"
@@ -88,6 +89,275 @@
       }
 
       <app-cabinet-navigation [roles]="realmRoles()" active="dashboard" />
+
+      @if (showManualPaymentSettings()) {
+        <section class="panel manual-payment-panel" aria-label="Реквизиты ручной оплаты">
+          <div class="panel-title">
+            <span class="material-icons-sharp">phone_iphone</span>
+            <div>
+              <p class="eyebrow">PAYMENT PROFILE</p>
+              <h2>Реквизиты ручной оплаты</h2>
+            </div>
+          </div>
+
+          <p class="panel-note">
+            {{ manualPaymentSettings()?.profileName || 'Платежный профиль' }} · новые ссылки будут создаваться с выбранным способом ручной оплаты.
+          </p>
+
+          <div class="manual-payment-grid">
+            <div class="manual-mode-toggle" aria-label="Способ ручной оплаты">
+              <button
+                type="button"
+                [class.active]="manualPaymentType() === 'MOBILE_BANK'"
+                (click)="setManualPaymentType('MOBILE_BANK')"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+                Телефон
+              </button>
+              <button
+                type="button"
+                [class.active]="manualPaymentType() === 'EXTERNAL_LINK'"
+                (click)="setManualPaymentType('EXTERNAL_LINK')"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">link</span>
+                Ссылка Альфа
+              </button>
+            </div>
+            @if (manualPaymentType() === 'EXTERNAL_LINK') {
+              <label>
+                <span>Ссылка оплаты</span>
+                <input
+                  type="url"
+                  autocomplete="url"
+                  [ngModel]="manualPaymentUrl()"
+                  (ngModelChange)="setManualPaymentUrl($event)"
+                >
+              </label>
+              <label>
+                <span>Текст кнопки</span>
+                <input
+                  type="text"
+                  [ngModel]="manualPaymentButtonLabel()"
+                  (ngModelChange)="setManualPaymentButtonLabel($event)"
+                >
+              </label>
+              <label>
+                <span>Получатель</span>
+                <input
+                  type="text"
+                  autocomplete="name"
+                  [ngModel]="manualPaymentRecipient()"
+                  (ngModelChange)="setManualPaymentRecipient($event)"
+                >
+              </label>
+            } @else {
+              <label>
+                <span>Телефон</span>
+                <input
+                  type="text"
+                  autocomplete="tel"
+                  [ngModel]="manualPaymentPhone()"
+                  (ngModelChange)="setManualPaymentPhone($event)"
+                >
+              </label>
+              <label>
+                <span>Получатель</span>
+                <input
+                  type="text"
+                  autocomplete="name"
+                  [ngModel]="manualPaymentRecipient()"
+                  (ngModelChange)="setManualPaymentRecipient($event)"
+                >
+              </label>
+            }
+            <button
+              type="button"
+              class="primary manual-payment-save"
+              (click)="saveManualPaymentSettings()"
+              [disabled]="manualPaymentSaving() || !manualPaymentChanged()"
+            >
+              <span class="material-icons-sharp">{{ manualPaymentSaving() ? 'hourglass_top' : 'save' }}</span>
+              {{ manualPaymentSaving() ? 'Сохраняю' : 'Сохранить реквизиты' }}
+            </button>
+          </div>
+        </section>
+      } @else if (manualPaymentLoading()) {
+        <section class="panel manual-payment-panel">
+          <div class="panel-title">
+            <span class="material-icons-sharp">hourglass_top</span>
+            <div>
+              <p class="eyebrow">PAYMENT PROFILE</p>
+              <h2>Проверяю реквизиты оплаты</h2>
+            </div>
+          </div>
+        </section>
+      }
+
+      @if (showManualPaymentTasks()) {
+        <section class="panel manual-task-panel" aria-label="Ручные платежные задания">
+          <div class="panel-title">
+            <span class="material-icons-sharp">playlist_add_check</span>
+            <div>
+              <p class="eyebrow">PAYMENT TASKS</p>
+              <h2>Ручные задания</h2>
+            </div>
+          </div>
+
+          <p class="panel-note">
+            Эти задания используются раньше общего лимита профиля и не уменьшают месячный счетчик.
+          </p>
+
+          <div class="manual-task-form">
+            <div class="manual-mode-toggle" aria-label="Способ задания">
+              <button
+                type="button"
+                [class.active]="manualTaskPaymentType() === 'MOBILE_BANK'"
+                (click)="setManualTaskPaymentType('MOBILE_BANK')"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+                Телефон
+              </button>
+              <button
+                type="button"
+                [class.active]="manualTaskPaymentType() === 'EXTERNAL_LINK'"
+                (click)="setManualTaskPaymentType('EXTERNAL_LINK')"
+              >
+                <span class="material-icons-sharp" aria-hidden="true">link</span>
+                Ссылка Альфа
+              </button>
+            </div>
+            @if (manualTaskPaymentType() === 'EXTERNAL_LINK') {
+              <label>
+                <span>Ссылка оплаты</span>
+                <input
+                  type="url"
+                  autocomplete="url"
+                  placeholder="https://pay.alfabank.ru/..."
+                  [ngModel]="manualTaskPaymentUrl()"
+                  (ngModelChange)="setManualTaskPaymentUrl($event)"
+                >
+              </label>
+              <label>
+                <span>Текст кнопки</span>
+                <input
+                  type="text"
+                  placeholder="Оплатить через Альфа-Банк"
+                  [ngModel]="manualTaskPaymentButtonLabel()"
+                  (ngModelChange)="setManualTaskPaymentButtonLabel($event)"
+                >
+              </label>
+              <label>
+                <span>Получатель</span>
+                <input
+                  type="text"
+                  autocomplete="name"
+                  placeholder="Сивохин И.И."
+                  [ngModel]="manualTaskRecipient()"
+                  (ngModelChange)="setManualTaskRecipient($event)"
+                >
+              </label>
+            } @else {
+              <label>
+                <span>Телефон</span>
+                <input
+                  type="text"
+                  autocomplete="tel"
+                  placeholder="+7..."
+                  [ngModel]="manualTaskPhone()"
+                  (ngModelChange)="setManualTaskPhone($event)"
+                >
+              </label>
+              <label>
+                <span>Получатель</span>
+                <input
+                  type="text"
+                  autocomplete="name"
+                  placeholder="Имя в банке"
+                  [ngModel]="manualTaskRecipient()"
+                  (ngModelChange)="setManualTaskRecipient($event)"
+                >
+              </label>
+            }
+            <label>
+              <span>Цель, руб.</span>
+              <input
+                type="number"
+                min="1"
+                step="100"
+                [ngModel]="manualTaskAmountRubles()"
+                (ngModelChange)="setManualTaskAmount($event)"
+              >
+            </label>
+            <label>
+              <span>Комментарий</span>
+              <input
+                type="text"
+                [ngModel]="manualTaskComment()"
+                (ngModelChange)="setManualTaskComment($event)"
+              >
+            </label>
+            <button
+              type="button"
+              class="primary manual-task-create"
+              (click)="createManualPaymentTask()"
+              [disabled]="!canCreateManualTask()"
+            >
+              <span class="material-icons-sharp">{{ manualTaskSaving() ? 'hourglass_top' : 'add' }}</span>
+              {{ manualTaskSaving() ? 'Создаю' : 'Создать задание' }}
+            </button>
+          </div>
+
+          <div class="manual-task-list">
+            @for (task of manualPaymentTasks(); track task.id) {
+              <article class="manual-task-card" [class.inactive]="task.status !== 'ACTIVE'">
+                <header>
+                  <div>
+                    <strong>{{ manualTaskTitle(task) }}</strong>
+                    <small>{{ manualTaskSubtitle(task) }}</small>
+                  </div>
+                  <span class="task-status">{{ manualTaskStatusLabel(task.status) }}</span>
+                </header>
+                <div class="manual-task-progress">
+                  <div>
+                    <strong>{{ formatKopecks(task.reservedAmountKopecks) }}</strong>
+                    <small>из {{ formatKopecks(task.targetAmountKopecks) }} · ждут {{ task.pendingCount }}</small>
+                  </div>
+                  <div class="task-bar">
+                    <span [style.width.%]="manualTaskProgressPercent(task)"></span>
+                  </div>
+                </div>
+                @if (task.comment) {
+                  <p>{{ task.comment }}</p>
+                }
+                <footer>
+                  @if (task.status === 'ACTIVE') {
+                    <button type="button" class="secondary" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="manualTaskMutatingId() === task.id">
+                      <span class="material-icons-sharp">pause</span>
+                      Пауза
+                    </button>
+                  } @else if (task.status === 'PAUSED') {
+                    <button type="button" class="secondary" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="manualTaskMutatingId() === task.id">
+                      <span class="material-icons-sharp">play_arrow</span>
+                      Включить
+                    </button>
+                  }
+                  @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                    <button type="button" class="secondary danger" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="manualTaskMutatingId() === task.id">
+                      <span class="material-icons-sharp">close</span>
+                      Отменить
+                    </button>
+                  }
+                </footer>
+              </article>
+            } @empty {
+              <div class="manual-task-empty">
+                <span class="material-icons-sharp">playlist_add</span>
+                <strong>{{ manualTaskLoading() ? 'Загружаю задания' : 'Заданий пока нет' }}</strong>
+              </div>
+            }
+          </div>
+        </section>
+      }
 
       <section class="dashboard-grid">
         <article class="panel profile-panel">

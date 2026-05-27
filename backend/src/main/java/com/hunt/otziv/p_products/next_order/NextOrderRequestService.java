@@ -5,7 +5,9 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.r_review.model.Review;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -17,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,12 +59,13 @@ public class NextOrderRequestService {
         }
 
         Long filialId = filialId(sourceOrder.getFilial());
-        if (hasActiveOrderForFilial(company.getId(), filialId, sourceOrder.getId())) {
+        Set<Long> filialIds = orderFilialIds(sourceOrder);
+        if (hasActiveOrderForFilials(company.getId(), filialIds, filialId, sourceOrder.getId())) {
             log.info(
-                    "Следующая заявка для заказа {} не нужна: у компании {} и филиала {} уже есть активный заказ",
+                    "Следующая заявка для заказа {} не нужна: у компании {} и филиалов {} уже есть активный заказ",
                     sourceOrder.getId(),
                     company.getId(),
-                    filialId
+                    filialIds.isEmpty() ? String.valueOf(filialId) : filialIds
             );
             refreshCompanyStatusForOpenRequests(company.getId());
             return Optional.empty();
@@ -227,6 +231,21 @@ public class NextOrderRequestService {
         );
     }
 
+    public boolean hasActiveOrderForFilials(Long companyId, Set<Long> filialIds, Long fallbackFilialId, Long excludedOrderId) {
+        if (filialIds == null || filialIds.isEmpty()) {
+            return hasActiveOrderForFilial(companyId, fallbackFilialId, excludedOrderId);
+        }
+        if (filialIds.size() == 1) {
+            return hasActiveOrderForFilial(companyId, filialIds.iterator().next(), excludedOrderId);
+        }
+        return orderRepository.existsActiveOrderByCompanyIdAndAnyFilialId(
+                companyId,
+                filialIds,
+                excludedOrderId,
+                INACTIVE_ORDER_STATUSES
+        );
+    }
+
     public List<Order> findActiveOrdersForFilial(Long companyId, Long filialId) {
         return orderRepository.findActiveOrdersByCompanyIdAndFilialId(
                 companyId,
@@ -235,6 +254,48 @@ public class NextOrderRequestService {
                 INACTIVE_ORDER_STATUSES,
                 PageRequest.of(0, 1)
         );
+    }
+
+    public List<Order> findActiveOrdersForFilials(Long companyId, Set<Long> filialIds, Long fallbackFilialId) {
+        if (filialIds == null || filialIds.isEmpty()) {
+            return findActiveOrdersForFilial(companyId, fallbackFilialId);
+        }
+        if (filialIds.size() == 1) {
+            return findActiveOrdersForFilial(companyId, filialIds.iterator().next());
+        }
+        return orderRepository.findActiveOrdersByCompanyIdAndAnyFilialId(
+                companyId,
+                filialIds,
+                null,
+                INACTIVE_ORDER_STATUSES,
+                PageRequest.of(0, 1)
+        );
+    }
+
+    public Set<Long> orderFilialIds(Order order) {
+        Set<Long> filialIds = new LinkedHashSet<>();
+        Long orderFilialId = filialId(order == null ? null : order.getFilial());
+        if (orderFilialId != null) {
+            filialIds.add(orderFilialId);
+        }
+
+        if (order == null || order.getDetails() == null) {
+            return filialIds;
+        }
+
+        for (OrderDetails detail : order.getDetails()) {
+            if (detail == null || detail.getReviews() == null) {
+                continue;
+            }
+            for (Review review : detail.getReviews()) {
+                Long reviewFilialId = filialId(review == null ? null : review.getFilial());
+                if (reviewFilialId != null) {
+                    filialIds.add(reviewFilialId);
+                }
+            }
+        }
+
+        return filialIds;
     }
 
     private Optional<NextOrderRequest> findOpenRequest(Long companyId, Long filialId) {

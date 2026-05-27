@@ -130,8 +130,8 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
       --background: rgba(255, 255, 255, 0.96);
       --border: 1px solid rgba(103, 116, 131, 0.16);
       justify-content: stretch;
-      height: calc(4.25rem + env(safe-area-inset-bottom));
-      padding: 0.35rem max(0.35rem, env(safe-area-inset-right)) calc(0.35rem + env(safe-area-inset-bottom)) max(0.35rem, env(safe-area-inset-left));
+      height: calc(3.36rem + env(safe-area-inset-bottom));
+      padding: 0.14rem max(0.24rem, env(safe-area-inset-right)) calc(0.16rem + env(safe-area-inset-bottom)) max(0.24rem, env(safe-area-inset-left));
       box-shadow: 0 -0.7rem 1.8rem rgba(132, 139, 200, 0.13);
     }
 
@@ -147,9 +147,11 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
       justify-content: center;
       flex: 1 1 0;
       flex-direction: column;
+      height: 100%;
+      min-height: 0;
       min-width: 0;
       border: 0;
-      border-radius: 0.9rem;
+      border-radius: 0.7rem;
       color: var(--otziv-info);
       background: transparent;
       font: inherit;
@@ -166,7 +168,7 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
     }
 
     ion-icon {
-      font-size: 1.28rem;
+      font-size: 1.03rem;
       pointer-events: none;
     }
 
@@ -174,9 +176,9 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
     .tab-label {
       width: 100%;
       max-width: 100%;
-      margin-top: 0.14rem;
+      margin-top: 0.08rem;
       overflow: hidden;
-      font-size: clamp(0.54rem, 2.25vw, 0.6rem);
+      font-size: clamp(0.47rem, 1.95vw, 0.52rem);
       line-height: 1;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -184,12 +186,12 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
 
     @media (max-width: 360px) {
       .otziv-tabbar {
-        padding-inline: 0.2rem;
+        padding-inline: 0.12rem;
       }
 
       ion-label,
       .tab-label {
-        font-size: 0.5rem;
+        font-size: 0.46rem;
       }
     }
   `]

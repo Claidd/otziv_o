@@ -225,6 +225,23 @@
   box-shadow: none;
 }
 
+.recovery-task-actions button.delete {
+  grid-column: 1 / -1;
+  min-height: 2.1rem;
+  border: 1px solid rgba(217, 73, 99, 0.22);
+  border-radius: 1rem;
+  color: #c43859;
+  background: #fff0f5;
+  text-transform: uppercase;
+  box-shadow: none;
+}
+
+.recovery-task-actions button.delete:not(:disabled):hover {
+  border-color: rgba(217, 73, 99, 0.34);
+  color: #a92d49;
+  background: #ffe5ef;
+}
+
 .recovery-task-actions .material-icons-sharp {
   font-size: 1rem;
 }
@@ -354,7 +371,13 @@
   gap: 0.45rem;
 }
 
-.review-card header > a {
+.review-card-title {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.review-card-title > a {
   overflow: hidden;
   color: var(--otziv-dark);
   font-family: var(--otziv-card-title-font);
@@ -363,6 +386,17 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   text-decoration: none;
+  white-space: nowrap;
+}
+
+.review-card-title > span {
+  overflow: hidden;
+  color: var(--otziv-info);
+  font-family: var(--otziv-font-family);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

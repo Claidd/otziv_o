@@ -267,6 +267,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private String badReviewInvoiceMessage(Order order, BadReviewTaskSummary summary) {
+        if (usesTbankPaymentInstructionSource()) {
+            return paymentLinkServiceProvider.getObject().createForOrder(order.getId()).copyText();
+        }
         String heading = orderHeading(order);
         String paymentText = paymentInstruction(order) + "\n\nК оплате: " + money(payableSum(order, summary)) + " руб.";
         return heading.isBlank() ? paymentText : heading + "\n\n" + paymentText;
@@ -283,7 +286,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return managerPayText(order);
         }
         ManagerPaymentLinkResponse link = paymentLinkServiceProvider.getObject().createForOrder(order.getId());
-        return "Ссылка на оплату: " + link.url();
+        return link.instructionText();
     }
 
     private boolean usesTbankPaymentInstructionSource() {

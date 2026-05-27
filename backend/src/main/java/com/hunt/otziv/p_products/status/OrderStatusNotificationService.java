@@ -60,6 +60,25 @@ public class OrderStatusNotificationService {
         return false;
     }
 
+    public boolean sendInformationalMessageToClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            String actionTitle
+    ) {
+        log.info("📨 Отправка клиентского уведомления: {}", actionTitle);
+        String sentChannel = sendToActiveClientChat(order, clientId, groupId, message);
+        if (sentChannel != null) {
+            log.info("✅ Клиентское уведомление \"{}\" отправлено через {}", actionTitle, sentChannel);
+            return true;
+        }
+
+        log.warn("⚠️ Клиентское уведомление \"{}\" для компании {} не отправлено в активный клиентский мессенджер",
+                actionTitle, companyTitle(order));
+        return false;
+    }
+
     public String sendMessageToClientChat(
             String title,
             Order order,

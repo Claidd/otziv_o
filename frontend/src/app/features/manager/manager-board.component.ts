@@ -1,10 +1,12 @@
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
 import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
+import { PaymentsApi } from '../../core/payments.api';
 import {
   CompanyCardItem,
   ManagerApi,
@@ -46,9 +48,7 @@ import {
   managerErrorMessage,
   managerLayoutTitle,
   managerOrderActions,
-  managerOrderPaymentCopyText,
   managerOrderReviewCopyText,
-  managerPayableOrderSum,
   managerPromoItems,
   managerStatusOptionLabel,
   trackManagerCompany,
@@ -110,6 +110,7 @@ type ChatBotLinkPoll = {
 export class ManagerBoardComponent implements OnDestroy {
   private readonly historyStateKey = MANAGER_HISTORY_STATE_KEY;
   private readonly managerApi = inject(ManagerApi);
+  private readonly paymentsApi = inject(PaymentsApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
   private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
@@ -459,16 +460,17 @@ export class ManagerBoardComponent implements OnDestroy {
       return;
     }
 
-    const sum = this.payableOrderSum(order);
-    await this.copyText(
-      managerOrderPaymentCopyText(order, sum),
-      `payment-${order.id}`,
-      'Текст счета скопирован'
-    );
-  }
-
-  payableOrderSum(order: OrderCardItem): number {
-    return managerPayableOrderSum(order);
+    try {
+      const response = await firstValueFrom(this.paymentsApi.createOrderPaymentLink(order.id));
+      await this.copyText(
+        response.copyText || response.url,
+        `payment-${order.id}`,
+        'Текст счета скопирован'
+      );
+    } catch (err) {
+      const message = this.errorMessage(err, 'Не удалось создать ссылку на оплату');
+      this.toastService.error('Счет не создан', message);
+    }
   }
 
   openCompanyOrders(company: CompanyCardItem): void {

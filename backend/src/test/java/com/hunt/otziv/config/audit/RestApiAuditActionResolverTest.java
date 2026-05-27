@@ -229,6 +229,7 @@ class RestApiAuditActionResolverTest {
                 arguments("POST", "/api/manager/orders/{orderId}/reviews/help-drafts", "создание AI-помощи для всех отзывов заказа 17"),
                 arguments("PUT", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "редактирование восстановления 8"),
                 arguments("POST", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}/complete", "выполнение восстановления 8"),
+                arguments("DELETE", "/api/manager/orders/{orderId}/recovery-tasks/{taskId}", "удаление восстановления 8"),
                 arguments("POST", "/api/manager/orders/{orderId}/recovery-batches/{batchId}/client-notified", "отметка клиента уведомленным по восстановлению 4"),
                 arguments("GET", "/api/manager/overdue-orders", "проверка заказов, которые давно не менялись"),
                 arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/answer", "редактирование ответа отзыва 25 при проверке"),

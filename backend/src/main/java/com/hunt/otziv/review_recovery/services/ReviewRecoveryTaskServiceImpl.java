@@ -65,7 +65,9 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (orderId == null || orderId <= 0) {
             return List.of();
         }
-        return taskRepository.findByOrderIdAndBatchStatusIn(orderId, VISIBLE_BATCH_STATUSES);
+        return taskRepository.findByOrderIdAndBatchStatusIn(orderId, VISIBLE_BATCH_STATUSES).stream()
+                .filter(task -> task.getStatus() != ReviewRecoveryTaskStatus.CANCELLED)
+                .toList();
     }
 
     @Override
@@ -149,6 +151,26 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         completeBatchIfReady(savedTask.getBatch());
 
         log.info("Задача восстановления {} выполнена, отзыв {}, заказ {}",
+                savedTask.getId(), reviewId(savedTask), orderId(savedTask));
+        return savedTask;
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryTask cancelTask(Long taskId) {
+        ReviewRecoveryTask task = requireTask(taskId);
+        if (task.getStatus() == ReviewRecoveryTaskStatus.CANCELLED) {
+            return task;
+        }
+        if (task.getStatus() == ReviewRecoveryTaskStatus.DONE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Выполненную задачу восстановления нельзя удалить");
+        }
+
+        task.setStatus(ReviewRecoveryTaskStatus.CANCELLED);
+        ReviewRecoveryTask savedTask = taskRepository.save(task);
+        completeBatchIfReady(savedTask.getBatch());
+
+        log.info("Задача восстановления {} отменена, отзыв {}, заказ {}",
                 savedTask.getId(), reviewId(savedTask), orderId(savedTask));
         return savedTask;
     }
@@ -405,6 +427,10 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
         long plannedCount = taskRepository.countByBatchIdAndStatus(batch.getId(), ReviewRecoveryTaskStatus.PLANNED);
         if (plannedCount > 0) {
+            return;
+        }
+        long doneCount = taskRepository.countByBatchIdAndStatus(batch.getId(), ReviewRecoveryTaskStatus.DONE);
+        if (doneCount <= 0) {
             return;
         }
 

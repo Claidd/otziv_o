@@ -33,7 +33,7 @@ public class ReputationContentPackService {
         ResearchSnapshot snapshot = researchService.createSnapshot(companyId, safeRequest.toResearchRequest());
         return aiContentFactory.create(snapshot, deepReport, safeRequest)
                 .orElseThrow(() -> new IllegalStateException(
-                        "OpenAI не подготовил AI-пакет. Проверьте API-ключ, модель и лимиты OpenAI."
+                        "AI-провайдер не подготовил AI-пакет. Проверьте ключ, модель и лимиты YandexGPT."
                 ));
     }
 

@@ -832,6 +832,23 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                     @Param("inactiveStatuses") Set<String> inactiveStatuses);
 
     @Query("""
+        SELECT CASE WHEN COUNT(DISTINCT o.id) > 0 THEN true ELSE false END
+        FROM Order o
+        LEFT JOIN o.status s
+        LEFT JOIN o.details d
+        LEFT JOIN d.reviews r
+        WHERE o.company.id = :companyId
+          AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND o.complete = false
+          AND COALESCE(s.title, '') NOT IN :inactiveStatuses
+          AND (o.filial.id IN :filialIds OR r.filial.id IN :filialIds)
+    """)
+    boolean existsActiveOrderByCompanyIdAndAnyFilialId(@Param("companyId") Long companyId,
+                                                       @Param("filialIds") Collection<Long> filialIds,
+                                                       @Param("excludedOrderId") Long excludedOrderId,
+                                                       @Param("inactiveStatuses") Set<String> inactiveStatuses);
+
+    @Query("""
         SELECT o
         FROM Order o
         LEFT JOIN FETCH o.status s
@@ -850,6 +867,28 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                        @Param("excludedOrderId") Long excludedOrderId,
                                                        @Param("inactiveStatuses") Set<String> inactiveStatuses,
                                                        Pageable pageable);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.status s
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
+        LEFT JOIN o.details d
+        LEFT JOIN d.reviews r
+        WHERE o.company.id = :companyId
+          AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND o.complete = false
+          AND COALESCE(s.title, '') NOT IN :inactiveStatuses
+          AND (o.filial.id IN :filialIds OR r.filial.id IN :filialIds)
+        ORDER BY o.id DESC
+    """)
+    List<Order> findActiveOrdersByCompanyIdAndAnyFilialId(@Param("companyId") Long companyId,
+                                                          @Param("filialIds") Collection<Long> filialIds,
+                                                          @Param("excludedOrderId") Long excludedOrderId,
+                                                          @Param("inactiveStatuses") Set<String> inactiveStatuses,
+                                                          Pageable pageable);
 
     @Query("""
         SELECT o.id

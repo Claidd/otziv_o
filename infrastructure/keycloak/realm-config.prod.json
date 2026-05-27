@@ -24,6 +24,9 @@
   "accessTokenLifespan": 600,
   "ssoSessionIdleTimeout": 28800,
   "ssoSessionMaxLifespan": 86400,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 2592000,
   "roles": {
     "realm": [
       {
@@ -128,8 +131,13 @@
         "http://localhost",
         "capacitor://localhost"
       ],
+      "optionalClientScopes": [
+        "offline_access"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
+        "client.session.idle.timeout": "2592000",
+        "client.session.max.lifespan": "2592000",
         "post.logout.redirect.uris": "${OTZIV_APP_BASE_URL}/login##otziv://logout"
       },
       "protocolMappers": [

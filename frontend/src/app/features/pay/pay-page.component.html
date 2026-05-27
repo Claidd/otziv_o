@@ -8,7 +8,7 @@
       </section>
     } @else if (payment()) {
       @let item = payment();
-      <section class="payment-widget" [class.bank-first]="bankFirst()" aria-label="Оплата заказа">
+      <section class="payment-widget" aria-label="Оплата заказа">
         <header class="payment-head">
           <div>
             <span class="merchant-name">Компания О!</span>
@@ -18,73 +18,81 @@
           <span class="brand-mark" aria-hidden="true">О!</span>
         </header>
 
-        @if (showSbpPayment()) {
-        <article class="quick-pay-card">
+        @if (manualPayment() && !isPaymentComplete()) {
+        <article class="manual-card">
           <div class="method-title">
             <div>
-              <h2>СБП</h2>
-              <p>{{ showBankPayment() ? 'Основной способ оплаты по динамическому QR-коду' : 'Оплата только через динамический QR-код' }}</p>
+              <h2>{{ externalManualPayment() ? 'Оплата по ссылке банка' : 'Оплата по номеру телефона' }}</h2>
+              <p>Платеж проверяется менеджером вручную.</p>
             </div>
             <span>{{ statusLabel() }}</span>
           </div>
-          <button
-            class="quick-pay-button"
-            type="button"
-            [disabled]="!canSubmit()"
-            (click)="submitSbp()"
-          >
-            <span class="material-icons-sharp" aria-hidden="true">{{ sbpSubmitting() ? 'hourglass_top' : 'qr_code_2' }}</span>
-            {{ sbpSubmitting() ? 'Создаем QR...' : 'Оплатить через СБП' }}
-          </button>
 
-          @if (hasSbpQr()) {
-            <div class="sbp-qr-panel" aria-live="polite">
-              <div>
-                <strong>QR-код готов</strong>
-                <small>Откройте приложение банка и оплатите по СБП. После оплаты статус придет от банка автоматически.</small>
-              </div>
-              @if (sbpQrImageSrc()) {
-                <img [src]="sbpQrImageSrc()" alt="QR-код для оплаты через СБП">
-              }
-              <div class="sbp-actions">
-                @if (sbpQrPayload()) {
-                  <button type="button" class="secondary-pay-button" (click)="openSbpPayload()">
-                    <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
-                    Открыть в банке
-                  </button>
-                }
-                @if (sbpPaymentUrl()) {
-                  <a [href]="sbpPaymentUrl()" target="_blank" rel="noopener" class="secondary-pay-button">
-                    <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
-                    Другой способ
-                  </a>
-                }
-              </div>
-            </div>
-          }
+          <div class="manual-details" aria-label="Реквизиты ручной оплаты">
+            @if (externalManualPayment()) {
+              <button type="button" class="manual-external-pay" (click)="openManualPaymentUrl()">
+                <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                {{ manualPaymentButtonLabel() }}
+              </button>
+              <button type="button" (click)="copyManualValue(manualPaymentUrl())" title="Скопировать ссылку оплаты">
+                <small>Ссылка оплаты</small>
+                <strong>{{ manualPaymentUrl() }}</strong>
+                <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+              </button>
+              <button type="button" (click)="copyManualValue(item?.manualRecipientName)" title="Скопировать получателя">
+                <small>Получатель</small>
+                <strong>{{ item?.manualRecipientName || 'Сивохин И.И.' }}</strong>
+                <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+              </button>
+            } @else {
+              <button type="button" (click)="copyManualValue(item?.manualPhone)" title="Скопировать телефон">
+                <small>Телефон</small>
+                <strong>{{ item?.manualPhone || 'не указан' }}</strong>
+                <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+              </button>
+              <button type="button" (click)="copyManualValue(item?.manualRecipientName)" title="Скопировать получателя">
+                <small>Получатель</small>
+                <strong>{{ item?.manualRecipientName || 'не указан' }}</strong>
+                <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+              </button>
+            }
+            <button type="button" (click)="copyManualValue(item?.manualComment)" title="Скопировать комментарий">
+              <small>Комментарий</small>
+              <strong>{{ item?.manualComment || 'Оплата заказа' }}</strong>
+              <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
+            </button>
+          </div>
+
+          <button
+            class="manual-paid-button"
+            type="button"
+            [disabled]="!canReportManual()"
+            (click)="reportManualPayment()"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">{{ manualSubmitting() ? 'hourglass_top' : 'done_all' }}</span>
+            {{ item?.status === 'MANUAL_REPORTED' ? 'Платеж ожидает проверки' : (manualSubmitting() ? 'Отмечаем' : 'Я оплатил') }}
+          </button>
         </article>
         }
 
-        @if (message()) {
-          <p class="pay-message">{{ message() }}</p>
-        }
-        @if (error()) {
-          <p class="pay-error">{{ error() }}</p>
-        }
-
-        @if (showBankPayment()) {
-        <article class="bank-card">
-          <header>
-            <h2>{{ bankPaymentTitle() }}</h2>
-            <span>
-              <span class="material-icons-sharp" aria-hidden="true">lock</span>
-              банк
-            </span>
-          </header>
-          <div class="bank-method-grid" aria-label="Доступные способы в форме банка">
-            @for (method of bankMethodChips(); track method) {
-              <span>{{ method }}</span>
-            }
+        @if (isPaymentComplete()) {
+        <article class="payment-complete-card" aria-live="polite">
+          <span class="payment-complete-icon" aria-hidden="true">
+            <span class="material-icons-sharp">task_alt</span>
+          </span>
+          <div>
+            <h2>{{ paymentCompleteTitle() }}</h2>
+            <p>{{ paymentCompleteText() }}</p>
+          </div>
+        </article>
+        } @else if (!manualPayment() && (showSbpPayment() || showBankPayment())) {
+        <article class="checkout-card">
+          <div class="method-title">
+            <div>
+              <h2>{{ checkoutTitle() }}</h2>
+              <p>{{ checkoutSubtitle() }}</p>
+            </div>
+            <span>{{ statusLabel() }}</span>
           </div>
 
           <div class="order-summary" aria-label="Данные заказа">
@@ -106,7 +114,57 @@
             </div>
           </div>
 
-          <form class="pay-form" (ngSubmit)="submitBankForm()" aria-label="Данные для оплаты">
+          <form class="pay-form" (ngSubmit)="submitPrimaryPayment()" aria-label="Данные для оплаты">
+            @if (showSbpPayment()) {
+              <section class="sbp-section" aria-label="Банк для оплаты через СБП">
+                @if (sbpBanksLoading()) {
+                  <div class="sbp-bank-state">
+                    <span class="material-icons-sharp" aria-hidden="true">hourglass_top</span>
+                    <strong>Загружаем банки</strong>
+                  </div>
+                } @else if (hasSbpBanks()) {
+                  <div class="sbp-bank-picker">
+                    <div class="sbp-bank-grid">
+                      @for (bank of featuredSbpBanks(); track trackSbpBank($index, bank)) {
+                        <button
+                          type="button"
+                          class="sbp-bank-option"
+                          [class.active]="selectedSbpBankId() === bank.bankId"
+                          (click)="selectSbpBank(bank)"
+                          [title]="bank.name"
+                        >
+                          <span class="sbp-bank-logo" aria-hidden="true">
+                            @if (bank.logoUrl) {
+                              <img [src]="bank.logoUrl" [alt]="bank.name">
+                            } @else {
+                              <span>{{ bankInitials(bank.name) }}</span>
+                            }
+                          </span>
+                          <strong>{{ bank.name }}</strong>
+                        </button>
+                      }
+                    </div>
+
+                    <label class="sbp-bank-select">
+                      <span>Банк</span>
+                      <select
+                        name="sbpBank"
+                        [ngModel]="selectedSbpBankId()"
+                        (ngModelChange)="setSbpBankId($event)"
+                      >
+                        <option value="">СБП без выбора банка</option>
+                        @for (bank of sbpBanks(); track trackSbpBank($index, bank)) {
+                          <option [value]="bank.bankId">{{ bank.name }}</option>
+                        }
+                      </select>
+                    </label>
+                  </div>
+                } @else if (sbpBanksError()) {
+                  <p class="sbp-bank-error">{{ sbpBanksError() }}</p>
+                }
+              </section>
+            }
+
             <label class="email-field">
               <span>E-mail для электронного чека</span>
               <input
@@ -142,9 +200,43 @@
             </div>
 
             <button class="primary-pay-button" type="submit" [disabled]="!canSubmit()">
-              <span class="material-icons-sharp" aria-hidden="true">{{ bankSubmitting() ? 'hourglass_top' : 'payments' }}</span>
-              {{ bankSubmitting() ? 'Открываем форму банка' : 'Оплатить другим способом' }}
+              <span class="material-icons-sharp" aria-hidden="true">{{ primaryButtonIcon() }}</span>
+              {{ primaryButtonText() }}
             </button>
+
+            @if (showBankPayment() && hasFastBankMethods()) {
+              <div class="fast-bank-methods" aria-label="Быстрые способы в форме банка">
+                @for (method of fastBankMethods(); track method) {
+                  <button
+                    type="button"
+                    class="fast-bank-method"
+                    [class.fast-bank-method--tpay]="method === 'T-Pay'"
+                    [class.fast-bank-method--sberpay]="method === 'SberPay'"
+                    [class.fast-bank-method--mirpay]="method === 'Mir Pay'"
+                    [disabled]="!canSubmit()"
+                    (click)="submitBankForm()"
+                  >
+                    <span>{{ methodIcon(method) }}</span>
+                    {{ method }}
+                  </button>
+                }
+              </div>
+            }
+
+            @if (showSbpPayment() && showBankPayment()) {
+              <button
+                class="alternative-pay-link"
+                type="button"
+                [disabled]="!canSubmit()"
+                (click)="submitBankForm()"
+              >
+                другой способ
+              </button>
+            }
+
+            @if (hasSbpLink()) {
+              <p class="sbp-inline-note" aria-live="polite">Если приложение банка не открылось, нажмите основную кнопку еще раз.</p>
+            }
 
             <div class="payment-badges" aria-label="Способы оплаты">
               @for (badge of paymentBadges(); track badge) {
@@ -153,6 +245,13 @@
             </div>
           </form>
         </article>
+        }
+
+        @if (message()) {
+          <p class="pay-message">{{ message() }}</p>
+        }
+        @if (error()) {
+          <p class="pay-error">{{ error() }}</p>
         }
       </section>
     } @else {

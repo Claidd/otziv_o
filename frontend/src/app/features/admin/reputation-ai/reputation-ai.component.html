@@ -59,7 +59,7 @@
         </section>
 
         <section class="launch-action-area" aria-label="Основные действия AI-помощника">
-          <button type="button" class="flow-action-button report-action" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()" appTooltip="Запустить новый глубокий отчёт: OpenAI соберёт источники, разделы, риски и чек-лист качества.">
+          <button type="button" class="flow-action-button report-action" [disabled]="busy() || hasActiveDeepResearch()" (click)="createDeepResearch()" appTooltip="Запустить новый глубокий отчёт: AI-провайдер соберёт источники, разделы, риски и чек-лист качества.">
             <span class="flow-step">1</span>
             <span class="material-icons-sharp">psychology</span>
             <span class="flow-action-copy">
@@ -740,7 +740,7 @@
               <span class="material-icons-sharp">rule</span>
               {{ validatingPrompt() ? 'Проверяю' : 'Проверить' }}
             </button>
-            <button type="button" class="secondary" [disabled]="previewingPrompt()" (click)="previewPrompt()" appTooltip="Собрать итоговый prompt input на демо-данных без вызова OpenAI.">
+            <button type="button" class="secondary" [disabled]="previewingPrompt()" (click)="previewPrompt()" appTooltip="Собрать итоговый prompt input на демо-данных без вызова AI-провайдера.">
               <span class="material-icons-sharp">preview</span>
               {{ previewingPrompt() ? 'Собираю' : 'Preview' }}
             </button>
@@ -755,7 +755,7 @@
           </div>
 
           @if (promptPreview(); as preview) {
-            <details class="prompt-preview-panel" open appTooltip="Итоговый текст после подстановки демо-данных. OpenAI здесь не вызывается.">
+            <details class="prompt-preview-panel" open appTooltip="Итоговый текст после подстановки демо-данных. AI-провайдер здесь не вызывается.">
               <summary>Preview · {{ preview.sampleName }}</summary>
               <div class="prompt-preview-meta">
                 <span>{{ preview.replacedPlaceholders.length }} подставлено</span>
@@ -964,14 +964,19 @@
     <article class="side-panel">
       <div class="side-title">
         <span class="material-icons-sharp">key</span>
-        <h2>Маршрут OpenAI</h2>
+        <h2>Маршрут AI</h2>
       </div>
 
       @if (status(); as providerStatus) {
         <div class="provider-summary">
           <span>AI: {{ providerStatus.aiProvider }} · {{ providerStatus.aiAvailable ? 'доступен' : 'не доступен' }}</span>
           <span>Search: {{ providerStatus.searchProvider }} · {{ providerStatus.searchAvailable ? 'доступен' : 'не доступен' }}</span>
-          <span>OpenAI: {{ providerStatus.openAiConfigured ? providerStatus.openAiModel : 'не настроен' }}</span>
+          <span>
+            Модель:
+            {{ providerStatus.aiProvider === 'yandexgpt'
+              ? (providerStatus.yandexGptConfigured ? providerStatus.yandexModel : 'YandexGPT не настроен')
+              : (providerStatus.openAiConfigured ? providerStatus.openAiModel : 'OpenAI не настроен') }}
+          </span>
           @if (providerStatus.openAiProxyEnabled) {
             <strong>proxy</strong>
           }
@@ -990,7 +995,7 @@
           </div>
           <button type="button" class="secondary side-action" [disabled]="checkingOpenAiRoute()" (click)="checkOpenAiRoute()">
             <span class="material-icons-sharp">network_check</span>
-            {{ checkingOpenAiRoute() ? 'Проверяю' : 'Проверить OpenAI' }}
+            {{ checkingOpenAiRoute() ? 'Проверяю' : 'Проверить AI' }}
           </button>
         }
       } @else {

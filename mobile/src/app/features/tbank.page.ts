@@ -11,10 +11,20 @@ import { firstValueFrom } from 'rxjs';
 import {
   AdminPaymentLinkResponse,
   ApiService,
+  ManualPaymentTaskResponse,
+  ManualPaymentTaskStatus,
+  ManualPaymentType,
   ManagerPaymentProfileResponse,
   ManagerPaymentProfileAssignmentRequest,
+  PaymentInstructionSource,
+  PaymentPolicy,
+  PaymentProfilePolicyRequest,
   PaymentProfileResponse,
-  TbankPaymentStatus
+  TbankPaymentPageMode,
+  TbankPaymentStatus,
+  TbankRuntimeMode,
+  TbankRuntimeSettings,
+  UpdateTbankRuntimeSettingsRequest
 } from '../core/api.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
@@ -24,8 +34,8 @@ import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
 
-type TbankMode = 'payments' | 'profiles' | 'managers';
-type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created';
+type TbankMode = 'payments' | 'launch' | 'tasks' | 'profiles' | 'managers';
+type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created' | 'manual';
 type Tone = 'blue' | 'green' | 'yellow' | 'red' | 'teal' | 'gray';
 
 type StatusOption = {
@@ -35,7 +45,21 @@ type StatusOption = {
   tone: Tone;
 };
 
+type ProfilePolicyDraft = {
+  paymentPolicy: PaymentPolicy;
+  manualPaymentType: ManualPaymentType;
+  manualPhone: string;
+  manualRecipientName: string;
+  manualPaymentUrl: string;
+  manualPaymentButtonLabel: string;
+  manualMonthlyLimitRubles: string;
+};
+
 const PAGE_SIZE = 10;
+const DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES = 191000;
+const DEFAULT_MANUAL_RECIPIENT_NAME = 'Сивохин И.И.';
+const DEFAULT_MANUAL_PAYMENT_URL = 'https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR';
+const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Альфа-Банк';
 
 @Component({
   selector: 'app-tbank-page',
@@ -134,20 +158,48 @@ const PAGE_SIZE = 10;
                       </span>
                     </div>
 
-                    <button
-                      type="button"
-                      class="copy-line"
-                      (click)="copy(link.tbankPaymentId, 'payment-' + link.id)"
-                      [disabled]="!link.tbankPaymentId"
-                    >
-                      <span class="material-icons-sharp">{{ copied() === 'payment-' + link.id ? 'check' : 'content_copy' }}</span>
-                      {{ link.tbankPaymentId || 'PaymentId не получен' }}
-                    </button>
+                    @if (isManualPayment(link)) {
+                      @if (isExternalManualPayment(link)) {
+                        <button
+                          type="button"
+                          class="copy-line manual"
+                          (click)="openUrl(link.manualPaymentUrl)"
+                          [disabled]="!link.manualPaymentUrl"
+                        >
+                          <span class="material-icons-sharp">open_in_new</span>
+                          {{ link.manualPaymentButtonLabel || 'Ссылка Альфа-Банк' }}
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="copy-line manual"
+                          (click)="copy(link.manualPhone, 'manual-phone-' + link.id)"
+                          [disabled]="!link.manualPhone"
+                        >
+                          <span class="material-icons-sharp">{{ copied() === 'manual-phone-' + link.id ? 'check' : 'content_copy' }}</span>
+                          {{ link.manualPhone || 'Телефон не указан' }}
+                        </button>
+                      }
+                      <div class="manual-note">
+                        <strong>{{ link.manualRecipientName || 'Получатель не указан' }}</strong>
+                        <small>{{ manualSourceLabel(link) }} · {{ link.manualComment || 'Комментарий не задан' }}</small>
+                      </div>
+                    } @else {
+                      <button
+                        type="button"
+                        class="copy-line"
+                        (click)="copy(link.tbankPaymentId, 'payment-' + link.id)"
+                        [disabled]="!link.tbankPaymentId"
+                      >
+                        <span class="material-icons-sharp">{{ copied() === 'payment-' + link.id ? 'check' : 'content_copy' }}</span>
+                        {{ link.tbankPaymentId || 'PaymentId не получен' }}
+                      </button>
+                    }
 
                     <div class="meta-grid">
                       <span>
-                        <small>OrderId</small>
-                        <strong>{{ link.tbankOrderId || '-' }}</strong>
+                        <small>{{ isManualPayment(link) ? 'Метод' : 'OrderId' }}</small>
+                        <strong>{{ isManualPayment(link) ? paymentMethodLabel(link) : (link.tbankOrderId || '-') }}</strong>
                       </span>
                       <span>
                         <small>Профиль</small>
@@ -161,6 +213,16 @@ const PAGE_SIZE = 10;
                         <small>Истекает</small>
                         <strong>{{ shortDate(link.expiresAt) }}</strong>
                       </span>
+                      @if (isManualPayment(link)) {
+                        <span>
+                          <small>Чек</small>
+                          <strong>{{ receiptStatusLabel(link) }}</strong>
+                        </span>
+                        <span>
+                          <small>Сверка</small>
+                          <strong>{{ shortDate(link.manualConfirmedAt || link.manualReportedAt) }}</strong>
+                        </span>
+                      }
                     </div>
 
                     @if (link.payerEmail) {
@@ -182,19 +244,33 @@ const PAGE_SIZE = 10;
                         <span class="material-icons-sharp">open_in_new</span>
                         ссылка
                       </button>
-                      <button type="button" (click)="openUrl(link.paymentUrl)" [disabled]="!link.paymentUrl">
-                        <span class="material-icons-sharp">credit_card</span>
-                        банк
-                      </button>
-                      <button
-                        type="button"
-                        class="refund"
-                        (click)="cancel(link)"
-                        [disabled]="!link.refundable || mutatingId() === link.id"
-                      >
-                        <span class="material-icons-sharp">undo</span>
-                        {{ mutatingId() === link.id ? '...' : 'возврат' }}
-                      </button>
+                      @if (canConfirmManual(link)) {
+                        <button type="button" class="confirm" (click)="confirmManual(link)" [disabled]="mutatingId() === link.id">
+                          <span class="material-icons-sharp">done_all</span>
+                          {{ mutatingId() === link.id ? '...' : 'подтвердить' }}
+                        </button>
+                      }
+                      @if (canMarkManualReceipt(link)) {
+                        <button type="button" class="receipt" (click)="markManualReceipt(link)" [disabled]="mutatingId() === link.id">
+                          <span class="material-icons-sharp">receipt</span>
+                          чек
+                        </button>
+                      }
+                      @if (!isManualPayment(link)) {
+                        <button type="button" (click)="openUrl(link.paymentUrl)" [disabled]="!link.paymentUrl">
+                          <span class="material-icons-sharp">credit_card</span>
+                          банк
+                        </button>
+                        <button
+                          type="button"
+                          class="refund"
+                          (click)="cancel(link)"
+                          [disabled]="!link.refundable || mutatingId() === link.id"
+                        >
+                          <span class="material-icons-sharp">undo</span>
+                          {{ mutatingId() === link.id ? '...' : 'возврат' }}
+                        </button>
+                      }
                     </footer>
                   </article>
                 } @empty {
@@ -229,6 +305,328 @@ const PAGE_SIZE = 10;
                 <span class="material-icons-sharp">swap_vert</span>
               </button>
             </app-mobile-bottom-pager>
+          } @else if (mode() === 'launch') {
+            <section class="launch-list" aria-label="Пульт запуска T-Bank">
+              @if (runtimeSettings(); as settings) {
+                <article class="launch-card launch-summary-card">
+                  <header>
+                    <span class="material-icons-sharp">{{ settings.runtimeMode === 'TEST' ? 'science' : 'rocket_launch' }}</span>
+                    <div>
+                      <p>Пульт запуска</p>
+                      <h2>{{ launchStateTitle() }}</h2>
+                      <small>{{ launchStateDescription() }}</small>
+                    </div>
+                  </header>
+                  @if (savingRuntimeSettings()) {
+                    <span class="saving-note">Сохраняю настройки...</span>
+                  }
+                </article>
+
+                <article class="launch-card">
+                  <h3><span>1</span> Контур T-Bank</h3>
+                  <div class="segmented two">
+                    <button type="button" [class.active]="settings.runtimeMode === 'TEST'" [disabled]="savingRuntimeSettings() || loading()" (click)="setRuntimeMode('TEST')">
+                      <span class="material-icons-sharp">science</span>
+                      Тестовый
+                    </button>
+                    <button type="button" [class.active]="settings.runtimeMode === 'LIVE'" [disabled]="savingRuntimeSettings() || loading()" (click)="setRuntimeMode('LIVE')">
+                      <span class="material-icons-sharp">verified</span>
+                      Боевой
+                    </button>
+                  </div>
+                  <small>В тестовом контуре платежи не засчитываются как реальные.</small>
+                </article>
+
+                <article class="launch-card">
+                  <h3><span>2</span> Что отправлять клиентам</h3>
+                  <div class="segmented two">
+                    <button type="button" [class.active]="settings.paymentInstructionSource === 'MANAGER_TEXT'" [disabled]="savingRuntimeSettings() || loading()" (click)="setPaymentInstructionSource('MANAGER_TEXT')">
+                      <span class="material-icons-sharp">article</span>
+                      Альфа / текст
+                    </button>
+                    <button type="button" [class.active]="settings.paymentInstructionSource === 'TBANK_LINK'" [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'" (click)="setPaymentInstructionSource('TBANK_LINK')">
+                      <span class="material-icons-sharp">link</span>
+                      T-Bank ссылки
+                    </button>
+                  </div>
+                  <small>Переключает автоответчик и счета после плохого отзыва.</small>
+                </article>
+
+                <article class="launch-card">
+                  <h3><span>3</span> После подтверждения оплаты</h3>
+                  <div class="segmented two">
+                    <button type="button" [class.active]="!settings.applyConfirmedPayments" [disabled]="savingRuntimeSettings() || loading()" (click)="setApplyConfirmedPayments(false)">
+                      <span class="material-icons-sharp">fact_check</span>
+                      Только журнал
+                    </button>
+                    <button type="button" [class.active]="settings.applyConfirmedPayments" [disabled]="savingRuntimeSettings() || loading() || settings.runtimeMode === 'TEST'" (click)="setApplyConfirmedPayments(true)">
+                      <span class="material-icons-sharp">paid</span>
+                      Оплачивать заказ
+                    </button>
+                  </div>
+                  <small>Полное включение переводит заказ в оплату по webhook CONFIRMED.</small>
+                </article>
+
+                <article class="launch-card">
+                  <h3><span>4</span> Способы на /pay</h3>
+                  <div class="segmented four">
+                    <button type="button" [class.active]="settings.paymentPageMode === 'SBP_PRIMARY'" [disabled]="savingRuntimeSettings() || loading()" (click)="setPaymentPageMode('SBP_PRIMARY')">
+                      <span class="material-icons-sharp">account_balance_wallet</span>
+                      СБП + карта
+                    </button>
+                    <button type="button" [class.active]="settings.paymentPageMode === 'BANK_PRIMARY'" [disabled]="savingRuntimeSettings() || loading()" (click)="setPaymentPageMode('BANK_PRIMARY')">
+                      <span class="material-icons-sharp">credit_card</span>
+                      Карта + СБП
+                    </button>
+                    <button type="button" [class.active]="settings.paymentPageMode === 'SBP_ONLY'" [disabled]="savingRuntimeSettings() || loading()" (click)="setPaymentPageMode('SBP_ONLY')">
+                      <span class="material-icons-sharp">mobile_friendly</span>
+                      Только СБП
+                    </button>
+                    <button type="button" [class.active]="settings.paymentPageMode === 'BANK_ONLY'" [disabled]="savingRuntimeSettings() || loading()" (click)="setPaymentPageMode('BANK_ONLY')">
+                      <span class="material-icons-sharp">payments</span>
+                      Только банк
+                    </button>
+                  </div>
+                  <small>{{ paymentPageModeDescription() }}</small>
+                </article>
+
+                <article class="launch-card">
+                  <h3><span>5</span> Быстрые методы банка</h3>
+                  <label class="toggle-row">
+                    <span><strong>T-Pay</strong><small>Показывать в банковском блоке</small></span>
+                    <input type="checkbox" [checked]="settings.tpayEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setFastBankMethodSwitch('tpayEnabled', $any($event.target).checked)">
+                  </label>
+                  <label class="toggle-row">
+                    <span><strong>SberPay</strong><small>Показывать в банковском блоке</small></span>
+                    <input type="checkbox" [checked]="settings.sberpayEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setFastBankMethodSwitch('sberpayEnabled', $any($event.target).checked)">
+                  </label>
+                  <label class="toggle-row">
+                    <span><strong>Mir Pay</strong><small>Показывать в банковском блоке</small></span>
+                    <input type="checkbox" [checked]="settings.mirpayEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setFastBankMethodSwitch('mirpayEnabled', $any($event.target).checked)">
+                  </label>
+                  <small>{{ fastBankMethodDescription() }}</small>
+                </article>
+
+                <article class="launch-card">
+                  <h3><span>6</span> Базовые переключатели</h3>
+                  <label class="toggle-row">
+                    <span><strong>API</strong><small>Разрешить работу T-Bank backend</small></span>
+                    <input type="checkbox" [checked]="settings.tbankEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setCoreSwitch('tbankEnabled', $any($event.target).checked)">
+                  </label>
+                  <label class="toggle-row">
+                    <span><strong>Ссылки</strong><small>Создание платежных ссылок</small></span>
+                    <input type="checkbox" [checked]="settings.paymentLinksEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setCoreSwitch('paymentLinksEnabled', $any($event.target).checked)">
+                  </label>
+                  <label class="toggle-row">
+                    <span><strong>UI менеджера</strong><small>Показывать платежный UI менеджерам</small></span>
+                    <input type="checkbox" [checked]="settings.managerUiEnabled" [disabled]="savingRuntimeSettings() || loading()" (change)="setCoreSwitch('managerUiEnabled', $any($event.target).checked)">
+                  </label>
+                </article>
+              } @else {
+                <div class="empty-state">
+                  <span class="material-icons-sharp">hourglass_top</span>
+                  <strong>Настройки запуска загружаются</strong>
+                </div>
+              }
+            </section>
+          } @else if (mode() === 'tasks') {
+            <section class="task-list" aria-label="Ручные платежные задания">
+              <article class="manager-save-card">
+                <div>
+                  <p>Ручные платежи</p>
+                  <h2>Задания менеджерам</h2>
+                </div>
+                <button type="button" (click)="load()" [disabled]="loading()">
+                  <span class="material-icons-sharp">refresh</span>
+                  Обновить
+                </button>
+              </article>
+
+              <article class="profile-card manual-task-form">
+                <header>
+                  <span class="material-icons-sharp">playlist_add</span>
+                  <div>
+                    <h2>Создать задание</h2>
+                    <small>Приоритетнее лимита профиля и не уменьшает месячный счетчик.</small>
+                  </div>
+                </header>
+
+                <label class="profile-field">
+                  <span>Менеджер</span>
+                  <select [ngModel]="adminTaskManagerId()" (ngModelChange)="setAdminTaskManagerId($event)">
+                    <option [ngValue]="null">Выберите менеджера</option>
+                    @for (manager of managerProfiles(); track manager.managerId) {
+                      <option [ngValue]="manager.managerId">
+                        {{ manager.managerTitle }} · {{ manager.paymentProfileName || 'по умолчанию' }}
+                      </option>
+                    }
+                  </select>
+                </label>
+
+                <div class="segmented two profile-policy-segment">
+                  <button
+                    type="button"
+                    [class.active]="adminTaskPaymentType() === 'MOBILE_BANK'"
+                    (click)="setAdminTaskPaymentType('MOBILE_BANK')"
+                  >
+                    <span class="material-icons-sharp">phone_iphone</span>
+                    Телефон
+                  </button>
+                  <button
+                    type="button"
+                    [class.active]="adminTaskPaymentType() === 'EXTERNAL_LINK'"
+                    (click)="setAdminTaskPaymentType('EXTERNAL_LINK')"
+                  >
+                    <span class="material-icons-sharp">link</span>
+                    Ссылка Альфа
+                  </button>
+                </div>
+
+                @if (adminTaskPaymentType() === 'EXTERNAL_LINK') {
+                  <label class="profile-field">
+                    <span>Ссылка оплаты</span>
+                    <input
+                      type="url"
+                      [ngModel]="adminTaskPaymentUrl()"
+                      (ngModelChange)="setAdminTaskPaymentUrl($event)"
+                      placeholder="https://pay.alfabank.ru/..."
+                    >
+                  </label>
+                  <label class="profile-field">
+                    <span>Текст кнопки</span>
+                    <input
+                      type="text"
+                      [ngModel]="adminTaskPaymentButtonLabel()"
+                      (ngModelChange)="setAdminTaskPaymentButtonLabel($event)"
+                      placeholder="Оплатить через Альфа-Банк"
+                    >
+                  </label>
+                } @else {
+                  <label class="profile-field">
+                    <span>Телефон</span>
+                    <input
+                      type="tel"
+                      [ngModel]="adminTaskPhone()"
+                      (ngModelChange)="setAdminTaskPhone($event)"
+                      placeholder="+7..."
+                    >
+                  </label>
+                }
+
+                <label class="profile-field">
+                  <span>Получатель</span>
+                  <input
+                    type="text"
+                    [ngModel]="adminTaskRecipient()"
+                    (ngModelChange)="setAdminTaskRecipient($event)"
+                    placeholder="ФИО получателя"
+                  >
+                </label>
+
+                <div class="amount-row">
+                  <label class="profile-field">
+                    <span>Сумма, руб.</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputmode="numeric"
+                      [ngModel]="adminTaskAmountRubles()"
+                      (ngModelChange)="setAdminTaskAmountRubles($event)"
+                      placeholder="50000"
+                    >
+                  </label>
+                  <label class="profile-field">
+                    <span>Комментарий</span>
+                    <input
+                      type="text"
+                      [ngModel]="adminTaskComment()"
+                      (ngModelChange)="setAdminTaskComment($event)"
+                      placeholder="Необязательно"
+                    >
+                  </label>
+                </div>
+
+                <footer class="task-actions">
+                  <button type="button" class="confirm" (click)="createManualTask()" [disabled]="!canCreateManualTask()">
+                    <span class="material-icons-sharp">{{ savingManualTask() ? 'hourglass_top' : 'add' }}</span>
+                    {{ savingManualTask() ? 'создаю' : 'создать' }}
+                  </button>
+                </footer>
+              </article>
+
+              @for (task of manualTasks(); track task.id) {
+                <article class="profile-card manual-task-card" [class.disabled]="task.status !== 'ACTIVE'">
+                  <header>
+                    <span class="material-icons-sharp">playlist_add_check</span>
+                    <div>
+                      <h2>{{ manualTaskTitle(task) }}</h2>
+                      <small>{{ manualTaskTargetLine(task) }}</small>
+                    </div>
+                    <span class="status-pill {{ task.status === 'ACTIVE' ? 'manual' : 'neutral' }}">
+                      {{ manualTaskStatusLabel(task.status) }}
+                    </span>
+                  </header>
+
+                  <div class="manual-limit-box">
+                    <div>
+                      <strong>{{ formatKopecks(task.reservedAmountKopecks) }}</strong>
+                      <small>
+                        из {{ formatKopecks(task.targetAmountKopecks) }}
+                        · подтверждено {{ formatKopecks(task.confirmedAmountKopecks) }}
+                        · ждут {{ task.pendingCount }}
+                      </small>
+                    </div>
+                    <div class="limit-bar">
+                      <span [style.width.%]="manualTaskProgressPercent(task)"></span>
+                    </div>
+                  </div>
+
+                  <div class="meta-grid">
+                    <span>
+                      <small>Профиль</small>
+                      <strong>{{ task.paymentProfileName || 'по умолчанию' }}</strong>
+                    </span>
+                    <span>
+                      <small>Менеджер</small>
+                      <strong>{{ task.managerTitle || task.username }}</strong>
+                    </span>
+                  </div>
+
+                  @if (task.comment) {
+                    <div class="manual-note">
+                      <strong>Комментарий</strong>
+                      <small>{{ task.comment }}</small>
+                    </div>
+                  }
+
+                  <footer class="task-actions">
+                    @if (task.status === 'ACTIVE') {
+                      <button type="button" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="mutatingTaskId() === task.id">
+                        <span class="material-icons-sharp">pause</span>
+                        пауза
+                      </button>
+                    } @else if (task.status === 'PAUSED') {
+                      <button type="button" class="confirm" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="mutatingTaskId() === task.id">
+                        <span class="material-icons-sharp">play_arrow</span>
+                        включить
+                      </button>
+                    }
+                    @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                      <button type="button" class="refund" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="mutatingTaskId() === task.id">
+                        <span class="material-icons-sharp">close</span>
+                        отменить
+                      </button>
+                    }
+                  </footer>
+                </article>
+              } @empty {
+                <div class="empty-state">
+                  <span class="material-icons-sharp">playlist_add</span>
+                  <strong>Ручных заданий пока нет</strong>
+                </div>
+              }
+            </section>
           } @else if (mode() === 'profiles') {
             <section class="profile-list" aria-label="Платежные профили">
               @if (status(); as bank) {
@@ -248,13 +646,24 @@ const PAGE_SIZE = 10;
                 </article>
               }
 
+              <article class="manager-save-card">
+                <div>
+                  <p>Маршрутизация оплат</p>
+                  <h2>Профили, лимиты и телефон</h2>
+                </div>
+                <button type="button" (click)="saveProfilePolicies()" [disabled]="savingProfilePolicies() || loading()">
+                  <span class="material-icons-sharp">save</span>
+                  {{ savingProfilePolicies() ? 'Сохраняю' : 'Сохранить' }}
+                </button>
+              </article>
+
               @for (profile of profiles(); track profile.id) {
                 <article class="profile-card" [class.disabled]="!profile.enabled">
                   <header>
                     <span class="material-icons-sharp">storefront</span>
                     <div>
                       <h2>{{ profile.name }}</h2>
-                      <small>{{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }}</small>
+                      <small>{{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }} · {{ profilePolicyLabel(profile) }}</small>
                     </div>
                     <span class="status-pill {{ profile.hasPassword ? 'paid' : 'failed' }}">
                       {{ profile.hasPassword ? 'секрет есть' : 'нет секрета' }}
@@ -278,6 +687,108 @@ const PAGE_SIZE = 10;
                       <strong>{{ profile.enabled ? 'включен' : 'выключен' }}</strong>
                     </span>
                   </div>
+
+                  <div class="manual-limit-box">
+                    <div>
+                      <strong>{{ formatKopecks(profile.manualMonthlyUsedKopecks) }}</strong>
+                      <small>из {{ formatKopecks(profileManualLimitKopecks(profile)) }} · ожидают {{ profile.manualMonthlyPendingCount }}</small>
+                    </div>
+                    <div class="limit-bar">
+                      <span [style.width.%]="profileManualUsagePercent(profile)"></span>
+                    </div>
+                  </div>
+
+                  <div class="segmented two profile-policy-segment">
+                    <button
+                      type="button"
+                      [class.active]="profilePolicy(profile.id).paymentPolicy === 'T_BANK_ONLY'"
+                      (click)="setProfilePolicy(profile.id, 'T_BANK_ONLY')"
+                    >
+                      <span class="material-icons-sharp">account_balance</span>
+                      Только T-Bank
+                    </button>
+                    <button
+                      type="button"
+                      [class.active]="profilePolicy(profile.id).paymentPolicy === 'MANUAL_UNTIL_LIMIT_THEN_TBANK'"
+                      (click)="setProfilePolicy(profile.id, 'MANUAL_UNTIL_LIMIT_THEN_TBANK')"
+                    >
+                      <span class="material-icons-sharp">phone_iphone</span>
+                      Телефон до лимита
+                    </button>
+                  </div>
+
+                  <label class="profile-field">
+                    <span>Месячный лимит ручных оплат, руб.</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1000"
+                      [ngModel]="profilePolicy(profile.id).manualMonthlyLimitRubles"
+                      (ngModelChange)="setProfileManualLimit(profile.id, $event)"
+                    >
+                  </label>
+
+                  @if (profilePolicy(profile.id).paymentPolicy === 'MANUAL_UNTIL_LIMIT_THEN_TBANK') {
+                    <div class="segmented two profile-policy-segment">
+                      <button
+                        type="button"
+                        [class.active]="profilePolicy(profile.id).manualPaymentType === 'MOBILE_BANK'"
+                        (click)="setProfileManualPaymentType(profile.id, 'MOBILE_BANK')"
+                      >
+                        <span class="material-icons-sharp">phone_iphone</span>
+                        Телефон
+                      </button>
+                      <button
+                        type="button"
+                        [class.active]="profilePolicy(profile.id).manualPaymentType === 'EXTERNAL_LINK'"
+                        (click)="setProfileManualPaymentType(profile.id, 'EXTERNAL_LINK')"
+                      >
+                        <span class="material-icons-sharp">link</span>
+                        Ссылка Альфа
+                      </button>
+                    </div>
+
+                    @if (profilePolicy(profile.id).manualPaymentType === 'EXTERNAL_LINK') {
+                      <label class="profile-field">
+                        <span>Ссылка оплаты</span>
+                        <input
+                          type="url"
+                          [ngModel]="profilePolicy(profile.id).manualPaymentUrl"
+                          (ngModelChange)="setProfileManualPaymentUrl(profile.id, $event)"
+                          placeholder="https://pay.alfabank.ru/..."
+                        >
+                      </label>
+                      <label class="profile-field">
+                        <span>Текст кнопки</span>
+                        <input
+                          type="text"
+                          [ngModel]="profilePolicy(profile.id).manualPaymentButtonLabel"
+                          (ngModelChange)="setProfileManualPaymentButtonLabel(profile.id, $event)"
+                          placeholder="Оплатить через Альфа-Банк"
+                        >
+                      </label>
+                    } @else {
+                      <label class="profile-field">
+                        <span>Телефон для перевода</span>
+                        <input
+                          type="text"
+                          [ngModel]="profilePolicy(profile.id).manualPhone"
+                          (ngModelChange)="setProfileManualPhone(profile.id, $event)"
+                          placeholder="+7..."
+                        >
+                      </label>
+                    }
+
+                    <label class="profile-field">
+                      <span>Получатель</span>
+                      <input
+                        type="text"
+                        [ngModel]="profilePolicy(profile.id).manualRecipientName"
+                        (ngModelChange)="setProfileManualRecipient(profile.id, $event)"
+                        placeholder="Имя в банке"
+                      >
+                    </label>
+                  }
                 </article>
               } @empty {
                 <div class="empty-state">Профили не найдены.</div>
@@ -287,12 +798,12 @@ const PAGE_SIZE = 10;
             <section class="manager-profile-list" aria-label="Платежные профили менеджеров">
               <article class="manager-save-card">
                 <div>
-                  <p>Профили менеджеров</p>
-                  <h2>Назначение терминалов</h2>
+                  <p>Маршрутизация оплат</p>
+                  <h2>Профили и менеджеры</h2>
                 </div>
-                <button type="button" (click)="saveProfileAssignments()" [disabled]="savingProfiles() || loading()">
+                <button type="button" (click)="saveRoutingSettings()" [disabled]="savingRoutingSettings() || loading()">
                   <span class="material-icons-sharp">save</span>
-                  {{ savingProfiles() ? 'Сохраняю' : 'Сохранить' }}
+                  {{ savingRoutingSettings() ? 'Сохраняю' : 'Сохранить' }}
                 </button>
               </article>
 
@@ -381,8 +892,8 @@ const PAGE_SIZE = 10;
       min-height: 0;
       margin: 0 auto;
       flex-direction: column;
-      gap: 0.65rem;
-      padding: 0.75rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom));
+      gap: var(--otziv-page-gap, 0.65rem);
+      padding: var(--otziv-page-padding-y, 0.75rem) var(--otziv-page-padding-x, 0.75rem) calc(var(--otziv-page-padding-bottom, 0.7rem) + env(safe-area-inset-bottom));
       overflow: hidden;
     }
 
@@ -481,6 +992,7 @@ const PAGE_SIZE = 10;
     .search-strip,
     .date-strip,
     .mobile-pagination,
+    .launch-card,
     .bank-card,
     .manager-save-card {
       border: 1px solid rgba(135, 151, 178, 0.14);
@@ -591,8 +1103,8 @@ const PAGE_SIZE = 10;
     }
 
     .payment-list {
-      grid-auto-columns: minmax(14.3rem, 65vw);
-      gap: 0.58rem;
+      grid-auto-columns: var(--otziv-board-card-width, minmax(14.3rem, 65vw));
+      gap: var(--otziv-list-gap, 0.58rem);
       flex: 1 1 0;
       height: 100%;
       min-height: 0;
@@ -614,13 +1126,14 @@ const PAGE_SIZE = 10;
       --card-bg: var(--tile-bg, #ffffff);
       display: flex;
       height: 100%;
-      min-height: 100%;
+      min-height: 0;
       min-width: 0;
+      align-self: stretch;
       flex-direction: column;
-      justify-content: space-between;
-      gap: clamp(0.3rem, 0.72vh, 0.54rem);
+      justify-content: flex-start;
+      gap: var(--otziv-card-gap, 0.34rem);
       overflow: hidden;
-      padding: 0.66rem;
+      padding: var(--otziv-card-padding, 0.66rem);
     }
 
     .payment-card header,
@@ -682,6 +1195,7 @@ const PAGE_SIZE = 10;
 
     .status-pill.paid { color: #267d68; background: rgba(68, 158, 133, 0.14); }
     .status-pill.refunded { color: #315f97; background: rgba(116, 154, 207, 0.16); }
+    .status-pill.manual { color: #87651d; background: rgba(218, 168, 36, 0.18); }
     .status-pill.failed { color: var(--otziv-danger); background: rgba(239, 52, 95, 0.12); }
     .status-pill.neutral { color: #87651d; background: rgba(218, 168, 36, 0.16); }
 
@@ -748,6 +1262,12 @@ const PAGE_SIZE = 10;
       color: #315f97;
     }
 
+    .copy-line.manual {
+      color: #87651d;
+      border-color: rgba(218, 168, 36, 0.36);
+      background: linear-gradient(145deg, #fffaf0 0%, var(--otziv-white) 100%);
+    }
+
     .copy-line:disabled {
       opacity: 1;
       color: var(--otziv-info);
@@ -779,11 +1299,39 @@ const PAGE_SIZE = 10;
       font-size: 0.82rem;
     }
 
-    .payment-card footer {
+    .manual-note {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.12rem;
+      border: 1px solid rgba(218, 168, 36, 0.22);
+      border-radius: 0.75rem;
+      padding: 0.42rem 0.5rem;
+      background: rgba(255, 250, 240, 0.72);
+    }
+
+    .manual-note strong,
+    .manual-note small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .manual-note strong {
+      color: var(--otziv-dark);
+      font-size: 0.68rem;
+      font-weight: 900;
+    }
+
+    .manual-note small {
+      color: var(--otziv-info);
+      font-size: 0.58rem;
+      font-weight: 850;
+    }
+
+    .payment-card footer {
+      display: flex;
+      flex-wrap: wrap;
       gap: 0.34rem;
-      margin-top: 0;
+      margin-top: auto;
     }
 
     .payment-card footer button,
@@ -805,6 +1353,7 @@ const PAGE_SIZE = 10;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      flex: 1 1 4.3rem;
     }
 
     .payment-card footer button:disabled {
@@ -821,6 +1370,16 @@ const PAGE_SIZE = 10;
     .payment-card footer .refund {
       color: #315f97;
       border-color: rgba(218, 168, 36, 0.36);
+    }
+
+    .payment-card footer .confirm {
+      color: #267d68;
+      border-color: rgba(68, 158, 133, 0.34);
+    }
+
+    .payment-card footer .receipt {
+      color: #315f97;
+      border-color: rgba(116, 154, 207, 0.38);
     }
 
     button:disabled {
@@ -857,6 +1416,8 @@ const PAGE_SIZE = 10;
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .launch-list,
+    .task-list,
     .profile-list,
     .manager-profile-list {
       display: flex;
@@ -869,9 +1430,175 @@ const PAGE_SIZE = 10;
       scrollbar-width: none;
     }
 
+    .launch-list::-webkit-scrollbar,
+    .task-list::-webkit-scrollbar,
     .profile-list::-webkit-scrollbar,
     .manager-profile-list::-webkit-scrollbar {
       display: none;
+    }
+
+    .launch-card {
+      display: grid;
+      flex: 0 0 auto;
+      gap: 0.58rem;
+      min-width: 0;
+      padding: 0.72rem;
+    }
+
+    .launch-summary-card header,
+    .launch-card h3 {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0;
+    }
+
+    .launch-summary-card header > .material-icons-sharp,
+    .launch-card h3 > span {
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border-radius: 0.75rem;
+      color: var(--otziv-primary);
+      background: rgba(116, 154, 207, 0.14);
+      font-size: 1rem;
+      font-weight: 950;
+    }
+
+    .launch-card h3 {
+      color: var(--otziv-dark);
+      font-size: 0.82rem;
+      font-weight: 950;
+      line-height: 1.15;
+    }
+
+    .launch-card p,
+    .launch-card h2,
+    .launch-card small,
+    .saving-note {
+      margin: 0;
+    }
+
+    .launch-card p {
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .launch-card h2 {
+      color: var(--otziv-dark);
+      font-size: 0.96rem;
+      font-weight: 950;
+      line-height: 1.08;
+    }
+
+    .launch-card small,
+    .saving-note {
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 850;
+      line-height: 1.28;
+    }
+
+    .saving-note {
+      border-radius: 0.72rem;
+      padding: 0.42rem 0.55rem;
+      background: rgba(116, 154, 207, 0.12);
+      text-align: center;
+    }
+
+    .segmented {
+      display: grid;
+      overflow: hidden;
+      border: 1px solid rgba(135, 151, 178, 0.22);
+      border-radius: 0.78rem;
+      background: var(--otziv-field-background);
+    }
+
+    .segmented.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .segmented.four {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .segmented button {
+      display: inline-flex;
+      min-width: 0;
+      min-height: 2.25rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.22rem;
+      border: 0;
+      border-right: 1px solid rgba(135, 151, 178, 0.16);
+      border-radius: 0;
+      padding: 0 0.36rem;
+      color: var(--otziv-info);
+      background: transparent;
+      font: inherit;
+      font-size: 0.64rem;
+      font-weight: 900;
+      line-height: 1.05;
+      text-align: center;
+    }
+
+    .segmented.four button:nth-child(2n),
+    .segmented button:last-child {
+      border-right: 0;
+    }
+
+    .segmented.four button:nth-child(n + 3) {
+      border-top: 1px solid rgba(135, 151, 178, 0.16);
+    }
+
+    .segmented button.active {
+      color: #fff;
+      background: var(--otziv-primary);
+    }
+
+    .segmented button:disabled,
+    .toggle-row input:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .segmented .material-icons-sharp {
+      flex: 0 0 auto;
+      font-size: 0.9rem;
+    }
+
+    .toggle-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.55rem;
+      border: 1px solid rgba(135, 151, 178, 0.16);
+      border-radius: 0.78rem;
+      padding: 0.52rem 0.58rem;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .toggle-row > span {
+      display: grid;
+      gap: 0.06rem;
+      min-width: 0;
+    }
+
+    .toggle-row strong {
+      color: var(--otziv-dark);
+      font-size: 0.72rem;
+      font-weight: 950;
+      line-height: 1.1;
+    }
+
+    .toggle-row input {
+      width: 1.25rem;
+      height: 1.25rem;
+      accent-color: var(--otziv-primary);
     }
 
     .bank-card {
@@ -909,6 +1636,10 @@ const PAGE_SIZE = 10;
       opacity: 0.68;
     }
 
+    .manual-task-card.disabled {
+      opacity: 0.72;
+    }
+
     .profile-card header {
       grid-template-columns: auto minmax(0, 1fr) auto;
     }
@@ -925,6 +1656,99 @@ const PAGE_SIZE = 10;
       background: var(--otziv-primary);
       color: #fff;
       padding-inline: 0.78rem;
+    }
+
+    .manual-limit-box,
+    .profile-field {
+      display: grid;
+      gap: 0.32rem;
+      min-width: 0;
+    }
+
+    .manual-limit-box {
+      border: 1px solid rgba(135, 151, 178, 0.16);
+      border-radius: 0.78rem;
+      padding: 0.52rem;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .manual-limit-box strong {
+      color: var(--otziv-dark);
+      font-size: 0.74rem;
+      font-weight: 950;
+    }
+
+    .manual-limit-box small,
+    .profile-field span {
+      color: var(--otziv-info);
+      font-size: 0.6rem;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+
+    .limit-bar {
+      overflow: hidden;
+      height: 0.42rem;
+      border-radius: 999px;
+      background: rgba(135, 151, 178, 0.14);
+    }
+
+    .limit-bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: #d6a000;
+    }
+
+    .profile-field input,
+    .profile-field select {
+      min-height: 2.2rem;
+      min-width: 0;
+      border: 1px solid rgba(135, 151, 178, 0.22);
+      border-radius: 0.78rem;
+      padding: 0 0.66rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font: 900 0.74rem/1 var(--otziv-font-family);
+    }
+
+    .task-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.34rem;
+      margin-top: 0.12rem;
+    }
+
+    .task-actions button {
+      display: inline-flex;
+      min-width: 0;
+      min-height: 2rem;
+      align-items: center;
+      justify-content: center;
+      gap: 0.22rem;
+      border: 1px solid rgba(135, 151, 178, 0.24);
+      border-radius: 999px;
+      padding: 0 0.55rem;
+      color: #315f97;
+      background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-muted-surface) 100%);
+      font: inherit;
+      font-size: 0.62rem;
+      font-weight: 900;
+      flex: 1 1 5.6rem;
+    }
+
+    .task-actions .material-icons-sharp {
+      font-size: 0.9rem;
+    }
+
+    .task-actions .confirm {
+      color: #267d68;
+      border-color: rgba(68, 158, 133, 0.34);
+    }
+
+    .task-actions .refund {
+      color: var(--otziv-danger);
+      border-color: rgba(239, 52, 95, 0.28);
     }
 
     .manager-row {
@@ -961,10 +1785,138 @@ const PAGE_SIZE = 10;
       font-size: 2rem;
     }
 
+    :host-context(body.otziv-compact-phone) .tbank-page {
+      gap: 0.22rem;
+      padding: 0.3rem 0.42rem calc(0.16rem + env(safe-area-inset-bottom));
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-list {
+      grid-auto-columns: min(14.7rem, 80vw);
+      gap: 0.34rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card {
+      justify-content: flex-start;
+      gap: 0.16rem;
+      border-radius: 0.82rem;
+      padding: 0.38rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card header {
+      gap: 0.28rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card h2 {
+      font-size: 0.82rem;
+      line-height: 0.98;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card small {
+      font-size: 0.5rem;
+      line-height: 1.05;
+    }
+
+    :host-context(body.otziv-compact-phone) .status-pill {
+      min-height: 1.25rem;
+      max-width: 5rem;
+      padding: 0 0.36rem;
+      overflow: hidden;
+      font-size: 0.5rem;
+      text-overflow: ellipsis;
+    }
+
+    :host-context(body.otziv-compact-phone) .amount-row,
+    :host-context(body.otziv-compact-phone) .meta-grid {
+      gap: 0.22rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .amount-row span,
+    :host-context(body.otziv-compact-phone) .meta-grid span {
+      min-height: 1.42rem;
+      border-radius: 0.58rem;
+      padding: 0.16rem 0.34rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .amount-row strong,
+    :host-context(body.otziv-compact-phone) .meta-grid strong {
+      font-size: 0.63rem;
+      line-height: 1;
+    }
+
+    :host-context(body.otziv-compact-phone) .amount-row small,
+    :host-context(body.otziv-compact-phone) .meta-grid small {
+      font-size: 0.46rem;
+      line-height: 1;
+    }
+
+    :host-context(body.otziv-compact-phone) .copy-line {
+      min-height: 1.36rem;
+      gap: 0.2rem;
+      padding: 0 0.4rem;
+      font-size: 0.55rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .copy-line .material-icons-sharp {
+      font-size: 0.76rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .manual-note {
+      gap: 0.08rem;
+      border-radius: 0.58rem;
+      padding: 0.26rem 0.36rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .manual-note strong {
+      font-size: 0.58rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .manual-note small {
+      font-size: 0.5rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card footer {
+      gap: 0.18rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card footer button {
+      flex-basis: 3.35rem;
+      min-height: 1.28rem;
+      border-radius: 0.56rem;
+      padding: 0 0.28rem;
+      font-size: 0.48rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .payment-card footer .material-icons-sharp {
+      font-size: 0.68rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .error-text {
+      max-height: 1.6rem;
+      border-radius: 0.56rem;
+      padding: 0.24rem 0.34rem;
+      font-size: 0.5rem;
+      line-height: 1.08;
+    }
+
+    :host-context(body.otziv-short-phone) .payment-list {
+      grid-auto-columns: min(14.25rem, 82vw);
+    }
+
+    :host-context(body.otziv-short-phone) .payment-card {
+      gap: 0.12rem;
+      padding: 0.32rem;
+    }
+
+    :host-context(body.otziv-short-phone) .amount-row span,
+    :host-context(body.otziv-short-phone) .meta-grid span {
+      min-height: 1.3rem;
+    }
+
     :host-context(body.otziv-dark-theme) .metric-tile,
     :host-context(body.otziv-dark-theme) .search-strip,
     :host-context(body.otziv-dark-theme) .date-strip,
     :host-context(body.otziv-dark-theme) .tbank-bottom-controls,
+    :host-context(body.otziv-dark-theme) .launch-card,
     :host-context(body.otziv-dark-theme) .payment-card,
     :host-context(body.otziv-dark-theme) .profile-card,
     :host-context(body.otziv-dark-theme) .bank-card,
@@ -981,6 +1933,12 @@ const PAGE_SIZE = 10;
     :host-context(body.otziv-dark-theme) .amount-row span,
     :host-context(body.otziv-dark-theme) .meta-grid span,
     :host-context(body.otziv-dark-theme) .copy-line,
+    :host-context(body.otziv-dark-theme) .manual-note,
+    :host-context(body.otziv-dark-theme) .manual-limit-box,
+    :host-context(body.otziv-dark-theme) .toggle-row,
+    :host-context(body.otziv-dark-theme) .profile-field input,
+    :host-context(body.otziv-dark-theme) .profile-field select,
+    :host-context(body.otziv-dark-theme) .task-actions button,
     :host-context(body.otziv-dark-theme) .payment-card footer button,
     :host-context(body.otziv-dark-theme) .manager-row select {
       background: #151b1d;
@@ -999,7 +1957,7 @@ const PAGE_SIZE = 10;
       }
 
       .payment-list {
-        grid-auto-columns: minmax(13.6rem, 72vw);
+        grid-auto-columns: var(--otziv-board-card-width, minmax(13.6rem, 72vw));
       }
     }
   `]
@@ -1011,7 +1969,8 @@ export class TbankPage implements OnInit {
     { key: 'paid', label: 'Оплачены', icon: 'check_circle', tone: 'green' },
     { key: 'refunded', label: 'Возвраты', icon: 'assignment_return', tone: 'teal' },
     { key: 'failed', label: 'Ошибки', icon: 'error', tone: 'red' },
-    { key: 'created', label: 'Созданы', icon: 'schedule', tone: 'gray' }
+    { key: 'created', label: 'Созданы', icon: 'schedule', tone: 'gray' },
+    { key: 'manual', label: 'Ручные', icon: 'phone_iphone', tone: 'yellow' }
   ];
 
   readonly mode = signal<TbankMode>('payments');
@@ -1019,11 +1978,19 @@ export class TbankPage implements OnInit {
   readonly status = signal<TbankPaymentStatus | null>(null);
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
+  readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
   readonly profileAssignments = signal<Record<number, number | null>>({});
+  readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
+  readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
+  readonly mutatingTaskId = signal<number | null>(null);
   readonly savingProfiles = signal(false);
+  readonly savingProfilePolicies = signal(false);
+  readonly savingManualTask = signal(false);
+  readonly savingRuntimeSettings = signal(false);
+  readonly savingRoutingSettings = computed(() => this.savingProfiles() || this.savingProfilePolicies());
   readonly copied = signal<string | null>(null);
   readonly search = signal('');
   readonly statusFilter = signal<PaymentStatusFilter>('all');
@@ -1034,6 +2001,14 @@ export class TbankPage implements OnInit {
   readonly draftDateTo = signal('');
   readonly pageIndex = signal(0);
   readonly sortDirection = signal<'asc' | 'desc'>('desc');
+  readonly adminTaskManagerId = signal<number | null>(null);
+  readonly adminTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
+  readonly adminTaskPhone = signal('');
+  readonly adminTaskRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly adminTaskPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
+  readonly adminTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+  readonly adminTaskAmountRubles = signal('');
+  readonly adminTaskComment = signal('');
   readonly modeItems = computed<MobileStatusItem[]>(() => [
     {
       key: 'payments',
@@ -1041,6 +2016,20 @@ export class TbankPage implements OnInit {
       value: `${this.filteredLinks().length}/${this.links().length}`,
       icon: 'receipt_long',
       tone: 'blue'
+    },
+    {
+      key: 'launch',
+      title: 'запуск',
+      value: this.activeRuntimeMode() === 'TEST' ? 'тест' : 'боевой',
+      icon: 'rocket_launch',
+      tone: this.activeRuntimeMode() === 'TEST' ? 'yellow' : 'green'
+    },
+    {
+      key: 'tasks',
+      title: 'задания',
+      value: this.activeManualTaskCount(),
+      icon: 'playlist_add_check',
+      tone: 'yellow'
     },
     {
       key: 'profiles',
@@ -1097,6 +2086,97 @@ export class TbankPage implements OnInit {
 
   readonly hasDateFilter = computed(() => Boolean(this.dateFrom() || this.dateTo()));
 
+  readonly manualPendingLinks = computed(() => this.links().filter((link) => {
+    return this.isManualPayment(link) && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
+  }));
+
+  readonly activeManualTaskCount = computed(() => {
+    return this.manualTasks().filter((task) => task.status === 'ACTIVE').length;
+  });
+
+  readonly canCreateManualTask = computed(() => {
+    const hasTarget = this.adminTaskPaymentType() === 'EXTERNAL_LINK'
+      ? Boolean(this.adminTaskPaymentUrl().trim()) && Boolean(this.adminTaskRecipient().trim())
+      : Boolean(this.adminTaskPhone().trim()) && Boolean(this.adminTaskRecipient().trim());
+    return !this.savingManualTask()
+      && this.adminTaskManagerId() != null
+      && hasTarget
+      && this.adminTaskTargetKopecks() > 0;
+  });
+
+  readonly tbankReadyForClientPayments = computed(() => {
+    const status = this.status();
+    const settings = this.runtimeSettings();
+    return Boolean(settings?.tbankEnabled
+      && settings.paymentLinksEnabled
+      && settings.managerUiEnabled
+      && status?.hasCredentials);
+  });
+
+  readonly activeRuntimeMode = computed<TbankRuntimeMode>(() => {
+    return this.runtimeSettings()?.runtimeMode ?? this.status()?.runtimeMode ?? (this.status()?.testMode ? 'TEST' : 'LIVE');
+  });
+
+  readonly paymentPageModeDescription = computed(() => {
+    switch (this.runtimeSettings()?.paymentPageMode ?? 'SBP_PRIMARY') {
+      case 'BANK_PRIMARY':
+        return 'Сначала форма банка, СБП запасным способом.';
+      case 'SBP_ONLY':
+        return 'Только кнопка СБП, форма банка скрыта.';
+      case 'BANK_ONLY':
+        return 'Только форма банка: карта, T-Pay и способы банка.';
+      default:
+        return 'Сначала СБП, форма банка запасным способом.';
+    }
+  });
+
+  readonly fastBankMethodDescription = computed(() => {
+    const settings = this.runtimeSettings();
+    if (!settings) {
+      return 'Настройки загружаются.';
+    }
+    const methods = [
+      settings.tpayEnabled ? 'T-Pay' : '',
+      settings.sberpayEnabled ? 'SberPay' : '',
+      settings.mirpayEnabled ? 'Mir Pay' : ''
+    ].filter(Boolean);
+    return methods.length ? `Показываем: ${methods.join(', ')}.` : 'Быстрые методы выключены, остается карта.';
+  });
+
+  readonly launchStateTitle = computed(() => {
+    const settings = this.runtimeSettings();
+    if (!settings) {
+      return 'Настройки загружаются';
+    }
+    if (settings.runtimeMode === 'TEST') {
+      return 'Тестовый контур';
+    }
+    if (settings.paymentInstructionSource !== 'TBANK_LINK') {
+      return 'Боевой терминал, клиенты на Альфа';
+    }
+    if (!settings.applyConfirmedPayments) {
+      return 'T-Bank клиентам, заказы вручную';
+    }
+    return 'T-Bank полностью включен';
+  });
+
+  readonly launchStateDescription = computed(() => {
+    const settings = this.runtimeSettings();
+    if (!settings) {
+      return 'Получаю состояние из backend.';
+    }
+    if (settings.runtimeMode === 'TEST') {
+      return 'Можно проверять ссылки и возвраты. Клиентам остаются старые счета.';
+    }
+    if (settings.paymentInstructionSource !== 'TBANK_LINK') {
+      return 'Терминалы готовы для ручных тестов, но автоответчик отправляет старый текст.';
+    }
+    if (!settings.applyConfirmedPayments) {
+      return 'Клиенты получают ссылки T-Bank, подтвержденные платежи попадают в журнал.';
+    }
+    return 'Webhook CONFIRMED переводит заказ в оплату и сохраняет e-mail плательщика.';
+  });
+
   readonly dateFilterLabel = computed(() => {
     const from = this.dateFrom();
     const to = this.dateTo();
@@ -1135,13 +2215,17 @@ export class TbankPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const [status, links, profiles] = await Promise.all([
+      const [status, links, profiles, manualTasks, runtimeSettings] = await Promise.all([
         firstValueFrom(this.api.getTbankStatus()),
         firstValueFrom(this.api.getAdminTbankPaymentLinks()),
-        firstValueFrom(this.api.getAdminTbankPaymentProfiles())
+        firstValueFrom(this.api.getAdminTbankPaymentProfiles()),
+        firstValueFrom(this.api.getAdminManualPaymentTasks()),
+        firstValueFrom(this.api.getAdminTbankRuntimeSettings())
       ]);
       this.status.set(status);
       this.links.set(links ?? []);
+      this.manualTasks.set(manualTasks ?? []);
+      this.runtimeSettings.set(runtimeSettings);
       this.applyProfilesState(profiles.profiles, profiles.managers);
       this.keepPageInRange();
     } catch (error) {
@@ -1238,6 +2322,111 @@ export class TbankPage implements OnInit {
     this.resetPage();
   }
 
+  async setRuntimeMode(mode: TbankRuntimeMode): Promise<void> {
+    const current = this.runtimeSettings();
+    if (!current || this.savingRuntimeSettings() || current.runtimeMode === mode) {
+      return;
+    }
+    if (mode === 'LIVE') {
+      const confirmed = await this.confirm.confirm({
+        title: 'Боевой контур',
+        message: 'Переключить T-Bank на рабочие терминалы? Клиентам ссылки T-Bank не уйдут, пока источник счетов остается «Альфа / текст».',
+        confirmText: 'Включить'
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    const patch: UpdateTbankRuntimeSettingsRequest = { runtimeMode: mode };
+    if (mode === 'TEST') {
+      patch.paymentInstructionSource = 'MANAGER_TEXT';
+      patch.applyConfirmedPayments = false;
+    }
+    await this.saveRuntimeSettings(patch);
+  }
+
+  async setPaymentInstructionSource(source: PaymentInstructionSource): Promise<void> {
+    const current = this.runtimeSettings();
+    if (!current || this.savingRuntimeSettings() || current.paymentInstructionSource === source) {
+      return;
+    }
+    if (source === 'TBANK_LINK') {
+      if (current.runtimeMode !== 'LIVE') {
+        this.error.set('Сначала включите боевой контур.');
+        return;
+      }
+      if (!this.tbankReadyForClientPayments()) {
+        this.error.set('T-Bank еще не готов: проверьте API, ссылки, UI менеджера и секреты терминалов.');
+        return;
+      }
+      const confirmed = await this.confirm.confirm({
+        title: 'T-Bank клиентам',
+        message: 'Отправлять клиентам ссылки T-Bank вместо старого текста/Альфа?',
+        confirmText: 'Переключить'
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    await this.saveRuntimeSettings({ paymentInstructionSource: source });
+  }
+
+  async setApplyConfirmedPayments(enabled: boolean): Promise<void> {
+    const current = this.runtimeSettings();
+    if (!current || this.savingRuntimeSettings() || current.applyConfirmedPayments === enabled) {
+      return;
+    }
+    if (enabled) {
+      if (current.runtimeMode !== 'LIVE') {
+        this.error.set('В тестовом режиме нельзя автоматически оплачивать заказы.');
+        return;
+      }
+      const confirmed = await this.confirm.confirm({
+        title: 'Автооплата заказов',
+        message: 'После webhook CONFIRMED заказ будет переходить в оплату автоматически.',
+        confirmText: 'Включить'
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    await this.saveRuntimeSettings({ applyConfirmedPayments: enabled });
+  }
+
+  async setPaymentPageMode(mode: TbankPaymentPageMode): Promise<void> {
+    const current = this.runtimeSettings();
+    if (!current || this.savingRuntimeSettings() || current.paymentPageMode === mode) {
+      return;
+    }
+    await this.saveRuntimeSettings({ paymentPageMode: mode });
+  }
+
+  async setCoreSwitch(
+    field: 'tbankEnabled' | 'paymentLinksEnabled' | 'managerUiEnabled',
+    enabled: boolean
+  ): Promise<void> {
+    const current = this.runtimeSettings();
+    if (!current || this.savingRuntimeSettings() || current[field] === enabled) {
+      return;
+    }
+    const patch: UpdateTbankRuntimeSettingsRequest = {};
+    patch[field] = enabled;
+    await this.saveRuntimeSettings(patch);
+  }
+
+  async setFastBankMethodSwitch(
+    field: 'tpayEnabled' | 'sberpayEnabled' | 'mirpayEnabled',
+    enabled: boolean
+  ): Promise<void> {
+    const current = this.runtimeSettings();
+    if (!current || this.savingRuntimeSettings() || current[field] === enabled) {
+      return;
+    }
+    const patch: UpdateTbankRuntimeSettingsRequest = {};
+    patch[field] = enabled;
+    await this.saveRuntimeSettings(patch);
+  }
+
   setManagerProfile(managerId: number, value: string | number | null): void {
     const profileId = Number(value);
     this.profileAssignments.update((assignments) => ({
@@ -1248,6 +2437,139 @@ export class TbankPage implements OnInit {
 
   selectedProfileId(manager: ManagerPaymentProfileResponse): number | null {
     return this.profileAssignments()[manager.managerId] ?? manager.paymentProfileId ?? null;
+  }
+
+  profilePolicy(profileId: number): ProfilePolicyDraft {
+    return this.policyDraft(profileId);
+  }
+
+  profilePolicyLabel(profile: PaymentProfileResponse): string {
+    const draft = this.policyDraft(profile.id);
+    if (draft.paymentPolicy !== 'MANUAL_UNTIL_LIMIT_THEN_TBANK') {
+      return 'Только T-Bank';
+    }
+    return draft.manualPaymentType === 'EXTERNAL_LINK' ? 'Ссылка до лимита' : 'Телефон до лимита';
+  }
+
+  profileManualUsagePercent(profile: PaymentProfileResponse): number {
+    const limit = this.profileManualLimitKopecks(profile);
+    if (!limit) {
+      return 0;
+    }
+    return Math.min(100, Math.round((profile.manualMonthlyUsedKopecks / limit) * 100));
+  }
+
+  profileManualLimitKopecks(profile: PaymentProfileResponse): number {
+    return this.manualLimitKopecksFromDraft(this.policyDraft(profile.id).manualMonthlyLimitRubles);
+  }
+
+  setProfilePolicy(profileId: number, value: PaymentPolicy): void {
+    this.updateProfilePolicyDraft(profileId, { paymentPolicy: value });
+  }
+
+  setProfileManualPaymentType(profileId: number, value: ManualPaymentType): void {
+    const patch: Partial<ProfilePolicyDraft> = { manualPaymentType: value };
+    if (value === 'EXTERNAL_LINK' && !this.policyDraft(profileId).manualPaymentUrl.trim()) {
+      patch.manualPaymentUrl = DEFAULT_MANUAL_PAYMENT_URL;
+    }
+    if (!this.policyDraft(profileId).manualRecipientName.trim()) {
+      patch.manualRecipientName = DEFAULT_MANUAL_RECIPIENT_NAME;
+    }
+    this.updateProfilePolicyDraft(profileId, patch);
+  }
+
+  setProfileManualPhone(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualPhone: value ?? '' });
+  }
+
+  setProfileManualRecipient(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualRecipientName: value ?? '' });
+  }
+
+  setProfileManualPaymentUrl(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualPaymentUrl: value ?? '' });
+  }
+
+  setProfileManualPaymentButtonLabel(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualPaymentButtonLabel: value ?? '' });
+  }
+
+  setProfileManualLimit(profileId: number, value: string | number | null): void {
+    this.updateProfilePolicyDraft(profileId, {
+      manualMonthlyLimitRubles: value == null ? '' : String(value)
+    });
+  }
+
+  setAdminTaskManagerId(value: number | string | null): void {
+    const id = value == null || value === '' ? NaN : Number(value);
+    this.adminTaskManagerId.set(Number.isFinite(id) && id > 0 ? id : null);
+  }
+
+  setAdminTaskPaymentType(value: ManualPaymentType): void {
+    this.adminTaskPaymentType.set(value);
+    if (value === 'EXTERNAL_LINK' && !this.adminTaskPaymentUrl().trim()) {
+      this.adminTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
+    }
+    if (!this.adminTaskRecipient().trim()) {
+      this.adminTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
+    }
+  }
+
+  setAdminTaskPhone(value: string | null): void {
+    this.adminTaskPhone.set(value ?? '');
+  }
+
+  setAdminTaskRecipient(value: string | null): void {
+    this.adminTaskRecipient.set(value ?? '');
+  }
+
+  setAdminTaskPaymentUrl(value: string | null): void {
+    this.adminTaskPaymentUrl.set(value ?? '');
+  }
+
+  setAdminTaskPaymentButtonLabel(value: string | null): void {
+    this.adminTaskPaymentButtonLabel.set(value ?? '');
+  }
+
+  setAdminTaskAmountRubles(value: string | number | null): void {
+    this.adminTaskAmountRubles.set(value == null ? '' : String(value));
+  }
+
+  setAdminTaskComment(value: string | null): void {
+    this.adminTaskComment.set(value ?? '');
+  }
+
+  async createManualTask(): Promise<void> {
+    if (!this.canCreateManualTask()) {
+      return;
+    }
+
+    this.savingManualTask.set(true);
+    this.error.set(null);
+    try {
+      const task = await firstValueFrom(this.api.createAdminManualPaymentTask({
+        managerId: this.adminTaskManagerId(),
+        manualPaymentType: this.adminTaskPaymentType(),
+        manualPhone: this.adminTaskPhone().trim(),
+        manualRecipientName: this.adminTaskRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
+        manualPaymentUrl: this.adminTaskPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        targetAmountKopecks: this.adminTaskTargetKopecks(),
+        comment: this.adminTaskComment().trim() || null
+      }));
+      this.manualTasks.update((tasks) => [task, ...tasks]);
+      this.adminTaskPhone.set('');
+      this.adminTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
+      this.adminTaskPaymentType.set('MOBILE_BANK');
+      this.adminTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
+      this.adminTaskPaymentButtonLabel.set(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+      this.adminTaskAmountRubles.set('');
+      this.adminTaskComment.set('');
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось создать ручное задание.'));
+    } finally {
+      this.savingManualTask.set(false);
+    }
   }
 
   async saveProfileAssignments(): Promise<void> {
@@ -1268,6 +2590,45 @@ export class TbankPage implements OnInit {
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось сохранить платежные профили.'));
     } finally {
+      this.savingProfiles.set(false);
+    }
+  }
+
+  async saveProfilePolicies(): Promise<void> {
+    if (this.savingProfilePolicies()) {
+      return;
+    }
+    this.savingProfilePolicies.set(true);
+    this.error.set(null);
+    try {
+      const state = await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      this.applyProfilesState(state.profiles, state.managers);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось сохранить политики оплаты.'));
+    } finally {
+      this.savingProfilePolicies.set(false);
+    }
+  }
+
+  async saveRoutingSettings(): Promise<void> {
+    if (this.savingRoutingSettings()) {
+      return;
+    }
+    const assignments: ManagerPaymentProfileAssignmentRequest[] = this.managerProfiles().map((manager) => ({
+      managerId: manager.managerId,
+      paymentProfileId: this.selectedProfileId(manager)
+    }));
+    this.savingProfilePolicies.set(true);
+    this.savingProfiles.set(true);
+    this.error.set(null);
+    try {
+      await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      const state = await firstValueFrom(this.api.updateAdminTbankPaymentProfileAssignments(assignments));
+      this.applyProfilesState(state.profiles, state.managers);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось сохранить маршрутизацию оплат.'));
+    } finally {
+      this.savingProfilePolicies.set(false);
       this.savingProfiles.set(false);
     }
   }
@@ -1296,6 +2657,67 @@ export class TbankPage implements OnInit {
       this.error.set(this.errorMessage(error, 'Не удалось выполнить возврат.'));
     } finally {
       this.mutatingId.set(null);
+    }
+  }
+
+  async confirmManual(link: AdminPaymentLinkResponse): Promise<void> {
+    if (!this.canConfirmManual(link) || this.mutatingId()) {
+      return;
+    }
+    const confirmed = await this.confirm.confirm({
+      title: 'Подтвердить перевод',
+      message: `Подтвердить ручную оплату по заказу №${link.orderId ?? '-'} на сумму ${this.money(link.amount)}?`,
+      confirmText: 'Подтвердить'
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.error.set(null);
+    try {
+      const updated = await firstValueFrom(this.api.confirmAdminManualPaymentLink(link.id));
+      this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      await this.loadProfilesOnly();
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось подтвердить ручную оплату.'));
+    } finally {
+      this.mutatingId.set(null);
+    }
+  }
+
+  async markManualReceipt(link: AdminPaymentLinkResponse): Promise<void> {
+    if (!this.canMarkManualReceipt(link) || this.mutatingId()) {
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.error.set(null);
+    try {
+      const updated = await firstValueFrom(this.api.markAdminManualPaymentReceipt(link.id));
+      this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+      await this.loadProfilesOnly();
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось отметить чек.'));
+    } finally {
+      this.mutatingId.set(null);
+    }
+  }
+
+  async updateManualTaskStatus(task: ManualPaymentTaskResponse, status: ManualPaymentTaskStatus): Promise<void> {
+    if (!task?.id || this.mutatingTaskId()) {
+      return;
+    }
+
+    this.mutatingTaskId.set(task.id);
+    this.error.set(null);
+    try {
+      const updated = await firstValueFrom(this.api.updateAdminManualPaymentTaskStatus(task.id, status));
+      this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось обновить ручное задание.'));
+    } finally {
+      this.mutatingTaskId.set(null);
     }
   }
 
@@ -1333,11 +2755,89 @@ export class TbankPage implements OnInit {
     return [link.filialTitle, link.description].filter(Boolean).join(' · ') || 'T-Bank';
   }
 
+  paymentMethodLabel(link: AdminPaymentLinkResponse): string {
+    if (this.isManualPayment(link)) {
+      return this.isExternalManualPayment(link) ? 'Ссылка Альфа' : 'Телефон';
+    }
+    return link.paymentMethod === 'SBP_QR' ? 'СБП' : 'Форма банка';
+  }
+
+  manualSourceLabel(link: AdminPaymentLinkResponse): string {
+    if (link.manualSource === 'MANUAL_TASK') {
+      return link.manualTaskTitle ? `Задание: ${link.manualTaskTitle}` : 'Ручное задание';
+    }
+    return this.isManualPayment(link) ? 'Лимит профиля' : '';
+  }
+
+  manualTaskTargetLine(task: ManualPaymentTaskResponse): string {
+    if (this.isExternalManualTask(task)) {
+      return `${task.manualPaymentUrl || DEFAULT_MANUAL_PAYMENT_URL} · ${task.managerTitle || task.username}`;
+    }
+    return `${task.manualPhone || 'телефон не указан'} · ${task.managerTitle || task.username}`;
+  }
+
+  manualTaskTitle(task: ManualPaymentTaskResponse): string {
+    return task.manualRecipientName || 'Получатель не указан';
+  }
+
+  manualTaskProgressPercent(task: ManualPaymentTaskResponse): number {
+    if (!task.targetAmountKopecks) {
+      return 0;
+    }
+    return Math.min(100, Math.round((task.reservedAmountKopecks / task.targetAmountKopecks) * 100));
+  }
+
+  manualTaskStatusLabel(status: string): string {
+    switch (status) {
+      case 'ACTIVE':
+        return 'Активно';
+      case 'PAUSED':
+        return 'Пауза';
+      case 'COMPLETED':
+        return 'Выполнено';
+      case 'CANCELED':
+        return 'Отменено';
+      default:
+        return status || 'Неизвестно';
+    }
+  }
+
+  receiptStatusLabel(link: AdminPaymentLinkResponse): string {
+    if (!this.isManualPayment(link)) {
+      return '';
+    }
+    return link.receiptStatus === 'MARKED' ? 'Чек отмечен' : 'Чек ожидает';
+  }
+
+  isManualPayment(link: AdminPaymentLinkResponse): boolean {
+    return link.paymentMethod === 'MANUAL_MOBILE_BANK' || link.paymentMethod === 'MANUAL_EXTERNAL_LINK';
+  }
+
+  isExternalManualPayment(link: AdminPaymentLinkResponse): boolean {
+    return this.isManualPayment(link)
+      && (link.manualPaymentType === 'EXTERNAL_LINK' || link.paymentMethod === 'MANUAL_EXTERNAL_LINK');
+  }
+
+  isExternalManualTask(task: ManualPaymentTaskResponse): boolean {
+    return task.manualPaymentType === 'EXTERNAL_LINK';
+  }
+
+  canConfirmManual(link: AdminPaymentLinkResponse): boolean {
+    return this.isManualPayment(link)
+      && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
+  }
+
+  canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {
+    return this.isManualPayment(link) && link.status === 'CONFIRMED' && link.receiptStatus !== 'MARKED';
+  }
+
   statusLabel(status: string): string {
     const labels: Record<string, string> = {
       CREATED: 'Создана',
       INITIATED: 'Форма',
       AUTHORIZED: 'Авторизован',
+      WAITING_MANUAL_PAYMENT: 'Ждет перевод',
+      MANUAL_REPORTED: 'Клиент оплатил',
       TEST_CONFIRMED: 'Тест оплачен',
       CONFIRMED: 'Оплачен',
       REJECTED: 'Отклонен',
@@ -1356,6 +2856,9 @@ export class TbankPage implements OnInit {
     if (this.isPaid(status)) {
       return 'paid';
     }
+    if (status === 'WAITING_MANUAL_PAYMENT' || status === 'MANUAL_REPORTED') {
+      return 'manual';
+    }
     if (this.isRefunded(status) || status === 'CANCELED') {
       return 'refunded';
     }
@@ -1368,6 +2871,9 @@ export class TbankPage implements OnInit {
   rowTone(link: AdminPaymentLinkResponse): Tone {
     if (this.isPaid(link.status)) {
       return 'green';
+    }
+    if (this.isManualPayment(link) && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED')) {
+      return 'yellow';
     }
     if (this.isRefunded(link.status) || link.status === 'CANCELED') {
       return 'teal';
@@ -1383,6 +2889,13 @@ export class TbankPage implements OnInit {
 
   money(value: number | null | undefined): string {
     return `${Math.round(Number(value || 0)).toLocaleString('ru-RU')} руб.`;
+  }
+
+  formatKopecks(value?: number | null): string {
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2
+    }).format((value ?? 0) / 100)} руб.`;
   }
 
   shortDate(value: string | null | undefined): string {
@@ -1410,6 +2923,9 @@ export class TbankPage implements OnInit {
     this.profileAssignments.set(Object.fromEntries(
       (managers ?? []).map((manager) => [manager.managerId, manager.paymentProfileId ?? null])
     ));
+    this.profilePolicies.set(Object.fromEntries(
+      (profiles ?? []).map((profile) => [profile.id, this.profileToPolicyDraft(profile)])
+    ));
   }
 
   private matchesSearch(link: AdminPaymentLinkResponse, search: string): boolean {
@@ -1426,6 +2942,12 @@ export class TbankPage implements OnInit {
       link.paymentProfileName,
       link.tbankTerminalKey,
       link.payerEmail,
+      link.manualPhone,
+      link.manualRecipientName,
+      link.manualPaymentUrl,
+      link.manualPaymentButtonLabel,
+      link.manualTaskTitle,
+      link.manualComment,
       link.lastError,
       this.statusLabel(link.status)
     ].join(' ').toLowerCase().includes(search);
@@ -1434,7 +2956,11 @@ export class TbankPage implements OnInit {
   private matchesStatusFilter(link: AdminPaymentLinkResponse, filter: PaymentStatusFilter): boolean {
     switch (filter) {
       case 'active':
-        return link.status === 'CREATED' || link.status === 'INITIATED' || link.status === 'AUTHORIZED';
+        return link.status === 'CREATED'
+          || link.status === 'INITIATED'
+          || link.status === 'AUTHORIZED'
+          || link.status === 'WAITING_MANUAL_PAYMENT'
+          || link.status === 'MANUAL_REPORTED';
       case 'paid':
         return this.isPaid(link.status);
       case 'refunded':
@@ -1443,9 +2969,125 @@ export class TbankPage implements OnInit {
         return link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED';
       case 'created':
         return link.status === 'CREATED';
+      case 'manual':
+        return this.isManualPayment(link);
       default:
         return true;
     }
+  }
+
+  private async saveRuntimeSettings(request: UpdateTbankRuntimeSettingsRequest): Promise<void> {
+    const previous = this.runtimeSettings();
+    if (!previous) {
+      return;
+    }
+    const optimistic = { ...previous, ...request };
+    optimistic.testMode = optimistic.runtimeMode === 'TEST';
+    optimistic.clientTbankEnabled = optimistic.paymentInstructionSource === 'TBANK_LINK';
+    this.runtimeSettings.set(optimistic);
+    this.savingRuntimeSettings.set(true);
+    this.error.set(null);
+    try {
+      const settings = await firstValueFrom(this.api.updateAdminTbankRuntimeSettings(request));
+      this.runtimeSettings.set(settings);
+      this.status.update((status) => status ? {
+        ...status,
+        enabled: settings.tbankEnabled,
+        paymentLinksEnabled: settings.paymentLinksEnabled,
+        managerUiEnabled: settings.managerUiEnabled,
+        applyConfirmedPayments: settings.applyConfirmedPayments,
+        runtimeMode: settings.runtimeMode,
+        testMode: settings.testMode
+      } : status);
+    } catch (error) {
+      this.runtimeSettings.set(previous);
+      this.error.set(this.errorMessage(error, 'Не удалось сохранить настройки T-Bank.'));
+    } finally {
+      this.savingRuntimeSettings.set(false);
+    }
+  }
+
+  private async loadProfilesOnly(): Promise<void> {
+    try {
+      const profiles = await firstValueFrom(this.api.getAdminTbankPaymentProfiles());
+      this.applyProfilesState(profiles.profiles, profiles.managers);
+    } catch {
+      // Основная операция уже выполнена, не перебиваем ее результат ошибкой фонового обновления.
+    }
+  }
+
+  private profilePolicyRequest(): PaymentProfilePolicyRequest[] {
+    return this.profiles().map((profile) => {
+      const draft = this.policyDraft(profile.id);
+      const manualMonthlyLimitKopecks = this.manualLimitKopecksFromDraft(draft.manualMonthlyLimitRubles);
+      return {
+        profileId: profile.id,
+        paymentPolicy: draft.paymentPolicy,
+        manualPaymentType: draft.manualPaymentType,
+        manualPhone: draft.manualPhone.trim(),
+        manualRecipientName: draft.manualRecipientName.trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
+        manualPaymentUrl: draft.manualPaymentUrl.trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
+        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
+      };
+    });
+  }
+
+  private updateProfilePolicyDraft(profileId: number, patch: Partial<ProfilePolicyDraft>): void {
+    this.profilePolicies.update((policies) => ({
+      ...policies,
+      [profileId]: {
+        ...this.policyDraft(profileId),
+        ...patch
+      }
+    }));
+  }
+
+  private policyDraft(profileId: number): ProfilePolicyDraft {
+    return this.profilePolicies()[profileId] ?? {
+      paymentPolicy: 'T_BANK_ONLY',
+      manualPaymentType: 'MOBILE_BANK',
+      manualPhone: '',
+      manualRecipientName: DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualMonthlyLimitRubles: String(DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
+    };
+  }
+
+  private profileToPolicyDraft(profile: PaymentProfileResponse): ProfilePolicyDraft {
+    return {
+      paymentPolicy: profile.paymentPolicy ?? 'T_BANK_ONLY',
+      manualPaymentType: (profile.manualPaymentType as ManualPaymentType | undefined) ?? 'MOBILE_BANK',
+      manualPhone: profile.manualPhone ?? '',
+      manualRecipientName: profile.manualRecipientName ?? DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: profile.manualPaymentUrl ?? DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: profile.manualPaymentButtonLabel ?? DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualMonthlyLimitRubles: String(this.kopecksToRubles(profile.manualMonthlyHardLimitKopecks)
+        ?? this.kopecksToRubles(profile.manualMonthlySoftLimitKopecks)
+        ?? DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
+    };
+  }
+
+  private adminTaskTargetKopecks(): number {
+    const value = Number(this.adminTaskAmountRubles());
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
+  private manualLimitKopecksFromDraft(value: string): number {
+    const numeric = Number(value);
+    return this.rublesToKopecks(Number.isFinite(numeric) ? numeric : null)
+      ?? this.rublesToKopecks(DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
+      ?? 0;
+  }
+
+  private rublesToKopecks(value: number | null | undefined): number | null {
+    return value && value > 0 ? Math.round(value * 100) : null;
+  }
+
+  private kopecksToRubles(value?: number | null): number | null {
+    return value && value > 0 ? value / 100 : null;
   }
 
   private matchesDateRange(link: AdminPaymentLinkResponse, from: string, to: string): boolean {

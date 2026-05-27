@@ -56,6 +56,8 @@ public class ReviewDTOOne {
 
     private String orderComments;
 
+    private Long filialId;
+
     private String filialCity;
 
     private String filialTitle;

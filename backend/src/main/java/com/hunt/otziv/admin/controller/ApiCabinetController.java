@@ -15,6 +15,13 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.payments.PaymentProfileService;
+import com.hunt.otziv.payments.ManualPaymentTaskService;
+import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
+import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
+import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
+import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskStatusRequest;
+import com.hunt.otziv.payments.dto.UpdateManagerManualPaymentSettingsRequest;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -32,6 +39,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -71,6 +82,8 @@ public class ApiCabinetController {
     private final AnalyticsAggregateScoreService analyticsAggregateScoreService;
     private final AnalyticsAggregateUserStatsService analyticsAggregateUserStatsService;
     private final AnalyticsAggregateTeamService analyticsAggregateTeamService;
+    private final PaymentProfileService paymentProfileService;
+    private final ManualPaymentTaskService manualPaymentTaskService;
 
     @Value("${otziv.analytics.aggregates.read-enabled:false}")
     private boolean aggregateAnalyticsReadEnabled;
@@ -132,6 +145,56 @@ public class ApiCabinetController {
                     }
             );
         });
+    }
+
+    @GetMapping("/payment-profile/manual")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerManualPaymentSettingsResponse managerManualPaymentSettings(Principal principal) {
+        User user = currentUser(principal);
+        return paymentProfileService.managerManualPaymentSettings(user.getId());
+    }
+
+    @PutMapping("/payment-profile/manual")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerManualPaymentSettingsResponse updateManagerManualPaymentSettings(
+            Principal principal,
+            @RequestBody UpdateManagerManualPaymentSettingsRequest request
+    ) {
+        User user = currentUser(principal);
+        return paymentProfileService.updateManagerManualPaymentSettings(user.getId(), request);
+    }
+
+    @GetMapping("/manual-payment-tasks")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public List<ManualPaymentTaskResponse> manualPaymentTasks(Principal principal) {
+        User user = currentUser(principal);
+        return manualPaymentTaskService.managerTasks(user.getId());
+    }
+
+    @PostMapping("/manual-payment-tasks")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManualPaymentTaskResponse createManualPaymentTask(
+            Principal principal,
+            @RequestBody CreateManualPaymentTaskRequest request
+    ) {
+        User user = currentUser(principal);
+        return manualPaymentTaskService.createManagerTask(user.getId(), request, principal.getName());
+    }
+
+    @PutMapping("/manual-payment-tasks/{taskId}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManualPaymentTaskResponse updateManualPaymentTaskStatus(
+            Principal principal,
+            @PathVariable Long taskId,
+            @RequestBody UpdateManualPaymentTaskStatusRequest request
+    ) {
+        User user = currentUser(principal);
+        return manualPaymentTaskService.updateManagerTaskStatus(
+                user.getId(),
+                taskId,
+                request == null ? null : request.status(),
+                principal.getName()
+        );
     }
 
     @GetMapping("/team")

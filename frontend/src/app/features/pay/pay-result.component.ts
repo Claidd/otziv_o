@@ -24,7 +24,7 @@ export class PayResultComponent {
     ? 'Спасибо. Деньги поступили в банк, а электронный чек будет отправлен на указанный e-mail.'
     : 'Банк не подтвердил списание. Деньги не были приняты этой операцией.'
   );
-  readonly nextStepTitle = computed(() => this.isSuccess() ? 'Заказ принят в работу' : 'Можно повторить оплату');
+  readonly nextStepTitle = computed(() => this.isSuccess() ? 'Новый заказ принят в работу' : 'Можно повторить оплату');
   readonly actionLabel = computed(() => this.isSuccess() ? 'На главную' : 'Вернуться к оплате');
   readonly actionLink = computed(() => this.isSuccess() ? '/' : '/pay');
   readonly lead = computed(() => this.isSuccess()

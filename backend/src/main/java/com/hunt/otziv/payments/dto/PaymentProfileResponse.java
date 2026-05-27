@@ -10,6 +10,16 @@ public record PaymentProfileResponse(
         boolean enabled,
         boolean defaultProfile,
         boolean testMode,
-        boolean hasPassword
+        boolean hasPassword,
+        String paymentPolicy,
+        String manualPaymentType,
+        String manualPhone,
+        String manualRecipientName,
+        String manualPaymentUrl,
+        String manualPaymentButtonLabel,
+        Long manualMonthlySoftLimitKopecks,
+        Long manualMonthlyHardLimitKopecks,
+        long manualMonthlyUsedKopecks,
+        long manualMonthlyPendingCount
 ) {
 }

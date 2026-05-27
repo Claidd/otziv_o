@@ -92,6 +92,18 @@
     </div>
   </section>
 
+  @if (manualPendingLinks().length) {
+    <section class="analytics-section manual-alert-panel" aria-label="Ручные платежи на сверку">
+      <div class="section-title compact-title">
+        <span class="material-icons-sharp">fact_check</span>
+        <div>
+          <h2>Ручные платежи на сверку</h2>
+          <p>{{ manualPendingLinks().length }} ожидает подтверждения менеджером или админом.</p>
+        </div>
+      </div>
+    </section>
+  }
+
   @if (error()) {
     <app-load-error-card title="T-Bank платежи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
   }
@@ -135,6 +147,36 @@
                 <small>Заказ №{{ link.orderId || '-' }}</small>
               </td>
               <td class="payment-cell">
+                @if (isManualPayment(link)) {
+                  @if (isExternalManualPayment(link)) {
+                    <a
+                      class="copy-line"
+                      [href]="link.manualPaymentUrl || '#'"
+                      target="_blank"
+                      rel="noopener"
+                      title="Открыть ссылку оплаты"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                      <strong>{{ link.manualPaymentButtonLabel || 'Ссылка Альфа-Банк' }}</strong>
+                    </a>
+                    <small>{{ link.manualPaymentUrl || 'Ссылка не указана' }}</small>
+                  } @else {
+                    <button
+                      type="button"
+                      class="copy-line"
+                      (click)="copy(link.manualPhone, 'manual-phone-' + link.id)"
+                      [disabled]="!link.manualPhone"
+                      title="Скопировать телефон"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'manual-phone-' + link.id ? 'check' : 'content_copy' }}</span>
+                      <strong>{{ link.manualPhone || 'Телефон не указан' }}</strong>
+                    </button>
+                    <small>{{ link.manualRecipientName || 'Получатель не указан' }}</small>
+                  }
+                  <small class="profile-line">{{ link.paymentProfileName || 'Профиль оплаты' }}</small>
+                  <small class="method-line">{{ paymentMethodLabel(link) }} · {{ link.manualComment || 'без комментария' }}</small>
+                  <small class="method-line">{{ manualSourceLabel(link) }}</small>
+                } @else {
                 <button
                   type="button"
                   class="copy-line"
@@ -151,6 +193,7 @@
                 @if (link.payerEmail) {
                   <small class="email-line">{{ link.payerEmail }}</small>
                 }
+                }
               </td>
               <td class="amount-cell">
                 <strong>{{ link.amount | number:'1.2-2' }} руб.</strong>
@@ -161,6 +204,16 @@
                 @if (link.lastError) {
                   <small class="error-text">{{ link.lastError }}</small>
                 }
+                @if (isManualPayment(link)) {
+                  <small class="receipt-line">{{ receiptStatusLabel(link) }}</small>
+                }
+                @if (hasPaymentNotificationInfo(link)) {
+                  <span [class]="paymentNotificationClass(link)">{{ paymentNotificationLabel(link) }}</span>
+                  @if (link.paymentSuccessNotificationError) {
+                    <small class="error-text">{{ link.paymentSuccessNotificationError }}</small>
+                  }
+                }
+                <small [class]="clientChatClass(link)">{{ clientChatInfo(link) }}</small>
               </td>
               <td class="date-cell">
                 <span>Создана: {{ link.createdAt | date:'dd.MM HH:mm' }}</span>
@@ -169,6 +222,12 @@
                 }
                 @if (link.paidAt) {
                   <span>Оплата: {{ link.paidAt | date:'dd.MM HH:mm' }}</span>
+                }
+                @if (link.manualReportedAt) {
+                  <span>Клиент: {{ link.manualReportedAt | date:'dd.MM HH:mm' }}</span>
+                }
+                @if (link.manualConfirmedAt) {
+                  <span>Сверка: {{ link.manualConfirmedAt | date:'dd.MM HH:mm' }}</span>
                 }
                 <span>Истекает: {{ link.expiresAt | date:'dd.MM HH:mm' }}</span>
               </td>
@@ -182,16 +241,42 @@
                       <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
                     </a>
                   }
-                  <button
-                    type="button"
-                    class="refund-action"
-                    (click)="cancel(link)"
-                    [disabled]="!link.refundable || isMutating(link)"
-                    title="Сделать полный возврат через T-Bank"
-                  >
-                    <span class="material-icons-sharp" aria-hidden="true">undo</span>
-                    {{ isMutating(link) ? 'Возвращаю' : 'Возврат' }}
-                  </button>
+                  @if (canConfirmManual(link)) {
+                    <button
+                      type="button"
+                      class="confirm-action"
+                      (click)="confirmManual(link)"
+                      [disabled]="isMutating(link)"
+                      title="Подтвердить ручную оплату"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">done_all</span>
+                      {{ isMutating(link) ? 'Проверяю' : 'Подтвердить' }}
+                    </button>
+                  }
+                  @if (canMarkManualReceipt(link)) {
+                    <button
+                      type="button"
+                      class="receipt-action"
+                      (click)="markManualReceipt(link)"
+                      [disabled]="isMutating(link)"
+                      title="Отметить чек"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">receipt</span>
+                      Чек
+                    </button>
+                  }
+                  @if (!isManualPayment(link)) {
+                    <button
+                      type="button"
+                      class="refund-action"
+                      (click)="cancel(link)"
+                      [disabled]="!link.refundable || isMutating(link)"
+                      title="Сделать полный возврат через T-Bank"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">undo</span>
+                      {{ isMutating(link) ? 'Возвращаю' : 'Возврат' }}
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -320,7 +405,7 @@
               [disabled]="savingRuntimeSettings() || loading()"
               (click)="setPaymentPageMode('SBP_PRIMARY')"
             >
-              <span class="material-icons-sharp" aria-hidden="true">qr_code_2</span>
+              <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
               СБП + карта
             </button>
             <button
@@ -338,7 +423,7 @@
               [disabled]="savingRuntimeSettings() || loading()"
               (click)="setPaymentPageMode('SBP_ONLY')"
             >
-              <span class="material-icons-sharp" aria-hidden="true">qr_code_scanner</span>
+              <span class="material-icons-sharp" aria-hidden="true">mobile_friendly</span>
               Только СБП
             </button>
             <button
@@ -475,79 +560,387 @@
       </article>
     }
 
-    <section class="side-card profiles-panel">
-      <div class="side-card-head">
-        <span class="material-icons-sharp" aria-hidden="true">storefront</span>
-        <div>
-          <h2>Профили</h2>
-          <p>Терминалы, через которые создаются новые ссылки.</p>
-        </div>
-      </div>
-
-      <div class="profiles-grid">
-        @for (profile of profiles(); track trackProfile($index, profile)) {
-          <article class="profile-card" [class.disabled]="!profile.enabled">
-            <div>
-              <strong>{{ profile.name }}</strong>
-              <span>{{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }}</span>
-            </div>
-            <small>{{ profile.terminalKey }}</small>
-            <span [class]="profile.hasPassword ? 'status-pill paid' : 'status-pill failed'">
-              {{ profile.hasPassword ? 'Секрет найден' : 'Нет секрета' }}
-            </span>
-          </article>
-        } @empty {
-          <div class="empty-state compact-empty">
-            <span class="material-icons-sharp" aria-hidden="true">account_balance_off</span>
-            <strong>Профили не найдены</strong>
-          </div>
-        }
-      </div>
-    </section>
-
-    <section class="side-card profiles-panel manager-panel">
+    <section class="side-card launch-panel routing-panel">
       <div class="side-card-head compact-head">
-        <span class="material-icons-sharp" aria-hidden="true">manage_accounts</span>
+        <span class="material-icons-sharp" aria-hidden="true">account_tree</span>
         <div>
-          <h2>Менеджеры</h2>
-          <p>Назначьте профиль для новых оплат.</p>
+          <h2>Маршрутизация оплат</h2>
+          <p>Профили, лимиты и менеджеры для новых ссылок.</p>
         </div>
       </div>
 
-      <div class="manager-profile-list">
-        @for (manager of managerProfiles(); track trackManagerProfile($index, manager)) {
-          <label class="manager-profile-row">
-            <span>
-              <strong>{{ manager.managerTitle }}</strong>
-              <small>ID {{ manager.managerId }} · {{ manager.username || 'без логина' }}</small>
-            </span>
-            <select
-              [ngModel]="selectedProfileId(manager)"
-              (ngModelChange)="setManagerProfile(manager.managerId, $event)"
-              [attr.aria-label]="'Платежный профиль для ' + manager.managerTitle"
-            >
-              <option [ngValue]="null">По умолчанию</option>
-              @for (profile of profiles(); track trackProfile($index, profile)) {
-                <option [ngValue]="profile.id">{{ profile.name }}</option>
+      <div class="launch-summary routing-summary">
+        <strong>{{ profiles().length }} профиля · {{ managerProfiles().length }} менеджера</strong>
+        <span>Ручные задания идут перед лимитом профиля и не уменьшают месячный счетчик.</span>
+      </div>
+
+      <div class="launch-section">
+        <div class="launch-label">
+          <span>1</span>
+          <strong>Ручные задания</strong>
+        </div>
+        <small>Приоритетные цели для ручных оплат. Их можно создать здесь или в кабинете менеджера.</small>
+
+        <div class="manual-task-create-card">
+          <label class="profile-field">
+            <span>Менеджер</span>
+            <select [ngModel]="adminTaskManagerId()" (ngModelChange)="setAdminTaskManagerId($event)">
+              <option [ngValue]="null">Выберите менеджера</option>
+              @for (manager of managerProfiles(); track trackManagerProfile($index, manager)) {
+                <option [ngValue]="manager.managerId">
+                  {{ manager.managerTitle }} · {{ manager.paymentProfileName || 'по умолчанию' }}
+                </option>
               }
             </select>
           </label>
-        } @empty {
-          <div class="empty-state compact-empty">
-            <span class="material-icons-sharp" aria-hidden="true">group_off</span>
-            <strong>Менеджеры не найдены</strong>
+          <div class="launch-segment route-segment">
+            <button
+              type="button"
+              [class.active]="adminTaskPaymentType() === 'MOBILE_BANK'"
+              (click)="setAdminTaskPaymentType('MOBILE_BANK')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+              Телефон
+            </button>
+            <button
+              type="button"
+              [class.active]="adminTaskPaymentType() === 'EXTERNAL_LINK'"
+              (click)="setAdminTaskPaymentType('EXTERNAL_LINK')"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">link</span>
+              Ссылка Альфа
+            </button>
           </div>
-        }
+          @if (adminTaskPaymentType() === 'EXTERNAL_LINK') {
+            <label class="profile-field">
+              <span>Ссылка оплаты</span>
+              <input
+                type="url"
+                [ngModel]="adminTaskPaymentUrl()"
+                (ngModelChange)="setAdminTaskPaymentUrl($event)"
+                placeholder="https://pay.alfabank.ru/..."
+              />
+            </label>
+            <label class="profile-field">
+              <span>Текст кнопки</span>
+              <input
+                type="text"
+                [ngModel]="adminTaskPaymentButtonLabel()"
+                (ngModelChange)="setAdminTaskPaymentButtonLabel($event)"
+                placeholder="Оплатить через Альфа-Банк"
+              />
+            </label>
+            <label class="profile-field">
+              <span>Получатель</span>
+              <input
+                type="text"
+                [ngModel]="adminTaskRecipient()"
+                (ngModelChange)="setAdminTaskRecipient($event)"
+                placeholder="Сивохин И.И."
+              />
+            </label>
+          } @else {
+          <label class="profile-field">
+            <span>Телефон</span>
+            <input
+              type="tel"
+              [ngModel]="adminTaskPhone()"
+              (ngModelChange)="setAdminTaskPhone($event)"
+              placeholder="+7..."
+            />
+          </label>
+          <label class="profile-field">
+            <span>Получатель</span>
+            <input
+              type="text"
+              [ngModel]="adminTaskRecipient()"
+              (ngModelChange)="setAdminTaskRecipient($event)"
+              placeholder="ФИО получателя"
+            />
+          </label>
+          }
+          <label class="profile-field limit-field">
+            <span>Сумма, руб.</span>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              [ngModel]="adminTaskAmountRubles()"
+              (ngModelChange)="setAdminTaskAmountRubles($event)"
+              placeholder="50000"
+            />
+          </label>
+          <label class="profile-field">
+            <span>Комментарий</span>
+            <input
+              type="text"
+              [ngModel]="adminTaskComment()"
+              (ngModelChange)="setAdminTaskComment($event)"
+              placeholder="Необязательно"
+            />
+          </label>
+          <button
+            type="button"
+            class="secondary-action manual-task-submit"
+            (click)="createManualTask()"
+            [disabled]="!canCreateManualTask()"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">{{ savingManualTask() ? 'hourglass_top' : 'add' }}</span>
+            {{ savingManualTask() ? 'Создаю' : 'Создать' }}
+          </button>
+        </div>
+
+        <div class="manual-task-admin-list">
+          @for (task of manualTasks(); track trackManualTask($index, task)) {
+            <article class="manual-task-admin-card" [class.inactive]="task.status !== 'ACTIVE'">
+              <header>
+                <span class="route-avatar">
+                  <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
+                </span>
+                <div>
+                  <strong>{{ manualTaskTitle(task) }}</strong>
+                  <small>{{ manualTaskTargetLine(task) }}</small>
+                </div>
+                <span class="status-pill manual">{{ manualTaskStatusLabel(task.status) }}</span>
+              </header>
+              <div class="manual-limit-box">
+                <div>
+                  <strong>{{ formatKopecks(task.reservedAmountKopecks) }}</strong>
+                  <small>
+                    из {{ formatKopecks(task.targetAmountKopecks) }}
+                    · подтверждено {{ formatKopecks(task.confirmedAmountKopecks) }}
+                    · ждут {{ task.pendingCount }}
+                  </small>
+                </div>
+                <div class="limit-bar" [title]="'Заполнено: ' + manualTaskProgressPercent(task) + '%'">
+                  <span [style.width.%]="manualTaskProgressPercent(task)"></span>
+                </div>
+              </div>
+              <small class="profile-terminal">{{ task.paymentProfileName }}</small>
+              @if (task.comment) {
+                <small class="profile-terminal">{{ task.comment }}</small>
+              }
+              <footer>
+                @if (task.status === 'ACTIVE') {
+                  <button type="button" class="secondary-action tiny-action" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="mutatingTaskId() === task.id">
+                    <span class="material-icons-sharp" aria-hidden="true">pause</span>
+                    Пауза
+                  </button>
+                } @else if (task.status === 'PAUSED') {
+                  <button type="button" class="secondary-action tiny-action" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="mutatingTaskId() === task.id">
+                    <span class="material-icons-sharp" aria-hidden="true">play_arrow</span>
+                    Включить
+                  </button>
+                }
+                @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                  <button type="button" class="secondary-action tiny-action danger-action" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="mutatingTaskId() === task.id">
+                    <span class="material-icons-sharp" aria-hidden="true">close</span>
+                    Отменить
+                  </button>
+                }
+              </footer>
+            </article>
+          } @empty {
+            <div class="empty-state compact-empty">
+              <span class="material-icons-sharp" aria-hidden="true">playlist_add</span>
+              <strong>Ручных заданий пока нет</strong>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="launch-section">
+        <div class="launch-label">
+          <span>2</span>
+          <strong>Профили оплаты</strong>
+        </div>
+
+        <div class="routing-profile-list">
+          @for (profile of profiles(); track trackProfile($index, profile)) {
+            <article class="routing-profile-card" [class.disabled]="!profile.enabled">
+              <div class="routing-card-title">
+                <span class="route-avatar">
+                  <span class="material-icons-sharp" aria-hidden="true">storefront</span>
+                </span>
+                <div>
+                  <strong>{{ profile.name }}</strong>
+                  <small>{{ profile.defaultProfile ? 'По умолчанию' : 'Дополнительный' }} · {{ profilePolicyLabel(profile) }}</small>
+                </div>
+                <span [class]="profile.hasPassword ? 'status-pill paid' : 'status-pill failed'">
+                  {{ profile.hasPassword ? 'Секрет найден' : 'Нет секрета' }}
+                </span>
+              </div>
+              <small class="profile-terminal">{{ profile.terminalKey }}</small>
+
+              <div class="manual-limit-box">
+                <div>
+                  <strong>{{ formatKopecks(profile.manualMonthlyUsedKopecks) }}</strong>
+                  <small>
+                    из {{ formatKopecks(profileManualLimitKopecks(profile)) }}
+                    · ожидают {{ profile.manualMonthlyPendingCount }}
+                  </small>
+                </div>
+                <div class="limit-bar" [title]="'Использовано лимита: ' + profileManualUsagePercent(profile) + '%'">
+                  <span [style.width.%]="profileManualUsagePercent(profile)"></span>
+                </div>
+              </div>
+
+              <div class="launch-segment route-segment">
+                <button
+                  type="button"
+                  [class.active]="profilePolicy(profile.id).paymentPolicy === 'T_BANK_ONLY'"
+                  (click)="setProfilePolicy(profile.id, $any('T_BANK_ONLY'))"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">account_balance</span>
+                  Только T-Bank
+                </button>
+                <button
+                  type="button"
+                  [class.active]="profilePolicy(profile.id).paymentPolicy === 'MANUAL_UNTIL_LIMIT_THEN_TBANK'"
+                  (click)="setProfilePolicy(profile.id, $any('MANUAL_UNTIL_LIMIT_THEN_TBANK'))"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+                  Ручная до лимита
+                </button>
+              </div>
+
+              <label class="profile-field limit-field">
+                <span>Месячный лимит ручных оплат, руб.</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  [ngModel]="profilePolicy(profile.id).manualMonthlyLimitRubles"
+                  (ngModelChange)="setProfileManualLimit(profile.id, $event)"
+                >
+              </label>
+
+              @if (profilePolicy(profile.id).paymentPolicy === 'MANUAL_UNTIL_LIMIT_THEN_TBANK') {
+                <div class="manual-policy-grid">
+                  <div class="launch-segment route-segment">
+                    <button
+                      type="button"
+                      [class.active]="profilePolicy(profile.id).manualPaymentType === 'MOBILE_BANK'"
+                      (click)="setProfileManualPaymentType(profile.id, 'MOBILE_BANK')"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+                      Телефон
+                    </button>
+                    <button
+                      type="button"
+                      [class.active]="profilePolicy(profile.id).manualPaymentType === 'EXTERNAL_LINK'"
+                      (click)="setProfileManualPaymentType(profile.id, 'EXTERNAL_LINK')"
+                    >
+                      <span class="material-icons-sharp" aria-hidden="true">link</span>
+                      Ссылка Альфа
+                    </button>
+                  </div>
+                  @if (profilePolicy(profile.id).manualPaymentType === 'EXTERNAL_LINK') {
+                    <label class="profile-field">
+                      <span>Ссылка оплаты</span>
+                      <input
+                        type="url"
+                        [ngModel]="profilePolicy(profile.id).manualPaymentUrl"
+                        (ngModelChange)="setProfileManualPaymentUrl(profile.id, $event)"
+                        placeholder="https://pay.alfabank.ru/..."
+                      >
+                    </label>
+                    <label class="profile-field">
+                      <span>Текст кнопки</span>
+                      <input
+                        type="text"
+                        [ngModel]="profilePolicy(profile.id).manualPaymentButtonLabel"
+                        (ngModelChange)="setProfileManualPaymentButtonLabel(profile.id, $event)"
+                        placeholder="Оплатить через Альфа-Банк"
+                      >
+                    </label>
+                    <label class="profile-field">
+                      <span>Получатель</span>
+                      <input
+                        type="text"
+                        [ngModel]="profilePolicy(profile.id).manualRecipientName"
+                        (ngModelChange)="setProfileManualRecipient(profile.id, $event)"
+                        placeholder="Сивохин И.И."
+                      >
+                    </label>
+                  } @else {
+                    <label class="profile-field">
+                      <span>Телефон</span>
+                      <input
+                        type="text"
+                        [ngModel]="profilePolicy(profile.id).manualPhone"
+                        (ngModelChange)="setProfileManualPhone(profile.id, $event)"
+                        placeholder="+7..."
+                      >
+                    </label>
+                    <label class="profile-field">
+                      <span>Получатель</span>
+                      <input
+                        type="text"
+                        [ngModel]="profilePolicy(profile.id).manualRecipientName"
+                        (ngModelChange)="setProfileManualRecipient(profile.id, $event)"
+                        placeholder="Имя в банке"
+                      >
+                    </label>
+                  }
+                </div>
+              }
+            </article>
+          } @empty {
+            <div class="empty-state compact-empty">
+              <span class="material-icons-sharp" aria-hidden="true">account_balance_off</span>
+              <strong>Профили не найдены</strong>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="launch-section">
+        <div class="launch-label">
+          <span>3</span>
+          <strong>Менеджеры</strong>
+        </div>
+        <small>Назначьте профиль тем, кто создает новые оплаты.</small>
+
+        <div class="manager-profile-list routing-manager-list">
+          @for (manager of managerProfiles(); track trackManagerProfile($index, manager)) {
+            <label class="manager-profile-row routing-manager-row">
+              <span class="route-avatar">
+                <span class="material-icons-sharp" aria-hidden="true">person</span>
+              </span>
+              <span>
+                <strong>{{ manager.managerTitle }}</strong>
+                <small>ID {{ manager.managerId }} · {{ manager.username || 'без логина' }}</small>
+              </span>
+              <select
+                [ngModel]="selectedProfileId(manager)"
+                (ngModelChange)="setManagerProfile(manager.managerId, $event)"
+                [attr.aria-label]="'Платежный профиль для ' + manager.managerTitle"
+              >
+                <option [ngValue]="null">По умолчанию</option>
+                @for (profile of profiles(); track trackProfile($index, profile)) {
+                  <option [ngValue]="profile.id">{{ profile.name }}</option>
+                }
+              </select>
+            </label>
+          } @empty {
+            <div class="empty-state compact-empty">
+              <span class="material-icons-sharp" aria-hidden="true">group_off</span>
+              <strong>Менеджеры не найдены</strong>
+            </div>
+          }
+        </div>
       </div>
 
       <button
         type="button"
-        class="primary-action side-save"
-        (click)="saveProfileAssignments()"
-        [disabled]="savingProfiles() || loading()"
+        class="primary-action side-save routing-save"
+        (click)="saveRoutingSettings()"
+        [disabled]="savingRoutingSettings() || loading()"
       >
         <span class="material-icons-sharp" aria-hidden="true">save</span>
-        {{ savingProfiles() ? 'Сохраняю' : 'Сохранить' }}
+        {{ savingRoutingSettings() ? 'Сохраняю' : 'Сохранить маршрутизацию' }}
       </button>
     </section>
   </section>

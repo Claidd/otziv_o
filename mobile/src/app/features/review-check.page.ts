@@ -120,7 +120,7 @@ type ReviewDraft = {
                       }
                       @if (hasReviewNote(review, details)) {
                         <button class="review-card-badge note" type="button" (click)="toggleReviewNotes(review)" aria-label="Заметки">
-                          <span class="material-icons-sharp">priority_high</span>
+                          <span aria-hidden="true">!</span>
                         </button>
                       }
                       <small>#{{ review.id }}</small>
@@ -341,12 +341,12 @@ type ReviewDraft = {
     .review-check-page {
       display: flex;
       flex-direction: column;
-      gap: 0.54rem;
+      gap: var(--otziv-page-gap, 0.46rem);
       height: 100%;
       max-width: 48rem;
       margin: 0 auto;
       overflow: hidden;
-      padding: 0.62rem 0.68rem calc(0.58rem + env(safe-area-inset-bottom));
+      padding: var(--otziv-page-padding-y, 0.55rem) var(--otziv-page-padding-x, 0.62rem) calc(var(--otziv-page-padding-bottom, 0.45rem) + env(safe-area-inset-bottom));
       font-family: var(--otziv-card-title-font);
     }
 
@@ -394,8 +394,8 @@ type ReviewDraft = {
     .review-check-actions {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.45rem;
-      padding: 0.55rem;
+      gap: var(--otziv-unified-card-gap, 0.32rem);
+      padding: 0.4rem;
     }
 
     .review-check-actions button,
@@ -403,7 +403,7 @@ type ReviewDraft = {
     .field-actions button {
       display: inline-flex;
       min-width: 0;
-      min-height: 1.92rem;
+      min-height: var(--otziv-card-control-height, 1.5rem);
       align-items: center;
       justify-content: center;
       gap: 0.22rem;
@@ -412,7 +412,7 @@ type ReviewDraft = {
       color: var(--otziv-dark);
       background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-muted-surface) 100%);
       font: inherit;
-      font-size: 0.62rem;
+      font-size: var(--otziv-card-control-font-size, 0.6rem);
       font-weight: 1000;
       line-height: 1;
       text-align: center;
@@ -437,13 +437,13 @@ type ReviewDraft = {
 
     .review-check-list {
       display: flex;
-      gap: 0.62rem;
+      gap: var(--otziv-list-gap, 0.56rem);
       flex: 1 1 0;
       min-height: 0;
-      margin-inline: -0.68rem;
+      margin-inline: calc(var(--otziv-page-padding-x, 0.62rem) * -1);
       overflow-x: auto;
       overflow-y: hidden;
-      padding: 0 0.68rem 0.15rem;
+      padding: 0 var(--otziv-page-padding-x, 0.62rem) 0.12rem;
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
     }
@@ -465,17 +465,17 @@ type ReviewDraft = {
     }
 
     .review-check-card {
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-      align-content: stretch;
-      gap: 0.52rem;
-      flex: 0 0 min(15.4rem, 79vw);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: var(--otziv-unified-card-gap, 0.3rem);
+      flex: 0 0 var(--otziv-board-card-width, min(14.75rem, 78vw));
       min-width: 0;
       height: 100%;
       max-height: 100%;
       border: 1px solid rgba(103, 116, 131, 0.2);
       border-radius: 0.9rem;
-      padding: 0.65rem;
+      padding: var(--otziv-unified-card-padding, 0.46rem);
       overflow: hidden;
       background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 44%, var(--otziv-white) 100%);
       box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
@@ -581,17 +581,19 @@ type ReviewDraft = {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.45rem;
+      gap: 0.32rem;
+      flex: 0 0 auto;
       min-width: 0;
+      min-height: 1.05rem;
     }
 
     .review-check-card header strong {
       min-width: 0;
       overflow: hidden;
       color: var(--otziv-dark);
-      font-size: 1rem;
+      font-size: var(--otziv-unified-title-size, 0.9rem);
       font-weight: 1000;
-      line-height: 1.1;
+      line-height: 1.04;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -607,17 +609,18 @@ type ReviewDraft = {
     .review-check-card footer span {
       color: var(--otziv-info);
       font-family: var(--otziv-font-family);
-      font-size: 0.68rem;
+      font-size: var(--otziv-unified-subtitle-size, 0.56rem);
       font-weight: 900;
+      line-height: 1;
     }
 
     .review-card-badge {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 1.28rem;
-      height: 1.28rem;
-      min-width: 1.28rem;
+      width: var(--otziv-note-alert-size, 1.06rem);
+      height: var(--otziv-note-alert-size, 1.06rem);
+      min-width: var(--otziv-note-alert-size, 1.06rem);
       border: 0;
       border-radius: 999px;
       color: #4d3900;
@@ -631,9 +634,9 @@ type ReviewDraft = {
     }
 
     .review-card-badge.photo {
-      width: 1.18rem;
-      height: 1.18rem;
-      min-width: 1.18rem;
+      width: var(--otziv-note-alert-size, 1.06rem);
+      height: var(--otziv-note-alert-size, 1.06rem);
+      min-width: var(--otziv-note-alert-size, 1.06rem);
       color: white;
       background: var(--otziv-success);
     }
@@ -657,13 +660,14 @@ type ReviewDraft = {
     .review-note-panel {
       position: relative;
       display: grid;
-      gap: 0.42rem;
+      gap: var(--otziv-unified-card-gap, 0.3rem);
       min-width: 0;
     }
 
     .review-text-editor {
+      flex: 0 0 auto;
       min-height: 0;
-      grid-template-rows: minmax(0, 1fr) auto;
+      grid-template-rows: auto auto;
     }
 
     .review-text-editor.editing {
@@ -680,14 +684,14 @@ type ReviewDraft = {
       width: 100%;
       min-width: 0;
       border: 1px solid rgba(103, 116, 131, 0.22);
-      border-radius: 0.8rem;
-      padding: 0.68rem;
+      border-radius: 0.74rem;
+      padding: 0.44rem 0.52rem;
       color: var(--otziv-dark);
       background: var(--otziv-field-background);
       font-family: var(--otziv-font-family);
-      font-size: 0.78rem;
+      font-size: var(--otziv-unified-field-font-size, 0.6rem);
       font-weight: 700;
-      line-height: 1.34;
+      line-height: 1.18;
       text-align: left;
     }
 
@@ -698,23 +702,32 @@ type ReviewDraft = {
 
     .review-text-editor textarea,
     .review-text-editor .review-display-field {
-      display: block;
-      height: 100%;
-      min-height: 10.15rem;
+      display: -webkit-box;
+      height: 6.15rem;
+      min-height: 6.15rem;
+      max-height: 6.15rem;
       overflow: hidden;
-      padding-bottom: 1.05rem;
+      padding-bottom: 0.46rem;
       resize: none;
       white-space: pre-wrap;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 5;
     }
 
     .review-text-editor.open textarea,
     .review-text-editor.open .review-display-field {
+      height: 8.2rem;
+      min-height: 8.2rem;
+      max-height: 8.2rem;
       overflow: auto;
+      -webkit-line-clamp: initial;
     }
 
     .review-text-editor.editing textarea {
-      height: clamp(8.2rem, 23vh, 9.8rem);
-      min-height: 8.2rem;
+      display: block;
+      height: 7rem;
+      min-height: 7rem;
+      max-height: 7rem;
       overflow: auto;
       padding-bottom: 0.72rem;
     }
@@ -722,24 +735,25 @@ type ReviewDraft = {
     .review-answer-editor textarea,
     .review-display-field--answer {
       display: -webkit-box;
-      height: 3.58rem;
-      min-height: 3.58rem;
-      padding: 0.46rem 0.6rem;
+      height: 2.28rem;
+      min-height: 2.28rem;
+      max-height: 2.28rem;
+      padding: 0.34rem 0.48rem;
       overflow: hidden;
       resize: none;
-      opacity: 0.58;
-      font-size: 0.6rem;
+      opacity: 0.78;
+      font-size: 0.56rem;
       font-weight: 800;
-      line-height: 1.2;
+      line-height: 1.12;
       text-align: center;
       -webkit-box-orient: vertical;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
     }
 
     .review-answer-editor.editing textarea {
       display: block;
-      height: 3.7rem;
-      min-height: 3.7rem;
+      height: 3.1rem;
+      min-height: 3.1rem;
       overflow: auto;
       opacity: 1;
     }
@@ -750,32 +764,35 @@ type ReviewDraft = {
     }
 
     .text-toggle {
-      position: absolute;
-      right: 0.7rem;
-      bottom: 0.7rem;
+      position: static;
+      justify-self: end;
+      min-height: 0;
       border: 0;
-      padding: 0;
       color: var(--otziv-info);
-      background: var(--otziv-field-background);
+      border-radius: 999px;
+      margin-top: -0.16rem;
+      padding: 0.05rem 0.28rem;
+      background: rgba(255, 255, 255, 0.88);
       font-family: var(--otziv-font-family);
-      font-size: 0.62rem;
+      font-size: 0.56rem;
       font-weight: 900;
+      line-height: 1;
     }
 
     .field-actions {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.44rem;
+      gap: var(--otziv-unified-card-gap, 0.32rem);
       align-items: center;
-      min-height: 1.68rem;
+      min-height: var(--otziv-card-control-height, 1.5rem);
     }
 
     .review-text-editor > .field-actions button,
     .review-answer-editor > .field-actions button {
-      height: 1.68rem;
-      min-height: 1.68rem;
+      height: var(--otziv-card-control-height, 1.5rem);
+      min-height: var(--otziv-card-control-height, 1.5rem);
       padding: 0 0.42rem;
-      font-size: 0.56rem;
+      font-size: var(--otziv-card-control-font-size, 0.6rem);
     }
 
     .field-actions .save {
@@ -785,16 +802,23 @@ type ReviewDraft = {
 
     .bot-line {
       display: grid;
-      min-height: 2.1rem;
+      flex: 0 0 auto;
+      min-height: var(--otziv-card-control-height, 1.5rem);
+      height: var(--otziv-card-control-height, 1.5rem);
+      max-height: var(--otziv-card-control-height, 1.5rem);
       place-items: center;
       border: 1px solid rgba(103, 116, 131, 0.2);
-      border-radius: 0.8rem;
+      border-radius: 999px;
+      padding: 0 0.42rem;
+      overflow: hidden;
       color: var(--otziv-dark);
       background: var(--otziv-field-background);
       font-family: var(--otziv-font-family);
-      font-size: 0.76rem;
+      font-size: var(--otziv-card-control-font-size, 0.6rem);
       font-weight: 900;
       text-align: center;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .review-note-panel {
@@ -831,24 +855,24 @@ type ReviewDraft = {
     .review-check-decision {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: 0.45rem;
-      padding: 0.55rem;
+      gap: var(--otziv-unified-card-gap, 0.32rem);
+      padding: 0.48rem;
       font-family: var(--otziv-font-family);
     }
 
     .review-check-decision textarea {
-      height: 3.1rem;
-      min-height: 3.1rem;
+      height: 2.45rem;
+      min-height: 2.45rem;
       resize: none;
-      font-size: 0.7rem;
+      font-size: 0.64rem;
     }
 
     .review-check-decision .approve-button {
-      min-height: 2.15rem;
+      min-height: 1.9rem;
       border-color: #f0b429;
       color: #4f3700;
       background: #ffe17a;
-      font-size: 0.86rem;
+      font-size: 0.78rem;
     }
 
     .review-check-decision .approve-button.approved {
@@ -962,7 +986,21 @@ type ReviewDraft = {
       }
 
       .review-check-card {
-        flex-basis: min(15rem, 82vw);
+        flex-basis: min(14.35rem, 82vw);
+      }
+
+      .review-text-editor textarea,
+      .review-text-editor .review-display-field {
+        height: 5.7rem;
+        min-height: 5.7rem;
+        max-height: 5.7rem;
+      }
+
+      .review-text-editor.open textarea,
+      .review-text-editor.open .review-display-field {
+        height: 7.5rem;
+        min-height: 7.5rem;
+        max-height: 7.5rem;
       }
     }
   `]

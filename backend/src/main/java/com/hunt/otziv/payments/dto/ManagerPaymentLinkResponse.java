@@ -10,7 +10,9 @@ public record ManagerPaymentLinkResponse(
         BigDecimal amount,
         long amountKopecks,
         String status,
+        String paymentMethod,
         LocalDateTime expiresAt,
+        String instructionText,
         String copyText
 ) {
 }

@@ -15,13 +15,13 @@ public class OpenAiProvider implements AiProvider {
     @Override
     public AiResponse generate(AiRequest request) {
         if (!isAvailable()) {
-            return new AiResponse("", providerName(), 0, 0);
+            return new AiResponse("", responsesClient.activeProviderName(), 0, 0);
         }
 
         OpenAiResponseResult result = responsesClient.createTextResponse(request);
         return new AiResponse(
                 result.text(),
-                providerName(),
+                responsesClient.activeProviderName(),
                 result.inputTokens(),
                 result.outputTokens(),
                 result.errorMessage()
@@ -30,13 +30,13 @@ public class OpenAiProvider implements AiProvider {
 
     public AiResponse generateContentPack(AiRequest request, String profileKey) {
         if (!isAvailable()) {
-            return new AiResponse("", providerName(), 0, 0);
+            return new AiResponse("", responsesClient.activeProviderName(), 0, 0);
         }
 
         OpenAiResponseResult result = responsesClient.createContentPackResponse(request, profileKey);
         return new AiResponse(
                 result.text(),
-                providerName(),
+                responsesClient.activeProviderName(),
                 result.inputTokens(),
                 result.outputTokens(),
                 result.errorMessage()
@@ -45,13 +45,13 @@ public class OpenAiProvider implements AiProvider {
 
     public AiResponse generateReviewTemplates(AiRequest request, String profileKey) {
         if (!isAvailable()) {
-            return new AiResponse("", providerName(), 0, 0);
+            return new AiResponse("", responsesClient.activeProviderName(), 0, 0);
         }
 
         OpenAiResponseResult result = responsesClient.createReviewTemplatesResponse(request, profileKey);
         return new AiResponse(
                 result.text(),
-                providerName(),
+                responsesClient.activeProviderName(),
                 result.inputTokens(),
                 result.outputTokens(),
                 result.errorMessage()
@@ -60,13 +60,13 @@ public class OpenAiProvider implements AiProvider {
 
     public AiResponse generateSingleReviewDraft(AiRequest request, String profileKey) {
         if (!isAvailable()) {
-            return new AiResponse("", providerName(), 0, 0);
+            return new AiResponse("", responsesClient.activeProviderName(), 0, 0);
         }
 
         OpenAiResponseResult result = responsesClient.createSingleReviewDraftResponse(request, profileKey);
         return new AiResponse(
                 result.text(),
-                providerName(),
+                responsesClient.activeProviderName(),
                 result.inputTokens(),
                 result.outputTokens(),
                 result.errorMessage()
@@ -75,13 +75,13 @@ public class OpenAiProvider implements AiProvider {
 
     public AiResponse generateBatchReviewDraft(AiRequest request, String profileKey) {
         if (!isAvailable()) {
-            return new AiResponse("", providerName(), 0, 0);
+            return new AiResponse("", responsesClient.activeProviderName(), 0, 0);
         }
 
         OpenAiResponseResult result = responsesClient.createBatchReviewDraftResponse(request, profileKey);
         return new AiResponse(
                 result.text(),
-                providerName(),
+                responsesClient.activeProviderName(),
                 result.inputTokens(),
                 result.outputTokens(),
                 result.errorMessage()
@@ -90,13 +90,13 @@ public class OpenAiProvider implements AiProvider {
 
     public AiResponse generateBatchReviewWritingGuide(AiRequest request, String profileKey) {
         if (!isAvailable()) {
-            return new AiResponse("", providerName(), 0, 0);
+            return new AiResponse("", responsesClient.activeProviderName(), 0, 0);
         }
 
         OpenAiResponseResult result = responsesClient.createBatchReviewWritingGuideResponse(request, profileKey);
         return new AiResponse(
                 result.text(),
-                providerName(),
+                responsesClient.activeProviderName(),
                 result.inputTokens(),
                 result.outputTokens(),
                 result.errorMessage()

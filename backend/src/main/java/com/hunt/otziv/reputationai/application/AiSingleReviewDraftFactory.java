@@ -6,6 +6,7 @@ import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftTarget;
 import com.hunt.otziv.reputationai.api.dto.ReputationSingleReviewDraftRequest;
 import com.hunt.otziv.reputationai.config.ContentPackProfile;
+import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftItem;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftResult;
@@ -388,6 +389,7 @@ public class AiSingleReviewDraftFactory {
     private final OpenAiProvider openAiProvider;
     private final ObjectMapper objectMapper;
     private final ReviewSafetyService reviewSafetyService;
+    private final ReputationAiProperties properties;
 
     public boolean isOpenAiAvailable() {
         return openAiProvider.isAvailable();
@@ -3004,8 +3006,20 @@ public class AiSingleReviewDraftFactory {
     }
 
     private String modelLabel(String profileKey) {
+        if (isYandexActive()) {
+            return properties.getYandex().getModel();
+        }
         ContentPackProfile profile = ContentPackProfile.fromKey(profileKey);
         return profile == null ? profileKey : profile.model();
+    }
+
+    private boolean isYandexActive() {
+        String provider = properties.getProvider();
+        if (provider == null) {
+            return false;
+        }
+        String normalized = provider.trim().toLowerCase(Locale.ROOT);
+        return "yandex".equals(normalized) || "yandexgpt".equals(normalized) || "yandex-gpt".equals(normalized);
     }
 
     private String limit(String value, int limit) {

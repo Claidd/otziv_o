@@ -24,6 +24,7 @@ public record OrderDetailsResponse(
         List<ReviewDetailsResponse> reviews,
         List<BadReviewTaskDetailsResponse> badReviewTasks,
         List<ReviewRecoveryTaskDetailsResponse> recoveryTasks,
+        List<OptionResponse> filials,
         List<ProductOptionResponse> products,
         boolean canEditReviews,
         boolean canSendToCheck,

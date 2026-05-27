@@ -454,6 +454,7 @@ export interface OrderReviewItem {
   companyTitle: string;
   commentCompany: string;
   orderComments: string;
+  filialId?: number | null;
   filialCity: string;
   filialTitle: string;
   filialUrl: string;
@@ -557,6 +558,7 @@ export interface OrderDetailsPayload {
   reviews: OrderReviewItem[];
   badReviewTasks: BadReviewTaskItem[];
   recoveryTasks: ReviewRecoveryTaskItem[];
+  filials: ManagerOption[];
   products: ProductOption[];
   canEditReviews: boolean;
   canSendToCheck: boolean;
@@ -588,6 +590,7 @@ export interface ReviewUpdateRequest {
   botName: string;
   botPassword: string;
   productId: number | null;
+  filialId: number | null;
   url: string;
 }
 
@@ -902,6 +905,12 @@ export class ManagerApi {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/recovery-tasks/${taskId}/complete`,
       {}
+    );
+  }
+
+  deleteReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
+    return this.http.delete<OrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/recovery-tasks/${taskId}`
     );
   }
 

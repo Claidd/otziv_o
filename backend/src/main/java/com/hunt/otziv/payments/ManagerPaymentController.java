@@ -13,7 +13,7 @@ public class ManagerPaymentController {
 
     private final PaymentLinkService paymentLinkService;
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/payment-link")
     public ManagerPaymentLinkResponse createPaymentLink(@PathVariable Long orderId) {
         return paymentLinkService.createForOrder(orderId);

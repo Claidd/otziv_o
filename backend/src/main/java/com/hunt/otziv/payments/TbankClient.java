@@ -153,7 +153,7 @@ public class TbankClient {
         }
         validateProfile(profile);
         if (command.paymentId() == null || command.paymentId().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не задан PaymentId для QR СБП");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не задан PaymentId для СБП-ссылки");
         }
 
         Map<String, Object> payload = qrPayload(profile, command);
@@ -180,6 +180,41 @@ public class TbankClient {
             throw new ResponseStatusException(
                     HttpStatus.BAD_GATEWAY,
                     "Ошибка запроса GetQr в Т-Банк: " + e.getResponseBodyAsString(),
+                    e
+            );
+        }
+    }
+
+    public TbankGetQrBankListResponse getQrBankList(TbankPaymentProfile profile, TbankGetQrBankListCommand command) {
+        if (!runtimeSettingsService.isTbankEnabled()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Интернет-эквайринг Т-Банка выключен в настройках");
+        }
+        validateProfile(profile);
+
+        Map<String, Object> payload = qrBankListPayload(profile, command);
+        payload.put("Token", tokenSigner.sign(payload, profile.password()));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        try {
+            ResponseEntity<TbankGetQrBankListResponse> response = restTemplate.postForEntity(
+                    properties.getBaseUrl() + "/v2/GetQrBankList",
+                    new HttpEntity<>(payload, headers),
+                    TbankGetQrBankListResponse.class
+            );
+            TbankGetQrBankListResponse body = response.getBody();
+            if (body == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк вернул пустой ответ на GetQrBankList");
+            }
+            if (!body.success()) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, body.errorText());
+            }
+            return body;
+        } catch (RestClientResponseException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Ошибка запроса GetQrBankList в Т-Банк: " + e.getResponseBodyAsString(),
                     e
             );
         }
@@ -248,6 +283,24 @@ public class TbankClient {
         if (command.bankId() != null && !command.bankId().isBlank()) {
             payload.put("BankId", command.bankId());
         }
+        return payload;
+    }
+
+    private Map<String, Object> qrBankListPayload(TbankPaymentProfile profile, TbankGetQrBankListCommand command) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("TerminalKey", profile.terminalKey());
+        String scenarioType = command == null || command.scenarioType() == null || command.scenarioType().isBlank()
+                ? "qr"
+                : command.scenarioType();
+        String deviceType = command == null || command.deviceType() == null || command.deviceType().isBlank()
+                ? "mobile"
+                : command.deviceType();
+        String os = command == null || command.os() == null ? "" : command.os();
+        payload.put("ScenarioType", scenarioType);
+        payload.put("Device", Map.of(
+                "Type", deviceType,
+                "Os", os
+        ));
         return payload;
     }
 

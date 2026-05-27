@@ -14,6 +14,7 @@ public record ReviewEditorUpdateRequest(
         String botName,
         String botPassword,
         Long productId,
+        Long filialId,
         String url
 ) {
 }

@@ -15,21 +15,38 @@ export interface PublicPaymentLink {
   description: string;
   payerEmail?: string | null;
   status: string;
+  paymentMethod?: PaymentMethod;
   expiresAt: string;
   payable: boolean;
   paymentPageMode?: TbankPaymentPageMode;
   tpayEnabled?: boolean;
   sberpayEnabled?: boolean;
   mirpayEnabled?: boolean;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
+  receiptStatus?: PaymentReceiptStatus | string | null;
 }
 
 export interface PublicPaymentInitResponse {
   paymentUrl: string;
   paymentId: string;
   status: string;
-  method?: 'BANK_FORM' | 'SBP_QR' | string;
+  method?: PaymentMethod;
   qrPayload?: string | null;
   qrImage?: string | null;
+}
+
+export interface PublicSbpBank {
+  bankId: string;
+  nspkBankId?: string | null;
+  name: string;
+  logoUrl?: string | null;
+  order?: number | null;
+  featured: boolean;
 }
 
 export interface ManagerPaymentLinkResponse {
@@ -39,7 +56,9 @@ export interface ManagerPaymentLinkResponse {
   amount: number;
   amountKopecks: number;
   status: string;
+  paymentMethod?: PaymentMethod;
   expiresAt: string;
+  instructionText?: string | null;
   copyText: string;
 }
 
@@ -53,15 +72,35 @@ export interface AdminPaymentLinkResponse {
   description: string;
   amount: number;
   amountKopecks: number;
+  reservedAmountKopecks?: number | null;
+  confirmedAmountKopecks?: number | null;
   status: string;
-  paymentMethod?: 'BANK_FORM' | 'SBP_QR' | string;
+  paymentMethod?: PaymentMethod;
   paymentProfileCode?: string | null;
   paymentProfileName?: string | null;
+  manualSource?: ManualPaymentSource | string | null;
+  manualTaskId?: number | null;
+  manualTaskTitle?: string | null;
   tbankTerminalKey?: string | null;
   tbankPaymentId?: string | null;
   tbankOrderId?: string | null;
   payerEmail?: string | null;
   paymentUrl?: string | null;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
+  manualReportedAt?: string | null;
+  manualConfirmedBy?: string | null;
+  manualConfirmedAt?: string | null;
+  receiptStatus?: PaymentReceiptStatus | string | null;
+  paymentSuccessNotifiedAt?: string | null;
+  paymentSuccessNotificationError?: string | null;
+  clientChatPlatform?: string | null;
+  clientChatReady: boolean;
+  clientChatWarning?: string | null;
   lastError?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -83,6 +122,16 @@ export interface PaymentProfileResponse {
   defaultProfile: boolean;
   testMode: boolean;
   hasPassword: boolean;
+  paymentPolicy: PaymentPolicy;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualMonthlySoftLimitKopecks?: number | null;
+  manualMonthlyHardLimitKopecks?: number | null;
+  manualMonthlyUsedKopecks: number;
+  manualMonthlyPendingCount: number;
 }
 
 export interface ManagerPaymentProfileResponse {
@@ -106,6 +155,53 @@ export interface TbankClientPaymentMode {
 export type TbankRuntimeMode = 'TEST' | 'LIVE';
 export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK';
 export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_ONLY' | 'BANK_ONLY';
+export type PaymentPolicy = 'T_BANK_ONLY' | 'MANUAL_UNTIL_LIMIT_THEN_TBANK';
+export type PaymentMethod = 'BANK_FORM' | 'SBP_QR' | 'MANUAL_MOBILE_BANK' | 'MANUAL_EXTERNAL_LINK' | string;
+export type PaymentReceiptStatus = 'PENDING' | 'MARKED';
+export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK';
+export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
+export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
+
+export interface ManualPaymentTaskResponse {
+  id: number;
+  managerId?: number | null;
+  managerTitle: string;
+  username: string;
+  paymentProfileId?: number | null;
+  paymentProfileName: string;
+  status: ManualPaymentTaskStatus | string;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  targetAmountKopecks: number;
+  reservedAmountKopecks: number;
+  confirmedAmountKopecks: number;
+  pendingAmountKopecks: number;
+  remainingAmountKopecks: number;
+  pendingCount: number;
+  comment?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  completedAt?: string | null;
+  routable: boolean;
+}
+
+export interface CreateManualPaymentTaskRequest {
+  managerId?: number | null;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  targetAmountKopecks: number;
+  comment?: string | null;
+}
+
+export interface UpdateManualPaymentTaskStatusRequest {
+  status: ManualPaymentTaskStatus;
+}
 
 export interface TbankRuntimeSettings {
   runtimeMode: TbankRuntimeMode;
@@ -138,6 +234,18 @@ export interface UpdateTbankRuntimeSettingsRequest {
 export interface ManagerPaymentProfileAssignmentRequest {
   managerId: number;
   paymentProfileId?: number | null;
+}
+
+export interface PaymentProfilePolicyRequest {
+  profileId: number;
+  paymentPolicy: PaymentPolicy;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualMonthlySoftLimitKopecks?: number | null;
+  manualMonthlyHardLimitKopecks?: number | null;
 }
 
 export interface TbankPaymentStatus {
@@ -187,11 +295,27 @@ export class PaymentsApi {
     email: string,
     offerConsent: boolean,
     privacyConsent: boolean,
-    receiptConsent: boolean
+    receiptConsent: boolean,
+    sbpBankId?: string | null
   ): Observable<PublicPaymentInitResponse> {
     return this.http.post<PublicPaymentInitResponse>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/sbp`,
-      { email, offerConsent, privacyConsent, receiptConsent },
+      { email, offerConsent, privacyConsent, receiptConsent, sbpBankId },
+      { context: this.publicContext }
+    );
+  }
+
+  getPublicSbpBanks(token: string): Observable<PublicSbpBank[]> {
+    return this.http.get<PublicSbpBank[]>(
+      `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/sbp/banks`,
+      { context: this.publicContext }
+    );
+  }
+
+  reportPublicManualPayment(token: string): Observable<PublicPaymentLink> {
+    return this.http.post<PublicPaymentLink>(
+      `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/manual-paid`,
+      {},
       { context: this.publicContext }
     );
   }
@@ -219,6 +343,20 @@ export class PaymentsApi {
   cancelAdminTbankPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> {
     return this.http.post<AdminPaymentLinkResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-links/${linkId}/cancel`,
+      {}
+    );
+  }
+
+  confirmAdminManualPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/confirm`,
+      {}
+    );
+  }
+
+  markAdminManualPaymentReceipt(linkId: number): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/receipt`,
       {}
     );
   }
@@ -263,6 +401,40 @@ export class PaymentsApi {
     return this.http.put<TbankPaymentProfilesResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-profiles/manager-assignments`,
       { assignments }
+    );
+  }
+
+  updateAdminPaymentProfilePolicies(
+    profiles: PaymentProfilePolicyRequest[]
+  ): Observable<TbankPaymentProfilesResponse> {
+    return this.http.put<TbankPaymentProfilesResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-profiles/policies`,
+      { profiles }
+    );
+  }
+
+  getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {
+    return this.http.get<ManualPaymentTaskResponse[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks`
+    );
+  }
+
+  createAdminManualPaymentTask(
+    request: CreateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.post<ManualPaymentTaskResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks`,
+      request
+    );
+  }
+
+  updateAdminManualPaymentTaskStatus(
+    taskId: number,
+    status: ManualPaymentTaskStatus
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks/${taskId}/status`,
+      { status }
     );
   }
 }

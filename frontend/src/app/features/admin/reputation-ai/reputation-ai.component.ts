@@ -286,7 +286,7 @@ export class ReputationAiComponent implements OnDestroy {
     {
       icon: 'psychology',
       title: '3. Отчёт',
-      text: 'Запустите глубокий отчёт: OpenAI синтезирует разделы, источники, сомнения и чек-лист качества.'
+      text: 'Запустите глубокий отчёт: AI-провайдер синтезирует разделы, источники, сомнения и чек-лист качества.'
     },
     {
       icon: 'compare_arrows',
@@ -591,7 +591,7 @@ export class ReputationAiComponent implements OnDestroy {
         this.previewingPrompt.set(false);
         this.notice.set(preview.unresolvedPlaceholders.length > 0
           ? 'Preview собран, но часть маркеров не подставилась.'
-          : 'Preview промпта собран без вызова OpenAI.');
+          : 'Preview промпта собран без вызова AI-провайдера.');
       },
       error: (error: unknown) => {
         this.previewingPrompt.set(false);
@@ -719,7 +719,7 @@ export class ReputationAiComponent implements OnDestroy {
       },
       error: (error: unknown) => {
         this.checkingOpenAiRoute.set(false);
-        this.fail(error, 'Не удалось проверить маршрут OpenAI.');
+        this.fail(error, 'Не удалось проверить маршрут AI-провайдера.');
       }
     });
   }
@@ -1036,7 +1036,7 @@ export class ReputationAiComponent implements OnDestroy {
       next: (result) => {
         this.reviewTemplatesResult.set(result);
         this.finish(result.provider === 'local'
-          ? 'Улучшенные отзывы собраны локально, OpenAI не использовался.'
+          ? 'Улучшенные отзывы собраны локально, AI-провайдер не использовался.'
           : 'Улучшенные отзывы готовы.');
       },
       error: (error: unknown) => this.fail(error, 'Не удалось улучшить шаблоны отзывов.')
@@ -1090,7 +1090,7 @@ export class ReputationAiComponent implements OnDestroy {
         this.singleReviewDraftResult.set(result);
         this.checkReport.set(result.safetyReport);
         this.finish(result.provider === 'local'
-          ? 'Один черновик собран локально, OpenAI не использовался.'
+          ? 'Один черновик собран локально, AI-провайдер не использовался.'
           : 'Один черновик отзыва готов.');
       },
       error: (error: unknown) => this.fail(error, 'Не удалось подготовить точечный черновик отзыва.')
@@ -1525,7 +1525,7 @@ export class ReputationAiComponent implements OnDestroy {
       return 'неизвестно';
     }
     if (!diagnostics.configured) {
-      return 'OpenAI не настроен';
+      return 'AI-провайдер не настроен';
     }
     if (diagnostics.requestGoesThroughProxy) {
       return `через VPS proxy ${diagnostics.proxyHost}:${diagnostics.proxyPort}`;
@@ -2403,8 +2403,8 @@ export class ReputationAiComponent implements OnDestroy {
 
   private openAiCheckNotice(diagnostics: OpenAiProviderDiagnostics): string {
     if (diagnostics.lastCheckStatus === 'ok') {
-      return `OpenAI доступен: ${this.openAiRouteLabel(diagnostics)}.`;
+      return `AI-провайдер доступен: ${this.openAiRouteLabel(diagnostics)}.`;
     }
-    return diagnostics.lastMessage || 'Маршрут OpenAI проверен, требуется внимание.';
+    return diagnostics.lastMessage || 'Маршрут AI-провайдера проверен, требуется внимание.';
   }
 }

@@ -151,6 +151,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     @if (isReviewFieldEditing(review, 'text')) {
                       <textarea
                         [name]="'text-' + review.id"
+                        [attr.data-review-textarea]="review.id"
                         [ngModel]="reviewFieldValue(review, 'text')"
                         (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
                         placeholder="Текст отзыва"
@@ -166,7 +167,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                         class="review-display-field"
                         type="button"
                         [class.empty]="!reviewFieldValue(review, 'text').trim()"
-                        (click)="startReviewFieldEdit(review, 'text')"
+                        (click)="startReviewTextInlineEdit(review)"
                       >
                         {{ reviewFieldValue(review, 'text').trim() || 'Текст отзыва' }}
                       </button>
@@ -197,7 +198,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                         class="review-display-field review-display-field--answer"
                         type="button"
                         [class.empty]="!reviewFieldValue(review, 'answer').trim()"
-                        (click)="startReviewFieldEdit(review, 'answer')"
+                        (click)="openReviewEdit(review, 'answer')"
                       >
                         {{ reviewFieldValue(review, 'answer').trim() || 'Ответ на отзыв или замечание' }}
                       </button>
@@ -656,7 +657,13 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
           </ng-template>
         </ion-modal>
 
-        <ion-modal class="sheet-modal review-edit-sheet" [isOpen]="reviewEdit() !== null" (didDismiss)="closeReviewEdit()">
+        <ion-modal
+          class="sheet-modal review-edit-sheet"
+          [class.review-edit-sheet--text-first]="reviewEditInitialField() === 'text'"
+          [class.review-edit-sheet--answer-first]="reviewEditInitialField() === 'answer'"
+          [isOpen]="reviewEdit() !== null"
+          (didDismiss)="closeReviewEdit()"
+        >
           <ng-template>
             <form class="sheet-body sheet-form" (ngSubmit)="saveReviewEdit()">
               <div class="sheet-head">
@@ -886,12 +893,12 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .order-details-mobile-page {
       display: flex;
       flex-direction: column;
-      gap: 0.58rem;
+      gap: var(--otziv-page-gap, 0.58rem);
       height: 100%;
       max-width: 48rem;
       margin: 0 auto;
       overflow: hidden;
-      padding: 0.68rem 0.68rem calc(0.58rem + env(safe-area-inset-bottom));
+      padding: var(--otziv-page-padding-y, 0.68rem) var(--otziv-page-padding-x, 0.68rem) calc(var(--otziv-page-padding-bottom, 0.58rem) + env(safe-area-inset-bottom));
       font-family: var(--otziv-card-title-font);
     }
 
@@ -1272,14 +1279,15 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
     .review-mobile-strip {
       display: flex;
-      gap: 0.62rem;
+      gap: var(--otziv-list-gap, 0.56rem);
       flex: 1 1 0;
+      align-items: stretch;
       min-height: 0;
-      margin-inline: -0.68rem;
+      margin-inline: calc(var(--otziv-page-padding-x, 0.68rem) * -1);
       overflow-x: auto;
       overflow-y: hidden;
-      padding: 0 0.9rem 0.15rem;
-      scroll-padding-inline: 0.9rem;
+      padding: 0 var(--otziv-page-padding-x, 0.68rem) 0.12rem;
+      scroll-padding-inline: var(--otziv-page-padding-x, 0.68rem);
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
     }
@@ -1304,14 +1312,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto auto auto auto auto;
       align-content: stretch;
-      gap: 0.55rem;
-      flex: 0 0 min(15.4rem, 79vw);
+      gap: var(--otziv-card-gap, 0.36rem);
+      flex: 0 0 var(--otziv-detail-card-width, min(15.4rem, 79vw));
       min-width: 0;
       height: 100%;
       max-height: 100%;
       border: 1px solid rgba(103, 116, 131, 0.2);
       border-radius: 0.9rem;
-      padding: 0.65rem;
+      padding: var(--otziv-card-padding, 0.52rem);
       overflow: hidden;
       background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 42%, var(--otziv-white) 100%);
       box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
@@ -1434,13 +1442,15 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-note-panel {
       position: relative;
       display: grid;
-      gap: 0.42rem;
+      gap: 0.28rem;
+      isolation: isolate;
       min-width: 0;
     }
 
     .review-text-editor {
       min-height: 0;
       grid-template-rows: minmax(0, 1fr) auto;
+      overflow: hidden;
     }
 
     .review-text-editor.editing {
@@ -1452,18 +1462,20 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-answer-editor textarea,
     .review-note-panel textarea,
     .review-display-field {
+      position: relative;
+      z-index: 1;
       box-sizing: border-box;
       width: 100%;
       min-width: 0;
       border: 1px solid rgba(103, 116, 131, 0.22);
       border-radius: 0.8rem;
-      padding: 0.68rem;
+      padding: 0.5rem;
       color: var(--otziv-dark);
       background: var(--otziv-field-background);
       font-family: var(--otziv-font-family);
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 700;
-      line-height: 1.34;
+      line-height: 1.24;
       text-align: left;
     }
 
@@ -1475,23 +1487,28 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-text-editor textarea,
     .review-text-editor .review-display-field {
       display: block;
-      height: 100%;
-      min-height: 11.45rem;
+      height: var(--otziv-review-text-height, 8.2rem);
+      min-height: var(--otziv-review-text-height, 8.2rem);
       overflow: hidden;
-      padding-bottom: 1.15rem;
+      padding-bottom: 1.05rem;
       resize: none;
       white-space: pre-wrap;
     }
 
+    .review-answer-editor {
+      z-index: 2;
+      min-height: var(--otziv-review-answer-height, 2.78rem);
+    }
+
     .review-text-editor.open textarea,
     .review-text-editor.open .review-display-field {
-      height: 100%;
+      height: var(--otziv-review-text-height-open, 8.2rem);
       overflow: auto;
     }
 
     .review-text-editor.editing textarea {
-      height: clamp(8.7rem, 24vh, 10.25rem);
-      min-height: 8.7rem;
+      height: var(--otziv-review-text-height-open, 7.9rem);
+      min-height: var(--otziv-review-text-height-open, 7.9rem);
       overflow: auto;
       padding-bottom: 0.72rem;
     }
@@ -1499,15 +1516,18 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-answer-editor textarea,
     .review-display-field--answer {
       display: -webkit-box;
-      height: 3.58rem;
-      min-height: 3.58rem;
-      padding: 0.46rem 0.6rem;
+      height: var(--otziv-review-answer-height, 2.78rem);
+      min-height: var(--otziv-review-answer-height, 2.78rem);
+      padding: 0.38rem 0.5rem;
       overflow: hidden;
       resize: none;
-      opacity: 0.56;
-      font-size: 0.6rem;
+      opacity: 1;
+      color: var(--otziv-info);
+      background: linear-gradient(180deg, var(--otziv-field-background) 0%, var(--otziv-muted-surface) 100%);
+      border-style: dashed;
+      font-size: 0.56rem;
       font-weight: 800;
-      line-height: 1.2;
+      line-height: 1.12;
       text-align: center;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 3;
@@ -1519,8 +1539,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
     .review-answer-editor.editing textarea {
       display: block;
-      height: 3.7rem;
-      min-height: 3.7rem;
+      height: 3.1rem;
+      min-height: 3.1rem;
       overflow: auto;
     }
 
@@ -1531,8 +1551,9 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
     .text-toggle {
       position: absolute;
-      right: 0.7rem;
-      bottom: 0.7rem;
+      z-index: 3;
+      right: 0.55rem;
+      bottom: 0.5rem;
       border: 0;
       padding: 0;
       color: var(--otziv-info);
@@ -1554,13 +1575,13 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-actions button,
     .publish-button,
     .order-details-actions button {
-      min-height: 1.92rem;
+      min-height: 1.62rem;
       border: 1px solid rgba(103, 116, 131, 0.18);
       border-radius: 999px;
       color: var(--otziv-dark);
       background: linear-gradient(145deg, var(--otziv-white) 0%, var(--otziv-muted-surface) 100%);
       font: inherit;
-      font-size: 0.66rem;
+      font-size: 0.58rem;
       font-weight: 1000;
       line-height: 1;
     }
@@ -1582,14 +1603,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
     .bot-line {
       display: grid;
-      min-height: 2.1rem;
+      min-height: 1.58rem;
       place-items: center;
       border: 1px solid rgba(103, 116, 131, 0.2);
-      border-radius: 0.8rem;
+      border-radius: 0.68rem;
       color: var(--otziv-dark);
       background: var(--otziv-field-background);
       font-family: var(--otziv-font-family);
-      font-size: 0.76rem;
+      font-size: 0.64rem;
       font-weight: 900;
       text-align: center;
     }
@@ -1647,7 +1668,19 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-actions {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.45rem;
+      gap: 0.28rem;
+      align-items: stretch;
+      min-width: 0;
+    }
+
+    .review-actions button,
+    .review-actions a,
+    .publish-button {
+      min-width: 0;
+      overflow: hidden;
+      padding-inline: 0.22rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .review-actions .ai-action {
@@ -1744,6 +1777,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .task-text-field {
       width: 100%;
       min-height: 8.1rem;
+      max-height: 8.1rem;
       border: 1px solid rgba(103, 116, 131, 0.2);
       border-radius: 0.84rem;
       padding: 0.62rem;
@@ -1753,12 +1787,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       font-size: 0.74rem;
       font-weight: 800;
       line-height: 1.3;
+      overflow: auto;
       resize: none;
     }
 
     .task-answer-field {
       width: 100%;
       min-height: 3.15rem;
+      max-height: 3.15rem;
       border: 1px solid rgba(103, 116, 131, 0.18);
       border-radius: 0.82rem;
       padding: 0.54rem 0.6rem;
@@ -1768,6 +1804,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       font-size: 0.64rem;
       font-weight: 700;
       line-height: 1.24;
+      overflow: auto;
       opacity: 0.78;
       resize: none;
     }
@@ -1911,6 +1948,79 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       opacity: 0.5;
     }
 
+    :host-context(body.otziv-compact-phone) .order-details-mobile-page,
+    :host-context(body.otziv-short-phone) .order-details-mobile-page {
+      --otziv-review-text-height: 5.85rem;
+      --otziv-review-text-height-open: 6.4rem;
+      --otziv-review-answer-height: 2.05rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .review-display-field,
+    :host-context(body.otziv-compact-phone) .review-text-editor textarea,
+    :host-context(body.otziv-short-phone) .review-display-field,
+    :host-context(body.otziv-short-phone) .review-text-editor textarea {
+      font-size: 0.66rem;
+      line-height: 1.18;
+      padding: 0.42rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .review-display-field--answer,
+    :host-context(body.otziv-compact-phone) .review-answer-editor textarea,
+    :host-context(body.otziv-short-phone) .review-display-field--answer,
+    :host-context(body.otziv-short-phone) .review-answer-editor textarea {
+      padding: 0.3rem 0.42rem;
+      font-size: 0.5rem;
+      line-height: 1.08;
+    }
+
+    :host-context(body.otziv-compact-phone) .bot-line,
+    :host-context(body.otziv-short-phone) .bot-line {
+      min-height: 1.34rem;
+      font-size: 0.56rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .field-actions button,
+    :host-context(body.otziv-compact-phone) .review-actions button,
+    :host-context(body.otziv-compact-phone) .publish-button,
+    :host-context(body.otziv-compact-phone) .order-details-actions button,
+    :host-context(body.otziv-short-phone) .field-actions button,
+    :host-context(body.otziv-short-phone) .review-actions button,
+    :host-context(body.otziv-short-phone) .publish-button,
+    :host-context(body.otziv-short-phone) .order-details-actions button {
+      min-height: 1.36rem;
+      font-size: 0.5rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .task-meta-grid,
+    :host-context(body.otziv-short-phone) .task-meta-grid {
+      gap: 0.22rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .task-meta-grid span,
+    :host-context(body.otziv-compact-phone) .task-date-field,
+    :host-context(body.otziv-short-phone) .task-meta-grid span,
+    :host-context(body.otziv-short-phone) .task-date-field {
+      padding: 0.28rem 0.38rem;
+      font-size: 0.52rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .task-text-field,
+    :host-context(body.otziv-short-phone) .task-text-field {
+      min-height: 6.4rem;
+      max-height: 6.4rem;
+      padding: 0.46rem;
+      font-size: 0.66rem;
+      line-height: 1.2;
+    }
+
+    :host-context(body.otziv-compact-phone) .task-answer-field,
+    :host-context(body.otziv-short-phone) .task-answer-field {
+      min-height: 2.38rem;
+      max-height: 2.38rem;
+      padding: 0.38rem 0.44rem;
+      font-size: 0.56rem;
+    }
+
   `]
 })
 export class OrderDetailsPage implements OnInit, OnDestroy {
@@ -1948,6 +2058,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     .slice(0, 8));
   readonly reviewsExpanded = signal(false);
   readonly reviewEdit = signal<OrderReviewItem | null>(null);
+  readonly reviewEditInitialField = signal<ReviewEditableField | null>(null);
   readonly reviewEditDraft = signal<ReviewUpdateRequest | null>(null);
   readonly reviewEditSaving = signal(false);
   readonly reviewEditDeleting = signal(false);
@@ -2148,6 +2259,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     });
   }
 
+  startReviewTextInlineEdit(review: OrderReviewItem): void {
+    this.startReviewFieldEdit(review, 'text');
+    window.setTimeout(() => this.focusInlineReviewText(review.id), 40);
+  }
+
   cancelReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
     const key = this.reviewFieldKey(review, field);
     this.editingFieldKey.set(null);
@@ -2156,6 +2272,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       delete next[key];
       return next;
     });
+    this.blurActiveControl();
   }
 
   saveReviewField(review: OrderReviewItem, field: ReviewEditableField): void {
@@ -2175,6 +2292,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.applyUpdatedReview(updatedReview);
         this.mutationKey.set(null);
         this.cancelReviewFieldEdit(updatedReview, field);
+        this.blurActiveControl();
       },
       error: (err) => {
         this.error.set(this.errorMessage(err, 'Не удалось сохранить отзыв'));
@@ -2306,7 +2424,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
   }
 
-  openReviewEdit(review: OrderReviewItem): void {
+  openReviewEdit(review: OrderReviewItem, initialField: ReviewEditableField | null = null): void {
     if (!this.details()?.canEditReviews) {
       this.error.set('Редактирование отзывов недоступно для этого заказа.');
       return;
@@ -2317,9 +2435,14 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
 
     this.reviewEdit.set(review);
+    this.reviewEditInitialField.set(initialField);
     this.reviewEditDraft.set(this.reviewEditDraftFromReview(review));
     this.reviewEditError.set(null);
     this.reviewEditUploading.set(false);
+
+    if (initialField) {
+      window.setTimeout(() => this.scrollReviewEditFieldIntoView(initialField), 120);
+    }
   }
 
   closeReviewEdit(): void {
@@ -2328,6 +2451,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
 
     this.reviewEdit.set(null);
+    this.reviewEditInitialField.set(null);
     this.reviewEditDraft.set(null);
     this.reviewEditError.set(null);
     this.reviewEditUploading.set(false);
@@ -3193,6 +3317,31 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       productId: review.productId ?? null,
       url: review.url || review.urlPhoto || ''
     };
+  }
+
+  private scrollReviewEditFieldIntoView(field: ReviewEditableField): void {
+    const fieldName = field === 'answer' ? 'reviewEditAnswer' : 'reviewEditText';
+    const element = document.querySelector<HTMLElement>(`.review-edit-sheet [name="${fieldName}"]`);
+    element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  private focusInlineReviewText(reviewId: number): void {
+    const element = document.querySelector<HTMLTextAreaElement>(`textarea[data-review-textarea="${reviewId}"]`);
+    if (!element) {
+      return;
+    }
+
+    element.focus({ preventScroll: true });
+    const position = element.value.length;
+    element.setSelectionRange(position, position);
+    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  }
+
+  private blurActiveControl(): void {
+    const element = document.activeElement;
+    if (element instanceof HTMLElement) {
+      element.blur();
+    }
   }
 
   private normalizedReviewEditDraft(draft: ReviewUpdateRequest): ReviewUpdateRequest {

@@ -6,8 +6,10 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.reputationai.api.dto.ReputationContentPackRequest;
 import com.hunt.otziv.reputationai.config.ContentPackProfile;
+import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.domain.ReputationContentPack;
 import com.hunt.otziv.reputationai.domain.ReputationContentPackJobStatus;
+import com.hunt.otziv.reputationai.infrastructure.ai.AiProviderRouter;
 import com.hunt.otziv.reputationai.persistence.ContentPackJobStatus;
 import com.hunt.otziv.reputationai.persistence.ReputationContentPackJobEntity;
 import com.hunt.otziv.reputationai.persistence.ReputationContentPackJobRepository;
@@ -31,6 +33,8 @@ public class ReputationContentPackJobService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final TaskExecutor reputationDeepReportExecutor;
+    private final AiProviderRouter aiProviderRouter;
+    private final ReputationAiProperties properties;
 
     public ReputationContentPackJobStatus start(Long companyId, ReputationContentPackRequest request) {
         ReputationContentPackRequest safeRequest = safeRequest(request);
@@ -49,7 +53,7 @@ public class ReputationContentPackJobService {
             entity.setCompanyId(company.getId());
             entity.setCompanyTitle(company.getTitle());
             entity.setStatus(ContentPackJobStatus.QUEUED);
-            entity.setProvider("openai");
+            entity.setProvider(activeAiProvider());
             entity.setModel(contentPackModel(safeRequest));
             entity.setRequestJson(writeJson(safeRequest));
             entity.setErrorMessage(null);
@@ -107,7 +111,8 @@ public class ReputationContentPackJobService {
             ReputationContentPackJobEntity entity = jobRepository.findById(jobId)
                     .orElseThrow(() -> new IllegalStateException("Задача AI-пакета не найдена"));
             entity.setStatus(ContentPackJobStatus.DONE);
-            entity.setProvider("openai");
+            entity.setProvider(activeAiProvider());
+            entity.setModel(contentPackModel(readRequest(entity.getRequestJson())));
             entity.setPackJson(writeJson(pack));
             entity.setErrorMessage(null);
             entity.setCompletedAt(LocalDateTime.now());
@@ -165,8 +170,20 @@ public class ReputationContentPackJobService {
     }
 
     private String contentPackModel(ReputationContentPackRequest request) {
+        if (isYandexActive()) {
+            return properties.getYandex().getModel();
+        }
         ContentPackProfile profile = ContentPackProfile.fromKey(request.contentPackProfile());
         return profile == null ? "" : profile.model();
+    }
+
+    private String activeAiProvider() {
+        return aiProviderRouter.activeProviderName();
+    }
+
+    private boolean isYandexActive() {
+        String provider = activeAiProvider();
+        return "yandex".equalsIgnoreCase(provider) || "yandexgpt".equalsIgnoreCase(provider);
     }
 
     private String writeJson(Object value) {

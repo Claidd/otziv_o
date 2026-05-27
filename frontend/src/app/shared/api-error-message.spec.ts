@@ -26,8 +26,8 @@ describe('apiErrorMessage', () => {
   it('keeps readable service-unavailable messages from backend', () => {
     expect(apiErrorMessage({
       status: 503,
-      error: { message: 'OpenAI не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.' }
-    }, 'Отчёт не запущен')).toBe('OpenAI не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.');
+      error: { message: 'AI-провайдер не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.' }
+    }, 'Отчёт не запущен')).toBe('AI-провайдер не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.');
   });
 
   it('explains network failures without leaking implementation details', () => {

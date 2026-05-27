@@ -236,9 +236,6 @@ try {
         Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_ENABLED" -Value "true"
         Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_HOST" -Value $outboundProxyHost
         Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_PORT" -Value $outboundProxyPort
-        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_ENABLED" -Value "true"
-        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_HOST" -Value $outboundProxyHost
-        Set-EnvFileValue -Path $stageEnv -Name "WHATSAPP_PROXY_PORT" -Value $outboundProxyPort
         Set-EnvFileValue -Path $stageEnv -Name "MAX_PROXY_ENABLED" -Value "false"
         Set-EnvFileValue -Path $stageEnv -Name "MAX_PROXY_HOST" -Value ""
     }
@@ -432,9 +429,6 @@ outbound_proxy_port="`$(get_env OPENAI_PROXY_PORT "8888")"
 set_env TELEGRAM_PROXY_ENABLED "true"
 set_env TELEGRAM_PROXY_HOST "`$outbound_proxy_host"
 set_env TELEGRAM_PROXY_PORT "`$outbound_proxy_port"
-set_env WHATSAPP_PROXY_ENABLED "true"
-set_env WHATSAPP_PROXY_HOST "`$outbound_proxy_host"
-set_env WHATSAPP_PROXY_PORT "`$outbound_proxy_port"
 set_env MAX_PROXY_ENABLED "false"
 set_env MAX_PROXY_HOST ""
 

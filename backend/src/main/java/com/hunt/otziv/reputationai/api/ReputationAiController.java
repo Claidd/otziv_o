@@ -109,7 +109,7 @@ public class ReputationAiController {
                 && !isBlank(properties.getOpenai().getProxy().getHost());
         List<String> warnings = new ArrayList<>();
         if (!aiAvailable || "local".equalsIgnoreCase(aiProviderRouter.activeProviderName())) {
-            warnings.add("Генерация работает через локальный шаблон. Для OpenAI укажите REPUTATION_AI_PROVIDER=openai и OPENAI_API_KEY, для YandexGPT — REPUTATION_AI_PROVIDER=yandexgpt и ключи.");
+            warnings.add("Генерация работает через локальный шаблон или AI-провайдер недоступен. Для YandexGPT укажите REPUTATION_AI_PROVIDER=yandexgpt, YANDEX_AI_API_KEY и YANDEX_FOLDER_ID.");
         }
         if (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName())) {
             warnings.add("Публичный поиск выключен. Для Yandex Search укажите REPUTATION_SEARCH_PROVIDER=yandex и ключи.");
@@ -197,30 +197,34 @@ public class ReputationAiController {
     }
 
     private List<ReputationAiModelProfile> deepResearchProfiles() {
+        boolean yandex = "yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
+                || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName());
         return DeepResearchProfile.all().stream()
                 .map(profile -> new ReputationAiModelProfile(
                         profile.key(),
                         profile.label(),
-                        profile.model(),
+                        yandex ? properties.getYandex().getModel() : profile.model(),
                         profile.description(),
-                        profile.maxToolCalls(),
-                        profile.maxOutputTokens(),
-                        profile.reasoningEffort(),
-                        profile.searchContextSize()
+                        yandex ? 0 : profile.maxToolCalls(),
+                        yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
+                        yandex ? "off" : profile.reasoningEffort(),
+                        yandex ? "yandex-search" : profile.searchContextSize()
                 ))
                 .toList();
     }
 
     private List<ReputationAiModelProfile> contentPackProfiles() {
+        boolean yandex = "yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
+                || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName());
         return ContentPackProfile.all().stream()
                 .map(profile -> new ReputationAiModelProfile(
                         profile.key(),
                         profile.label(),
-                        profile.model(),
+                        yandex ? properties.getYandex().getModel() : profile.model(),
                         profile.description(),
                         0,
-                        profile.maxOutputTokens(),
-                        profile.reasoningEffort(),
+                        yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
+                        yandex ? "off" : profile.reasoningEffort(),
                         "off"
                 ))
                 .toList();
@@ -518,6 +522,27 @@ public class ReputationAiController {
     }
 
     private OpenAiProviderDiagnostics openAiDiagnostics() {
+        if ("yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
+                || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName())) {
+            ReputationAiProperties.YandexGpt yandex = properties.getYandex();
+            boolean configured = !isBlank(yandex.getApiKey()) && !isBlank(yandex.getFolderId()) && !isBlank(yandex.getModel());
+            OpenAiResponsesClient.OpenAiLastCheck lastCheck = openAiResponsesClient.lastCheck();
+            return new OpenAiProviderDiagnostics(
+                    yandex.getBaseUrl(),
+                    configured,
+                    false,
+                    false,
+                    false,
+                    "",
+                    0,
+                    false,
+                    "direct",
+                    lastCheck.status(),
+                    lastCheck.httpStatus(),
+                    lastCheck.message(),
+                    lastCheck.checkedAt()
+            );
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.Proxy proxy = openai.getProxy();
         boolean configured = !isBlank(openai.getApiKey()) && !isBlank(openai.getBaseUrl()) && !isBlank(openai.getModel());

@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -28,6 +29,7 @@ import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstDetail;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeString;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isShortCommonReviewText;
 
 @Service
 @Slf4j
@@ -155,11 +157,42 @@ public class OrderStatusTransitionService {
                 log.info("Заказ ID {} переведен в статус 'К публикации'", order.getId());
             }
 
+            notifyClientAboutPublicationStarted(order, previousOrderStatus);
             return true;
 
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'К ПУБЛИКАЦИИ' ===", e);
             throw new RuntimeException("Ошибка при переводе заказа в статус 'К публикации'", e);
+        }
+    }
+
+    private void notifyClientAboutPublicationStarted(Order order, String previousOrderStatus) {
+        if (!STATUS_IN_CHECK.equals(previousOrderStatus)) {
+            log.info("Уведомление о передаче в публикацию пропущено: заказ ID {} перешел из статуса '{}'",
+                    order.getId(), previousOrderStatus);
+            return;
+        }
+
+        try {
+            String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
+            String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
+            String message = orderReviewCheckMessageBuilder.publicationStartedMessage(order);
+
+            boolean sent = orderStatusNotificationService.sendInformationalMessageToClientChat(
+                    order,
+                    clientId,
+                    groupId,
+                    message,
+                    "заказ передан в публикацию"
+            );
+            if (sent) {
+                log.info("Уведомление клиенту о передаче заказа ID {} в публикацию отправлено", order.getId());
+            } else {
+                log.warn("Уведомление клиенту о передаче заказа ID {} в публикацию не отправлено", order.getId());
+            }
+        } catch (Exception e) {
+            log.warn("Уведомление клиенту о передаче заказа ID {} в публикацию не отправлено из-за ошибки. Статус уже изменен.",
+                    order.getId(), e);
         }
     }
 
@@ -191,7 +224,7 @@ public class OrderStatusTransitionService {
 
         for (Review review : reviews) {
             if (review.getId() != null) {
-                reviewArchiveService.saveNewReviewArchive(review.getId());
+                reviewArchiveService.saveNewReviewArchive(review.getId(), ReviewArchiveSourceReason.ORDER_ARCHIVED);
             }
         }
     }
@@ -218,7 +251,12 @@ public class OrderStatusTransitionService {
         validateReviewTextsNotPreviouslyPublished(
                 order,
                 "Отправка на проверку",
-                "Нельзя отправить заказ на проверку: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой."
+                "Нельзя отправить заказ на проверку: текст отзыва уже опубликован ранее. Измените текст отзыва и сохраните его дискеткой."
+        );
+        validateReviewTextsNotArchived(
+                order,
+                "Отправка на проверку",
+                "Нельзя отправить заказ на проверку: текст отзыва уже есть в архиве текстов. Он может быть зарезервирован или использован ранее. Измените текст отзыва и сохраните его дискеткой."
         );
     }
 
@@ -236,7 +274,12 @@ public class OrderStatusTransitionService {
         validateReviewTextsNotPreviouslyPublished(
                 order,
                 "Публикация",
-                "Нельзя отправить заказ в публикацию: текст отзыва уже публиковался ранее. Измените текст отзыва и сохраните его дискеткой."
+                "Нельзя отправить заказ в публикацию: текст отзыва уже опубликован ранее. Измените текст отзыва и сохраните его дискеткой."
+        );
+        validateReviewTextsNotArchived(
+                order,
+                "Публикация",
+                "Нельзя отправить заказ в публикацию: текст отзыва уже есть в архиве текстов. Он может быть зарезервирован или использован ранее. Измените текст отзыва и сохраните его дискеткой."
         );
     }
 
@@ -292,10 +335,41 @@ public class OrderStatusTransitionService {
         List<Review> duplicateReviews = getAllReviews(order).stream()
                 .filter(review -> review != null && !review.isPublish())
                 .filter(review -> !isBlankOrPlaceholder(review.getText()))
-                .filter(review -> reviewRepository.existsPublishedByTextExcludingReviewId(review.getText(), review.getId()))
+                .filter(this::isPublishedReviewText)
                 .toList();
 
         rejectIfDuplicatedReviewsFound(order, logActionTitle, errorMessage, duplicateReviews, "ранее опубликованные тексты");
+    }
+
+    private void validateReviewTextsNotArchived(
+            Order order,
+            String logActionTitle,
+            String errorMessage
+    ) {
+        List<Review> duplicateReviews = getAllReviews(order).stream()
+                .filter(review -> review != null && !review.isPublish())
+                .filter(review -> !isBlankOrPlaceholder(review.getText()))
+                .filter(review -> isArchivedReviewText(order, review))
+                .toList();
+
+        rejectIfDuplicatedReviewsFound(order, logActionTitle, errorMessage, duplicateReviews, "тексты из архива");
+    }
+
+    private boolean isPublishedReviewText(Review review) {
+        String text = review.getText();
+        if (isShortCommonReviewText(text)) {
+            return false;
+        }
+        return reviewRepository.existsPublishedByTextExcludingReviewId(text, review.getId());
+    }
+
+    private boolean isArchivedReviewText(Order order, Review review) {
+        String text = review.getText();
+        if (isShortCommonReviewText(text)) {
+            return false;
+        }
+        Long orderId = order == null ? null : order.getId();
+        return reviewArchiveService.existsByTextExcludingOwnSource(text, review.getId(), orderId);
     }
 
     private void rejectIfDuplicatedReviewsFound(
@@ -419,6 +493,8 @@ public class OrderStatusTransitionService {
     }
 
     private boolean handleManualInCheckStatus(Order order) {
+        validateReviewsReadyForCheck(order);
+
         log.info("=== РУЧНОЙ ПЕРЕВОД ЗАКАЗА В СТАТУС 'НА ПРОВЕРКЕ' ===");
         log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
 

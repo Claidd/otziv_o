@@ -9,7 +9,7 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "reputation-ai")
 public class ReputationAiProperties {
 
-    private String provider = "local";
+    private String provider = "yandexgpt";
     private int maxWebsitePages = 36;
     private int maxDeepWebsitePages = 12;
     private int maxWebsiteChars = 20_000;
@@ -96,8 +96,8 @@ public class ReputationAiProperties {
         private String folderId = "";
         private String baseUrl = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion";
         private String model = "yandexgpt";
-        private Duration timeout = Duration.ofSeconds(45);
-        private int maxTokens = 4000;
+        private Duration timeout = Duration.ofMinutes(6);
+        private int maxTokens = 12000;
 
         public String getApiKey() {
             return apiKey;
@@ -138,7 +138,7 @@ public class ReputationAiProperties {
         }
 
         public void setTimeout(Duration timeout) {
-            this.timeout = timeout == null ? Duration.ofSeconds(45) : timeout;
+            this.timeout = timeout == null ? Duration.ofMinutes(6) : timeout;
         }
 
         public int getMaxTokens() {
@@ -151,7 +151,7 @@ public class ReputationAiProperties {
     }
 
     public static class Search {
-        private String provider = "local";
+        private String provider = "yandex";
         private int maxQueries = 6;
         private int resultsPerQuery = 5;
         private int crawlResultLimit = 20;
@@ -162,7 +162,7 @@ public class ReputationAiProperties {
         }
 
         public void setProvider(String provider) {
-            this.provider = provider == null || provider.isBlank() ? "local" : provider.trim();
+            this.provider = provider == null || provider.isBlank() ? "yandex" : provider.trim();
         }
 
         public int getMaxQueries() {

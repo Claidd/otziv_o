@@ -349,6 +349,8 @@ export class AdminDictionariesComponent implements OnDestroy {
     openNextOrderRequestStatuses: ['PENDING,FAILED', [Validators.required, Validators.maxLength(500)]],
     reviewLinkBaseUrl: ['https://o-ogo.ru', [Validators.required, Validators.maxLength(500)]],
     reviewReminderText: ['', [Validators.required, Validators.maxLength(500)]],
+    publicationStartedText: ['', [Validators.required, Validators.maxLength(500)]],
+    publicationProgressReportText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK', [Validators.required]],
     paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
     archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]]
@@ -2169,6 +2171,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       openNextOrderRequestStatuses: raw.openNextOrderRequestStatuses.trim(),
       reviewLinkBaseUrl: raw.reviewLinkBaseUrl.trim(),
       reviewReminderText: raw.reviewReminderText.trim(),
+      publicationStartedText: raw.publicationStartedText.trim(),
+      publicationProgressReportText: raw.publicationProgressReportText.trim(),
       paymentInstructionSource: raw.paymentInstructionSource,
       paymentReminderText: raw.paymentReminderText.trim(),
       archiveOfferText: raw.archiveOfferText.trim()
@@ -2521,6 +2525,10 @@ export class AdminDictionariesComponent implements OnDestroy {
       reviewLinkBaseUrl: settings?.reviewLinkBaseUrl ?? 'https://o-ogo.ru',
       reviewReminderText: settings?.reviewReminderText
         ?? '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}',
+      publicationStartedText: settings?.publicationStartedText
+        ?? '{companyAndFilial}\n\nСпасибо, правки получили. Отзывы переданы в публикацию. Будем присылать короткие отчёты по мере публикации.',
+      publicationProgressReportText: settings?.publicationProgressReportText
+        ?? '{companyAndFilial}. Опубликован новый отзыв {progress}.',
       paymentInstructionSource: settings?.paymentInstructionSource ?? 'MANAGER_TEXT',
       paymentReminderText: settings?.paymentReminderText ?? '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
       archiveOfferText: settings?.archiveOfferText

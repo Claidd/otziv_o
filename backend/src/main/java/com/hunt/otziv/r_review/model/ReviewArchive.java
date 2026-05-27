@@ -1,9 +1,8 @@
 package com.hunt.otziv.r_review.model;
 
-import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
-import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.Order;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,5 +36,20 @@ public class ReviewArchive {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private SubCategory subCategory;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_archive_source_review_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Review sourceReview;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_archive_source_order_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Order sourceOrder;
+
+    @Column(name = "review_archive_source_reason")
+    private String sourceReason;
 
 }

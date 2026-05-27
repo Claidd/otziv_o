@@ -258,7 +258,7 @@ export const routes: Routes = [
       .then((m) => m.TbankPaymentsComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN']
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {

@@ -4,6 +4,19 @@ import { catchError, Observable, shareReplay, throwError } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 import { AuthService } from './auth.service';
+import type {
+  CreateManualPaymentTaskRequest,
+  ManualPaymentTaskResponse,
+  ManualPaymentType,
+  ManualPaymentTaskStatus
+} from './payments.api';
+
+export type {
+  CreateManualPaymentTaskRequest,
+  ManualPaymentTaskResponse,
+  ManualPaymentType,
+  ManualPaymentTaskStatus
+} from './payments.api';
 
 export interface UserLk {
   username: string;
@@ -75,6 +88,26 @@ export interface CabinetProfile {
   date: string;
   user: UserLk;
   workerZp: UserStat;
+}
+
+export interface ManagerManualPaymentSettings {
+  profileId?: number | null;
+  profileName: string;
+  paymentPolicy: string;
+  manualPaymentEnabled: boolean;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone: string;
+  manualRecipientName: string;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+}
+
+export interface UpdateManagerManualPaymentSettingsRequest {
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone: string;
+  manualRecipientName: string;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
 }
 
 export interface WhatsAppClientStatus {
@@ -265,6 +298,48 @@ export class CabinetApi {
     return this.http.get<WhatsAppClientStatus>(`${appEnvironment.apiBaseUrl}/api/cabinet/whatsapp`, {
       context: this.requestContext(options)
     });
+  }
+
+  getManagerManualPaymentSettings(options: CacheOptions = {}): Observable<ManagerManualPaymentSettings> {
+    return this.http.get<ManagerManualPaymentSettings>(
+      `${appEnvironment.apiBaseUrl}/api/cabinet/payment-profile/manual`,
+      { context: this.requestContext(options) }
+    );
+  }
+
+  updateManagerManualPaymentSettings(
+    request: UpdateManagerManualPaymentSettingsRequest
+  ): Observable<ManagerManualPaymentSettings> {
+    return this.http.put<ManagerManualPaymentSettings>(
+      `${appEnvironment.apiBaseUrl}/api/cabinet/payment-profile/manual`,
+      request
+    );
+  }
+
+  getManagerManualPaymentTasks(options: CacheOptions = {}): Observable<ManualPaymentTaskResponse[]> {
+    return this.http.get<ManualPaymentTaskResponse[]>(
+      `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks`,
+      { context: this.requestContext(options) }
+    );
+  }
+
+  createManagerManualPaymentTask(
+    request: CreateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.post<ManualPaymentTaskResponse>(
+      `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks`,
+      request
+    );
+  }
+
+  updateManagerManualPaymentTaskStatus(
+    taskId: number,
+    status: ManualPaymentTaskStatus
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks/${taskId}/status`,
+      { status }
+    );
   }
 
   imageUrl(imageId?: number | null): string {
