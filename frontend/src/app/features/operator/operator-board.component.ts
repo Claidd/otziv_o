@@ -72,7 +72,8 @@ export class OperatorBoardComponent {
     { label: 'Главная', routerLink: '/' },
     { label: 'Лиды', routerLink: '/leads' },
     { label: 'Оператор', routerLink: '/operator' },
-    { label: 'Менеджер', routerLink: '/manager' },
+    { label: 'Компании', routerLink: '/companies' },
+    { label: 'Заказы', routerLink: '/orders' },
     { label: 'Специалист', routerLink: '/worker' },
     { label: 'Личный кабинет', routerLink: '/' }
   ];

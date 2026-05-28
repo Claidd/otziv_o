@@ -11,7 +11,7 @@
       </nav>
 
       <div class="archive-actions">
-        <a routerLink="/manager">Менеджер</a>
+        <a routerLink="/orders">Заказы</a>
         <button type="button" (click)="refresh()" [disabled]="loading()">
           <span class="material-icons-sharp">refresh</span>
           {{ loading() ? 'Загрузка' : 'Обновить' }}

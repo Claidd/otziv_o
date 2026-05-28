@@ -76,7 +76,7 @@ export class CompanyDeepReportLaunchService {
     const title = encodeURIComponent(this.companyTitle(result));
     return {
       label: context.actionLabel ?? 'К заказам',
-      routerLink: `/manager?section=orders&companyId=${result.companyId}&companyTitle=${title}`
+      routerLink: `/orders?companyId=${result.companyId}&companyTitle=${title}`
     };
   }
 

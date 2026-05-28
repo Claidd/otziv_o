@@ -49,6 +49,9 @@ public record AdminPaymentLinkResponse(
         LocalDateTime initiatedAt,
         LocalDateTime paidAt,
         LocalDateTime sbpQrCreatedAt,
+        boolean archived,
+        LocalDateTime archivedAt,
+        String archiveReason,
         boolean refundable
 ) {
 }

@@ -1,4 +1,4 @@
-<app-admin-layout [title]="layoutTitle()" active="manager" rightPanelMode="custom">
+<app-admin-layout [title]="layoutTitle()" [active]="activeSection()" rightPanelMode="custom">
   <section class="manager-workspace" [class.menu-open]="mobileMenuOpen()">
     <button
       type="button"

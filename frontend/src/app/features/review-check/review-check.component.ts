@@ -1012,10 +1012,10 @@ export class ReviewCheckComponent {
 
   managerOrderRoute(details: ReviewCheckPayload): unknown[] {
     if (!details.companyId || !details.orderId) {
-      return ['/manager'];
+      return ['/orders'];
     }
 
-    return ['/manager/orders', details.companyId, details.orderId];
+    return ['/orders', details.companyId, details.orderId];
   }
 
   managerCompanyOrdersQuery(details: ReviewCheckPayload): Record<string, string | number> {
@@ -1024,7 +1024,6 @@ export class ReviewCheckComponent {
     }
 
     return {
-      section: 'orders',
       companyId: details.companyId,
       companyTitle: details.companyTitle || `Компания #${details.companyId}`,
       status: 'Все'

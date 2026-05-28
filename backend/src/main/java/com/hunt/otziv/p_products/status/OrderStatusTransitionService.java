@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.payments.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -48,6 +49,7 @@ public class OrderStatusTransitionService {
     private static final String STATUS_NOT_PAID = "Не оплачено";
     private static final String STATUS_ARCHIVE = "Архив";
     private static final String STATUS_BAN = "Бан";
+    private static final String STATUS_REMINDER = "Напоминание";
 
     private final OrderRepository orderRepository;
     private final OrderStatusService orderStatusService;
@@ -65,6 +67,7 @@ public class OrderStatusTransitionService {
     private final OrderCorrectionTelegramNotifier orderCorrectionTelegramNotifier;
     private final ManualPaymentAutoConfirmationService manualPaymentAutoConfirmationService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    private final AppSettingService appSettingService;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -112,16 +115,24 @@ public class OrderStatusTransitionService {
         if (updated) {
             manualPaymentAutoConfirmationService.confirmForPaidOrder(order);
             manualPaymentAutoConfirmationService.retireOpenLinksForPaidOrder(order);
+            paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Заказ оплачен");
         }
         return updated;
     }
 
     private boolean handleBanStatus(Order order) {
-        if (!STATUS_NOT_PAID.equals(safeStatusTitle(order))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Перевести заказ в Бан можно только из статуса \"Не оплачено\"");
-        }
-
         var summary = badReviewTaskService.getSummaryForOrder(order.getId());
+        boolean badReviewFinalInvoiceReady = summary != null && summary.pending() == 0 && summary.done() > 0;
+        String currentStatus = safeStatusTitle(order);
+        boolean regularBanAllowed = STATUS_NOT_PAID.equals(currentStatus);
+        boolean finalBadReviewInvoiceBanAllowed = badReviewFinalInvoiceReady
+                && (STATUS_TO_PAY.equals(currentStatus) || STATUS_REMINDER.equals(currentStatus));
+        if (!regularBanAllowed && !finalBadReviewInvoiceBanAllowed) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Перевести заказ в Бан можно из статуса \"Не оплачено\" или после финального счета за плохие отзывы"
+            );
+        }
         if (summary != null && summary.pending() > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выполните все плохие задачи заказа");
         }
@@ -130,6 +141,7 @@ public class OrderStatusTransitionService {
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_BAN);
         badReviewTaskService.deleteOrderReadyReminder(order);
         orderRepository.save(order);
+        paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Заказ переведен в Бан");
         return true;
     }
 
@@ -184,6 +196,11 @@ public class OrderStatusTransitionService {
         if (!STATUS_IN_CHECK.equals(previousOrderStatus)) {
             log.info("Уведомление о передаче в публикацию пропущено: заказ ID {} перешел из статуса '{}'",
                     order.getId(), previousOrderStatus);
+            return;
+        }
+        if (!immediateClientMessagesEnabled()) {
+            log.info("Уведомление о передаче в публикацию пропущено: моментальные клиентские сообщения выключены, orderId={}",
+                    order.getId());
             return;
         }
 
@@ -467,6 +484,15 @@ public class OrderStatusTransitionService {
 
             String message = orderReviewCheckMessageBuilder.reviewCheckMessage(order);
 
+            if (!immediateClientMessagesEnabled()) {
+                log.info("Отправка проверки клиенту пропущена: моментальные клиентские сообщения выключены, orderId={}",
+                        order.getId());
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_CHECK));
+                orderRepository.save(order);
+                mobilePushBusinessNotificationService.notifyManagerOrderReadyForReview(order);
+                return true;
+            }
+
             log.info("Отправляем сообщение клиенту для заказа ID: {}", order.getId());
             String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
                     STATUS_TO_CHECK,
@@ -611,6 +637,15 @@ public class OrderStatusTransitionService {
 
             String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
 
+            if (!immediateClientMessagesEnabled()) {
+                log.info("Счет после публикации не отправлен: моментальные клиентские сообщения выключены, orderId={}",
+                        order.getId());
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+                orderRepository.save(order);
+                mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
+                return true;
+            }
+
             boolean sent = orderStatusNotificationService.sendMessageToGroup(
                     STATUS_PUBLIC,
                     order,
@@ -639,12 +674,25 @@ public class OrderStatusTransitionService {
         log.info("=== РУЧНОЙ ПЕРЕВОД ЗАКАЗА В СТАТУС 'ВЫСТАВЛЕН СЧЕТ' ===");
         log.info("Заказ ID: {}, текущий статус: {}", order.getId(), safeStatusTitle(order));
 
+        var summary = badReviewTaskService.getSummaryForOrder(order.getId());
+        boolean badReviewFinalInvoiceReady = summary != null && summary.pending() == 0 && summary.done() > 0;
+        if (badReviewFinalInvoiceReady || (summary != null && summary.done() > 0)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "После плохих отзывов заказ остается в статусе \"Не оплачено\" до оплаты или автобана"
+            );
+        }
+
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_PAY));
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_TO_PAY);
         orderRepository.save(order);
 
         log.info("✅ Заказ ID {} вручную переведен в статус 'Выставлен счет' без отправки сообщения клиенту", order.getId());
         return true;
+    }
+
+    private boolean immediateClientMessagesEnabled() {
+        return appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
     }
 
     private boolean hasText(String value) {

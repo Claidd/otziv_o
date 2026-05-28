@@ -587,7 +587,7 @@ class ManagerArchiveRepository {
         return switch (normalizeMode(mode)) {
             case "paid" -> " AND os.order_status_title = 'Оплачено'\n";
             case "archive" -> " AND os.order_status_title = 'Архив'\n";
-            default -> " AND os.order_status_title IN ('Архив', 'Оплачено')\n";
+            default -> " AND os.order_status_title IN ('Архив', 'Оплачено', 'Бан')\n";
         };
     }
 

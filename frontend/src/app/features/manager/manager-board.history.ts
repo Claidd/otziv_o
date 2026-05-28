@@ -24,7 +24,6 @@ export function managerWithHistoryState(
 
 export function managerViewQueryParams(view: ManagerHistoryView): Record<string, string | number> {
   const params: Record<string, string | number> = {
-    section: view.activeSection,
     status: view.activeSection === 'companies' ? view.companyStatus : view.orderStatus,
     pageNumber: Math.max(view.pageNumber, 0),
     pageSize: view.pageSize,
@@ -73,13 +72,17 @@ export function managerReadHistoryView(
   };
 }
 
-export function managerReadQueryView(params: ManagerQueryParamReader): ManagerHistoryView | null {
+export function managerReadQueryView(
+  params: ManagerQueryParamReader,
+  defaultSection: ManagerSection | null = null
+): ManagerHistoryView | null {
   const section = params.get('section');
-  if (section !== 'orders' && section !== 'companies') {
+  const activeSection = section === 'orders' || section === 'companies' ? section : defaultSection;
+  if (activeSection !== 'orders' && activeSection !== 'companies') {
     return null;
   }
 
-  if (section === 'companies') {
+  if (activeSection === 'companies') {
     return {
       activeSection: 'companies',
       companyStatus: params.get('status')?.trim() || 'Все',

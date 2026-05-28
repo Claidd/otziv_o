@@ -1,4 +1,4 @@
-<app-admin-layout [title]="title()" active="manager" [hideSidebarBeforeLogin]="false" rightPanelMode="custom">
+<app-admin-layout [title]="title()" active="orders" [hideSidebarBeforeLogin]="false" rightPanelMode="custom">
   <section class="review-check-workspace">
     <header class="details-topbar">
       <div class="details-title">
@@ -553,7 +553,7 @@
           <article class="staff-actions-card review-window-status-card">
             <h2>Действия</h2>
             @if (details.permissions.canOpenManagerLinks) {
-              <a routerLink="/manager" [queryParams]="managerCompanyOrdersQuery(details)">
+              <a routerLink="/orders" [queryParams]="managerCompanyOrdersQuery(details)">
                 <span class="material-icons-sharp">business</span>
                 Компания
               </a>
@@ -682,7 +682,7 @@
         <article class="staff-actions-card">
           <h2>Действия</h2>
           @if (details.permissions.canOpenManagerLinks) {
-            <a routerLink="/manager" [queryParams]="managerCompanyOrdersQuery(details)">
+            <a routerLink="/orders" [queryParams]="managerCompanyOrdersQuery(details)">
               <span class="material-icons-sharp">business</span>
               Компания
             </a>

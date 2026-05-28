@@ -4,11 +4,13 @@ import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PublicSbpBankResponse;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -75,6 +78,12 @@ class PaymentLinkServiceTest {
 
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
+
+    @Mock
+    private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+
+    @Mock
+    private PaymentLinkArchiveService paymentLinkArchiveService;
 
     @Mock
     private AppSettingService appSettingService;
@@ -478,6 +487,7 @@ class PaymentLinkServiceTest {
 
         when(paymentLinkRepository.findByIdWithOrder(15L)).thenReturn(Optional.of(link));
         when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         service.confirmManual(15L, "admin@example.ru");
 
@@ -488,6 +498,7 @@ class PaymentLinkServiceTest {
         assertNotNull(link.getManualConfirmedAt());
         assertNotNull(link.getPaidAt());
         verify(orderTransactionService).handlePaymentStatus(order);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Ручная оплата подтверждена");
         verify(paymentLinkRepository).save(link);
     }
 
@@ -583,6 +594,7 @@ class PaymentLinkServiceTest {
         assertNull(link.getPaymentSuccessNotificationError());
         verify(orderTransactionService).handlePaymentStatus(order);
         verify(paymentSuccessClientNotifier).notifySuccess(link);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "T-Bank/SBP оплата подтверждена");
         verify(paymentLinkRepository).save(link);
     }
 
@@ -947,7 +959,34 @@ class PaymentLinkServiceTest {
         link.setPayerEmail("CLIENT@EXAMPLE.RU");
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
-        when(paymentLinkRepository.findTop100ByOrderByCreatedAtDesc()).thenReturn(List.of(link));
+        when(paymentLinkRepository.findAdminPage(
+                anyString(),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                any()
+        )).thenReturn(new PageImpl<>(List.of(link)));
+        when(paymentLinkRepository.summarizeAdminPage(
+                anyString(),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection()
+        )).thenReturn(new PaymentLinkAdminSummary(1L, 90000L, 1L, 0L, 1L, 0L, 0L, 1L, 0L, 0L));
         when(paymentProfileService.toRuntimeForTerminal(profile, "secondary-terminal")).thenReturn(new TbankPaymentProfile(
                 2L,
                 TbankPaymentProfile.SECONDARY_CODE,
@@ -969,13 +1008,13 @@ class PaymentLinkServiceTest {
                 90000L
         ));
 
-        List<AdminPaymentLinkResponse> response = service.adminLinks();
+        AdminPaymentLinksPageResponse response = service.adminLinks(0, 100, "all", null, null, null, "live");
 
         assertEquals(PaymentLinkStatus.TEST_CONFIRMED, link.getStatus());
-        assertEquals("TEST_CONFIRMED", response.get(0).status());
-        assertEquals("UNKNOWN", response.get(0).clientChatPlatform());
-        assertFalse(response.get(0).clientChatReady());
-        assertEquals("ссылка на чат не указана", response.get(0).clientChatWarning());
+        assertEquals("TEST_CONFIRMED", response.items().get(0).status());
+        assertEquals("UNKNOWN", response.items().get(0).clientChatPlatform());
+        assertFalse(response.items().get(0).clientChatReady());
+        assertEquals("ссылка на чат не указана", response.items().get(0).clientChatWarning());
         assertNotNull(link.getPaidAt());
         assertEquals("client@example.ru", order.getCompany().getLastPayerEmail());
         verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-50"));
@@ -1110,6 +1149,8 @@ class PaymentLinkServiceTest {
                 signer,
                 paymentSuccessClientNotifier,
                 manualPaymentTaskService,
+                paymentInvoiceRetryScheduler,
+                paymentLinkArchiveService,
                 appSettingService
         );
     }

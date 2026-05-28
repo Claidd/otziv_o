@@ -150,7 +150,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   selector: 'app-admin-dictionaries',
   imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective],
   templateUrl: './admin-dictionaries.component.html',
-  styleUrl: './admin-dictionaries.component.scss'
+  styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })
 export class AdminDictionariesComponent implements OnDestroy {
   private readonly fb = inject(FormBuilder);
@@ -315,21 +315,29 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly autoresponderForm = this.fb.nonNullable.group({
     workerEnabled: [true],
     liveEnabled: [true],
+    immediateEnabled: [true],
     monitorEnabled: [false],
     reviewCheckEnabled: [true],
+    reviewCheckAutoArchiveEnabled: [true],
+    clientTextReminderEnabled: [true],
     paymentReminderEnabled: [true],
     badReviewInvoiceEnabled: [true],
+    badReviewAutoBanEnabled: [true],
     paymentOverdueEnabled: [true],
     paymentOverdueLiveEnabled: [false],
     archiveReorderEnabled: [true],
     errorProtectionEnabled: [true],
     reviewCheckIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
+    reviewCheckAutoArchiveDays: [30, [Validators.required, Validators.min(1), Validators.max(3650)]],
+    clientTextReminderIntervalDays: [3, [Validators.required, Validators.min(1), Validators.max(365)]],
     paymentReminderIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
     reviewCheckRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     paymentInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     badReviewInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
+    badReviewAutoBanDelayDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
     paymentOverdueDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]],
     archiveReorderMonths: [3, [Validators.required, Validators.min(1), Validators.max(36)]],
+    archiveOrderRetentionDays: [90, [Validators.required, Validators.min(1), Validators.max(3650)]],
     errorProtectionThreshold: [20, [Validators.required, Validators.min(1), Validators.max(10000)]],
     errorProtectionWindowMinutes: [10, [Validators.required, Validators.min(1), Validators.max(1440)]],
     errorProtectionCooldownMinutes: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
@@ -343,6 +351,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     maxGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
     businessWindows: ['10:00-12:00,14:00-17:00,19:00-21:00', [Validators.required, Validators.maxLength(500)]],
     reviewCheckStatuses: ['На проверке', [Validators.required, Validators.maxLength(500)]],
+    clientTextReminderStatuses: ['Новый', [Validators.required, Validators.maxLength(500)]],
     paymentReminderStatuses: ['Выставлен счет,Напоминание', [Validators.required, Validators.maxLength(500)]],
     paymentOverdueStatuses: ['Выставлен счет,Напоминание', [Validators.required, Validators.maxLength(500)]],
     closedOrderStatuses: ['Оплачено,Архив,Бан,Не оплачено', [Validators.required, Validators.maxLength(500)]],
@@ -352,11 +361,13 @@ export class AdminDictionariesComponent implements OnDestroy {
     openNextOrderRequestStatuses: ['PENDING,FAILED', [Validators.required, Validators.maxLength(500)]],
     reviewLinkBaseUrl: ['https://o-ogo.ru', [Validators.required, Validators.maxLength(500)]],
     reviewReminderText: ['', [Validators.required, Validators.maxLength(500)]],
+    clientTextReminderText: ['', [Validators.required, Validators.maxLength(500)]],
     publicationStartedText: ['', [Validators.required, Validators.maxLength(500)]],
     publicationProgressReportText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentInstructionSource: ['MANAGER_TEXT' as 'MANAGER_TEXT' | 'TBANK_LINK', [Validators.required]],
     paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
+    paymentSuccessText: ['', [Validators.required, Validators.maxLength(500)]],
     archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]]
   });
 
@@ -1275,11 +1286,13 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   monitorScenarioIcon(scenario: AdminClientMessageMonitorScenario): string {
     return {
+      CLIENT_TEXT_REMINDER: 'edit_note',
       REVIEW_CHECK_REMINDER: 'playlist_add_check',
       PAYMENT_REMINDER: 'receipt_long',
       PAYMENT_OVERDUE_ESCALATION: 'priority_high',
       ARCHIVE_REORDER_OFFER: 'archive',
-      BAD_REVIEW_INVOICE: 'request_quote'
+      BAD_REVIEW_INVOICE: 'request_quote',
+      BAD_REVIEW_AUTO_BAN: 'gavel'
     }[scenario.scenario] ?? 'mark_chat_unread';
   }
 
@@ -1298,11 +1311,13 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   monitorScenarioTooltip(scenario: AdminClientMessageMonitorScenario): string {
     return {
+      CLIENT_TEXT_REMINDER: 'Напоминает клиенту прислать текст или пожелания, когда заказ в режиме "ждем текст от клиента".',
       REVIEW_CHECK_REMINDER: 'Напоминает клиенту проверить шаблоны отзывов и перейти по ссылке проверки.',
       PAYMENT_REMINDER: 'Напоминает клиенту об оплате заказа в статусах счета и напоминания.',
       PAYMENT_OVERDUE_ESCALATION: 'Следит за долгой просрочкой оплаты и готовит перевод в целевой статус по настройкам.',
       ARCHIVE_REORDER_OFFER: 'Предлагает новый заказ компаниям из архивного цикла, если нет активных заказов и открытой заявки.',
-      BAD_REVIEW_INVOICE: 'Фиксирует отправку счета после выполненного плохого отзыва с учетом доплаты.'
+      BAD_REVIEW_INVOICE: 'Фиксирует отправку счета после выполненного плохого отзыва с учетом доплаты.',
+      BAD_REVIEW_AUTO_BAN: 'Переводит заказ и компанию в Бан, если финальный счет после плохих не оплатили за заданный срок.'
     }[scenario.scenario] ?? 'Сценарий автоответчика: кандидаты, отправки, пропуски и ошибки.';
   }
 
@@ -1431,8 +1446,10 @@ export class AdminDictionariesComponent implements OnDestroy {
       settings.workerEnabled,
       settings.liveEnabled,
       settings.reviewCheckEnabled,
+      settings.clientTextReminderEnabled,
       settings.paymentReminderEnabled,
       settings.badReviewInvoiceEnabled,
+      settings.badReviewAutoBanEnabled,
       settings.paymentOverdueEnabled,
       settings.archiveReorderEnabled
     ].filter(Boolean).length;
@@ -2141,21 +2158,29 @@ export class AdminDictionariesComponent implements OnDestroy {
     const request: ClientMessageSettingsRequest = {
       workerEnabled: raw.workerEnabled,
       liveEnabled: raw.liveEnabled,
+      immediateEnabled: raw.immediateEnabled,
       monitorEnabled: raw.monitorEnabled,
       reviewCheckEnabled: raw.reviewCheckEnabled,
+      reviewCheckAutoArchiveEnabled: raw.reviewCheckAutoArchiveEnabled,
+      clientTextReminderEnabled: raw.clientTextReminderEnabled,
       paymentReminderEnabled: raw.paymentReminderEnabled,
       badReviewInvoiceEnabled: raw.badReviewInvoiceEnabled,
+      badReviewAutoBanEnabled: raw.badReviewAutoBanEnabled,
       paymentOverdueEnabled: raw.paymentOverdueEnabled,
       paymentOverdueLiveEnabled: raw.paymentOverdueLiveEnabled,
       archiveReorderEnabled: raw.archiveReorderEnabled,
       errorProtectionEnabled: raw.errorProtectionEnabled,
       reviewCheckIntervalDays: Number(raw.reviewCheckIntervalDays ?? 2),
+      reviewCheckAutoArchiveDays: Number(raw.reviewCheckAutoArchiveDays ?? 30),
+      clientTextReminderIntervalDays: Number(raw.clientTextReminderIntervalDays ?? 3),
       paymentReminderIntervalDays: Number(raw.paymentReminderIntervalDays ?? 2),
       reviewCheckRetryDelayHours: Number(raw.reviewCheckRetryDelayHours ?? 2),
       paymentInvoiceRetryDelayHours: Number(raw.paymentInvoiceRetryDelayHours ?? 2),
       badReviewInvoiceRetryDelayHours: Number(raw.badReviewInvoiceRetryDelayHours ?? 2),
+      badReviewAutoBanDelayDays: Number(raw.badReviewAutoBanDelayDays ?? 2),
       paymentOverdueDays: Number(raw.paymentOverdueDays ?? 30),
       archiveReorderMonths: Number(raw.archiveReorderMonths ?? 3),
+      archiveOrderRetentionDays: Number(raw.archiveOrderRetentionDays ?? 90),
       errorProtectionThreshold: Number(raw.errorProtectionThreshold ?? 20),
       errorProtectionWindowMinutes: Number(raw.errorProtectionWindowMinutes ?? 10),
       errorProtectionCooldownMinutes: Number(raw.errorProtectionCooldownMinutes ?? 60),
@@ -2169,6 +2194,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       maxGapSeconds: Number(raw.maxGapSeconds ?? 90),
       businessWindows: raw.businessWindows.trim(),
       reviewCheckStatuses: raw.reviewCheckStatuses.trim(),
+      clientTextReminderStatuses: raw.clientTextReminderStatuses.trim(),
       paymentReminderStatuses: raw.paymentReminderStatuses.trim(),
       paymentOverdueStatuses: raw.paymentOverdueStatuses.trim(),
       closedOrderStatuses: raw.closedOrderStatuses.trim(),
@@ -2178,11 +2204,13 @@ export class AdminDictionariesComponent implements OnDestroy {
       openNextOrderRequestStatuses: raw.openNextOrderRequestStatuses.trim(),
       reviewLinkBaseUrl: raw.reviewLinkBaseUrl.trim(),
       reviewReminderText: raw.reviewReminderText.trim(),
+      clientTextReminderText: raw.clientTextReminderText.trim(),
       publicationStartedText: raw.publicationStartedText.trim(),
       publicationProgressReportText: raw.publicationProgressReportText.trim(),
       paymentInstructionSource: raw.paymentInstructionSource,
       paymentReminderText: raw.paymentReminderText.trim(),
       paymentLinkCopyText: raw.paymentLinkCopyText.trim(),
+      paymentSuccessText: raw.paymentSuccessText.trim(),
       archiveOfferText: raw.archiveOfferText.trim()
     };
 
@@ -2498,21 +2526,29 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.autoresponderForm.reset({
       workerEnabled: settings?.workerEnabled ?? true,
       liveEnabled: settings?.liveEnabled ?? true,
+      immediateEnabled: settings?.immediateEnabled ?? true,
       monitorEnabled: settings?.monitorEnabled ?? false,
       reviewCheckEnabled: settings?.reviewCheckEnabled ?? true,
+      reviewCheckAutoArchiveEnabled: settings?.reviewCheckAutoArchiveEnabled ?? true,
+      clientTextReminderEnabled: settings?.clientTextReminderEnabled ?? true,
       paymentReminderEnabled: settings?.paymentReminderEnabled ?? true,
       badReviewInvoiceEnabled: settings?.badReviewInvoiceEnabled ?? true,
+      badReviewAutoBanEnabled: settings?.badReviewAutoBanEnabled ?? true,
       paymentOverdueEnabled: settings?.paymentOverdueEnabled ?? true,
       paymentOverdueLiveEnabled: settings?.paymentOverdueLiveEnabled ?? false,
       archiveReorderEnabled: settings?.archiveReorderEnabled ?? true,
       errorProtectionEnabled: settings?.errorProtectionEnabled ?? true,
       reviewCheckIntervalDays: settings?.reviewCheckIntervalDays ?? 2,
+      reviewCheckAutoArchiveDays: settings?.reviewCheckAutoArchiveDays ?? 30,
+      clientTextReminderIntervalDays: settings?.clientTextReminderIntervalDays ?? 3,
       paymentReminderIntervalDays: settings?.paymentReminderIntervalDays ?? 2,
       reviewCheckRetryDelayHours: settings?.reviewCheckRetryDelayHours ?? 2,
       paymentInvoiceRetryDelayHours: settings?.paymentInvoiceRetryDelayHours ?? 2,
       badReviewInvoiceRetryDelayHours: settings?.badReviewInvoiceRetryDelayHours ?? 2,
+      badReviewAutoBanDelayDays: settings?.badReviewAutoBanDelayDays ?? 2,
       paymentOverdueDays: settings?.paymentOverdueDays ?? 30,
       archiveReorderMonths: settings?.archiveReorderMonths ?? 3,
+      archiveOrderRetentionDays: settings?.archiveOrderRetentionDays ?? 90,
       errorProtectionThreshold: settings?.errorProtectionThreshold ?? 20,
       errorProtectionWindowMinutes: settings?.errorProtectionWindowMinutes ?? 10,
       errorProtectionCooldownMinutes: settings?.errorProtectionCooldownMinutes ?? 60,
@@ -2526,6 +2562,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       maxGapSeconds: settings?.maxGapSeconds ?? 90,
       businessWindows: settings?.businessWindows ?? '10:00-12:00,14:00-17:00,19:00-21:00',
       reviewCheckStatuses: settings?.reviewCheckStatuses ?? 'На проверке',
+      clientTextReminderStatuses: settings?.clientTextReminderStatuses ?? 'Новый',
       paymentReminderStatuses: settings?.paymentReminderStatuses ?? 'Выставлен счет,Напоминание',
       paymentOverdueStatuses: settings?.paymentOverdueStatuses ?? 'Выставлен счет,Напоминание',
       closedOrderStatuses: settings?.closedOrderStatuses ?? 'Оплачено,Архив,Бан,Не оплачено',
@@ -2536,6 +2573,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       reviewLinkBaseUrl: settings?.reviewLinkBaseUrl ?? 'https://o-ogo.ru',
       reviewReminderText: settings?.reviewReminderText
         ?? '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}',
+      clientTextReminderText: settings?.clientTextReminderText
+        ?? '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.',
       publicationStartedText: settings?.publicationStartedText
         ?? '{companyAndFilial}\n\nСпасибо, правки получили. Отзывы переданы в публикацию. Будем присылать короткие отчёты по мере публикации.',
       publicationProgressReportText: settings?.publicationProgressReportText
@@ -2544,6 +2583,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentReminderText: settings?.paymentReminderText ?? '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
       paymentLinkCopyText: settings?.paymentLinkCopyText
         ?? '{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}',
+      paymentSuccessText: settings?.paymentSuccessText
+        ?? 'Оплата прошла успешно.\n\nНовый заказ принят в работу.\n{orderLine}{companyLine}Сумма: {sum}\nСтраница оплаты: {paymentPage}\n\n{receiptText}',
       archiveOfferText: settings?.archiveOfferText
         ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.'
     });

@@ -142,11 +142,18 @@ export class HomeComponent {
       routerLink: '/operator'
     },
     {
-      label: 'Менеджер',
-      description: 'Компании и заказы',
-      icon: 'groups',
+      label: 'Компании',
+      description: 'Клиенты, филиалы и рабочие статусы',
+      icon: 'business',
       roles: ['ADMIN', 'OWNER', 'MANAGER'],
-      routerLink: '/manager'
+      routerLink: '/companies'
+    },
+    {
+      label: 'Заказы',
+      description: 'Проверки, публикации и оплаты',
+      icon: 'inventory_2',
+      roles: ['ADMIN', 'OWNER', 'MANAGER'],
+      routerLink: '/orders'
     },
     {
       label: 'Специалист',

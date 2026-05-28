@@ -40,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -748,6 +749,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 
     private Order toEntityOrderFromDTO(OrderDTO orderDTO, Long productId) { // Конвертер из DTO для заказа
         Product product1 = productService.findById(productId);
+        boolean waitingForClient = orderDTO.isWaitingForClient();
+        boolean clientTextExpected = waitingForClient || orderDTO.isClientTextExpected();
         return Order.builder()
                 .amount(orderDTO.getAmount())
                 .complete(false)
@@ -757,6 +760,9 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .filial(convertFilialDTOToFilial(orderDTO.getFilial()))
                 .sum(product1.getPrice().multiply(BigDecimal.valueOf(orderDTO.getAmount())))
                 .status(convertStatusDTOToStatus(orderDTO.getStatus()))
+                .waitingForClient(waitingForClient)
+                .waitingForClientChangedAt(waitingForClient ? LocalDateTime.now() : null)
+                .clientTextExpected(clientTextExpected)
                 .build();
     } // Конвертер из DTO для заказа
 
@@ -780,6 +786,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     } // Конвертер из DTO для субкатегории
 
     public OrderDTO convertToOrderDTOToRepeat(Order order) { // Конвертер DTO для создания нового заказа после завершения предыдущего
+        boolean clientTextExpected = order.isWaitingForClient() || order.isClientTextExpected();
         return OrderDTO.builder()
                 .id(order.getId())
                 .amount(order.getAmount())
@@ -790,6 +797,8 @@ public class OrderCreationServiceImpl implements OrderCreationService {
                 .reviewFilialIds(reviewFilialIds(order))
                 .commentsCompany(order.getCompany().getCommentsCompany())
                 .status(convertToStatusDTO("Новый"))
+                .waitingForClient(clientTextExpected)
+                .clientTextExpected(clientTextExpected)
                 .build();
     } // Конвертер DTO для создания нового заказа после завершения предыдущего
 

@@ -30,12 +30,14 @@ class OrderArchiveDryRunRepository {
     private static final String ELIGIBLE_ORDER_WHERE = """
             FROM orders o
             JOIN order_statuses s ON s.order_status_id = o.order_status
-            WHERE s.order_status_title IN ('Архив', 'Оплачено')
+            WHERE s.order_status_title IN ('Архив', 'Оплачено', 'Бан')
               AND (
                     (s.order_status_title = 'Оплачено'
                      AND COALESCE(o.order_pay_day, o.order_changed, o.order_created) <= :cutoffDate)
                  OR (s.order_status_title = 'Архив'
                      AND COALESCE(o.order_changed, o.order_pay_day, o.order_created) <= :cutoffDate)
+                 OR (s.order_status_title = 'Бан'
+                     AND COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created) <= :cutoffDate)
               )
               AND NOT EXISTS (
                     SELECT 1
@@ -59,6 +61,8 @@ class OrderArchiveDryRunRepository {
                     CASE
                         WHEN s.order_status_title = 'Оплачено'
                             THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
+                        WHEN s.order_status_title = 'Бан'
+                            THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
                         ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
                     END,
                     o.order_id
@@ -93,6 +97,8 @@ class OrderArchiveDryRunRepository {
                     CASE
                         WHEN s.order_status_title = 'Оплачено'
                             THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
+                        WHEN s.order_status_title = 'Бан'
+                            THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
                         ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
                     END,
                     o.order_id
@@ -170,6 +176,8 @@ class OrderArchiveDryRunRepository {
                     CASE
                         WHEN s.order_status_title = 'Оплачено'
                             THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
+                        WHEN s.order_status_title = 'Бан'
+                            THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
                         ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
                     END AS candidate_date,
                     (
@@ -244,9 +252,16 @@ class OrderArchiveDryRunRepository {
                 .addValue("adminScopeKey", AnalyticsAggregateReadService.SCOPE_ADMIN_ALL);
         Long count = jdbc.queryForObject(CANDIDATE_ORDER_CTE + """
                 , candidate_dates AS (
-                    SELECT COALESCE(o.order_pay_day, o.order_changed, o.order_created) AS metric_date
+                    SELECT CASE
+                        WHEN s.order_status_title = 'Оплачено'
+                            THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
+                        WHEN s.order_status_title = 'Бан'
+                            THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
+                        ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
+                    END AS metric_date
                     FROM orders o
                     JOIN candidate_orders co ON co.order_id = o.order_id
+                    JOIN order_statuses s ON s.order_status_id = o.order_status
 
                     UNION ALL
 
@@ -293,9 +308,16 @@ class OrderArchiveDryRunRepository {
         jdbc.update("DELETE FROM archive_candidate_dates", Map.of());
         jdbc.update("""
                 INSERT INTO archive_candidate_dates (metric_date)
-                SELECT COALESCE(o.order_pay_day, o.order_changed, o.order_created)
+                SELECT CASE
+                    WHEN s.order_status_title = 'Оплачено'
+                        THEN COALESCE(o.order_pay_day, o.order_changed, o.order_created)
+                    WHEN s.order_status_title = 'Бан'
+                        THEN COALESCE(DATE(o.order_status_changed_at), o.order_changed, o.order_pay_day, o.order_created)
+                    ELSE COALESCE(o.order_changed, o.order_pay_day, o.order_created)
+                END
                 FROM orders o
                 JOIN archive_candidate_orders co ON co.order_id = o.order_id
+                JOIN order_statuses s ON s.order_status_id = o.order_status
                 """, Map.of());
         jdbc.update("""
                 INSERT INTO archive_candidate_dates (metric_date)

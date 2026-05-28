@@ -38,7 +38,7 @@ describe('ManagerCompanyCardComponent', () => {
     expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toContain('Филиалов:');
     expect(element.querySelector<HTMLAnchorElement>('.company-manager-link')?.getAttribute('href'))
-      .toBe('/manager?section=orders&status=%D0%92%D1%81%D0%B5');
+      .toBe('/orders?status=%D0%92%D1%81%D0%B5');
     expect(element.querySelector<HTMLButtonElement>('.card-actions button')?.disabled).toBe(true);
   });
 

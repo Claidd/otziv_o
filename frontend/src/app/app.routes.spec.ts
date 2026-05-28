@@ -17,6 +17,9 @@ describe('routes', () => {
       'pay/:token',
       'leads',
       'operator',
+      'orders/:companyId/:orderId',
+      'companies',
+      'orders',
       'manager',
       'manager/archive',
       'manager/orders/:companyId/:orderId',
@@ -65,13 +68,16 @@ describe('routes', () => {
     const protectedRoutes = [
       ['leads', ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG']],
       ['operator', ['ADMIN', 'OWNER', 'OPERATOR']],
+      ['orders/:companyId/:orderId', ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']],
+      ['companies', ['ADMIN', 'OWNER', 'MANAGER']],
+      ['orders', ['ADMIN', 'OWNER', 'MANAGER']],
       ['manager', ['ADMIN', 'OWNER', 'MANAGER']],
       ['manager/archive', ['ADMIN', 'OWNER', 'MANAGER']],
       ['worker', ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']],
       ['training', ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']],
       ['admin/analyse', ['ADMIN', 'OWNER']],
       ['admin/archive', ['ADMIN', 'OWNER']],
-      ['admin/tbank-payments', ['ADMIN']],
+      ['admin/tbank-payments', ['ADMIN', 'OWNER']],
       ['admin/dictionaries/phones', ['ADMIN', 'OWNER']],
       ['admin/dictionaries', ['ADMIN', 'OWNER', 'MANAGER']]
     ];

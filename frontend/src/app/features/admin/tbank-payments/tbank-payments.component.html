@@ -39,9 +39,9 @@
           </button>
         }
 
-        <a routerLink="/manager" class="quiet-action">
-          <span class="material-icons-sharp" aria-hidden="true">groups</span>
-          Менеджер
+        <a routerLink="/orders" class="quiet-action">
+          <span class="material-icons-sharp" aria-hidden="true">inventory_2</span>
+          Заказы
         </a>
 
         <button type="button" class="primary-action" (click)="load()" [disabled]="loading()">
@@ -52,6 +52,25 @@
     </div>
 
     <div class="toolbar-actions">
+      <div class="source-control" role="group" aria-label="Источник журнала">
+        <button
+          type="button"
+          [class.active]="paymentSource() === 'LIVE'"
+          (click)="setPaymentSource('LIVE')"
+        >
+          <span class="material-icons-sharp" aria-hidden="true">bolt</span>
+          Live
+        </button>
+        <button
+          type="button"
+          [class.active]="paymentSource() === 'ARCHIVE'"
+          (click)="setPaymentSource('ARCHIVE')"
+        >
+          <span class="material-icons-sharp" aria-hidden="true">archive</span>
+          Архив
+        </button>
+      </div>
+
       <div class="status-control" role="group" aria-label="Фильтр статуса">
         @for (option of statusOptions; track trackStatusOption($index, option)) {
           <button
@@ -92,13 +111,13 @@
     </div>
   </section>
 
-  @if (manualPendingLinks().length) {
+  @if (manualPendingCount()) {
     <section class="analytics-section manual-alert-panel" aria-label="Ручные платежи на сверку">
       <div class="section-title compact-title">
         <span class="material-icons-sharp">fact_check</span>
         <div>
           <h2>Ручные платежи на сверку</h2>
-          <p>{{ manualPendingLinks().length }} ожидает подтверждения менеджером или админом.</p>
+          <p>{{ manualPendingCount() }} ожидает подтверждения менеджером или админом.</p>
         </div>
       </div>
     </section>
@@ -114,10 +133,23 @@
       <div>
         <h2>Журнал платежей</h2>
         <p>
-          Показано {{ filteredLinks().length }} из {{ links().length }},
-          сумма в выборке {{ totalAmount(filteredLinks()) | number:'1.2-2' }} руб.
+          {{ paymentSource() === 'ARCHIVE' ? 'Архив' : 'Live' }} ·
+          показано {{ filteredLinks().length }} из {{ paymentTotalElements() }},
+          сумма в выборке {{ (paymentSummary()?.totalAmount ?? totalAmount(filteredLinks())) | number:'1.2-2' }} руб.
         </p>
       </div>
+      @if (paymentSource() === 'LIVE') {
+        <button
+          type="button"
+          class="archive-run-action"
+          (click)="archiveClosedLinks()"
+          [disabled]="archiving()"
+          title="Перенести старые закрытые платежи в архив"
+        >
+          <span class="material-icons-sharp" aria-hidden="true">inventory_2</span>
+          {{ archiving() ? 'Архивирую' : 'Архивировать закрытые' }}
+        </button>
+      }
       @if (status(); as bank) {
         <span [class]="bank.testMode ? 'mode-pill test' : 'mode-pill live'">
           <span class="material-icons-sharp" aria-hidden="true">{{ bank.testMode ? 'science' : 'verified' }}</span>
@@ -229,53 +261,63 @@
                 @if (link.manualConfirmedAt) {
                   <span>Сверка: {{ link.manualConfirmedAt | date:'dd.MM HH:mm' }}</span>
                 }
+                @if (link.archivedAt) {
+                  <span>Архив: {{ link.archivedAt | date:'dd.MM HH:mm' }}</span>
+                }
                 <span>Истекает: {{ link.expiresAt | date:'dd.MM HH:mm' }}</span>
               </td>
               <td class="action-cell">
                 <div class="row-actions">
-                  <a [href]="link.publicUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть ссылку оплаты">
-                    <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
-                  </a>
-                  @if (link.paymentUrl) {
-                    <a [href]="link.paymentUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть форму банка">
-                      <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+                  @if (link.archived) {
+                    <span class="archive-label" [title]="link.archiveReason || 'Архивная запись'">
+                      <span class="material-icons-sharp" aria-hidden="true">archive</span>
+                      Архив
+                    </span>
+                  } @else {
+                    <a [href]="link.publicUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть ссылку оплаты">
+                      <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
                     </a>
-                  }
-                  @if (canConfirmManual(link)) {
-                    <button
-                      type="button"
-                      class="confirm-action"
-                      (click)="confirmManual(link)"
-                      [disabled]="isMutating(link)"
-                      title="Подтвердить ручную оплату"
-                    >
-                      <span class="material-icons-sharp" aria-hidden="true">done_all</span>
-                      {{ isMutating(link) ? 'Проверяю' : 'Подтвердить' }}
-                    </button>
-                  }
-                  @if (canMarkManualReceipt(link)) {
-                    <button
-                      type="button"
-                      class="receipt-action"
-                      (click)="markManualReceipt(link)"
-                      [disabled]="isMutating(link)"
-                      title="Отметить чек"
-                    >
-                      <span class="material-icons-sharp" aria-hidden="true">receipt</span>
-                      Чек
-                    </button>
-                  }
-                  @if (!isManualPayment(link)) {
-                    <button
-                      type="button"
-                      class="refund-action"
-                      (click)="cancel(link)"
-                      [disabled]="!link.refundable || isMutating(link)"
-                      title="Сделать полный возврат через T-Bank"
-                    >
-                      <span class="material-icons-sharp" aria-hidden="true">undo</span>
-                      {{ isMutating(link) ? 'Возвращаю' : 'Возврат' }}
-                    </button>
+                    @if (link.paymentUrl) {
+                      <a [href]="link.paymentUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть форму банка">
+                        <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+                      </a>
+                    }
+                    @if (canConfirmManual(link)) {
+                      <button
+                        type="button"
+                        class="confirm-action"
+                        (click)="confirmManual(link)"
+                        [disabled]="isMutating(link)"
+                        title="Подтвердить ручную оплату"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">done_all</span>
+                        {{ isMutating(link) ? 'Проверяю' : 'Подтвердить' }}
+                      </button>
+                    }
+                    @if (canMarkManualReceipt(link)) {
+                      <button
+                        type="button"
+                        class="receipt-action"
+                        (click)="markManualReceipt(link)"
+                        [disabled]="isMutating(link)"
+                        title="Отметить чек"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">receipt</span>
+                        Чек
+                      </button>
+                    }
+                    @if (!isManualPayment(link)) {
+                      <button
+                        type="button"
+                        class="refund-action"
+                        (click)="cancel(link)"
+                        [disabled]="!link.refundable || isMutating(link)"
+                        title="Сделать полный возврат через T-Bank"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">undo</span>
+                        {{ isMutating(link) ? 'Возвращаю' : 'Возврат' }}
+                      </button>
+                    }
                   }
                 </div>
               </td>
@@ -290,6 +332,26 @@
           }
         </tbody>
       </table>
+    </div>
+
+    <div class="pagination-row">
+      <p>{{ paymentPageLabel() }}</p>
+      <div class="pagination-controls">
+        <label class="page-size-field">
+          <span>На странице</span>
+          <select [ngModel]="paymentSize()" (ngModelChange)="setPaymentSize($event)" aria-label="Размер страницы">
+            <option [ngValue]="25">25</option>
+            <option [ngValue]="50">50</option>
+            <option [ngValue]="100">100</option>
+          </select>
+        </label>
+        <button type="button" class="icon-action" (click)="setPaymentPage(paymentPage() - 1)" [disabled]="paymentPage() <= 0 || loading()">
+          <span class="material-icons-sharp" aria-hidden="true">chevron_left</span>
+        </button>
+        <button type="button" class="icon-action" (click)="setPaymentPage(paymentPage() + 1)" [disabled]="paymentPage() + 1 >= paymentTotalPages() || loading()">
+          <span class="material-icons-sharp" aria-hidden="true">chevron_right</span>
+        </button>
+      </div>
     </div>
   </section>
 

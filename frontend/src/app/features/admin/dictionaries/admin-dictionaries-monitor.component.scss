@@ -1,0 +1,294 @@
+.dictionary-monitor-page,
+.autoresponder-monitor,
+.monitor-metric-grid,
+.monitor-scenario-grid,
+.archive-diagnostics-grid,
+.monitor-preview-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.monitor-head,
+.monitor-status-row,
+.monitor-table-card,
+.monitor-metric-card {
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: 0.75rem;
+  background: var(--otziv-white);
+}
+
+.monitor-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: stretch;
+  padding: 0.8rem;
+  background: rgba(108, 155, 207, 0.05);
+}
+
+.monitor-head .editor-guide {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.monitor-actions {
+  align-items: stretch;
+  margin: 0;
+}
+
+.monitor-toggle {
+  min-width: 16rem;
+}
+
+.monitor-empty {
+  min-height: 18rem;
+  border: 1px dashed rgba(108, 155, 207, 0.32);
+  border-radius: 0.85rem;
+  background: var(--otziv-muted-surface);
+}
+
+.monitor-status-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.9fr);
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.monitor-status-pills,
+.monitor-row-actions,
+.monitor-scenario-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.status-pill.danger,
+.monitor-scenario-stat.failed b,
+.monitor-error,
+.monitor-scenario-error {
+  color: var(--otziv-danger);
+}
+
+.status-pill.danger {
+  background: rgba(255, 0, 96, 0.1);
+}
+
+.monitor-clock-list,
+.monitor-scenario-stats,
+.monitor-filter-row {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.monitor-clock-list,
+.monitor-preview-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.monitor-clock-list span,
+.archive-diagnostics-grid span,
+.monitor-preview-grid span,
+.monitor-preview-grid p,
+.monitor-scenario-stat {
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: 0.55rem;
+  padding: 0.65rem;
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.monitor-clock-list b,
+.monitor-preview-grid b,
+.archive-diagnostics-grid b,
+.monitor-scenario-stat b {
+  display: block;
+  color: var(--otziv-dark);
+  font-size: 0.72rem;
+}
+
+.monitor-clock-list span {
+  font-size: 0.78rem;
+}
+
+.archive-diagnostics-grid b,
+.monitor-scenario-stat b {
+  margin-bottom: 0.12rem;
+  font-size: clamp(1.3rem, 1.9vw, 1.75rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.monitor-section-heading,
+.monitor-table-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.monitor-section-heading h3,
+.monitor-table-head h3 {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 0.95rem;
+}
+
+.monitor-section-heading p {
+  margin: 0.18rem 0 0;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.monitor-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.monitor-scenario-grid {
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+.archive-diagnostics-grid {
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+}
+
+.monitor-metric-card {
+  min-width: 0;
+  padding: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.monitor-metric-grid .monitor-metric-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  background: rgba(108, 155, 207, 0.05);
+}
+
+.monitor-metric-card .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 1.2rem;
+}
+
+.monitor-metric-card small,
+.monitor-scenario-stat span {
+  display: block;
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.monitor-metric-grid .monitor-metric-card strong {
+  display: block;
+  color: var(--otziv-dark);
+  font-size: clamp(1.75rem, 2.4vw, 2.35rem);
+  font-weight: 950;
+  line-height: 1;
+}
+
+.monitor-scenario-card {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.monitor-scenario-title {
+  color: var(--otziv-dark);
+  font-size: 0.84rem;
+}
+
+.monitor-scenario-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.monitor-scenario-stat {
+  display: grid;
+  min-height: 4.1rem;
+  align-content: center;
+  text-align: center;
+}
+
+.monitor-scenario-stat.primary b {
+  font-size: clamp(1.45rem, 2.1vw, 1.95rem);
+}
+
+.monitor-scenario-error {
+  border-radius: 0.55rem;
+  padding: 0.55rem;
+  background: rgba(255, 0, 96, 0.06);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.monitor-table-card {
+  padding: 0.85rem;
+}
+
+.monitor-table-count {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.35rem 0.6rem;
+  color: var(--otziv-primary);
+  background: rgba(108, 155, 207, 0.14);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.monitor-filter-row {
+  grid-template-columns: repeat(3, minmax(9rem, 1fr)) minmax(14rem, 1.35fr);
+}
+
+.monitor-filter-row span {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.monitor-table-scroll {
+  max-height: min(34rem, calc(100vh - 13rem));
+}
+
+.monitor-table-scroll table {
+  min-width: 64rem;
+}
+
+.monitor-row-actions {
+  margin-top: 0.45rem;
+}
+
+.monitor-error {
+  font-weight: 900;
+}
+
+.monitor-detail-row td {
+  background: rgba(108, 155, 207, 0.04);
+}
+
+.monitor-preview-grid p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 1180px) {
+  .monitor-status-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .monitor-head,
+  .monitor-filter-row,
+  .monitor-metric-grid,
+  .monitor-clock-list,
+  .monitor-scenario-stats,
+  .archive-diagnostics-grid,
+  .monitor-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}

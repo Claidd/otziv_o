@@ -533,6 +533,10 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             return false;
         }
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
+            log.info("Короткий отчёт о публикации пропущен: моментальные клиентские сообщения выключены");
+            return false;
+        }
 
         int total = order.getAmount();
         if (total > 0 && actualPublished >= total) {

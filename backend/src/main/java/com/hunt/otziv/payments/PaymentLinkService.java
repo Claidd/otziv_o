@@ -5,19 +5,25 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.client_messages.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.AdminPaymentLinkSummaryResponse;
+import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentInitResponse;
 import com.hunt.otziv.payments.dto.PublicPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PublicSbpBankResponse;
 import com.hunt.otziv.u_users.model.Manager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -65,6 +72,28 @@ public class PaymentLinkService {
             PaymentLinkStatus.CONFIRMED,
             PaymentLinkStatus.AMOUNT_MISMATCH
     );
+    private static final Set<PaymentLinkStatus> PAID_STATUSES = Set.of(
+            PaymentLinkStatus.AUTHORIZED,
+            PaymentLinkStatus.TEST_CONFIRMED,
+            PaymentLinkStatus.CONFIRMED,
+            PaymentLinkStatus.AMOUNT_MISMATCH
+    );
+    private static final Set<PaymentLinkStatus> REFUNDED_STATUSES = Set.of(
+            PaymentLinkStatus.REVERSED,
+            PaymentLinkStatus.PARTIAL_REVERSED,
+            PaymentLinkStatus.REFUNDED,
+            PaymentLinkStatus.PARTIAL_REFUNDED,
+            PaymentLinkStatus.CANCELED
+    );
+    private static final Set<PaymentLinkStatus> FAILED_STATUSES = Set.of(
+            PaymentLinkStatus.REJECTED,
+            PaymentLinkStatus.FAILED,
+            PaymentLinkStatus.EXPIRED
+    );
+    private static final Set<PaymentLinkStatus> REJECTED_STATUSES = Set.of(
+            PaymentLinkStatus.REJECTED,
+            PaymentLinkStatus.FAILED
+    );
     private static final Set<PaymentLinkStatus> SYNCABLE_BANK_STATUSES = Set.of(
             PaymentLinkStatus.INITIATED,
             PaymentLinkStatus.AUTHORIZED
@@ -73,6 +102,14 @@ public class PaymentLinkService {
             PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
             PaymentLinkStatus.MANUAL_REPORTED,
             PaymentLinkStatus.CONFIRMED
+    );
+    private static final Set<PaymentLinkStatus> MANUAL_PENDING_STATUSES = Set.of(
+            PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
+            PaymentLinkStatus.MANUAL_REPORTED
+    );
+    private static final Set<PaymentMethod> MANUAL_METHODS = Set.of(
+            PaymentMethod.MANUAL_MOBILE_BANK,
+            PaymentMethod.MANUAL_EXTERNAL_LINK
     );
     private static final Set<PaymentMethod> MANUAL_PAYMENT_METHODS = Set.of(
             PaymentMethod.MANUAL_MOBILE_BANK,
@@ -108,6 +145,8 @@ public class PaymentLinkService {
     private final TbankTokenSigner tokenSigner;
     private final PaymentSuccessClientNotifier paymentSuccessClientNotifier;
     private final ManualPaymentTaskService manualPaymentTaskService;
+    private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final AppSettingService appSettingService;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -311,13 +350,127 @@ public class PaymentLinkService {
     }
 
     @Transactional
-    public List<AdminPaymentLinkResponse> adminLinks() {
+    public AdminPaymentLinksPageResponse adminLinks(
+            int page,
+            int size,
+            String statusFilter,
+            String search,
+            LocalDate from,
+            LocalDate to,
+            String source
+    ) {
         expireStaleManualLinks(LocalDateTime.now());
-        List<PaymentLink> links = paymentLinkRepository.findTop100ByOrderByCreatedAtDesc();
+
+        int resolvedPage = Math.max(0, page);
+        int resolvedSize = Math.max(10, Math.min(size, 100));
+        String resolvedFilter = normalizeStatusFilter(statusFilter);
+        String resolvedSearch = normalize(search);
+        String resolvedSource = normalizeSource(source);
+        String searchText = resolvedSearch.isBlank() ? null : "%" + resolvedSearch.toLowerCase(Locale.ROOT) + "%";
+        Long searchId = parseLongOrNull(resolvedSearch);
+        LocalDateTime fromAt = from == null ? null : from.atStartOfDay();
+        LocalDateTime toAt = to == null ? null : to.plusDays(1).atStartOfDay();
+
+        if ("ARCHIVE".equals(resolvedSource)) {
+            return paymentLinkArchiveService.archivedLinks(
+                    resolvedPage,
+                    resolvedSize,
+                    resolvedFilter,
+                    resolvedSearch,
+                    searchId,
+                    from,
+                    to
+            );
+        }
+
+        Page<PaymentLink> links = paymentLinkRepository.findAdminPage(
+                resolvedFilter,
+                searchText,
+                searchId,
+                fromAt,
+                toAt,
+                REUSABLE_STATUSES,
+                PAID_STATUSES,
+                REFUNDED_STATUSES,
+                FAILED_STATUSES,
+                MANUAL_METHODS,
+                PageRequest.of(resolvedPage, resolvedSize)
+        );
         links.forEach(this::syncTbankStateIfNeeded);
-        return links.stream()
-                .map(this::toAdminResponse)
-                .toList();
+
+        PaymentLinkAdminSummary summary = paymentLinkRepository.summarizeAdminPage(
+                resolvedFilter,
+                searchText,
+                searchId,
+                fromAt,
+                toAt,
+                REUSABLE_STATUSES,
+                PAID_STATUSES,
+                REFUNDED_STATUSES,
+                FAILED_STATUSES,
+                MANUAL_METHODS,
+                MANUAL_PENDING_STATUSES,
+                REFUNDABLE_STATUSES,
+                REJECTED_STATUSES
+        );
+
+        return new AdminPaymentLinksPageResponse(
+                links.stream().map(this::toAdminResponse).toList(),
+                links.getNumber(),
+                links.getSize(),
+                links.getTotalElements(),
+                links.getTotalPages(),
+                resolvedSource,
+                toSummaryResponse(summary)
+        );
+    }
+
+    @Transactional
+    public PaymentLinkArchiveRunResponse archiveClosedLinks(boolean dryRun, Integer batchSize) {
+        return paymentLinkArchiveService.run(dryRun, batchSize);
+    }
+
+    private String normalizeStatusFilter(String statusFilter) {
+        String value = normalize(statusFilter).toLowerCase(Locale.ROOT);
+        return switch (value) {
+            case "active", "paid", "refunded", "failed", "created", "manual" -> value;
+            default -> "all";
+        };
+    }
+
+    private String normalizeSource(String source) {
+        String value = normalize(source).toUpperCase(Locale.ROOT);
+        return "ARCHIVE".equals(value) ? "ARCHIVE" : "LIVE";
+    }
+
+    private Long parseLongOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private AdminPaymentLinkSummaryResponse toSummaryResponse(PaymentLinkAdminSummary summary) {
+        PaymentLinkAdminSummary safe = summary == null
+                ? new PaymentLinkAdminSummary(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)
+                : summary;
+        return new AdminPaymentLinkSummaryResponse(
+                safe.safeTotalElements(),
+                amountRubles(safe.safeTotalAmountKopecks()),
+                safe.safeTotalAmountKopecks(),
+                safe.safePaid(),
+                safe.safeManualPending(),
+                safe.safeConfirmed(),
+                safe.safeNotificationsSent(),
+                safe.safeNotificationErrors(),
+                safe.safeRefundable(),
+                safe.safeRefunded(),
+                safe.safeRejected()
+        );
     }
 
     @Transactional
@@ -350,7 +503,7 @@ public class PaymentLinkService {
         validateAmountCurrentForManualConfirm(link);
 
         try {
-            orderTransactionService.handlePaymentStatus(link.getOrder());
+            boolean updated = orderTransactionService.handlePaymentStatus(link.getOrder());
             LocalDateTime now = LocalDateTime.now();
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(now);
@@ -361,6 +514,9 @@ public class PaymentLinkService {
             link.setLastError(null);
             paymentLinkRepository.save(link);
             manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
+            if (updated) {
+                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "Ручная оплата подтверждена");
+            }
             return toAdminResponse(link);
         } catch (Exception e) {
             link.setStatus(PaymentLinkStatus.FAILED);
@@ -788,13 +944,16 @@ public class PaymentLinkService {
             return;
         }
         try {
-            orderTransactionService.handlePaymentStatus(link.getOrder());
+            boolean updated = orderTransactionService.handlePaymentStatus(link.getOrder());
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(LocalDateTime.now());
             link.setConfirmedAmountKopecks(link.getAmountKopecks());
             link.setLastError(null);
             rememberCompanyPayerEmail(link);
             notifyPaymentSuccessIfNeeded(link);
+            if (updated) {
+                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "T-Bank/SBP оплата подтверждена");
+            }
         } catch (Exception e) {
             link.setStatus(PaymentLinkStatus.FAILED);
             link.setLastError("Order payment transition failed");
@@ -1171,6 +1330,9 @@ public class PaymentLinkService {
                 link.getInitiatedAt(),
                 link.getPaidAt(),
                 link.getSbpQrCreatedAt(),
+                false,
+                null,
+                null,
                 isRefundable(link)
         );
     }

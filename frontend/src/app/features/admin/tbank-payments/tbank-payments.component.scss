@@ -112,7 +112,8 @@ p {
 .toolbar-menu select,
 .toolbar-menu button,
 .toolbar-menu a,
-.status-control button {
+.status-control button,
+.source-control button {
   font-family: 'laptev_brush', var(--otziv-font-family);
 }
 
@@ -160,7 +161,7 @@ p {
 
 .toolbar-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(12rem, 20rem);
+  grid-template-columns: minmax(7.8rem, 10rem) minmax(0, 1fr) minmax(12rem, 20rem);
   min-width: 0;
   max-width: 100%;
   align-items: center;
@@ -196,9 +197,9 @@ input[type='search']::placeholder {
   color: rgba(103, 116, 131, 0.72);
 }
 
-.status-control {
+.status-control,
+.source-control {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
   min-width: 0;
   min-height: 2.25rem;
   overflow: hidden;
@@ -207,7 +208,16 @@ input[type='search']::placeholder {
   background: var(--otziv-field-background);
 }
 
-.status-control button {
+.status-control {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.source-control {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-control button,
+.source-control button {
   display: inline-flex;
   min-width: 0;
   align-items: center;
@@ -224,16 +234,19 @@ input[type='search']::placeholder {
   white-space: nowrap;
 }
 
-.status-control button:last-child {
+.status-control button:last-child,
+.source-control button:last-child {
   border-right: 0;
 }
 
-.status-control button.active {
+.status-control button.active,
+.source-control button.active {
   color: var(--otziv-white);
   background: var(--otziv-primary);
 }
 
-.status-control .material-icons-sharp {
+.status-control .material-icons-sharp,
+.source-control .material-icons-sharp {
   font-size: 1rem;
 }
 
@@ -241,6 +254,7 @@ input[type='search']::placeholder {
 .primary-action,
 .icon-action,
 .refund-action,
+.archive-run-action,
 .copy-line,
 .mode-pill,
 .status-pill,
@@ -253,7 +267,8 @@ input[type='search']::placeholder {
 .quiet-action,
 .primary-action,
 .icon-action,
-.refund-action {
+.refund-action,
+.archive-run-action {
   min-height: 2.25rem;
   justify-content: center;
   gap: 0.4rem;
@@ -272,6 +287,17 @@ input[type='search']::placeholder {
 .quiet-action,
 .primary-action {
   white-space: nowrap;
+}
+
+.archive-run-action {
+  width: fit-content;
+  margin-left: auto;
+  color: #315f97;
+  background: rgba(108, 155, 207, 0.13);
+}
+
+.archive-run-action + .mode-pill {
+  margin-left: 0;
 }
 
 .primary-action {
@@ -1315,6 +1341,11 @@ tbody tr.failed {
   box-shadow: inset 3px 0 0 rgba(255, 0, 96, 0.56);
 }
 
+tbody tr.archived {
+  background: rgba(125, 141, 161, 0.06);
+  box-shadow: inset 3px 0 0 rgba(125, 141, 161, 0.52);
+}
+
 td strong,
 td span,
 td small {
@@ -1446,6 +1477,7 @@ button.copy-line.copy-line.copy-line {
 .refund-action .material-icons-sharp,
 .confirm-action .material-icons-sharp,
 .receipt-action .material-icons-sharp,
+.archive-label .material-icons-sharp,
 .quiet-action .material-icons-sharp,
 .primary-action .material-icons-sharp {
   font-size: 1rem;
@@ -1474,6 +1506,21 @@ button.copy-line.copy-line.copy-line {
 .receipt-action.receipt-action {
   border-color: rgba(108, 155, 207, 0.42);
   color: #315f97;
+}
+
+.archive-label {
+  display: inline-flex;
+  min-height: 2.08rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(125, 141, 161, 0.22);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.6rem;
+  color: var(--otziv-info);
+  background: rgba(125, 141, 161, 0.1);
+  font-size: 0.72rem;
+  font-weight: 900;
 }
 
 .refund-action:not(:disabled):hover,
@@ -1506,6 +1553,53 @@ button:disabled,
   font-size: 2.2rem;
 }
 
+.pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-top: 1px solid rgba(103, 116, 131, 0.14);
+  padding: 0.8rem 1rem;
+}
+
+.pagination-row p {
+  color: var(--otziv-info);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.page-size-field {
+  display: grid;
+  grid-template-columns: auto minmax(4.6rem, 5.2rem);
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.page-size-field span {
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.page-size-field select {
+  min-height: 2.08rem;
+  border: 1px solid rgba(103, 116, 131, 0.25);
+  border-radius: var(--otziv-small-radius);
+  padding: 0 0.5rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+  font-weight: 900;
+}
+
 @media (max-width: 1320px) {
   :host ::ng-deep app-admin-layout .admin-layout.right-panel-custom .admin-right {
     display: block;
@@ -1531,6 +1625,7 @@ button:disabled,
   }
 
   .toolbar-selects,
+  .source-control,
   .status-control,
   .search-field {
     width: 100%;
@@ -1582,6 +1677,7 @@ button:disabled,
   }
 
   .search-field,
+  .source-control,
   .status-control {
     order: initial;
     grid-column: 1 / -1;
@@ -1589,6 +1685,15 @@ button:disabled,
 
   .status-control {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pagination-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination-controls {
+    width: 100%;
   }
 
   .quiet-action,

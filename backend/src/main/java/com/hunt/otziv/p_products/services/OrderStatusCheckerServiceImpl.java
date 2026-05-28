@@ -2,9 +2,11 @@ package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
+import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,8 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    private final OrderStatusService orderStatusService;
+    private final AppSettingService appSettingService;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -84,6 +88,14 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
         String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
 
+        if (!immediateClientMessagesEnabled()) {
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            orderRepository.save(order);
+            log.info("Счет после публикации не отправлен: моментальные клиентские сообщения выключены, orderId={}",
+                    order.getId());
+            return STATUS_PUBLIC;
+        }
+
         String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
                 STATUS_PUBLIC,
                 order,
@@ -96,6 +108,10 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
             paymentInvoiceRetryScheduler.scheduleRetry(order);
         }
         return appliedStatus;
+    }
+
+    private boolean immediateClientMessagesEnabled() {
+        return appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true);
     }
 
     private String safeCompanyTitle(Order order) {

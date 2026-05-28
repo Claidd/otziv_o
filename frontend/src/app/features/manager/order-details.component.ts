@@ -537,8 +537,8 @@ export class OrderDetailsComponent {
     const details = this.details();
     const orderId = this.orderId();
     const routerLink = details?.companyId && orderId
-      ? `/manager/orders/${details.companyId}/${orderId}`
-      : '/manager';
+      ? `/orders/${details.companyId}/${orderId}`
+      : '/orders';
     const name = companyName || details?.companyTitle || `Компания #${companyId}`;
     this.deepReportMonitor.watch(companyId, {
       routerLink,
@@ -2025,7 +2025,7 @@ export class OrderDetailsComponent {
 
   editAllReviewsRoute(): string {
     const details = this.details();
-    return details?.orderDetailsId ? reviewCheckPath(details.orderDetailsId) : '/manager';
+    return details?.orderDetailsId ? reviewCheckPath(details.orderDetailsId) : '/orders';
   }
 
   botLabel(review: OrderReviewItem): string {

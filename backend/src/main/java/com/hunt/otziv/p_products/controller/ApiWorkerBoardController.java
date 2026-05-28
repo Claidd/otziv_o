@@ -60,6 +60,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -290,7 +291,13 @@ public class ApiWorkerBoardController {
             );
         }
 
+        if (order.isWaitingForClient() != waitingForClient) {
+            order.setWaitingForClientChangedAt(waitingForClient ? LocalDateTime.now() : null);
+        }
         order.setWaitingForClient(waitingForClient);
+        if (waitingForClient) {
+            order.setClientTextExpected(true);
+        }
         orderService.save(order);
     }
 
@@ -1338,6 +1345,7 @@ public class ApiWorkerBoardController {
         }
 
         order.setWaitingForClient(false);
+        order.setWaitingForClientChangedAt(null);
         orderService.save(order);
     }
 

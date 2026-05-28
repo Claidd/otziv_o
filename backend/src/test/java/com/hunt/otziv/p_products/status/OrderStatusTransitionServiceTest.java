@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.payments.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -102,6 +103,9 @@ class OrderStatusTransitionServiceTest {
     @Mock
     private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
 
+    @Mock
+    private AppSettingService appSettingService;
+
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
         OrderStatusTransitionService service = service();
@@ -187,7 +191,7 @@ class OrderStatusTransitionServiceTest {
         );
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
-        assertEquals("Перевести заказ в Бан можно только из статуса \"Не оплачено\"", exception.getReason());
+        assertEquals("Перевести заказ в Бан можно из статуса \"Не оплачено\" или после финального счета за плохие отзывы", exception.getReason());
         verify(orderRepository, never()).save(order);
     }
 
@@ -244,6 +248,25 @@ class OrderStatusTransitionServiceTest {
 
         assertSame(ban, order.getStatus());
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void banStatusAllowsFinalBadReviewInvoiceOrder() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(35L, "Выставлен счет");
+        OrderStatus ban = status("Бан");
+
+        when(orderRepository.findById(35L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(35L))
+                .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
+        when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
+
+        assertTrue(service.changeStatusForOrder(35L, "Бан"));
+
+        assertSame(ban, order.getStatus());
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
+        verify(badReviewTaskService).deleteOrderReadyReminder(order);
         verify(orderRepository).save(order);
     }
 
@@ -349,6 +372,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithCompanyManagerAndDetail(5L, "Новый", "Компания", " ");
         OrderStatus toCheck = status("В проверку");
 
+        enableImmediateMessages();
         when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
         when(orderReviewCheckMessageBuilder.reviewCheckMessage(order)).thenReturn("Проверьте отзывы");
         when(orderStatusNotificationService.sendMessageToClientChat(
@@ -522,6 +546,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithCompanyManagerAndDetail(6L, "Публикация", "Компания", "group");
         order.setSum(BigDecimal.valueOf(1500));
 
+        enableImmediateMessages();
         when(orderRepository.findById(6L)).thenReturn(Optional.of(order));
         when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
                 .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
@@ -547,6 +572,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(61L, "Публикация", "Компания", "group");
 
+        enableImmediateMessages();
         when(orderRepository.findById(61L)).thenReturn(Optional.of(order));
         when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
                 .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
@@ -582,6 +608,25 @@ class OrderStatusTransitionServiceTest {
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Выставлен счет");
         verify(orderRepository).save(order);
         verifyNoInteractions(orderStatusNotificationService, orderBotLifecycleService, orderReviewCheckMessageBuilder);
+    }
+
+    @Test
+    void manualToPayStatusRejectsBadReviewOrdersSoTheyStayNotPaid() {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(63L, "Не оплачено", "Компания", "group");
+
+        when(orderRepository.findById(63L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(63L))
+                .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(63L, "Выставлен счет")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("После плохих отзывов заказ остается в статусе \"Не оплачено\" до оплаты или автобана", exception.getReason());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(order);
     }
 
     @Test
@@ -687,6 +732,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(84L, "На проверке", 840L, "Готовый текст отзыва");
         OrderStatus toPublish = status("Публикация");
 
+        enableImmediateMessages();
         when(orderRepository.findById(84L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
@@ -719,6 +765,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(85L, "На проверке", 850L, "Готовый текст отзыва");
         OrderStatus toPublish = status("Публикация");
 
+        enableImmediateMessages();
         when(orderRepository.findById(85L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
@@ -832,8 +879,13 @@ class OrderStatusTransitionServiceTest {
                 mobilePushBusinessNotificationService,
                 orderCorrectionTelegramNotifier,
                 manualPaymentAutoConfirmationService,
-                paymentInvoiceRetryScheduler
+                paymentInvoiceRetryScheduler,
+                appSettingService
         );
+    }
+
+    private void enableImmediateMessages() {
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
     }
 
     private Order order(Long id, String statusTitle) {

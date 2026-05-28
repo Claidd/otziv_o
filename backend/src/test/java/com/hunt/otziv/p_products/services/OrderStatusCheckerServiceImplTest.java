@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.services;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
@@ -50,6 +51,9 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+
+    @Mock
+    private AppSettingService appSettingService;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -107,6 +111,7 @@ class OrderStatusCheckerServiceImplTest {
     void checkAndMarkOrderCompletedSchedulesPaymentInvoiceRetryWhenClientMessageFails() throws Exception {
         Order order = payableOrder(50L);
 
+        enableImmediateMessages();
         when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order)).thenReturn("счет");
         when(orderStatusNotificationService.sendMessageToClientChat(
                 eq("Опубликовано"),
@@ -126,6 +131,7 @@ class OrderStatusCheckerServiceImplTest {
     void checkAndMarkOrderCompletedDoesNotScheduleRetryWhenInvoiceWasSent() throws Exception {
         Order order = payableOrder(51L);
 
+        enableImmediateMessages();
         when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order)).thenReturn("счет");
         when(orderStatusNotificationService.sendMessageToClientChat(
                 eq("Опубликовано"),
@@ -147,8 +153,14 @@ class OrderStatusCheckerServiceImplTest {
                 orderRepository,
                 orderStatusNotificationService,
                 orderPaymentMessageBuilder,
-                paymentInvoiceRetryScheduler
+                paymentInvoiceRetryScheduler,
+                orderStatusService,
+                appSettingService
         );
+    }
+
+    private void enableImmediateMessages() {
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
     }
 
     private Order order(Long id, int counter) {

@@ -51,6 +51,13 @@ public class Order {
     @Column(name = "order_waiting_for_client")
     private boolean waitingForClient = false;
 
+    @Column(name = "order_waiting_for_client_changed_at")
+    private LocalDateTime waitingForClientChangedAt;
+
+    @Builder.Default
+    @Column(name = "order_client_text_expected")
+    private boolean clientTextExpected = false;
+
     @Column(name = "order_zametka")
     private String zametka;
 

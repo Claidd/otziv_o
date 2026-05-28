@@ -583,9 +583,8 @@ export class LeadsBoardComponent {
     this.closeCompanyCreate();
     this.toastService.success('Компания создана', `${result.title} добавлена в работу`);
     this.companyDeepReportLaunch.handleCompanyCreated(result);
-    void this.router.navigate(['/manager'], {
+    void this.router.navigate(['/companies'], {
       queryParams: {
-        section: 'companies',
         status: 'Новая'
       }
     });

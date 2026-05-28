@@ -163,6 +163,35 @@ export const routes: Routes = [
     pathMatch: 'full'
   },
   {
+    path: 'orders/:companyId/:orderId',
+    loadComponent: () => import('./features/manager/order-details.component')
+      .then((m) => m.OrderDetailsComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
+    }
+  },
+  {
+    path: 'companies',
+    loadComponent: () => import('./features/manager/manager-board.component')
+      .then((m) => m.ManagerBoardComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER'],
+      managerSection: 'companies'
+    }
+  },
+  {
+    path: 'orders',
+    loadComponent: () => import('./features/manager/manager-board.component')
+      .then((m) => m.ManagerBoardComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER'],
+      managerSection: 'orders'
+    }
+  },
+  {
     path: 'manager',
     loadComponent: () => import('./features/manager/manager-board.component')
       .then((m) => m.ManagerBoardComponent),

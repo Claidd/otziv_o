@@ -272,7 +272,7 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
-    void completeTaskSendsClientInvoiceWithDoneBadReviewSumWhenLiveEnabled() {
+    void completeTaskSendsClientInvoiceWithDoneBadReviewSumWhenImmediateEnabled() {
         Order order = order(14L);
         order.getManager().setClientId("client-14");
         order.getManager().setPayText("Оплатите по ссылке Альфа.");
@@ -290,28 +290,26 @@ class BadReviewTaskServiceImplTest {
         when(badReviewTaskRepository.summarizeByOrderId(14L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 2L, BigDecimal.valueOf(600)}
         ));
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)).thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
-        when(orderStatusNotificationService.sendMessageToClientChat(
-                eq("Не оплачено"),
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
                 eq(order),
                 eq("client-14"),
                 eq("group-14"),
                 eq("Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб."),
-                eq("Выставлен счет")
-        )).thenReturn("Выставлен счет");
+                eq("счет после плохого отзыва")
+        )).thenReturn(true);
 
         service.completeTask(44L);
 
-        verify(orderStatusNotificationService).sendMessageToClientChat(
-                "Не оплачено",
+        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
                 order,
                 "client-14",
                 "group-14",
                 "Компания 14\n\nОплатите по ссылке Альфа.\n\nК оплате: 1600 руб.",
-                "Выставлен счет"
+                "счет после плохого отзыва"
         );
+        verify(paymentInvoiceRetryScheduler).scheduleBadReviewAutoBan(order);
     }
 
     @Test
@@ -333,17 +331,15 @@ class BadReviewTaskServiceImplTest {
         when(badReviewTaskRepository.summarizeByOrderId(17L)).thenReturn(List.<Object[]>of(
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
         ));
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)).thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
-        when(orderStatusNotificationService.sendMessageToClientChat(
-                eq("Не оплачено"),
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
                 eq(order),
                 eq("client-17"),
                 eq("group-17"),
                 eq("Компания 17\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
-                eq("Выставлен счет")
-        )).thenReturn("Не оплачено");
+                eq("счет после плохого отзыва")
+        )).thenReturn(false);
 
         service.completeTask(47L);
 
@@ -444,27 +440,24 @@ class BadReviewTaskServiceImplTest {
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
                 new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
         ));
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)).thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
-        when(orderStatusNotificationService.sendMessageToClientChat(
-                eq("Выставлен счет"),
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
+        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
                 eq(order),
                 eq("client-16"),
                 eq("group-16"),
                 eq("Компания 16\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
-                eq("Выставлен счет")
-        )).thenReturn("Выставлен счет");
+                eq("счет после плохого отзыва")
+        )).thenReturn(true);
 
         service.cancelTask(46L);
 
-        verify(orderStatusNotificationService).sendMessageToClientChat(
-                "Выставлен счет",
+        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
                 order,
                 "client-16",
                 "group-16",
                 "Компания 16\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб.",
-                "Выставлен счет"
+                "счет после плохого отзыва"
         );
     }
 

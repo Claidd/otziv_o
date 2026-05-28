@@ -114,6 +114,12 @@ public class ReputationAiController {
         if (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName())) {
             warnings.add("Публичный поиск выключен. Для Yandex Search укажите REPUTATION_SEARCH_PROVIDER=yandex и ключи.");
         }
+        if (isYandexProvider() && "completion".equalsIgnoreCase(properties.getYandex().getApiMode())) {
+            warnings.add("YandexGPT работает через legacy completion API без встроенного Web Search. Для полного отчёта используйте YANDEX_GPT_API_MODE=responses.");
+        }
+        if (isYandexProvider() && properties.getYandex().getModel().toLowerCase().contains("lite")) {
+            warnings.add("Для глубоких отчётов выбран YandexGPT Lite. Лучше использовать YandexGPT Pro: gpt://<folder-id>/yandexgpt/rc или yandexgpt.");
+        }
 
         return new ReputationAiStatus(
                 aiProviderRouter.activeProviderName(),
@@ -197,25 +203,23 @@ public class ReputationAiController {
     }
 
     private List<ReputationAiModelProfile> deepResearchProfiles() {
-        boolean yandex = "yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
-                || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName());
+        boolean yandex = isYandexProvider();
         return DeepResearchProfile.all().stream()
                 .map(profile -> new ReputationAiModelProfile(
                         profile.key(),
                         profile.label(),
                         yandex ? properties.getYandex().getModel() : profile.model(),
                         profile.description(),
-                        yandex ? 0 : profile.maxToolCalls(),
+                        yandex ? properties.getYandex().getMaxToolCalls() : profile.maxToolCalls(),
                         yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
                         yandex ? "off" : profile.reasoningEffort(),
-                        yandex ? "yandex-search" : profile.searchContextSize()
+                        yandex ? yandexSearchMode() : profile.searchContextSize()
                 ))
                 .toList();
     }
 
     private List<ReputationAiModelProfile> contentPackProfiles() {
-        boolean yandex = "yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
-                || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName());
+        boolean yandex = isYandexProvider();
         return ContentPackProfile.all().stream()
                 .map(profile -> new ReputationAiModelProfile(
                         profile.key(),
@@ -228,6 +232,19 @@ public class ReputationAiController {
                         "off"
                 ))
                 .toList();
+    }
+
+    private boolean isYandexProvider() {
+        return "yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
+                || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName());
+    }
+
+    private String yandexSearchMode() {
+        String apiMode = properties.getYandex().getApiMode();
+        if (apiMode != null && apiMode.equalsIgnoreCase("responses")) {
+            return "web_search:" + properties.getYandex().getSearchContextSize();
+        }
+        return "snapshot:" + searchProviderRouter.activeProviderName();
     }
 
     @PostMapping("/companies/{companyId}/research")
@@ -528,7 +545,7 @@ public class ReputationAiController {
             boolean configured = !isBlank(yandex.getApiKey()) && !isBlank(yandex.getFolderId()) && !isBlank(yandex.getModel());
             OpenAiResponsesClient.OpenAiLastCheck lastCheck = openAiResponsesClient.lastCheck();
             return new OpenAiProviderDiagnostics(
-                    yandex.getBaseUrl(),
+                    "responses".equalsIgnoreCase(yandex.getApiMode()) ? yandex.getResponsesBaseUrl() : yandex.getBaseUrl(),
                     configured,
                     false,
                     false,

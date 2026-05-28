@@ -211,26 +211,34 @@
 
           @if (clientMessageMonitor(); as monitor) {
             <div class="monitor-status-row">
-              <span [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
-                {{ monitor.workerEnabled ? 'worker включен' : 'worker выключен' }}
-              </span>
-              <span [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
-                {{ monitor.liveEnabled ? 'live-отправка' : 'dry-run' }}
-              </span>
-              <span [class]="monitor.windowAllowed ? 'status-pill' : 'status-pill off'">
-                {{ monitor.windowAllowed ? 'рабочее окно сейчас' : 'вне рабочего окна' }}
-              </span>
-              @if (monitor.pausedUntil) {
-                <span class="status-pill danger" [appTooltip]="monitor.pauseReason || 'Автоответчик временно поставлен на паузу защитой от массовых ошибок.'">
-                  пауза до {{ monitor.pausedUntil | date:'dd.MM HH:mm' }}
+              <div class="monitor-status-pills">
+                <span [class]="monitor.workerEnabled ? 'status-pill' : 'status-pill off'">
+                  {{ monitor.workerEnabled ? 'worker включен' : 'worker выключен' }}
                 </span>
-              }
-              <span class="monitor-updated">
-                Обновлено {{ monitor.updatedAt | date:'HH:mm:ss' }} МСК · окна {{ monitor.businessWindows }}
-              </span>
-              <span class="monitor-updated">
-                Ближайший слот: {{ monitor.nextAttemptAt ? (monitor.nextAttemptAt | date:'dd.MM HH:mm') : 'не запланирован' }}
-              </span>
+                <span [class]="monitor.liveEnabled ? 'status-pill' : 'status-pill off'">
+                  {{ monitor.liveEnabled ? 'live-отправка' : 'dry-run' }}
+                </span>
+                <span [class]="monitor.windowAllowed ? 'status-pill' : 'status-pill off'">
+                  {{ monitor.windowAllowed ? 'рабочее окно сейчас' : 'вне рабочего окна' }}
+                </span>
+                @if (monitor.pausedUntil) {
+                  <span class="status-pill danger" [appTooltip]="monitor.pauseReason || 'Автоответчик временно поставлен на паузу защитой от массовых ошибок.'">
+                    пауза до {{ monitor.pausedUntil | date:'dd.MM HH:mm' }}
+                  </span>
+                }
+              </div>
+              <div class="monitor-clock-list">
+                <span><b>Обновлено</b>{{ monitor.updatedAt | date:'HH:mm:ss' }} ИРК</span>
+                <span><b>Окна</b>{{ monitor.businessWindows }}</span>
+                <span><b>Ближайший слот</b>{{ monitor.nextAttemptAt ? (monitor.nextAttemptAt | date:'dd.MM HH:mm') : 'не запланирован' }}</span>
+              </div>
+            </div>
+
+            <div class="monitor-section-heading">
+              <div>
+                <h3>Быстрый срез</h3>
+                <p>Главные числа по очереди, отправкам и ошибкам за сегодня.</p>
+              </div>
             </div>
 
             <div class="monitor-metric-grid">
@@ -263,6 +271,13 @@
                 </div>
               </section>
             }
+
+            <div class="monitor-section-heading">
+              <div>
+                <h3>Сценарии</h3>
+                <p>По каждому правилу видно, сколько задач готово, что ушло и где последняя ошибка.</p>
+              </div>
+            </div>
 
             <div class="monitor-scenario-grid">
               @for (scenario of monitor.scenarios; track trackMonitorScenario($index, scenario)) {
@@ -526,12 +541,12 @@
       </article>
     </section>
     } @else {
-    <section class="dictionary-grid">
+    <section class="dictionary-grid" [class.autoresponder-layout]="activeTab() === 'autoresponder'">
       <article class="dictionary-card table-card">
         <div class="table-head">
           <div>
-            <p class="eyebrow">Список</p>
-            <h2>{{ activeLabel() }}</h2>
+            <p class="eyebrow">{{ activeTab() === 'autoresponder' ? 'Обзор' : 'Список' }}</p>
+            <h2>{{ activeTab() === 'autoresponder' ? 'Пульт автоответчика' : activeLabel() }}</h2>
           </div>
           <span>{{ activeItemsTotal() }}</span>
         </div>
@@ -879,154 +894,136 @@
             }
 
             @case ('autoresponder') {
-              <table>
-                <thead>
-                  <tr>
-                    <th>Параметр</th>
-                    <th>Значение</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr class="selected">
-                    <td class="setting-parameter">
-                      <div class="setting-title-row">
-                        <strong>Сервис</strong>
-                        <span class="summary-switch" [class.on]="clientMessageSettings()?.workerEnabled" [class.off]="!clientMessageSettings()?.workerEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.workerEnabled ? 'вкл' : 'выкл' }}
-                        </span>
+              <div class="autoresponder-overview">
+                <section class="autoresponder-overview-half">
+                  <div class="section-head">
+                    <div>
+                      <h3>Состояние системы</h3>
+                      <p class="settings-hint">Фон, события заказа, окна отправки и защита.</p>
+                    </div>
+                  </div>
+
+                  <div class="autoresponder-status-grid">
+                    <article class="autoresponder-status-card" [class.off]="!clientMessageSettings()?.workerEnabled">
+                      <span class="material-icons-sharp">settings_suggest</span>
+                      <div>
+                        <small>Фоновая очередь</small>
+                        <strong>{{ clientMessageSettings()?.workerEnabled ? 'Включен' : 'Выключен' }}</strong>
+                        <em>{{ clientMessageSettings()?.liveEnabled ? 'может отправлять клиентам' : 'dry-run без отправки' }}</em>
                       </div>
-                      <div class="setting-state-row">
-                        <span class="summary-switch mini" [class.on]="clientMessageSettings()?.liveEnabled" [class.off]="!clientMessageSettings()?.liveEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.liveEnabled ? 'live' : 'dry-run' }}
-                        </span>
+                    </article>
+
+                    <article class="autoresponder-status-card" [class.off]="!clientMessageSettings()?.immediateEnabled">
+                      <span class="material-icons-sharp">bolt</span>
+                      <div>
+                        <small>Смена статусов</small>
+                        <strong>{{ clientMessageSettings()?.immediateEnabled ? 'Включены' : 'Остановлены' }}</strong>
+                        <em>сообщения уходят сразу при действии</em>
                       </div>
-                      <span>Глобальная работа автоответчика и реальные отправки</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.workerEnabled ? 'включен' : 'выключен' }}</strong>
-                      <span>{{ clientMessageSettings()?.liveEnabled ? 'live-отправка' : 'dry-run без отправки' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Рабочие окна</strong>
-                      <span>Московское время</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.businessWindows || '-' }}</strong>
-                      <span>лимит {{ clientMessageSettings()?.dailyLimit ?? 0 }} в день</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="setting-parameter">
-                      <div class="setting-title-row">
-                        <strong>Проверка отзывов</strong>
-                        <span class="summary-switch" [class.on]="clientMessageSettings()?.reviewCheckEnabled" [class.off]="!clientMessageSettings()?.reviewCheckEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.reviewCheckEnabled ? 'вкл' : 'выкл' }}
-                        </span>
+                    </article>
+
+                    <article class="autoresponder-status-card">
+                      <span class="material-icons-sharp">schedule</span>
+                      <div>
+                        <small>Окна</small>
+                        <strong>{{ clientMessageSettings()?.businessWindows || 'Не заданы' }}</strong>
+                        <em>лимит {{ clientMessageSettings()?.dailyLimit ?? 0 }} сообщений в день</em>
                       </div>
-                      <span>Статусы: {{ clientMessageSettings()?.reviewCheckStatuses || '-' }}</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.reviewCheckEnabled ? 'включена' : 'выключена' }}</strong>
-                      <span>каждые {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн.</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="setting-parameter">
-                      <div class="setting-title-row">
-                        <strong>Оплата</strong>
-                        <span class="summary-switch" [class.on]="clientMessageSettings()?.paymentReminderEnabled" [class.off]="!clientMessageSettings()?.paymentReminderEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.paymentReminderEnabled ? 'вкл' : 'выкл' }}
-                        </span>
+                    </article>
+
+                    <article class="autoresponder-status-card" [class.off]="!clientMessageSettings()?.errorProtectionEnabled">
+                      <span class="material-icons-sharp">health_and_safety</span>
+                      <div>
+                        <small>Автопауза ошибок</small>
+                        <strong>{{ clientMessageSettings()?.errorProtectionEnabled ? 'Активна' : 'Выключена' }}</strong>
+                        <em>{{ clientMessageSettings()?.errorProtectionThreshold ?? 0 }} ошибок за {{ clientMessageSettings()?.errorProtectionWindowMinutes ?? 0 }} мин.</em>
                       </div>
-                      <span>Статусы: {{ clientMessageSettings()?.paymentReminderStatuses || '-' }}</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.paymentReminderEnabled ? 'включена' : 'выключена' }}</strong>
-                      <span>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}, каждые {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн.</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="setting-parameter">
-                      <div class="setting-title-row">
-                        <strong>Просрочка оплаты</strong>
-                        <span class="summary-switch" [class.on]="clientMessageSettings()?.paymentOverdueEnabled" [class.off]="!clientMessageSettings()?.paymentOverdueEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.paymentOverdueEnabled ? 'вкл' : 'выкл' }}
-                        </span>
+                    </article>
+
+                    <article class="autoresponder-status-card">
+                      <span class="material-icons-sharp">timer</span>
+                      <div>
+                        <small>Паузы каналов</small>
+                        <strong>{{ clientMessageSettings()?.whatsAppGapSeconds ?? 0 }} / {{ clientMessageSettings()?.telegramGapSeconds ?? 0 }} / {{ clientMessageSettings()?.maxGapSeconds ?? 0 }} сек.</strong>
+                        <em>общая пауза {{ clientMessageSettings()?.defaultGapSeconds ?? 0 }} сек.</em>
                       </div>
-                      <div class="setting-state-row">
-                        <span class="summary-switch mini" [class.on]="clientMessageSettings()?.paymentOverdueLiveEnabled" [class.off]="!clientMessageSettings()?.paymentOverdueLiveEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.paymentOverdueLiveEnabled ? 'live-перевод' : 'dry-run' }}
-                        </span>
+                    </article>
+
+                    <article class="autoresponder-status-card">
+                      <span class="material-icons-sharp">history</span>
+                      <div>
+                        <small>Журнал</small>
+                        <strong>{{ clientMessageSettings()?.retentionDays ?? 0 }} дн.</strong>
+                        <em>пачка {{ clientMessageSettings()?.tickBatchSize ?? 0 }}, кандидатов {{ clientMessageSettings()?.candidateLimit ?? 0 }}</em>
                       </div>
-                      <span>Цель: {{ clientMessageSettings()?.paymentOverdueTargetStatus || '-' }}</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.paymentOverdueEnabled ? 'контроль включен' : 'контроль выключен' }}</strong>
-                      <span>{{ clientMessageSettings()?.paymentOverdueLiveEnabled ? 'live-перевод' : 'dry-run' }} после {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн.</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="setting-parameter">
-                      <div class="setting-title-row">
-                        <strong>Плохие отзывы</strong>
-                        <span class="summary-switch" [class.on]="clientMessageSettings()?.badReviewInvoiceEnabled" [class.off]="!clientMessageSettings()?.badReviewInvoiceEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.badReviewInvoiceEnabled ? 'вкл' : 'выкл' }}
-                        </span>
-                      </div>
-                      <span>Счет после публикации плохого</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.badReviewInvoiceEnabled ? 'включен' : 'выключен' }}</strong>
-                      <span>сумма с доплатой</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td class="setting-parameter">
-                      <div class="setting-title-row">
-                        <strong>Архивные компании</strong>
-                        <span class="summary-switch" [class.on]="clientMessageSettings()?.archiveReorderEnabled" [class.off]="!clientMessageSettings()?.archiveReorderEnabled">
-                          <i></i>
-                          {{ clientMessageSettings()?.archiveReorderEnabled ? 'вкл' : 'выкл' }}
-                        </span>
-                      </div>
-                      <span>Статус: {{ clientMessageSettings()?.archiveCompanyStatus || '-' }}</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.archiveReorderEnabled ? 'включены' : 'выключены' }}</strong>
-                      <span>каждые {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес.</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Паузы каналов</strong>
-                      <span>WhatsApp / Telegram / MAX / общий</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.whatsAppGapSeconds ?? 0 }} / {{ clientMessageSettings()?.telegramGapSeconds ?? 0 }} / {{ clientMessageSettings()?.maxGapSeconds ?? 0 }} сек.</strong>
-                      <span>общая {{ clientMessageSettings()?.defaultGapSeconds ?? 0 }} сек.</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <strong>Журнал и пачки</strong>
-                      <span>Сколько храним и сколько берем за тик</span>
-                    </td>
-                    <td>
-                      <strong>{{ clientMessageSettings()?.retentionDays ?? 0 }} дн.</strong>
-                      <span>пачка {{ clientMessageSettings()?.tickBatchSize ?? 0 }}, кандидатов {{ clientMessageSettings()?.candidateLimit ?? 0 }}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="autoresponder-overview-half">
+                  <div class="section-head">
+                    <div>
+                      <h3>Маршрут заказа</h3>
+                      <p class="settings-hint">Что произойдет от проверки текстов до нового предложения.</p>
+                    </div>
+                    <button type="button" class="compact-action" (click)="setTab('autoresponderMonitor')">
+                      <span class="material-icons-sharp">monitor_heart</span>
+                      Мониторинг
+                    </button>
+                  </div>
+
+                  <div class="autoresponder-flow">
+                    <article>
+                      <i>1</i>
+                      <strong>Ждем текст</strong>
+                      <span>Новый заказ</span>
+                      <p>Если включен режим ожидания клиента, напоминание уходит каждые {{ clientMessageSettings()?.clientTextReminderIntervalDays ?? 0 }} дн.</p>
+                    </article>
+
+                    <article>
+                      <i>2</i>
+                      <strong>На проверке</strong>
+                      <span>Ссылка проверки</span>
+                      <p>Повтор каждые {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн., архив через {{ clientMessageSettings()?.reviewCheckAutoArchiveDays ?? 0 }} дн.</p>
+                    </article>
+
+                    <article>
+                      <i>3</i>
+                      <strong>Счет</strong>
+                      <span>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}</span>
+                      <p>Первый повтор через {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн. переводит в "Напоминание".</p>
+                    </article>
+
+                    <article>
+                      <i>4</i>
+                      <strong>Не оплачено</strong>
+                      <span>Просрочка</span>
+                      <p>Через {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн. готовится статус "{{ clientMessageSettings()?.paymentOverdueTargetStatus || 'не задан' }}".</p>
+                    </article>
+
+                    <article>
+                      <i>5</i>
+                      <strong>Плохие</strong>
+                      <span>Новая сумма</span>
+                      <p>Счет уходит после каждого выполненного плохого без возврата в "Выставлен счет".</p>
+                    </article>
+
+                    <article>
+                      <i>6</i>
+                      <strong>Бан</strong>
+                      <span>Финальная защита</span>
+                      <p>После финальных плохих через {{ clientMessageSettings()?.badReviewAutoBanDelayDays ?? 0 }} дн.</p>
+                    </article>
+
+                    <article>
+                      <i>7</i>
+                      <strong>Новый заказ</strong>
+                      <span>Архивное предложение</span>
+                      <p>Компаниям "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задано' }}" раз в {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес.</p>
+                    </article>
+                  </div>
+                </section>
+              </div>
             }
           }
         </div>
@@ -1616,340 +1613,399 @@
           }
 
           @case ('autoresponder') {
-            <form class="settings-form" [formGroup]="autoresponderForm" (ngSubmit)="saveActive()">
-              <section class="settings-section" aria-label="Как работает автоответчик">
-                <div class="editor-guide">
-                  <span class="material-icons-sharp">info</span>
+            <form class="settings-form autoresponder-form" [formGroup]="autoresponderForm" (ngSubmit)="saveActive()">
+              <section class="settings-section">
+                <div class="section-head">
                   <div>
-                    <h3>Как сейчас работает автоответчик</h3>
-                    <p>
-                      Сервис регулярно находит подходящие компании и заказы, планирует сообщения внутри рабочих окон по Москве и отправляет их с паузами между каналами.
-                    </p>
+                    <h3>Сценарии и правила</h3>
+                    <p class="settings-hint">Открывайте только тот сценарий, который нужно поправить. Все значения сохраняются одной кнопкой внизу.</p>
                   </div>
                 </div>
 
-                <div class="form-grid">
-                  <div>
-                    <strong>Проверка шаблонов</strong>
-                    <p class="settings-hint">
-                      Заказы в статусах "{{ clientMessageSettings()?.reviewCheckStatuses || 'не заданы' }}" получают ссылку на проверку отзывов.
-                      Повтор идет раз в {{ clientMessageSettings()?.reviewCheckIntervalDays ?? 0 }} дн., пока заказ остается в этих статусах.
-                    </p>
-                  </div>
+                <div class="autoresponder-scenario-list">
+                  <details class="scenario-panel" open>
+                    <summary>
+                      <span class="material-icons-sharp">toggle_on</span>
+                      <div>
+                        <strong>Основные переключатели</strong>
+                        <small>Очередь, отправка клиентам, статусы и мониторинг</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.workerEnabled ? 'очередь включена' : 'очередь выключена' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Полностью включает или останавливает фоновый worker: напоминания, ретраи, архивные предложения и контроль просрочки.">
+                        <input class="switch" type="checkbox" formControlName="workerEnabled">
+                        <span>Фоновая очередь задач работает</span>
+                      </label>
 
-                  <div>
-                    <strong>Напоминание об оплате</strong>
-                    <p class="settings-hint">
-                      Для статусов "{{ clientMessageSettings()?.paymentReminderStatuses || 'не заданы' }}" клиенту уходит текст оплаты.
-                      Повтор идет раз в {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн. и прекращается после выхода заказа из группы.
-                      Источник оплаты сейчас: {{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}.
-                    </p>
-                  </div>
+                      <label class="checkbox" appTooltip="Если выключить, фоновые задачи будут планироваться и логироваться, но фоновые сообщения не уйдут клиентам. Моментальные сообщения при смене статусов управляются отдельным переключателем.">
+                        <input class="switch" type="checkbox" formControlName="liveEnabled">
+                        <span>Фоновой очереди разрешено отправлять клиентам</span>
+                      </label>
 
-                  <div>
-                    <strong>Просрочка оплаты</strong>
-                    <p class="settings-hint">
-                      После {{ clientMessageSettings()?.paymentOverdueDays ?? 0 }} дн. в статусах "{{ clientMessageSettings()?.paymentOverdueStatuses || 'не заданы' }}"
-                      сервис готовит эскалацию в "{{ clientMessageSettings()?.paymentOverdueTargetStatus || 'не задано' }}".
-                      Сейчас режим: {{ clientMessageSettings()?.paymentOverdueLiveEnabled ? 'live-перевод' : 'dry-run без смены статуса' }}.
-                    </p>
-                  </div>
+                      <label class="checkbox" appTooltip="Управляет сообщениями, которые отправляются сразу при событиях заказа: ссылка проверки, передача в публикацию, счет после публикации, доплата после плохого отзыва, короткий отчет и успешная оплата T-Bank/СБП.">
+                        <input class="switch" type="checkbox" formControlName="immediateEnabled">
+                        <span>Отправлять сразу при смене статуса заказа</span>
+                      </label>
 
-                  <div>
-                    <strong>Плохие отзывы</strong>
-                    <p class="settings-hint">
-                      После выполнения плохого отзыва сервис сразу готовит счет клиенту на сумму заказа плюс все выполненные плохие отзывы.
-                      При выключенной live-отправке счет только логируется.
-                    </p>
-                  </div>
+                      <label class="checkbox" appTooltip="Включает страницу наблюдения за очередью, последними попытками и ошибками автоответчика. На сами отправки не влияет.">
+                        <input class="switch" type="checkbox" formControlName="monitorEnabled">
+                        <span>Показывать страницу мониторинга</span>
+                      </label>
 
-                  <div>
-                    <strong>Архивные компании</strong>
-                    <p class="settings-hint">
-                      Компаниям со статусом "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задан' }}" предлагается новый заказ раз в
-                      {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес., если нет активных заказов и открытой заявки на следующий заказ.
-                    </p>
-                  </div>
-                </div>
+                      <label class="checkbox" appTooltip="Если за короткое время накопится много ошибок отправки, worker временно поставит авторассылку на паузу.">
+                        <input class="switch" type="checkbox" formControlName="errorProtectionEnabled">
+                        <span>Автопауза при серии ошибок</span>
+                      </label>
+                    </div>
+                  </details>
 
-                <div class="form-grid">
-                  <div>
-                    <strong>Расписание</strong>
-                    <p class="settings-hint">
-                      Окна: {{ clientMessageSettings()?.businessWindows || 'не заданы' }} по Москве.
-                      Лимит: {{ clientMessageSettings()?.dailyLimit ?? 0 }} успешных сообщений в день.
-                      За проход берется до {{ clientMessageSettings()?.tickBatchSize ?? 0 }} задач и до {{ clientMessageSettings()?.candidateLimit ?? 0 }} кандидатов на сценарий.
-                    </p>
-                  </div>
-                  <div>
-                    <strong>Защита от массовой отправки</strong>
-                    <p class="settings-hint">
-                      Между сообщениями выдерживаются паузы: WhatsApp {{ clientMessageSettings()?.whatsAppGapSeconds ?? 0 }} сек.,
-                      Telegram {{ clientMessageSettings()?.telegramGapSeconds ?? 0 }} сек., MAX {{ clientMessageSettings()?.maxGapSeconds ?? 0 }} сек.
-                      Если канал не распознан, применяется общая пауза {{ clientMessageSettings()?.defaultGapSeconds ?? 0 }} сек.
-                    </p>
-                  </div>
-                  <div>
-                    <strong>Ошибки и ручная работа</strong>
-                    <p class="settings-hint">
-                      Ошибка отправки записывается в журнал с читаемой причиной и не ломает сайт: менеджер может вручную отправить сообщение или поменять статус.
-                      При выключенной live-отправке задачи только планируются и логируются.
-                    </p>
-                  </div>
-                  <div>
-                    <strong>Хранение</strong>
-                    <p class="settings-hint">
-                      Сервис хранит состояние последней отправки по сценарию, а старые попытки и закрытые состояния очищает через
-                      {{ clientMessageSettings()?.retentionDays ?? 0 }} дн., чтобы журнал не рос бесконечно.
-                    </p>
-                  </div>
+                  <details class="scenario-panel" open>
+                    <summary>
+                      <span class="material-icons-sharp">edit_note</span>
+                      <div>
+                        <strong>Ожидание текста от клиента</strong>
+                        <small>Статусы "{{ clientMessageSettings()?.clientTextReminderStatuses || 'не заданы' }}"</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.clientTextReminderEnabled ? 'включено' : 'выключено' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Фоново напоминает клиенту прислать текст или пожелания, если заказ отмечен как 'ждем текст от клиента'.">
+                        <input class="switch" type="checkbox" formControlName="clientTextReminderEnabled">
+                        <span>Напоминать, если ждем текст клиента</span>
+                      </label>
+
+                      <label appTooltip="Через сколько дней после включения режима ожидания клиента отправлять и повторять напоминание.">
+                        <span>Интервал ожидания текста, дней</span>
+                        <input type="number" min="1" max="365" step="1" formControlName="clientTextReminderIntervalDays">
+                      </label>
+
+                      <label class="wide" appTooltip="Заказы в этих статусах получают напоминание только если у них включен флаг 'ждем текст от клиента'. Через запятую.">
+                        <span>Статусы ожидания текста</span>
+                        <input type="text" formControlName="clientTextReminderStatuses">
+                      </label>
+                    </div>
+                  </details>
+
+                  <details class="scenario-panel" open>
+                    <summary>
+                      <span class="material-icons-sharp">rate_review</span>
+                      <div>
+                        <strong>Проверка текстов</strong>
+                        <small>Статусы "{{ clientMessageSettings()?.reviewCheckStatuses || 'не заданы' }}"</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.reviewCheckEnabled ? 'включено' : 'выключено' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Фоновое напоминание клиенту о проверке шаблонов отзывов, если заказ долго остается в статусе проверки.">
+                        <input class="switch" type="checkbox" formControlName="reviewCheckEnabled">
+                        <span>Напоминать о проверке шаблонов</span>
+                      </label>
+
+                      <label class="checkbox" appTooltip="Если заказ остается в статусе проверки дольше заданного срока, автоответчик переведет заказ в Архив без сообщения клиенту. Статус компании обновится стандартным правилом архива.">
+                        <input class="switch" type="checkbox" formControlName="reviewCheckAutoArchiveEnabled">
+                        <span>Автоархив долгой проверки</span>
+                      </label>
+
+                      <label appTooltip="Через сколько дней после перехода в статус проверки отправлять и повторять сообщение.">
+                        <span>Интервал проверки отзывов, дней</span>
+                        <input type="number" min="1" max="365" step="1" formControlName="reviewCheckIntervalDays">
+                      </label>
+
+                      <label appTooltip="Через сколько дней в статусе проверки заказ автоматически уйдет в Архив. После архива компания перейдет на стоп, если у нее нет других активных заказов.">
+                        <span>Автоархив проверки, дней</span>
+                        <input type="number" min="1" max="3650" step="1" formControlName="reviewCheckAutoArchiveDays">
+                      </label>
+
+                      <label appTooltip="Если первая ссылка на проверку не ушла из-за чата и заказ остался в статусе 'В проверку', через сколько часов попробовать снова.">
+                        <span>Повтор проверки после сбоя, часов</span>
+                        <input type="number" min="1" max="168" step="1" formControlName="reviewCheckRetryDelayHours">
+                      </label>
+
+                      <label appTooltip="Заказы в этих статусах получают напоминание о проверке шаблонов. Через запятую.">
+                        <span>Статусы проверки отзывов</span>
+                        <input type="text" formControlName="reviewCheckStatuses">
+                      </label>
+
+                      <label class="wide" appTooltip="Базовая ссылка без id детали заказа. Id будет добавлен автоматически.">
+                        <span>Ссылка проверки отзывов</span>
+                        <input type="text" formControlName="reviewLinkBaseUrl">
+                      </label>
+                    </div>
+                  </details>
+
+                  <details class="scenario-panel" open>
+                    <summary>
+                      <span class="material-icons-sharp">receipt_long</span>
+                      <div>
+                        <strong>Счета и напоминания оплаты</strong>
+                        <small>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }} · каждые {{ clientMessageSettings()?.paymentReminderIntervalDays ?? 0 }} дн.</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.paymentReminderEnabled ? 'включено' : 'выключено' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Фоновое напоминание клиенту об оплате заказа.">
+                        <input class="switch" type="checkbox" formControlName="paymentReminderEnabled">
+                        <span>Напоминать об оплате</span>
+                      </label>
+
+                      <label class="checkbox" appTooltip="Фоново контролирует заказы с долгой просрочкой оплаты.">
+                        <input class="switch" type="checkbox" formControlName="paymentOverdueEnabled">
+                        <span>Контролировать просрочку оплаты</span>
+                      </label>
+
+                      <label class="checkbox" appTooltip="Если включить, просрочка будет переводить заказ в целевой статус. Сейчас лучше держать выключенным до проверки на бою.">
+                        <input class="switch" type="checkbox" formControlName="paymentOverdueLiveEnabled">
+                        <span>Live-перевод просрочки в целевой статус</span>
+                      </label>
+
+                      <label appTooltip="MANAGER_TEXT оставляет текущий текст менеджера. TBANK_LINK создает актуальную /pay-ссылку по платежным профилям, лимитам и заданиям из раздела T-Bank.">
+                        <span>Источник оплаты</span>
+                        <select formControlName="paymentInstructionSource">
+                          <option value="MANAGER_TEXT">Текст менеджера</option>
+                          <option value="TBANK_LINK">T-Bank /pay ссылка</option>
+                        </select>
+                      </label>
+
+                      <label appTooltip="Через сколько дней после выставления счета отправлять и повторять напоминание.">
+                        <span>Интервал оплаты, дней</span>
+                        <input type="number" min="1" max="365" step="1" formControlName="paymentReminderIntervalDays">
+                      </label>
+
+                      <label appTooltip="Если финальный счет после публикации не ушел из-за чата, через сколько часов попробовать отправить его снова.">
+                        <span>Повтор счета после сбоя, часов</span>
+                        <input type="number" min="1" max="168" step="1" formControlName="paymentInvoiceRetryDelayHours">
+                      </label>
+
+                      <label appTooltip="Через сколько дней неоплаты заказ считается просроченным для эскалации.">
+                        <span>Просрочка оплаты, дней</span>
+                        <input type="number" min="1" max="365" step="1" formControlName="paymentOverdueDays">
+                      </label>
+
+                      <label appTooltip="Заказы в этих статусах получают напоминания об оплате. Через запятую.">
+                        <span>Статусы ожидания оплаты</span>
+                        <input type="text" formControlName="paymentReminderStatuses">
+                      </label>
+
+                      <label appTooltip="Заказы в этих статусах считаются кандидатами на просрочку оплаты. Через запятую.">
+                        <span>Статусы просрочки оплаты</span>
+                        <input type="text" formControlName="paymentOverdueStatuses">
+                      </label>
+
+                      <label appTooltip="В этот статус будет переведен просроченный заказ, если live-перевод включен.">
+                        <span>Целевой статус просрочки</span>
+                        <input type="text" formControlName="paymentOverdueTargetStatus">
+                      </label>
+
+                      <label class="wide" appTooltip="Статусы, при которых просрочка больше не нужна. Через запятую.">
+                        <span>Закрытые статусы заказов</span>
+                        <input type="text" formControlName="closedOrderStatuses">
+                      </label>
+                    </div>
+                  </details>
+
+                  <details class="scenario-panel" open>
+                    <summary>
+                      <span class="material-icons-sharp">report</span>
+                      <div>
+                        <strong>Плохие отзывы, бан и live-архив</strong>
+                        <small>Бан через {{ clientMessageSettings()?.badReviewAutoBanDelayDays ?? 0 }} дн., архив через {{ clientMessageSettings()?.archiveOrderRetentionDays ?? 0 }} дн.</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.badReviewInvoiceEnabled ? 'счета включены' : 'счета выключены' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Включает сценарий счета после плохого отзыва: моментальную отправку при завершении задачи и фоновый повтор, если сообщение не ушло.">
+                        <input class="switch" type="checkbox" formControlName="badReviewInvoiceEnabled">
+                        <span>Счет после плохого отзыва</span>
+                      </label>
+
+                      <label class="checkbox" appTooltip="После финального счета за плохие отзывы ждет заданное число дней и переводит неоплаченный заказ вместе с компанией в Бан.">
+                        <input class="switch" type="checkbox" formControlName="badReviewAutoBanEnabled">
+                        <span>Автобан после плохих отзывов</span>
+                      </label>
+
+                      <label appTooltip="Если счет после выполнения плохого отзыва не ушел из-за чата, через сколько часов попробовать отправить его снова.">
+                        <span>Повтор доплаты после сбоя, часов</span>
+                        <input type="number" min="1" max="168" step="1" formControlName="badReviewInvoiceRetryDelayHours">
+                      </label>
+
+                      <label appTooltip="Через сколько дней после финального счета за плохие отзывы неоплаченный заказ автоматически уйдет в Бан.">
+                        <span>Автобан после плохих, дней</span>
+                        <input type="number" min="1" max="365" step="1" formControlName="badReviewAutoBanDelayDays">
+                      </label>
+
+                      <label class="wide" appTooltip="Через сколько дней закрытые live-заказы, включая статус 'Бан', переносить в архивные таблицы и убирать с рабочей доски.">
+                        <span>Архив live-заказов, дней</span>
+                        <input type="number" min="1" max="3650" step="1" formControlName="archiveOrderRetentionDays">
+                      </label>
+                    </div>
+                  </details>
+
+                  <details class="scenario-panel">
+                    <summary>
+                      <span class="material-icons-sharp">restart_alt</span>
+                      <div>
+                        <strong>Архивные предложения</strong>
+                        <small>Компании "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задано' }}"</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.archiveReorderEnabled ? 'включено' : 'выключено' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Предложение нового заказа компаниям, которые давно в архивном цикле.">
+                        <input class="switch" type="checkbox" formControlName="archiveReorderEnabled">
+                        <span>Предлагать новый заказ архивным компаниям</span>
+                      </label>
+
+                      <label appTooltip="Через сколько месяцев после архива предлагать новый заказ.">
+                        <span>Архивное предложение, месяцев</span>
+                        <input type="number" min="1" max="36" step="1" formControlName="archiveReorderMonths">
+                      </label>
+
+                      <label appTooltip="Статус компании, которая участвует в архивном предложении нового заказа.">
+                        <span>Статус архивной компании</span>
+                        <input type="text" formControlName="archiveCompanyStatus">
+                      </label>
+
+                      <label appTooltip="Статусы заказов, которые не мешают архивному предложению. Через запятую.">
+                        <span>Неактивные статусы заказов</span>
+                        <input type="text" formControlName="archiveInactiveOrderStatuses">
+                      </label>
+
+                      <label class="wide" appTooltip="Статусы заявок на следующий заказ, при которых повторное предложение не отправляется.">
+                        <span>Открытые статусы заявок</span>
+                        <input type="text" formControlName="openNextOrderRequestStatuses">
+                      </label>
+                    </div>
+                  </details>
+
+                  <details class="scenario-panel">
+                    <summary>
+                      <span class="material-icons-sharp">tune</span>
+                      <div>
+                        <strong>Расписание, лимиты и защита</strong>
+                        <small>{{ clientMessageSettings()?.businessWindows || 'окна не заданы' }} · {{ clientMessageSettings()?.dailyLimit ?? 0 }} в день</small>
+                      </div>
+                      <em>расширенные</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="wide" appTooltip="Окна в часовом поясе Asia/Irkutsk. Формат: HH:mm-HH:mm, через запятую.">
+                        <span>Рабочие окна по Иркутску</span>
+                        <input type="text" formControlName="businessWindows">
+                      </label>
+
+                      <label appTooltip="Максимум успешно отправленных автоответчиком сообщений за иркутский день.">
+                        <span>Дневной лимит сообщений</span>
+                        <input type="number" min="1" max="5000" step="1" formControlName="dailyLimit">
+                      </label>
+
+                      <label appTooltip="Сколько активных задач брать за один тик планировщика.">
+                        <span>Размер пачки за тик</span>
+                        <input type="number" min="1" max="100" step="1" formControlName="tickBatchSize">
+                      </label>
+
+                      <label appTooltip="Сколько кандидатов по каждому сценарию искать за один проход сверки.">
+                        <span>Лимит кандидатов</span>
+                        <input type="number" min="1" max="5000" step="1" formControlName="candidateLimit">
+                      </label>
+
+                      <label appTooltip="Сколько дней хранить попытки отправок и закрытые состояния.">
+                        <span>Хранить журнал, дней</span>
+                        <input type="number" min="1" max="3650" step="1" formControlName="retentionDays">
+                      </label>
+
+                      <label appTooltip="Минимальная пауза, если канал не распознан.">
+                        <span>Общая пауза, секунд</span>
+                        <input type="number" min="30" max="86400" step="10" formControlName="defaultGapSeconds">
+                      </label>
+
+                      <label appTooltip="Минимальная пауза между сообщениями WhatsApp.">
+                        <span>WhatsApp, секунд</span>
+                        <input type="number" min="30" max="86400" step="10" formControlName="whatsAppGapSeconds">
+                      </label>
+
+                      <label appTooltip="Минимальная пауза между сообщениями Telegram.">
+                        <span>Telegram, секунд</span>
+                        <input type="number" min="30" max="86400" step="10" formControlName="telegramGapSeconds">
+                      </label>
+
+                      <label appTooltip="Минимальная пауза между сообщениями MAX.">
+                        <span>MAX, секунд</span>
+                        <input type="number" min="30" max="86400" step="10" formControlName="maxGapSeconds">
+                      </label>
+
+                      <label appTooltip="Сколько ошибок подряд за окно достаточно, чтобы временно остановить новые отправки.">
+                        <span>Порог ошибок</span>
+                        <input type="number" min="1" max="10000" step="1" formControlName="errorProtectionThreshold">
+                      </label>
+
+                      <label appTooltip="За сколько последних минут считать ошибки для защитной паузы.">
+                        <span>Окно ошибок, минут</span>
+                        <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionWindowMinutes">
+                      </label>
+
+                      <label appTooltip="На сколько минут поставить автоответчик на паузу после срабатывания защиты.">
+                        <span>Пауза после срабатывания, минут</span>
+                        <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionCooldownMinutes">
+                      </label>
+
+                      <p class="settings-hint wide">
+                        Пауза останавливает только новые попытки авторассылки. Очередь и мониторинг остаются видны, сайт и ручные действия менеджера продолжают работать.
+                      </p>
+                    </div>
+                  </details>
                 </div>
               </section>
 
-              <div class="settings-section">
-                <h3>Включатели</h3>
-                <label class="checkbox" appTooltip="Полностью включает или останавливает worker автоответчика.">
-                  <input class="switch" type="checkbox" formControlName="workerEnabled">
-                  <span>Автоответчик включен</span>
-                </label>
+              <section class="settings-section autoresponder-texts">
+                <div class="section-head">
+                  <div>
+                    <h3>Тексты сообщений</h3>
+                    <p class="settings-hint">Шаблоны используют и моментальные отправки, и фоновый автоответчик. Переменные подсказаны в каждом поле.</p>
+                  </div>
+                </div>
 
-                <label class="checkbox" appTooltip="Если выключить, задачи будут планироваться и логироваться, но сообщения не уйдут клиентам.">
-                  <input class="switch" type="checkbox" formControlName="liveEnabled">
-                  <span>Реальная отправка сообщений включена</span>
-                </label>
+                <div class="form-grid">
+                  <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {orderId}, {sum}. Отправляется только заказам с включенным режимом ожидания текста клиента.">
+                    <span>Ожидание текста клиента</span>
+                    <textarea rows="5" formControlName="clientTextReminderText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="Напоминание клиенту о проверке шаблонов отзывов.">
-                  <input class="switch" type="checkbox" formControlName="reviewCheckEnabled">
-                  <span>Напоминать о проверке шаблонов</span>
-                </label>
+                  <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {reviewLink}, {sum}.">
+                    <span>Проверка отзывов</span>
+                    <textarea rows="5" formControlName="reviewReminderText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="Напоминание клиенту об оплате заказа.">
-                  <input class="switch" type="checkbox" formControlName="paymentReminderEnabled">
-                  <span>Напоминать об оплате</span>
-                </label>
+                  <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {sum}. Отправляется, когда клиент разрешил публикацию и заказ перешёл из На проверке в Публикация.">
+                    <span>Передача в публикацию</span>
+                    <textarea rows="5" formControlName="publicationStartedText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="После выполнения плохого отзыва отправляет клиенту счет с суммой заказа и уже выполненных плохих отзывов.">
-                  <input class="switch" type="checkbox" formControlName="badReviewInvoiceEnabled">
-                  <span>Отправлять счет после плохого отзыва</span>
-                </label>
+                  <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {published}, {total}, {progress}. Отправляется, когда специалист публикует очередной отзыв.">
+                    <span>Отчет о публикации</span>
+                    <textarea rows="5" formControlName="publicationProgressReportText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="Контролирует заказы с долгой просрочкой оплаты.">
-                  <input class="switch" type="checkbox" formControlName="paymentOverdueEnabled">
-                  <span>Контролировать просрочку оплаты</span>
-                </label>
+                  <label appTooltip="Основной текст для напоминаний в режиме Текст менеджера. В режиме T-Bank /pay ссылка стандартный шаблон берется из поля ниже; здесь можно собрать свой шаблон с переменными: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
+                    <span>Напоминание об оплате</span>
+                    <textarea rows="5" formControlName="paymentReminderText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="Если включить, просрочка будет переводить заказ в целевой статус. Сейчас лучше держать выключенным до проверки на бою.">
-                  <input class="switch" type="checkbox" formControlName="paymentOverdueLiveEnabled">
-                  <span>Live-перевод просрочки в целевой статус</span>
-                </label>
+                  <label appTooltip="Используется кнопкой Счет, автоответчиком в режиме T-Bank ссылок и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {recipient}, {comment}, {paymentAfterword}.">
+                    <span>Счет /pay</span>
+                    <textarea rows="6" formControlName="paymentLinkCopyText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="Предложение нового заказа компаниям, которые давно в архивном цикле.">
-                  <input class="switch" type="checkbox" formControlName="archiveReorderEnabled">
-                  <span>Предлагать новый заказ архивным компаниям</span>
-                </label>
+                  <label appTooltip="Отправляется клиенту после успешной оплаты через T-Bank или СБП. Переменные: {orderId}, {orderLine}, {company}, {companyLine}, {filial}, {companyAndFilial}, {sum}, {paymentPage}, {payerEmail}, {receiptText}.">
+                    <span>Успешная оплата</span>
+                    <textarea rows="5" formControlName="paymentSuccessText"></textarea>
+                  </label>
 
-                <label class="checkbox" appTooltip="Если за короткое время накопится много ошибок отправки, worker временно поставит авторассылку на паузу.">
-                  <input class="switch" type="checkbox" formControlName="errorProtectionEnabled">
-                  <span>Защита от массовых ошибок включена</span>
-                </label>
-              </div>
-
-              <div class="settings-section form-grid">
-                <h3 class="wide">Расписание и лимиты</h3>
-                <label appTooltip="Через сколько дней после перехода в статус проверки отправлять и повторять сообщение.">
-                  <span>Интервал проверки отзывов, дней</span>
-                  <input type="number" min="1" max="365" step="1" formControlName="reviewCheckIntervalDays">
-                </label>
-
-                <label appTooltip="Через сколько дней после выставления счета отправлять и повторять напоминание.">
-                  <span>Интервал оплаты, дней</span>
-                  <input type="number" min="1" max="365" step="1" formControlName="paymentReminderIntervalDays">
-                </label>
-
-                <label appTooltip="Если первая ссылка на проверку не ушла из-за чата и заказ остался в статусе 'В проверку', через сколько часов попробовать снова.">
-                  <span>Повтор проверки после сбоя, часов</span>
-                  <input type="number" min="1" max="168" step="1" formControlName="reviewCheckRetryDelayHours">
-                </label>
-
-                <label appTooltip="Если финальный счет после публикации не ушел из-за чата, через сколько часов попробовать отправить его снова.">
-                  <span>Повтор счета после сбоя, часов</span>
-                  <input type="number" min="1" max="168" step="1" formControlName="paymentInvoiceRetryDelayHours">
-                </label>
-
-                <label appTooltip="Если счет после выполнения плохого отзыва не ушел из-за чата, через сколько часов попробовать отправить его снова.">
-                  <span>Повтор доплаты после сбоя, часов</span>
-                  <input type="number" min="1" max="168" step="1" formControlName="badReviewInvoiceRetryDelayHours">
-                </label>
-
-                <label appTooltip="Через сколько дней неоплаты заказ считается просроченным для эскалации.">
-                  <span>Просрочка оплаты, дней</span>
-                  <input type="number" min="1" max="365" step="1" formControlName="paymentOverdueDays">
-                </label>
-
-                <label appTooltip="Через сколько месяцев после архива предлагать новый заказ.">
-                  <span>Архивное предложение, месяцев</span>
-                  <input type="number" min="1" max="36" step="1" formControlName="archiveReorderMonths">
-                </label>
-
-                <label appTooltip="Максимум успешно отправленных автоответчиком сообщений за московский день.">
-                  <span>Дневной лимит сообщений</span>
-                  <input type="number" min="1" max="5000" step="1" formControlName="dailyLimit">
-                </label>
-
-                <label appTooltip="Сколько активных задач брать за один тик планировщика.">
-                  <span>Размер пачки за тик</span>
-                  <input type="number" min="1" max="100" step="1" formControlName="tickBatchSize">
-                </label>
-
-                <label appTooltip="Сколько кандидатов по каждому сценарию искать за один проход сверки.">
-                  <span>Лимит кандидатов</span>
-                  <input type="number" min="1" max="5000" step="1" formControlName="candidateLimit">
-                </label>
-
-                <label appTooltip="Сколько дней хранить попытки отправок и закрытые состояния.">
-                  <span>Хранить журнал, дней</span>
-                  <input type="number" min="1" max="3650" step="1" formControlName="retentionDays">
-                </label>
-
-                <label class="wide" appTooltip="Окна в часовом поясе Europe/Moscow. Формат: HH:mm-HH:mm, через запятую.">
-                  <span>Рабочие окна по Москве</span>
-                  <input type="text" formControlName="businessWindows">
-                </label>
-              </div>
-
-              <div class="settings-section form-grid">
-                <h3 class="wide">Паузы каналов</h3>
-                <label appTooltip="Минимальная пауза, если канал не распознан.">
-                  <span>Общая пауза, секунд</span>
-                  <input type="number" min="30" max="86400" step="10" formControlName="defaultGapSeconds">
-                </label>
-
-                <label appTooltip="Минимальная пауза между сообщениями WhatsApp.">
-                  <span>WhatsApp, секунд</span>
-                  <input type="number" min="30" max="86400" step="10" formControlName="whatsAppGapSeconds">
-                </label>
-
-                <label appTooltip="Минимальная пауза между сообщениями Telegram.">
-                  <span>Telegram, секунд</span>
-                  <input type="number" min="30" max="86400" step="10" formControlName="telegramGapSeconds">
-                </label>
-
-                <label appTooltip="Минимальная пауза между сообщениями MAX.">
-                  <span>MAX, секунд</span>
-                  <input type="number" min="30" max="86400" step="10" formControlName="maxGapSeconds">
-                </label>
-              </div>
-
-              <div class="settings-section form-grid">
-                <h3 class="wide">Защита от массовых ошибок</h3>
-                <label appTooltip="Сколько ошибок подряд за окно достаточно, чтобы временно остановить новые отправки.">
-                  <span>Порог ошибок</span>
-                  <input type="number" min="1" max="10000" step="1" formControlName="errorProtectionThreshold">
-                </label>
-
-                <label appTooltip="За сколько последних минут считать ошибки для защитной паузы.">
-                  <span>Окно ошибок, минут</span>
-                  <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionWindowMinutes">
-                </label>
-
-                <label appTooltip="На сколько минут поставить автоответчик на паузу после срабатывания защиты.">
-                  <span>Пауза после срабатывания, минут</span>
-                  <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionCooldownMinutes">
-                </label>
-
-                <p class="settings-hint wide">
-                  Пауза останавливает только новые попытки авторассылки. Очередь и мониторинг остаются видны, сайт и ручные действия менеджера продолжают работать.
-                </p>
-              </div>
-
-              <div class="settings-section">
-                <h3>Статусы</h3>
-                <label appTooltip="Заказы в этих статусах получают напоминание о проверке шаблонов. Через запятую.">
-                  <span>Статусы проверки отзывов</span>
-                  <input type="text" formControlName="reviewCheckStatuses">
-                </label>
-
-                <label appTooltip="Заказы в этих статусах получают напоминания об оплате. Через запятую.">
-                  <span>Статусы ожидания оплаты</span>
-                  <input type="text" formControlName="paymentReminderStatuses">
-                </label>
-
-                <label appTooltip="Заказы в этих статусах считаются кандидатами на просрочку оплаты. Через запятую.">
-                  <span>Статусы просрочки оплаты</span>
-                  <input type="text" formControlName="paymentOverdueStatuses">
-                </label>
-
-                <label appTooltip="Статусы, при которых просрочка больше не нужна. Через запятую.">
-                  <span>Закрытые статусы заказов</span>
-                  <input type="text" formControlName="closedOrderStatuses">
-                </label>
-
-                <label appTooltip="В этот статус будет переведен просроченный заказ, если live-перевод включен.">
-                  <span>Целевой статус просрочки</span>
-                  <input type="text" formControlName="paymentOverdueTargetStatus">
-                </label>
-
-                <label appTooltip="Статус компании, которая участвует в архивном предложении нового заказа.">
-                  <span>Статус архивной компании</span>
-                  <input type="text" formControlName="archiveCompanyStatus">
-                </label>
-
-                <label appTooltip="Статусы заказов, которые не мешают архивному предложению. Через запятую.">
-                  <span>Неактивные статусы заказов</span>
-                  <input type="text" formControlName="archiveInactiveOrderStatuses">
-                </label>
-
-                <label appTooltip="Статусы заявок на следующий заказ, при которых повторное предложение не отправляется.">
-                  <span>Открытые статусы заявок</span>
-                  <input type="text" formControlName="openNextOrderRequestStatuses">
-                </label>
-              </div>
-
-              <div class="settings-section">
-                <h3>Тексты</h3>
-                <label appTooltip="Базовая ссылка без id детали заказа. Id будет добавлен автоматически.">
-                  <span>Ссылка проверки отзывов</span>
-                  <input type="text" formControlName="reviewLinkBaseUrl">
-                </label>
-
-                <label appTooltip="MANAGER_TEXT оставляет текущий текст менеджера. TBANK_LINK создает актуальную /pay-ссылку по платежным профилям, лимитам и заданиям из раздела T-Bank.">
-                  <span>Источник оплаты</span>
-                  <select formControlName="paymentInstructionSource">
-                    <option value="MANAGER_TEXT">Текст менеджера (сейчас)</option>
-                    <option value="TBANK_LINK">T-Bank /pay ссылка</option>
-                  </select>
-                </label>
-
-                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {reviewLink}, {sum}.">
-                  <span>Текст проверки отзывов</span>
-                  <textarea rows="5" formControlName="reviewReminderText"></textarea>
-                </label>
-
-                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {sum}. Отправляется, когда клиент разрешил публикацию и заказ перешёл из На проверке в Публикация.">
-                  <span>Текст передачи в публикацию</span>
-                  <textarea rows="5" formControlName="publicationStartedText"></textarea>
-                </label>
-
-                <label appTooltip="Переменные: {company}, {filial}, {companyAndFilial}, {published}, {total}, {progress}. Отправляется, когда специалист публикует очередной отзыв.">
-                  <span>Текст отчёта о публикации</span>
-                  <textarea rows="5" formControlName="publicationProgressReportText"></textarea>
-                </label>
-
-                <label appTooltip="Основной текст для напоминаний в режиме Текст менеджера. В режиме T-Bank /pay ссылка стандартный шаблон берется из поля ниже; здесь можно собрать свой шаблон с переменными: {company}, {filial}, {companyAndFilial}, {managerPayText}, {legacyManagerPayText}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {tbankPaymentCopyText}, {sum}.">
-                  <span>Текст напоминания об оплате</span>
-                  <textarea rows="5" formControlName="paymentReminderText"></textarea>
-                </label>
-
-                <label appTooltip="Используется кнопкой Счет, автоответчиком в режиме T-Bank ссылок и счетом после плохого отзыва. Переменные: {company}, {filial}, {companyAndFilial}, {sum}, {paymentInstruction}, {paymentLink}, {tbankPaymentLink}, {recipient}, {comment}, {paymentAfterword}.">
-                  <span>Текст счета /pay</span>
-                  <textarea rows="6" formControlName="paymentLinkCopyText"></textarea>
-                </label>
-
-                <label appTooltip="Переменная: {company}.">
-                  <span>Текст архивного предложения</span>
-                  <textarea rows="5" formControlName="archiveOfferText"></textarea>
-                </label>
-              </div>
+                  <label class="wide" appTooltip="Переменная: {company}.">
+                    <span>Архивное предложение</span>
+                    <textarea rows="5" formControlName="archiveOfferText"></textarea>
+                  </label>
+                </div>
+              </section>
 
               @if (autoresponderForm.invalid && autoresponderForm.touched) {
                 <p class="error compact">Проверьте интервалы, лимиты, статусы, рабочие окна и длину текстов до 500 символов.</p>

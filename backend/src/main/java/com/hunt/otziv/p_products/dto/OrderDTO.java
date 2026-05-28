@@ -48,6 +48,10 @@ public class OrderDTO {
 
     private int dayToChangeStatusAgo;
 
+    private boolean waitingForClient;
+
+    private boolean clientTextExpected;
+
     //    каждый бот имеет Работника, который его добавлял
     private WorkerDTO worker;
 

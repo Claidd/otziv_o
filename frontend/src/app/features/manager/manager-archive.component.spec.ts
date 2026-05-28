@@ -212,7 +212,7 @@ describe('ManagerArchiveComponent', () => {
     expect(fixture.componentInstance.canRestore(storedOrder)).toBe(true);
     expect(fixture.componentInstance.canRestore(liveOrder)).toBe(false);
     expect(fixture.componentInstance.canChangeLiveStatus(liveOrder)).toBe(true);
-    expect(fixture.componentInstance.orderDetailsLink(liveOrder)).toEqual(['/manager/orders', 7, 4]);
+    expect(fixture.componentInstance.orderDetailsLink(liveOrder)).toEqual(['/orders', 7, 4]);
   });
 
   it('toggles archive sort from the pager', async () => {

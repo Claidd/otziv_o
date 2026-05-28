@@ -616,22 +616,42 @@ public class ApiAdminDictionaryController {
 
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, request.workerEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, request.liveEnabled());
+        appSettingService.setBoolean(
+                AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,
+                request.immediateEnabled() == null || request.immediateEnabled()
+        );
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, request.monitorEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, request.reviewCheckEnabled());
+        appSettingService.setBoolean(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED,
+                request.reviewCheckAutoArchiveEnabled() == null || request.reviewCheckAutoArchiveEnabled()
+        );
+        appSettingService.setBoolean(
+                AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED,
+                request.clientTextReminderEnabled() == null || request.clientTextReminderEnabled()
+        );
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, request.paymentReminderEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, request.badReviewInvoiceEnabled());
+        appSettingService.setBoolean(
+                AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED,
+                request.badReviewAutoBanEnabled() == null || request.badReviewAutoBanEnabled()
+        );
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, request.paymentOverdueEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, request.paymentOverdueLiveEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, request.archiveReorderEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, request.errorProtectionEnabled());
 
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS, request.reviewCheckAutoArchiveDays(), 1, 3650, "Автоархив проверки отзывов");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS, request.clientTextReminderIntervalDays(), 1, 365, "Интервал ожидания текста клиента");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, request.paymentReminderIntervalDays(), 1, 365, "Интервал напоминания об оплате");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS, request.reviewCheckRetryDelayHours(), 1, 168, "Повтор ссылки проверки после сбоя");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS, request.paymentInvoiceRetryDelayHours(), 1, 168, "Повтор счета после сбоя");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS, request.badReviewInvoiceRetryDelayHours(), 1, 168, "Повтор счета после плохого отзыва");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS, request.badReviewAutoBanDelayDays(), 1, 365, "Автобан после плохих отзывов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, request.paymentOverdueDays(), 1, 365, "Срок просрочки оплаты");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS, request.archiveReorderMonths(), 1, 36, "Интервал архивного предложения");
+        saveIntSetting(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, request.archiveOrderRetentionDays(), 1, 3650, "Архив live-заказов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD, request.errorProtectionThreshold(), 1, 10000, "Порог массовых ошибок");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES, request.errorProtectionWindowMinutes(), 1, 1440, "Окно массовых ошибок");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES, request.errorProtectionCooldownMinutes(), 1, 1440, "Пауза после массовых ошибок");
@@ -646,6 +666,7 @@ public class ApiAdminDictionaryController {
 
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, businessWindows);
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, requiredSettingText(request.reviewCheckStatuses(), "Укажите статусы проверки отзывов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, requiredSettingText(request.clientTextReminderStatuses(), "Укажите статусы ожидания текста клиента"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, requiredSettingText(request.paymentReminderStatuses(), "Укажите статусы напоминаний об оплате"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_STATUSES, requiredSettingText(request.paymentOverdueStatuses(), "Укажите статусы просрочки оплаты"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES, requiredSettingText(request.closedOrderStatuses(), "Укажите закрытые статусы заказов"));
@@ -655,11 +676,19 @@ public class ApiAdminDictionaryController {
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, requiredSettingText(request.openNextOrderRequestStatuses(), "Укажите открытые статусы заявок"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_LINK_BASE_URL, requiredSettingText(request.reviewLinkBaseUrl(), "Укажите базовую ссылку проверки отзывов"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_REMINDER_TEXT, requiredSettingText(request.reviewReminderText(), "Укажите текст проверки отзывов"));
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT, requiredSettingText(request.clientTextReminderText(), "Укажите текст ожидания текста клиента"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT, requiredSettingText(request.publicationStartedText(), "Укажите текст передачи в публикацию"));
         appSettingService.setString(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, requiredSettingText(request.publicationProgressReportText(), "Укажите текст отчёта о публикации отзыва"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, requiredPaymentInstructionSource(request.paymentInstructionSource()));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT, requiredSettingText(request.paymentLinkCopyText(), "Укажите текст счета по платежной ссылке"));
+        String paymentSuccessText = request.paymentSuccessText() == null
+                ? appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT
+                )
+                : request.paymentSuccessText();
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT, requiredSettingText(paymentSuccessText, "Укажите текст успешной оплаты"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
 
         return clientMessageSettings();
@@ -944,10 +973,14 @@ public class ApiAdminDictionaryController {
         return new ClientMessageSettingsResponse(
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_MONITOR_ENABLED, false),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, false),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, true),
@@ -955,6 +988,14 @@ public class ApiAdminDictionaryController {
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
                         ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_AUTO_ARCHIVE_DAYS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS,
+                        ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS
                 ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS,
@@ -973,12 +1014,20 @@ public class ApiAdminDictionaryController {
                         ScheduledClientMessageService.DEFAULT_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS
                 ),
                 appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS,
+                        ScheduledClientMessageService.DEFAULT_BAD_REVIEW_AUTO_BAN_DELAY_DAYS
+                ),
+                appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_DAYS
                 ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS,
                         ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS,
+                        90
                 ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD,
@@ -1033,6 +1082,10 @@ public class ApiAdminDictionaryController {
                         ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES
                 ),
                 appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES,
+                        ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES
+                ),
+                appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_STATUSES
                 ),
@@ -1069,6 +1122,10 @@ public class ApiAdminDictionaryController {
                         ScheduledClientMessageService.DEFAULT_REVIEW_REMINDER_TEXT
                 ),
                 appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT,
+                        ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_TEXT
+                ),
+                appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT,
                         ScheduledClientMessageService.DEFAULT_PUBLICATION_STARTED_TEXT
                 ),
@@ -1087,6 +1144,10 @@ public class ApiAdminDictionaryController {
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_LINK_COPY_TEXT
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
+                        ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT
                 ),
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT,
@@ -1465,21 +1526,29 @@ public class ApiAdminDictionaryController {
     public record ClientMessageSettingsRequest(
             boolean workerEnabled,
             boolean liveEnabled,
+            Boolean immediateEnabled,
             boolean monitorEnabled,
             boolean reviewCheckEnabled,
+            Boolean reviewCheckAutoArchiveEnabled,
+            Boolean clientTextReminderEnabled,
             boolean paymentReminderEnabled,
             boolean badReviewInvoiceEnabled,
+            Boolean badReviewAutoBanEnabled,
             boolean paymentOverdueEnabled,
             boolean paymentOverdueLiveEnabled,
             boolean archiveReorderEnabled,
             boolean errorProtectionEnabled,
             Integer reviewCheckIntervalDays,
+            Integer reviewCheckAutoArchiveDays,
+            Integer clientTextReminderIntervalDays,
             Integer paymentReminderIntervalDays,
             Integer reviewCheckRetryDelayHours,
             Integer paymentInvoiceRetryDelayHours,
             Integer badReviewInvoiceRetryDelayHours,
+            Integer badReviewAutoBanDelayDays,
             Integer paymentOverdueDays,
             Integer archiveReorderMonths,
+            Integer archiveOrderRetentionDays,
             Integer errorProtectionThreshold,
             Integer errorProtectionWindowMinutes,
             Integer errorProtectionCooldownMinutes,
@@ -1493,6 +1562,7 @@ public class ApiAdminDictionaryController {
             Integer maxGapSeconds,
             String businessWindows,
             String reviewCheckStatuses,
+            String clientTextReminderStatuses,
             String paymentReminderStatuses,
             String paymentOverdueStatuses,
             String closedOrderStatuses,
@@ -1502,11 +1572,13 @@ public class ApiAdminDictionaryController {
             String openNextOrderRequestStatuses,
             String reviewLinkBaseUrl,
             String reviewReminderText,
+            String clientTextReminderText,
             String publicationStartedText,
             String publicationProgressReportText,
             String paymentInstructionSource,
             String paymentReminderText,
             String paymentLinkCopyText,
+            String paymentSuccessText,
             String archiveOfferText
     ) {
     }
@@ -1514,21 +1586,29 @@ public class ApiAdminDictionaryController {
     public record ClientMessageSettingsResponse(
             boolean workerEnabled,
             boolean liveEnabled,
+            boolean immediateEnabled,
             boolean monitorEnabled,
             boolean reviewCheckEnabled,
+            boolean reviewCheckAutoArchiveEnabled,
+            boolean clientTextReminderEnabled,
             boolean paymentReminderEnabled,
             boolean badReviewInvoiceEnabled,
+            boolean badReviewAutoBanEnabled,
             boolean paymentOverdueEnabled,
             boolean paymentOverdueLiveEnabled,
             boolean archiveReorderEnabled,
             boolean errorProtectionEnabled,
             int reviewCheckIntervalDays,
+            int reviewCheckAutoArchiveDays,
+            int clientTextReminderIntervalDays,
             int paymentReminderIntervalDays,
             int reviewCheckRetryDelayHours,
             int paymentInvoiceRetryDelayHours,
             int badReviewInvoiceRetryDelayHours,
+            int badReviewAutoBanDelayDays,
             int paymentOverdueDays,
             int archiveReorderMonths,
+            int archiveOrderRetentionDays,
             int errorProtectionThreshold,
             int errorProtectionWindowMinutes,
             int errorProtectionCooldownMinutes,
@@ -1542,6 +1622,7 @@ public class ApiAdminDictionaryController {
             int maxGapSeconds,
             String businessWindows,
             String reviewCheckStatuses,
+            String clientTextReminderStatuses,
             String paymentReminderStatuses,
             String paymentOverdueStatuses,
             String closedOrderStatuses,
@@ -1551,11 +1632,13 @@ public class ApiAdminDictionaryController {
             String openNextOrderRequestStatuses,
             String reviewLinkBaseUrl,
             String reviewReminderText,
+            String clientTextReminderText,
             String publicationStartedText,
             String publicationProgressReportText,
             String paymentInstructionSource,
             String paymentReminderText,
             String paymentLinkCopyText,
+            String paymentSuccessText,
             String archiveOfferText
     ) {
     }

@@ -138,7 +138,6 @@ describe('manager-board history helpers', () => {
       sortDirection: 'asc',
       selectedCompany: { id: 8, title: ' Acme ' }
     }))).toEqual({
-      section: 'orders',
       status: 'Новый',
       keyword: 'order',
       pageNumber: 2,
@@ -156,7 +155,6 @@ describe('manager-board history helpers', () => {
       orderStatus: 'Оплачено',
       selectedCompany: { id: 8, title: 'Acme' }
     }))).toEqual({
-      section: 'companies',
       status: 'Новая',
       pageNumber: 0,
       pageSize: 10,
@@ -169,5 +167,22 @@ describe('manager-board history helpers', () => {
     expect(managerNormalizeSelectedCompany({ id: '4', title: 'bad' })).toBeNull();
     expect(managerNormalizeSelectedCompany({ id: 4, title: ' Acme ' })).toEqual({ id: 4, title: ' Acme ' });
     expect(managerReadQueryView(params({ section: 'bad' }))).toBeNull();
+  });
+
+  it('uses route section when query params do not carry legacy section', () => {
+    expect(managerReadQueryView(params({
+      status: 'Оплачено',
+      companyId: '6',
+      companyTitle: 'Acme'
+    }), 'orders')).toEqual({
+      activeSection: 'orders',
+      companyStatus: 'Все',
+      orderStatus: 'Оплачено',
+      keyword: '',
+      pageNumber: 0,
+      pageSize: 10,
+      sortDirection: 'desc',
+      selectedCompany: { id: 6, title: 'Acme' }
+    });
   });
 });

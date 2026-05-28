@@ -58,6 +58,7 @@ function draft(overrides: Partial<ReviewEditDraft> = {}): ReviewEditDraft {
     botName: 'Bot Name',
     botPassword: 'bot-password',
     productId: 9,
+    filialId: null,
     url: '',
     ...overrides
   };

@@ -1,15 +1,18 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin, switchMap } from 'rxjs';
 import { PaymentsApi } from '../../../core/payments.api';
 import type {
   AdminPaymentLinkResponse,
+  AdminPaymentLinkSummaryResponse,
+  AdminPaymentLinksPageResponse,
   ManualPaymentTaskResponse,
   ManualPaymentTaskStatus,
   ManualPaymentType,
   ManagerPaymentProfileResponse,
+  PaymentLinkListSource,
   PaymentInstructionSource,
   PaymentPolicy,
   PaymentProfilePolicyRequest,
@@ -56,7 +59,7 @@ type StatusFilterOption = {
   templateUrl: './tbank-payments.component.html',
   styleUrl: './tbank-payments.component.scss'
 })
-export class TbankPaymentsComponent {
+export class TbankPaymentsComponent implements OnDestroy {
   private static readonly DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES = 191000;
   private static readonly DEFAULT_MANUAL_RECIPIENT_NAME = 'Сивохин И.И.';
   private static readonly DEFAULT_MANUAL_PAYMENT_URL = 'https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR';
@@ -95,6 +98,14 @@ export class TbankPaymentsComponent {
   readonly statusFilter = signal<PaymentStatusFilter>('all');
   readonly dateFrom = signal('');
   readonly dateTo = signal('');
+  readonly paymentSource = signal<PaymentLinkListSource>('LIVE');
+  readonly paymentPage = signal(0);
+  readonly paymentSize = signal(25);
+  readonly paymentTotalElements = signal(0);
+  readonly paymentTotalPages = signal(0);
+  readonly paymentSummary = signal<AdminPaymentLinkSummaryResponse | null>(null);
+  readonly archiving = signal(false);
+  private searchReloadTimer: number | null = null;
 
   readonly statusOptions: StatusFilterOption[] = [
     { key: 'all', label: 'Все', icon: 'apps' },
@@ -107,15 +118,7 @@ export class TbankPaymentsComponent {
   ];
 
   readonly filteredLinks = computed(() => {
-    const search = this.search().trim().toLowerCase();
-    const from = this.dateFrom();
-    const to = this.dateTo();
-    const filter = this.statusFilter();
-    return this.links().filter((link) => {
-      return this.matchesSearch(link, search)
-        && this.matchesStatusFilter(link, filter)
-        && this.matchesDateRange(link, from, to);
-    });
+    return this.links();
   });
 
   readonly hasFilters = computed(() => {
@@ -130,6 +133,18 @@ export class TbankPaymentsComponent {
   readonly manualPendingLinks = computed(() => this.manualLinks().filter((link) => {
     return link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED';
   }));
+
+  readonly manualPendingCount = computed(() => {
+    return this.paymentSummary()?.manualPending ?? this.manualPendingLinks().length;
+  });
+
+  readonly paymentPageLabel = computed(() => {
+    const totalPages = this.paymentTotalPages();
+    if (!totalPages) {
+      return 'Страница 0 из 0';
+    }
+    return `Страница ${this.paymentPage() + 1} из ${totalPages}`;
+  });
 
   readonly canCreateManualTask = computed(() => {
     const hasTarget = this.adminTaskPaymentType() === 'MOBILE_BANK'
@@ -260,22 +275,23 @@ export class TbankPaymentsComponent {
   });
 
   readonly metrics = computed<PaymentMetric[]>(() => {
+    const summary = this.paymentSummary();
     const links = this.links();
-    const filtered = this.filteredLinks();
-    const status = this.status();
-    const paid = links.filter((link) => this.isPaid(link.status)).length;
-    const refunded = links.filter((link) => this.isRefunded(link.status) || link.status === 'CANCELED').length;
-    const rejected = links.filter((link) => link.status === 'REJECTED' || link.status === 'FAILED').length;
-    const manualPending = this.manualPendingLinks().length;
-    const confirmedLinks = links.filter((link) => link.status === 'CONFIRMED');
-    const notificationsSent = confirmedLinks.filter((link) => Boolean(link.paymentSuccessNotifiedAt)).length;
-    const notificationErrors = confirmedLinks.filter((link) => !link.paymentSuccessNotifiedAt && Boolean(link.paymentSuccessNotificationError)).length;
+    const total = summary?.totalElements ?? links.length;
+    const paid = summary?.paid ?? links.filter((link) => this.isPaid(link.status)).length;
+    const refunded = summary?.refunded ?? links.filter((link) => this.isRefunded(link.status) || link.status === 'CANCELED').length;
+    const rejected = summary?.rejected ?? links.filter((link) => link.status === 'REJECTED' || link.status === 'FAILED').length;
+    const manualPending = this.manualPendingCount();
+    const confirmed = summary?.confirmed ?? links.filter((link) => link.status === 'CONFIRMED').length;
+    const notificationsSent = summary?.notificationsSent ?? links.filter((link) => link.status === 'CONFIRMED' && Boolean(link.paymentSuccessNotifiedAt)).length;
+    const notificationErrors = summary?.notificationErrors ?? links.filter((link) => link.status === 'CONFIRMED' && !link.paymentSuccessNotifiedAt && Boolean(link.paymentSuccessNotificationError)).length;
+    const refundable = summary?.refundable ?? links.filter((link) => link.refundable).length;
     return [
-      { label: 'Показано', value: `${filtered.length}/${links.length}`, icon: 'filter_list', tone: 'blue' },
+      { label: 'Показано', value: `${links.length}/${total}`, icon: 'filter_list', tone: 'blue' },
       { label: 'Оплачено', value: paid, icon: 'check_circle', tone: 'green' },
       { label: 'Ручные ждут', value: manualPending, icon: 'phone_iphone', tone: manualPending ? 'yellow' : 'gray' },
-      { label: 'Уведомления', value: confirmedLinks.length ? `${notificationsSent}/${confirmedLinks.length}` : 0, icon: notificationErrors ? 'sms_failed' : 'mark_chat_read', tone: notificationErrors ? 'red' : notificationsSent ? 'green' : 'gray' },
-      { label: 'Можно вернуть', value: links.filter((link) => link.refundable).length, icon: 'undo', tone: 'yellow' },
+      { label: 'Уведомления', value: confirmed ? `${notificationsSent}/${confirmed}` : 0, icon: notificationErrors ? 'sms_failed' : 'mark_chat_read', tone: notificationErrors ? 'red' : notificationsSent ? 'green' : 'gray' },
+      { label: 'Можно вернуть', value: refundable, icon: 'undo', tone: 'yellow' },
       { label: 'Возвращено', value: refunded, icon: 'assignment_return', tone: 'green' },
       { label: 'Ошибки', value: rejected, icon: 'priority_high', tone: rejected ? 'red' : 'gray' },
       { label: 'Источник счетов', value: this.tbankClientPaymentEnabled() ? 'T-Bank' : 'Текст', icon: 'payments', tone: this.tbankClientPaymentEnabled() ? 'green' : 'gray' },
@@ -287,19 +303,25 @@ export class TbankPaymentsComponent {
     this.load();
   }
 
+  ngOnDestroy(): void {
+    if (this.searchReloadTimer != null) {
+      window.clearTimeout(this.searchReloadTimer);
+    }
+  }
+
   load(): void {
     this.loading.set(true);
     this.error.set(null);
     forkJoin({
       status: this.paymentsApi.getTbankStatus(),
-      links: this.paymentsApi.getAdminTbankPaymentLinks(),
+      links: this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()),
       profiles: this.paymentsApi.getAdminTbankPaymentProfiles(),
       manualTasks: this.paymentsApi.getAdminManualPaymentTasks(),
       runtimeSettings: this.paymentsApi.getAdminTbankRuntimeSettings()
     }).subscribe({
       next: ({ status, links, profiles, manualTasks, runtimeSettings }) => {
         this.status.set(status);
-        this.links.set(links);
+        this.applyPaymentLinksPage(links);
         this.manualTasks.set(manualTasks ?? []);
         this.runtimeSettings.set(runtimeSettings);
         this.applyProfilesState(profiles.profiles, profiles.managers);
@@ -431,25 +453,99 @@ export class TbankPaymentsComponent {
 
   setSearch(value: string): void {
     this.search.set(value ?? '');
+    this.paymentPage.set(0);
+    if (this.searchReloadTimer != null) {
+      window.clearTimeout(this.searchReloadTimer);
+    }
+    this.searchReloadTimer = window.setTimeout(() => {
+      this.loadPaymentLinks();
+      this.searchReloadTimer = null;
+    }, 260);
   }
 
   setStatusFilter(filter: PaymentStatusFilter): void {
     this.statusFilter.set(filter);
+    this.paymentPage.set(0);
+    this.loadPaymentLinks();
   }
 
   setDateFrom(value: string): void {
     this.dateFrom.set(value ?? '');
+    this.paymentPage.set(0);
+    this.loadPaymentLinks();
   }
 
   setDateTo(value: string): void {
     this.dateTo.set(value ?? '');
+    this.paymentPage.set(0);
+    this.loadPaymentLinks();
   }
 
   resetFilters(): void {
+    if (this.searchReloadTimer != null) {
+      window.clearTimeout(this.searchReloadTimer);
+      this.searchReloadTimer = null;
+    }
     this.search.set('');
     this.statusFilter.set('all');
     this.dateFrom.set('');
     this.dateTo.set('');
+    this.paymentPage.set(0);
+    this.loadPaymentLinks();
+  }
+
+  setPaymentSource(source: PaymentLinkListSource): void {
+    if (this.paymentSource() === source) {
+      return;
+    }
+    this.paymentSource.set(source);
+    this.paymentPage.set(0);
+    this.loadPaymentLinks();
+  }
+
+  setPaymentPage(page: number): void {
+    const totalPages = this.paymentTotalPages();
+    const next = Math.max(0, Math.min(page, Math.max(0, totalPages - 1)));
+    if (next === this.paymentPage()) {
+      return;
+    }
+    this.paymentPage.set(next);
+    this.loadPaymentLinks();
+  }
+
+  setPaymentSize(size: string | number): void {
+    const next = Number(size);
+    if (!Number.isFinite(next) || next <= 0 || next === this.paymentSize()) {
+      return;
+    }
+    this.paymentSize.set(next);
+    this.paymentPage.set(0);
+    this.loadPaymentLinks();
+  }
+
+  archiveClosedLinks(): void {
+    if (this.archiving()) {
+      return;
+    }
+    const confirmed = window.confirm(
+      'Перенести закрытые старые платежи в архивную таблицу? В live-журнале останутся свежие и рабочие ссылки.'
+    );
+    if (!confirmed) {
+      return;
+    }
+    this.archiving.set(true);
+    this.paymentsApi.runAdminPaymentLinkArchive(false).subscribe({
+      next: (result) => {
+        this.archiving.set(false);
+        this.toastService.success('Архивация платежей завершена', `Перенесено: ${result.archived}, удалено из live: ${result.deleted}`);
+        this.loadPaymentLinks();
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось архивировать платежи');
+        this.archiving.set(false);
+        this.toastService.error('Архивация не выполнена', message);
+      }
+    });
   }
 
   setManagerProfile(managerId: number, value: string | number | null): void {
@@ -612,7 +708,7 @@ export class TbankPaymentsComponent {
   }
 
   cancel(link: AdminPaymentLinkResponse): void {
-    if (!link.refundable || this.mutatingId()) {
+    if (link.archived || !link.refundable || this.mutatingId()) {
       return;
     }
 
@@ -624,9 +720,10 @@ export class TbankPaymentsComponent {
     this.mutatingId.set(link.id);
     this.paymentsApi.cancelAdminTbankPaymentLink(link.id).subscribe({
       next: (updated) => {
-        this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+        this.replaceLink(updated);
         this.mutatingId.set(null);
         this.toastService.success('Возврат отправлен', `Статус: ${this.statusLabel(updated.status)}`);
+        this.loadPaymentLinks();
       },
       error: (err) => {
         const message = apiErrorDetail(err, 'Не удалось выполнить возврат');
@@ -648,10 +745,11 @@ export class TbankPaymentsComponent {
     this.mutatingId.set(link.id);
     this.paymentsApi.confirmAdminManualPaymentLink(link.id).subscribe({
       next: (updated) => {
-        this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+        this.replaceLink(updated);
         this.mutatingId.set(null);
         this.toastService.success('Ручная оплата подтверждена', `Статус: ${this.statusLabel(updated.status)}`);
         this.loadProfilesOnly();
+        this.loadPaymentLinks();
       },
       error: (err) => {
         const message = apiErrorDetail(err, 'Не удалось подтвердить ручную оплату');
@@ -669,10 +767,11 @@ export class TbankPaymentsComponent {
     this.mutatingId.set(link.id);
     this.paymentsApi.markAdminManualPaymentReceipt(link.id).subscribe({
       next: (updated) => {
-        this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
+        this.replaceLink(updated);
         this.mutatingId.set(null);
         this.toastService.success('Статус чека обновлен');
         this.loadProfilesOnly();
+        this.loadPaymentLinks();
       },
       error: (err) => {
         const message = apiErrorDetail(err, 'Не удалось отметить чек');
@@ -929,12 +1028,13 @@ export class TbankPaymentsComponent {
   }
 
   canConfirmManual(link: AdminPaymentLinkResponse): boolean {
-    return this.isManualPayment(link)
+    return !link.archived
+      && this.isManualPayment(link)
       && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
   }
 
   canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {
-    return this.isManualPayment(link) && link.status === 'CONFIRMED' && link.receiptStatus !== 'MARKED';
+    return !link.archived && this.isManualPayment(link) && link.status === 'CONFIRMED' && link.receiptStatus !== 'MARKED';
   }
 
   profilePolicy(profileId: number): ProfilePolicyDraft {
@@ -1029,6 +1129,9 @@ export class TbankPaymentsComponent {
   }
 
   rowMode(link: AdminPaymentLinkResponse): string {
+    if (link.archived) {
+      return 'archived';
+    }
     if (this.isPaid(link.status)) {
       return 'paid';
     }
@@ -1173,6 +1276,49 @@ export class TbankPaymentsComponent {
       next: (profiles) => this.applyProfilesState(profiles.profiles, profiles.managers),
       error: () => {}
     });
+  }
+
+  private loadPaymentLinks(): void {
+    this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()).subscribe({
+      next: (links) => this.applyPaymentLinksPage(links),
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось обновить журнал платежей');
+        this.toastService.error('Журнал не обновлен', message);
+      }
+    });
+  }
+
+  private paymentLinkQuery(): {
+    page: number;
+    size: number;
+    status: PaymentStatusFilter;
+    search: string;
+    source: PaymentLinkListSource;
+    from: string;
+    to: string;
+  } {
+    return {
+      page: this.paymentPage(),
+      size: this.paymentSize(),
+      status: this.statusFilter(),
+      search: this.search().trim(),
+      source: this.paymentSource(),
+      from: this.dateFrom(),
+      to: this.dateTo()
+    };
+  }
+
+  private applyPaymentLinksPage(page: AdminPaymentLinksPageResponse): void {
+    this.links.set(page.items ?? []);
+    this.paymentPage.set(page.page ?? 0);
+    this.paymentSize.set(page.size ?? this.paymentSize());
+    this.paymentTotalElements.set(page.totalElements ?? 0);
+    this.paymentTotalPages.set(page.totalPages ?? 0);
+    this.paymentSummary.set(page.summary ?? null);
+  }
+
+  private replaceLink(updated: AdminPaymentLinkResponse): void {
+    this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
   }
 
   private updateProfilePolicyDraft(profileId: number, patch: Partial<ProfilePolicyDraft>): void {

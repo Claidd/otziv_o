@@ -1,4 +1,4 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
@@ -108,7 +108,44 @@ export interface AdminPaymentLinkResponse {
   initiatedAt?: string | null;
   paidAt?: string | null;
   sbpQrCreatedAt?: string | null;
+  archived: boolean;
+  archivedAt?: string | null;
+  archiveReason?: string | null;
   refundable: boolean;
+}
+
+export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
+
+export interface AdminPaymentLinkSummaryResponse {
+  totalElements: number;
+  totalAmount: number;
+  totalAmountKopecks: number;
+  paid: number;
+  manualPending: number;
+  confirmed: number;
+  notificationsSent: number;
+  notificationErrors: number;
+  refundable: number;
+  refunded: number;
+  rejected: number;
+}
+
+export interface AdminPaymentLinksPageResponse {
+  items: AdminPaymentLinkResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  source: PaymentLinkListSource | string;
+  summary: AdminPaymentLinkSummaryResponse;
+}
+
+export interface PaymentLinkArchiveRunResponse {
+  eligible: number;
+  archived: number;
+  deleted: number;
+  dryRun: boolean;
+  reason: string;
 }
 
 export interface PaymentProfileResponse {
@@ -336,9 +373,38 @@ export class PaymentsApi {
     );
   }
 
-  getAdminTbankPaymentLinks(): Observable<AdminPaymentLinkResponse[]> {
-    return this.http.get<AdminPaymentLinkResponse[]>(
-      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-links`
+  getAdminTbankPaymentLinks(params?: {
+    page?: number;
+    size?: number;
+    status?: string;
+    search?: string;
+    source?: PaymentLinkListSource;
+    from?: string;
+    to?: string;
+  }): Observable<AdminPaymentLinksPageResponse> {
+    let httpParams = new HttpParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          httpParams = httpParams.set(key, String(value));
+        }
+      });
+    }
+    return this.http.get<AdminPaymentLinksPageResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-links`,
+      { params: httpParams }
+    );
+  }
+
+  runAdminPaymentLinkArchive(dryRun: boolean, batchSize?: number): Observable<PaymentLinkArchiveRunResponse> {
+    let params = new HttpParams().set('dryRun', String(dryRun));
+    if (batchSize != null && Number.isFinite(batchSize) && batchSize > 0) {
+      params = params.set('batchSize', String(batchSize));
+    }
+    return this.http.post<PaymentLinkArchiveRunResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/tbank-links/archive/run`,
+      {},
+      { params }
     );
   }
 

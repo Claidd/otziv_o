@@ -95,9 +95,14 @@ public class ReputationAiProperties {
         private String apiKey = "";
         private String folderId = "";
         private String baseUrl = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion";
+        private String responsesBaseUrl = "https://ai.api.cloud.yandex.net/v1";
+        private String apiMode = "completion";
         private String model = "yandexgpt";
         private Duration timeout = Duration.ofMinutes(6);
-        private int maxTokens = 12000;
+        private int maxTokens = 16000;
+        private int maxToolCalls = 24;
+        private String searchContextSize = "high";
+        private String searchRegion = "";
 
         public String getApiKey() {
             return apiKey;
@@ -125,6 +130,24 @@ public class ReputationAiProperties {
                     : baseUrl.trim();
         }
 
+        public String getResponsesBaseUrl() {
+            return responsesBaseUrl;
+        }
+
+        public void setResponsesBaseUrl(String responsesBaseUrl) {
+            this.responsesBaseUrl = responsesBaseUrl == null || responsesBaseUrl.isBlank()
+                    ? "https://ai.api.cloud.yandex.net/v1"
+                    : responsesBaseUrl.trim().replaceAll("/+$", "");
+        }
+
+        public String getApiMode() {
+            return apiMode;
+        }
+
+        public void setApiMode(String apiMode) {
+            this.apiMode = apiMode == null || apiMode.isBlank() ? "completion" : apiMode.trim();
+        }
+
         public String getModel() {
             return model;
         }
@@ -146,7 +169,33 @@ public class ReputationAiProperties {
         }
 
         public void setMaxTokens(int maxTokens) {
-            this.maxTokens = Math.max(1000, Math.min(12000, maxTokens));
+            this.maxTokens = Math.max(1000, Math.min(32000, maxTokens));
+        }
+
+        public int getMaxToolCalls() {
+            return maxToolCalls;
+        }
+
+        public void setMaxToolCalls(int maxToolCalls) {
+            this.maxToolCalls = Math.max(1, Math.min(64, maxToolCalls));
+        }
+
+        public String getSearchContextSize() {
+            return searchContextSize;
+        }
+
+        public void setSearchContextSize(String searchContextSize) {
+            this.searchContextSize = searchContextSize == null || searchContextSize.isBlank()
+                    ? "high"
+                    : searchContextSize.trim();
+        }
+
+        public String getSearchRegion() {
+            return searchRegion;
+        }
+
+        public void setSearchRegion(String searchRegion) {
+            this.searchRegion = searchRegion == null ? "" : searchRegion.trim();
         }
     }
 

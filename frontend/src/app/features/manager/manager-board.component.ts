@@ -233,7 +233,8 @@ export class ManagerBoardComponent implements OnDestroy {
   });
 
   constructor() {
-    const queryView = managerReadQueryView(this.route.snapshot.queryParamMap);
+    const routeSection = this.routeManagerSection();
+    const queryView = managerReadQueryView(this.route.snapshot.queryParamMap, routeSection);
     const restoredView = managerReadHistoryView(window.history.state, this.historyStateKey);
     if (queryView) {
       this.applyHistoryView(queryView);
@@ -763,9 +764,18 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   private managerUrlForView(view: ManagerHistoryView): string {
-    return this.router.serializeUrl(this.router.createUrlTree(['/manager'], {
+    return this.router.serializeUrl(this.router.createUrlTree([this.managerRouteForSection(view.activeSection)], {
       queryParams: managerViewQueryParams(view)
     }));
+  }
+
+  private routeManagerSection(): ManagerSection | null {
+    const section = this.route.snapshot.data['managerSection'];
+    return section === 'orders' || section === 'companies' ? section : null;
+  }
+
+  private managerRouteForSection(section: ManagerSection): string {
+    return section === 'orders' ? '/orders' : '/companies';
   }
 
   private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {

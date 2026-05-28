@@ -1,8 +1,10 @@
 package com.hunt.otziv.payments;
 
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
+import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
+import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
 import com.hunt.otziv.payments.dto.TbankClientPaymentModeResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfilesResponse;
 import com.hunt.otziv.payments.dto.TbankRuntimeSettingsResponse;
@@ -14,13 +16,16 @@ import com.hunt.otziv.payments.dto.UpdateTbankRuntimeSettingsRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -34,8 +39,25 @@ public class AdminPaymentController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/admin/payments/tbank-links")
-    public List<AdminPaymentLinkResponse> tbankLinks() {
-        return paymentLinkService.adminLinks();
+    public AdminPaymentLinksPageResponse tbankLinks(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size,
+            @RequestParam(defaultValue = "all") String status,
+            @RequestParam(defaultValue = "") String search,
+            @RequestParam(defaultValue = "LIVE") String source,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return paymentLinkService.adminLinks(page, size, status, search, from, to, source);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/admin/payments/tbank-links/archive/run")
+    public PaymentLinkArchiveRunResponse archiveClosedPaymentLinks(
+            @RequestParam(defaultValue = "true") boolean dryRun,
+            @RequestParam(required = false) Integer batchSize
+    ) {
+        return paymentLinkService.archiveClosedLinks(dryRun, batchSize);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

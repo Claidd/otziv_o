@@ -84,7 +84,7 @@ public class OpenAiResponsesClient {
     }
 
     public String activeProviderDisplayName() {
-        return useYandex() ? "YandexGPT" : "OpenAI";
+        return useYandex() ? (useYandexResponsesApi() ? "YandexGPT Responses" : "YandexGPT") : "OpenAI";
     }
 
     public String activeModel() {
@@ -92,7 +92,7 @@ public class OpenAiResponsesClient {
     }
 
     public boolean usesExternalSearchContext() {
-        return useYandex();
+        return useYandex() && !useYandexResponsesApi();
     }
 
     public OpenAiLastCheck lastCheck() {
@@ -133,7 +133,7 @@ public class OpenAiResponsesClient {
         if (!isAvailable()) {
             return rememberCheck("not_configured", null, "YandexGPT не настроен: укажите YANDEX_AI_API_KEY и YANDEX_FOLDER_ID.");
         }
-        AiResponse response = yandexGptProvider.generate(new AiRequest(
+        OpenAiResponseResult response = createYandexResponse(
                 "provider-check",
                 "Ответь одним словом OK.",
                 "Проверка доступности YandexGPT.",
@@ -141,7 +141,7 @@ public class OpenAiResponsesClient {
                 false,
                 16,
                 Duration.ofSeconds(20)
-        ));
+        );
         if (!response.text().isBlank()) {
             return rememberCheck("ok", 200, "YandexGPT доступен по текущему маршруту.");
         }
@@ -375,7 +375,11 @@ public class OpenAiResponsesClient {
                     0.2,
                     true,
                     yandexMaxTokens(deep.getMaxOutputTokens()),
-                    deep.getTimeout()
+                    deep.getTimeout(),
+                    useYandexResponsesApi(),
+                    properties.getYandex().getSearchContextSize(),
+                    "company_deep_research_report",
+                    deepResearchSchema(12, 16)
             );
         }
 
@@ -404,6 +408,7 @@ public class OpenAiResponsesClient {
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
         if (useYandex()) {
+            OpenAiResearchReportOptions optionsForSchema = options;
             return createYandexResponse(
                     "company-research-report",
                     yandexResearchInstructions(instructions),
@@ -411,7 +416,11 @@ public class OpenAiResponsesClient {
                     0.2,
                     true,
                     yandexMaxTokens(options.maxOutputTokens()),
-                    options.timeout()
+                    options.timeout(),
+                    useYandexResponsesApi(),
+                    properties.getYandex().getSearchContextSize(),
+                    "company_research_report",
+                    deepResearchSchema(optionsForSchema)
             );
         }
 
@@ -451,7 +460,11 @@ public class OpenAiResponsesClient {
                     0.15,
                     true,
                     yandexMaxTokens(Math.min(options.maxOutputTokens(), 6000)),
-                    options.timeout()
+                    options.timeout(),
+                    useYandexResponsesApi(),
+                    properties.getYandex().getSearchContextSize(),
+                    "company_research_sources_refresh",
+                    sourceRefreshSchema()
             );
         }
 
@@ -491,7 +504,11 @@ public class OpenAiResponsesClient {
                     0.18,
                     true,
                     yandexMaxTokens(Math.min(options.maxOutputTokens(), 7000)),
-                    options.timeout()
+                    options.timeout(),
+                    useYandexResponsesApi(),
+                    properties.getYandex().getSearchContextSize(),
+                    "company_research_gap_enrichment",
+                    gapEnrichmentSchema()
             );
         }
 
@@ -531,7 +548,11 @@ public class OpenAiResponsesClient {
                     0.18,
                     true,
                     yandexMaxTokens(options.maxOutputTokens()),
-                    options.timeout()
+                    options.timeout(),
+                    false,
+                    options.searchContextSize(),
+                    "company_research_report_rewrite",
+                    deepResearchSchema(options)
             );
         }
 
@@ -566,7 +587,11 @@ public class OpenAiResponsesClient {
                     0.18,
                     true,
                     yandexMaxTokens(Math.min(options.maxOutputTokens(), 5000)),
-                    options.timeout()
+                    options.timeout(),
+                    false,
+                    options.searchContextSize(),
+                    "company_research_section_rewrite",
+                    sectionRewriteSchema()
             );
         }
 
@@ -603,6 +628,34 @@ public class OpenAiResponsesClient {
             int maxTokens,
             Duration timeout
     ) {
+        return createYandexResponse(
+                task,
+                instructions,
+                input,
+                temperature,
+                jsonObject,
+                maxTokens,
+                timeout,
+                false,
+                properties.getYandex().getSearchContextSize(),
+                "",
+                null
+        );
+    }
+
+    private OpenAiResponseResult createYandexResponse(
+            String task,
+            String instructions,
+            String input,
+            double temperature,
+            boolean jsonObject,
+            int maxTokens,
+            Duration timeout,
+            boolean webSearch,
+            String searchContextSize,
+            String schemaName,
+            Map<String, Object> schema
+    ) {
         String model = properties.getYandex().getModel();
         if (!yandexGptProvider.isAvailable()) {
             return new OpenAiResponseResult(
@@ -613,6 +666,23 @@ public class OpenAiResponsesClient {
                     0,
                     0,
                     "YandexGPT не настроен: укажите YANDEX_AI_API_KEY и YANDEX_FOLDER_ID."
+            );
+        }
+
+        if (useYandexResponsesApi()) {
+            return postYandexResponsesApi(
+                    yandexResponsesRequestBody(
+                            instructions,
+                            input,
+                            temperature,
+                            jsonObject,
+                            yandexMaxTokens(maxTokens),
+                            webSearch,
+                            searchContextSize,
+                            schemaName,
+                            schema
+                    ),
+                    timeout == null ? properties.getYandex().getTimeout() : timeout
             );
         }
 
@@ -632,14 +702,157 @@ public class OpenAiResponsesClient {
     }
 
     private String yandexResearchInstructions(String instructions) {
+        if (useYandexResponsesApi()) {
+            return instructions + "\n\n"
+                    + "Важно: используй подключенный инструмент web_search для публичной проверки компании, источников, карточек, "
+                    + "сайта, цен, филиалов, отзывов и спорных фактов. Не ограничивайся памятью модели. Сохраняй реальные URL "
+                    + "в sources и не утверждай неподтвержденные факты без пометки.";
+        }
         return instructions + "\n\n"
                 + "Важно: ты работаешь через YandexGPT без встроенного web-search. Используй только CRM-факты, ручные URL, "
                 + "собранные источники и выдержки, которые переданы в пользовательском сообщении. Не утверждай, что сделал живой поиск, "
                 + "если факт не подтверждён переданным источником; лучше добавь предупреждение в warnings.";
     }
 
+    private Map<String, Object> yandexResponsesRequestBody(
+            String instructions,
+            String input,
+            double temperature,
+            boolean jsonObject,
+            int maxTokens,
+            boolean webSearch,
+            String searchContextSize,
+            String schemaName,
+            Map<String, Object> schema
+    ) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", yandexModelUri());
+        body.put("instructions", instructions);
+        body.put("input", input);
+        body.put("temperature", temperature);
+        body.put("max_output_tokens", maxTokens);
+        body.put("stream", false);
+
+        if (webSearch) {
+            body.put("tools", List.of(yandexWebSearchTool(searchContextSize)));
+            body.put("tool_choice", "auto");
+            body.put("max_tool_calls", properties.getYandex().getMaxToolCalls());
+        }
+        if (schema != null && !isBlank(schemaName)) {
+            body.put("text", Map.of("format", Map.of(
+                    "type", "json_schema",
+                    "name", schemaName,
+                    "strict", true,
+                    "schema", schema
+            )));
+        } else if (jsonObject) {
+            body.put("text", Map.of("format", Map.of("type", "json_object")));
+        }
+        return body;
+    }
+
+    private Map<String, Object> yandexWebSearchTool(String searchContextSize) {
+        Map<String, Object> tool = new LinkedHashMap<>();
+        tool.put("type", "web_search");
+        tool.put("search_context_size", yandexSearchContextSize(searchContextSize));
+
+        String region = properties.getYandex().getSearchRegion();
+        if (!isBlank(region)) {
+            tool.put("filters", Map.of("user_location", Map.of("region", region.trim())));
+        }
+        return tool;
+    }
+
+    private String yandexSearchContextSize(String value) {
+        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "low", "medium", "high" -> normalized;
+            default -> "high";
+        };
+    }
+
+    private String yandexModelUri() {
+        ReputationAiProperties.YandexGpt yandex = properties.getYandex();
+        String model = yandex.getModel();
+        if (model.startsWith("gpt://")) {
+            return model;
+        }
+        return "gpt://" + yandex.getFolderId() + "/" + model;
+    }
+
     private int yandexMaxTokens(int desired) {
         return Math.max(1, Math.min(desired, properties.getYandex().getMaxTokens()));
+    }
+
+    private OpenAiResponseResult postYandexResponsesApi(Map<String, Object> body, Duration timeout) {
+        ReputationAiProperties.YandexGpt yandex = properties.getYandex();
+        String fallbackModel = yandexModelUri();
+        String requestJson;
+        try {
+            requestJson = objectMapper.writeValueAsString(body);
+        } catch (Exception exception) {
+            log.warn("YandexGPT Responses API request serialization failed: {}", exception.getMessage());
+            return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, "Не удалось подготовить запрос YandexGPT Responses: " + exception.getMessage());
+        }
+
+        Duration effectiveTimeout = timeout == null ? yandex.getTimeout() : timeout;
+        int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(yandex.getResponsesBaseUrl() + "/responses"))
+                        .version(HttpClient.Version.HTTP_1_1)
+                        .timeout(effectiveTimeout)
+                        .header("Authorization", "Api-Key " + yandex.getApiKey())
+                        .header("x-folder-id", yandex.getFolderId())
+                        .header("OpenAI-Project", yandex.getFolderId())
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
+                        .build();
+
+                HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    String httpError = "YandexGPT Responses API вернул HTTP " + response.statusCode() + ": " + limit(response.body(), 800);
+                    rememberCheck("http_error", response.statusCode(), httpError);
+                    log.warn("YandexGPT Responses API returned HTTP {} on attempt {}/{}: {}",
+                            response.statusCode(),
+                            attempt,
+                            maxAttempts,
+                            limit(response.body(), 800));
+                    if (attempt < maxAttempts && isRetryableStatus(response.statusCode())) {
+                        sleepBeforeRetry(response, attempt);
+                        continue;
+                    }
+                    return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, httpError);
+                }
+
+                rememberCheck("ok", response.statusCode(), "YandexGPT Responses API вернул успешный ответ.");
+                JsonNode root = objectMapper.readTree(response.body());
+                return parseResponse(root, fallbackModel, "yandexgpt");
+            } catch (InterruptedException interruptedException) {
+                Thread.currentThread().interrupt();
+                return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, "Запрос YandexGPT Responses был прерван.");
+            } catch (HttpTimeoutException timeoutException) {
+                String message = "Запрос YandexGPT Responses не успел завершиться по таймауту.";
+                rememberCheck("network_error", null, message);
+                return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, message);
+            } catch (Exception exception) {
+                log.warn("YandexGPT Responses API request failed on attempt {}/{}: {}", attempt, maxAttempts, exception.getMessage());
+                if (attempt < maxAttempts) {
+                    try {
+                        sleepBeforeRetry(null, attempt);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                        return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, "Запрос YandexGPT Responses был прерван.");
+                    }
+                    continue;
+                }
+                String message = "Запрос YandexGPT Responses завершился ошибкой: " + exception.getMessage();
+                rememberCheck("network_error", null, message);
+                return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, message);
+            }
+        }
+        return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, "YandexGPT Responses не вернул ответ после повторных попыток.");
     }
 
     private OpenAiResponseResult postResponse(Map<String, Object> body, Duration timeout) {
@@ -943,14 +1156,27 @@ public class OpenAiResponsesClient {
     }
 
     private OpenAiResponseResult parseResponse(JsonNode root, String fallbackModel) {
+        return parseResponse(root, fallbackModel, "openai");
+    }
+
+    private OpenAiResponseResult parseResponse(JsonNode root, String fallbackModel, String provider) {
         String status = root.path("status").asText("");
         if ("failed".equalsIgnoreCase(status)
                 || "cancelled".equalsIgnoreCase(status)
                 || "incomplete".equalsIgnoreCase(status)) {
-            return errorResult(
+            String message = responseErrorMessage(
+                    root,
+                    ("yandexgpt".equals(provider) ? "YandexGPT Responses" : "OpenAI")
+                            + " завершил ответ со статусом " + status + "."
+            );
+            return new OpenAiResponseResult(
                     root.path("id").asText(""),
+                    "",
+                    provider,
                     root.path("model").asText(fallbackModel),
-                    responseErrorMessage(root, "OpenAI завершил ответ со статусом " + status + ".")
+                    0,
+                    0,
+                    message
             );
         }
         String text = extractOutputText(root);
@@ -958,6 +1184,7 @@ public class OpenAiResponsesClient {
         return new OpenAiResponseResult(
                 root.path("id").asText(""),
                 text,
+                provider,
                 root.path("model").asText(fallbackModel),
                 usage.path("input_tokens").asInt(0),
                 usage.path("output_tokens").asInt(0)
@@ -1522,6 +1749,17 @@ public class OpenAiResponsesClient {
         return "yandex".equals(normalized)
                 || "yandexgpt".equals(normalized)
                 || "yandex-gpt".equals(normalized);
+    }
+
+    private boolean useYandexResponsesApi() {
+        String mode = properties.getYandex().getApiMode();
+        if (mode == null) {
+            return false;
+        }
+        String normalized = mode.trim().toLowerCase(Locale.ROOT);
+        return "responses".equals(normalized)
+                || "openai".equals(normalized)
+                || "openai-compatible".equals(normalized);
     }
 
     private String ensureJsonKeyword(String input) {

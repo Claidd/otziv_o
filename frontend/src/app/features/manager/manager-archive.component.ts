@@ -231,7 +231,7 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   orderDetailsLink(order: ArchiveOrderListItem): Array<string | number> | null {
     return order.source === 'live' && order.companyId
-      ? ['/manager/orders', order.companyId, order.id]
+      ? ['/orders', order.companyId, order.id]
       : null;
   }
 

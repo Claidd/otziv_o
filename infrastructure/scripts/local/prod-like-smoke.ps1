@@ -854,6 +854,23 @@ function Invoke-ReputationAiSmoke {
         throw "Reputation AI status response did not include OpenAI diagnostics."
     }
     Write-Host "Reputation AI status OK: AI=$($status.aiProvider), Search=$($status.searchProvider), Route=$($status.openAiDiagnostics.route)."
+    if ($status.aiProvider -match "^(yandex|yandexgpt)$") {
+        if ([string]$status.yandexModel -match "lite") {
+            throw "Reputation AI smoke expected YandexGPT Pro for deep reports, got model=$($status.yandexModel)."
+        }
+        $deepProfiles = @(ConvertTo-SmokeArray -Value $status.openAiResearchReportProfiles)
+        $maximumProfile = $deepProfiles | Where-Object { $_.key -eq "maximum" } | Select-Object -First 1
+        if ($null -eq $maximumProfile) {
+            throw "Reputation AI status did not include maximum deep research profile."
+        }
+        if ([int]$maximumProfile.maxOutputTokens -lt 12000) {
+            throw "Reputation AI Yandex maximum profile is too small: maxOutputTokens=$($maximumProfile.maxOutputTokens)."
+        }
+        if (-not ([string]$maximumProfile.searchContextSize).StartsWith("web_search:", [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Reputation AI Yandex deep report must use Responses Web Search, got searchContextSize=$($maximumProfile.searchContextSize)."
+        }
+        Write-Host "Reputation AI Yandex Responses/Web Search profile OK: model=$($status.yandexModel), maxOutputTokens=$($maximumProfile.maxOutputTokens), search=$($maximumProfile.searchContextSize)."
+    }
 
     $prompts = Invoke-RestMethod -Uri "$apiRoot/api/ai/reputation/prompts" -Headers $headers -TimeoutSec 30
     $promptItems = @(ConvertTo-SmokeArray -Value $prompts)

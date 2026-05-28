@@ -59,7 +59,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private static final int DEFAULT_ORIGINAL_RATING = 5;
     private static final int DEFAULT_TARGET_RATING = 2;
     private static final int SCHEDULE_STEP_DAYS = 2;
-    private static final String STATUS_TO_PAY = "Выставлен счет";
     private static final String STATUS_NOT_PAID = "Не оплачено";
 
     private final BadReviewTaskRepository badReviewTaskRepository;
@@ -167,11 +166,8 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     "Заказ для счета после плохого отзыва не найден", null, 0);
             return;
         }
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)) {
-            log.info("Счет после плохого отзыва пропущен: автоответчик выключен, orderId={}, taskId={}", order.getId(), task.getId());
-            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "worker_disabled",
-                    "Автоответчик выключен", badReviewInvoicePreview(order, summary), 0);
-            return;
+        if (isBadReviewFinalInvoice(summary)) {
+            paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Финальный счет после плохих пересчитывается");
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)) {
             log.info("Счет после плохого отзыва пропущен настройкой, orderId={}, taskId={}", order.getId(), task.getId());
@@ -179,18 +175,11 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     "Отправка счета после плохого отзыва выключена настройкой", badReviewInvoicePreview(order, summary), 0);
             return;
         }
-
-        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
-            String preview = badReviewInvoicePreview(order, summary);
-            log.info(
-                    "Счет после плохого отзыва dry-run: orderId={}, taskId={}, amount={}, message={}",
-                    order.getId(),
-                    task.getId(),
-                    money(payableSum(order, summary)),
-                    preview
-            );
-            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "client_messages_live_disabled",
-                    "Реальная отправка сообщений выключена", preview, 0);
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
+            log.info("Счет после плохого отзыва пропущен: моментальные клиентские сообщения выключены, orderId={}, taskId={}",
+                    order.getId(), task.getId());
+            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "immediate_messages_disabled",
+                    "Моментальные клиентские сообщения выключены", badReviewInvoicePreview(order, summary), 0);
             return;
         }
 
@@ -199,15 +188,14 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         try {
             message = badReviewInvoiceMessage(order, summary);
             String currentStatus = statusTitle(order);
-            String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
-                    currentStatus,
+            boolean sent = orderStatusNotificationService.sendInformationalMessageToClientChat(
                     order,
                     order.getManager() == null ? null : order.getManager().getClientId(),
                     order.getCompany() == null ? null : order.getCompany().getGroupId(),
                     message,
-                    STATUS_TO_PAY
+                    "счет после плохого отзыва"
             );
-            if (STATUS_TO_PAY.equals(appliedStatus)) {
+            if (sent) {
                 log.info(
                         "Счет после плохого отзыва отправлен клиенту: orderId={}, taskId={}, amount={}",
                         order.getId(),
@@ -216,13 +204,14 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 );
                 recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SENT, "client-chat",
                         null, null, message, System.currentTimeMillis() - startedAt);
+                scheduleBadReviewAutoBanIfReady(order, summary);
             } else {
-                String reason = "Сообщение не отправлено, заказ остался в статусе \"" + appliedStatus + "\"";
+                String reason = "Сообщение не отправлено, заказ остался в статусе \"" + currentStatus + "\"";
                 log.warn(
                         "Счет после плохого отзыва не отправлен клиенту: orderId={}, taskId={}, statusLeft={}",
                         order.getId(),
                         task.getId(),
-                        appliedStatus
+                        currentStatus
                 );
                 recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
                         "client_chat_send_failed", reason, message, System.currentTimeMillis() - startedAt);
@@ -237,6 +226,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                     System.currentTimeMillis() - startedAt);
             paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(order);
         }
+    }
+
+    private void scheduleBadReviewAutoBanIfReady(Order order, BadReviewTaskSummary summary) {
+        if (!isBadReviewFinalInvoice(summary)) {
+            return;
+        }
+        paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
+    }
+
+    private boolean isBadReviewFinalInvoice(BadReviewTaskSummary summary) {
+        return summary != null && summary.pending() == 0 && summary.done() > 0;
     }
 
     private void recordBadReviewInvoiceAttempt(

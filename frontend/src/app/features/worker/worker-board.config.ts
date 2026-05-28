@@ -112,13 +112,13 @@ export function workerBotIdLabel(botId?: number | null): string {
 }
 
 export function workerOrderDetailsPath(order: OrderCardItem): string {
-  return `/manager/orders/${order.companyId}/${order.id}`;
+  return `/orders/${order.companyId}/${order.id}`;
 }
 
 export function workerReviewDetailsPath(review: { companyId: number; orderId: number; orderDetailsId?: string }): string {
   return review.orderDetailsId
     ? reviewCheckPath(review.orderDetailsId)
-    : `/manager/orders/${review.companyId}/${review.orderId}`;
+    : `/orders/${review.companyId}/${review.orderId}`;
 }
 
 export function workerBotBrowserPath(botId?: number | null): string {

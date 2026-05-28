@@ -92,6 +92,24 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                              @Param("cutoff") LocalDateTime cutoff,
                                                              Pageable pageable);
 
+    @Query("""
+        SELECT o.id AS id,
+               c.id AS companyId,
+               COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) AS statusChangedAt
+        FROM Order o
+        LEFT JOIN o.company c
+        JOIN o.status s
+        WHERE o.complete = false
+          AND o.waitingForClient = true
+          AND COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) IS NOT NULL
+          AND COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) <= :cutoff
+          AND s.title IN :statuses
+        ORDER BY COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) ASC, o.id ASC
+    """)
+    List<ClientMessageCandidate> findClientTextWaitingMessageCandidates(@Param("statuses") Collection<String> statuses,
+                                                                        @Param("cutoff") LocalDateTime cutoff,
+                                                                        Pageable pageable);
+
     interface ClientMessageCandidate {
         Long getId();
         Long getCompanyId();

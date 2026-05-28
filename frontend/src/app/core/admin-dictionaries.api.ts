@@ -91,21 +91,29 @@ export interface AdminClientPublicationProgressReportSettings {
 export interface AdminClientMessageSettings {
   workerEnabled: boolean;
   liveEnabled: boolean;
+  immediateEnabled: boolean;
   monitorEnabled: boolean;
   reviewCheckEnabled: boolean;
+  reviewCheckAutoArchiveEnabled: boolean;
+  clientTextReminderEnabled: boolean;
   paymentReminderEnabled: boolean;
   badReviewInvoiceEnabled: boolean;
+  badReviewAutoBanEnabled: boolean;
   paymentOverdueEnabled: boolean;
   paymentOverdueLiveEnabled: boolean;
   archiveReorderEnabled: boolean;
   errorProtectionEnabled: boolean;
   reviewCheckIntervalDays: number;
+  reviewCheckAutoArchiveDays: number;
+  clientTextReminderIntervalDays: number;
   paymentReminderIntervalDays: number;
   reviewCheckRetryDelayHours: number;
   paymentInvoiceRetryDelayHours: number;
   badReviewInvoiceRetryDelayHours: number;
+  badReviewAutoBanDelayDays: number;
   paymentOverdueDays: number;
   archiveReorderMonths: number;
+  archiveOrderRetentionDays: number;
   errorProtectionThreshold: number;
   errorProtectionWindowMinutes: number;
   errorProtectionCooldownMinutes: number;
@@ -119,6 +127,7 @@ export interface AdminClientMessageSettings {
   maxGapSeconds: number;
   businessWindows: string;
   reviewCheckStatuses: string;
+  clientTextReminderStatuses: string;
   paymentReminderStatuses: string;
   paymentOverdueStatuses: string;
   closedOrderStatuses: string;
@@ -128,11 +137,13 @@ export interface AdminClientMessageSettings {
   openNextOrderRequestStatuses: string;
   reviewLinkBaseUrl: string;
   reviewReminderText: string;
+  clientTextReminderText: string;
   publicationStartedText: string;
   publicationProgressReportText: string;
   paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
   paymentReminderText: string;
   paymentLinkCopyText: string;
+  paymentSuccessText: string;
   archiveOfferText: string;
 }
 
@@ -202,7 +213,7 @@ export interface AdminClientMessageMonitor {
   liveEnabled: boolean;
   windowAllowed: boolean;
   businessWindows: string;
-  nowMoscow: string;
+  nowIrkutsk: string;
   updatedAt: string;
   nextAttemptAt?: string | null;
   pausedUntil?: string | null;

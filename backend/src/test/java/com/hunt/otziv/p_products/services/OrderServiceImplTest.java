@@ -124,6 +124,8 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+                .thenReturn(true);
         when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
                 .thenReturn(true);
         doAnswer(invocation -> {

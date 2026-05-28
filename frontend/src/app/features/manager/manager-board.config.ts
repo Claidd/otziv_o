@@ -137,7 +137,8 @@ export const MANAGER_MOBILE_NAV_LINKS: MobileNavLink[] = [
   { label: 'Главная', routerLink: '/' },
   { label: 'Лиды', routerLink: '/leads' },
   { label: 'Оператор', routerLink: '/operator' },
-  { label: 'Менеджер', routerLink: '/manager' },
+  { label: 'Компании', routerLink: '/companies' },
+  { label: 'Заказы', routerLink: '/orders' },
   { label: 'Специалист', routerLink: '/worker' },
   { label: 'Личный кабинет', routerLink: '/' }
 ];
@@ -346,15 +347,14 @@ export function managerCompanyFilialUrl(company: CompanyCardItem): string {
 
 export function managerCompanyOrderUrl(_company: CompanyCardItem): string {
   const params = new URLSearchParams({
-    section: 'orders',
     status: 'Все'
   });
 
-  return `/manager?${params.toString()}`;
+  return `/orders?${params.toString()}`;
 }
 
 export function managerOrderDetailsUrl(order: OrderCardItem): string {
-  return `/manager/orders/${order.companyId}/${order.id}`;
+  return `/orders/${order.companyId}/${order.id}`;
 }
 
 export function managerOrderInfoUrl(order: OrderCardItem): string {
