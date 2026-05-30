@@ -1,9 +1,8 @@
 package com.hunt.otziv.client_messages;
 
-import org.junit.jupiter.api.Test;
-
+import com.hunt.otziv.client_messages.service.ClientMessageSlotPlanner;
 import java.time.LocalDateTime;
-
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

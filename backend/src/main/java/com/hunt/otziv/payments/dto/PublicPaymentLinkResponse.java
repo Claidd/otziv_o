@@ -1,5 +1,7 @@
 package com.hunt.otziv.payments.dto;
 
+import com.hunt.otziv.payments.model.ManualPaymentType;
+import com.hunt.otziv.payments.model.PaymentMethod;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 

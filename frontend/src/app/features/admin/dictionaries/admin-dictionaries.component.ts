@@ -1437,7 +1437,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       ARCHIVE_REORDER_OFFER: 'Предлагает новый заказ компаниям из архивного цикла, если нет активных заказов и открытой заявки.',
       BAD_REVIEW_INVOICE: 'Фиксирует отправку счета после выполненного плохого отзыва с учетом доплаты.',
       BAD_REVIEW_AUTO_BAN: 'Переводит заказ и компанию в Бан, если финальный счет после плохих не оплатили за заданный срок.',
-      REVIEW_RECOVERY_NOTICE: 'Уведомляет клиента о завершенном восстановлении и снимает паузу с платежных таймеров заказа.'
+      REVIEW_RECOVERY_NOTICE: 'Финально уведомляет клиента, что все восстановления по заказу завершены, и снимает паузу с платежных таймеров.'
     }[scenario.scenario] ?? 'Сценарий автоответчика: кандидаты, отправки, пропуски и ошибки.';
   }
 
@@ -2723,7 +2723,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentSuccessText: settings?.paymentSuccessText
         ?? 'Оплата прошла успешно.\n\nНовый заказ принят в работу.\n{orderLine}{companyLine}Сумма: {sum}\nСтраница оплаты: {paymentPage}\n\n{receiptText}',
       reviewRecoveryNoticeText: settings?.reviewRecoveryNoticeText
-        ?? '{companyAndFilial}\n\nОтзыв восстановлен. Продолжаем работу по заказу №{orderId}.',
+        ?? '{companyAndFilial}\n\nВсе отзывы по заказу №{orderId} восстановлены. Продолжаем работу.',
       archiveOfferText: settings?.archiveOfferText
         ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.'
     });

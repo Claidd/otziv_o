@@ -1,5 +1,8 @@
 package com.hunt.otziv.payments.dto;
 
+import com.hunt.otziv.payments.model.ManualPaymentType;
+import com.hunt.otziv.payments.model.PaymentPolicy;
+
 public record ManagerManualPaymentSettingsResponse(
         Long profileId,
         String profileName,

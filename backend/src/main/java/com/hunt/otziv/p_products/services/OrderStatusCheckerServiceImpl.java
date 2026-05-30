@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.email.EmailService;
-import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -9,11 +9,10 @@ import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j

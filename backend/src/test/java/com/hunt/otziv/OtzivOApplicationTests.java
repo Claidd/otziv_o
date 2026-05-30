@@ -1,12 +1,15 @@
 package com.hunt.otziv;
 
-import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.archive.ArchiveRunResult;
-import com.hunt.otziv.archive.ManagerArchiveOrderDetailsResponse;
-import com.hunt.otziv.archive.ManagerArchiveOrderListItem;
-import com.hunt.otziv.archive.ManagerArchiveService;
-import com.hunt.otziv.archive.OrderArchiveDryRunService;
+import com.hunt.otziv.archive.dto.ArchiveRunResult;
+import com.hunt.otziv.archive.dto.ManagerArchiveOrderDetailsResponse;
+import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
+import com.hunt.otziv.archive.service.ManagerArchiveService;
+import com.hunt.otziv.archive.service.OrderArchiveDryRunService;
 import com.hunt.otziv.manager.dto.api.PageResponse;
+import com.hunt.otziv.r_review.services.ReviewService;
+import java.nio.ByteBuffer;
+import java.time.LocalDate;
+import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,11 +22,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.time.LocalDate;
-import java.nio.ByteBuffer;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest

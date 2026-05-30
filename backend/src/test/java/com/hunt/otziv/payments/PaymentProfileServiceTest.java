@@ -1,17 +1,23 @@
 package com.hunt.otziv.payments;
 
+import com.hunt.otziv.payments.config.TbankPaymentProperties;
+import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.dto.UpdateManagerManualPaymentSettingsRequest;
+import com.hunt.otziv.payments.model.PaymentPolicy;
+import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.repository.PaymentProfileRepository;
+import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.server.ResponseStatusException;
-
 import java.util.Optional;
-
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
+import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;

@@ -1,32 +1,30 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
-import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
+import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.u_users.services.service.UserService;
-import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
+import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
-import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)

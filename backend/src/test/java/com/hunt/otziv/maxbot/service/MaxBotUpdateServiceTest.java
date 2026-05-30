@@ -2,14 +2,12 @@ package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
+import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import java.util.Optional;
-
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;

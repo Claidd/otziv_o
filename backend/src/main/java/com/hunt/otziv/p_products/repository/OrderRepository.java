@@ -3,9 +3,13 @@ package com.hunt.otziv.p_products.repository;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
@@ -16,10 +20,6 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.data.util.Pair;
 import org.springframework.lang.NonNullApi;
 import org.springframework.stereotype.Repository;
-
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.*;
 
 @Repository
 public interface OrderRepository extends CrudRepository<Order, Long> {

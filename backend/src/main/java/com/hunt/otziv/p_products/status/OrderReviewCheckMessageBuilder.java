@@ -1,19 +1,18 @@
 package com.hunt.otziv.p_products.status;
 
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-
-import static com.hunt.otziv.client_messages.ScheduledClientMessageService.DEFAULT_PUBLICATION_STARTED_TEXT;
-import static com.hunt.otziv.client_messages.ScheduledClientMessageService.DEFAULT_REVIEW_LINK_BASE_URL;
-import static com.hunt.otziv.client_messages.ScheduledClientMessageService.DEFAULT_REVIEW_REMINDER_TEXT;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_PUBLICATION_STARTED_TEXT;
+import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_REVIEW_LINK_BASE_URL;
+import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_REVIEW_REMINDER_TEXT;
 
 @Service
 @RequiredArgsConstructor

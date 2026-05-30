@@ -2,6 +2,8 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncResponse;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
@@ -24,6 +26,7 @@ public class WhatsAppGroupLinkSyncService {
     private final WhatsAppProperties properties;
     private final WhatsAppService whatsAppService;
     private final WhatsAppGroupCompanyLinker groupCompanyLinker;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
     private final AppSettingService appSettingService;
 
     public static final boolean DEFAULT_ENABLED = true;
@@ -119,6 +122,20 @@ public class WhatsAppGroupLinkSyncService {
             }
         }
 
+        SharedChatLinkSyncResponse sharedChatSync = sharedChatLinkSyncService.syncSharedChatIds();
+        if (sharedChatSync.updatedCompanies() > 0) {
+            linked += sharedChatSync.whatsappLinked();
+            log.info(
+                    "WhatsApp group sync copied shared chat ids source={} updatedCompanies={} whatsappLinked={} telegramLinked={} maxLinked={} conflictGroups={}",
+                    source,
+                    sharedChatSync.updatedCompanies(),
+                    sharedChatSync.whatsappLinked(),
+                    sharedChatSync.telegramLinked(),
+                    sharedChatSync.maxLinked(),
+                    sharedChatSync.conflictGroups()
+            );
+        }
+
         appSettingService.setString(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_RUN_AT, Instant.now().toString());
         appSettingService.setInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, linked);
         log.info("WhatsApp group sync finished source={} clients={} groups={} linked={} durationMs={}",
@@ -149,7 +166,7 @@ public class WhatsAppGroupLinkSyncService {
             }
 
             int groupLinked = groupCompanyLinker.linkByInvite(group.groupId(), group.inviteLink());
-            if (groupLinked == 0 && !hasText(group.inviteLink())) {
+            if (groupLinked == 0) {
                 if (companiesWithChatUrl == null) {
                     companiesWithChatUrl = groupCompanyLinker.companiesWithChatUrl();
                 }

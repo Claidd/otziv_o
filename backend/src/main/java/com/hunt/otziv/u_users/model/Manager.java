@@ -2,12 +2,11 @@ package com.hunt.otziv.u_users.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.l_lead.model.Lead;
-import com.hunt.otziv.payments.PaymentProfile;
+import com.hunt.otziv.payments.model.PaymentProfile;
 import jakarta.persistence.*;
-import lombok.*;
-
 import java.util.Objects;
 import java.util.Set;
+import lombok.*;
 
 @Entity
 @Data

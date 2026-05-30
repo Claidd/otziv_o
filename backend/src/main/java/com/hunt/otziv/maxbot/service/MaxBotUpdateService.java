@@ -1,12 +1,11 @@
 package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
+import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j

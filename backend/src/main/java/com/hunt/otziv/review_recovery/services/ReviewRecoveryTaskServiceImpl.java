@@ -4,7 +4,7 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.client_messages.ReviewRecoveryNoticeScheduler;
+import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -19,25 +19,23 @@ import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 
 @Service
@@ -474,7 +472,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (batch == null || batch.getOrder() == null) {
             return;
         }
-        if (recoveryHoldService.isTerminal(batch.getOrder())) {
+        if (recoveryHoldService.shouldSkipClientRecoveryNotice(batch.getOrder())) {
             batch.setStatus(ReviewRecoveryBatchStatus.CLIENT_NOTIFIED);
             batch.setClientNotifiedAt(Instant.now());
             ReviewRecoveryBatch savedBatch = batchRepository.save(batch);

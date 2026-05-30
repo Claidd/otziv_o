@@ -1,11 +1,12 @@
 package com.hunt.otziv.p_products.services;
 
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
-import com.hunt.otziv.business_audit.BusinessAuditService;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
@@ -30,8 +31,12 @@ import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
-import lombok.RequiredArgsConstructor;
+import java.security.Principal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.*;
 import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
@@ -39,18 +44,11 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-
-
-import java.security.Principal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.*;
-
+import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
-import static com.hunt.otziv.client_messages.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
+import static com.hunt.otziv.r_review.utils.ReviewBotPolicy.hasUsablePublicationBot;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isShortCommonReviewText;
-import static com.hunt.otziv.r_review.utils.ReviewBotPolicy.hasUsablePublicationBot;
 
 @Service
 @Slf4j

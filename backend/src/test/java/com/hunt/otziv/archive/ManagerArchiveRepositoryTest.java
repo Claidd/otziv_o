@@ -1,16 +1,16 @@
 package com.hunt.otziv.archive;
 
-import org.junit.jupiter.api.Test;
+import com.hunt.otziv.archive.dto.ArchiveAccessScope;
+import com.hunt.otziv.archive.repository.ManagerArchiveRepository;
+import java.util.List;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.RowMapper;
+import org.mockito.Mock;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-
-import java.util.List;
-
+import org.springframework.jdbc.core.RowMapper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

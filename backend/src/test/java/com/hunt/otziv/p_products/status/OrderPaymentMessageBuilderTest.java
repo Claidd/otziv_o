@@ -5,18 +5,16 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.payments.PaymentLinkService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.u_users.model.Manager;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.ObjectProvider;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
+import org.springframework.beans.factory.ObjectProvider;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;

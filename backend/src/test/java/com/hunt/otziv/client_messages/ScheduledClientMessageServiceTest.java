@@ -1,10 +1,20 @@
-package com.hunt.otziv.client_messages;
+package com.hunt.otziv.client_messages.service;
 
+import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
-import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
+import com.hunt.otziv.client_messages.model.ScheduledClientMessageAttempt;
+import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
+import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.client_messages.repository.ArchiveCompanyMessageCandidateRepository;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -13,7 +23,7 @@ import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
-import com.hunt.otziv.payments.PaymentLinkService;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
@@ -22,18 +32,16 @@ import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -483,13 +491,14 @@ class ScheduledClientMessageServiceTest {
         Company company = new Company();
         company.setId(25L);
         company.setGroupId("group-15");
+        company.setPublicationProgressReportsEnabled(false);
         Manager manager = new Manager();
         manager.setClientId("client-15");
         Order order = new Order();
         order.setId(15L);
         order.setCompany(company);
         order.setManager(manager);
-        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        order.setStatus(OrderStatus.builder().title("Оплачено").build());
         ReviewRecoveryBatch batch = ReviewRecoveryBatch.builder()
                 .id(55L)
                 .order(order)
@@ -507,7 +516,9 @@ class ScheduledClientMessageServiceTest {
 
         ReflectionTestUtils.invokeMethod(service, "sendReviewRecoveryNotice", state, company, now);
 
-        verify(messageSender).send(eq(company), eq("client-15"), eq("group-15"), anyString());
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(messageSender).send(eq(company), eq("client-15"), eq("group-15"), messageCaptor.capture());
+        assertTrue(messageCaptor.getValue().contains("Все отзывы по заказу №15 восстановлены"));
         verify(reviewRecoveryTaskService).markClientNotifiedAutomatically(55L);
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());

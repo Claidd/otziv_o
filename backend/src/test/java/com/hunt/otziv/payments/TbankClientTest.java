@@ -1,9 +1,7 @@
-package com.hunt.otziv.payments;
-
-import org.junit.jupiter.api.Test;
+package com.hunt.otziv.payments.service;
 
 import java.time.OffsetDateTime;
-
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TbankClientTest {

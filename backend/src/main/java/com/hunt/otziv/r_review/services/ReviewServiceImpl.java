@@ -2,7 +2,7 @@ package com.hunt.otziv.r_review.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
-import com.hunt.otziv.business_audit.BusinessAuditService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -14,6 +14,9 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.ProductService;
+import com.hunt.otziv.r_review.board.ReviewBoardMode;
+import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
+import com.hunt.otziv.r_review.board.ReviewBoardScope;
 import com.hunt.otziv.r_review.bot.ReviewBotChangeService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -21,9 +24,6 @@ import com.hunt.otziv.r_review.edit.ReviewEditService;
 import com.hunt.otziv.r_review.mapper.ReviewDtoMapper;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchive;
-import com.hunt.otziv.r_review.board.ReviewBoardMode;
-import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
-import com.hunt.otziv.r_review.board.ReviewBoardScope;
 import com.hunt.otziv.r_review.nagul.ReviewNagulService;
 import com.hunt.otziv.r_review.repository.ReviewArchiveRepository;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -34,14 +34,6 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.*;
-import org.springframework.data.util.Pair;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.DayOfWeek;
@@ -49,12 +41,17 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
-
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.*;
+import org.springframework.data.util.Pair;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
 import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.requireAllowed;
 import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.requireAllowedAfterPrevious;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
-
 
 @Service
 @Slf4j

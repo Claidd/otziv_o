@@ -1,43 +1,34 @@
 package com.hunt.otziv.bad_reviews.services;
 
+import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
-import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
+import com.hunt.otziv.client_messages.model.ScheduledClientMessageAttempt;
+import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
+import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.settings.AppSettingService;
-import com.hunt.otziv.client_messages.ClientMessageScenario;
-import com.hunt.otziv.client_messages.ClientMessageTargetType;
-import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
-import com.hunt.otziv.client_messages.ScheduledClientMessageAttempt;
-import com.hunt.otziv.client_messages.ScheduledClientMessageAttemptRepository;
-import com.hunt.otziv.client_messages.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
-import com.hunt.otziv.payments.PaymentLinkService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
-import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.SecureRandom;
@@ -50,6 +41,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j

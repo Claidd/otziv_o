@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
@@ -13,11 +13,10 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
+import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
-
+import org.mockito.Mock;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.contains;

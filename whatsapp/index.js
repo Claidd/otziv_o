@@ -502,7 +502,7 @@ app.get("/health", (req, res) => {
 });
 
 app.get("/ready", (req, res) => {
-  if (!ready) {
+  if (!ready || !authenticated) {
     res.status(503).json(statusPayload());
     return;
   }

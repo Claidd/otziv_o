@@ -2,7 +2,7 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
-import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
+import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
@@ -13,14 +13,13 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
@@ -207,7 +206,3 @@ public class ReplyServiceImpl implements ReplyService {
         whatsAppService.sendMessageToGroup(reply.getClientId(), reply.getGroupId(), message);
     }
 }
-
-
-
-

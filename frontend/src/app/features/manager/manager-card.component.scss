@@ -65,6 +65,8 @@
 .order-card header {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
+  min-height: 1.5rem;
+  padding-inline: 2.85rem;
   text-align: center;
 }
 
@@ -74,6 +76,23 @@
 
 .order-card header small {
   display: none;
+}
+
+.order-card .order-id-badge {
+  display: inline-grid;
+  min-width: 2.1rem;
+  min-height: 1.35rem;
+  place-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 999px;
+  padding: 0 0.42rem;
+  color: var(--otziv-info);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 0.35rem 0.8rem rgba(132, 139, 200, 0.16);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .phone-row,

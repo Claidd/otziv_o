@@ -1,37 +1,36 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
-import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
+import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.http.NoHttpResponseException;
-import org.apache.http.conn.ConnectTimeoutException;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.bots.DefaultBotOptions;
-import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
-import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
-
-import javax.net.ssl.SSLException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Collections;
 import java.util.regex.Pattern;
+import javax.net.ssl.SSLException;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.http.conn.ConnectTimeoutException;
+import org.apache.http.NoHttpResponseException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.bots.DefaultBotOptions;
+import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
+import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 @Component
 @Slf4j

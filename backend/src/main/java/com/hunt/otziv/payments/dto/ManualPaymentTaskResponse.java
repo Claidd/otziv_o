@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.dto;
 
+import com.hunt.otziv.payments.model.ManualPaymentType;
 import java.time.LocalDateTime;
 
 public record ManualPaymentTaskResponse(

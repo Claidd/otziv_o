@@ -1,20 +1,22 @@
 package com.hunt.otziv.payments;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.client_messages.ClientChatMessageSender;
-import com.hunt.otziv.client_messages.ClientMessageSendResult;
-import com.hunt.otziv.client_messages.ScheduledClientMessageService;
+import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.payments.config.TbankPaymentProperties;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.service.PaymentSuccessClientNotifier;
 import com.hunt.otziv.u_users.model.Manager;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.time.LocalDateTime;
-
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
