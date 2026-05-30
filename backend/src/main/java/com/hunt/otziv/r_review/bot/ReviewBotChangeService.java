@@ -41,6 +41,7 @@ public class ReviewBotChangeService {
     private final EmailService emailService;
     private final BotAssignmentService botAssignmentService;
     private final FilialService filialService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @Transactional
     public void changeBot(Long reviewId) {
@@ -74,6 +75,7 @@ public class ReviewBotChangeService {
             }
 
             boolean wasVigul = review.isVigul();
+            boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
 
             Bot currentBot = review.getBot();
             Long currentBotId = currentBot != null ? currentBot.getId() : null;
@@ -91,6 +93,7 @@ public class ReviewBotChangeService {
 
             Set<Long> excludedBotIds = botId != null && botId > 0 ? Set.of(botId) : Set.of();
             assignBotUsingSharedRules(review, excludedBotIds);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
 
             log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
             reviewRepository.save(review);
@@ -105,6 +108,7 @@ public class ReviewBotChangeService {
     public void assignNewAccount(Long reviewId) {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
+        boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
 
         Filial filial = review.getFilial();
         City city = filial != null ? filial.getCity() : null;
@@ -127,7 +131,7 @@ public class ReviewBotChangeService {
                 .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Впиши Имя Фамилию\" в городе 325"));
 
         review.setBot(selectedBot);
-        review.setVigul(false);
+        accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
         reviewRepository.save(review);
 
         log.info("Новый аккаунт ID {} назначен отзыву ID {} для города филиала {}",
@@ -202,8 +206,10 @@ public class ReviewBotChangeService {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
         boolean wasVigul = review.isVigul();
+        boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
 
         assignBotUsingSharedRules(review, Set.of());
+        accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
 
         log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
         return review;

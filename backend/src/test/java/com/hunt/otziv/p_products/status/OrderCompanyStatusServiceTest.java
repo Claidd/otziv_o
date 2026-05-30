@@ -65,6 +65,23 @@ class OrderCompanyStatusServiceTest {
     }
 
     @Test
+    void archiveMovesStoppedCompanyToWorkWhenAnotherActiveOrderExists() {
+        OrderCompanyStatusService service = service();
+        Company company = company("На стопе");
+        Order current = order(1L, "Архив", company);
+        Order active = order(2L, "Публикация", company);
+        company.setOrderList(new LinkedHashSet<>(java.util.List.of(current, active)));
+        CompanyStatus work = status("В работе");
+
+        when(companyStatusService.getStatusByTitle("В работе")).thenReturn(work);
+
+        service.autoManageCompanyStatus(current, "Архив");
+
+        assertEquals("В работе", company.getStatus().getTitle());
+        verify(companyService).save(company);
+    }
+
+    @Test
     void archiveMovesCompanyToNewOrderWhenOpenRequestExists() {
         OrderCompanyStatusService service = service();
         Company company = company("В работе");
@@ -117,18 +134,19 @@ class OrderCompanyStatusServiceTest {
     }
 
     @Test
-    void activeStatusKeepsStoppedCompanyWhenAnotherActiveOrderExists() {
+    void activeStatusMovesStoppedCompanyToWorkWhenAnotherActiveOrderExists() {
         OrderCompanyStatusService service = service();
         Company company = company("На стопе");
         Order current = order(1L, "Публикация", company);
         Order active = order(2L, "Коррекция", company);
         company.setOrderList(new LinkedHashSet<>(java.util.List.of(current, active)));
+        CompanyStatus work = status("В работе");
 
+        when(companyStatusService.getStatusByTitle("В работе")).thenReturn(work);
         service.autoManageCompanyStatus(current, "Публикация");
 
-        assertEquals("На стопе", company.getStatus().getTitle());
-        verify(companyStatusService, never()).getStatusByTitle("В работе");
-        verify(companyService, never()).save(company);
+        assertEquals("В работе", company.getStatus().getTitle());
+        verify(companyService).save(company);
     }
 
     @Test

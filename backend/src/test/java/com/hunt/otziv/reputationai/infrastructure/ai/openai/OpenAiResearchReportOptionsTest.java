@@ -32,9 +32,9 @@ class OpenAiResearchReportOptionsTest {
 
         assertThat(options.profileKey()).isEqualTo("maximum");
         assertThat(options.model()).isEqualTo("gpt-5.5");
-        assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(12));
+        assertThat(options.timeout()).isEqualTo(Duration.ofMinutes(15));
         assertThat(options.maxToolCalls()).isEqualTo(48);
-        assertThat(options.maxOutputTokens()).isEqualTo(16000);
+        assertThat(options.maxOutputTokens()).isEqualTo(24000);
         assertThat(options.reasoningEffort()).isEqualTo("medium");
         assertThat(options.searchContextSize()).isEqualTo("medium");
     }

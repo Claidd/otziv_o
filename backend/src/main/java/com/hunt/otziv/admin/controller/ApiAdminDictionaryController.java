@@ -92,6 +92,7 @@ public class ApiAdminDictionaryController {
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
     private final TbankRuntimeSettingsService tbankRuntimeSettingsService;
+    private final ScheduledClientMessageService scheduledClientMessageService;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -515,7 +516,12 @@ public class ApiAdminDictionaryController {
     @GetMapping("/settings/nagul")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public NagulSettingsResponse getNagulSettings() {
-        return new NagulSettingsResponse(nagulCooldownMinutes(), nagulLookaheadDays());
+        return new NagulSettingsResponse(
+                nagulCooldownMinutes(),
+                nagulLookaheadDays(),
+                accountWalkedCounterThreshold(),
+                accountWalkDelayDays()
+        );
     }
 
     @PutMapping("/settings/nagul")
@@ -523,6 +529,8 @@ public class ApiAdminDictionaryController {
     public NagulSettingsResponse updateNagulSettings(@RequestBody NagulSettingsRequest request) {
         int cooldownMinutes = requiredCooldownMinutes(request.cooldownMinutes());
         int lookaheadDays = requiredLookaheadDays(request.lookaheadDays());
+        int accountWalkedCounterThreshold = requiredAccountWalkedCounterThreshold(request.accountWalkedCounterThreshold());
+        int accountWalkDelayDays = requiredAccountWalkDelayDays(request.accountWalkDelayDays());
 
         int savedCooldownMinutes = appSettingService.setInt(
                 AppSettingService.NAGUL_COOLDOWN_MINUTES,
@@ -532,7 +540,20 @@ public class ApiAdminDictionaryController {
                 AppSettingService.NAGUL_LOOKAHEAD_DAYS,
                 lookaheadDays
         );
-        return new NagulSettingsResponse(savedCooldownMinutes, savedLookaheadDays);
+        int savedAccountWalkedCounterThreshold = appSettingService.setInt(
+                AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD,
+                accountWalkedCounterThreshold
+        );
+        int savedAccountWalkDelayDays = appSettingService.setInt(
+                AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS,
+                accountWalkDelayDays
+        );
+        return new NagulSettingsResponse(
+                savedCooldownMinutes,
+                savedLookaheadDays,
+                savedAccountWalkedCounterThreshold,
+                savedAccountWalkDelayDays
+        );
     }
 
     @GetMapping("/settings/telegram-reports")
@@ -616,6 +637,9 @@ public class ApiAdminDictionaryController {
 
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, request.workerEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, request.liveEnabled());
+        if (request.liveEnabled()) {
+            scheduledClientMessageService.releaseDryRunMessagesIfLiveEnabled();
+        }
         appSettingService.setBoolean(
                 AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED,
                 request.immediateEnabled() == null || request.immediateEnabled()
@@ -636,6 +660,10 @@ public class ApiAdminDictionaryController {
                 AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED,
                 request.badReviewAutoBanEnabled() == null || request.badReviewAutoBanEnabled()
         );
+        appSettingService.setBoolean(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_ENABLED,
+                request.reviewRecoveryNoticeEnabled() == null || request.reviewRecoveryNoticeEnabled()
+        );
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, request.paymentOverdueEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, request.paymentOverdueLiveEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, request.archiveReorderEnabled());
@@ -649,12 +677,16 @@ public class ApiAdminDictionaryController {
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS, request.paymentInvoiceRetryDelayHours(), 1, 168, "Повтор счета после сбоя");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS, request.badReviewInvoiceRetryDelayHours(), 1, 168, "Повтор счета после плохого отзыва");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS, request.badReviewAutoBanDelayDays(), 1, 365, "Автобан после плохих отзывов");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS, request.reviewRecoveryNoticeRetryDelayHours(), 1, 168, "Повтор уведомления о восстановлении");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, request.paymentOverdueDays(), 1, 365, "Срок просрочки оплаты");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS, request.archiveReorderMonths(), 1, 36, "Интервал архивного предложения");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS, request.archiveReorderJitterDays(), 0, 30, "Разброс архивного предложения");
         saveIntSetting(AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS, request.archiveOrderRetentionDays(), 1, 3650, "Архив live-заказов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD, request.errorProtectionThreshold(), 1, 10000, "Порог массовых ошибок");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_WINDOW_MINUTES, request.errorProtectionWindowMinutes(), 1, 1440, "Окно массовых ошибок");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES, request.errorProtectionCooldownMinutes(), 1, 1440, "Пауза после массовых ошибок");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS, request.whatsAppAuthRetryHours(), 1, 48, "Повтор WhatsApp QR/авторизации");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS, request.whatsAppAuthAlertCooldownHours(), 1, 168, "Пауза Telegram-алерта WhatsApp");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS, request.retentionDays(), 1, 3650, "Хранение журнала");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_TICK_BATCH_SIZE, request.tickBatchSize(), 1, 100, "Размер пачки");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_CANDIDATE_LIMIT, request.candidateLimit(), 1, 5000, "Лимит кандидатов");
@@ -689,6 +721,13 @@ public class ApiAdminDictionaryController {
                 )
                 : request.paymentSuccessText();
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT, requiredSettingText(paymentSuccessText, "Укажите текст успешной оплаты"));
+        String reviewRecoveryNoticeText = request.reviewRecoveryNoticeText() == null
+                ? appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
+                )
+                : request.reviewRecoveryNoticeText();
+        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT, requiredSettingText(reviewRecoveryNoticeText, "Укажите текст уведомления о восстановлении"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
 
         return clientMessageSettings();
@@ -961,12 +1000,40 @@ public class ApiAdminDictionaryController {
         return value;
     }
 
+    private int requiredAccountWalkedCounterThreshold(Integer value) {
+        if (value == null) {
+            throw badRequest("Укажите порог выгулянного аккаунта");
+        }
+        if (value < 1 || value > 30) {
+            throw badRequest("Порог выгулянного аккаунта должен быть от 1 до 30 публикаций");
+        }
+        return value;
+    }
+
+    private int requiredAccountWalkDelayDays(Integer value) {
+        if (value == null) {
+            throw badRequest("Укажите задержку публикации для невыгулянного аккаунта");
+        }
+        if (value < 0 || value > 30) {
+            throw badRequest("Задержка публикации для невыгулянного аккаунта должна быть от 0 до 30 дней");
+        }
+        return value;
+    }
+
     private int nagulCooldownMinutes() {
         return appSettingService.getInt(AppSettingService.NAGUL_COOLDOWN_MINUTES, defaultNagulCooldownMinutes);
     }
 
     private int nagulLookaheadDays() {
         return appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, defaultNagulLookaheadDays);
+    }
+
+    private int accountWalkedCounterThreshold() {
+        return appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3);
+    }
+
+    private int accountWalkDelayDays() {
+        return appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2);
     }
 
     private ClientMessageSettingsResponse clientMessageSettings() {
@@ -981,6 +1048,7 @@ public class ApiAdminDictionaryController {
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, false),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, true),
@@ -1018,12 +1086,20 @@ public class ApiAdminDictionaryController {
                         ScheduledClientMessageService.DEFAULT_BAD_REVIEW_AUTO_BAN_DELAY_DAYS
                 ),
                 appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS
+                ),
+                appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_DAYS
                 ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS,
                         ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_MONTHS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS,
+                        ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_JITTER_DAYS
                 ),
                 appSettingService.getInt(
                         AppSettingService.ARCHIVE_ORDERS_RETENTION_DAYS,
@@ -1040,6 +1116,14 @@ public class ApiAdminDictionaryController {
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES,
                         ScheduledClientMessageService.DEFAULT_ERROR_PROTECTION_COOLDOWN_MINUTES
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS,
+                        ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS,
+                        ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS
                 ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS,
@@ -1148,6 +1232,10 @@ public class ApiAdminDictionaryController {
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_SUCCESS_TEXT
+                ),
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
+                        ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
                 ),
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT,
@@ -1511,10 +1599,20 @@ public class ApiAdminDictionaryController {
     ) {
     }
 
-    public record NagulSettingsRequest(Integer cooldownMinutes, Integer lookaheadDays) {
+    public record NagulSettingsRequest(
+            Integer cooldownMinutes,
+            Integer lookaheadDays,
+            Integer accountWalkedCounterThreshold,
+            Integer accountWalkDelayDays
+    ) {
     }
 
-    public record NagulSettingsResponse(int cooldownMinutes, int lookaheadDays) {
+    public record NagulSettingsResponse(
+            int cooldownMinutes,
+            int lookaheadDays,
+            int accountWalkedCounterThreshold,
+            int accountWalkDelayDays
+    ) {
     }
 
     public record ClientPublicationProgressReportSettingsRequest(boolean enabled) {
@@ -1534,6 +1632,7 @@ public class ApiAdminDictionaryController {
             boolean paymentReminderEnabled,
             boolean badReviewInvoiceEnabled,
             Boolean badReviewAutoBanEnabled,
+            Boolean reviewRecoveryNoticeEnabled,
             boolean paymentOverdueEnabled,
             boolean paymentOverdueLiveEnabled,
             boolean archiveReorderEnabled,
@@ -1546,12 +1645,16 @@ public class ApiAdminDictionaryController {
             Integer paymentInvoiceRetryDelayHours,
             Integer badReviewInvoiceRetryDelayHours,
             Integer badReviewAutoBanDelayDays,
+            Integer reviewRecoveryNoticeRetryDelayHours,
             Integer paymentOverdueDays,
             Integer archiveReorderMonths,
+            Integer archiveReorderJitterDays,
             Integer archiveOrderRetentionDays,
             Integer errorProtectionThreshold,
             Integer errorProtectionWindowMinutes,
             Integer errorProtectionCooldownMinutes,
+            Integer whatsAppAuthRetryHours,
+            Integer whatsAppAuthAlertCooldownHours,
             Integer retentionDays,
             Integer tickBatchSize,
             Integer candidateLimit,
@@ -1579,6 +1682,7 @@ public class ApiAdminDictionaryController {
             String paymentReminderText,
             String paymentLinkCopyText,
             String paymentSuccessText,
+            String reviewRecoveryNoticeText,
             String archiveOfferText
     ) {
     }
@@ -1594,6 +1698,7 @@ public class ApiAdminDictionaryController {
             boolean paymentReminderEnabled,
             boolean badReviewInvoiceEnabled,
             boolean badReviewAutoBanEnabled,
+            boolean reviewRecoveryNoticeEnabled,
             boolean paymentOverdueEnabled,
             boolean paymentOverdueLiveEnabled,
             boolean archiveReorderEnabled,
@@ -1606,12 +1711,16 @@ public class ApiAdminDictionaryController {
             int paymentInvoiceRetryDelayHours,
             int badReviewInvoiceRetryDelayHours,
             int badReviewAutoBanDelayDays,
+            int reviewRecoveryNoticeRetryDelayHours,
             int paymentOverdueDays,
             int archiveReorderMonths,
+            int archiveReorderJitterDays,
             int archiveOrderRetentionDays,
             int errorProtectionThreshold,
             int errorProtectionWindowMinutes,
             int errorProtectionCooldownMinutes,
+            int whatsAppAuthRetryHours,
+            int whatsAppAuthAlertCooldownHours,
             int retentionDays,
             int tickBatchSize,
             int candidateLimit,
@@ -1639,6 +1748,7 @@ public class ApiAdminDictionaryController {
             String paymentReminderText,
             String paymentLinkCopyText,
             String paymentSuccessText,
+            String reviewRecoveryNoticeText,
             String archiveOfferText
     ) {
     }

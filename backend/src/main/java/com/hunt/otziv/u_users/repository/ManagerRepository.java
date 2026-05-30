@@ -107,6 +107,14 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     List<Manager> findAllForPaymentProfileAssignments();
 
     @Query("""
+    SELECT DISTINCT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    WHERE m.clientId = :clientId
+""")
+    List<Manager> findAllByClientIdWithUser(@Param("clientId") String clientId);
+
+    @Query("""
     SELECT m.user.id
     FROM Manager m
     WHERE m.id IN :managerIds

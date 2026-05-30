@@ -85,6 +85,7 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
                 addReadyReviewTextConditions(conditions);
+                addReadyReviewAccountConditions(conditions);
             }
             case ORDER_STATUS -> {
                 conditions.add("os.title = :status");
@@ -157,6 +158,7 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
                 addReadyReviewTextConditions(conditions);
+                addReadyReviewAccountConditions(conditions);
             }
             case ORDER_STATUS -> {
                 conditions.add("os.title = :status");
@@ -197,8 +199,8 @@ public class ReviewBoardQueryService {
     private String reviewCountJoins(ReviewBoardMode mode, ReviewBoardScope scope) {
         return switch (mode) {
             case PUBLISH -> scope == ReviewBoardScope.MANAGER
-                    ? " JOIN r.orderDetails d JOIN d.order o "
-                    : "";
+                    ? " LEFT JOIN r.bot b JOIN r.orderDetails d JOIN d.order o "
+                    : " LEFT JOIN r.bot b ";
             case VIGUL -> scope == ReviewBoardScope.MANAGER
                     ? " LEFT JOIN r.bot b LEFT JOIN r.orderDetails d LEFT JOIN d.order o "
                     : " LEFT JOIN r.bot b ";
@@ -238,7 +240,21 @@ public class ReviewBoardQueryService {
     private void addReadyReviewTextConditions(List<String> conditions) {
         conditions.add("r.text IS NOT NULL");
         conditions.add("TRIM(r.text) <> ''");
-        conditions.add("LOWER(TRIM(r.text)) <> 'текст отзыва'");
+        conditions.add("LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'");
+        conditions.add("LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'");
+        conditions.add("LOWER(TRIM(r.text)) NOT LIKE 'нужно подсавить%'");
+        conditions.add("LOWER(TRIM(r.text)) NOT LIKE 'подставить текст%'");
+        conditions.add("LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'");
+    }
+
+    private void addReadyReviewAccountConditions(List<String> conditions) {
+        conditions.add("b IS NOT NULL");
+        conditions.add("b.id IS NOT NULL");
+        conditions.add("b.id <> 1");
+        conditions.add("b.active = true");
+        conditions.add("b.login IS NOT NULL");
+        conditions.add("TRIM(b.login) <> ''");
+        conditions.add("LOWER(TRIM(b.fio)) NOT IN ('впишите имя фамилию', 'впиши имя фамилию', 'впишите фамилию имя', 'нет доступных аккаунтов')");
     }
 
     private void bindReviewBoardParameters(

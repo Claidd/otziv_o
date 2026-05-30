@@ -65,6 +65,8 @@ export interface AdminManagerText {
 export interface AdminNagulSettings {
   cooldownMinutes: number;
   lookaheadDays: number;
+  accountWalkedCounterThreshold: number;
+  accountWalkDelayDays: number;
 }
 
 export interface AdminTelegramReportScheduleSettings {
@@ -99,6 +101,7 @@ export interface AdminClientMessageSettings {
   paymentReminderEnabled: boolean;
   badReviewInvoiceEnabled: boolean;
   badReviewAutoBanEnabled: boolean;
+  reviewRecoveryNoticeEnabled: boolean;
   paymentOverdueEnabled: boolean;
   paymentOverdueLiveEnabled: boolean;
   archiveReorderEnabled: boolean;
@@ -111,12 +114,16 @@ export interface AdminClientMessageSettings {
   paymentInvoiceRetryDelayHours: number;
   badReviewInvoiceRetryDelayHours: number;
   badReviewAutoBanDelayDays: number;
+  reviewRecoveryNoticeRetryDelayHours: number;
   paymentOverdueDays: number;
   archiveReorderMonths: number;
+  archiveReorderJitterDays: number;
   archiveOrderRetentionDays: number;
   errorProtectionThreshold: number;
   errorProtectionWindowMinutes: number;
   errorProtectionCooldownMinutes: number;
+  whatsAppAuthRetryHours: number;
+  whatsAppAuthAlertCooldownHours: number;
   retentionDays: number;
   tickBatchSize: number;
   candidateLimit: number;
@@ -144,6 +151,7 @@ export interface AdminClientMessageSettings {
   paymentReminderText: string;
   paymentLinkCopyText: string;
   paymentSuccessText: string;
+  reviewRecoveryNoticeText: string;
   archiveOfferText: string;
 }
 
@@ -152,6 +160,9 @@ export interface AdminClientMessageMonitorScenario {
   label: string;
   activeCandidates: number;
   dueNow: number;
+  readyToSendNow: number;
+  waitingForWindow: number;
+  missingChannelBindings: number;
   sentToday: number;
   sentSevenDays: number;
   failedToday: number;
@@ -182,6 +193,9 @@ export interface AdminClientMessageMonitorQueueItem {
   channelDetails?: string | null;
   paymentInstructionSource?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null;
   messagePreview?: string | null;
+  readiness?: string | null;
+  readinessLabel?: string | null;
+  readinessReason?: string | null;
   link?: string | null;
 }
 
@@ -220,6 +234,9 @@ export interface AdminClientMessageMonitor {
   pauseReason?: string | null;
   activeCandidates: number;
   dueNow: number;
+  readyToSendNow: number;
+  waitingForWindow: number;
+  missingChannelBindings: number;
   sentToday: number;
   failedToday: number;
   skippedToday: number;
@@ -242,6 +259,109 @@ export interface AdminClientMessageArchiveDiagnostics {
 
 export interface AdminClientMessageMonitorSettings {
   enabled: boolean;
+}
+
+export interface AdminClientMessageMaintenancePreview {
+  updatedAt: string;
+  paymentOverdueDays: number;
+  publicationStaleDays: number;
+  companyStatuses: AdminMaintenanceCompanyStatusPreview;
+  paymentStatuses: AdminMaintenancePaymentStatusPreview;
+  unpaidRecovery: AdminMaintenanceUnpaidRecoveryPreview;
+  publication: AdminMaintenancePublicationPreview;
+  archiveOffers: AdminMaintenanceArchiveOfferPreview;
+  suggestedActions: AdminMaintenanceActionItem[];
+}
+
+export interface AdminMaintenanceCompanyStatusPreview {
+  shouldMoveToWork: number;
+  stoppedWithActiveOrders: number;
+  newOrderWithActiveOrders: number;
+  bannedWithActiveOrders: number;
+  workWithoutActiveOrders: number;
+  newOrderWithoutActiveOrders: number;
+  samplesToWork: AdminMaintenanceCompanyStatusSample[];
+  samplesToStop: AdminMaintenanceCompanyStatusSample[];
+  samplesBannedWithActiveOrders: AdminMaintenanceCompanyStatusSample[];
+}
+
+export interface AdminMaintenanceCompanyStatusSample {
+  companyId: number;
+  companyTitle: string;
+  currentStatus: string;
+  activeOrders: number;
+  activeOrderStatuses: string;
+}
+
+export interface AdminMaintenancePaymentStatusPreview {
+  invoiceOrReminderTotal: number;
+  invoiceOrReminderOlderThanThreshold: number;
+  invoiceOrReminderOlderThanThirtyDays: number;
+  invoiceOrReminderWithoutActiveState: number;
+  overdueSamples: AdminMaintenanceOrderRiskSample[];
+}
+
+export interface AdminMaintenanceUnpaidRecoveryPreview {
+  total: number;
+  olderThanThreshold: number;
+  olderThanThreeHundredDays: number;
+  withoutBadTasks: number;
+  canCreateBadTasks: number;
+  withoutPublishedReviews: number;
+  withPendingBadTasks: number;
+  allBadTasksDone: number;
+  oldSamples: AdminMaintenanceOrderRiskSample[];
+}
+
+export interface AdminMaintenancePublicationPreview {
+  total: number;
+  suspicious: number;
+  olderThanStaleDays: number;
+  overdueUnpublished: number;
+  undatedUnpublished: number;
+  longPublishSpan: number;
+  farFuturePublishDate: number;
+  oldAllReviewsPublished: number;
+  oldWithFuturePublishDate: number;
+  oldSamples: AdminMaintenanceOrderRiskSample[];
+}
+
+export interface AdminMaintenanceArchiveOfferPreview {
+  activeStates: number;
+  dueNow: number;
+  blockedByActiveOrders: number;
+  blockedByOpenNextRequest: number;
+}
+
+export interface AdminMaintenanceOrderRiskSample {
+  orderId: number;
+  companyId?: number | null;
+  companyTitle: string;
+  status: string;
+  ageDays: number;
+  orderAmount?: number | null;
+  orderSum?: string | null;
+  reviews: number;
+  publishedReviews: number;
+  badTasks: number;
+  pendingBadTasks: number;
+  maxPublishDate?: string | null;
+  reason: string;
+}
+
+export interface AdminMaintenanceActionItem {
+  tone: 'safe' | 'warning' | 'danger' | string;
+  title: string;
+  description: string;
+  count: number;
+}
+
+export interface AdminMaintenanceApplyResponse {
+  action: string;
+  changed: number;
+  message: string;
+  appliedAt: string;
+  preview: AdminClientMessageMaintenancePreview;
 }
 
 export interface AdminSharedChatLinkSyncResponse {
@@ -360,6 +480,8 @@ export interface ManagerTextRequest {
 export interface NagulSettingsRequest {
   cooldownMinutes: number;
   lookaheadDays: number;
+  accountWalkedCounterThreshold: number;
+  accountWalkDelayDays: number;
 }
 
 export interface TelegramReportScheduleSettingsRequest {
@@ -601,6 +723,19 @@ export class AdminDictionariesApi {
 
   getClientMessageMonitor(): Observable<AdminClientMessageMonitor> {
     return this.http.get<AdminClientMessageMonitor>(`${appEnvironment.apiBaseUrl}/api/admin/client-messages/monitor`);
+  }
+
+  getClientMessageMaintenancePreview(): Observable<AdminClientMessageMaintenancePreview> {
+    return this.http.get<AdminClientMessageMaintenancePreview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/maintenance-preview`
+    );
+  }
+
+  applyClientMessageMaintenance(action: 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed'): Observable<AdminMaintenanceApplyResponse> {
+    return this.http.post<AdminMaintenanceApplyResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/client-messages/maintenance/${action}`,
+      {}
+    );
   }
 
   updateClientMessageMonitorSettings(enabled: boolean): Observable<AdminClientMessageMonitorSettings> {

@@ -341,12 +341,22 @@ public class ReputationSingleReviewDraftService {
     }
 
     private Optional<ReportEnvelope> deepReport(Long companyId, Long deepReportJobId) {
-        Optional<ReputationDeepReportJobEntity> entity = deepReportJobId != null && deepReportJobId > 0
-                ? deepReportJobRepository.findById(deepReportJobId).filter(job -> job.getCompanyId().equals(companyId))
-                : deepReportJobRepository.findByCompanyIdOrderByCreatedAtDesc(companyId).stream().findFirst();
-        return entity
-                .filter(job -> job.getReportJson() != null && !job.getReportJson().isBlank())
+        if (deepReportJobId != null && deepReportJobId > 0) {
+            return deepReportJobRepository.findById(deepReportJobId)
+                    .filter(job -> job.getCompanyId().equals(companyId))
+                    .filter(this::hasSavedReport)
+                    .map(job -> new ReportEnvelope(job.getId(), readDeepReport(job.getReportJson())));
+        }
+        return deepReportJobRepository.findByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+                .filter(this::hasSavedReport)
+                .findFirst()
                 .map(job -> new ReportEnvelope(job.getId(), readDeepReport(job.getReportJson())));
+    }
+
+    private boolean hasSavedReport(ReputationDeepReportJobEntity job) {
+        return job != null
+                && job.getReportJson() != null
+                && !job.getReportJson().isBlank();
     }
 
     private ReputationSingleReviewDraftResult localResult(

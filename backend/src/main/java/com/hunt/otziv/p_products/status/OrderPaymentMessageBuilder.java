@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.status;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.payments.PaymentLinkService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class OrderPaymentMessageBuilder {
 
     private static final String PAYMENT_SOURCE_TBANK_LINK = "TBANK_LINK";
     private static final String PAYMENT_SOURCE_MANAGER_TEXT = "MANAGER_TEXT";
+    private static final String RECOVERY_PRODUCT_TITLE = "Восстановление";
 
     private final AppSettingService appSettingService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
@@ -32,6 +34,10 @@ public class OrderPaymentMessageBuilder {
         String heading = orderHeading(order);
         String paymentText = paymentInstruction(order) + " К оплате: " + money(payableSum(order)) + " руб.";
         return heading.isBlank() ? paymentText : heading + "\n\n" + paymentText;
+    }
+
+    public boolean shouldSkipPublishedPayment(Order order) {
+        return hasRecoveryProduct(order) && payableSum(order).compareTo(BigDecimal.ZERO) <= 0;
     }
 
     private String paymentInstruction(Order order) {
@@ -98,6 +104,18 @@ public class OrderPaymentMessageBuilder {
         } catch (RuntimeException e) {
             return order.getSum() == null ? BigDecimal.ZERO : order.getSum();
         }
+    }
+
+    private boolean hasRecoveryProduct(Order order) {
+        return order != null
+                && order.getDetails() != null
+                && order.getDetails().stream()
+                .map(OrderDetails::getProduct)
+                .anyMatch(product -> product != null && isRecoveryProductTitle(product.getTitle()));
+    }
+
+    private boolean isRecoveryProductTitle(String title) {
+        return title != null && RECOVERY_PRODUCT_TITLE.equalsIgnoreCase(title.trim());
     }
 
     private String money(BigDecimal amount) {

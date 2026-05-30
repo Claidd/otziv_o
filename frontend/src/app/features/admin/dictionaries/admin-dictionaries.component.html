@@ -189,6 +189,11 @@
               <span class="material-icons-sharp">refresh</span>
               {{ clientMessageMonitorLoading() ? 'Обновляю' : 'Обновить' }}
             </button>
+
+            <button type="button" class="dictionary-action" (click)="loadClientMessageMaintenancePreview()" [disabled]="clientMessageMaintenancePreviewLoading()">
+              <span class="material-icons-sharp">fact_check</span>
+              {{ clientMessageMaintenancePreviewLoading() ? 'Проверяю' : 'Dry-run' }}
+            </button>
           </div>
         </div>
 
@@ -272,6 +277,208 @@
               </section>
             }
 
+            <section class="monitor-table-card maintenance-preview-card">
+              <div class="monitor-table-head">
+                <div>
+                  <h3>Dry-run актуализации базы</h3>
+                  <p class="settings-hint">
+                    Безопасная проверка: показывает, что можно исправить, но не меняет компании, заказы и очередь.
+                  </p>
+                </div>
+                <span class="monitor-table-count">
+                  {{ clientMessageMaintenancePreview()?.updatedAt ? ('обновлено ' + (clientMessageMaintenancePreview()!.updatedAt | date:'HH:mm:ss')) : 'еще не загружено' }}
+                </span>
+              </div>
+
+              @if (clientMessageMaintenancePreviewError()) {
+                <div class="monitor-scenario-error">
+                  <b>!</b>
+                  <span>{{ clientMessageMaintenancePreviewError() }}</span>
+                </div>
+              }
+
+              @if (clientMessageMaintenancePreview(); as preview) {
+                <div class="maintenance-preview-grid">
+                  <article>
+                    <span class="material-icons-sharp">sync_problem</span>
+                    <small>Компании</small>
+                    <strong>{{ preview.companyStatuses.shouldMoveToWork }}</strong>
+                    <p>нужно вернуть в работу</p>
+                  </article>
+                  <article>
+                    <span class="material-icons-sharp">pause_circle</span>
+                    <small>Компании</small>
+                    <strong>{{ preview.companyStatuses.workWithoutActiveOrders }}</strong>
+                    <p>можно поставить на стоп</p>
+                  </article>
+                  <article>
+                    <span class="material-icons-sharp">receipt_long</span>
+                    <small>Счета {{ preview.paymentOverdueDays }}+ дн.</small>
+                    <strong>{{ preview.paymentStatuses.invoiceOrReminderOlderThanThreshold }}</strong>
+                    <p>кандидатов в неоплату</p>
+                  </article>
+                  <article>
+                    <span class="material-icons-sharp">sentiment_very_dissatisfied</span>
+                    <small>Не оплачено</small>
+                    <strong>{{ preview.unpaidRecovery.canCreateBadTasks }}</strong>
+                    <p>можно создать плохие</p>
+                  </article>
+                  <article>
+                    <span class="material-icons-sharp">schedule</span>
+                    <small>Публикация {{ preview.publicationStaleDays }}+ дн.</small>
+                    <strong>{{ preview.publication.suspicious }}</strong>
+                    <p>подозрительных заказов</p>
+                  </article>
+                  <article>
+                    <span class="material-icons-sharp">outbox</span>
+                    <small>Архивные офферы</small>
+                    <strong>{{ preview.archiveOffers.blockedByActiveOrders + preview.archiveOffers.blockedByOpenNextRequest }}</strong>
+                    <p>нужно заблокировать</p>
+                  </article>
+                </div>
+
+                @if (preview.suggestedActions.length) {
+                  <div class="maintenance-action-list">
+                    @for (action of preview.suggestedActions; track action.title) {
+                      <div class="maintenance-action" [class]="action.tone">
+                        <b>{{ action.count }}</b>
+                        <div>
+                          <strong>{{ action.title }}</strong>
+                          <span>{{ action.description }}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+
+                @if (canApplyMaintenance()) {
+                  <div class="maintenance-button-row">
+                    <button
+                      type="button"
+                      class="compact-action"
+                      (click)="applyClientMessageMaintenance('company-statuses', 'актуализировать статусы компаний')"
+                      [disabled]="maintenanceAction() !== null || (preview.companyStatuses.shouldMoveToWork + preview.companyStatuses.workWithoutActiveOrders) === 0"
+                    >
+                      <span class="material-icons-sharp">{{ maintenanceAction() === 'company-statuses' ? 'sync' : 'domain_verification' }}</span>
+                      Статусы компаний
+                    </button>
+                    <button
+                      type="button"
+                      class="compact-action warning"
+                      (click)="applyClientMessageMaintenance('payment-overdue', 'перевести старые счета в Не оплачено')"
+                      [disabled]="maintenanceAction() !== null || preview.paymentStatuses.invoiceOrReminderOlderThanThreshold === 0"
+                    >
+                      <span class="material-icons-sharp">{{ maintenanceAction() === 'payment-overdue' ? 'sync' : 'price_check' }}</span>
+                      Старые счета
+                    </button>
+                    <button
+                      type="button"
+                      class="compact-action warning"
+                      (click)="applyClientMessageMaintenance('missing-bad-tasks', 'создать недостающие плохие задачи')"
+                      [disabled]="maintenanceAction() !== null || preview.unpaidRecovery.canCreateBadTasks === 0"
+                    >
+                      <span class="material-icons-sharp">{{ maintenanceAction() === 'missing-bad-tasks' ? 'sync' : 'sentiment_very_dissatisfied' }}</span>
+                      Плохие задачи
+                    </button>
+                    <button
+                      type="button"
+                      class="compact-action"
+                      (click)="applyClientMessageMaintenance('archive-offers', 'заблокировать лишние архивные предложения')"
+                      [disabled]="maintenanceAction() !== null || (preview.archiveOffers.blockedByActiveOrders + preview.archiveOffers.blockedByOpenNextRequest) === 0"
+                    >
+                      <span class="material-icons-sharp">{{ maintenanceAction() === 'archive-offers' ? 'sync' : 'outbox_alt' }}</span>
+                      Архивные офферы
+                    </button>
+                    <button
+                      type="button"
+                      class="compact-action warning"
+                      (click)="applyClientMessageMaintenance('publication-dates', 'исправить дальние даты публикации')"
+                      [disabled]="maintenanceAction() !== null || (preview.publication.farFuturePublishDate + preview.publication.longPublishSpan + preview.publication.undatedUnpublished) === 0"
+                    >
+                      <span class="material-icons-sharp">{{ maintenanceAction() === 'publication-dates' ? 'sync' : 'event_repeat' }}</span>
+                      Даты публикаций
+                    </button>
+                    <button
+                      type="button"
+                      class="compact-action"
+                      (click)="applyClientMessageMaintenance('publication-completed', 'перевести завершенные публикации в Опубликовано')"
+                      [disabled]="maintenanceAction() !== null || preview.publication.oldAllReviewsPublished === 0"
+                    >
+                      <span class="material-icons-sharp">{{ maintenanceAction() === 'publication-completed' ? 'sync' : 'task_alt' }}</span>
+                      Завершить публикации
+                    </button>
+                  </div>
+                  <p class="maintenance-note">
+                    Даты публикаций исправляются только у неопубликованных отзывов, если дата отсутствует, график растянут больше 75 дней или дата ушла дальше чем на 90 дней. Маленькая просрочка по датам остается в списке для ручной проверки. Завершенные публикации переводятся в Опубликовано через обычную бизнес-логику финального счета.
+                  </p>
+                }
+
+                @if (preview.companyStatuses.samplesToWork.length || preview.companyStatuses.samplesBannedWithActiveOrders.length || preview.unpaidRecovery.oldSamples.length || preview.publication.oldSamples.length) {
+                  <div class="maintenance-samples">
+                    @if (preview.companyStatuses.samplesToWork.length) {
+                      <div>
+                        <h4>Примеры вернуть в работу</h4>
+                        @for (sample of preview.companyStatuses.samplesToWork; track sample.companyId) {
+                          <span>
+                            <b>#{{ sample.companyId }}</b>
+                            {{ sample.companyTitle }}: {{ sample.currentStatus }} → активные {{ sample.activeOrderStatuses }}
+                          </span>
+                        }
+                      </div>
+                    }
+                    @if (preview.companyStatuses.samplesBannedWithActiveOrders.length) {
+                      <div>
+                        <h4>Бан с активными заказами</h4>
+                        @for (sample of preview.companyStatuses.samplesBannedWithActiveOrders; track sample.companyId) {
+                          <span>
+                            <b>#{{ sample.companyId }}</b>
+                            {{ sample.companyTitle }}: активных {{ sample.activeOrders }}, статусы {{ sample.activeOrderStatuses }}
+                          </span>
+                        }
+                      </div>
+                    }
+                    @if (preview.unpaidRecovery.oldSamples.length) {
+                      <div>
+                        <h4>Старые неоплаты</h4>
+                        @for (sample of preview.unpaidRecovery.oldSamples; track sample.orderId) {
+                          <span>
+                            <b>Заказ #{{ sample.orderId }}</b>
+                            {{ sample.companyTitle }}, {{ sample.ageDays }} дн.: {{ sample.reason }}
+                          </span>
+                        }
+                      </div>
+                    }
+                    @if (preview.publication.oldSamples.length) {
+                      <div>
+                        <h4>Старые публикации</h4>
+                        <small>
+                          Прошедшие даты: {{ preview.publication.overdueUnpublished }},
+                          без даты: {{ preview.publication.undatedUnpublished }},
+                          дальние даты: {{ preview.publication.farFuturePublishDate }},
+                          растянуты: {{ preview.publication.longPublishSpan }}
+                        </small>
+                        @for (sample of preview.publication.oldSamples; track sample.orderId) {
+                          <span>
+                            <b>Заказ #{{ sample.orderId }}</b>
+                            {{ sample.companyTitle }}, {{ sample.ageDays }} дн.: {{ sample.reason }}
+                            @if (sample.maxPublishDate) {
+                              <em>крайняя дата {{ sample.maxPublishDate | date:'dd.MM.yyyy' }}</em>
+                            }
+                          </span>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+              } @else {
+                <div class="empty-picker monitor-empty compact">
+                  <span class="material-icons-sharp">fact_check</span>
+                  <h2>Dry-run еще не загружен</h2>
+                  <p>Нажмите Dry-run, чтобы увидеть безопасный план актуализации без изменений в базе.</p>
+                </div>
+              }
+            </section>
+
             <div class="monitor-section-heading">
               <div>
                 <h3>Сценарии</h3>
@@ -298,8 +505,12 @@
                       <span>активных кандидатов</span>
                     </div>
                     <div class="monitor-scenario-stat">
-                      <b>{{ scenario.dueNow }}</b>
-                      <span>готово сейчас</span>
+                      <b>{{ monitorScenarioDueValue(scenario) }}</b>
+                      <span>{{ monitorScenarioDueLabel(scenario) }}</span>
+                    </div>
+                    <div class="monitor-scenario-stat">
+                      <b>{{ scenario.missingChannelBindings || 0 }}</b>
+                      <span>нет chatId/groupId</span>
                     </div>
                     <div class="monitor-scenario-stat">
                       <b>{{ scenario.sentToday }}</b>
@@ -350,7 +561,7 @@
                   <span>Очередь</span>
                   <select [value]="monitorQueueStatusFilter()" (change)="setMonitorQueueStatusFilter($any($event.target).value)">
                     <option value="ALL">Все кандидаты</option>
-                    <option value="DUE">Готово сейчас</option>
+                    <option value="DUE">Пора проверить</option>
                     <option value="ERROR">С ошибкой</option>
                   </select>
                 </label>
@@ -390,7 +601,7 @@
                       <tr>
                         <td>
                           <strong>{{ item.scenarioLabel }}</strong>
-                          <span>{{ item.sentCount }} отправок · {{ item.consecutiveFailures }} ошибок подряд</span>
+                          <span>реально отправлено: {{ item.sentCount }} · ошибок подряд: {{ item.consecutiveFailures }}</span>
                         </td>
                         <td>
                           @if (item.link) {
@@ -402,6 +613,10 @@
                         </td>
                         <td>
                           <span class="status-pill off">{{ item.statusTitle || 'без статуса' }}</span>
+                          <span [class]="monitorReadinessClass(item)">{{ item.readinessLabel || 'статус очереди не рассчитан' }}</span>
+                          @if (item.readinessReason) {
+                            <small class="monitor-queue-reason">{{ item.readinessReason }}</small>
+                          }
                         </td>
                         <td>
                           <strong>{{ item.nextAttemptAt ? (item.nextAttemptAt | date:'dd.MM HH:mm') : '-' }}</strong>
@@ -837,6 +1052,26 @@
                   </tr>
                   <tr>
                     <td>
+                      <strong>Порог выгулянного аккаунта</strong>
+                      <span>Сколько публикаций должен иметь аккаунт, чтобы считаться готовым к публикации без выгула</span>
+                    </td>
+                    <td>
+                      <strong>{{ nagulSettings()?.accountWalkedCounterThreshold ?? 3 }} публ.</strong>
+                      <span>counter аккаунта</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Задержка при невыгулянном аккаунте</strong>
+                      <span>На сколько дней сдвигать отзыв и следующие отзывы после замены на невыгулянный аккаунт</span>
+                    </td>
+                    <td>
+                      <strong>{{ nagulSettings()?.accountWalkDelayDays ?? 2 }} дн.</strong>
+                      <span>{{ nagulSettings()?.accountWalkDelayDays === 0 ? 'без сдвига дат' : 'при смене аккаунта' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
                       <strong>Утренняя Telegram-рассылка</strong>
                       <span>Админский отчёт за сегодня</span>
                     </td>
@@ -1019,7 +1254,7 @@
                       <i>7</i>
                       <strong>Новый заказ</strong>
                       <span>Архивное предложение</span>
-                      <p>Компаниям "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задано' }}" раз в {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес.</p>
+                      <p>Компаниям "{{ clientMessageSettings()?.archiveCompanyStatus || 'не задано' }}" раз в {{ clientMessageSettings()?.archiveReorderMonths ?? 0 }} мес. + до {{ clientMessageSettings()?.archiveReorderJitterDays ?? 0 }} дн.</p>
                     </article>
                   </div>
                 </section>
@@ -1498,6 +1733,27 @@
                   <span>Горизонт выдачи выгула, дней</span>
                   <input type="number" min="0" max="365" step="1" formControlName="nagulLookaheadDays">
                 </label>
+
+                <label appTooltip="Аккаунт считается выгулянным, когда он реальный, активный, не «Впиши Имя Фамилию» и его счетчик публикаций не меньше этого числа.">
+                  <span>Порог выгулянного аккаунта, публикаций</span>
+                  <input type="number" min="1" max="30" step="1" formControlName="accountWalkedCounterThreshold">
+                </label>
+
+                <label appTooltip="Если при смене, бане или назначении нового аккаунта отзыв получает невыгулянный аккаунт, система сдвигает этот отзыв и следующие неопубликованные отзывы заказа на это число дней. При возврате выгулянного аккаунта эта задержка снимается.">
+                  <span>Задержка публикации при невыгулянном аккаунте, дней</span>
+                  <input type="number" min="0" max="30" step="1" formControlName="accountWalkDelayDays">
+                </label>
+
+                <p class="settings-hint">
+                  Эти два параметра работают только при последующей замене аккаунта: кнопки «смена», «бан» и
+                  «новый аккаунт». Первичная автоматическая раскладка дат заказа остаётся по старым правилам.
+                </p>
+
+                <p class="settings-hint">
+                  Если аккаунт меняется с выгулянного на невыгулянный, дата этого отзыва и всех следующих
+                  неопубликованных отзывов сдвигается вперёд. Если потом назначить выгулянный аккаунт обратно,
+                  система снимет только ранее добавленную задержку.
+                </p>
               </div>
 
               <div class="settings-section">
@@ -1599,11 +1855,12 @@
 
               <p class="settings-hint">
                 Значения применяются сразу после сохранения. Дефолт расписания сохранён как раньше: 11:30 утром и 22:00 вечером.
-                Если поставить 0 минут для выгула, специалист сможет делать выгул без паузы.
+                Если поставить 0 минут для выгула, специалист сможет делать выгул без паузы. Если поставить 0 дней задержки,
+                смена на невыгулянный аккаунт будет менять только отметку выгула без переноса дат публикации.
               </p>
 
               @if (settingsForm.invalid && settingsForm.touched) {
-                <p class="error compact">Проверьте паузу, горизонт, время рассылок, часовой пояс и интервал WhatsApp.</p>
+                <p class="error compact">Проверьте паузу, горизонт, порог аккаунта, задержку дат, время рассылок, часовой пояс и интервал WhatsApp.</p>
               }
 
               <div class="actions">
@@ -1841,6 +2098,32 @@
                     </div>
                   </details>
 
+                  <details class="scenario-panel" open>
+                    <summary>
+                      <span class="material-icons-sharp">restore_page</span>
+                      <div>
+                        <strong>Восстановление отзывов</strong>
+                        <small>Пауза счетов и напоминаний, затем сообщение клиенту</small>
+                      </div>
+                      <em>{{ clientMessageSettings()?.reviewRecoveryNoticeEnabled ? 'включено' : 'выключено' }}</em>
+                    </summary>
+                    <div class="scenario-body form-grid">
+                      <label class="checkbox" appTooltip="Когда все задачи восстановления завершены, клиенту уходит сообщение 'отзыв восстановлен', а платежные и архивные таймеры продолжаются с учетом паузы.">
+                        <input class="switch" type="checkbox" formControlName="reviewRecoveryNoticeEnabled">
+                        <span>Уведомлять клиента после восстановления</span>
+                      </label>
+
+                      <label appTooltip="Если сообщение о восстановлении не ушло из-за чата, через сколько часов повторить попытку.">
+                        <span>Повтор уведомления, часов</span>
+                        <input type="number" min="1" max="168" step="1" formControlName="reviewRecoveryNoticeRetryDelayHours">
+                      </label>
+
+                      <p class="settings-hint wide">
+                        Пока у заказа есть активное восстановление, автоответчик не отправляет счета, напоминания об оплате, автоархив проверки и автобан после плохих. Для закрытых заказов клиентское сообщение не отправляется.
+                      </p>
+                    </div>
+                  </details>
+
                   <details class="scenario-panel">
                     <summary>
                       <span class="material-icons-sharp">restart_alt</span>
@@ -1859,6 +2142,11 @@
                       <label appTooltip="Через сколько месяцев после архива предлагать новый заказ.">
                         <span>Архивное предложение, месяцев</span>
                         <input type="number" min="1" max="36" step="1" formControlName="archiveReorderMonths">
+                      </label>
+
+                      <label appTooltip="Случайный сдвиг даты отправки вправо, чтобы архивные предложения не уходили одной большой пачкой.">
+                        <span>Разброс отправки, дней</span>
+                        <input type="number" min="0" max="30" step="1" formControlName="archiveReorderJitterDays">
                       </label>
 
                       <label appTooltip="Статус компании, которая участвует в архивном предложении нового заказа.">
@@ -1948,6 +2236,16 @@
                         <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionCooldownMinutes">
                       </label>
 
+                      <label appTooltip="Если WhatsApp-клиент не авторизован, ждет QR или временно не готов, через сколько часов пробовать снова. Такой сбой не уводит задачу в долгую паузу.">
+                        <span>Повтор WhatsApp QR, часов</span>
+                        <input type="number" min="1" max="48" step="1" formControlName="whatsAppAuthRetryHours">
+                      </label>
+
+                      <label appTooltip="Как часто можно отправлять менеджеру Telegram-предупреждение о слетевшей авторизации одного WhatsApp-клиента.">
+                        <span>Алерт менеджеру, часов</span>
+                        <input type="number" min="1" max="168" step="1" formControlName="whatsAppAuthAlertCooldownHours">
+                      </label>
+
                       <p class="settings-hint wide">
                         Пауза останавливает только новые попытки авторассылки. Очередь и мониторинг остаются видны, сайт и ручные действия менеджера продолжают работать.
                       </p>
@@ -1998,6 +2296,11 @@
                   <label appTooltip="Отправляется клиенту после успешной оплаты через T-Bank или СБП. Переменные: {orderId}, {orderLine}, {company}, {companyLine}, {filial}, {companyAndFilial}, {sum}, {paymentPage}, {payerEmail}, {receiptText}.">
                     <span>Успешная оплата</span>
                     <textarea rows="5" formControlName="paymentSuccessText"></textarea>
+                  </label>
+
+                  <label appTooltip="Отправляется после завершения восстановления отзывов. Переменные: {company}, {filial}, {companyAndFilial}, {orderId}, {sum}.">
+                    <span>Восстановление отзыва</span>
+                    <textarea rows="5" formControlName="reviewRecoveryNoticeText"></textarea>
                   </label>
 
                   <label class="wide" appTooltip="Переменная: {company}.">

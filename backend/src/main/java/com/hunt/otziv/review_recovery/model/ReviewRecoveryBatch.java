@@ -65,6 +65,19 @@ public class ReviewRecoveryBatch {
     @Column(name = "review_recovery_batch_archived_at")
     private Instant archivedAt;
 
+    @Column(name = "review_recovery_batch_hold_started_at")
+    private Instant holdStartedAt;
+
+    @Column(name = "review_recovery_batch_hold_released_at")
+    private Instant holdReleasedAt;
+
+    @Column(name = "review_recovery_batch_deadline_shift_applied_at")
+    private Instant deadlineShiftAppliedAt;
+
+    @Builder.Default
+    @Column(name = "review_recovery_batch_deadline_shift_seconds", nullable = false)
+    private long deadlineShiftSeconds = 0;
+
     @Column(name = "review_recovery_batch_created_at", nullable = false)
     private Instant createdAt;
 

@@ -47,6 +47,7 @@ class TelegramServiceSendRetryTest {
                     "",
                     null,
                     null,
+                    null,
                     null);
             this.failuresBeforeSuccess = failuresBeforeSuccess;
         }

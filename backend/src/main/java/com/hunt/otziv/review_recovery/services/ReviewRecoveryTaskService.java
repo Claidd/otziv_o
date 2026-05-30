@@ -31,6 +31,8 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryBatch markClientNotified(Long batchId, User notifiedBy);
 
+    ReviewRecoveryBatch markClientNotifiedAutomatically(Long batchId);
+
     boolean taskBelongsToOrder(Long taskId, Long orderId);
 
     boolean batchBelongsToOrder(Long batchId, Long orderId);

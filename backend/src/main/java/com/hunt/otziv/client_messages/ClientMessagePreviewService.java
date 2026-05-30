@@ -21,6 +21,7 @@ public class ClientMessagePreviewService {
     private static final String DEFAULT_PAYMENT_INSTRUCTION_SOURCE = "MANAGER_TEXT";
     private static final String DEFAULT_CLIENT_TEXT_REMINDER_TEXT = "{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.";
     private static final String DEFAULT_PAYMENT_REMINDER_TEXT = "{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.";
+    private static final String DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT = "{companyAndFilial}\n\nОтзыв восстановлен. Продолжаем работу по заказу №{orderId}.";
     private static final String DEFAULT_ARCHIVE_OFFER_TEXT = "{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.";
     private static final int PREVIEW_LIMIT = 700;
 
@@ -93,6 +94,12 @@ public class ClientMessagePreviewService {
                     paymentSource,
                     limit("Кандидат на Бан после плохих отзывов: заказ #" + nullSafe(state.getOrderId()), PREVIEW_LIMIT)
             );
+            case REVIEW_RECOVERY_NOTICE -> new ClientMessagePreview(
+                    expectedChannel,
+                    channelDetails(resolvedCompany, manager(order, resolvedCompany)),
+                    paymentSource,
+                    limit(reviewRecoveryNoticeText(order), PREVIEW_LIMIT)
+            );
         };
     }
 
@@ -142,6 +149,17 @@ public class ClientMessagePreviewService {
                         "tbankPaymentLink", paymentLink,
                         "tbankPaymentCopyText", tbankPaymentCopyText
                 )
+        );
+    }
+
+    private String reviewRecoveryNoticeText(Order order) {
+        return renderOrderTemplate(
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
+                        DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
+                ),
+                order,
+                Map.of()
         );
     }
 

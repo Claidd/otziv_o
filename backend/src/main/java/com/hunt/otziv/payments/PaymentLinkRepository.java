@@ -368,4 +368,38 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         WHERE link.tbankPaymentId = :paymentId
     """)
     Optional<PaymentLink> findByTbankPaymentIdWithOrder(@Param("paymentId") String paymentId);
+
+    @Query("""
+        SELECT link
+        FROM PaymentLink link
+        LEFT JOIN FETCH link.paymentProfile
+        LEFT JOIN FETCH link.order o
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH c.manager cm
+        LEFT JOIN FETCH cm.user
+        LEFT JOIN FETCH cm.paymentProfile
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.manager m
+        LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH m.paymentProfile
+        WHERE link.status = com.hunt.otziv.payments.PaymentLinkStatus.CONFIRMED
+          AND link.paymentSuccessNotifiedAt IS NULL
+          AND link.paymentSuccessNotificationError IS NOT NULL
+          AND (
+            (LOWER(COALESCE(c.urlChat, '')) LIKE '%chat.whatsapp.com%'
+              AND c.groupId IS NOT NULL
+              AND TRIM(c.groupId) <> '')
+            OR ((
+                  LOWER(COALESCE(c.urlChat, '')) LIKE '%t.me/%'
+                  OR LOWER(COALESCE(c.urlChat, '')) LIKE '%telegram.me/%'
+                  OR LOWER(COALESCE(c.urlChat, '')) LIKE '%telegram.dog/%'
+                  OR LOWER(COALESCE(c.urlChat, '')) LIKE 'tg://resolve?%'
+                )
+                AND c.telegramGroupChatId IS NOT NULL)
+            OR (LOWER(COALESCE(c.urlChat, '')) LIKE '%max.ru%'
+                AND c.maxGroupChatId IS NOT NULL)
+          )
+        ORDER BY link.updatedAt ASC, link.id ASC
+    """)
+    List<PaymentLink> findSuccessNotificationRetryCandidates(Pageable pageable);
 }

@@ -23,11 +23,12 @@ class WhatsAppGroupLinkSyncServiceTest {
     private final WhatsAppProperties properties = new WhatsAppProperties();
     private final WhatsAppService whatsAppService = mock(WhatsAppService.class);
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
+    private final WhatsAppGroupCompanyLinker groupCompanyLinker = new WhatsAppGroupCompanyLinker(companyRepository);
     private final AppSettingService appSettingService = mock(AppSettingService.class);
     private final WhatsAppGroupLinkSyncService service = new WhatsAppGroupLinkSyncService(
             properties,
             whatsAppService,
-            companyRepository,
+            groupCompanyLinker,
             appSettingService
     );
 
@@ -97,13 +98,181 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
-    void ignoresGatewayGroupWithoutInviteLink() {
+    void ignoresGatewayGroupWithoutInviteLinkAndWithoutNameMatch() {
         when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
                 new WhatsAppGroupInfo("120363123@g.us", "Св-Моторс. Отзывы", "")
         ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of());
 
         service.syncClientGroups("whatsapp_lika");
 
+        verify(companyRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void linksCompaniesWithSameWhatsAppChatByCompositeGroupNameWhenInviteIsMissing() {
+        Company first = new Company();
+        first.setId(10L);
+        first.setTitle("Амбар");
+        first.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        Company second = new Company();
+        second.setId(11L);
+        second.setTitle("Вокруг света");
+        second.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363412424775524@g.us", "Амбар, Вокруг света. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(first, second));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363412424775524@g.us", first.getGroupId());
+        assertEquals("120363412424775524@g.us", second.getGroupId());
+        verify(companyRepository).save(first);
+        verify(companyRepository).save(second);
+    }
+
+    @Test
+    void linksGroupByNameAfterKnownServicePrefixAndPlatformSuffixAreRemoved() {
+        Company company = new Company();
+        company.setId(12L);
+        company.setTitle("Алла");
+        company.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363422400063031@g.us", "КУ Алла 2гис", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363422400063031@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksCompositeGroupByNameAfterPrefixCleanupForEachPart() {
+        Company first = new Company();
+        first.setId(13L);
+        first.setTitle("Мир дверей");
+        first.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        Company second = new Company();
+        second.setId(14L);
+        second.setTitle("Дверной маркет");
+        second.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        Company third = new Company();
+        third.setId(15L);
+        third.setTitle("Автосервис первый");
+        third.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363424329251621@g.us", "ВИ Мир дверей, Дверной маркет, Автосервис первый 2 гис", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(first, second, third));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363424329251621@g.us", first.getGroupId());
+        assertEquals("120363424329251621@g.us", second.getGroupId());
+        assertEquals("120363424329251621@g.us", third.getGroupId());
+        verify(companyRepository).save(first);
+        verify(companyRepository).save(second);
+        verify(companyRepository).save(third);
+    }
+
+    @Test
+    void keepsExactCompanyTitleBeforeTryingPrefixCleanup() {
+        Company prefixedTitle = new Company();
+        prefixedTitle.setId(16L);
+        prefixedTitle.setTitle("КУ Алла");
+        prefixedTitle.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        Company plainTitle = new Company();
+        plainTitle.setId(17L);
+        plainTitle.setTitle("Алла");
+        plainTitle.setUrlChat("https://chat.whatsapp.com/OtherSharedInvite123");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363422400063031@g.us", "КУ Алла 2гис", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(prefixedTitle, plainTitle));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363422400063031@g.us", prefixedTitle.getGroupId());
+        assertEquals(null, plainTitle.getGroupId());
+        verify(companyRepository).save(prefixedTitle);
+        verify(companyRepository, never()).save(plainTitle);
+    }
+
+    @Test
+    void linksGroupByNameAfterTwoKnownServicePrefixesAreRemoved() {
+        Company company = new Company();
+        company.setId(18L);
+        company.setTitle("Юридический каб");
+        company.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363123456789@g.us", "М Н Юридический каб Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363123456789@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void skipsCompositeGroupNameWhenMatchedCompaniesHaveDifferentChatLinks() {
+        Company first = new Company();
+        first.setId(10L);
+        first.setTitle("Амбар");
+        first.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        Company second = new Company();
+        second.setId(11L);
+        second.setTitle("Вокруг света");
+        second.setUrlChat("https://chat.whatsapp.com/OtherSharedInvite123");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363412424775524@g.us", "Амбар, Вокруг света. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(first, second));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals(null, first.getGroupId());
+        assertEquals(null, second.getGroupId());
+        verify(companyRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void skipsCompositeGroupNameWhenExistingGroupIdConflicts() {
+        Company first = new Company();
+        first.setId(10L);
+        first.setTitle("Амбар");
+        first.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+        first.setGroupId("120363999@g.us");
+
+        Company second = new Company();
+        second.setId(11L);
+        second.setTitle("Вокруг света");
+        second.setUrlChat("https://chat.whatsapp.com/G5lfHMxirWT1WfjX65GPtb");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363412424775524@g.us", "Амбар, Вокруг света. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(first, second));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363999@g.us", first.getGroupId());
+        assertEquals(null, second.getGroupId());
         verify(companyRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 

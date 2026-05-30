@@ -512,6 +512,16 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r.orderDetails.order.id FROM Review r WHERE r.id = :reviewId")
     Optional<Long> findOrderIdByReviewId(@Param("reviewId") Long reviewId);
 
+    @Query("""
+        SELECT r
+        FROM Review r
+        LEFT JOIN FETCH r.orderDetails d
+        LEFT JOIN FETCH d.order o
+        WHERE o.id = :orderId
+        ORDER BY r.id
+    """)
+    List<Review> findAllByOrderIdForAccountWalkSchedule(@Param("orderId") Long orderId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT DISTINCT r

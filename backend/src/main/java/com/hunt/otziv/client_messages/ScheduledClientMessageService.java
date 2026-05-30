@@ -12,9 +12,16 @@ import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.payments.PaymentLinkService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
+import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryHoldService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -35,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -60,6 +68,7 @@ public class ScheduledClientMessageService {
     public static final String DEFAULT_PAYMENT_REMINDER_TEXT = "{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.";
     public static final String DEFAULT_PAYMENT_LINK_COPY_TEXT = "{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}";
     public static final String DEFAULT_PAYMENT_SUCCESS_TEXT = "Оплата прошла успешно.\n\nНовый заказ принят в работу.\n{orderLine}{companyLine}Сумма: {sum}\nСтраница оплаты: {paymentPage}\n\n{receiptText}";
+    public static final String DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT = "{companyAndFilial}\n\nОтзыв восстановлен. Продолжаем работу по заказу №{orderId}.";
     public static final String DEFAULT_ARCHIVE_OFFER_TEXT = "{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.";
 
     public static final int DEFAULT_REMINDER_INTERVAL_DAYS = 2;
@@ -68,9 +77,12 @@ public class ScheduledClientMessageService {
     public static final int DEFAULT_REVIEW_CHECK_RETRY_DELAY_HOURS = 2;
     public static final int DEFAULT_PAYMENT_INVOICE_RETRY_DELAY_HOURS = 2;
     public static final int DEFAULT_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS = 2;
+    public static final int DEFAULT_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS = 2;
     public static final int DEFAULT_BAD_REVIEW_AUTO_BAN_DELAY_DAYS = 2;
     public static final int DEFAULT_ARCHIVE_REORDER_MONTHS = 3;
+    public static final int DEFAULT_ARCHIVE_REORDER_JITTER_DAYS = 10;
     public static final int DEFAULT_PAYMENT_OVERDUE_DAYS = 30;
+    public static final int DEFAULT_NO_SEND_RETRY_DAYS = 1;
     public static final int DEFAULT_CANDIDATE_LIMIT = 200;
     public static final int DEFAULT_LOCK_MINUTES = 5;
     public static final int DEFAULT_RETENTION_DAYS = 90;
@@ -80,6 +92,9 @@ public class ScheduledClientMessageService {
     public static final int DEFAULT_TELEGRAM_GAP_SECONDS = 90;
     public static final int DEFAULT_MAX_GAP_SECONDS = 90;
     public static final int DEFAULT_WHATSAPP_GAP_SECONDS = 180;
+    public static final int DEFAULT_WHATSAPP_AUTH_RETRY_HOURS = 2;
+    public static final int DEFAULT_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = 12;
+    public static final int DEFAULT_NO_SEND_MAX_FAILURES = 30;
     public static final int DEFAULT_ERROR_PROTECTION_THRESHOLD = 20;
     public static final int DEFAULT_ERROR_PROTECTION_WINDOW_MINUTES = 10;
     public static final int DEFAULT_ERROR_PROTECTION_COOLDOWN_MINUTES = 60;
@@ -109,7 +124,14 @@ public class ScheduledClientMessageService {
     private final OrderReviewCheckMessageBuilder reviewCheckMessageBuilder;
     private final BadReviewTaskService badReviewTaskService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    private final WhatsAppAuthAlertService whatsAppAuthAlertService;
+    private final ReviewRecoveryHoldService reviewRecoveryHoldService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
+    private final ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
     private final Clock clock = Clock.systemDefaultZone();
+    @Value("${client.messages.reconcile-interval:PT5M}")
+    private Duration reconcileInterval;
+    private LocalDateTime lastReconcileAt;
     private LocalDateTime lastCleanupAt;
     private LocalDateTime lastSummaryLogAt;
 
@@ -136,8 +158,13 @@ public class ScheduledClientMessageService {
             }
         }
 
-        ClientMessageReconcileSummary reconcileSummary = reconcileCandidates(nowStorage);
+        ClientMessageReconcileSummary reconcileSummary = ClientMessageReconcileSummary.empty();
+        if (shouldReconcileCandidates(nowStorage)) {
+            reconcileSummary = reconcileCandidates(nowStorage);
+            lastReconcileAt = nowStorage;
+        }
         cleanupOldAttempts(nowStorage);
+        releaseDryRunMessagesIfLiveEnabled(nowStorage);
 
         String windowsSpec = businessWindows();
         if (!slotPlanner.isAllowedNow(nowIrkutsk, windowsSpec)) {
@@ -231,6 +258,13 @@ public class ScheduledClientMessageService {
         );
     }
 
+    private boolean shouldReconcileCandidates(LocalDateTime nowStorage) {
+        Duration interval = reconcileInterval == null || reconcileInterval.isNegative()
+                ? Duration.ZERO
+                : reconcileInterval;
+        return lastReconcileAt == null || !lastReconcileAt.plus(interval).isAfter(nowStorage);
+    }
+
     private int ensureClientTextWaitingStates(
             Collection<String> statuses,
             LocalDateTime cutoff,
@@ -314,14 +348,15 @@ public class ScheduledClientMessageService {
         );
         int created = 0;
         for (ArchiveCompanyMessageCandidate candidate : candidates) {
+            String targetKey = archiveCompanyTargetKey(candidate.companyId(), candidate.statusChangedAt());
             if (ensureState(
                     ClientMessageScenario.ARCHIVE_REORDER_OFFER,
                     ClientMessageTargetType.ARCHIVE_COMPANY,
-                    archiveCompanyTargetKey(candidate.companyId(), candidate.statusChangedAt()),
+                    targetKey,
                     candidate.companyId(),
                     null,
                     candidate.archiveOrderId(),
-                    scheduleAtStorage(candidate.statusChangedAt().plusMonths(archiveReorderMonths))
+                    archiveReorderAttemptAt(candidate.statusChangedAt().plusMonths(archiveReorderMonths), targetKey)
             )) {
                 created++;
             }
@@ -434,6 +469,7 @@ public class ScheduledClientMessageService {
             case PAYMENT_OVERDUE_ESCALATION -> escalateOverduePayment(state, nowStorage);
             case BAD_REVIEW_INVOICE -> retryBadReviewInvoice(state, company, nowStorage);
             case BAD_REVIEW_AUTO_BAN -> autoBanAfterBadReviews(state, nowStorage);
+            case REVIEW_RECOVERY_NOTICE -> sendReviewRecoveryNotice(state, company, nowStorage);
         }
     }
 
@@ -450,6 +486,9 @@ public class ScheduledClientMessageService {
 
         if (!order.isWaitingForClient()) {
             markDone(state, nowStorage, "client_text_received", "Заказ уже не ждет текст клиента");
+            return;
+        }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
 
@@ -479,6 +518,9 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для авторассылки не найден");
+            return;
+        }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
 
@@ -511,6 +553,9 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для повторной отправки проверки отзывов не найден");
+            return;
+        }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
 
@@ -572,6 +617,9 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для повторной отправки счета не найден");
+            return;
+        }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
 
@@ -645,6 +693,9 @@ public class ScheduledClientMessageService {
             disable(state, nowStorage, "order_missing", "Заказ для автоархива проверки не найден");
             return;
         }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
+            return;
+        }
 
         String status = statusTitle(order);
         if (!listSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, DEFAULT_REVIEW_CHECK_STATUSES).contains(status)) {
@@ -676,6 +727,9 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для повторной отправки счета после плохого отзыва не найден");
+            return;
+        }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
 
@@ -767,6 +821,9 @@ public class ScheduledClientMessageService {
             disable(state, nowStorage, "order_missing", "Заказ для автобана после плохих не найден");
             return;
         }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
+            return;
+        }
 
         String status = statusTitle(order);
         if (STATUS_PAYMENT.equals(status) || STATUS_ARCHIVE.equals(status) || STATUS_BAN.equals(status)) {
@@ -810,6 +867,14 @@ public class ScheduledClientMessageService {
             markDone(state, nowStorage, "company_status_changed", "Компания уже перешла в новый цикл статуса");
             return;
         }
+        if (archiveCandidateRepository.hasArchiveReorderBlocker(
+                company == null ? null : company.getId(),
+                listSetting(AppSettingService.CLIENT_MESSAGES_ARCHIVE_INACTIVE_ORDER_STATUSES, DEFAULT_ARCHIVE_INACTIVE_ORDER_STATUSES),
+                listSetting(AppSettingService.CLIENT_MESSAGES_OPEN_NEXT_ORDER_REQUEST_STATUSES, DEFAULT_OPEN_NEXT_ORDER_REQUEST_STATUSES)
+        )) {
+            markDone(state, nowStorage, "archive_reorder_blocked", "У компании уже есть активный заказ или открытая заявка на следующий заказ");
+            return;
+        }
 
         String message = archiveOfferText(company);
         sendMessage(state, company, company.getManager(), message, nowStorage, null);
@@ -819,6 +884,9 @@ public class ScheduledClientMessageService {
         Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
         if (order == null) {
             disable(state, nowStorage, "order_missing", "Заказ для просрочки оплаты не найден");
+            return;
+        }
+        if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
 
@@ -874,6 +942,53 @@ public class ScheduledClientMessageService {
         }
     }
 
+    private void sendReviewRecoveryNotice(ScheduledClientMessageState state, Company company, LocalDateTime nowStorage) {
+        Long batchId = ReviewRecoveryNoticeScheduler.batchIdFromTargetKey(state.getTargetKey());
+        if (batchId == null) {
+            disable(state, nowStorage, "review_recovery_batch_missing", "Не удалось определить пачку восстановления");
+            return;
+        }
+
+        ReviewRecoveryBatch batch = reviewRecoveryBatchRepository.findById(batchId).orElse(null);
+        if (batch == null) {
+            disable(state, nowStorage, "review_recovery_batch_missing", "Пачка восстановления не найдена");
+            return;
+        }
+        if (batch.getStatus() == ReviewRecoveryBatchStatus.CLIENT_NOTIFIED
+                || batch.getStatus() == ReviewRecoveryBatchStatus.ARCHIVED) {
+            markDone(state, nowStorage, "review_recovery_already_notified", "Клиент уже отмечен уведомленным");
+            return;
+        }
+        if (batch.getStatus() == ReviewRecoveryBatchStatus.OPEN) {
+            postpone(state, scheduleAtStorage(nowStorage.plusHours(reviewRecoveryNoticeRetryDelayHours())),
+                    "review_recovery_still_open", "Восстановление еще не завершено");
+            return;
+        }
+        if (batch.getStatus() != ReviewRecoveryBatchStatus.COMPLETED) {
+            markDone(state, nowStorage, "review_recovery_status_changed", "Пачка восстановления уже не ждет уведомления");
+            return;
+        }
+
+        Order order = batch.getOrder();
+        if (order == null || order.getId() == null) {
+            disable(state, nowStorage, "order_missing", "Заказ для уведомления о восстановлении не найден");
+            return;
+        }
+        if (reviewRecoveryHoldService.isTerminal(order)) {
+            reviewRecoveryTaskService.markClientNotifiedAutomatically(batch.getId());
+            markDone(state, nowStorage, "order_closed", "Заказ закрыт, клиентское уведомление о восстановлении не требуется");
+            return;
+        }
+
+        String message = reviewRecoveryNoticeText(order);
+        boolean sent = sendMessage(state, company, manager(order), message, nowStorage, null);
+        if (sent) {
+            reviewRecoveryTaskService.markClientNotifiedAutomatically(batch.getId());
+            markDone(state, nowStorage, null, null);
+            log.info("Review recovery notice sent batchId={} orderId={} stateId={}", batch.getId(), order.getId(), state.getId());
+        }
+    }
+
     private boolean sendMessage(
             ScheduledClientMessageState state,
             Company company,
@@ -897,10 +1012,18 @@ public class ScheduledClientMessageService {
         long durationMs = System.currentTimeMillis() - startedAt;
 
         if (result.sent()) {
+            if (isWhatsAppChannel(result.channel())) {
+                whatsAppAuthAlertService.notifyRecovered(
+                        manager == null ? null : manager.getClientId(),
+                        "успешная отправка автоответчика",
+                        nowStorage,
+                        managerCandidates(company, manager)
+                );
+            }
             registerSuccess(state, nowStorage, result.channel(), message, durationMs, nextIntervalDays);
             return true;
         } else {
-            registerFailure(state, nowStorage, result.errorCode(), result.errorMessage(), message, durationMs);
+            registerFailure(state, nowStorage, result.errorCode(), result.errorMessage(), message, durationMs, company, manager);
             return false;
         }
     }
@@ -936,9 +1059,25 @@ public class ScheduledClientMessageService {
         state.setLastErrorMessage(null);
         state.setConsecutiveFailures(0);
         state.setLockedUntil(null);
-        state.setNextAttemptAt(nextSuccessAttemptAt(state.getScenario(), nowStorage, nextIntervalDays));
+        state.setNextAttemptAt(nextNoSendAttemptAt(nowStorage));
         stateRepository.save(state);
         log.info("Scheduled client message dry-run scenario={} target={}", state.getScenario(), state.getTargetKey());
+    }
+
+    @Transactional
+    public int releaseDryRunMessagesIfLiveEnabled() {
+        return releaseDryRunMessagesIfLiveEnabled(LocalDateTime.now(clock));
+    }
+
+    private int releaseDryRunMessagesIfLiveEnabled(LocalDateTime nowStorage) {
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)) {
+            return 0;
+        }
+        int released = stateRepository.releaseDryRunStates(nowStorage);
+        if (released > 0) {
+            log.info("Client messages released dry-run states after live enabled: {}", released);
+        }
+        return released;
     }
 
     private void registerSuccess(
@@ -957,7 +1096,12 @@ public class ScheduledClientMessageService {
         state.setConsecutiveFailures(0);
         state.setSentCount(state.getSentCount() + 1);
         state.setLockedUntil(null);
-        state.setNextAttemptAt(nextSuccessAttemptAt(state.getScenario(), nowStorage, nextIntervalDays));
+        state.setNextAttemptAt(nextSuccessAttemptAt(
+                state.getScenario(),
+                nowStorage,
+                nextIntervalDays,
+                state.getTargetKey() + ":" + state.getSentCount()
+        ));
         stateRepository.save(state);
 
         String sentAt = nowIrkutsk().toString();
@@ -976,6 +1120,38 @@ public class ScheduledClientMessageService {
             String message,
             long durationMs
     ) {
+        registerFailure(state, nowStorage, errorCode, errorMessage, message, durationMs, null, null);
+    }
+
+    private boolean postponeForReviewRecoveryIfNeeded(
+            ScheduledClientMessageState state,
+            Order order,
+            LocalDateTime nowStorage
+    ) {
+        if (!reviewRecoveryHoldService.shouldPauseClientMessages(order)) {
+            return false;
+        }
+        String message = "У заказа идет восстановление отзывов, клиентский сценарий поставлен на паузу";
+        recordAttempt(state, ScheduledMessageAttemptStatus.SKIPPED, null, "review_recovery_active", message, message, 0);
+        state.setLastAttemptAt(nowStorage);
+        state.setLastErrorCode("review_recovery_active");
+        state.setLastErrorMessage(message);
+        state.setLockedUntil(null);
+        state.setNextAttemptAt(scheduleAtStorage(nowStorage.plusDays(1)));
+        stateRepository.save(state);
+        return true;
+    }
+
+    private void registerFailure(
+            ScheduledClientMessageState state,
+            LocalDateTime nowStorage,
+            String errorCode,
+            String errorMessage,
+            String message,
+            long durationMs,
+            Company company,
+            Manager manager
+    ) {
         String code = hasText(errorCode) ? errorCode : "unknown_error";
         String readable = hasText(errorMessage) ? errorMessage : "Неизвестная ошибка авторассылки";
         recordAttempt(state, ScheduledMessageAttemptStatus.FAILED, null, code, readable, message, durationMs);
@@ -986,30 +1162,126 @@ public class ScheduledClientMessageService {
         state.setConsecutiveFailures(state.getConsecutiveFailures() + 1);
         state.setLockedUntil(null);
 
-        if (isPermanentError(code)) {
+        FailureRetryPolicy policy = failureRetryPolicy(code, readable, state.getConsecutiveFailures(), nowStorage);
+        if (policy.disable()) {
             state.setStatus(ScheduledMessageStateStatus.DISABLED);
             state.setNextAttemptAt(null);
-            log.warn(
-                    "Scheduled client message disabled scenario={} target={} reason={} message={}",
-                    state.getScenario(),
-                    state.getTargetKey(),
-                    code,
-                    readable
-            );
         } else {
-            state.setNextAttemptAt(scheduleAtStorage(nowStorage.plus(retryDelay(state.getConsecutiveFailures(), code))));
-            log.warn(
-                    "Scheduled client message failed scenario={} target={} reason={} message={} nextAttemptAt={}",
-                    state.getScenario(),
-                    state.getTargetKey(),
-                    code,
-                    readable,
-                    state.getNextAttemptAt()
-            );
+            state.setNextAttemptAt(policy.nextAttemptAt());
         }
+        log.warn(
+                "Scheduled client message failed scenario={} target={} reason={} message={} status={} nextAttemptAt={}",
+                state.getScenario(),
+                state.getTargetKey(),
+                code,
+                readable,
+                state.getStatus(),
+                state.getNextAttemptAt()
+        );
 
         stateRepository.save(state);
-        applyMassErrorProtection(nowStorage, code, readable);
+        if (policy.notifyWhatsAppAuth()) {
+            Manager targetManager = manager != null ? manager : company == null ? null : company.getManager();
+            whatsAppAuthAlertService.notifyAuthIssue(
+                    targetManager == null ? null : targetManager.getClientId(),
+                    company == null ? null : company.getTitle(),
+                    "фоновый автоответчик",
+                    code,
+                    readable,
+                    nowStorage,
+                    toIrkutskTime(nextWhatsAppAuthAttemptAt(nowStorage)),
+                    managerCandidates(company, manager)
+            );
+        }
+        if (policy.countForMassProtection()) {
+            applyMassErrorProtection(nowStorage, code, readable);
+        }
+    }
+
+    private FailureRetryPolicy failureRetryPolicy(
+            String code,
+            String readable,
+            int consecutiveFailures,
+            LocalDateTime nowStorage
+    ) {
+        if (isWhatsAppAuthUnavailable(code, readable)) {
+            return new FailureRetryPolicy(nextWhatsAppAuthAttemptAt(nowStorage), false, true, false);
+        }
+        if (isWhatsAppFastRetryError(code, readable)) {
+            return new FailureRetryPolicy(nextWhatsAppAuthAttemptAt(nowStorage), false, false, false);
+        }
+        if (isManualFixError(code)) {
+            boolean disable = consecutiveFailures >= DEFAULT_NO_SEND_MAX_FAILURES;
+            return new FailureRetryPolicy(disable ? null : nextNoSendAttemptAt(nowStorage), disable, false, false);
+        }
+        if (isOperationalNoSendError(code)) {
+            return new FailureRetryPolicy(nextNoSendAttemptAt(nowStorage), false, false, false);
+        }
+        return new FailureRetryPolicy(nextNoSendAttemptAt(nowStorage), false, false, true);
+    }
+
+    private boolean isWhatsAppFastRetryError(String code, String readable) {
+        String normalized = normalizedFailureText(code, readable);
+        return normalized.contains("whatsapp_not_ready")
+                || normalized.contains("not_ready")
+                || normalized.contains("client is not ready")
+                || normalized.contains("client_unavailable")
+                || normalized.contains("http 503")
+                || normalized.contains("http_error")
+                || normalized.contains("gateway timeout")
+                || normalized.contains("connection refused");
+    }
+
+    private boolean isWhatsAppAuthUnavailable(String code, String readable) {
+        String normalized = normalizedFailureText(code, readable);
+        return normalized.contains("authenticated=false")
+                || normalized.contains("\"authenticated\":false")
+                || normalized.contains("\"authenticated\": false")
+                || normalized.contains("state\":\"qr")
+                || normalized.contains("\"state\":\"qr\"")
+                || normalized.contains("\"state\": \"qr\"")
+                || normalized.contains("hasqr=true")
+                || normalized.contains("\"hasqr\":true")
+                || normalized.contains("\"hasqr\": true")
+                || normalized.contains("scan it")
+                || normalized.contains("не авториз");
+    }
+
+    private boolean isManualFixError(String code) {
+        String normalized = code == null ? "" : code.toLowerCase(Locale.ROOT);
+        return normalized.equals("whatsapp_group_missing")
+                || normalized.equals("telegram_group_missing")
+                || normalized.equals("max_group_missing")
+                || normalized.equals("chat_platform_unknown")
+                || normalized.equals("whatsapp_client_missing")
+                || normalized.equals("unknown_client")
+                || normalized.equals("missing_client")
+                || normalized.equals("empty_client_url")
+                || normalized.equals("missing_group_id")
+                || normalized.equals("message_empty")
+                || normalized.equals("missing_message");
+    }
+
+    private boolean isOperationalNoSendError(String code) {
+        String normalized = code == null ? "" : code.toLowerCase(Locale.ROOT);
+        return normalized.contains("payment_instruction")
+                || normalized.contains("status_change")
+                || normalized.contains("auto_archive")
+                || normalized.contains("auto_ban");
+    }
+
+    private String normalizedFailureText(String code, String readable) {
+        return ((code == null ? "" : code) + " " + (readable == null ? "" : readable))
+                .toLowerCase(Locale.ROOT);
+    }
+
+    private List<Manager> managerCandidates(Company company, Manager manager) {
+        Manager targetManager = manager != null ? manager : company == null ? null : company.getManager();
+        return targetManager == null ? List.of() : List.of(targetManager);
+    }
+
+    private boolean isWhatsAppChannel(String channel) {
+        return channel != null && "whatsapp".equals(channel.trim().toLowerCase(Locale.ROOT));
     }
 
     private void markDone(ScheduledClientMessageState state, LocalDateTime nowStorage, String code, String message) {
@@ -1135,6 +1407,17 @@ public class ScheduledClientMessageService {
         );
     }
 
+    private String reviewRecoveryNoticeText(Order order) {
+        return renderOrderTemplate(
+                appSettingService.getString(
+                        AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
+                        DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
+                ),
+                order,
+                Map.of()
+        );
+    }
+
     private String managerPayText(Order order) {
         return order.getManager() != null && hasText(order.getManager().getPayText())
                 ? order.getManager().getPayText().trim()
@@ -1198,10 +1481,16 @@ public class ScheduledClientMessageService {
         return company.getStatus() == null || company.getStatus().getTitle() == null ? "" : company.getStatus().getTitle();
     }
 
-    private LocalDateTime nextSuccessAttemptAt(ClientMessageScenario scenario, LocalDateTime nowStorage, Integer nextIntervalDays) {
+    private LocalDateTime nextSuccessAttemptAt(
+            ClientMessageScenario scenario,
+            LocalDateTime nowStorage,
+            Integer nextIntervalDays,
+            String jitterSeed
+    ) {
         if (scenario == ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
                 || scenario == ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE
-                || scenario == ClientMessageScenario.BAD_REVIEW_AUTO_BAN) {
+                || scenario == ClientMessageScenario.BAD_REVIEW_AUTO_BAN
+                || scenario == ClientMessageScenario.REVIEW_RECOVERY_NOTICE) {
             return null;
         }
         if (scenario == ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY) {
@@ -1214,9 +1503,17 @@ public class ScheduledClientMessageService {
             return scheduleAtStorage(nowStorage.plusHours(badReviewInvoiceRetryDelayHours()));
         }
         if (scenario == ClientMessageScenario.ARCHIVE_REORDER_OFFER) {
-            return scheduleAtStorage(nowStorage.plusMonths(archiveReorderMonths()));
+            return archiveReorderAttemptAt(nowStorage.plusMonths(archiveReorderMonths()), jitterSeed);
         }
         return scheduleAtStorage(nowStorage.plusDays(nextIntervalDays == null ? DEFAULT_REMINDER_INTERVAL_DAYS : nextIntervalDays));
+    }
+
+    private LocalDateTime nextNoSendAttemptAt(LocalDateTime nowStorage) {
+        return scheduleAtStorage(nowStorage.plusDays(DEFAULT_NO_SEND_RETRY_DAYS));
+    }
+
+    private LocalDateTime nextWhatsAppAuthAttemptAt(LocalDateTime nowStorage) {
+        return scheduleAtStorage(nowStorage.plusHours(whatsAppAuthRetryHours()));
     }
 
     private boolean withinDailyLimit(LocalDateTime nowStorage) {
@@ -1365,12 +1662,30 @@ public class ScheduledClientMessageService {
         );
     }
 
+    private int reviewRecoveryNoticeRetryDelayHours() {
+        return intSetting(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS,
+                DEFAULT_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS,
+                1,
+                168
+        );
+    }
+
     private int badReviewAutoBanDelayDays() {
         return intSetting(
                 AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS,
                 DEFAULT_BAD_REVIEW_AUTO_BAN_DELAY_DAYS,
                 1,
                 365
+        );
+    }
+
+    private int whatsAppAuthRetryHours() {
+        return intSetting(
+                AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS,
+                DEFAULT_WHATSAPP_AUTH_RETRY_HOURS,
+                1,
+                48
         );
     }
 
@@ -1381,6 +1696,24 @@ public class ScheduledClientMessageService {
                 1,
                 36
         );
+    }
+
+    private int archiveReorderJitterDays() {
+        return intSetting(
+                AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS,
+                DEFAULT_ARCHIVE_REORDER_JITTER_DAYS,
+                0,
+                30
+        );
+    }
+
+    LocalDateTime archiveReorderAttemptAt(LocalDateTime baseAt, String seed) {
+        int maxJitterDays = archiveReorderJitterDays();
+        if (maxJitterDays <= 0) {
+            return scheduleAtStorage(baseAt);
+        }
+        int offsetDays = Math.floorMod(Objects.hashCode(seed), maxJitterDays + 1);
+        return scheduleAtStorage(baseAt.plusDays(offsetDays));
     }
 
     private int candidateLimit() {
@@ -1613,23 +1946,6 @@ public class ScheduledClientMessageService {
         return true;
     }
 
-    private Duration retryDelay(int consecutiveFailures, String code) {
-        if (code != null && code.toLowerCase(Locale.ROOT).contains("not_ready")) {
-            return Duration.ofMinutes(60);
-        }
-        return switch (Math.min(consecutiveFailures, 4)) {
-            case 1 -> Duration.ofMinutes(30);
-            case 2 -> Duration.ofHours(2);
-            case 3 -> Duration.ofHours(6);
-            default -> Duration.ofHours(24);
-        };
-    }
-
-    private boolean isPermanentError(String code) {
-        String normalized = code == null ? "" : code.toLowerCase(Locale.ROOT);
-        return normalized.contains("missing") || normalized.contains("unknown");
-    }
-
     private void cleanupOldAttempts(LocalDateTime nowStorage) {
         if (lastCleanupAt != null && lastCleanupAt.plusHours(1).isAfter(nowStorage)) {
             return;
@@ -1758,6 +2074,17 @@ public class ScheduledClientMessageService {
             int paymentReminderCandidates,
             int paymentOverdueCandidates,
             int archiveReorderCandidates
+    ) {
+        private static ClientMessageReconcileSummary empty() {
+            return new ClientMessageReconcileSummary(0, 0, 0, 0, 0, 0);
+        }
+    }
+
+    private record FailureRetryPolicy(
+            LocalDateTime nextAttemptAt,
+            boolean disable,
+            boolean notifyWhatsAppAuth,
+            boolean countForMassProtection
     ) {
     }
 

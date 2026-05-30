@@ -69,6 +69,7 @@ public class DeepCompanyResearchService {
         } catch (ReportParseException exception) {
             report = repairAndParseReport(company, response, exception);
         }
+        report = expandThinYandexReportIfNeeded(company, safeRequest, sourceSnapshot, report);
         if (!safeRequest.shouldEnrichCollectionGaps()) {
             return reportWithCollectionGapEnrichmentStatus(
                     company,
@@ -491,6 +492,148 @@ public class DeepCompanyResearchService {
         );
     }
 
+    private DeepCompanyResearchReport expandThinYandexReportIfNeeded(
+            Company company,
+            ReputationResearchRequest request,
+            ResearchSnapshot sourceSnapshot,
+            DeepCompanyResearchReport report
+    ) {
+        if (!isYandexReport(report) || !needsDetailExpansion(request, report)) {
+            return report;
+        }
+
+        OpenAiResponseResult response = openAiResponsesClient.createResearchReportRewriteResponse(
+                yandexDetailExpansionInstructions(),
+                yandexDetailExpansionInput(company, request, sourceSnapshot, report),
+                request.deepResearchProfile()
+        );
+        if (response.text().isBlank()) {
+            String detail = response.errorMessage().isBlank()
+                    ? activeProviderDisplayName() + " не вернул текст второго прохода детализации."
+                    : response.errorMessage();
+            return reportWithWarnings(report, List.of("Yandex detail pass не выполнен: " + detail));
+        }
+
+        try {
+            DeepCompanyResearchReport expanded = parseReport(
+                    company,
+                    response,
+                    List.of("Yandex detail pass: краткий web_search-отчёт автоматически пересобран в подробную аналитику со строгой JSON-схемой.")
+            );
+            return reportWithMergedSources(company, expanded, report.sources());
+        } catch (ReportParseException exception) {
+            return reportWithWarnings(report, List.of("Yandex detail pass вернул повреждённый JSON: " + exception.getMessage()));
+        }
+    }
+
+    private boolean isYandexReport(DeepCompanyResearchReport report) {
+        return report != null && report.provider() != null && report.provider().toLowerCase(Locale.ROOT).contains("yandex");
+    }
+
+    private boolean needsDetailExpansion(ReputationResearchRequest request, DeepCompanyResearchReport report) {
+        String profile = request == null || request.deepResearchProfile() == null
+                ? "maximum"
+                : request.deepResearchProfile().trim().toLowerCase(Locale.ROOT);
+        if ("economy".equals(profile)) {
+            return false;
+        }
+
+        String markdown = report.reportMarkdown().isBlank() ? sectionsToMarkdown(report.sections()) : report.reportMarkdown();
+        int sectionCount = report.sections().size();
+        int totalChars = markdown.length();
+        int averageSectionChars = sectionCount == 0 ? 0 : totalChars / sectionCount;
+        boolean servicesAreThin = sectionBody(report, "услуг", "цен", "товар", "стоимост").length() < 900;
+        boolean scenariosAreThin = sectionBody(report, "утп", "сценар").length() < 700;
+        boolean staffMissingOrThin = sectionBody(report, "сотруд", "компет").length() < 500;
+        boolean noPriceTable = !markdown.contains("| Позиция") && !markdown.contains("|Позиция");
+        boolean reviewIdeasAreShort = countNumberedItems(sectionBody(report, "идеи", "отзыв")) < 30;
+
+        return sectionCount < 14
+                || totalChars < 18000
+                || averageSectionChars < 900
+                || servicesAreThin
+                || scenariosAreThin
+                || staffMissingOrThin
+                || noPriceTable
+                || reviewIdeasAreShort;
+    }
+
+    private String yandexDetailExpansionInstructions() {
+        return textRebuildInstructions() + "\n\n"
+                + """
+                Критически важно: текущий Yandex web_search-проход может быть слишком кратким. Твоя задача - не резюмировать, а развернуть полноценный аналитический отчет.
+                Верни подробный отчет уровня старого OpenAI-режима:
+                - 14-16 sections в стабильном порядке из основного промпта;
+                - не меньше 18 000 знаков суммарного markdown для профилей Баланс/Максимум, если входных данных не совсем пусто;
+                - ключевые sections не должны быть одним абзацем: используй подзаголовки, списки и таблицы;
+                - "Услуги, товары и цены" обязательно в markdown-таблице с колонками "Позиция", "Описание", "Условия/сроки", "Цена", "Источник/уверенность";
+                - отдельно раскрой УТП, клиентские сценарии, цены/пакеты/доплаты, сотрудников/имена из отзывов, удобства, риски, доверие, что уточнить менеджеру;
+                - если точных цен, сотрудников или услуг не найдено, не оставляй раздел коротким: напиши, какие источники проверены, какие сигналы есть, какие поля отсутствуют и что надо дозвонить;
+                - идеи для отзывов верни ровно 30 пунктов.
+                Не добавляй новые URL вне sources из входа и не выдумывай факты.
+                Если среди sources есть одноименный источник, который противоречит CRM-городу, адресу, категории, филиалу или типу бизнеса, не смешивай его с компанией: вынеси его в warnings как сомнительный и не строй на нем услуги, цены, УТП или выводы.
+                """.stripIndent().trim();
+    }
+
+    private String yandexDetailExpansionInput(
+            Company company,
+            ReputationResearchRequest request,
+            ResearchSnapshot sourceSnapshot,
+            DeepCompanyResearchReport baseReport
+    ) {
+        return """
+                Исходный полный input первого прохода, включая CRM, ручные данные, priority URL и предварительный Yandex Search snapshot:
+                %s
+
+                Текущий слишком краткий отчет, который надо пересобрать подробнее:
+                %s
+
+                Sources текущего отчета:
+                %s
+
+                Warnings текущего отчета:
+                %s
+                """.formatted(
+                researchInput(company, request, sourceSnapshot),
+                sectionsToPrompt(baseReport.sections(), baseReport.reportMarkdown(), 30000),
+                sourcesToPrompt(baseReport.sources()),
+                listToText(baseReport.warnings())
+        );
+    }
+
+    private String sectionBody(DeepCompanyResearchReport report, String... needles) {
+        if (report == null || report.sections() == null) {
+            return "";
+        }
+        for (DeepCompanyResearchReport.Section section : report.sections()) {
+            String title = section.title() == null ? "" : section.title().toLowerCase(Locale.ROOT);
+            boolean matches = true;
+            for (String needle : needles) {
+                if (needle != null && !needle.isBlank() && !title.contains(needle.toLowerCase(Locale.ROOT))) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                return section.body() == null ? "" : section.body();
+            }
+        }
+        return "";
+    }
+
+    private int countNumberedItems(String text) {
+        if (text == null || text.isBlank()) {
+            return 0;
+        }
+        int count = 0;
+        for (String line : text.split("\\R")) {
+            if (line.trim().matches("^\\d+[.)].+")) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private String sectionRewriteInput(
             Company company,
             ReputationResearchRequest request,
@@ -765,6 +908,43 @@ public class DeepCompanyResearchService {
                 warnings,
                 report.qualityChecks(),
                 report.factSnapshot(),
+                report.createdAt()
+        );
+    }
+
+    private DeepCompanyResearchReport reportWithMergedSources(
+            Company company,
+            DeepCompanyResearchReport report,
+            List<DeepCompanyResearchReport.Source> fallbackSources
+    ) {
+        List<DeepCompanyResearchReport.Source> sources = mergeSources(report.sources(), fallbackSources);
+        if (sources.size() == report.sources().size()) {
+            return report;
+        }
+
+        String markdown = report.reportMarkdown().isBlank() ? sectionsToMarkdown(report.sections()) : report.reportMarkdown();
+        List<String> warnings = new ArrayList<>(report.warnings());
+        warnings.add("Источники второго прохода дополнены источниками первого web_search/snapshot-прохода.");
+        List<DeepCompanyResearchReport.QualityCheck> qualityChecks = reportQualityChecks(company, report.sections(), sources, markdown);
+        DeepCompanyResearchReport.FactSnapshot factSnapshot = factSnapshot(company, report.sections(), sources, qualityChecks, markdown);
+        warnings.addAll(qualityChecks.stream()
+                .filter(this::isActionableQualityCheck)
+                .map(DeepCompanyResearchReport.QualityCheck::detail)
+                .filter(detail -> detail != null && !detail.isBlank())
+                .toList());
+        return new DeepCompanyResearchReport(
+                report.companyId(),
+                report.companyName(),
+                report.city(),
+                report.provider(),
+                report.model(),
+                report.responseId(),
+                markdown,
+                report.sections(),
+                sources,
+                warnings,
+                qualityChecks,
+                factSnapshot,
                 report.createdAt()
         );
     }

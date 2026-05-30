@@ -148,14 +148,26 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         task.setStatus(BadReviewTaskStatus.DONE);
         task.setCompletedDate(LocalDate.now());
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
-        Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
-        BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
-        expireStalePaymentLinks(savedTask.getOrder());
-        sendBadReviewInvoiceIfEnabled(savedTask, summary);
-        createTaskCompletionReminder(savedTask, summary);
-        createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
-        log.info("Плохая задача {} выполнена, заказ {}, доплата {}", savedTask.getId(), orderId, savedTask.getPrice());
+        runCompletionSideEffects(savedTask);
+        log.info("Плохая задача {} выполнена, заказ {}, доплата {}",
+                savedTask.getId(),
+                savedTask.getOrder() != null ? savedTask.getOrder().getId() : null,
+                savedTask.getPrice());
         return savedTask;
+    }
+
+    private void runCompletionSideEffects(BadReviewTask savedTask) {
+        Long orderId = savedTask.getOrder() != null ? savedTask.getOrder().getId() : null;
+        try {
+            BadReviewTaskSummary summary = orderId == null ? BadReviewTaskSummary.empty() : getSummaryForOrder(orderId);
+            expireStalePaymentLinks(savedTask.getOrder());
+            sendBadReviewInvoiceIfEnabled(savedTask, summary);
+            createTaskCompletionReminder(savedTask, summary);
+            createOrderReadyReminderIfNeeded(savedTask.getOrder(), summary);
+        } catch (RuntimeException e) {
+            log.warn("Плохая задача {} уже отмечена выполненной, но пост-действия не завершились. orderId={}",
+                    savedTask.getId(), orderId, e);
+        }
     }
 
     private void sendBadReviewInvoiceIfEnabled(BadReviewTask task, BadReviewTaskSummary summary) {
@@ -686,7 +698,8 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (taskId == null || taskId <= 0) {
             throw new EntityNotFoundException("Плохая задача не найдена");
         }
-        return badReviewTaskRepository.findById(taskId)
+        return badReviewTaskRepository.findByIdForMutation(taskId)
+                .or(() -> badReviewTaskRepository.findById(taskId))
                 .orElseThrow(() -> new EntityNotFoundException("Плохая задача не найдена: " + taskId));
     }
 

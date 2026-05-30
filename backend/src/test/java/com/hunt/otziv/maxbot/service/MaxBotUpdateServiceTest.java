@@ -2,6 +2,7 @@ package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -23,6 +24,9 @@ class MaxBotUpdateServiceTest {
 
     @Mock
     private MaxBotClient maxBotClient;
+
+    @Mock
+    private PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     @Test
     void handlesBotStartedDeepLinkPayload() throws Exception {
@@ -85,7 +89,36 @@ class MaxBotUpdateServiceTest {
         verifyNoMoreInteractions(maxGroupLinkService, maxBotClient);
     }
 
+    @Test
+    void handlesPublicationPreferenceCommandFromGroupMessage() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_created",
+                  "message": {
+                    "recipient": { "chat_id": -200 },
+                    "sender": { "user_id": 303 },
+                    "body": { "text": "включить уведомления" }
+                  }
+                }
+                """);
+
+        when(publicationProgressPreferenceService.handleMaxCommand(-200L, "включить уведомления"))
+                .thenReturn(Optional.of(new PublicationProgressPreferenceService.PreferenceUpdate(
+                        10L,
+                        true,
+                        "Оповещения о публикациях включены."
+                )));
+        when(publicationProgressPreferenceService.isPreferenceCommand("включить уведомления")).thenReturn(true);
+
+        service.handleUpdate(update);
+
+        verify(publicationProgressPreferenceService).handleMaxCommand(-200L, "включить уведомления");
+        verify(maxBotClient).sendMessageToChat(-200L, "Оповещения о публикациях включены.");
+        verifyNoMoreInteractions(maxGroupLinkService);
+    }
+
     private MaxBotUpdateService service() {
-        return new MaxBotUpdateService(maxGroupLinkService, maxBotClient);
+        return new MaxBotUpdateService(maxGroupLinkService, maxBotClient, publicationProgressPreferenceService);
     }
 }

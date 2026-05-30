@@ -127,6 +127,50 @@ describe('ReviewCheckComponent', () => {
     expect(component.reviewedCount(payload)).toBe(2);
   });
 
+  it('sends review remarks and correction comment when returning to correction', () => {
+    const api = TestBed.inject(ReviewCheckApi) as unknown as {
+      sendToCorrection: ReturnType<typeof vi.fn>;
+    };
+    const payload = details({
+      permissions: {
+        ...details().permissions,
+        canSendCorrection: true
+      }
+    });
+    api.sendToCorrection = vi.fn(() => of(payload));
+
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    component.orderDetailId.set(payload.orderDetailId);
+    component.details.set(payload);
+    component.draft.set({
+      comment: '',
+      reviews: payload.reviews.map((item) => ({
+        id: item.id,
+        text: item.text,
+        answer: item.answer
+      }))
+    });
+
+    component.setReviewFieldDraft(payload.reviews[0], 'answer', 'Нужна корректировка');
+    component.setComment('Общее замечание');
+    component.sendToCorrection();
+
+    expect(api.sendToCorrection).toHaveBeenCalledWith(payload.orderDetailId, {
+      comment: 'Общее замечание',
+      reviews: [
+        {
+          id: 17,
+          text: 'Текст отзыва',
+          answer: 'Нужна корректировка',
+          publish: false,
+          publishedDate: null,
+          url: ''
+        }
+      ]
+    });
+  });
+
   it('expands and collapses long review text from the review card', () => {
     const fixture = TestBed.createComponent(ReviewCheckComponent);
     const component = fixture.componentInstance;

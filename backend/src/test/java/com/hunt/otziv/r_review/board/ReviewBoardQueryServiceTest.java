@@ -149,7 +149,8 @@ class ReviewBoardQueryServiceTest {
         assertTrue(queryCaptor.getValue().contains("LEFT JOIN r.bot b"));
         assertTrue(queryCaptor.getValue().contains("(o IS NULL OR o.manager IS NULL OR o.manager = :manager)"));
         assertTrue(queryCaptor.getValue().contains("TRIM(r.text) <> ''"));
-        assertTrue(queryCaptor.getValue().contains("LOWER(TRIM(r.text)) <> 'текст отзыва'"));
+        assertTrue(queryCaptor.getValue().contains("LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'"));
+        assertTrue(queryCaptor.getValue().contains("LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'"));
         verify(countQuery).setParameter(eq("localDate"), eq(localDate));
         verify(countQuery).setParameter(eq("workers"), same(workers));
         verify(countQuery).setParameter(eq("manager"), same(manager));

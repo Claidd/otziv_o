@@ -863,7 +863,7 @@ function Invoke-ReputationAiSmoke {
         if ($null -eq $maximumProfile) {
             throw "Reputation AI status did not include maximum deep research profile."
         }
-        if ([int]$maximumProfile.maxOutputTokens -lt 12000) {
+        if ([int]$maximumProfile.maxOutputTokens -lt 20000) {
             throw "Reputation AI Yandex maximum profile is too small: maxOutputTokens=$($maximumProfile.maxOutputTokens)."
         }
         if (-not ([string]$maximumProfile.searchContextSize).StartsWith("web_search:", [System.StringComparison]::OrdinalIgnoreCase)) {

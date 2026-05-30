@@ -52,6 +52,9 @@ class ReviewBotChangeServiceTest {
     @Mock
     private FilialService filialService;
 
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
     @Test
     void changeBotAssignsNewBotAndUpdatesVigulByCounter() {
         ReviewBotChangeService service = service();
@@ -163,7 +166,7 @@ class ReviewBotChangeServiceTest {
         service.assignNewAccount(44L);
 
         assertSame(selectedBot, review.getBot());
-        assertFalse(review.isVigul());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false);
         verify(reviewRepository).save(review);
     }
 
@@ -193,7 +196,8 @@ class ReviewBotChangeServiceTest {
                 botService,
                 emailService,
                 botAssignmentService,
-                filialService
+                filialService,
+                accountWalkScheduleService
         );
     }
 

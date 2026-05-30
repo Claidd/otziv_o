@@ -14,9 +14,26 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, Long> {
+
+    @Query("""
+        SELECT t
+        FROM BadReviewTask t
+        LEFT JOIN FETCH t.order o
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.manager om
+        LEFT JOIN FETCH om.user
+        LEFT JOIN FETCH t.sourceReview r
+        LEFT JOIN FETCH t.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH t.bot b
+        WHERE t.id = :taskId
+    """)
+    Optional<BadReviewTask> findByIdForMutation(@Param("taskId") Long taskId);
 
     @Query("""
         SELECT DISTINCT t

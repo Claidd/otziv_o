@@ -79,6 +79,40 @@ public class ArchiveCompanyMessageCandidateRepository {
         });
     }
 
+    public boolean hasArchiveReorderBlocker(
+            Long companyId,
+            Collection<String> inactiveOrderStatuses,
+            Collection<String> openNextOrderStatuses
+    ) {
+        if (companyId == null) {
+            return true;
+        }
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("companyId", companyId)
+                .addValue("inactiveStatuses", inactiveOrderStatuses)
+                .addValue("openNextOrderStatuses", openNextOrderStatuses);
+
+        Boolean blocked = jdbc.queryForObject("""
+                SELECT CASE WHEN
+                    EXISTS (
+                        SELECT 1
+                        FROM orders live_order
+                        JOIN order_statuses live_status ON live_status.order_status_id = live_order.order_status
+                        WHERE live_order.order_company = :companyId
+                          AND COALESCE(live_status.order_status_title, '') NOT IN (:inactiveStatuses)
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM next_order_requests request
+                        WHERE request.company_id = :companyId
+                          AND request.request_status IN (:openNextOrderStatuses)
+                    )
+                THEN 1 ELSE 0 END
+                """, params, Boolean.class);
+        return Boolean.TRUE.equals(blocked);
+    }
+
     public ArchiveCompanyCandidateDiagnostics diagnostics(
             LocalDateTime cutoff,
             String archiveCompanyStatus,

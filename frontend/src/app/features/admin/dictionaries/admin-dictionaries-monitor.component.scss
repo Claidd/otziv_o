@@ -3,7 +3,10 @@
 .monitor-metric-grid,
 .monitor-scenario-grid,
 .archive-diagnostics-grid,
-.monitor-preview-grid {
+.monitor-preview-grid,
+.maintenance-preview-grid,
+.maintenance-action-list,
+.maintenance-samples {
   display: grid;
   gap: 0.7rem;
 }
@@ -275,6 +278,140 @@
   margin: 0;
 }
 
+.maintenance-preview-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.maintenance-preview-grid article,
+.maintenance-action,
+.maintenance-samples > div {
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: 0.55rem;
+  background: var(--otziv-muted-surface);
+}
+
+.maintenance-preview-grid article {
+  padding: 0.7rem;
+}
+
+.maintenance-preview-grid .material-icons-sharp {
+  color: var(--otziv-primary);
+  font-size: 1.25rem;
+}
+
+.maintenance-preview-grid small,
+.maintenance-preview-grid p,
+.maintenance-samples small {
+  display: block;
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.maintenance-preview-grid strong {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--otziv-dark);
+  font-size: 1.25rem;
+  font-weight: 1000;
+}
+
+.maintenance-action-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.maintenance-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.65rem;
+}
+
+.maintenance-action b {
+  display: grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(108, 155, 207, 0.14);
+  color: var(--otziv-primary);
+  font-size: 0.9rem;
+}
+
+.maintenance-action strong,
+.maintenance-samples h4 {
+  display: block;
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+  font-weight: 1000;
+}
+
+.maintenance-action span,
+.maintenance-samples span {
+  display: block;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.maintenance-action.warning b {
+  color: #a67500;
+  background: rgba(219, 168, 47, 0.16);
+}
+
+.maintenance-action.danger b {
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.1);
+}
+
+.maintenance-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: 0.55rem;
+  background: rgba(108, 155, 207, 0.05);
+}
+
+.maintenance-button-row .compact-action {
+  margin: 0;
+}
+
+.maintenance-button-row .compact-action.warning {
+  color: #8a6400;
+  background: rgba(219, 168, 47, 0.14);
+}
+
+.maintenance-note {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.maintenance-samples {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.maintenance-samples > div {
+  padding: 0.7rem;
+}
+
+.maintenance-samples span + span {
+  margin-top: 0.45rem;
+}
+
+.maintenance-samples em {
+  display: block;
+  color: var(--otziv-primary);
+  font-style: normal;
+}
+
 @media (max-width: 1180px) {
   .monitor-status-row {
     grid-template-columns: 1fr;
@@ -288,7 +425,10 @@
   .monitor-clock-list,
   .monitor-scenario-stats,
   .archive-diagnostics-grid,
-  .monitor-preview-grid {
+  .monitor-preview-grid,
+  .maintenance-preview-grid,
+  .maintenance-action-list,
+  .maintenance-samples {
     grid-template-columns: 1fr;
   }
 }

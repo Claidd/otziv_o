@@ -16,6 +16,9 @@ public record ClientMessageMonitorResponse(
         String pauseReason,
         long activeCandidates,
         long dueNow,
+        long readyToSendNow,
+        long waitingForWindow,
+        long missingChannelBindings,
         long sentToday,
         long failedToday,
         long skippedToday,
@@ -41,6 +44,9 @@ public record ClientMessageMonitorResponse(
             String label,
             long activeCandidates,
             long dueNow,
+            long readyToSendNow,
+            long waitingForWindow,
+            long missingChannelBindings,
             long sentToday,
             long sentSevenDays,
             long failedToday,
@@ -72,6 +78,9 @@ public record ClientMessageMonitorResponse(
             String channelDetails,
             String paymentInstructionSource,
             String messagePreview,
+            String readiness,
+            String readinessLabel,
+            String readinessReason,
             String link
     ) {
     }

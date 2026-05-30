@@ -6,6 +6,7 @@ import { forkJoin, Observable } from 'rxjs';
 import {
   AdminBot,
   AdminCategory,
+  AdminClientMessageMaintenancePreview,
   AdminClientMessageMonitor,
   AdminClientMessageMonitorAttempt,
   AdminClientMessageMonitorQueueItem,
@@ -218,15 +219,19 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
   readonly clientMessageSettings = signal<AdminClientMessageSettings | null>(null);
   readonly clientMessageMonitor = signal<AdminClientMessageMonitor | null>(null);
+  readonly clientMessageMaintenancePreview = signal<AdminClientMessageMaintenancePreview | null>(null);
   readonly clientMessageMonitorLoading = signal(false);
+  readonly clientMessageMaintenancePreviewLoading = signal(false);
   readonly clientMessageMonitorSaving = signal(false);
   readonly clientMessageMonitorError = signal<string | null>(null);
+  readonly clientMessageMaintenancePreviewError = signal<string | null>(null);
   readonly monitorScenarioFilter = signal('ALL');
   readonly monitorQueueStatusFilter = signal('ALL');
   readonly monitorAttemptStatusFilter = signal('ALL');
   readonly monitorSearch = signal('');
   readonly expandedMonitorQueueKey = signal<string | null>(null);
   readonly clientMessageManualAction = signal<string | null>(null);
+  readonly maintenanceAction = signal<string | null>(null);
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -234,6 +239,10 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly canManageAllDictionaries = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  });
+  readonly canApplyMaintenance = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN']);
   });
   readonly tabs = computed<DictionaryTab[]>(() => this.canManageAllDictionaries() ? this.allTabs : this.managerTabs);
 
@@ -302,6 +311,8 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly settingsForm = this.fb.nonNullable.group({
     nagulCooldownMinutes: [60, [Validators.required, Validators.min(0), Validators.max(1440)]],
     nagulLookaheadDays: [60, [Validators.required, Validators.min(0), Validators.max(365)]],
+    accountWalkedCounterThreshold: [3, [Validators.required, Validators.min(1), Validators.max(30)]],
+    accountWalkDelayDays: [2, [Validators.required, Validators.min(0), Validators.max(30)]],
     morningReportEnabled: [true],
     morningReportTime: ['11:30', [Validators.required, Validators.pattern(/^([01]\d|2[0-3]):[0-5]\d$/)]],
     eveningReportEnabled: [true],
@@ -323,6 +334,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     paymentReminderEnabled: [true],
     badReviewInvoiceEnabled: [true],
     badReviewAutoBanEnabled: [true],
+    reviewRecoveryNoticeEnabled: [true],
     paymentOverdueEnabled: [true],
     paymentOverdueLiveEnabled: [false],
     archiveReorderEnabled: [true],
@@ -335,12 +347,16 @@ export class AdminDictionariesComponent implements OnDestroy {
     paymentInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     badReviewInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     badReviewAutoBanDelayDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
+    reviewRecoveryNoticeRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     paymentOverdueDays: [30, [Validators.required, Validators.min(1), Validators.max(365)]],
     archiveReorderMonths: [3, [Validators.required, Validators.min(1), Validators.max(36)]],
+    archiveReorderJitterDays: [10, [Validators.required, Validators.min(0), Validators.max(30)]],
     archiveOrderRetentionDays: [90, [Validators.required, Validators.min(1), Validators.max(3650)]],
     errorProtectionThreshold: [20, [Validators.required, Validators.min(1), Validators.max(10000)]],
     errorProtectionWindowMinutes: [10, [Validators.required, Validators.min(1), Validators.max(1440)]],
     errorProtectionCooldownMinutes: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
+    whatsAppAuthRetryHours: [2, [Validators.required, Validators.min(1), Validators.max(48)]],
+    whatsAppAuthAlertCooldownHours: [12, [Validators.required, Validators.min(1), Validators.max(168)]],
     retentionDays: [90, [Validators.required, Validators.min(1), Validators.max(3650)]],
     tickBatchSize: [5, [Validators.required, Validators.min(1), Validators.max(100)]],
     candidateLimit: [200, [Validators.required, Validators.min(1), Validators.max(5000)]],
@@ -368,6 +384,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     paymentReminderText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentSuccessText: ['', [Validators.required, Validators.maxLength(500)]],
+    reviewRecoveryNoticeText: ['', [Validators.required, Validators.maxLength(500)]],
     archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]]
   });
 
@@ -450,6 +467,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
       { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
       { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
+      { label: 'Порог аккаунта', value: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3, icon: 'verified_user', tone: 'green' },
+      { label: 'Сдвиг дат', value: this.nagulSettings()?.accountWalkDelayDays ?? 2, icon: 'date_range', tone: 'yellow' },
       { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
       { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' },
       { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' },
@@ -462,7 +481,10 @@ export class AdminDictionariesComponent implements OnDestroy {
     const monitor = this.clientMessageMonitor();
     return [
       { label: 'Активных', value: monitor?.activeCandidates ?? 0, icon: 'playlist_add_check', tone: 'blue' },
-      { label: 'Готово сейчас', value: monitor?.dueNow ?? 0, icon: 'bolt', tone: 'yellow' },
+      { label: 'Пора проверить', value: monitor?.dueNow ?? 0, icon: 'schedule', tone: 'blue' },
+      { label: 'Готово к отправке', value: monitor?.readyToSendNow ?? 0, icon: 'bolt', tone: 'green' },
+      { label: 'Ждет окно', value: monitor?.waitingForWindow ?? 0, icon: 'access_time', tone: 'yellow' },
+      { label: 'Нет chatId', value: monitor?.missingChannelBindings ?? 0, icon: 'link_off', tone: monitor?.missingChannelBindings ? 'pink' : 'teal' },
       { label: 'Отправлено сегодня', value: monitor?.sentToday ?? 0, icon: 'send', tone: 'green' },
       { label: 'Ошибок сегодня', value: monitor?.failedToday ?? 0, icon: 'priority_high', tone: monitor?.failedToday ? 'pink' : 'teal' },
       { label: 'Пропущено', value: monitor?.skippedToday ?? 0, icon: 'pause_circle', tone: 'teal' },
@@ -888,6 +910,8 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.settingsForm.reset({
       nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
       nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60,
+      accountWalkedCounterThreshold: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3,
+      accountWalkDelayDays: this.nagulSettings()?.accountWalkDelayDays ?? 2,
       morningReportEnabled: this.telegramReportSettings()?.morningEnabled ?? true,
       morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
       eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
@@ -1126,6 +1150,7 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.clientMessageMonitor.set(monitor);
         this.patchClientMessageMonitorEnabled(monitor.enabled);
         this.clientMessageMonitorLoading.set(false);
+        this.loadClientMessageMaintenancePreview(true);
         if (monitor.enabled && this.activeTab() === 'autoresponderMonitor') {
           this.startClientMessageMonitorPolling();
         }
@@ -1137,6 +1162,57 @@ export class AdminDictionariesComponent implements OnDestroy {
         if (!silent) {
           this.toastService.error('Мониторинг не загрузился', message);
         }
+      }
+    });
+  }
+
+  loadClientMessageMaintenancePreview(silent = false): void {
+    if (!silent) {
+      this.clientMessageMaintenancePreviewLoading.set(true);
+    }
+    this.clientMessageMaintenancePreviewError.set(null);
+    this.dictionariesApi.getClientMessageMaintenancePreview().subscribe({
+      next: (preview) => {
+        this.clientMessageMaintenancePreview.set(preview);
+        this.clientMessageMaintenancePreviewLoading.set(false);
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось загрузить dry-run актуализации');
+        this.clientMessageMaintenancePreviewError.set(message);
+        this.clientMessageMaintenancePreviewLoading.set(false);
+        if (!silent) {
+          this.toastService.error('Dry-run не загрузился', message);
+        }
+      }
+    });
+  }
+
+  applyClientMessageMaintenance(
+    action: 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed',
+    label: string
+  ): void {
+    if (this.maintenanceAction()) {
+      return;
+    }
+    const confirmed = window.confirm(`Применить: ${label}? Перед применением лучше проверить текущий dry-run.`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.maintenanceAction.set(action);
+    this.clientMessageMaintenancePreviewError.set(null);
+    this.dictionariesApi.applyClientMessageMaintenance(action).subscribe({
+      next: (response) => {
+        this.maintenanceAction.set(null);
+        this.clientMessageMaintenancePreview.set(response.preview);
+        this.toastService.success('Актуализация выполнена', response.message);
+        this.loadClientMessageMonitor(true);
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось выполнить актуализацию');
+        this.maintenanceAction.set(null);
+        this.clientMessageMaintenancePreviewError.set(message);
+        this.toastService.error('Актуализация не выполнена', message);
       }
     });
   }
@@ -1248,6 +1324,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       item.orderTitle,
       item.statusTitle,
       item.lastErrorMessage,
+      item.readinessLabel,
+      item.readinessReason,
       item.expectedChannel,
       item.channelDetails,
       item.messagePreview,
@@ -1292,7 +1370,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       PAYMENT_OVERDUE_ESCALATION: 'priority_high',
       ARCHIVE_REORDER_OFFER: 'archive',
       BAD_REVIEW_INVOICE: 'request_quote',
-      BAD_REVIEW_AUTO_BAN: 'gavel'
+      BAD_REVIEW_AUTO_BAN: 'gavel',
+      REVIEW_RECOVERY_NOTICE: 'restore_page'
     }[scenario.scenario] ?? 'mark_chat_unread';
   }
 
@@ -1300,13 +1379,53 @@ export class AdminDictionariesComponent implements OnDestroy {
     if (scenario.failedToday > 0 || scenario.lastError) {
       return 'pink';
     }
-    if (scenario.dueNow > 0) {
+    if ((scenario.missingChannelBindings ?? 0) > 0) {
+      return 'pink';
+    }
+    if ((scenario.readyToSendNow ?? 0) > 0) {
+      return 'green';
+    }
+    if ((scenario.waitingForWindow ?? 0) > 0 || scenario.dueNow > 0) {
       return 'yellow';
     }
     if (scenario.activeCandidates > 0) {
       return 'green';
     }
     return 'teal';
+  }
+
+  monitorScenarioDueValue(scenario: AdminClientMessageMonitorScenario): number {
+    if ((scenario.readyToSendNow ?? 0) > 0) {
+      return scenario.readyToSendNow;
+    }
+    if ((scenario.waitingForWindow ?? 0) > 0) {
+      return scenario.waitingForWindow;
+    }
+    return scenario.dueNow;
+  }
+
+  monitorScenarioDueLabel(scenario: AdminClientMessageMonitorScenario): string {
+    if ((scenario.readyToSendNow ?? 0) > 0) {
+      return 'готово к отправке';
+    }
+    if ((scenario.waitingForWindow ?? 0) > 0) {
+      return 'ждет окно';
+    }
+    return 'пора проверить';
+  }
+
+  monitorReadinessClass(item: AdminClientMessageMonitorQueueItem): string {
+    const code = item.readiness ?? '';
+    if (code === 'READY_TO_SEND' || code === 'READY_TO_RUN') {
+      return 'status-pill';
+    }
+    if (code === 'MISSING_CHANNEL' || code === 'DRY_RUN' || code === 'WORKER_DISABLED') {
+      return 'status-pill danger';
+    }
+    if (code === 'WAITING_WINDOW' || code === 'SCHEDULED' || code === 'PAUSED' || code === 'LOCKED') {
+      return 'status-pill warning';
+    }
+    return 'status-pill off';
   }
 
   monitorScenarioTooltip(scenario: AdminClientMessageMonitorScenario): string {
@@ -1317,7 +1436,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       PAYMENT_OVERDUE_ESCALATION: 'Следит за долгой просрочкой оплаты и готовит перевод в целевой статус по настройкам.',
       ARCHIVE_REORDER_OFFER: 'Предлагает новый заказ компаниям из архивного цикла, если нет активных заказов и открытой заявки.',
       BAD_REVIEW_INVOICE: 'Фиксирует отправку счета после выполненного плохого отзыва с учетом доплаты.',
-      BAD_REVIEW_AUTO_BAN: 'Переводит заказ и компанию в Бан, если финальный счет после плохих не оплатили за заданный срок.'
+      BAD_REVIEW_AUTO_BAN: 'Переводит заказ и компанию в Бан, если финальный счет после плохих не оплатили за заданный срок.',
+      REVIEW_RECOVERY_NOTICE: 'Уведомляет клиента о завершенном восстановлении и снимает паузу с платежных таймеров заказа.'
     }[scenario.scenario] ?? 'Сценарий автоответчика: кандидаты, отправки, пропуски и ошибки.';
   }
 
@@ -2100,7 +2220,9 @@ export class AdminDictionariesComponent implements OnDestroy {
     const raw = this.settingsForm.getRawValue();
     const nagulRequest: NagulSettingsRequest = {
       cooldownMinutes: Number(raw.nagulCooldownMinutes ?? 0),
-      lookaheadDays: Number(raw.nagulLookaheadDays ?? 60)
+      lookaheadDays: Number(raw.nagulLookaheadDays ?? 60),
+      accountWalkedCounterThreshold: Number(raw.accountWalkedCounterThreshold ?? 3),
+      accountWalkDelayDays: Number(raw.accountWalkDelayDays ?? 2)
     };
     const telegramRequest: TelegramReportScheduleSettingsRequest = {
       morningEnabled: raw.morningReportEnabled,
@@ -2166,6 +2288,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentReminderEnabled: raw.paymentReminderEnabled,
       badReviewInvoiceEnabled: raw.badReviewInvoiceEnabled,
       badReviewAutoBanEnabled: raw.badReviewAutoBanEnabled,
+      reviewRecoveryNoticeEnabled: raw.reviewRecoveryNoticeEnabled,
       paymentOverdueEnabled: raw.paymentOverdueEnabled,
       paymentOverdueLiveEnabled: raw.paymentOverdueLiveEnabled,
       archiveReorderEnabled: raw.archiveReorderEnabled,
@@ -2178,12 +2301,16 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentInvoiceRetryDelayHours: Number(raw.paymentInvoiceRetryDelayHours ?? 2),
       badReviewInvoiceRetryDelayHours: Number(raw.badReviewInvoiceRetryDelayHours ?? 2),
       badReviewAutoBanDelayDays: Number(raw.badReviewAutoBanDelayDays ?? 2),
+      reviewRecoveryNoticeRetryDelayHours: Number(raw.reviewRecoveryNoticeRetryDelayHours ?? 2),
       paymentOverdueDays: Number(raw.paymentOverdueDays ?? 30),
       archiveReorderMonths: Number(raw.archiveReorderMonths ?? 3),
+      archiveReorderJitterDays: Number(raw.archiveReorderJitterDays ?? 10),
       archiveOrderRetentionDays: Number(raw.archiveOrderRetentionDays ?? 90),
       errorProtectionThreshold: Number(raw.errorProtectionThreshold ?? 20),
       errorProtectionWindowMinutes: Number(raw.errorProtectionWindowMinutes ?? 10),
       errorProtectionCooldownMinutes: Number(raw.errorProtectionCooldownMinutes ?? 60),
+      whatsAppAuthRetryHours: Number(raw.whatsAppAuthRetryHours ?? 2),
+      whatsAppAuthAlertCooldownHours: Number(raw.whatsAppAuthAlertCooldownHours ?? 12),
       retentionDays: Number(raw.retentionDays ?? 90),
       tickBatchSize: Number(raw.tickBatchSize ?? 5),
       candidateLimit: Number(raw.candidateLimit ?? 200),
@@ -2211,6 +2338,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentReminderText: raw.paymentReminderText.trim(),
       paymentLinkCopyText: raw.paymentLinkCopyText.trim(),
       paymentSuccessText: raw.paymentSuccessText.trim(),
+      reviewRecoveryNoticeText: raw.reviewRecoveryNoticeText.trim(),
       archiveOfferText: raw.archiveOfferText.trim()
     };
 
@@ -2413,7 +2541,9 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.nagulSettings.set(response);
     this.settingsForm.patchValue({
       nagulCooldownMinutes: response.cooldownMinutes,
-      nagulLookaheadDays: response.lookaheadDays
+      nagulLookaheadDays: response.lookaheadDays,
+      accountWalkedCounterThreshold: response.accountWalkedCounterThreshold,
+      accountWalkDelayDays: response.accountWalkDelayDays
     });
   }
 
@@ -2510,6 +2640,8 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.settingsForm.reset({
       nagulCooldownMinutes: this.nagulSettings()?.cooldownMinutes ?? 60,
       nagulLookaheadDays: this.nagulSettings()?.lookaheadDays ?? 60,
+      accountWalkedCounterThreshold: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3,
+      accountWalkDelayDays: this.nagulSettings()?.accountWalkDelayDays ?? 2,
       morningReportEnabled: this.telegramReportSettings()?.morningEnabled ?? true,
       morningReportTime: this.telegramReportSettings()?.morningTime ?? '11:30',
       eveningReportEnabled: this.telegramReportSettings()?.eveningEnabled ?? true,
@@ -2534,6 +2666,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentReminderEnabled: settings?.paymentReminderEnabled ?? true,
       badReviewInvoiceEnabled: settings?.badReviewInvoiceEnabled ?? true,
       badReviewAutoBanEnabled: settings?.badReviewAutoBanEnabled ?? true,
+      reviewRecoveryNoticeEnabled: settings?.reviewRecoveryNoticeEnabled ?? true,
       paymentOverdueEnabled: settings?.paymentOverdueEnabled ?? true,
       paymentOverdueLiveEnabled: settings?.paymentOverdueLiveEnabled ?? false,
       archiveReorderEnabled: settings?.archiveReorderEnabled ?? true,
@@ -2546,12 +2679,16 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentInvoiceRetryDelayHours: settings?.paymentInvoiceRetryDelayHours ?? 2,
       badReviewInvoiceRetryDelayHours: settings?.badReviewInvoiceRetryDelayHours ?? 2,
       badReviewAutoBanDelayDays: settings?.badReviewAutoBanDelayDays ?? 2,
+      reviewRecoveryNoticeRetryDelayHours: settings?.reviewRecoveryNoticeRetryDelayHours ?? 2,
       paymentOverdueDays: settings?.paymentOverdueDays ?? 30,
       archiveReorderMonths: settings?.archiveReorderMonths ?? 3,
+      archiveReorderJitterDays: settings?.archiveReorderJitterDays ?? 10,
       archiveOrderRetentionDays: settings?.archiveOrderRetentionDays ?? 90,
       errorProtectionThreshold: settings?.errorProtectionThreshold ?? 20,
       errorProtectionWindowMinutes: settings?.errorProtectionWindowMinutes ?? 10,
       errorProtectionCooldownMinutes: settings?.errorProtectionCooldownMinutes ?? 60,
+      whatsAppAuthRetryHours: settings?.whatsAppAuthRetryHours ?? 2,
+      whatsAppAuthAlertCooldownHours: settings?.whatsAppAuthAlertCooldownHours ?? 12,
       retentionDays: settings?.retentionDays ?? 90,
       tickBatchSize: settings?.tickBatchSize ?? 5,
       candidateLimit: settings?.candidateLimit ?? 200,
@@ -2585,6 +2722,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         ?? '{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}',
       paymentSuccessText: settings?.paymentSuccessText
         ?? 'Оплата прошла успешно.\n\nНовый заказ принят в работу.\n{orderLine}{companyLine}Сумма: {sum}\nСтраница оплаты: {paymentPage}\n\n{receiptText}',
+      reviewRecoveryNoticeText: settings?.reviewRecoveryNoticeText
+        ?? '{companyAndFilial}\n\nОтзыв восстановлен. Продолжаем работу по заказу №{orderId}.',
       archiveOfferText: settings?.archiveOfferText
         ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.'
     });

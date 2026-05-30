@@ -26,6 +26,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -132,7 +133,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         } catch (RestClientResponseException e) {
             String error = "WhatsApp API вернул HTTP " + e.getStatusCode().value();
             log.warn("{} для клиента {}. Ответ: {}", error, clientId, e.getResponseBodyAsString());
-            return WhatsAppSendResult.error("http_error", error).toJson();
+            return httpSendError(e, error).toJson();
         } catch (ResourceAccessException e) {
             String error = "WhatsApp-клиент недоступен: " + e.getMessage();
             log.warn("{} ({})", error, clientId);
@@ -178,7 +179,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         } catch (RestClientResponseException e) {
             String error = "WhatsApp API вернул HTTP " + e.getStatusCode().value();
             log.warn("{} для клиента {}. Ответ: {}", error, clientId, e.getResponseBodyAsString());
-            return WhatsAppSendResult.error("http_error", error).toJson();
+            return httpSendError(e, error).toJson();
         } catch (ResourceAccessException e) {
             String error = "WhatsApp-клиент недоступен: " + e.getMessage();
             log.warn("{} ({})", error, clientId);
@@ -246,6 +247,65 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
         String body = response.getBody();
         return hasText(body) ? Optional.of(MAPPER.readTree(body)) : Optional.empty();
+    }
+
+    private WhatsAppSendResult httpSendError(RestClientResponseException e, String errorPrefix) {
+        String body = e.getResponseBodyAsString();
+        String message = errorPrefix + (hasText(body) ? ". Ответ: " + limit(body, 500) : "");
+        String code = httpSendErrorCode(body);
+        if (!hasText(code) && e.getStatusCode().value() == 503) {
+            code = "whatsapp_http_503";
+        }
+        return WhatsAppSendResult.error(hasText(code) ? code : "http_error", message);
+    }
+
+    private String httpSendErrorCode(String body) {
+        if (!hasText(body)) {
+            return null;
+        }
+
+        try {
+            JsonNode node = MAPPER.readTree(body);
+            String status = firstText(node, "status");
+            String code = firstText(node, "code");
+            if (looksLikeAuthUnavailable(status) || looksLikeAuthUnavailable(code) || looksLikeAuthUnavailable(body)) {
+                return "whatsapp_not_ready";
+            }
+            if (hasText(code)) {
+                return code;
+            }
+            if (hasText(status) && !"error".equalsIgnoreCase(status)) {
+                return status;
+            }
+        } catch (JsonProcessingException ignored) {
+            if (looksLikeAuthUnavailable(body)) {
+                return "whatsapp_not_ready";
+            }
+        }
+        return null;
+    }
+
+    private boolean looksLikeAuthUnavailable(String value) {
+        if (!hasText(value)) {
+            return false;
+        }
+        String normalized = value.toLowerCase(Locale.ROOT);
+        return normalized.contains("authenticated=false")
+                || normalized.contains("\"authenticated\":false")
+                || normalized.contains("\"authenticated\": false")
+                || normalized.contains("\"state\":\"qr\"")
+                || normalized.contains("\"state\": \"qr\"")
+                || normalized.contains("\"hasqr\":true")
+                || normalized.contains("\"hasqr\": true")
+                || normalized.contains("scan it")
+                || normalized.contains("не авториз");
+    }
+
+    private String limit(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxLength - 1)).trim() + "…";
     }
 
     private Optional<JsonNode> getJsonAllowingNotFound(String url) throws JsonProcessingException {

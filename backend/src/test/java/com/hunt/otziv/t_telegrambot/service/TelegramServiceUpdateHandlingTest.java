@@ -1,6 +1,7 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,6 +13,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.ArrayList;
@@ -22,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +40,9 @@ class TelegramServiceUpdateHandlingTest {
 
     @Mock
     private TelegramGroupLinkService telegramGroupLinkService;
+
+    @Mock
+    private PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     @Test
     void groupTextMessageDoesNotStartUserLoginFlow() {
@@ -80,11 +86,33 @@ class TelegramServiceUpdateHandlingTest {
         assertEquals("chatId: `-100123`", service.sentMessages.getFirst().getText());
     }
 
+    @Test
+    void publicationProgressMessageIncludesInlineDisableButton() {
+        CapturingTelegramService service = service();
+        when(publicationProgressPreferenceService.appendTelegramOptOutHint("Отчет"))
+                .thenReturn("Отчет\n\nЕсли не хотите получать отчет, нажмите кнопку ниже.");
+        when(publicationProgressPreferenceService.disableCallbackData(10L))
+                .thenReturn("publication_progress:disable:10");
+
+        boolean result = service.sendPublicationProgressMessage(-100123L, "Отчет", 10L);
+
+        assertTrue(result);
+        SendMessage sent = service.sentMessages.getFirst();
+        InlineKeyboardMarkup markup = (InlineKeyboardMarkup) sent.getReplyMarkup();
+        assertEquals("Отчет\n\nЕсли не хотите получать отчет, нажмите кнопку ниже.", sent.getText());
+        assertEquals("Отключить оповещения о каждой публикации",
+                markup.getKeyboard().getFirst().getFirst().getText());
+        assertEquals("publication_progress:disable:10",
+                markup.getKeyboard().getFirst().getFirst().getCallbackData());
+        verifyNoInteractions(userService);
+    }
+
     private CapturingTelegramService service() {
         return new CapturingTelegramService(
                 personalServiceProvider,
                 userService,
-                telegramGroupLinkService
+                telegramGroupLinkService,
+                publicationProgressPreferenceService
         );
     }
 
@@ -108,7 +136,8 @@ class TelegramServiceUpdateHandlingTest {
         private CapturingTelegramService(
                 ObjectProvider<PersonalService> personalServiceProvider,
                 UserService userService,
-                TelegramGroupLinkService telegramGroupLinkService
+                TelegramGroupLinkService telegramGroupLinkService,
+                PublicationProgressPreferenceService publicationProgressPreferenceService
         ) {
             super(new DefaultBotOptions(),
                     "123456:abcdefghijklmnopqrstuvwxyz",
@@ -116,7 +145,8 @@ class TelegramServiceUpdateHandlingTest {
                     "",
                     personalServiceProvider,
                     userService,
-                    telegramGroupLinkService);
+                    telegramGroupLinkService,
+                    publicationProgressPreferenceService);
         }
 
         @Override

@@ -5,6 +5,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.client_messages.ReviewRecoveryNoticeScheduler;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -60,6 +61,12 @@ class ReviewRecoveryTaskServiceImplTest {
 
     @Mock
     private BotService botService;
+
+    @Mock
+    private ReviewRecoveryNoticeScheduler recoveryNoticeScheduler;
+
+    @Mock
+    private ReviewRecoveryHoldService recoveryHoldService;
 
     @InjectMocks
     private ReviewRecoveryTaskServiceImpl service;

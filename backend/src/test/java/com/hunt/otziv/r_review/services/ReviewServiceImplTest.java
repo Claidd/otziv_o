@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.services.FilialService;
@@ -106,6 +107,9 @@ class ReviewServiceImplTest {
     @Mock
     private OrderStatusCheckerService orderStatusCheckerService;
 
+    @Mock
+    private BusinessAuditService businessAuditService;
+
     @InjectMocks
     private ReviewServiceImpl reviewService;
 
@@ -202,6 +206,52 @@ class ReviewServiceImplTest {
     }
 
     @Test
+    void updateReviewRejectsPublicationDateTooFarAhead() {
+        Review review = reviewForVigulUpdate(false);
+        ReviewDTO dto = reviewDtoForVigulUpdate(false);
+        dto.setPublishedDate(LocalDate.now().plusDays(91));
+
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reviewService.updateReview("ROLE_MANAGER", dto, 17L)
+        );
+
+        assertTrue(exception.getMessage().contains("Дата публикации слишком далеко"));
+        verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void updateReviewRejectsPublicationDateMoreThanThirtyDaysAfterPreviousReview() {
+        UUID detailsId = UUID.randomUUID();
+        OrderDetails details = new OrderDetails();
+        details.setId(detailsId);
+
+        Review previous = new Review();
+        previous.setId(16L);
+        previous.setPublishedDate(LocalDate.now());
+        previous.setOrderDetails(details);
+
+        Review review = reviewForVigulUpdate(false);
+        review.setOrderDetails(details);
+
+        ReviewDTO dto = reviewDtoForVigulUpdate(false);
+        dto.setPublishedDate(LocalDate.now().plusDays(31));
+
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+        when(reviewRepository.findAllByOrderDetailsId(detailsId)).thenReturn(List.of(previous, review));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> reviewService.updateReview("ROLE_MANAGER", dto, 17L)
+        );
+
+        assertTrue(exception.getMessage().contains("предыдущего отзыва"));
+        verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
     void updateOrderDetailAndReviewAndPublishDateSkipsSaturdaysAndDuplicateDates() {
         UUID detailsId = UUID.randomUUID();
         int totalReviews = 35;
@@ -242,12 +292,79 @@ class ReviewServiceImplTest {
 
         assertTrue(updated);
         Set<LocalDate> uniqueDates = new HashSet<>();
+        LocalDate earliestDate = reviews.stream()
+                .map(Review::getPublishedDate)
+                .min(LocalDate::compareTo)
+                .orElseThrow();
+
+        assertEquals(earliestDate, reviews.get(0).getPublishedDate());
 
         for (Review review : reviews) {
             LocalDate publishedDate = review.getPublishedDate();
             assertTrue(uniqueDates.add(publishedDate), "Дата публикации не должна повторяться: " + publishedDate);
             assertNotEquals(DayOfWeek.SATURDAY, publishedDate.getDayOfWeek(), "Дата не должна выпадать на субботу");
+            assertTrue(
+                    !publishedDate.isAfter(LocalDate.now().plusDays(90)),
+                    "Дата публикации не должна уходить слишком далеко вперед: " + publishedDate
+            );
         }
+    }
+
+    @Test
+    void updateOrderDetailAndReviewAndPublishDateAssignsDatesByReviewIdOrder() {
+        UUID detailsId = UUID.randomUUID();
+
+        Bot bot = new Bot();
+        bot.setCounter(3);
+
+        Review first = reviewForPublicationScheduling(1L, bot, detailsId);
+        Review second = reviewForPublicationScheduling(2L, null, detailsId);
+        Review third = reviewForPublicationScheduling(3L, null, detailsId);
+
+        OrderDetails orderDetails = new OrderDetails();
+        orderDetails.setId(detailsId);
+        orderDetails.setReviews(List.of(third, first, second));
+        orderDetails.setComment("Комментарий");
+
+        OrderDetailsDTO orderDetailsDTO = OrderDetailsDTO.builder()
+                .id(detailsId)
+                .reviews(List.of(
+                        publicationDto(2L),
+                        publicationDto(3L),
+                        publicationDto(1L)
+                ))
+                .comment("Комментарий")
+                .build();
+
+        when(orderDetailsService.getOrderDetailById(detailsId)).thenReturn(orderDetails);
+        when(reviewRepository.findById(1L)).thenReturn(Optional.of(first));
+        when(reviewRepository.findById(2L)).thenReturn(Optional.of(second));
+        when(reviewRepository.findById(3L)).thenReturn(Optional.of(third));
+
+        boolean updated = reviewService.updateOrderDetailAndReviewAndPublishDate(orderDetailsDTO);
+
+        assertTrue(updated);
+        assertTrue(first.getPublishedDate().isBefore(second.getPublishedDate()));
+        assertTrue(second.getPublishedDate().isBefore(third.getPublishedDate()));
+    }
+
+    private Review reviewForPublicationScheduling(Long id, Bot bot, UUID detailsId) {
+        OrderDetails details = new OrderDetails();
+        details.setId(detailsId);
+
+        Review review = new Review();
+        review.setId(id);
+        review.setText("Готовый текст отзыва " + id);
+        review.setBot(bot);
+        review.setOrderDetails(details);
+        return review;
+    }
+
+    private ReviewDTO publicationDto(Long id) {
+        return ReviewDTO.builder()
+                .id(id)
+                .text("Готовый текст отзыва " + id)
+                .build();
     }
 
     private Review reviewForVigulUpdate(boolean vigul) {

@@ -53,7 +53,10 @@
         }}</span>
       }
       @if (isRecoveryTask()) {
-        <span class="bad-task-badge recovery-task-badge" [title]="'Восстановление #' + review.recoveryTaskId">
+        <span
+          class="bad-task-badge recovery-task-badge"
+          [title]="'Восстановление #' + review.recoveryTaskId"
+        >
           восстановление
         </span>
       }
@@ -382,7 +385,7 @@
   </button>
 
   <footer>
-    <span>{{ reviewDate() }}</span>
+    <span [class.review-date--overdue]="isPublicationDateOverdue()">{{ reviewDate() }}</span>
     @if (canOpenEditModal) {
       <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="footerLabel()">{{
         footerLabel()

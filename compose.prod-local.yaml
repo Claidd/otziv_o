@@ -314,8 +314,8 @@ services:
       REPUTATION_AI_WEBSITE_TIMEOUT: ${REPUTATION_AI_WEBSITE_TIMEOUT:-8s}
       REPUTATION_AI_USER_AGENT: ${REPUTATION_AI_USER_AGENT:-OtzivReputationAI/1.0}
       REPUTATION_SEARCH_PROVIDER: ${REPUTATION_SEARCH_PROVIDER:-local}
-      REPUTATION_SEARCH_MAX_QUERIES: ${REPUTATION_SEARCH_MAX_QUERIES:-5}
-      REPUTATION_SEARCH_RESULTS_PER_QUERY: ${REPUTATION_SEARCH_RESULTS_PER_QUERY:-5}
+      REPUTATION_SEARCH_MAX_QUERIES: ${REPUTATION_SEARCH_MAX_QUERIES:-10}
+      REPUTATION_SEARCH_RESULTS_PER_QUERY: ${REPUTATION_SEARCH_RESULTS_PER_QUERY:-10}
       REPUTATION_SEARCH_CRAWL_RESULT_LIMIT: ${REPUTATION_SEARCH_CRAWL_RESULT_LIMIT:-20}
       YANDEX_AI_API_KEY: ${YANDEX_AI_API_KEY:-${YANDEX_SEARCH_API_KEY:-}}
       YANDEX_FOLDER_ID: ${YANDEX_FOLDER_ID:-${YANDEX_SEARCH_FOLDER_ID:-}}
@@ -323,8 +323,8 @@ services:
       YANDEX_GPT_RESPONSES_BASE_URL: ${YANDEX_GPT_RESPONSES_BASE_URL:-https://ai.api.cloud.yandex.net/v1}
       YANDEX_GPT_API_MODE: ${YANDEX_GPT_API_MODE:-responses}
       YANDEX_GPT_MODEL: ${YANDEX_GPT_MODEL:-yandexgpt/rc}
-      YANDEX_GPT_TIMEOUT: ${YANDEX_GPT_TIMEOUT:-8m}
-      YANDEX_GPT_MAX_TOKENS: ${YANDEX_GPT_MAX_TOKENS:-16000}
+      YANDEX_GPT_TIMEOUT: ${YANDEX_GPT_TIMEOUT:-10m}
+      YANDEX_GPT_MAX_TOKENS: ${YANDEX_GPT_MAX_TOKENS:-24000}
       YANDEX_GPT_MAX_TOOL_CALLS: ${YANDEX_GPT_MAX_TOOL_CALLS:-24}
       YANDEX_GPT_SEARCH_CONTEXT_SIZE: ${YANDEX_GPT_SEARCH_CONTEXT_SIZE:-high}
       YANDEX_GPT_SEARCH_REGION: ${YANDEX_GPT_SEARCH_REGION:-}
@@ -397,8 +397,6 @@ services:
       app:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
-      grafana:
         condition: service_healthy
     networks:
       - internal_net
@@ -503,8 +501,8 @@ services:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 3m
     depends_on:
       prometheus:
         condition: service_healthy

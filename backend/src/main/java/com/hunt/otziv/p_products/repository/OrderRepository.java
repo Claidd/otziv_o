@@ -429,12 +429,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword
             """
     )
     Page<Long> findPageIdByKeyWord(@Param("keyword") String keyword,
@@ -448,7 +450,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -456,7 +459,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByKeyWordLive(@Param("keyword") String keyword,
@@ -482,14 +486,16 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE o.manager = :manager
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE o.manager = :manager
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByByManagerAndKeyWord(@Param("manager") Manager manager,
@@ -505,7 +511,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -514,7 +521,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByByManagerAndKeyWordLive(@Param("manager") Manager manager,
@@ -541,7 +549,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE o.worker = :worker
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
                 ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
             """,
             countQuery = """
@@ -549,7 +558,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE o.worker = :worker
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByByWorkerAndKeyWordForBoard(@Param("worker") Worker worker,
@@ -564,7 +574,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
                 ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
             """,
             countQuery = """
@@ -573,7 +584,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByByWorkerAndKeyWordForBoardLive(@Param("worker") Worker worker,
@@ -589,7 +601,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
                 ORDER BY
                   o.waitingForClient ASC,
                   CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END,
@@ -604,7 +617,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByByWorkerAndKeyWordForBoardLiveSorted(@Param("worker") Worker worker,
@@ -632,14 +646,16 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE (o.manager IN :managers
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))))
+                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                    OR STR(o.id) = :keyword))
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE (o.manager IN :managers
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))))
+                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                    OR STR(o.id) = :keyword))
             """
     )
     Page<Long> findPageIdByOwnerAndKeyWord(@Param("managers") List<Manager> managers,
@@ -655,7 +671,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -664,7 +681,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                   AND o.status.title IN :liveStatuses
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByOwnerAndKeyWordLive(@Param("managers") List<Manager> managers,
@@ -691,12 +709,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
                    OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+                   OR (STR(o.id) = :keyword AND o.status.title = :status)
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
                    OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+                   OR (STR(o.id) = :keyword AND o.status.title = :status)
             """
     )
     Page<Long> findPageIdByKeyWordAndStatus(@Param("keyword") String keyword,
@@ -725,14 +745,16 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE o.manager = :manager
                   AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+                   OR (STR(o.id) = :keyword AND o.status.title = :status))
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE o.manager = :manager
                   AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+                   OR (STR(o.id) = :keyword AND o.status.title = :status))
             """
     )
     Page<Long> findPageIdByManagerAndKeyWordAndStatus(@Param("manager") Manager manager,
@@ -762,14 +784,16 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE o.worker = :worker
                   AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+                   OR (STR(o.id) = :keyword AND o.status.title = :status))
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE o.worker = :worker
                   AND ((LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status)
-                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+                   OR (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2)
+                   OR (STR(o.id) = :keyword AND o.status.title = :status))
             """
     )
     Page<Long> findPageIdByWorkerAndKeyWordAndStatus(@Param("worker") Worker worker,
@@ -798,12 +822,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status))
                    OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+                   OR (o.manager IN :managers AND (STR(o.id) = :keyword AND o.status.title = :status))
             """,
             countQuery = """
                 SELECT COUNT(o.id)
                 FROM Order o
                 WHERE (o.manager IN :managers AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND o.status.title = :status))
                    OR (o.manager IN :managers AND (LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND o.status.title = :status2))
+                   OR (o.manager IN :managers AND (STR(o.id) = :keyword AND o.status.title = :status))
             """
     )
     Page<Long> findPageIdByOwnerAndKeyWordAndStatus(@Param("managers") List<Manager> managers,
@@ -927,7 +953,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.company.id = :companyId
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -935,7 +962,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.company.id = :companyId
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
-                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(COALESCE(o.status.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(o.id) = :keyword)
             """
     )
     Page<Long> findPageIdByCompanyIdAndKeyWord(@Param("companyId") long companyId,

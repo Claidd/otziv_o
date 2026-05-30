@@ -1,6 +1,7 @@
 package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ public class MaxBotUpdateService {
 
     private final MaxGroupLinkService maxGroupLinkService;
     private final MaxBotClient maxBotClient;
+    private final PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     public void handleUpdate(JsonNode update) {
         if (update == null || update.isNull()) {
@@ -49,6 +51,16 @@ public class MaxBotUpdateService {
                 log.info("MAX /start fallback received chatId={} userId={} payloadPresent=true", chatId, userId);
                 Optional<String> response = maxGroupLinkService.handleBotStarted(userId, payload);
                 response.ifPresent(message -> sendResponse(chatId, userId, message));
+                return;
+            }
+
+            String messageText = messageText(update);
+            Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
+                    publicationProgressPreferenceService.handleMaxCommand(chatId, messageText);
+            if (preferenceUpdate != null) {
+                preferenceUpdate.ifPresent(response -> maxBotClient.sendMessageToChat(chatId, response.message()));
+            }
+            if (publicationProgressPreferenceService.isPreferenceCommand(messageText)) {
                 return;
             }
         }
@@ -114,11 +126,7 @@ public class MaxBotUpdateService {
     }
 
     private static String startCommandPayload(JsonNode update) {
-        String messageText = firstText(
-                update.path("message").path("body"),
-                update.path("body"),
-                update
-        );
+        String messageText = messageText(update);
         if (!hasText(messageText)) {
             return "";
         }
@@ -134,6 +142,14 @@ public class MaxBotUpdateService {
         }
 
         return normalized.substring(separator + 1).trim();
+    }
+
+    private static String messageText(JsonNode update) {
+        return firstText(
+                update.path("message").path("body"),
+                update.path("body"),
+                update
+        );
     }
 
     private static String firstText(JsonNode... nodes) {

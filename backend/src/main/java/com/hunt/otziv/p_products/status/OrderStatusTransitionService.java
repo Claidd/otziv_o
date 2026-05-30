@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.payments.ManualPaymentAutoConfirmationService;
@@ -68,14 +69,16 @@ public class OrderStatusTransitionService {
     private final ManualPaymentAutoConfirmationService manualPaymentAutoConfirmationService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final AppSettingService appSettingService;
+    private final BusinessAuditService businessAuditService;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
         try {
-            Order order = orderRepository.findById(orderID)
+            Order order = orderRepository.findByIdForMutation(orderID)
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
-            return switch (title) {
+            String oldStatus = safeStatusTitle(order);
+            boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
                 case STATUS_ARCHIVE -> handleArchiveStatus(order);
                 case STATUS_TO_CHECK -> handleToCheckStatus(order);
@@ -92,6 +95,8 @@ public class OrderStatusTransitionService {
                     yield true;
                 }
             };
+            recordStatusAudit(order, oldStatus, safeStatusTitle(order), title, changed);
+            return changed;
 
         } catch (ResponseStatusException e) {
             log.warn("Смена статуса заказа отклонена: {}", e.getReason());
@@ -100,6 +105,22 @@ public class OrderStatusTransitionService {
             log.error("При смене статуса произошли какие-то проблемы", e);
             throw e;
         }
+    }
+
+    private void recordStatusAudit(Order order, String oldStatus, String newStatus, String requestedStatus, boolean changed) {
+        if (!changed || safeString(oldStatus).equals(safeString(newStatus))) {
+            return;
+        }
+        businessAuditService.recordSafely(
+                "order_status_changed",
+                "order",
+                order.getId(),
+                order.getId(),
+                null,
+                oldStatus,
+                newStatus,
+                "requestedStatus=" + requestedStatus
+        );
     }
 
     private boolean handleNotPaidStatus(Order order) {
@@ -154,9 +175,10 @@ public class OrderStatusTransitionService {
 
             String previousOrderStatus = safeStatusTitle(order);
 
+            orderBotLifecycleService.assignBotsIfNeeded(order);
+
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_PUBLISH));
             orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_TO_PUBLISH);
-            orderBotLifecycleService.assignBotsIfNeeded(order);
 
             List<Review> reviews = getAllReviews(order);
             if (reviews.isEmpty()) {
@@ -186,6 +208,9 @@ public class OrderStatusTransitionService {
             notifyClientAboutPublicationStarted(order, previousOrderStatus);
             return true;
 
+        } catch (ResponseStatusException e) {
+            log.warn("Перевод заказа ID {} в публикацию отклонен: {}", order.getId(), e.getReason());
+            throw e;
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'К ПУБЛИКАЦИИ' ===", e);
             throw new RuntimeException("Ошибка при переводе заказа в статус 'К публикации'", e);
@@ -635,13 +660,26 @@ public class OrderStatusTransitionService {
             String clientId = order.getManager() != null ? order.getManager().getClientId() : null;
             String groupId = order.getCompany() != null ? order.getCompany().getGroupId() : null;
 
-            String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
+            if (orderPaymentMessageBuilder.shouldSkipPublishedPayment(order)) {
+                order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+                orderRepository.save(order);
+                mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
+                log.info("Счет после публикации пропущен: заказ ID {} по продукту 'Восстановление' без суммы к оплате",
+                        order.getId());
+                return true;
+            }
 
             if (!immediateClientMessagesEnabled()) {
                 log.info("Счет после публикации не отправлен: моментальные клиентские сообщения выключены, orderId={}",
                         order.getId());
                 order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
                 orderRepository.save(order);
+                mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
+                return true;
+            }
+
+            String message = preparePublishedPaymentMessage(order);
+            if (message == null) {
                 mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
                 return true;
             }
@@ -667,6 +705,19 @@ public class OrderStatusTransitionService {
         } catch (Exception e) {
             log.error("=== ОШИБКА ПРИ ПЕРЕВОДЕ ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===", e);
             throw new RuntimeException("Ошибка при переводе заказа в статус 'Публикация'", e);
+        }
+    }
+
+    private String preparePublishedPaymentMessage(Order order) {
+        try {
+            return orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
+        } catch (RuntimeException e) {
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            orderRepository.save(order);
+            paymentInvoiceRetryScheduler.scheduleRetry(order);
+            log.warn("Заказ ID {} переведен в 'Опубликовано', но счет клиенту не подготовлен. Статус не откатывается.",
+                    order.getId(), e);
+            return null;
         }
     }
 

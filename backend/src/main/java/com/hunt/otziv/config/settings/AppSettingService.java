@@ -1,8 +1,13 @@
 package com.hunt.otziv.config.settings;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -10,6 +15,8 @@ public class AppSettingService {
 
     public static final String NAGUL_COOLDOWN_MINUTES = "nagul.cooldown.minutes";
     public static final String NAGUL_LOOKAHEAD_DAYS = "nagul.lookahead.days";
+    public static final String REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD = "review.account.walked-counter-threshold";
+    public static final String REVIEW_ACCOUNT_WALK_DELAY_DAYS = "review.account.walk-delay-days";
     public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
     public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
     public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";
@@ -47,6 +54,7 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED = "client.messages.payment-reminder.enabled";
     public static final String CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED = "client.messages.bad-review-invoice.enabled";
     public static final String CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED = "client.messages.bad-review-auto-ban.enabled";
+    public static final String CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_ENABLED = "client.messages.review-recovery-notice.enabled";
     public static final String CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED = "client.messages.archive-reorder.enabled";
     public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED = "client.messages.payment-overdue.enabled";
     public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED = "client.messages.payment-overdue.live-enabled";
@@ -58,8 +66,10 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS = "client.messages.payment-invoice-retry.delay-hours";
     public static final String CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS = "client.messages.bad-review-invoice-retry.delay-hours";
     public static final String CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS = "client.messages.bad-review-auto-ban.delay-days";
+    public static final String CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS = "client.messages.review-recovery-notice.retry-delay-hours";
     public static final String CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS = "client.messages.payment-overdue-days";
     public static final String CLIENT_MESSAGES_ARCHIVE_REORDER_MONTHS = "client.messages.archive-reorder.months";
+    public static final String CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS = "client.messages.archive-reorder.jitter-days";
     public static final String CLIENT_MESSAGES_RETENTION_DAYS = "client.messages.retention-days";
     public static final String CLIENT_MESSAGES_TICK_BATCH_SIZE = "client.messages.tick.batch-size";
     public static final String CLIENT_MESSAGES_CANDIDATE_LIMIT = "client.messages.candidate-limit";
@@ -86,6 +96,7 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT = "client.messages.payment-reminder-text";
     public static final String CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT = "client.messages.payment-link-copy-text";
     public static final String CLIENT_MESSAGES_PAYMENT_SUCCESS_TEXT = "client.messages.payment-success-text";
+    public static final String CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT = "client.messages.review-recovery-notice-text";
     public static final String CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT = "client.messages.archive-offer-text";
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED = "client.messages.error-protection.enabled";
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_THRESHOLD = "client.messages.error-protection.threshold";
@@ -93,6 +104,11 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_ERROR_PROTECTION_COOLDOWN_MINUTES = "client.messages.error-protection.cooldown-minutes";
     public static final String CLIENT_MESSAGES_PAUSED_UNTIL = "client.messages.paused-until";
     public static final String CLIENT_MESSAGES_PAUSE_REASON = "client.messages.pause-reason";
+    public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS = "client.messages.whatsapp-auth.retry-hours";
+    public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = "client.messages.whatsapp-auth.alert-cooldown-hours";
+    public static final String PUBLICATION_HEALTH_MONITOR_ENABLED = "publication.health-monitor.enabled";
+    public static final String PUBLICATION_HEALTH_MONITOR_ZONE = "publication.health-monitor.zone";
+    public static final String PUBLICATION_HEALTH_MONITOR_LAST_RUN_KEY = "publication.health-monitor.last-run-key";
     public static final String PAYMENTS_TBANK_RUNTIME_MODE = "payments.tbank.runtime-mode";
     public static final String PAYMENTS_TBANK_ENABLED = "payments.tbank.enabled";
     public static final String PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED = "payments.tbank.payment-links-enabled";
@@ -104,13 +120,15 @@ public class AppSettingService {
     public static final String PAYMENTS_TBANK_MIRPAY_ENABLED = "payments.tbank.mirpay-enabled";
 
     private final AppSettingRepository repository;
+    private final Map<String, CachedSetting> cache = new ConcurrentHashMap<>();
+
+    @Value("${otziv.cache.app-settings.ttl:PT5M}")
+    private Duration cacheTtl;
 
     @Transactional(readOnly = true)
     public int getInt(String key, int fallback) {
-        return repository.findById(key)
-                .map(AppSetting::getValue)
-                .map(value -> parseInt(value, fallback))
-                .orElse(fallback);
+        String value = getCachedValue(key);
+        return value == null ? fallback : parseInt(value, fallback);
     }
 
     @Transactional
@@ -119,15 +137,14 @@ public class AppSettingService {
                 .orElseGet(() -> AppSetting.builder().key(key).build());
         setting.setValue(String.valueOf(value));
         repository.save(setting);
+        cache.put(key, CachedSetting.fresh(String.valueOf(value), cacheTtl));
         return value;
     }
 
     @Transactional(readOnly = true)
     public boolean getBoolean(String key, boolean fallback) {
-        return repository.findById(key)
-                .map(AppSetting::getValue)
-                .map(value -> parseBoolean(value, fallback))
-                .orElse(fallback);
+        String value = getCachedValue(key);
+        return value == null ? fallback : parseBoolean(value, fallback);
     }
 
     @Transactional
@@ -138,9 +155,7 @@ public class AppSettingService {
 
     @Transactional(readOnly = true)
     public String getString(String key, String fallback) {
-        return repository.findById(key)
-                .map(AppSetting::getValue)
-                .map(String::trim)
+        return trimToNull(getCachedValue(key))
                 .filter(value -> !value.isEmpty())
                 .orElse(fallback);
     }
@@ -151,7 +166,28 @@ public class AppSettingService {
                 .orElseGet(() -> AppSetting.builder().key(key).build());
         setting.setValue(value);
         repository.save(setting);
+        cache.put(key, CachedSetting.fresh(value, cacheTtl));
         return value;
+    }
+
+    private String getCachedValue(String key) {
+        CachedSetting cached = cache.get(key);
+        if (cached != null && !cached.isExpired()) {
+            return cached.value();
+        }
+        return cache.compute(key, (ignored, existing) -> {
+            if (existing != null && !existing.isExpired()) {
+                return existing;
+            }
+            String value = repository.findById(key)
+                    .map(AppSetting::getValue)
+                    .orElse(null);
+            return CachedSetting.fresh(value, cacheTtl);
+        }).value();
+    }
+
+    private java.util.Optional<String> trimToNull(String value) {
+        return value == null ? java.util.Optional.empty() : java.util.Optional.of(value.trim());
     }
 
     private int parseInt(String value, int fallback) {
@@ -170,5 +206,16 @@ public class AppSettingService {
             return false;
         }
         return fallback;
+    }
+
+    private record CachedSetting(String value, long expiresAtNanos) {
+        private static CachedSetting fresh(String value, Duration ttl) {
+            Duration safeTtl = ttl == null || ttl.isNegative() ? Duration.ZERO : ttl;
+            return new CachedSetting(value, System.nanoTime() + safeTtl.toNanos());
+        }
+
+        private boolean isExpired() {
+            return System.nanoTime() >= expiresAtNanos;
+        }
     }
 }

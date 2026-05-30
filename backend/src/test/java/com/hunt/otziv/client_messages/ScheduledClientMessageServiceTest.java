@@ -1,6 +1,7 @@
 package com.hunt.otziv.client_messages;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
@@ -13,7 +14,14 @@ import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.payments.PaymentLinkService;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
+import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
+import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryHoldService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -24,6 +32,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -69,6 +78,14 @@ class ScheduledClientMessageServiceTest {
     private BadReviewTaskService badReviewTaskService;
     @Mock
     private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    @Mock
+    private WhatsAppAuthAlertService whatsAppAuthAlertService;
+    @Mock
+    private ReviewRecoveryHoldService reviewRecoveryHoldService;
+    @Mock
+    private ReviewRecoveryTaskService reviewRecoveryTaskService;
+    @Mock
+    private ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
 
     @InjectMocks
     private ScheduledClientMessageService service;
@@ -115,8 +132,237 @@ class ScheduledClientMessageServiceTest {
         assertNull(state.getLastErrorMessage());
         assertEquals(0, state.getConsecutiveFailures());
         assertNull(state.getLockedUntil());
-        assertNotNull(state.getNextAttemptAt());
+        assertEquals(now.plusDays(ScheduledClientMessageService.DEFAULT_NO_SEND_RETRY_DAYS), state.getNextAttemptAt());
         verify(stateRepository).save(state);
+    }
+
+    @Test
+    void failedSendRetriesTomorrowInsteadOfDisablingState() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(177L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .targetType(ClientMessageTargetType.ARCHIVE_COMPANY)
+                .targetKey("archive-company:20:2026-02-20T10:00")
+                .companyId(20L)
+                .archiveOrderId(2L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(20L);
+        Manager manager = new Manager();
+        manager.setClientId("client-20");
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 10, 20);
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(messageSender.send(eq(company), eq("client-20"), any(), eq("message")))
+                .thenReturn(ClientMessageSendResult.failed("whatsapp_group_missing", "Для WhatsApp-группы не задан groupId"));
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReflectionTestUtils.invokeMethod(service, "sendMessage", state, company, manager, "message", now, null);
+
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor = ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.FAILED, attemptCaptor.getValue().getStatus());
+        assertEquals("whatsapp_group_missing", attemptCaptor.getValue().getErrorCode());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("whatsapp_group_missing", state.getLastErrorCode());
+        assertEquals(1, state.getConsecutiveFailures());
+        assertEquals(now.plusDays(ScheduledClientMessageService.DEFAULT_NO_SEND_RETRY_DAYS), state.getNextAttemptAt());
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void archiveOfferDoesNotSendWhenActiveOrderAppearedAfterQueueing() {
+        LocalDateTime statusChangedAt = LocalDateTime.of(2026, 2, 20, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 10, 20);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(180L)
+                .scenario(ClientMessageScenario.ARCHIVE_REORDER_OFFER)
+                .targetType(ClientMessageTargetType.ARCHIVE_COMPANY)
+                .targetKey("archive-company:20:2026-02-20T10:00")
+                .companyId(20L)
+                .archiveOrderId(2L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        CompanyStatus stop = new CompanyStatus();
+        stop.setTitle("На стопе");
+        Company company = new Company();
+        company.setId(20L);
+        company.setStatus(stop);
+        company.setStatusChangedAt(statusChangedAt);
+
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_ARCHIVE_COMPANY_STATUS,
+                ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_ARCHIVE_COMPANY_STATUS);
+        when(archiveCandidateRepository.hasArchiveReorderBlocker(
+                eq(20L),
+                eq(List.of("Оплачено", "Архив", "Бан")),
+                eq(List.of("PENDING", "FAILED"))
+        )).thenReturn(true);
+
+        ReflectionTestUtils.invokeMethod(service, "sendArchiveOffer", state, company, now);
+
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor = ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
+        assertEquals("archive_reorder_blocked", attemptCaptor.getValue().getErrorCode());
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertNull(state.getNextAttemptAt());
+        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void archiveReorderAttemptAddsStableForwardJitter() {
+        LocalDateTime baseAt = LocalDateTime.of(2026, 8, 29, 10, 20);
+
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS,
+                ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_JITTER_DAYS
+        )).thenReturn(10);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocalDateTime first = service.archiveReorderAttemptAt(baseAt, "archive-company:20:2026-02-20T10:00");
+        LocalDateTime second = service.archiveReorderAttemptAt(baseAt, "archive-company:20:2026-02-20T10:00");
+
+        assertEquals(first, second);
+        assertNotNull(first);
+        assertTrue(!first.isBefore(baseAt));
+        assertTrue(!first.isAfter(baseAt.plusDays(10)));
+    }
+
+    @Test
+    void archiveReorderAttemptKeepsBaseDateWhenJitterDisabled() {
+        LocalDateTime baseAt = LocalDateTime.of(2026, 8, 29, 10, 20);
+
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_JITTER_DAYS,
+                ScheduledClientMessageService.DEFAULT_ARCHIVE_REORDER_JITTER_DAYS
+        )).thenReturn(0);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        LocalDateTime result = service.archiveReorderAttemptAt(baseAt, "archive-company:20:2026-02-20T10:00");
+
+        assertEquals(baseAt, result);
+    }
+
+    @Test
+    void liveEnabledReleasesDryRunStatesBackToQueue() {
+        LocalDateTime now = LocalDateTime.of(2026, 5, 29, 12, 30);
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(stateRepository.releaseDryRunStates(now)).thenReturn(202);
+
+        Integer released = ReflectionTestUtils.invokeMethod(service, "releaseDryRunMessagesIfLiveEnabled", now);
+
+        assertEquals(202, released);
+        verify(stateRepository).releaseDryRunStates(now);
+    }
+
+    @Test
+    void whatsappNotReadyRetriesSoonAndAlertsManager() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(178L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:20:2026-05-25T10:00")
+                .companyId(30L)
+                .orderId(20L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(30L);
+        company.setTitle("Тестовая компания");
+        company.setGroupId("group-20");
+        Manager manager = new Manager();
+        manager.setId(4L);
+        manager.setClientId("whatsapp_vika");
+        manager.setUser(User.builder().telegramChatId(12345L).build());
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 10, 20);
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS,
+                ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messageSender.send(eq(company), eq("whatsapp_vika"), eq("group-20"), eq("message")))
+                .thenReturn(ClientMessageSendResult.failed(
+                        "whatsapp_not_ready",
+                        "WhatsApp API вернул HTTP 503. Ответ: {\"status\":\"not_ready\",\"authenticated\":false,\"state\":\"qr\"}"
+                ));
+        ReflectionTestUtils.invokeMethod(service, "sendMessage", state, company, manager, "message", now, null);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("whatsapp_not_ready", state.getLastErrorCode());
+        assertEquals(1, state.getConsecutiveFailures());
+        assertEquals(now.plusHours(ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS), state.getNextAttemptAt());
+        verify(whatsAppAuthAlertService).notifyAuthIssue(
+                eq("whatsapp_vika"),
+                eq("Тестовая компания"),
+                eq("фоновый автоответчик"),
+                eq("whatsapp_not_ready"),
+                anyString(),
+                eq(now),
+                any(LocalDateTime.class),
+                any()
+        );
+    }
+
+    @Test
+    void whatsappWarmupRetriesSoonWithoutAuthAlert() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(179L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:21:2026-05-25T10:00")
+                .companyId(31L)
+                .orderId(21L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(31L);
+        company.setTitle("Тестовая компания");
+        company.setGroupId("group-21");
+        Manager manager = new Manager();
+        manager.setId(5L);
+        manager.setClientId("whatsapp_lika");
+        manager.setUser(User.builder().telegramChatId(12345L).build());
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 10, 20);
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS,
+                ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messageSender.send(eq(company), eq("whatsapp_lika"), eq("group-21"), eq("message")))
+                .thenReturn(ClientMessageSendResult.failed(
+                        "not_ready",
+                        "WhatsApp API вернул HTTP 503. Ответ: {\"status\":\"not_ready\",\"authenticated\":true,\"state\":\"authenticated\",\"hasQr\":false,\"message\":\"WhatsApp client is not ready\"}"
+                ));
+        ReflectionTestUtils.invokeMethod(service, "sendMessage", state, company, manager, "message", now, null);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("not_ready", state.getLastErrorCode());
+        assertEquals(1, state.getConsecutiveFailures());
+        assertEquals(now.plusHours(ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS), state.getNextAttemptAt());
+        verify(whatsAppAuthAlertService, never()).notifyAuthIssue(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -170,6 +416,99 @@ class ScheduledClientMessageServiceTest {
 
         verify(messageSender).send(eq(company), eq("client-15"), eq("group-15"), anyString());
         verify(orderStatusTransitionService).changeStatusForOrder(15L, "Напоминание");
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertNull(state.getNextAttemptAt());
+    }
+
+    @Test
+    void paymentReminderIsPausedWhileReviewRecoveryIsActive() {
+        LocalDateTime statusChangedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 22, 10, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(180L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:15:2026-05-20T10:00")
+                .companyId(25L)
+                .orderId(15L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(25L);
+        company.setGroupId("group-15");
+        Order order = new Order();
+        order.setId(15L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        order.setStatusChangedAt(statusChangedAt);
+
+        when(orderRepository.findByIdForMutation(15L)).thenReturn(java.util.Optional.of(order));
+        when(reviewRecoveryHoldService.shouldPauseClientMessages(order)).thenReturn(true);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReflectionTestUtils.invokeMethod(
+                service,
+                "sendOrderReminder",
+                state,
+                company,
+                java.util.List.of("Выставлен счет", "Напоминание"),
+                "Заказ уже не ожидает оплату",
+                2,
+                false,
+                now
+        );
+
+        verify(messageSender, never()).send(any(), any(), any(), anyString());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("review_recovery_active", state.getLastErrorCode());
+        assertEquals(now.plusDays(1), state.getNextAttemptAt());
+    }
+
+    @Test
+    void recoveryNoticeSendsClientMessageAndMarksBatchNotified() {
+        LocalDateTime now = LocalDateTime.of(2026, 5, 22, 10, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(181L)
+                .scenario(ClientMessageScenario.REVIEW_RECOVERY_NOTICE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey(ReviewRecoveryNoticeScheduler.targetKey(55L))
+                .companyId(25L)
+                .orderId(15L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(25L);
+        company.setGroupId("group-15");
+        Manager manager = new Manager();
+        manager.setClientId("client-15");
+        Order order = new Order();
+        order.setId(15L);
+        order.setCompany(company);
+        order.setManager(manager);
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        ReviewRecoveryBatch batch = ReviewRecoveryBatch.builder()
+                .id(55L)
+                .order(order)
+                .status(ReviewRecoveryBatchStatus.COMPLETED)
+                .build();
+
+        when(reviewRecoveryBatchRepository.findById(55L)).thenReturn(java.util.Optional.of(batch));
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT,
+                ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_RECOVERY_NOTICE_TEXT);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(messageSender.send(eq(company), eq("client-15"), eq("group-15"), anyString()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+
+        ReflectionTestUtils.invokeMethod(service, "sendReviewRecoveryNotice", state, company, now);
+
+        verify(messageSender).send(eq(company), eq("client-15"), eq("group-15"), anyString());
+        verify(reviewRecoveryTaskService).markClientNotifiedAutomatically(55L);
         assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
         assertNull(state.getNextAttemptAt());
     }

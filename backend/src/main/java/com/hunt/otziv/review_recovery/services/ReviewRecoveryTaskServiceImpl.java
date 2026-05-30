@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_messages.ReviewRecoveryNoticeScheduler;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -58,6 +59,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final ReviewRepository reviewRepository;
     private final PersonalReminderService personalReminderService;
     private final BotService botService;
+    private final ReviewRecoveryNoticeScheduler recoveryNoticeScheduler;
+    private final ReviewRecoveryHoldService recoveryHoldService;
 
     @Override
     @Transactional(readOnly = true)
@@ -218,6 +221,16 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryBatch markClientNotified(Long batchId, User notifiedBy) {
+        return markClientNotifiedInternal(batchId, notifiedBy);
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryBatch markClientNotifiedAutomatically(Long batchId) {
+        return markClientNotifiedInternal(batchId, null);
+    }
+
+    private ReviewRecoveryBatch markClientNotifiedInternal(Long batchId, User notifiedBy) {
         ReviewRecoveryBatch batch = requireBatch(batchId);
         if (batch.getStatus() != ReviewRecoveryBatchStatus.COMPLETED
                 && batch.getStatus() != ReviewRecoveryBatchStatus.CLIENT_NOTIFIED) {
@@ -229,6 +242,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         batch.setClientNotifiedAt(Instant.now());
         ReviewRecoveryBatch savedBatch = batchRepository.save(batch);
         deleteCompletionReminder(savedBatch);
+        recoveryHoldService.releaseDeadlineHold(savedBatch);
         return savedBatch;
     }
 
@@ -397,11 +411,25 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                         .manager(order.getManager())
                         .status(ReviewRecoveryBatchStatus.OPEN)
                         .createdBy(createdBy)
+                        .holdStartedAt(Instant.now())
                         .build());
 
         if (batch.getStatus() == ReviewRecoveryBatchStatus.COMPLETED) {
             batch.setStatus(ReviewRecoveryBatchStatus.OPEN);
             batch.setCompletedAt(null);
+            batch.setClientNotifiedAt(null);
+            batch.setClientNotifiedBy(null);
+            batch.setHoldStartedAt(Instant.now());
+            batch.setHoldReleasedAt(null);
+            batch.setDeadlineShiftAppliedAt(null);
+            batch.setDeadlineShiftSeconds(0);
+        }
+
+        if (batch.getHoldStartedAt() == null || batch.getHoldReleasedAt() != null) {
+            batch.setHoldStartedAt(Instant.now());
+            batch.setHoldReleasedAt(null);
+            batch.setDeadlineShiftAppliedAt(null);
+            batch.setDeadlineShiftSeconds(0);
         }
 
         if (batch.getId() == null || batch.getStatus() == ReviewRecoveryBatchStatus.OPEN) {
@@ -436,9 +464,27 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
         batch.setStatus(ReviewRecoveryBatchStatus.COMPLETED);
         batch.setCompletedAt(Instant.now());
-        batchRepository.save(batch);
-        createCompletionReminder(batch);
+        ReviewRecoveryBatch savedBatch = batchRepository.save(batch);
+        createCompletionReminder(savedBatch);
+        handleCompletedBatchClientNotice(savedBatch);
         log.info("Пачка восстановления {} завершена", batch.getId());
+    }
+
+    private void handleCompletedBatchClientNotice(ReviewRecoveryBatch batch) {
+        if (batch == null || batch.getOrder() == null) {
+            return;
+        }
+        if (recoveryHoldService.isTerminal(batch.getOrder())) {
+            batch.setStatus(ReviewRecoveryBatchStatus.CLIENT_NOTIFIED);
+            batch.setClientNotifiedAt(Instant.now());
+            ReviewRecoveryBatch savedBatch = batchRepository.save(batch);
+            recoveryHoldService.releaseDeadlineHold(savedBatch);
+            return;
+        }
+        boolean scheduled = recoveryNoticeScheduler.scheduleNotice(batch);
+        if (!scheduled) {
+            recoveryHoldService.releaseWithoutClientNotice(batch);
+        }
     }
 
     private void createCompletionReminder(ReviewRecoveryBatch batch) {

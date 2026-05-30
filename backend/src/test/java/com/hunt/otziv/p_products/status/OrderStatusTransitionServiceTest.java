@@ -2,6 +2,8 @@ package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
+import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.PaymentInvoiceRetryScheduler;
@@ -106,12 +108,15 @@ class OrderStatusTransitionServiceTest {
     @Mock
     private AppSettingService appSettingService;
 
+    @Mock
+    private BusinessAuditService businessAuditService;
+
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = order(1L, "Бан");
 
-        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(1L)).thenReturn(Optional.of(order));
         when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
 
         assertTrue(service.changeStatusForOrder(1L, "Оплачено"));
@@ -132,7 +137,7 @@ class OrderStatusTransitionServiceTest {
                 "У заказа есть T-Bank/СБП платеж в процессе. Проверьте его в журнале перед ручным закрытием."
         );
 
-        when(orderRepository.findById(90L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(90L)).thenReturn(Optional.of(order));
         doThrow(conflict).when(manualPaymentAutoConfirmationService).ensureCanCloseOrderManually(order);
 
         ResponseStatusException exception = assertThrows(
@@ -152,7 +157,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(2L, "Новый");
         OrderStatus reminder = status("Напоминание");
 
-        when(orderRepository.findById(2L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(2L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Напоминание")).thenReturn(reminder);
 
         assertTrue(service.changeStatusForOrder(2L, "Напоминание"));
@@ -167,7 +172,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(3L, "Публикация");
         OrderStatus notPaid = status("Не оплачено");
 
-        when(orderRepository.findById(3L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(3L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Не оплачено")).thenReturn(notPaid);
 
         assertTrue(service.changeStatusForOrder(3L, "Не оплачено"));
@@ -183,7 +188,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatusTransitionService service = service();
         Order order = order(31L, "Напоминание");
 
-        when(orderRepository.findById(31L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(31L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -200,7 +205,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatusTransitionService service = service();
         Order order = order(32L, "Не оплачено");
 
-        when(orderRepository.findById(32L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(32L)).thenReturn(Optional.of(order));
         when(badReviewTaskService.getSummaryForOrder(32L))
                 .thenReturn(new BadReviewTaskSummary(2, 1, 1, 0, BigDecimal.valueOf(300), BigDecimal.valueOf(300)));
 
@@ -220,7 +225,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(33L, "Не оплачено");
         OrderStatus ban = status("Бан");
 
-        when(orderRepository.findById(33L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(33L)).thenReturn(Optional.of(order));
         when(badReviewTaskService.getSummaryForOrder(33L))
                 .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
         when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
@@ -239,7 +244,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(34L, "Не оплачено");
         OrderStatus ban = status("Бан");
 
-        when(orderRepository.findById(34L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(34L)).thenReturn(Optional.of(order));
         when(badReviewTaskService.getSummaryForOrder(34L))
                 .thenReturn(BadReviewTaskSummary.empty());
         when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
@@ -257,7 +262,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(35L, "Выставлен счет");
         OrderStatus ban = status("Бан");
 
-        when(orderRepository.findById(35L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(35L)).thenReturn(Optional.of(order));
         when(badReviewTaskService.getSummaryForOrder(35L))
                 .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
         when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
@@ -276,7 +281,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(4L, "Публикация");
         OrderStatus archive = status("Архив");
 
-        when(orderRepository.findById(4L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(4L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(archive);
 
         assertTrue(service.changeStatusForOrder(4L, "Архив"));
@@ -297,7 +302,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(42L, "Публикация", 420L, "Готовый текст отзыва");
         OrderStatus archive = status("Архив");
 
-        when(orderRepository.findById(42L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(archive);
 
         assertTrue(service.changeStatusForOrder(42L, "Архив"));
@@ -315,7 +320,7 @@ class OrderStatusTransitionServiceTest {
         List<Review> reviews = order.getDetails().getFirst().getReviews();
         OrderStatus archive = status("Архив");
 
-        when(orderRepository.findById(43L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(43L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Архив")).thenReturn(archive);
 
         assertTrue(service.changeStatusForOrder(43L, "Архив"));
@@ -332,7 +337,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(40L, "Публикация", 400L, " ");
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(40L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(40L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -352,7 +357,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatusTransitionService service = service();
         Order order = orderWithReview(41L, "Публикация", 410L, "  текст отзыва  ");
 
-        when(orderRepository.findById(41L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(41L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -373,7 +378,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatus toCheck = status("В проверку");
 
         enableImmediateMessages();
-        when(orderRepository.findById(5L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(5L)).thenReturn(Optional.of(order));
         when(orderReviewCheckMessageBuilder.reviewCheckMessage(order)).thenReturn("Проверьте отзывы");
         when(orderStatusNotificationService.sendMessageToClientChat(
                 eq("В проверку"),
@@ -410,7 +415,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithCompanyManagerAndDetail(52L, "В проверку", "Компания", " ");
         OrderStatus inCheck = status("На проверке");
 
-        when(orderRepository.findById(52L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(52L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(inCheck);
 
         assertTrue(service.changeStatusForOrder(52L, "На проверке"));
@@ -428,7 +433,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(55L, "В проверку", 550L, shortText);
         OrderStatus inCheck = status("На проверке");
 
-        when(orderRepository.findById(55L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(55L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(inCheck);
 
         assertTrue(service.changeStatusForOrder(55L, "На проверке"));
@@ -448,7 +453,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(53L, "В проверку", 530L, duplicateText);
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(53L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(53L)).thenReturn(Optional.of(order));
         when(reviewRepository.existsPublishedByTextExcludingReviewId(duplicateText, 530L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
@@ -473,11 +478,32 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(50L, "Новый", 500L, "");
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(50L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(50L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> service.changeStatusForOrder(50L, "В проверку")
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Нельзя отправить заказ на проверку: заполните текст всех отзывов", exception.getReason());
+        assertSame(originalStatus, order.getStatus());
+        verify(orderStatusService, never()).getOrderStatusByTitle("В проверку");
+        verifyNoInteractions(orderCompanyStatusService, orderBotLifecycleService, orderStatusNotificationService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void toCheckRejectsPlaceholderReviewTextWithoutSideEffects() {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithReview(56L, "Новый", 560L, " Нужно подсавить текст ");
+        OrderStatus originalStatus = order.getStatus();
+
+        when(orderRepository.findByIdForMutation(56L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(56L, "В проверку")
         );
 
         assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
@@ -495,7 +521,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(51L, "Новый", 510L, duplicateText);
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(51L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(51L)).thenReturn(Optional.of(order));
         when(reviewRepository.existsPublishedByTextExcludingReviewId(duplicateText, 510L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
@@ -521,7 +547,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(54L, "Новый", 540L, duplicateText);
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(54L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(54L)).thenReturn(Optional.of(order));
         when(reviewArchiveService.existsByTextExcludingOwnSource(duplicateText, 540L, 54L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
@@ -547,7 +573,7 @@ class OrderStatusTransitionServiceTest {
         order.setSum(BigDecimal.valueOf(1500));
 
         enableImmediateMessages();
-        when(orderRepository.findById(6L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(6L)).thenReturn(Optional.of(order));
         when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
                 .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
         when(orderStatusNotificationService.sendMessageToGroup(
@@ -573,7 +599,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithCompanyManagerAndDetail(61L, "Публикация", "Компания", "group");
 
         enableImmediateMessages();
-        when(orderRepository.findById(61L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(61L)).thenReturn(Optional.of(order));
         when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order))
                 .thenReturn("Компания. Филиал\n\nОплата К оплате: 1500 руб.");
         when(orderStatusNotificationService.sendMessageToGroup(
@@ -599,7 +625,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithCompanyManagerAndDetail(62L, "Опубликовано", "Компания", "group");
         OrderStatus toPay = status("Выставлен счет");
 
-        when(orderRepository.findById(62L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(62L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Выставлен счет")).thenReturn(toPay);
 
         assertTrue(service.changeStatusForOrder(62L, "Выставлен счет"));
@@ -615,7 +641,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(63L, "Не оплачено", "Компания", "group");
 
-        when(orderRepository.findById(63L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(63L)).thenReturn(Optional.of(order));
         when(badReviewTaskService.getSummaryForOrder(63L))
                 .thenReturn(new BadReviewTaskSummary(2, 0, 2, 0, BigDecimal.valueOf(600), BigDecimal.ZERO));
 
@@ -637,7 +663,7 @@ class OrderStatusTransitionServiceTest {
         order.getCompany().setCommentsCompany("комментарий");
         OrderStatus correction = status("Коррекция");
 
-        when(orderRepository.findById(7L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(7L)).thenReturn(Optional.of(order));
         when(orderStatusNotificationService.hasWorkerWithTelegram(order)).thenReturn(true);
         when(orderStatusService.getOrderStatusByTitle("Коррекция")).thenReturn(correction);
 
@@ -664,7 +690,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatusTransitionService service = service();
         Order order = orderWithWorker(72L, "Коррекция", 720L);
 
-        when(orderRepository.findById(72L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(72L)).thenReturn(Optional.of(order));
 
         assertTrue(service.changeStatusForOrder(72L, "Коррекция"));
 
@@ -687,7 +713,7 @@ class OrderStatusTransitionServiceTest {
         List<Review> reviews = order.getDetails().getFirst().getReviews();
         OrderStatus correction = status("Коррекция");
 
-        when(orderRepository.findById(71L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(71L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Коррекция")).thenReturn(correction);
 
         assertTrue(service.changeStatusForOrder(71L, "Коррекция"));
@@ -705,10 +731,11 @@ class OrderStatusTransitionServiceTest {
         Review review = new Review();
         review.setId(80L);
         review.setText("Готовый текст отзыва");
+        review.setBot(bot(80L, "Анна Иванова", "79000000080", true));
         order.getDetails().getFirst().setReviews(List.of(review));
         OrderStatus toPublish = status("Публикация");
 
-        when(orderRepository.findById(8L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(8L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderStatusNotificationService.hasWorkerWithTelegram(order)).thenReturn(true);
 
@@ -733,7 +760,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatus toPublish = status("Публикация");
 
         enableImmediateMessages();
-        when(orderRepository.findById(84L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(84L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
                 .thenReturn("Компания. Филиал\n\nОтзывы переданы в публикацию");
@@ -766,7 +793,7 @@ class OrderStatusTransitionServiceTest {
         OrderStatus toPublish = status("Публикация");
 
         enableImmediateMessages();
-        when(orderRepository.findById(85L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(85L)).thenReturn(Optional.of(order));
         when(orderStatusService.getOrderStatusByTitle("Публикация")).thenReturn(toPublish);
         when(orderReviewCheckMessageBuilder.publicationStartedMessage(order))
                 .thenReturn("Компания. Филиал\n\nОтзывы переданы в публикацию");
@@ -797,7 +824,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(81L, "На проверке", 810L, " Текст отзыва ");
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(81L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(81L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -818,7 +845,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithTwoReviews(82L, "На проверке", "Повторяющийся текст", " повторяющийся текст ");
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(82L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(82L)).thenReturn(Optional.of(order));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -843,7 +870,7 @@ class OrderStatusTransitionServiceTest {
         Order order = orderWithReview(83L, "На проверке", 830L, duplicateText);
         OrderStatus originalStatus = order.getStatus();
 
-        when(orderRepository.findById(83L)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForMutation(83L)).thenReturn(Optional.of(order));
         when(reviewArchiveService.existsByTextExcludingOwnSource(duplicateText, 830L, 83L)).thenReturn(true);
 
         ResponseStatusException exception = assertThrows(
@@ -880,7 +907,8 @@ class OrderStatusTransitionServiceTest {
                 orderCorrectionTelegramNotifier,
                 manualPaymentAutoConfirmationService,
                 paymentInvoiceRetryScheduler,
-                appSettingService
+                appSettingService,
+                businessAuditService
         );
     }
 
@@ -923,6 +951,7 @@ class OrderStatusTransitionServiceTest {
         Review review = new Review();
         review.setId(reviewId);
         review.setText(reviewText);
+        review.setBot(bot(reviewId + 1000, "Анна Иванова", "7900000" + reviewId, true));
         order.getDetails().getFirst().setReviews(List.of(review));
         return order;
     }
@@ -950,7 +979,17 @@ class OrderStatusTransitionServiceTest {
         review.setText(text);
         review.setPublish(publish);
         review.setPublishedDate(publishedDate);
+        review.setBot(bot(id + 1000, "Анна Иванова", "7900000" + id, true));
         return review;
+    }
+
+    private Bot bot(Long id, String fio, String login, boolean active) {
+        Bot bot = new Bot();
+        bot.setId(id);
+        bot.setFio(fio);
+        bot.setLogin(login);
+        bot.setActive(active);
+        return bot;
     }
 
     private Company company(String title, String groupId) {

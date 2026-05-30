@@ -121,7 +121,9 @@ export class WorkerReviewCardComponent {
   isReviewTitleLinkEnabled(): boolean {
     return (
       this.canOpenTitleLink ||
-      (this.activeSection !== 'nagul' && this.activeSection !== 'recovery' && this.activeSection !== 'publish')
+      (this.activeSection !== 'nagul' &&
+        this.activeSection !== 'recovery' &&
+        this.activeSection !== 'publish')
     );
   }
 
@@ -145,7 +147,11 @@ export class WorkerReviewCardComponent {
   }
 
   private shouldShowFilialTitle(): boolean {
-    return this.activeSection === 'nagul' || this.activeSection === 'recovery' || this.activeSection === 'publish';
+    return (
+      this.activeSection === 'nagul' ||
+      this.activeSection === 'recovery' ||
+      this.activeSection === 'publish'
+    );
   }
 
   botBrowserUrl(): string {
@@ -291,7 +297,27 @@ export class WorkerReviewCardComponent {
   }
 
   reviewDate(): string {
-    return this.review.recoveryTaskScheduledDate || this.review.badTaskScheduledDate || this.review.publishedDate || 'Не назначено';
+    return (
+      this.review.recoveryTaskScheduledDate ||
+      this.review.badTaskScheduledDate ||
+      this.review.publishedDate ||
+      'Не назначено'
+    );
+  }
+
+  isPublicationDateOverdue(): boolean {
+    if (!this.review.publishedDate) {
+      return false;
+    }
+
+    const publicationDate = this.parseLocalDateValue(this.review.publishedDate);
+    if (!publicationDate) {
+      return false;
+    }
+
+    const today = new Date();
+    const todayValue = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    return publicationDate < todayValue;
   }
 
   doneLabel(): string {
@@ -316,5 +342,14 @@ export class WorkerReviewCardComponent {
 
   isMutating(key: string): boolean {
     return this.mutationKey === key;
+  }
+
+  private parseLocalDateValue(value: string): number | null {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) {
+      return null;
+    }
+
+    return Number(match[1]) * 10000 + Number(match[2]) * 100 + Number(match[3]);
   }
 }

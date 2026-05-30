@@ -44,6 +44,8 @@ public class Review {
     private LocalDate publishedDate;
     @Column(name = "review_vigul")
     private boolean vigul;
+    @Column(name = "review_account_walk_delay_days", nullable = false)
+    private int accountWalkDelayDays;
     @Column(name = "review_publish")
     private boolean publish;
     @ManyToOne(fetch = FetchType.LAZY)

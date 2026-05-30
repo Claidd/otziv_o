@@ -142,8 +142,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     List<Long> findAllIdByStatusAndKeyword(String keyword, String status_title, String keyword2, String status_title2); // взять id по статусу + поиск
 
     @Query(
-            value = "SELECT c.id FROM Company c WHERE (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2)",
-            countQuery = "SELECT COUNT(c.id) FROM Company c WHERE (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2)"
+            value = "SELECT c.id FROM Company c WHERE (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) OR (STR(c.id) = :keyword AND c.status.title = :status_title)",
+            countQuery = "SELECT COUNT(c.id) FROM Company c WHERE (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) OR (STR(c.id) = :keyword AND c.status.title = :status_title)"
     )
     Page<Long> findPageIdByStatusAndKeyword(String keyword, String status_title, String keyword2, String status_title2, Pageable pageable);
 
@@ -199,6 +199,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')))
                    OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
                    OR (c.manager = :manager AND LOWER(COALESCE(s.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR (c.manager = :manager AND STR(c.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(c.id)
@@ -207,6 +208,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')))
                    OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
                    OR (c.manager = :manager AND LOWER(COALESCE(s.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR (c.manager = :manager AND STR(c.id) = :keyword)
             """
     )
     Page<Long> findPageByManagerAndKeyWord(Manager manager, String keyword, Manager manager2, String keyword2, Pageable pageable);
@@ -219,7 +221,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE c.manager = :manager
                   AND (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
                   AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(c.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(c.id)
@@ -228,7 +231,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE c.manager = :manager
                   AND (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
                   AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(c.id) = :keyword)
             """
     )
     Page<Long> findPageByManagerAndKeyWordLive(@Param("manager") Manager manager,
@@ -249,6 +253,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE (c.manager IN :managers AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')))
                    OR (c.manager IN :managers AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
                    OR (c.manager IN :managers AND LOWER(COALESCE(s.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR (c.manager IN :managers AND STR(c.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(c.id)
@@ -257,6 +262,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE (c.manager IN :managers AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')))
                    OR (c.manager IN :managers AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
                    OR (c.manager IN :managers AND LOWER(COALESCE(s.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR (c.manager IN :managers AND STR(c.id) = :keyword)
             """
     )
     Page<Long> findPageByOwnerAndKeyWord(List<Manager> managers, String keyword, String keyword2, Pageable pageable);
@@ -269,7 +275,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE c.manager IN :managers
                   AND (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
                   AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(c.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(c.id)
@@ -278,7 +285,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE c.manager IN :managers
                   AND (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
                   AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(c.id) = :keyword)
             """
     )
     Page<Long> findPageByOwnerAndKeyWordLive(@Param("managers") List<Manager> managers,
@@ -294,8 +302,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     // взять id по менеджеру + поиск + статус
 
     @Query(
-            value = "SELECT c.id FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2)",
-            countQuery = "SELECT COUNT(c.id) FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2)"
+            value = "SELECT c.id FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) OR (c.manager = :manager AND STR(c.id) = :keyword AND c.status.title = :status_title)",
+            countQuery = "SELECT COUNT(c.id) FROM Company c WHERE (c.manager = :manager AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :status_title) OR (c.manager = :manager2 AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :status_title2) OR (c.manager = :manager AND STR(c.id) = :keyword AND c.status.title = :status_title)"
     )
     Page<Long> findPageByManagerAndStatusAndKeyWords(Manager manager, String keyword, String status_title, Manager manager2, String keyword2, String status_title2, Pageable pageable);
 
@@ -309,8 +317,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     List<Long> findAllByOwnerListAndStatusAndKeyWords(List<Manager> managers, String keyword, String statusTitle, String keyword2, String statusTitle2);
 
     @Query(
-            value = "SELECT c.id FROM Company c WHERE ((c.manager IN :managers AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :statusTitle) OR (c.manager IN :managers AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :statusTitle2))",
-            countQuery = "SELECT COUNT(c.id) FROM Company c WHERE ((c.manager IN :managers AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :statusTitle) OR (c.manager IN :managers AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :statusTitle2))"
+            value = "SELECT c.id FROM Company c WHERE ((c.manager IN :managers AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :statusTitle) OR (c.manager IN :managers AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :statusTitle2) OR (c.manager IN :managers AND STR(c.id) = :keyword AND c.status.title = :statusTitle))",
+            countQuery = "SELECT COUNT(c.id) FROM Company c WHERE ((c.manager IN :managers AND LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) AND c.status.title = :statusTitle) OR (c.manager IN :managers AND LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')) AND c.status.title = :statusTitle2) OR (c.manager IN :managers AND STR(c.id) = :keyword AND c.status.title = :statusTitle))"
     )
     Page<Long> findPageByOwnerListAndStatusAndKeyWords(List<Manager> managers, String keyword, String statusTitle, String keyword2, String statusTitle2, Pageable pageable);
 
@@ -351,6 +359,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
                    OR LOWER(COALESCE(s.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(c.id) = :keyword
             """,
             countQuery = """
                 SELECT COUNT(c.id)
@@ -359,6 +368,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 WHERE LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
                    OR LOWER(COALESCE(s.title, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR STR(c.id) = :keyword
             """
     )
     Page<Long> findPageToAdminWithFetchWithKeyWord(String keyword, String keyword2, Pageable pageable);
@@ -370,7 +380,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 LEFT JOIN c.status s
                 WHERE (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
                   AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(c.id) = :keyword)
             """,
             countQuery = """
                 SELECT COUNT(c.id)
@@ -378,7 +389,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
                 LEFT JOIN c.status s
                 WHERE (COALESCE(s.title, '') NOT IN :hiddenStatuses OR c.updateStatus >= :liveCutoff)
                   AND (LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%')))
+                   OR LOWER(c.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                   OR STR(c.id) = :keyword)
             """
     )
     Page<Long> findPageToAdminWithFetchWithKeyWordLive(@Param("keyword") String keyword,
@@ -499,6 +511,10 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     WHERE c.groupId = :groupId
 """)
     Optional<Company> findByGroupId(String groupId);
+
+    Optional<Company> findByTelegramGroupChatId(Long telegramGroupChatId);
+
+    Optional<Company> findByMaxGroupChatId(Long maxGroupChatId);
 
     Optional<Company> findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(Long maxLinkUserId);
 

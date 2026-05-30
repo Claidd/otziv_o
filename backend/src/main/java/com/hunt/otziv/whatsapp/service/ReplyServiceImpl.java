@@ -2,6 +2,7 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.Telephone;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
@@ -10,6 +11,7 @@ import com.hunt.otziv.text_generator.alltext.service.clas.RandomTextService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,9 @@ public class ReplyServiceImpl implements ReplyService {
     private final OfferService offerService;
     private final NotificationService notificationService;
     private final OfferTextService offerTextService;
+    private final WhatsAppGroupCompanyLinker groupCompanyLinker;
+    private final PublicationProgressPreferenceService publicationProgressPreferenceService;
+    private final WhatsAppService whatsAppService;
 
     private List<String> offerList;
 
@@ -158,8 +163,15 @@ public class ReplyServiceImpl implements ReplyService {
             optCompany = companyService.getCompanyByTelephonAndTitle(telephoneNumber, title);
 
             if (optCompany.isEmpty()) {
-                log.warn("❌ Компания не найдена ни по GroupId {}, ни по номеру '{}' + названию '{}'",
-                        reply.getGroupId(), telephoneNumber, title);
+                int linkedByGroupName = groupCompanyLinker.linkByGroupName(reply.getGroupId(), reply.getGroupName());
+                if (linkedByGroupName > 0) {
+                    log.info("📌 GroupId {} привязан к {} компаниям по названию группы '{}'",
+                            reply.getGroupId(), linkedByGroupName, reply.getGroupName());
+                    return;
+                }
+
+                log.warn("❌ Компания не найдена ни по GroupId {}, ни по номеру '{}' + названию '{}', ни по названию группы '{}'",
+                        reply.getGroupId(), telephoneNumber, title, reply.getGroupName());
                 return;
             } else {
                 log.info("🔍 Найдена компания '{}' по телефону '{}' и названию '{}'",
@@ -178,8 +190,21 @@ public class ReplyServiceImpl implements ReplyService {
             log.info("ℹ Компания '{}' уже имеет GroupId: {}",
                     found.getTitle(), found.getGroupId());
         }
+        groupCompanyLinker.linkByGroupName(reply.getGroupId(), reply.getGroupName());
+
+        publicationProgressPreferenceService.handleWhatsAppCommand(reply.getGroupId(), reply.getMessage())
+                .ifPresent(update -> sendGroupPreferenceResponse(reply, update.message()));
 
         log.info("✅ Обработка ответа из группы '{}' завершена", reply.getGroupName());
+    }
+
+    private void sendGroupPreferenceResponse(WhatsAppGroupReplyDTO reply, String message) {
+        if (reply == null || reply.getClientId() == null || reply.getClientId().isBlank()
+                || reply.getGroupId() == null || reply.getGroupId().isBlank()) {
+            log.warn("WhatsApp preference response skipped: clientId or groupId is empty");
+            return;
+        }
+        whatsAppService.sendMessageToGroup(reply.getClientId(), reply.getGroupId(), message);
     }
 }
 

@@ -77,16 +77,21 @@ public class OrderCompanyStatusService {
                     companyService.save(company);
                     log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
                 } else {
-                    log.info("📌 ПРАВИЛО 1: Завершение заказа. Есть другие активные заказы -> статус компании не меняем");
+                    if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus)) {
+                        log.info("📌 ПРАВИЛО 1: Завершение заказа. Есть другие активные заказы, компания была в 'Стопе' -> 'В работе'");
+                        company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
+                        companyService.save(company);
+                        log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
+                    } else {
+                        log.info("📌 ПРАВИЛО 1: Завершение заказа. Есть другие активные заказы -> статус компании не меняем");
+                    }
                 }
             } else if (isActiveOrderStatus(newOrderStatus)) {
-                if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus) && !hasOtherActiveOrders) {
-                    log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе' и нет других активных заказов -> 'В работе'");
+                if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus)) {
+                    log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе' -> 'В работе'");
                     company.setStatus(companyStatusService.getStatusByTitle(STATUS_COMPANY_IN_WORK));
                     companyService.save(company);
                     log.info("✅ Статус компании изменен на: {}", company.getStatus().getTitle());
-                } else if (STATUS_COMPANY_IN_STOP.equals(currentCompanyStatus) && hasOtherActiveOrders) {
-                    log.info("📌 ПРАВИЛО 2: Активация заказа. Компания в 'Стопе', но есть другие активные заказы -> оставляем 'Стоп'");
                 } else {
                     log.info("📌 ПРАВИЛО 2: Активация заказа. Статус компании не требует изменений");
                 }

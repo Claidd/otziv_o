@@ -32,9 +32,9 @@ public enum DeepResearchProfile {
             "Максимум",
             "gpt-5.5",
             "Глубокий отчёт с усиленным reasoning и большим запасом контекста.",
-            Duration.ofMinutes(12),
+            Duration.ofMinutes(15),
             48,
-            16000,
+            24000,
             "medium",
             "medium"
     );

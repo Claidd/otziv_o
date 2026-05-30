@@ -86,6 +86,7 @@
               <input
                 name="reviewPublishedDate"
                 type="date"
+                [max]="reviewPublicationDateMax"
                 [ngModel]="draft.publishedDate"
                 (ngModelChange)="setField('publishedDate', $event || null)"
               >

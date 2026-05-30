@@ -5,6 +5,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
@@ -47,7 +48,9 @@ import java.util.*;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
 import static com.hunt.otziv.client_messages.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
+import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isShortCommonReviewText;
+import static com.hunt.otziv.r_review.utils.ReviewBotPolicy.hasUsablePublicationBot;
 
 @Service
 @Slf4j
@@ -73,6 +76,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderReviewMutationService orderReviewMutationService;
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final AppSettingService appSettingService;
+    private final BusinessAuditService businessAuditService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -417,6 +421,22 @@ public class OrderServiceImpl implements OrderService {
             log.info("Достали отзыв id={} для компании: {}", reviewId,
                     order.getCompany() != null ? order.getCompany().getTitle() : "null");
 
+            if (isBlankOrPlaceholder(review.getText())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Нельзя опубликовать отзыв: заполните настоящий текст. Проблемная карточка: "
+                                + reviewCardLabel(order, review) + "."
+                );
+            }
+
+            if (!hasUsablePublicationBot(review)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Нельзя опубликовать отзыв: назначьте реальный аккаунт. Проблемная карточка: "
+                                + reviewCardLabel(order, review) + "."
+                );
+            }
+
             if (isPublishedReviewText(review)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -443,6 +463,16 @@ public class OrderServiceImpl implements OrderService {
 
             review.setPublish(true);
             reviewRepository.save(review);
+            businessAuditService.recordSafely(
+                    "review_published",
+                    "review",
+                    review.getId(),
+                    order.getId(),
+                    review.getId(),
+                    false,
+                    true,
+                    "manual publish button"
+            );
             log.info("Сохранили отзыв, публикация установлена в true");
             reviewArchiveService.saveNewReviewArchive(review.getId(), ReviewArchiveSourceReason.PUBLISHED);
             log.info("Сохранили опубликованный отзыв в архив текстов");

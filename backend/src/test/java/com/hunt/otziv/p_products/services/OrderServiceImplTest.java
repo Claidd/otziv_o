@@ -4,6 +4,8 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
@@ -105,6 +107,9 @@ class OrderServiceImplTest {
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -239,6 +244,61 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void changeStatusAndOrderCounterRejectsPlaceholderWithOperatorNote() {
+        Order order = order(13L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review placeholderReview = review(2L, false, "текст отзыва Нужно подсавить текст", details);
+        details.setReviews(List.of(placeholderReview));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(13L));
+        when(orderRepository.findByIdForCounterUpdate(13L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(placeholderReview));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> orderService.changeStatusAndOrderCounter(2L)
+        );
+
+        assertEquals(
+                "Нельзя опубликовать отзыв: заполните настоящий текст. Проблемная карточка: №1 (отзыв #2).",
+                exception.getReason()
+        );
+        verify(reviewRepository, never()).save(placeholderReview);
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService);
+    }
+
+    @Test
+    void changeStatusAndOrderCounterRejectsTemplateBotAccount() {
+        Order order = order(14L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review reviewToPublish = review(2L, false, "Готовый текст отзыва", details);
+        reviewToPublish.setBot(bot(99L, "Впиши Имя Фамилию", "79000000000", true));
+        details.setReviews(List.of(reviewToPublish));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(14L));
+        when(orderRepository.findByIdForCounterUpdate(14L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> orderService.changeStatusAndOrderCounter(2L)
+        );
+
+        assertEquals(
+                "Нельзя опубликовать отзыв: назначьте реальный аккаунт. Проблемная карточка: №1 (отзыв #2).",
+                exception.getReason()
+        );
+        verify(reviewRepository, never()).save(reviewToPublish);
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService);
+    }
+
+    @Test
     void changeStatusAndOrderCounterAllowsShortCommonReviewTextWithoutHistoryLookup() throws Exception {
         Order order = order(12L, 0);
         OrderDetails details = new OrderDetails();
@@ -285,6 +345,16 @@ class OrderServiceImplTest {
         review.setPublish(publish);
         review.setText(text);
         review.setOrderDetails(details);
+        review.setBot(bot(10L + id, "Анна Иванова", "79000000000" + id, true));
         return review;
+    }
+
+    private Bot bot(Long id, String fio, String login, boolean active) {
+        Bot bot = new Bot();
+        bot.setId(id);
+        bot.setFio(fio);
+        bot.setLogin(login);
+        bot.setActive(active);
+        return bot;
     }
 }

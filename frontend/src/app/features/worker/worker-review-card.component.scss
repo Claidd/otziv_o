@@ -115,6 +115,10 @@
   flex: 0 0 auto;
 }
 
+.worker-card footer .review-date--overdue {
+  color: var(--otziv-danger);
+}
+
 .worker-card footer a {
   min-width: 0;
   overflow: hidden;

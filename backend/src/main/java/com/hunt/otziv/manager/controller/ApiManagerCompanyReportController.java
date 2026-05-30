@@ -87,9 +87,12 @@ public class ApiManagerCompanyReportController {
 
     private CompanyDeepReportStateResponse buildState(CompanyContext company, Authentication authentication) {
         DeepCompanyResearchJobStatus activeJob = deepCompanyResearchJobService.findActive(company.companyId()).orElse(null);
-        DeepCompanyResearchJobStatus latestJob = deepCompanyResearchJobService.findLatest(company.companyId()).orElse(null);
+        Optional<DeepCompanyResearchJobStatus> latestReadyJob = deepCompanyResearchJobService.findLatestReady(company.companyId());
+        DeepCompanyResearchJobStatus latestJob = latestReadyJob
+                .or(() -> deepCompanyResearchJobService.findLatest(company.companyId()))
+                .orElse(null);
         boolean adminOrOwner = isAdminOrOwner(authentication);
-        boolean hasReadyReport = deepCompanyResearchJobService.findLatestReady(company.companyId()).isPresent();
+        boolean hasReadyReport = latestReadyJob.isPresent();
         boolean canStart = activeJob == null && (adminOrOwner || !hasReadyReport);
         String unavailableReason = "";
         if (activeJob != null) {

@@ -128,6 +128,7 @@ public class CompanyResearchService {
                     result.snippet()
             ));
         }
+        urlsToCrawl.addAll(filialCrawlUrls(company));
         urlsToCrawl.addAll(prioritizedCrawlUrls(searchRun.results(), pageContext));
 
         Set<String> deepCrawlHosts = pageRoleClassifier.host(website).isBlank()
@@ -247,6 +248,7 @@ public class CompanyResearchService {
         String city = company.getCity();
         String category = company.getCategoryCompany() == null ? "" : company.getCategoryCompany().getCategoryTitle();
         String product = products == null || products.isEmpty() ? "" : products.getFirst();
+        List<String> filialHints = filialSearchHints(company);
 
         queries.add(joinNonBlank(companyName, city, category, "отзывы"));
         queries.add(joinNonBlank(companyName, city, "2ГИС"));
@@ -257,9 +259,61 @@ public class CompanyResearchService {
             queries.add(joinNonBlank(companyName, product, city));
         }
         queries.add(joinNonBlank(companyName, city, "цены услуги"));
+        for (String hint : filialHints) {
+            queries.add(joinNonBlank(companyName, hint));
+            queries.add(joinNonBlank(companyName, hint, "2ГИС"));
+            queries.add(joinNonBlank(companyName, hint, "отзывы"));
+            queries.add(joinNonBlank(companyName, hint, "цены услуги"));
+        }
 
         return queries.stream()
                 .filter(query -> !query.isBlank())
+                .toList();
+    }
+
+    private List<String> filialSearchHints(Company company) {
+        if (company.getFilial() == null || company.getFilial().isEmpty()) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> hints = new LinkedHashSet<>();
+        for (Filial filial : company.getFilial()) {
+            if (filial == null) {
+                continue;
+            }
+            String city = filial.getCity() == null ? "" : filial.getCity().getTitle();
+            String title = firstNonBlank(filial.getTitle(), "");
+            if (!isBlank(city)) {
+                hints.add(city);
+            }
+            if (!isBlank(title)) {
+                hints.add(title);
+                hints.add(joinNonBlank(title, city));
+            }
+        }
+        return hints.stream()
+                .filter(hint -> !hint.isBlank())
+                .limit(8)
+                .toList();
+    }
+
+    private List<String> filialCrawlUrls(Company company) {
+        if (company.getFilial() == null || company.getFilial().isEmpty()) {
+            return List.of();
+        }
+
+        LinkedHashSet<String> urls = new LinkedHashSet<>();
+        for (Filial filial : company.getFilial()) {
+            if (filial == null || isBlank(filial.getUrl())) {
+                continue;
+            }
+            String url = filial.getUrl().trim();
+            if (isLikelyPublicBusinessUrl(url)) {
+                urls.add(url);
+            }
+        }
+        return urls.stream()
+                .limit(properties.getSearch().getCrawlResultLimit())
                 .toList();
     }
 
@@ -1122,15 +1176,8 @@ public class CompanyResearchService {
         }
 
         String companyName = normalizeForMatch(company.getTitle());
-        if (!companyName.isBlank() && haystack.contains(companyName)) {
-            return true;
-        }
-
         String city = normalizeForMatch(company.getCity());
         boolean hasCity = !city.isBlank() && haystack.contains(city);
-        if (!hasCity) {
-            return false;
-        }
 
         String category = company.getCategoryCompany() == null ? "" : company.getCategoryCompany().getCategoryTitle();
         String subCategory = company.getSubCategory() == null ? "" : company.getSubCategory().getSubCategoryTitle();
@@ -1138,11 +1185,38 @@ public class CompanyResearchService {
         tokens.add(category);
         tokens.add(subCategory);
         tokens.addAll(products == null ? List.of() : products);
-
-        return tokens.stream()
+        boolean hasBusinessToken = tokens.stream()
                 .map(this::normalizeForMatch)
                 .filter(token -> token.length() >= 4)
                 .anyMatch(haystack::contains);
+
+        boolean hasFilialSignal = filialSearchHints(company).stream()
+                .map(this::normalizeForMatch)
+                .filter(token -> token.length() >= 4)
+                .anyMatch(haystack::contains);
+
+        if (!companyName.isBlank() && haystack.contains(companyName)) {
+            return hasCity || hasFilialSignal || hasBusinessToken || isTrustedLocalDirectory(result.url());
+        }
+
+        if (!hasCity && !hasFilialSignal) {
+            return false;
+        }
+
+        return hasBusinessToken;
+    }
+
+    private boolean isTrustedLocalDirectory(String url) {
+        String host = host(url == null ? "" : url.trim());
+        return List.of(
+                "2gis.ru",
+                "go.2gis.com",
+                "yell.ru",
+                "banya.ru",
+                "zoon.ru",
+                "yandex.ru",
+                "maps.yandex.ru"
+        ).contains(host);
     }
 
     private List<String> cleanList(List<String> values) {
@@ -1217,7 +1291,9 @@ public class CompanyResearchService {
                 || lower.contains("are you not a robot")
                 || lower.contains("я не робот")
                 || lower.contains("please confirm that you are not a robot")
-                || lower.contains("решение частых проблем");
+                || lower.contains("решение частых проблем")
+                || lower.contains("нет такой страницы")
+                || lower.contains("sitemap");
     }
 
     private String limit(String value, int maxLength) {

@@ -1,8 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
-import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
@@ -16,24 +15,15 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class WhatsAppGroupLinkSyncService {
 
-    private static final Pattern WHATSAPP_INVITE_URL = Pattern.compile(
-            "(?i)^https?://chat\\.whatsapp\\.com/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$"
-    );
-
     private final WhatsAppProperties properties;
     private final WhatsAppService whatsAppService;
-    private final CompanyRepository companyRepository;
+    private final WhatsAppGroupCompanyLinker groupCompanyLinker;
     private final AppSettingService appSettingService;
 
     public static final boolean DEFAULT_ENABLED = true;
@@ -152,8 +142,20 @@ public class WhatsAppGroupLinkSyncService {
             return new SyncClientResult(0, 0);
         }
 
+        List<Company> companiesWithChatUrl = null;
         for (WhatsAppGroupInfo group : groups) {
-            linked += syncGroup(group);
+            if (group == null || !hasText(group.groupId())) {
+                continue;
+            }
+
+            int groupLinked = groupCompanyLinker.linkByInvite(group.groupId(), group.inviteLink());
+            if (groupLinked == 0 && !hasText(group.inviteLink())) {
+                if (companiesWithChatUrl == null) {
+                    companiesWithChatUrl = groupCompanyLinker.companiesWithChatUrl();
+                }
+                groupLinked = groupCompanyLinker.linkByGroupName(group.groupId(), group.name(), companiesWithChatUrl);
+            }
+            linked += groupLinked;
         }
 
         if (linked > 0) {
@@ -195,58 +197,6 @@ public class WhatsAppGroupLinkSyncService {
             );
         }
         return value;
-    }
-
-    private int syncGroup(WhatsAppGroupInfo group) {
-        if (group == null || !hasText(group.groupId())) {
-            return 0;
-        }
-
-        Optional<String> inviteCode = whatsAppInviteCode(group.inviteLink());
-        if (inviteCode.isEmpty()) {
-            return 0;
-        }
-
-        String code = inviteCode.get();
-        List<Company> candidates = companyRepository.findByUrlChatContainingIgnoreCase(code);
-        int updated = 0;
-        for (Company candidate : candidates) {
-            if (!code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))
-                    || Objects.equals(candidate.getGroupId(), group.groupId())) {
-                continue;
-            }
-
-            String previousGroupId = candidate.getGroupId();
-            candidate.setGroupId(group.groupId());
-            companyRepository.save(candidate);
-            updated++;
-            if (hasText(previousGroupId)) {
-                log.info("WhatsApp groupId for company id={} title='{}' refreshed by invite link: {} -> {}",
-                        candidate.getId(), candidate.getTitle(), previousGroupId, group.groupId());
-            } else {
-                log.info("WhatsApp groupId={} linked by invite link to company id={} title='{}'",
-                        group.groupId(), candidate.getId(), candidate.getTitle());
-            }
-        }
-        return updated;
-    }
-
-    private static Optional<String> whatsAppInviteCode(String value) {
-        if (!hasText(value)) {
-            return Optional.empty();
-        }
-
-        String trimmed = value.trim();
-        if (trimmed.matches("^[A-Za-z0-9_-]{10,}$")) {
-            return Optional.of(trimmed.toLowerCase(Locale.ROOT));
-        }
-
-        Matcher matcher = WHATSAPP_INVITE_URL.matcher(trimmed);
-        if (!matcher.matches()) {
-            return Optional.empty();
-        }
-
-        return Optional.of(matcher.group(1).toLowerCase(Locale.ROOT));
     }
 
     private static boolean hasText(String value) {

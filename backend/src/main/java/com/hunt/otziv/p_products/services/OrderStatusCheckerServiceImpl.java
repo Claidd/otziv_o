@@ -86,13 +86,24 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         String clientId = order.getManager().getClientId();
         String groupId = order.getCompany().getGroupId();
 
-        String message = orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
+        if (orderPaymentMessageBuilder.shouldSkipPublishedPayment(order)) {
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            orderRepository.save(order);
+            log.info("Счет после публикации пропущен: заказ {} по продукту 'Восстановление' без суммы к оплате",
+                    order.getId());
+            return STATUS_PUBLIC;
+        }
 
         if (!immediateClientMessagesEnabled()) {
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
             orderRepository.save(order);
             log.info("Счет после публикации не отправлен: моментальные клиентские сообщения выключены, orderId={}",
                     order.getId());
+            return STATUS_PUBLIC;
+        }
+
+        String message = preparePublishedPaymentMessage(order);
+        if (message == null) {
             return STATUS_PUBLIC;
         }
 
@@ -108,6 +119,19 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
             paymentInvoiceRetryScheduler.scheduleRetry(order);
         }
         return appliedStatus;
+    }
+
+    private String preparePublishedPaymentMessage(Order order) {
+        try {
+            return orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
+        } catch (RuntimeException e) {
+            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+            orderRepository.save(order);
+            paymentInvoiceRetryScheduler.scheduleRetry(order);
+            log.warn("Заказ {} опубликован, но счет клиенту не подготовлен. Публикация не откатывается.",
+                    order.getId(), e);
+            return null;
+        }
     }
 
     private boolean immediateClientMessagesEnabled() {

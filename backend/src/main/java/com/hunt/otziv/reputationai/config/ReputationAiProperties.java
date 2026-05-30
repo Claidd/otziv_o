@@ -99,7 +99,7 @@ public class ReputationAiProperties {
         private String apiMode = "completion";
         private String model = "yandexgpt";
         private Duration timeout = Duration.ofMinutes(6);
-        private int maxTokens = 16000;
+        private int maxTokens = 24000;
         private int maxToolCalls = 24;
         private String searchContextSize = "high";
         private String searchRegion = "";

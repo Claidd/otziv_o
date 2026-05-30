@@ -92,7 +92,7 @@ public class OpenAiResponsesClient {
     }
 
     public boolean usesExternalSearchContext() {
-        return useYandex() && !useYandexResponsesApi();
+        return useYandex();
     }
 
     public OpenAiLastCheck lastCheck() {
@@ -370,7 +370,7 @@ public class OpenAiResponsesClient {
         if (useYandex()) {
             return createYandexResponse(
                     "company-deep-research-report",
-                    yandexResearchInstructions(instructions),
+                    yandexResearchInstructions(instructions, useYandexResponsesApi()),
                     input,
                     0.2,
                     true,
@@ -411,7 +411,7 @@ public class OpenAiResponsesClient {
             OpenAiResearchReportOptions optionsForSchema = options;
             return createYandexResponse(
                     "company-research-report",
-                    yandexResearchInstructions(instructions),
+                    yandexResearchInstructions(instructions, useYandexResponsesApi()),
                     input,
                     0.2,
                     true,
@@ -455,7 +455,7 @@ public class OpenAiResponsesClient {
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-sources-refresh",
-                    yandexResearchInstructions(instructions),
+                    yandexResearchInstructions(instructions, useYandexResponsesApi()),
                     input,
                     0.15,
                     true,
@@ -499,7 +499,7 @@ public class OpenAiResponsesClient {
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-gap-enrichment",
-                    yandexResearchInstructions(instructions),
+                    yandexResearchInstructions(instructions, useYandexResponsesApi()),
                     input,
                     0.18,
                     true,
@@ -543,7 +543,7 @@ public class OpenAiResponsesClient {
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-report-rewrite",
-                    yandexResearchInstructions(instructions),
+                    yandexResearchInstructions(instructions, false),
                     input,
                     0.18,
                     true,
@@ -582,7 +582,7 @@ public class OpenAiResponsesClient {
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-section-rewrite",
-                    yandexResearchInstructions(instructions),
+                    yandexResearchInstructions(instructions, false),
                     input,
                     0.18,
                     true,
@@ -701,12 +701,19 @@ public class OpenAiResponsesClient {
         return new OpenAiResponseResult("", response.text(), "yandexgpt", model, response.inputTokens(), response.outputTokens(), response.errorMessage());
     }
 
-    private String yandexResearchInstructions(String instructions) {
-        if (useYandexResponsesApi()) {
+    private String yandexResearchInstructions(String instructions, boolean webSearch) {
+        if (useYandexResponsesApi() && webSearch) {
             return instructions + "\n\n"
                     + "Важно: используй подключенный инструмент web_search для публичной проверки компании, источников, карточек, "
                     + "сайта, цен, филиалов, отзывов и спорных фактов. Не ограничивайся памятью модели. Сохраняй реальные URL "
-                    + "в sources и не утверждай неподтвержденные факты без пометки.";
+                    + "в sources и не утверждай неподтвержденные факты без пометки. Если источник совпадает только по названию, "
+                    + "но противоречит CRM-городу, адресу, категории, филиалу или типу бизнеса, не используй его как факт о компании; "
+                    + "вынеси его максимум в warnings как одноименный/сомнительный источник.";
+        }
+        if (useYandexResponsesApi()) {
+            return instructions + "\n\n"
+                    + "Важно: в этом запросе web_search не подключен. Не утверждай, что сделал новый живой поиск. "
+                    + "Используй только CRM-факты, сохраненные sources, переданные выдержки и результаты предыдущего поиска.";
         }
         return instructions + "\n\n"
                 + "Важно: ты работаешь через YandexGPT без встроенного web-search. Используй только CRM-факты, ручные URL, "
@@ -727,7 +734,7 @@ public class OpenAiResponsesClient {
     ) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", yandexModelUri());
-        body.put("instructions", instructions);
+        body.put("instructions", yandexResponsesInstructions(instructions, jsonObject, webSearch, schemaName));
         body.put("input", input);
         body.put("temperature", temperature);
         body.put("max_output_tokens", maxTokens);
@@ -738,17 +745,85 @@ public class OpenAiResponsesClient {
             body.put("tool_choice", "auto");
             body.put("max_tool_calls", properties.getYandex().getMaxToolCalls());
         }
-        if (schema != null && !isBlank(schemaName)) {
+        if (!webSearch && schema != null && !isBlank(schemaName)) {
             body.put("text", Map.of("format", Map.of(
                     "type", "json_schema",
                     "name", schemaName,
                     "strict", true,
                     "schema", schema
             )));
-        } else if (jsonObject) {
+        } else if (!webSearch && jsonObject) {
             body.put("text", Map.of("format", Map.of("type", "json_object")));
         }
         return body;
+    }
+
+    private String yandexResponsesInstructions(String instructions, boolean jsonObject, boolean webSearch, String schemaName) {
+        if (!webSearch || !jsonObject) {
+            return instructions;
+        }
+        return instructions + "\n\n"
+                + "Техническое ограничение Yandex Responses: при web_search нельзя использовать отдельный response_format. "
+                + "Поэтому верни строго один валидный JSON-объект без Markdown, без пояснений до или после JSON, "
+                + "с теми же полями и типами, которые запрошены в исходной инструкции.\n\n"
+                + yandexJsonContractInstruction(schemaName) + "\n\n"
+                + "Это должен быть НЕ мини-отчет. Делай отчет уровня хорошего ChatGPT/OpenAI-исследования: "
+                + "плотная аналитика, фактчекинг, таблицы, списки, спорные места и практические выводы для карточки компании. "
+                + "Для профиля maximum верни 14-16 крупных sections и развернутые body: "
+                + "ключевые разделы про профиль бизнеса, услуги/товары/цены, филиалы/логистику, удобства, отзывы, доверие, "
+                + "УТП, сотрудников, условия заказа, риски и что еще собирать должны быть аналитическими markdown-блоками, "
+                + "а не одним абзацем. Ориентир: минимум 900-1500 знаков для ключевого раздела, таблицы там, где они запрошены, "
+                + "30 идей для отзывов полностью. Если конкретные данные не найдены, не сокращай раздел: перечисли, какие поля "
+                + "проверены, что подтверждено, что не найдено и что менеджеру нужно уточнить. "
+                + "Для quality/maximum отчета верни 18-22 sources, если столько релевантных публичных URL реально найдено; "
+                + "не останавливайся на 7-10 sources без причины, а если релевантных источников меньше, объясни это в warnings.\n\n"
+                + "Эталонный каркас sections: Краткая сводка; Профиль бизнеса; Услуги, товары и цены; "
+                + "Филиалы и логистика; Удобства и клиентский опыт; Репутационные темы из отзывов; "
+                + "Доверие и доказательства; Клиентские сценарии и УТП; Сотрудники и компетенции; "
+                + "Акции и условия заказа; Сроки, аудитория и ограничения; Риски качества данных и возражения; "
+                + "Что ещё собирать; Дополнительный публичный дозбор; Идеи для постов и карточки; "
+                + "Идеи для отзывов; Главный вывод. Если по схеме максимум 16 sections, объединяй "
+                + "\"Дополнительный публичный дозбор\" с \"Что ещё собирать\", но не теряй содержание.";
+    }
+
+    private String yandexJsonContractInstruction(String schemaName) {
+        String normalized = schemaName == null ? "" : schemaName.trim();
+        if ("company_research_report".equals(normalized) || "company_deep_research_report".equals(normalized)) {
+            return """
+                    JSON-контракт для ответа:
+                    {
+                      "sections": [
+                        {"title": "Краткая сводка", "body": "markdown-фрагмент без заголовка section"}
+                      ],
+                      "sources": [
+                        {
+                          "title": "Название источника",
+                          "url": "https://...",
+                          "type": "official_site|map_card|directory|review_platform|social|legal|aggregator|media|other",
+                          "usedFor": ["услуги", "цены", "адрес"],
+                          "confidence": "high|medium|low",
+                          "note": "что подтверждает источник или почему он спорный"
+                        }
+                      ],
+                      "warnings": ["спорные источники, старые адреса, непроверенные цены, что нужно уточнить"]
+                    }
+                    Не добавляй поля вне этого объекта. section.body должен содержать Markdown: абзацы, списки и таблицы, но весь ответ целиком остается чистым JSON.
+                    Для стандартного и максимального отчета sources должен стремиться к 18-22 объектам, если столько релевантных URL найдено. Не добавляй конкурентов, мусорные каталоги и дубли только ради количества.
+                    """.stripIndent().trim();
+        }
+        if ("company_research_sources_refresh".equals(normalized)) {
+            return """
+                    JSON-контракт для ответа:
+                    {"sources":[{"title":"","url":"","type":"official_site|map_card|directory|review_platform|social|legal|aggregator|media|other","usedFor":[],"confidence":"high|medium|low","note":""}],"warnings":[]}
+                    """.stripIndent().trim();
+        }
+        if ("company_research_gap_enrichment".equals(normalized)) {
+            return """
+                    JSON-контракт для ответа:
+                    {"section":{"title":"Автодосбор по рекомендациям","body":"markdown-фрагмент"},"sources":[{"title":"","url":"","type":"official_site|map_card|directory|review_platform|social|legal|aggregator|media|other","usedFor":[],"confidence":"high|medium|low","note":""}],"warnings":[]}
+                    """.stripIndent().trim();
+        }
+        return "JSON-контракт: верни один валидный JSON-объект по полям, описанным в задаче; не добавляй текст до или после объекта.";
     }
 
     private Map<String, Object> yandexWebSearchTool(String searchContextSize) {

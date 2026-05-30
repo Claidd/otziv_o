@@ -1,16 +1,20 @@
 package com.hunt.otziv.p_products.status;
 
+import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
+import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -29,6 +33,8 @@ public class OrderStatusNotificationService {
     private final WhatsAppService whatsAppService;
     private final TelegramService telegramService;
     private final MaxBotClient maxBotClient;
+    private final WhatsAppAuthAlertService whatsAppAuthAlertService;
+    private final PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     public boolean sendMessageToGroup(
             String title,
@@ -49,7 +55,7 @@ public class OrderStatusNotificationService {
             String message
     ) {
         log.info("📨 Отправка короткого отчёта в клиентский чат");
-        String sentChannel = sendToActiveClientChat(order, clientId, groupId, message);
+        String sentChannel = sendProgressToActiveClientChat(order, clientId, groupId, message);
         if (sentChannel != null) {
             log.info("✅ Короткий отчёт клиенту отправлен через {}", sentChannel);
             return true;
@@ -58,6 +64,31 @@ public class OrderStatusNotificationService {
         log.warn("⚠️ Короткий отчёт компании {} не отправлен в активный клиентский мессенджер",
                 companyTitle(order));
         return false;
+    }
+
+    private String sendProgressToActiveClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message
+    ) {
+        ChatPlatform activePlatform = activeChatPlatform(order);
+        Long telegramChatId = telegramGroupChatId(order);
+        Long maxChatId = maxGroupChatId(order);
+        Long companyId = order != null && order.getCompany() != null ? order.getCompany().getId() : null;
+
+        return switch (activePlatform) {
+            case WHATSAPP -> hasText(groupId)
+                    ? sendToWhatsApp(order, clientId, groupId, publicationProgressPreferenceService.appendPlainOptOutHint(message))
+                    : missingActiveChannel("WhatsApp", order);
+            case TELEGRAM -> telegramChatId != null
+                    ? sendProgressToTelegram(telegramChatId, companyId, message)
+                    : missingActiveChannel("Telegram", order);
+            case MAX -> maxChatId != null
+                    ? sendToMax(maxChatId, publicationProgressPreferenceService.appendPlainOptOutHint(message))
+                    : missingActiveChannel("MAX", order);
+            case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
+        };
     }
 
     public boolean sendInformationalMessageToClientChat(
@@ -125,7 +156,7 @@ public class OrderStatusNotificationService {
         log.info("🔹 Активный канал по ссылке: {}", activePlatform);
 
         String sentChannel = switch (activePlatform) {
-            case WHATSAPP -> hasText(groupId) ? sendToWhatsApp(clientId, groupId, message) : missingActiveChannel("WhatsApp", order);
+            case WHATSAPP -> hasText(groupId) ? sendToWhatsApp(order, clientId, groupId, message) : missingActiveChannel("WhatsApp", order);
             case TELEGRAM -> telegramChatId != null ? sendToTelegram(telegramChatId, message) : missingActiveChannel("Telegram", order);
             case MAX -> maxChatId != null ? sendToMax(maxChatId, message) : missingActiveChannel("MAX", order);
             case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
@@ -140,6 +171,7 @@ public class OrderStatusNotificationService {
     }
 
     private String sendToWhatsApp(
+            Order order,
             String clientId,
             String groupId,
             String message
@@ -153,12 +185,48 @@ public class OrderStatusNotificationService {
         }
 
         if (result.isOk()) {
+            whatsAppAuthAlertService.notifyRecovered(
+                    clientId,
+                    "моментальная отправка клиенту",
+                    LocalDateTime.now().withNano(0),
+                    order == null || order.getManager() == null ? List.of() : List.of(order.getManager())
+            );
             return "WhatsApp";
         }
 
         log.warn("⚠️ Сообщение в WhatsApp-группу не прошло: code={}, error={}",
                 result.code(), result.displayError());
+        if (isWhatsAppAuthUnavailable(result.code(), result.displayError())) {
+            notifyManagerAboutWhatsAppAuthIssue(order, clientId, result.code(), result.displayError());
+        }
         return null;
+    }
+
+    private boolean isWhatsAppAuthUnavailable(String code, String readable) {
+        String normalized = ((code == null ? "" : code) + " " + (readable == null ? "" : readable))
+                .toLowerCase(Locale.ROOT);
+        return normalized.contains("authenticated=false")
+                || normalized.contains("\"authenticated\":false")
+                || normalized.contains("\"authenticated\": false")
+                || normalized.contains("\"state\":\"qr\"")
+                || normalized.contains("\"state\": \"qr\"")
+                || normalized.contains("\"hasqr\":true")
+                || normalized.contains("\"hasqr\": true")
+                || normalized.contains("scan it")
+                || normalized.contains("не авториз");
+    }
+
+    private void notifyManagerAboutWhatsAppAuthIssue(Order order, String clientId, String code, String readable) {
+        whatsAppAuthAlertService.notifyAuthIssue(
+                clientId,
+                companyTitle(order),
+                "моментальная отправка клиенту",
+                code,
+                readable,
+                LocalDateTime.now().withNano(0),
+                null,
+                order == null || order.getManager() == null ? List.of() : List.of(order.getManager())
+        );
     }
 
     private String sendToTelegram(
@@ -178,6 +246,27 @@ public class OrderStatusNotificationService {
         }
 
         log.warn("⚠️ Сообщение в Telegram-группу {} не отправлено", telegramChatId);
+        return null;
+    }
+
+    private String sendProgressToTelegram(
+            Long telegramChatId,
+            Long companyId,
+            String message
+    ) {
+        boolean sent;
+        try {
+            sent = telegramService.sendPublicationProgressMessage(telegramChatId, message, companyId);
+        } catch (Exception e) {
+            log.warn("⚠️ Ошибка при отправке короткого отчёта в Telegram-группу {}", telegramChatId, e);
+            return null;
+        }
+
+        if (sent) {
+            return "Telegram";
+        }
+
+        log.warn("⚠️ Короткий отчёт в Telegram-группу {} не отправлен", telegramChatId);
         return null;
     }
 
@@ -227,36 +316,40 @@ public class OrderStatusNotificationService {
     }
 
     private void notifyManagerAboutFallback(String title, Order order) {
-        String managerChatId = order.getManager() != null && order.getManager().getUser() != null
-                && order.getManager().getUser().getTelegramChatId() != null
-                ? String.valueOf(order.getManager().getUser().getTelegramChatId())
-                : null;
+        try {
+            Long managerChatId = managerTelegramChatId(order);
+            if (managerChatId == null || !hasDetails(order) || order == null || order.getCompany() == null) {
+                return;
+            }
 
-        if (STATUS_TO_CHECK.equals(title) && hasManagerWithTelegram(order) && hasText(managerChatId)) {
-            String url = "https://o-ogo.ru/orders/all_orders?status=В%20проверку";
-            String text = companyTitle(order) + " готов - На проверку\n" + url;
-            telegramService.sendMessage(Long.parseLong(managerChatId), text);
-            log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → В проверку", managerChatId);
-        }
+            if (STATUS_TO_CHECK.equals(title)) {
+                String url = "https://o-ogo.ru/orders/all_orders?status=В%20проверку";
+                String text = companyTitle(order) + " готов - На проверку\n" + url;
+                telegramService.sendMessage(managerChatId, text);
+                log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → В проверку", managerChatId);
+            }
 
-        if (STATUS_PUBLIC.equals(title) && hasManagerWithTelegram(order) && hasText(managerChatId)) {
-            String url = "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
-            String text = companyTitle(order) + " Опубликован\n" + url;
-            telegramService.sendMessage(Long.parseLong(managerChatId), text);
-            log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → Опубликовано", managerChatId);
+            if (STATUS_PUBLIC.equals(title)) {
+                String url = "https://o-ogo.ru/orders/all_orders?status=Опубликовано";
+                String text = companyTitle(order) + " Опубликован\n" + url;
+                telegramService.sendMessage(managerChatId, text);
+                log.info("📬 Уведомление менеджеру отправлено в Telegram: {} → Опубликовано", managerChatId);
+            }
+        } catch (Exception e) {
+            log.warn("Fallback-уведомление менеджеру не отправлено. Статус заказа продолжит меняться, orderId={}",
+                    order != null ? order.getId() : null, e);
         }
     }
 
-    private boolean hasManagerWithTelegram(Order order) {
+    private Long managerTelegramChatId(Order order) {
         try {
-            return order != null
-                    && order.getManager() != null
-                    && order.getManager().getUser() != null
-                    && order.getManager().getUser().getTelegramChatId() != null
-                    && hasDetails(order)
-                    && order.getCompany() != null;
+            return order != null && order.getManager() != null && order.getManager().getUser() != null
+                    ? order.getManager().getUser().getTelegramChatId()
+                    : null;
         } catch (Exception e) {
-            return false;
+            log.warn("Не удалось прочитать Telegram chatId менеджера для fallback-уведомления, orderId={}",
+                    order != null ? order.getId() : null, e);
+            return null;
         }
     }
 

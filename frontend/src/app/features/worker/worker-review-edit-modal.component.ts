@@ -7,6 +7,16 @@ import {
   trackWorkerOption
 } from './worker-board.config';
 
+const REVIEW_PUBLICATION_MAX_FUTURE_DAYS = 90;
+
+function localDateInputValue(daysFromToday = 0): string {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export type WorkerReviewEditDraftChange = {
   [K in keyof ReviewEditDraft]: {
     field: K;
@@ -35,6 +45,7 @@ export class WorkerReviewEditModalComponent {
   @Input() canEditVigul = false;
   @Input() canOnlyUnsetVigul = false;
   @Input() canDelete = false;
+  readonly reviewPublicationDateMax = localDateInputValue(REVIEW_PUBLICATION_MAX_FUTURE_DAYS);
 
   @Output() readonly closed = new EventEmitter<void>();
   @Output() readonly submitted = new EventEmitter<void>();

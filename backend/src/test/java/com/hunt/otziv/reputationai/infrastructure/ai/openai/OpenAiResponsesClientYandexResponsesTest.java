@@ -39,15 +39,17 @@ class OpenAiResponsesClientYandexResponsesTest {
 
             JsonNode sent = objectMapper.readTree(requestBody.get());
             assertThat(sent.path("model").asText()).isEqualTo("gpt://test-folder/yandexgpt/rc");
-            assertThat(sent.path("max_output_tokens").asInt()).isEqualTo(16000);
+            assertThat(sent.path("max_output_tokens").asInt()).isEqualTo(24000);
             assertThat(sent.path("tools").path(0).path("type").asText()).isEqualTo("web_search");
             assertThat(sent.path("tools").path(0).path("search_context_size").asText()).isEqualTo("high");
             assertThat(sent.path("tool_choice").asText()).isEqualTo("auto");
             assertThat(sent.path("max_tool_calls").asInt()).isEqualTo(24);
-            assertThat(sent.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
-            assertThat(sent.path("text").path("format").path("name").asText()).isEqualTo("company_research_report");
-            assertThat(sent.path("text").path("format").path("strict").asBoolean()).isTrue();
+            assertThat(sent.has("text")).isFalse();
             assertThat(sent.path("instructions").asText()).contains("web_search");
+            assertThat(sent.path("instructions").asText()).contains("валидный JSON-объект");
+            assertThat(sent.path("instructions").asText()).contains("JSON-контракт для ответа");
+            assertThat(sent.path("instructions").asText()).contains("НЕ мини-отчет");
+            assertThat(sent.path("instructions").asText()).contains("Эталонный каркас sections");
         } finally {
             server.stop(0);
         }
@@ -62,7 +64,7 @@ class OpenAiResponsesClientYandexResponsesTest {
         properties.getYandex().setResponsesBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
         properties.getYandex().setModel("yandexgpt/rc");
         properties.getYandex().setTimeout(Duration.ofSeconds(5));
-        properties.getYandex().setMaxTokens(16000);
+        properties.getYandex().setMaxTokens(24000);
         properties.getYandex().setMaxToolCalls(24);
         properties.getYandex().setSearchContextSize("high");
 

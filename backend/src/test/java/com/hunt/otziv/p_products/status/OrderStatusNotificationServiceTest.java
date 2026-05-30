@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_messages.PublicationProgressPreferenceService;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -11,6 +12,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +24,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.never;
@@ -44,6 +49,11 @@ class OrderStatusNotificationServiceTest {
 
     @Mock
     private MaxBotClient maxBotClient;
+    @Mock
+    private WhatsAppAuthAlertService whatsAppAuthAlertService;
+
+    @Mock
+    private PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     @Test
     void sendMessageToGroupSetsSuccessStatusWhenWhatsAppReturnsOk() {
@@ -66,6 +76,12 @@ class OrderStatusNotificationServiceTest {
         assertTrue(result);
         assertSame(success, order.getStatus());
         verify(orderRepository).save(order);
+        verify(whatsAppAuthAlertService).notifyRecovered(
+                eq("client"),
+                eq("моментальная отправка клиенту"),
+                any(),
+                any()
+        );
         verifyNoInteractions(telegramService);
         verifyNoInteractions(maxBotClient);
     }
@@ -159,6 +175,96 @@ class OrderStatusNotificationServiceTest {
     }
 
     @Test
+    void sendMessageToGroupKeepsFallbackStatusWhenManagerTelegramUserIsLazy() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithLazyManager(10L, "Компания");
+        OrderStatus fallback = status("Опубликовано");
+
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
+
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано",
+                order,
+                "client",
+                null,
+                "message",
+                "Выставлен счет"
+        );
+
+        assertFalse(result);
+        assertSame(fallback, order.getStatus());
+        verifyNoInteractions(telegramService);
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(maxBotClient);
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void sendMessageToGroupAlertsManagerWhenWhatsAppWaitsForQr() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        OrderStatus fallback = status("Опубликовано");
+
+        when(whatsAppService.sendMessageToGroup("client", "group", "message"))
+                .thenReturn("{\"status\":\"error\",\"code\":\"whatsapp_not_ready\",\"error\":\"authenticated=false state=qr\"}");
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано",
+                order,
+                "client",
+                "group",
+                "message",
+                "Выставлен счет"
+        );
+
+        assertFalse(result);
+        assertSame(fallback, order.getStatus());
+        verify(whatsAppAuthAlertService).notifyAuthIssue(
+                eq("client"),
+                eq("Компания"),
+                eq("моментальная отправка клиенту"),
+                eq("whatsapp_not_ready"),
+                contains("authenticated=false"),
+                any(),
+                eq(null),
+                any()
+        );
+        verify(telegramService).sendMessage(
+                123L,
+                "Компания Опубликован\nhttps://o-ogo.ru/orders/all_orders?status=Опубликовано"
+        );
+        verify(orderRepository).save(order);
+    }
+
+    @Test
+    void sendMessageToGroupDoesNotAlertManagerDuringWhatsAppWarmup() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        OrderStatus fallback = status("Опубликовано");
+
+        when(whatsAppService.sendMessageToGroup("client", "group", "message"))
+                .thenReturn("{\"status\":\"error\",\"code\":\"not_ready\",\"error\":\"authenticated=true state=authenticated hasQr=false client is not ready\"}");
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(fallback);
+        boolean result = service.sendMessageToGroup(
+                "Опубликовано",
+                order,
+                "client",
+                "group",
+                "message",
+                "Выставлен счет"
+        );
+
+        assertFalse(result);
+        assertSame(fallback, order.getStatus());
+        verify(whatsAppAuthAlertService, never()).notifyAuthIssue(any(), any(), any(), any(), any(), any(), any(), any());
+        verify(telegramService).sendMessage(
+                123L,
+                "Компания Опубликован\nhttps://o-ogo.ru/orders/all_orders?status=Опубликовано"
+        );
+        verify(orderRepository).save(order);
+    }
+
+    @Test
     void sendMessageToGroupReturnsFalseAndKeepsFallbackStatusWhenActiveTelegramThrows() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
@@ -199,7 +305,8 @@ class OrderStatusNotificationServiceTest {
         OrderStatus currentStatus = status("Публикация");
         order.setStatus(currentStatus);
 
-        when(telegramService.sendMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.")).thenReturn(true);
+        when(telegramService.sendPublicationProgressMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.", null))
+                .thenReturn(true);
 
         boolean result = service.sendProgressMessageToClientChat(
                 order,
@@ -210,9 +317,49 @@ class OrderStatusNotificationServiceTest {
 
         assertTrue(result);
         assertSame(currentStatus, order.getStatus());
-        verify(telegramService).sendMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.");
+        verify(telegramService).sendPublicationProgressMessage(-100L, "Компания. Опубликован новый отзыв 3 / 10.", null);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(maxBotClient);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void sendProgressMessageToClientChatAddsOptOutHintForWhatsApp() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        String message = "Компания. Опубликован новый отзыв 3 / 10.";
+        String messageWithHint = message + "\n\nЕсли вы не хотите получать отчет о каждом отзыве, напишите в чат: отключить оповещения о каждой публикации.";
+
+        when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
+        when(whatsAppService.sendMessageToGroup("client", "group", messageWithHint)).thenReturn("ok");
+
+        boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message);
+
+        assertTrue(result);
+        verify(whatsAppService).sendMessageToGroup("client", "group", messageWithHint);
+        verifyNoInteractions(telegramService);
+        verifyNoInteractions(maxBotClient);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void sendProgressMessageToClientChatAddsOptOutHintForMax() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setUrlChat("https://max.ru/join/SharedToken123");
+        order.getCompany().setMaxGroupChatId(-200L);
+        String message = "Компания. Опубликован новый отзыв 3 / 10.";
+        String messageWithHint = message + "\n\nЕсли вы не хотите получать отчет о каждом отзыве, напишите в чат: отключить оповещения о каждой публикации.";
+
+        when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
+        when(maxBotClient.sendMessageToChat(-200L, messageWithHint)).thenReturn(true);
+
+        boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message);
+
+        assertTrue(result);
+        verify(maxBotClient).sendMessageToChat(-200L, messageWithHint);
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(telegramService);
         verifyNoInteractions(orderRepository);
     }
 
@@ -240,7 +387,9 @@ class OrderStatusNotificationServiceTest {
                 orderStatusService,
                 whatsAppService,
                 telegramService,
-                maxBotClient
+                maxBotClient,
+                whatsAppAuthAlertService,
+                publicationProgressPreferenceService
         );
     }
 
@@ -251,6 +400,25 @@ class OrderStatusNotificationServiceTest {
 
         Manager manager = new Manager();
         manager.setUser(user(telegramChatId));
+        order.setManager(manager);
+
+        OrderDetails detail = new OrderDetails();
+        detail.setOrder(order);
+        order.setDetails(List.of(detail));
+        return order;
+    }
+
+    private Order orderWithLazyManager(Long id, String companyTitle) {
+        Order order = new Order();
+        order.setId(id);
+        order.setCompany(company(companyTitle));
+
+        Manager manager = new Manager() {
+            @Override
+            public User getUser() {
+                throw new RuntimeException("Could not initialize proxy - no session");
+            }
+        };
         order.setManager(manager);
 
         OrderDetails detail = new OrderDetails();

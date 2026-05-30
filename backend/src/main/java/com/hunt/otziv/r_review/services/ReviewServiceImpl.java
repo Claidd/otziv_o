@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -50,6 +51,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
+import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.requireAllowed;
+import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.requireAllowedAfterPrevious;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 
 
@@ -75,6 +78,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewBotChangeService reviewBotChangeService;
     private final ReviewEditService reviewEditService;
     private final OrderStatusCheckerService orderStatusCheckerService;
+    private final BusinessAuditService businessAuditService;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -737,6 +741,9 @@ public class ReviewServiceImpl implements ReviewService {
 
         boolean isChanged = false;
         boolean publishChanged = false;
+        String oldText = saveReview.getText();
+        LocalDate oldPublishedDate = saveReview.getPublishedDate();
+        boolean oldPublish = saveReview.isPublish();
 
         Product dtoProduct = reviewDTO.getProduct();
         Product currentProduct = saveReview.getProduct();
@@ -880,6 +887,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+            validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
             log.info("Обновляем дату публикации отзыва");
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
@@ -887,12 +895,58 @@ public class ReviewServiceImpl implements ReviewService {
 
         if (isChanged) {
             reviewRepository.save(saveReview);
+            recordReviewAudit(saveReview, oldText, oldPublishedDate, oldPublish);
         }
         if (reassignBotAfterSave) {
             reviewBotChangeService.changeBot(reviewId);
         }
         if (publishChanged) {
             synchronizeOrderCounter(saveReview);
+        }
+    }
+
+    private void recordReviewAudit(Review review, String oldText, LocalDate oldPublishedDate, boolean oldPublish) {
+        Long orderId = Optional.ofNullable(review)
+                .map(Review::getOrderDetails)
+                .map(OrderDetails::getOrder)
+                .map(Order::getId)
+                .orElse(null);
+
+        if (!Objects.equals(oldText, review.getText())) {
+            businessAuditService.recordSafely(
+                    "review_text_changed",
+                    "review",
+                    review.getId(),
+                    orderId,
+                    review.getId(),
+                    oldText,
+                    review.getText(),
+                    null
+            );
+        }
+        if (!Objects.equals(oldPublishedDate, review.getPublishedDate())) {
+            businessAuditService.recordSafely(
+                    "review_publish_date_changed",
+                    "review",
+                    review.getId(),
+                    orderId,
+                    review.getId(),
+                    oldPublishedDate,
+                    review.getPublishedDate(),
+                    null
+            );
+        }
+        if (!Objects.equals(oldPublish, review.isPublish())) {
+            businessAuditService.recordSafely(
+                    "review_publish_flag_changed",
+                    "review",
+                    review.getId(),
+                    orderId,
+                    review.getId(),
+                    oldPublish,
+                    review.isPublish(),
+                    null
+            );
         }
     }
 
@@ -1035,6 +1089,7 @@ public class ReviewServiceImpl implements ReviewService {
             isChanged = true;
         }
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+            validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
         }
@@ -1068,11 +1123,15 @@ public class ReviewServiceImpl implements ReviewService {
                 return false;
             }
 
+            List<ReviewDTO> reviewDtos = orderDetailsDTO.getReviews().stream()
+                    .sorted(Comparator.comparing(ReviewDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                    .toList();
+
             Bot firstBot = reviews.get(0).getBot();
             int botCounter = safeBotCounter(firstBot);
             LocalDate startDate = getLocalDate(botCounter);
 
-            int totalReviews = orderDetailsDTO.getReviews().size();
+            int totalReviews = reviewDtos.size();
             int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
             LocalDate endDate = startDate.plusDays(monthsNeeded * 28L - 1);
 
@@ -1080,7 +1139,7 @@ public class ReviewServiceImpl implements ReviewService {
             List<LocalDate> publishDates = randomPublicationDates(startDate, endDate, totalReviews, random);
 
             for (int i = 0; i < totalReviews; i++) {
-                ReviewDTO reviewDTO = orderDetailsDTO.getReviews().get(i);
+                ReviewDTO reviewDTO = reviewDtos.get(i);
                 LocalDate publishDate = publishDates.get(i);
                 checkUpdateReview(reviewDTO, publishDate);
                 log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
@@ -1103,6 +1162,25 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewDTO == null || isBlankOrPlaceholder(reviewDTO.getText());
     }
 
+    private void validateManualPublicationDate(Review review, LocalDate date) {
+        requireAllowed(date);
+        requireAllowedAfterPrevious(date, previousReviewPublicationDate(review));
+    }
+
+    private LocalDate previousReviewPublicationDate(Review review) {
+        if (review == null || review.getId() == null || review.getOrderDetails() == null || review.getOrderDetails().getId() == null) {
+            return null;
+        }
+
+        return reviewRepository.findAllByOrderDetailsId(review.getOrderDetails().getId()).stream()
+                .filter(item -> item != null && item.getId() != null && item.getId() < review.getId())
+                .sorted(Comparator.comparing(Review::getId).reversed())
+                .map(Review::getPublishedDate)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
     private List<LocalDate> randomPublicationDates(
             LocalDate startDate,
             LocalDate initialEndDate,
@@ -1118,10 +1196,18 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         List<LocalDate> selectedDates = new ArrayList<>();
-        for (int i = 0; i < totalReviews; i++) {
-            int fromIndex = (int) ((long) i * candidates.size() / totalReviews);
-            int toIndex = (int) (((long) (i + 1) * candidates.size() / totalReviews) - 1);
-            selectedDates.add(candidates.get(random.nextInt(fromIndex, toIndex + 1)));
+        selectedDates.add(candidates.get(0));
+
+        if (totalReviews == 1) {
+            return selectedDates;
+        }
+
+        List<LocalDate> remainingCandidates = candidates.subList(1, candidates.size());
+        int remainingReviews = totalReviews - 1;
+        for (int i = 0; i < remainingReviews; i++) {
+            int fromIndex = (int) ((long) i * remainingCandidates.size() / remainingReviews);
+            int toIndex = (int) (((long) (i + 1) * remainingCandidates.size() / remainingReviews) - 1);
+            selectedDates.add(remainingCandidates.get(random.nextInt(fromIndex, toIndex + 1)));
         }
 
         Collections.sort(selectedDates);
@@ -1153,6 +1239,7 @@ public class ReviewServiceImpl implements ReviewService {
         boolean isChanged = false;
 
         if (!saveReview.isPublish()) {
+            requireAllowed(localDate);
             saveReview.setPublishedDate(localDate);
             isChanged = true;
         }
@@ -1499,7 +1586,10 @@ public class ReviewServiceImpl implements ReviewService {
         if (orderDetails == null || orderDetails.getReviews() == null) {
             return Collections.emptyList();
         }
-        return orderDetails.getReviews();
+        return orderDetails.getReviews().stream()
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(Review::getId, Comparator.nullsLast(Long::compareTo)))
+                .toList();
     }
 
     private int safeBotCounter(Bot bot) {

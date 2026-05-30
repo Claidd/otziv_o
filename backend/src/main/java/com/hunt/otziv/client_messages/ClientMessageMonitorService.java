@@ -78,8 +78,24 @@ public class ClientMessageMonitorService {
                     0,
                     0,
                     0,
+                    0,
+                    0,
+                    0,
                     archiveDiagnostics(nowStorage),
-                    scenarioSummaries(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of()),
+                    scenarioSummaries(
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            workerEnabled,
+                            liveEnabled,
+                            windowAllowed,
+                            paused
+                    ),
                     List.of(),
                     List.of()
             );
@@ -92,6 +108,12 @@ public class ClientMessageMonitorService {
         );
         Map<ClientMessageScenario, Long> dueByScenario = scenarioCountMap(
                 stateRepository.countDueByScenario(ScheduledMessageStateStatus.ACTIVE, nowStorage)
+        );
+        Map<ClientMessageScenario, Long> missingChannelByScenario = nativeScenarioCountMap(
+                stateRepository.countMissingChannelBindingsByScenario(ScheduledMessageStateStatus.ACTIVE.name())
+        );
+        Map<ClientMessageScenario, Long> dueMissingChannelByScenario = nativeScenarioCountMap(
+                stateRepository.countDueMissingChannelBindingsByScenario(ScheduledMessageStateStatus.ACTIVE.name(), nowStorage)
         );
         Map<ClientMessageScenario, Long> sentTodayByScenario = attemptCountMap(
                 attemptRepository.countByStatusSinceGrouped(ScheduledMessageAttemptStatus.SENT, todayStartStorage)
@@ -125,6 +147,9 @@ public class ClientMessageMonitorService {
                 ScheduledMessageAttemptStatus.SKIPPED,
                 todayStartStorage
         );
+        long missingChannelBindings = missingChannelByScenario.values().stream().mapToLong(Long::longValue).sum();
+        long waitingForWindow = waitingForWindow(dueByScenario, workerEnabled, windowAllowed, paused);
+        long readyToSendNow = readyToSendNow(dueByScenario, dueMissingChannelByScenario, workerEnabled, liveEnabled, windowAllowed, paused);
         LocalDateTime nextAttemptAt = stateRepository.findNextAttempt(
                         ScheduledMessageStateStatus.ACTIVE,
                         PageRequest.of(0, 1)
@@ -148,13 +173,29 @@ public class ClientMessageMonitorService {
                 pauseReason,
                 stateRepository.countByStatus(ScheduledMessageStateStatus.ACTIVE),
                 stateRepository.countDue(ScheduledMessageStateStatus.ACTIVE, nowStorage),
+                readyToSendNow,
+                waitingForWindow,
+                missingChannelBindings,
                 sentToday,
                 failedToday,
                 skippedToday,
                 stateRepository.countByStatus(ScheduledMessageStateStatus.DISABLED),
                 archiveDiagnostics(nowStorage),
-                scenarioSummaries(activeByScenario, dueByScenario, sentTodayByScenario, sentSevenDaysByScenario, failedTodayByScenario, skippedTodayByScenario),
-                queueStates.stream().map((state) -> queueItem(state, resolution)).toList(),
+                scenarioSummaries(
+                        activeByScenario,
+                        dueByScenario,
+                        missingChannelByScenario,
+                        dueMissingChannelByScenario,
+                        sentTodayByScenario,
+                        sentSevenDaysByScenario,
+                        failedTodayByScenario,
+                        skippedTodayByScenario,
+                        workerEnabled,
+                        liveEnabled,
+                        windowAllowed,
+                        paused
+                ),
+                queueStates.stream().map((state) -> queueItem(state, resolution, nowStorage, workerEnabled, liveEnabled, windowAllowed, paused)).toList(),
                 recentAttempts.stream().map((attempt) -> attemptItem(attempt, resolution)).toList()
         );
     }
@@ -215,21 +256,35 @@ public class ClientMessageMonitorService {
     private List<ClientMessageMonitorResponse.ScenarioSummary> scenarioSummaries(
             Map<ClientMessageScenario, Long> activeByScenario,
             Map<ClientMessageScenario, Long> dueByScenario,
+            Map<ClientMessageScenario, Long> missingChannelByScenario,
+            Map<ClientMessageScenario, Long> dueMissingChannelByScenario,
             Map<ClientMessageScenario, Long> sentTodayByScenario,
             Map<ClientMessageScenario, Long> sentSevenDaysByScenario,
             Map<ClientMessageScenario, Long> failedTodayByScenario,
-            Map<ClientMessageScenario, Long> skippedTodayByScenario
+            Map<ClientMessageScenario, Long> skippedTodayByScenario,
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean windowAllowed,
+            boolean paused
     ) {
         List<ClientMessageMonitorResponse.ScenarioSummary> result = new ArrayList<>();
         for (ClientMessageScenario scenario : ClientMessageScenario.values()) {
             ScheduledClientMessageAttempt lastError = attemptRepository
                     .findFirstByScenarioAndStatusOrderByAttemptedAtDesc(scenario, ScheduledMessageAttemptStatus.FAILED)
                     .orElse(null);
+            if (lastError != null && isResolvedConfigurationError(lastError, liveEnabled)) {
+                lastError = null;
+            }
+            long dueNow = dueByScenario.getOrDefault(scenario, 0L);
+            long dueMissingChannel = dueMissingChannelByScenario.getOrDefault(scenario, 0L);
             result.add(new ClientMessageMonitorResponse.ScenarioSummary(
                     scenario.name(),
                     scenarioLabel(scenario),
                     activeByScenario.getOrDefault(scenario, 0L),
-                    dueByScenario.getOrDefault(scenario, 0L),
+                    dueNow,
+                    readyToSendNow(scenario, dueNow, dueMissingChannel, workerEnabled, liveEnabled, windowAllowed, paused),
+                    waitingForWindow(scenario, dueNow, workerEnabled, windowAllowed, paused),
+                    missingChannelByScenario.getOrDefault(scenario, 0L),
                     sentTodayByScenario.getOrDefault(scenario, 0L),
                     sentSevenDaysByScenario.getOrDefault(scenario, 0L),
                     failedTodayByScenario.getOrDefault(scenario, 0L),
@@ -243,10 +298,16 @@ public class ClientMessageMonitorService {
 
     private ClientMessageMonitorResponse.QueueItem queueItem(
             ScheduledClientMessageState state,
-            Resolution resolution
+            Resolution resolution,
+            LocalDateTime nowStorage,
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean windowAllowed,
+            boolean paused
     ) {
         TargetInfo target = targetInfo(state.getCompanyId(), state.getOrderId(), resolution);
         ClientMessagePreview preview = previewService.preview(state, target.order(), target.company());
+        QueueReadiness readiness = queueReadiness(state, target.company(), nowStorage, workerEnabled, liveEnabled, windowAllowed, paused);
         return new ClientMessageMonitorResponse.QueueItem(
                 state.getId(),
                 state.getScenario().name(),
@@ -269,6 +330,9 @@ public class ClientMessageMonitorService {
                 preview.channelDetails(),
                 preview.paymentInstructionSource(),
                 preview.messagePreview(),
+                readiness.code(),
+                readiness.label(),
+                readiness.reason(),
                 target.link()
         );
     }
@@ -399,6 +463,7 @@ public class ClientMessageMonitorService {
             case ARCHIVE_REORDER_OFFER -> "Архивные компании";
             case BAD_REVIEW_INVOICE -> "Счет после плохого отзыва";
             case BAD_REVIEW_AUTO_BAN -> "Автобан после плохих";
+            case REVIEW_RECOVERY_NOTICE -> "Восстановление отзыва";
         };
     }
 
@@ -434,10 +499,189 @@ public class ClientMessageMonitorService {
         return result;
     }
 
+    private Map<ClientMessageScenario, Long> nativeScenarioCountMap(List<ScheduledClientMessageStateRepository.NativeScenarioCount> counts) {
+        Map<ClientMessageScenario, Long> result = new EnumMap<>(ClientMessageScenario.class);
+        counts.forEach((count) -> {
+            try {
+                result.put(ClientMessageScenario.valueOf(count.getScenario()), count.getTotal());
+            } catch (RuntimeException ignored) {
+                // Ignore stale or unknown scenario values from older rows.
+            }
+        });
+        return result;
+    }
+
     private Map<ClientMessageScenario, Long> attemptCountMap(List<ScheduledClientMessageAttemptRepository.ScenarioCount> counts) {
         Map<ClientMessageScenario, Long> result = new EnumMap<>(ClientMessageScenario.class);
         counts.forEach((count) -> result.put(count.getScenario(), count.getTotal()));
         return result;
+    }
+
+    private long readyToSendNow(
+            Map<ClientMessageScenario, Long> dueByScenario,
+            Map<ClientMessageScenario, Long> dueMissingChannelByScenario,
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean windowAllowed,
+            boolean paused
+    ) {
+        return Arrays.stream(ClientMessageScenario.values())
+                .mapToLong(scenario -> readyToSendNow(
+                        scenario,
+                        dueByScenario.getOrDefault(scenario, 0L),
+                        dueMissingChannelByScenario.getOrDefault(scenario, 0L),
+                        workerEnabled,
+                        liveEnabled,
+                        windowAllowed,
+                        paused
+                ))
+                .sum();
+    }
+
+    private long readyToSendNow(
+            ClientMessageScenario scenario,
+            long dueNow,
+            long dueMissingChannel,
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean windowAllowed,
+            boolean paused
+    ) {
+        if (!workerEnabled || paused || dueNow <= 0) {
+            return 0;
+        }
+        if (requiresClientMessageSlot(scenario) && !windowAllowed) {
+            return 0;
+        }
+        if (requiresClientChat(scenario) && !liveEnabled) {
+            return 0;
+        }
+        long blockedByChannel = requiresClientChat(scenario) ? dueMissingChannel : 0;
+        return Math.max(0, dueNow - blockedByChannel);
+    }
+
+    private long waitingForWindow(
+            Map<ClientMessageScenario, Long> dueByScenario,
+            boolean workerEnabled,
+            boolean windowAllowed,
+            boolean paused
+    ) {
+        if (!workerEnabled || paused || windowAllowed) {
+            return 0;
+        }
+        return Arrays.stream(ClientMessageScenario.values())
+                .filter(this::requiresClientMessageSlot)
+                .mapToLong(scenario -> dueByScenario.getOrDefault(scenario, 0L))
+                .sum();
+    }
+
+    private long waitingForWindow(
+            ClientMessageScenario scenario,
+            long dueNow,
+            boolean workerEnabled,
+            boolean windowAllowed,
+            boolean paused
+    ) {
+        return workerEnabled && !paused && !windowAllowed && requiresClientMessageSlot(scenario) ? dueNow : 0;
+    }
+
+    private boolean isResolvedConfigurationError(ScheduledClientMessageAttempt attempt, boolean liveEnabled) {
+        if (attempt == null || !liveEnabled) {
+            return false;
+        }
+        String code = attempt.getErrorCode();
+        return "client_messages_live_disabled".equals(code);
+    }
+
+    private QueueReadiness queueReadiness(
+            ScheduledClientMessageState state,
+            Company company,
+            LocalDateTime nowStorage,
+            boolean workerEnabled,
+            boolean liveEnabled,
+            boolean windowAllowed,
+            boolean paused
+    ) {
+        if (!workerEnabled) {
+            return new QueueReadiness("WORKER_DISABLED", "Автоответчик выключен", "Фоновый worker выключен настройкой");
+        }
+        if (paused) {
+            return new QueueReadiness("PAUSED", "Пауза", "Автоответчик временно на паузе");
+        }
+        if (state.getLockedUntil() != null && state.getLockedUntil().isAfter(nowStorage)) {
+            return new QueueReadiness("LOCKED", "В обработке", "Кандидат уже взят worker-ом");
+        }
+        if (state.getNextAttemptAt() == null || state.getNextAttemptAt().isAfter(nowStorage)) {
+            return new QueueReadiness("SCHEDULED", "Ждет расписания", "Время следующей попытки еще не наступило");
+        }
+        if (requiresClientChat(state.getScenario()) && !liveEnabled) {
+            return new QueueReadiness("DRY_RUN", "Dry-run", "Реальная отправка фоновых сообщений выключена");
+        }
+        if (requiresClientChat(state.getScenario()) && missingChannelBinding(company)) {
+            return new QueueReadiness("MISSING_CHANNEL", "Нет chatId", missingChannelReason(company));
+        }
+        if (requiresClientMessageSlot(state.getScenario()) && !windowAllowed) {
+            return new QueueReadiness("WAITING_WINDOW", "Ждет окно", "Отправка начнется в ближайшее рабочее окно");
+        }
+        return new QueueReadiness(
+                requiresClientChat(state.getScenario()) ? "READY_TO_SEND" : "READY_TO_RUN",
+                requiresClientChat(state.getScenario()) ? "Готово к отправке" : "Готово к действию",
+                requiresClientChat(state.getScenario()) ? "Канал привязан, окно открыто" : "Системное действие готово"
+        );
+    }
+
+    private boolean requiresClientMessageSlot(ClientMessageScenario scenario) {
+        return scenario != ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE
+                && scenario != ClientMessageScenario.BAD_REVIEW_AUTO_BAN;
+    }
+
+    private boolean requiresClientChat(ClientMessageScenario scenario) {
+        return scenario == ClientMessageScenario.CLIENT_TEXT_REMINDER
+                || scenario == ClientMessageScenario.REVIEW_CHECK_REMINDER
+                || scenario == ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY
+                || scenario == ClientMessageScenario.PAYMENT_INVOICE_RETRY
+                || scenario == ClientMessageScenario.PAYMENT_REMINDER
+                || scenario == ClientMessageScenario.ARCHIVE_REORDER_OFFER
+                || scenario == ClientMessageScenario.BAD_REVIEW_INVOICE
+                || scenario == ClientMessageScenario.REVIEW_RECOVERY_NOTICE;
+    }
+
+    private boolean missingChannelBinding(Company company) {
+        String channel = expectedChannel(company);
+        return switch (channel) {
+            case "WhatsApp" -> company == null || !hasText(company.getGroupId());
+            case "Telegram" -> company == null || company.getTelegramGroupChatId() == null;
+            case "MAX" -> company == null || company.getMaxGroupChatId() == null;
+            default -> true;
+        };
+    }
+
+    private String missingChannelReason(Company company) {
+        String channel = expectedChannel(company);
+        return switch (channel) {
+            case "WhatsApp" -> "Для WhatsApp-группы не задан groupId";
+            case "Telegram" -> "Для Telegram-группы не задан chatId";
+            case "MAX" -> "Для MAX-группы не задан chatId";
+            default -> "Ссылка на чат не указана или не распознана";
+        };
+    }
+
+    private String expectedChannel(Company company) {
+        if (company == null || !hasText(company.getUrlChat())) {
+            return "ANY";
+        }
+        String normalized = company.getUrlChat().trim().toLowerCase();
+        if (normalized.matches("^(?:https?://)?chat\\.whatsapp\\.com/.+")) {
+            return "WhatsApp";
+        }
+        if (normalized.matches("^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/.+")
+                || normalized.startsWith("tg://resolve?")) {
+            return "Telegram";
+        }
+        if (normalized.matches("^(?:https?://)?(?:web\\.)?max\\.ru/.+")) {
+            return "MAX";
+        }
+        return "ANY";
     }
 
     private ClientMessageMonitorResponse.ArchiveDiagnostics archiveDiagnostics(LocalDateTime nowStorage) {
@@ -563,6 +807,13 @@ public class ClientMessageMonitorService {
             String link,
             Order order,
             Company company
+    ) {
+    }
+
+    private record QueueReadiness(
+            String code,
+            String label,
+            String reason
     ) {
     }
 }

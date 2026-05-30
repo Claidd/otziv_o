@@ -5,6 +5,7 @@ import com.hunt.otziv.archive.ReviewCheckArchiveService;
 import com.hunt.otziv.archive.ReviewCheckArchiveService.ArchivedReviewCheck;
 import com.hunt.otziv.archive.ReviewCheckArchiveService.ArchivedReviewCheckReview;
 import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.business_audit.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -46,6 +48,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.MAX_FUTURE_DAYS;
+import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.maxAllowedDate;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 
 @RestController
@@ -58,6 +62,7 @@ public class ApiReviewCheckController {
     private final ReviewService reviewService;
     private final CompanyService companyService;
     private final ReviewCheckArchiveService reviewCheckArchiveService;
+    private final BusinessAuditService businessAuditService;
 
     @GetMapping("/{orderDetailId}")
     public ReviewCheckResponse getReviewCheck(
@@ -125,6 +130,7 @@ public class ApiReviewCheckController {
     }
 
     @PostMapping("/{orderDetailId}/approve")
+    @Transactional
     public ReviewCheckResponse approveReviews(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckUpdateRequest request,
@@ -148,6 +154,17 @@ public class ApiReviewCheckController {
         if (!reviewService.updateOrderDetailAndReviewAndPublishDate(updateDto)) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось назначить даты публикации");
         }
+
+        businessAuditService.recordSafely(
+                "publication_allowed",
+                "order_detail",
+                orderDetailId,
+                order.getId(),
+                null,
+                null,
+                "Публикация",
+                "reviews=" + updateDto.getReviews().size()
+        );
 
         return buildResponse(orderDetailId, authentication);
     }
@@ -372,7 +389,7 @@ public class ApiReviewCheckController {
         List<Review> reviews = safeReviews(orderDetails);
         ReviewCheckPermissions permissions = permissions(authentication);
 
-        boolean approved = !reviews.isEmpty() && reviews.get(0).getPublishedDate() != null;
+        boolean approved = isApprovedForPublication(reviews);
         String workerFio = workerFio(reviews, order);
 
         return new ReviewCheckResponse(
@@ -401,7 +418,7 @@ public class ApiReviewCheckController {
         ArchivedReviewCheck archived = reviewCheckArchiveService.findByOrderDetailId(orderDetailId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Проверка отзывов не найдена"));
         ReviewCheckPermissions permissions = archivedPermissions(authentication);
-        boolean approved = !archived.reviews().isEmpty() && archived.reviews().get(0).publishedDate() != null;
+        boolean approved = isApprovedForPublicationArchived(archived.reviews());
 
         return new ReviewCheckResponse(
                 archived.orderDetailId(),
@@ -430,6 +447,22 @@ public class ApiReviewCheckController {
         Order order = requireOrder(orderDetails);
         Review review = requireReviewInDetails(orderDetails, reviewId);
         return toReviewResponse(review, orderDetails, order, permissions(authentication));
+    }
+
+    private boolean isApprovedForPublication(List<Review> reviews) {
+        return reviews != null
+                && !reviews.isEmpty()
+                && reviews.stream().allMatch(review -> review != null
+                && review.getPublishedDate() != null
+                && !isBlankOrPlaceholder(review.getText()));
+    }
+
+    private boolean isApprovedForPublicationArchived(List<ArchivedReviewCheckReview> reviews) {
+        return reviews != null
+                && !reviews.isEmpty()
+                && reviews.stream().allMatch(review -> review != null
+                && review.publishedDate() != null
+                && !isBlankOrPlaceholder(review.text()));
     }
 
     private OrderDetails reviewCheckDetails(UUID orderDetailId) {
@@ -666,7 +699,16 @@ public class ApiReviewCheckController {
         }
 
         try {
-            return LocalDate.parse(value);
+            LocalDate parsed = LocalDate.parse(value);
+            LocalDate maxAllowed = maxAllowedDate();
+            if (parsed.isAfter(maxAllowed)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Дата публикации слишком далеко: максимум " + maxAllowed
+                                + " (" + MAX_FUTURE_DAYS + " дней вперед)"
+                );
+            }
+            return parsed;
         } catch (DateTimeParseException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная дата публикации");
         }

@@ -14,11 +14,54 @@ import org.springframework.web.bind.annotation.RestController;
 public class ClientMessageMonitorController {
 
     private final ClientMessageMonitorService monitorService;
+    private final ClientMessageMaintenancePreviewService maintenancePreviewService;
 
     @GetMapping("/api/admin/client-messages/monitor")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public ClientMessageMonitorResponse monitor() {
         return monitorService.snapshot();
+    }
+
+    @GetMapping("/api/admin/client-messages/maintenance-preview")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ClientMessageMaintenancePreviewResponse maintenancePreview() {
+        return maintenancePreviewService.preview();
+    }
+
+    @PostMapping("/api/admin/client-messages/maintenance/company-statuses")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ClientMessageMaintenanceApplyResponse applyCompanyStatuses() {
+        return maintenancePreviewService.applyCompanyStatuses();
+    }
+
+    @PostMapping("/api/admin/client-messages/maintenance/payment-overdue")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ClientMessageMaintenanceApplyResponse applyPaymentOverdue() {
+        return maintenancePreviewService.applyPaymentOverdue();
+    }
+
+    @PostMapping("/api/admin/client-messages/maintenance/missing-bad-tasks")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ClientMessageMaintenanceApplyResponse applyMissingBadTasks() {
+        return maintenancePreviewService.applyMissingBadTasks();
+    }
+
+    @PostMapping("/api/admin/client-messages/maintenance/archive-offers")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ClientMessageMaintenanceApplyResponse blockInvalidArchiveOffers() {
+        return maintenancePreviewService.blockInvalidArchiveOffers();
+    }
+
+    @PostMapping("/api/admin/client-messages/maintenance/publication-dates")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ClientMessageMaintenanceApplyResponse repairPublicationDates() {
+        return maintenancePreviewService.repairPublicationDates();
+    }
+
+    @PostMapping("/api/admin/client-messages/maintenance/publication-completed")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ClientMessageMaintenanceApplyResponse completePublishedPublicationOrders() {
+        return maintenancePreviewService.completePublishedPublicationOrders();
     }
 
     @PutMapping("/api/admin/client-messages/monitor")

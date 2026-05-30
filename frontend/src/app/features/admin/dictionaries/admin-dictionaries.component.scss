@@ -386,6 +386,25 @@ tr.selected td:first-child {
   background: var(--otziv-light);
 }
 
+.status-pill.warning {
+  color: var(--otziv-warning);
+  background: rgba(255, 190, 11, 0.14);
+}
+
+.status-pill.danger {
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.1);
+}
+
+.monitor-queue-reason {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .usage-pill {
   display: inline-flex;
   width: fit-content;

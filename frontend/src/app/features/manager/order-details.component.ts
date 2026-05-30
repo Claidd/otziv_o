@@ -76,6 +76,20 @@ type ActiveOrderReviewFieldEdit = {
 const HIDDEN_PUBLISH_ORDER_STATUSES = new Set(['Новый', 'На проверке', 'В проверку', 'В прверку', 'Коррекция']);
 const REVIEW_HELP_ORDER_STATUSES = new Set(['новый']);
 const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
+const REVIEW_PUBLICATION_MAX_FUTURE_DAYS = 90;
+const REVIEW_PUBLICATION_MAX_GAP_DAYS = 30;
+
+function localDateInputValue(daysFromToday = 0): string {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromToday);
+  return formatDateInputValue(date);
+}
+
+function formatDateInputValue(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 @Component({
   selector: 'app-order-details',
@@ -137,6 +151,7 @@ export class OrderDetailsComponent {
   readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
   readonly browserOnline = signal(this.readBrowserOnline());
+  readonly reviewPublicationGlobalDateMax = localDateInputValue(REVIEW_PUBLICATION_MAX_FUTURE_DAYS);
 
   readonly layoutTitle = computed(() => this.details()?.title || 'Детали заказа');
   readonly reviews = computed(() => this.details()?.reviews ?? []);
@@ -517,10 +532,11 @@ export class OrderDetailsComponent {
     this.companyReportState.update((state) => {
       const canRefresh = state?.canRefresh ?? false;
       const hasReadyReport = !!job.report || !!state?.latestJob?.report;
+      const latestJob = job.report || !state?.latestJob?.report ? job : state.latestJob;
       return {
         companyId: job.companyId,
         companyName: job.companyName || state?.companyName || details.companyTitle,
-        latestJob: job,
+        latestJob,
         activeJob: active ? job : null,
         canStart: !active && (canRefresh || !hasReadyReport),
         canRefresh,
@@ -1797,6 +1813,34 @@ export class OrderDetailsComponent {
 
     this.reviewEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
     this.writeOrderDetailsSessionDraft();
+  }
+
+  reviewPublicationDateMaxFor(review: OrderReviewItem | null): string {
+    const previousDate = this.previousReviewPublicationDate(review);
+    if (!previousDate) {
+      return this.reviewPublicationGlobalDateMax;
+    }
+
+    const previous = new Date(`${previousDate}T00:00:00`);
+    if (Number.isNaN(previous.getTime())) {
+      return this.reviewPublicationGlobalDateMax;
+    }
+
+    previous.setDate(previous.getDate() + REVIEW_PUBLICATION_MAX_GAP_DAYS);
+    const sequenceMax = formatDateInputValue(previous);
+    return sequenceMax < this.reviewPublicationGlobalDateMax ? sequenceMax : this.reviewPublicationGlobalDateMax;
+  }
+
+  private previousReviewPublicationDate(review: OrderReviewItem | null): string | null {
+    if (!review) {
+      return null;
+    }
+
+    const previous = [...this.reviews()]
+      .filter((item) => item.id < review.id && !!item.publishedDate)
+      .sort((left, right) => right.id - left.id)[0];
+
+    return previous?.publishedDate || null;
   }
 
   saveReviewEdit(): void {

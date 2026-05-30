@@ -21,7 +21,7 @@ public class PageRoleClassifier {
     private static final List<String> SERVICE_TEXT_MARKERS = List.of(
             "лицензионное соглашение", "пользовательское соглашение", "политика конфиденциальности",
             "условия подписки", "служба поддержки", "правила сервиса", "войти или зарегистрироваться",
-            "регистрация и доступ", "частые вопросы"
+            "регистрация и доступ", "частые вопросы", "нет такой страницы"
     );
     private static final List<String> CATALOG_PATH_MARKERS = List.of(
             "/catalog", "/categories", "/category", "/ratings", "/rating", "/top", "/best",
@@ -94,6 +94,9 @@ public class PageRoleClassifier {
                 || titleOnly.contains("page not found")
                 || titleOnly.contains("страница не найдена")
                 || titleOnly.contains("not found")
+                || titleOnly.contains("нет такой страницы")
+                || lowerPath.contains("sitemap")
+                || haystack.contains("sitemap")
                 || SERVICE_TEXT_MARKERS.stream().anyMatch(titleOnly::contains)
                 || haystack.contains("seo title: лицензионное соглашение")
                 || haystack.contains("seo title: пользовательское соглашение")
