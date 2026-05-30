@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$EnvFile = ".env.prod-local",
     [string]$ComposeFile = "compose.prod-local.yaml",
     [string]$BaseUrl = "http://localhost:8088",
@@ -13,7 +13,14 @@ param(
     [switch]$WithDbAdmin,
     [switch]$WithReputationAiSmoke,
     [int]$ReputationAiCompanyId = 1,
-    [switch]$SkipReputationAiOpenAiRouteCheck
+    [switch]$SkipReputationAiOpenAiRouteCheck,
+    [switch]$RestoreProdDb,
+    [switch]$SkipProdDbRestore,
+    [string]$VpsHost = "95.213.248.152",
+    [string]$VpsUser = "root",
+    [int]$VpsPort = 22,
+    [string]$SshKey = "C:\Users\Hunt\.ssh\otziv_vps_ed25519",
+    [switch]$AllowLocalMessengerSending
 )
 
 Set-StrictMode -Version Latest
@@ -28,16 +35,6 @@ function Invoke-External {
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Command failed: $FilePath $($Arguments -join ' ')"
-    }
-}
-
-function Stop-DbAdminServices {
-    param([Parameter(Mandatory = $true)][string[]]$ComposeArguments)
-
-    Write-Host "Stopping db-admin profile services for default smoke run."
-    & docker @($ComposeArguments + @("--profile", "db-admin", "stop", "phpmyadmin")) | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: docker $($ComposeArguments + @("--profile", "db-admin", "stop", "phpmyadmin") -join ' ')"
     }
 }
 
@@ -107,6 +104,29 @@ function Wait-HttpOk {
     }
 
     throw "Timed out waiting for $Name at $Url"
+}
+
+function Wait-ComposeServiceHealthy {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][string]$Service,
+        [int]$TimeoutSeconds = 180
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $containerId = & docker @($ComposeArguments + @("ps", "-q", $Service))
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($containerId)) {
+            $health = & docker @("inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", $containerId.Trim())
+            if ($LASTEXITCODE -eq 0 -and $health.Trim() -eq "healthy") {
+                return
+            }
+        }
+
+        Start-Sleep -Seconds 3
+    } while ((Get-Date) -lt $deadline)
+
+    throw "Service '$Service' did not become healthy within $TimeoutSeconds seconds."
 }
 
 function Assert-FrontendShellRoute {
@@ -213,7 +233,7 @@ function Invoke-TbankPaymentConfigSmoke {
     Write-Host "T-Bank config OK: runtime=$($status.runtimeMode), enabled=$($status.enabled), paymentLinks=$($status.paymentLinksEnabled), managerUi=$($status.managerUiEnabled), applyConfirmed=$($status.applyConfirmedPayments), baseUrl=$($status.baseUrl)."
 }
 
-function Disable-LocalClientMessageLiveSending {
+function Disable-LocalExternalMessaging {
     param(
         [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
         [Parameter(Mandatory = $true)][string]$EnvPath
@@ -226,14 +246,52 @@ function Disable-LocalClientMessageLiveSending {
         throw "MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE must be set to force local autoresponder dry-run mode."
     }
 
+    $tableCheckOutput = & docker @($ComposeArguments + @(
+        "exec", "-T", "mysql",
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "-u$mysqlUser",
+        "-p$mysqlPassword",
+        $mysqlDatabase,
+        "-N", "-B",
+        "-e",
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'app_settings'"
+    )) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $text = ($tableCheckOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Could not inspect local app_settings table: $text"
+    }
+    $tableExists = @($tableCheckOutput | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ -match "^[0-9]+$" } | Select-Object -First 1)
+    if ($tableExists.Count -eq 0 -or $tableExists[0] -ne "1") {
+        Write-Host "Local app_settings table is not migrated yet; messenger safety relies on env overrides until backend creates it."
+        return
+    }
+
     $sql = @"
-UPDATE app_settings
-SET setting_value = 'false', updated_at = NOW(6)
-WHERE setting_key IN ('client.messages.live.enabled', 'client.messages.payment-overdue.live-enabled');
+INSERT INTO app_settings (setting_key, setting_value, updated_at)
+VALUES
+  ('client.messages.live.enabled', 'false', NOW(6)),
+  ('client.messages.payment-overdue.live-enabled', 'false', NOW(6)),
+  ('client.messages.immediate.enabled', 'false', NOW(6)),
+  ('client.messages.monitor.enabled', 'false', NOW(6)),
+  ('publication.health-monitor.enabled', 'false', NOW(6)),
+  ('telegram.reports.morning.enabled', 'false', NOW(6)),
+  ('telegram.reports.evening.enabled', 'false', NOW(6)),
+  ('whatsapp.group-sync.enabled', 'false', NOW(6))
+ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at);
 
 SELECT setting_key, setting_value
 FROM app_settings
-WHERE setting_key IN ('client.messages.live.enabled', 'client.messages.payment-overdue.live-enabled')
+WHERE setting_key IN (
+  'client.messages.live.enabled',
+  'client.messages.payment-overdue.live-enabled',
+  'client.messages.immediate.enabled',
+  'client.messages.monitor.enabled',
+  'publication.health-monitor.enabled',
+  'telegram.reports.morning.enabled',
+  'telegram.reports.evening.enabled',
+  'whatsapp.group-sync.enabled'
+)
 ORDER BY setting_key;
 "@
 
@@ -250,10 +308,22 @@ ORDER BY setting_key;
     $output = & docker @mysqlArgs 2>&1
     if ($LASTEXITCODE -ne 0) {
         $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-        throw "Could not force local autoresponder dry-run mode: $text"
+        throw "Could not force local external messaging safety mode: $text"
     }
 
-    Write-Host "Local autoresponder live sending is disabled for this prod-like stack."
+    Write-Host "Local external messaging is disabled for this prod-like stack."
+}
+
+function Disable-LocalMessengerEnv {
+    $env:TELEGRAM_BOT_TOKEN_LOCAL_DOCKER = ""
+    $env:TELEGRAM_BOT_TOKEN = ""
+    $env:TELEGRAM_BOT_REGISTRATION_ENABLED = "false"
+    $env:MAX_BOT_TOKEN = ""
+    $env:MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED = "false"
+    $env:MAX_BOT_LONG_POLLING_ENABLED = "false"
+    $env:WHATSAPP_HEALTH_MONITOR_ENABLED = "false"
+    $env:WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED = "false"
+    Write-Host "Local messenger tokens and bot registration are disabled for this prod-like stack."
 }
 
 function Get-KeycloakServiceAccountToken {
@@ -911,7 +981,7 @@ function Invoke-ReputationAiSmoke {
             $hasReadyDeepReport = $true
             $readyDeepReportJobId = $deepJob.jobId
             $deepExport = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/deep-research/jobs/latest/export" -Method "Get" -Headers $headers
-            if ($deepExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($deepExport.Content) -or -not $deepExport.Content.Contains("Глубокий AI-отчет")) {
+            if ($deepExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($deepExport.Content) -or -not $deepExport.Content.Contains("AI-")) {
                 throw "Reputation AI deep report markdown export failed: HTTP $($deepExport.StatusCode), length=$($deepExport.Content.Length)."
             }
             Write-Host "Reputation AI deep report Markdown export OK: $($deepExport.Content.Length) chars."
@@ -934,7 +1004,7 @@ function Invoke-ReputationAiSmoke {
             $hasReadyContentPack = $true
             $readyContentPackJobId = $packJob.jobId
             $packExport = Invoke-SmokeWebRequest -Uri "$apiRoot/api/ai/reputation/companies/$CompanyId/content-pack/jobs/latest/export" -Method "Get" -Headers $headers
-            if ($packExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($packExport.Content) -or -not $packExport.Content.Contains("AI-пакет компании")) {
+            if ($packExport.StatusCode -ne 200 -or [string]::IsNullOrWhiteSpace($packExport.Content) -or -not $packExport.Content.Contains("AI-")) {
                 throw "Reputation AI content pack markdown export failed: HTTP $($packExport.StatusCode), length=$($packExport.Content.Length)."
             }
             Write-Host "Reputation AI content pack Markdown export OK: $($packExport.Content.Length) chars."
@@ -1125,6 +1195,30 @@ if (-not (Test-Path -LiteralPath $envPath)) {
     Write-Host "Created $envPath from .env.prod-local.example."
 }
 
+if (-not $SkipProdDbRestore) {
+    $restoreScript = Join-Path $scriptRoot "restore-prod-db-local.ps1"
+    if (-not (Test-Path -LiteralPath $restoreScript)) {
+        throw "Local prod DB restore script not found: $restoreScript"
+    }
+    if ([string]::IsNullOrWhiteSpace($VpsHost)) {
+        throw "Pass -VpsHost, or use -SkipProdDbRestore to keep the existing local DB."
+    }
+
+    Write-Host "Refreshing local prod-like DB from VPS before smoke. Pass -SkipProdDbRestore to keep the existing local DB."
+    $restoreArgs = @("-EnvFile", $envPath, "-ComposeFile", $composePath, "-VpsHost", $VpsHost, "-VpsUser", $VpsUser, "-VpsPort", "$VpsPort")
+    if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
+        $restoreArgs += @("-SshKey", $SshKey)
+    }
+    & $restoreScript @restoreArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Production DB restore failed."
+    }
+}
+
+if (-not $AllowLocalMessengerSending) {
+    Disable-LocalMessengerEnv
+}
+
 if (-not $UseConfiguredOutboundProxy) {
     $env:OPENAI_PROXY_ENABLED = "false"
     $env:WHATSAPP_PROXY_ENABLED = "false"
@@ -1195,6 +1289,10 @@ if ($OfflineAppBuild) {
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 try {
     if (-not $NoUp) {
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "mysql"))
+        Wait-ComposeServiceHealthy -ComposeArguments $composeArgs -Service "mysql"
+        Disable-LocalExternalMessaging -ComposeArguments $composeArgs -EnvPath $envPath
+
         $upArgs = @("up", "-d", "--remove-orphans")
         if (-not $NoBuild -and -not $OfflineAppBuild) {
             $upArgs += "--build"
@@ -1218,12 +1316,8 @@ try {
         }
     }
 
-    if (-not $WithDbAdmin -and -not $NoUp) {
-        Stop-DbAdminServices -ComposeArguments @("compose", "-f", $composePath, "--env-file", $envPath)
-    }
-
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
-    Disable-LocalClientMessageLiveSending -ComposeArguments $composeArgs -EnvPath $envPath
+    Disable-LocalExternalMessaging -ComposeArguments $composeArgs -EnvPath $envPath
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline

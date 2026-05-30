@@ -234,6 +234,7 @@ select {
 
 .mobile-menu-toggle,
 .mobile-menu-heading,
+.mobile-personal-gamification,
 .mobile-personal-reminders {
   display: none;
 }
@@ -613,6 +614,11 @@ select {
   }
 
   .mobile-personal-reminders {
+    display: block;
+    margin-top: 1rem;
+  }
+
+  .mobile-personal-gamification {
     display: block;
     margin-top: 1rem;
   }

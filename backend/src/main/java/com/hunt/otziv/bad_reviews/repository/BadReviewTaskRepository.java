@@ -398,4 +398,23 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
             LocalDate scheduledDate,
             Collection<Manager> managers
     );
+
+    @Query("""
+        SELECT DISTINCT t
+        FROM BadReviewTask t
+        LEFT JOIN FETCH t.order o
+        LEFT JOIN FETCH o.worker ow
+        LEFT JOIN FETCH ow.user
+        LEFT JOIN FETCH o.manager om
+        LEFT JOIN FETCH om.user
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH t.sourceReview
+        LEFT JOIN FETCH t.worker w
+        LEFT JOIN FETCH w.user
+        WHERE t.status = :status
+          AND t.completedDate BETWEEN :from AND :to
+    """)
+    List<BadReviewTask> findDoneForGamificationBackfill(@Param("status") BadReviewTaskStatus status,
+                                                        @Param("from") LocalDate from,
+                                                        @Param("to") LocalDate to);
 }

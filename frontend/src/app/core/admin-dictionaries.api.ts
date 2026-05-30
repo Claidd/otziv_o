@@ -90,6 +90,162 @@ export interface AdminClientPublicationProgressReportSettings {
   enabled: boolean;
 }
 
+export interface AdminGamificationSettings {
+  enabled: boolean;
+  workerEnabled: boolean;
+  managerEnabled: boolean;
+  operatorEnabled: boolean;
+  marketologEnabled: boolean;
+  showInCabinet: boolean;
+  showInScore: boolean;
+  eventsEnabled: boolean;
+  shadowScoringEnabled: boolean;
+  updatedAt?: string | null;
+}
+
+export type AdminGamificationSettingsRequest = Omit<AdminGamificationSettings, 'updatedAt'>;
+
+export interface AdminGamificationEvent {
+  id: number;
+  eventType: string;
+  actorUserId?: number | null;
+  actorRole?: string | null;
+  actorName?: string | null;
+  orderId?: number | null;
+  reviewId?: number | null;
+  badReviewTaskId?: number | null;
+  recoveryTaskId?: number | null;
+  workerId?: number | null;
+  managerId?: number | null;
+  companyId?: number | null;
+  companyTitle?: string | null;
+  source?: string | null;
+  payload?: string | null;
+  plannedDate?: string | null;
+  actualDate?: string | null;
+  delayDays?: number | null;
+  timelinessBucket?: string | null;
+  timelinessMultiplier?: number | null;
+  createdAt: string;
+}
+
+export interface AdminGamificationEventTypeProgress {
+  eventType: string;
+  events: number;
+}
+
+export interface AdminGamificationActorProgress {
+  actorUserId?: number | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  events: number;
+}
+
+export interface AdminGamificationProgress {
+  from: string;
+  to: string;
+  days: number;
+  totalEvents: number;
+  eventTypes: AdminGamificationEventTypeProgress[];
+  topActors: AdminGamificationActorProgress[];
+}
+
+export interface AdminGamificationRule {
+  eventType: string;
+  enabled: boolean;
+  points: number;
+  updatedAt?: string | null;
+}
+
+export interface AdminGamificationRulesResponse {
+  rules: AdminGamificationRule[];
+}
+
+export interface AdminGamificationRulesRequest {
+  rules: Array<Pick<AdminGamificationRule, 'eventType' | 'enabled' | 'points'>>;
+}
+
+export interface AdminGamificationScorePreviewActor {
+  actorUserId?: number | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  totalEvents: number;
+  totalPoints: number;
+}
+
+export interface AdminGamificationScorePreview {
+  from: string;
+  to: string;
+  days: number;
+  totalPoints: number;
+  topActors: AdminGamificationScorePreviewActor[];
+}
+
+export interface AdminGamificationScoreLedger {
+  from: string;
+  to: string;
+  days: number;
+  totalEvents: number;
+  totalPoints: number;
+  previewPoints: number;
+  pointsDelta: number;
+  topActors: AdminGamificationScorePreviewActor[];
+}
+
+export interface AdminGamificationScoreLedgerRebuild {
+  from: string;
+  to: string;
+  days: number;
+  shadowScoringEnabled: boolean;
+  eventsReviewed: number;
+  entriesDeleted: number;
+  entriesCreated: number;
+  totalPoints: number;
+}
+
+export interface AdminGamificationBackfill {
+  from: string;
+  to: string;
+  days: number;
+  reviewedCandidates: number;
+  eventsCreated: number;
+  reviewPublishedReviewed: number;
+  reviewPublishedCreated: number;
+  orderPaidReviewed: number;
+  orderPaidCreated: number;
+  badReviewTaskDoneReviewed: number;
+  badReviewTaskDoneCreated: number;
+  reviewRecoveryTaskDoneReviewed: number;
+  reviewRecoveryTaskDoneCreated: number;
+  ledgerRebuild: AdminGamificationScoreLedgerRebuild;
+}
+
+export interface AdminGamificationBalance {
+  actorUserId?: number | null;
+  actorName?: string | null;
+  actorRole?: string | null;
+  totalEvents: number;
+  totalPoints: number;
+  reviewPublishedEvents: number;
+  reviewPublishedPoints: number;
+  orderPaidEvents: number;
+  orderPaidPoints: number;
+  badReviewTaskDoneEvents: number;
+  badReviewTaskDonePoints: number;
+  reviewRecoveryTaskDoneEvents: number;
+  reviewRecoveryTaskDonePoints: number;
+  onTimeEvents: number;
+  delayedEvents: number;
+  lostPoints: number;
+}
+
+export interface AdminGamificationBalances {
+  from: string;
+  to: string;
+  days: number;
+  balances: AdminGamificationBalance[];
+}
+
 export interface AdminClientMessageSettings {
   workerEnabled: boolean;
   liveEnabled: boolean;
@@ -711,6 +867,68 @@ export class AdminDictionariesApi {
       `${this.baseUrl}/settings/client-publication-progress-reports`,
       request
     );
+  }
+
+  getGamificationSettings(): Observable<AdminGamificationSettings> {
+    return this.http.get<AdminGamificationSettings>(`${this.baseUrl}/gamification/settings`);
+  }
+
+  updateGamificationSettings(request: AdminGamificationSettingsRequest): Observable<AdminGamificationSettings> {
+    return this.http.put<AdminGamificationSettings>(`${this.baseUrl}/gamification/settings`, request);
+  }
+
+  getGamificationEvents(limit = 50): Observable<AdminGamificationEvent[]> {
+    return this.http.get<AdminGamificationEvent[]>(`${this.baseUrl}/gamification/events`, {
+      params: { limit }
+    });
+  }
+
+  getGamificationProgress(days = 1): Observable<AdminGamificationProgress> {
+    return this.http.get<AdminGamificationProgress>(`${this.baseUrl}/gamification/progress`, {
+      params: { days }
+    });
+  }
+
+  getGamificationRules(): Observable<AdminGamificationRulesResponse> {
+    return this.http.get<AdminGamificationRulesResponse>(`${this.baseUrl}/gamification/rules`);
+  }
+
+  updateGamificationRules(request: AdminGamificationRulesRequest): Observable<AdminGamificationRulesResponse> {
+    return this.http.put<AdminGamificationRulesResponse>(`${this.baseUrl}/gamification/rules`, request);
+  }
+
+  getGamificationScorePreview(days = 1): Observable<AdminGamificationScorePreview> {
+    return this.http.get<AdminGamificationScorePreview>(`${this.baseUrl}/gamification/score-preview`, {
+      params: { days }
+    });
+  }
+
+  getGamificationScoreLedger(days = 1): Observable<AdminGamificationScoreLedger> {
+    return this.http.get<AdminGamificationScoreLedger>(`${this.baseUrl}/gamification/score-ledger`, {
+      params: { days }
+    });
+  }
+
+  rebuildGamificationScoreLedger(days = 1): Observable<AdminGamificationScoreLedgerRebuild> {
+    return this.http.post<AdminGamificationScoreLedgerRebuild>(
+      `${this.baseUrl}/gamification/score-ledger/rebuild`,
+      {},
+      { params: { days } }
+    );
+  }
+
+  backfillGamificationEvents(days = 1): Observable<AdminGamificationBackfill> {
+    return this.http.post<AdminGamificationBackfill>(
+      `${this.baseUrl}/gamification/events/backfill`,
+      {},
+      { params: { days } }
+    );
+  }
+
+  getGamificationBalances(days = 1): Observable<AdminGamificationBalances> {
+    return this.http.get<AdminGamificationBalances>(`${this.baseUrl}/gamification/balances`, {
+      params: { days }
+    });
   }
 
   getClientMessageSettings(): Observable<AdminClientMessageSettings> {

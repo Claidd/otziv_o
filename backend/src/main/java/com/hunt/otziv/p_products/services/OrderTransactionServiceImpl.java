@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
@@ -33,6 +34,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final BadReviewTaskService badReviewTaskService;
     private final NextOrderRequestService nextOrderRequestService;
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
+    private final GamificationEventService gamificationEventService;
 
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
@@ -46,7 +48,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             OrderStatusService orderStatusService,
             BadReviewTaskService badReviewTaskService,
             NextOrderRequestService nextOrderRequestService,
-            MobilePushBusinessNotificationService mobilePushBusinessNotificationService
+            MobilePushBusinessNotificationService mobilePushBusinessNotificationService,
+            GamificationEventService gamificationEventService
     ) {
         this.companyService = companyService;
         this.zpService = zpService;
@@ -57,6 +60,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.badReviewTaskService = badReviewTaskService;
         this.nextOrderRequestService = nextOrderRequestService;
         this.mobilePushBusinessNotificationService = mobilePushBusinessNotificationService;
+        this.gamificationEventService = gamificationEventService;
     }
 
     @Override
@@ -109,6 +113,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PAYMENT));
         orderRepository.save(order);
         if (!wasAlreadyPaid) {
+            gamificationEventService.recordOrderPaid(order);
             mobilePushBusinessNotificationService.notifyOwnersOrderPaid(order);
         }
         return true;

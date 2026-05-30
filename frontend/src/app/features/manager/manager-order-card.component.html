@@ -21,7 +21,6 @@
       {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
     </a>
     <div class="card-id-line">
-      <small class="order-id-badge" title="ID заказа">#{{ order.id }}</small>
       @if (hasMeaningfulNote(order.companyComments) || (selectedCompany && hasMeaningfulNote(order.orderComments))) {
         <app-company-note-trigger
           [note]="order.companyComments"
@@ -30,6 +29,7 @@
           (saveOrderNote)="orderNoteSaved.emit($event)"
         />
       }
+      <small class="order-id-badge" title="ID заказа">#{{ order.id }}</small>
     </div>
   </header>
 

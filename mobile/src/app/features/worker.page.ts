@@ -19,6 +19,7 @@ import {
   WorkerBoard,
   WorkerBoardSection,
   WorkerBoardSectionQuery,
+  WorkerBotItem,
   WorkerOption,
   WorkerReviewItem
 } from '../core/api.service';
@@ -351,6 +352,12 @@ import {
                 <small>{{ reminders.activeReminderCount() }}</small>
               }
             </button>
+            @if (permissions().canManageBots && workerBots().length) {
+              <button mobilePagerActions class="expand-list-button" type="button" (click)="openBotSheet()" aria-label="Аккаунты">
+                <span class="material-icons-sharp">manage_accounts</span>
+                <small>{{ workerBots().length }}</small>
+              </button>
+            }
             <button
               mobilePagerActions
               class="expand-list-button"
@@ -412,6 +419,39 @@ import {
                 <button type="button" [class.active]="selectedWorkerId() === worker.id" (click)="changeWorkerFilter(worker)">
                   {{ worker.label }}
                 </button>
+              }
+            </div>
+          </section>
+        }
+
+        @if (botSheetOpen()) {
+          <button class="worker-section-backdrop" type="button" aria-label="Закрыть аккаунты" (click)="closeBotSheet()"></button>
+          <section class="worker-section-sheet worker-filter-sheet" role="dialog" aria-modal="true" aria-label="Рабочие аккаунты">
+            <header>
+              <div>
+                <small>Аккаунты</small>
+                <h2>Рабочие аккаунты</h2>
+              </div>
+              <button type="button" class="icon-button" (click)="closeBotSheet()" aria-label="Закрыть">
+                <span class="material-icons-sharp">close</span>
+              </button>
+            </header>
+            <div class="worker-bot-list">
+              @for (bot of workerBots(); track bot.id) {
+                <article class="worker-bot-row" [class.inactive]="!bot.active">
+                  <header>
+                    <strong>{{ bot.fio || bot.login || ('#' + bot.id) }}</strong>
+                    <small>{{ bot.city || 'город не указан' }} · {{ bot.status || 'статус' }}</small>
+                  </header>
+                  <footer>
+                    <button type="button" (click)="copyBotValue(bot, 'login')">{{ copiedKey() === 'bot-login-' + bot.id ? 'готово' : 'логин' }}</button>
+                    <button type="button" (click)="copyBotValue(bot, 'password')">{{ copiedKey() === 'bot-password-' + bot.id ? 'готово' : 'пароль' }}</button>
+                    <a [href]="botBrowserUrlById(bot.id)" target="_blank" rel="noopener">вк</a>
+                    <button type="button" class="danger" (click)="deleteBot(bot)" [disabled]="isMutating('bot-' + bot.id + '-delete')">
+                      {{ isMutating('bot-' + bot.id + '-delete') ? '...' : 'удалить' }}
+                    </button>
+                  </footer>
+                </article>
               }
             </div>
           </section>
@@ -1066,6 +1106,73 @@ import {
       background: linear-gradient(145deg, rgba(108, 155, 207, 0.16) 0%, var(--otziv-white) 100%);
     }
 
+    .worker-bot-list {
+      display: grid;
+      gap: 0.5rem;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .worker-bot-row {
+      display: grid;
+      gap: 0.46rem;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 0.84rem;
+      padding: 0.62rem;
+      background: var(--otziv-white);
+    }
+
+    .worker-bot-row.inactive {
+      opacity: 0.7;
+    }
+
+    .worker-bot-row header,
+    .worker-bot-row footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.42rem;
+      min-width: 0;
+    }
+
+    .worker-bot-row strong,
+    .worker-bot-row small {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .worker-bot-row strong {
+      color: var(--otziv-dark);
+      font-size: 0.86rem;
+    }
+
+    .worker-bot-row footer {
+      flex-wrap: wrap;
+    }
+
+    .worker-bot-row footer button,
+    .worker-bot-row footer a {
+      display: inline-flex;
+      min-height: 1.9rem;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 999px;
+      padding: 0 0.62rem;
+      color: var(--otziv-primary);
+      background: var(--otziv-white);
+      font: 900 0.62rem/1 var(--otziv-font-family);
+      text-decoration: none;
+      flex: 1 1 4rem;
+    }
+
+    .worker-bot-row footer .danger {
+      color: var(--otziv-danger);
+    }
+
     .overdue-summary {
       display: grid;
       grid-template-columns: auto auto minmax(0, 1fr);
@@ -1169,6 +1276,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   readonly mutationKey = signal<string | null>(null);
   readonly sectionSheetOpen = signal(false);
   readonly workerSheetOpen = signal(false);
+  readonly botSheetOpen = signal(false);
   readonly listExpanded = signal(false);
   readonly boardNotice = signal<string | null>(null);
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
@@ -1189,6 +1297,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   readonly uploadingPhotoReviewId = signal<number | null>(null);
 
   readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
+  readonly workerBots = computed(() => this.board()?.bots ?? []);
   readonly workerOptions = computed(() => this.board()?.workerOptions ?? []);
   readonly workerFilterAvailable = computed(() => {
     this.auth.user();
@@ -1295,6 +1404,14 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   closeWorkerSheet(): void {
     this.workerSheetOpen.set(false);
+  }
+
+  openBotSheet(): void {
+    this.botSheetOpen.set(true);
+  }
+
+  closeBotSheet(): void {
+    this.botSheetOpen.set(false);
   }
 
   openAllSection(load = true): void {
@@ -1665,6 +1782,36 @@ export class WorkerPage implements OnInit, OnDestroy {
       vk: 'https://vk.com/'
     }[kind];
     await this.copyText(value, `${kind}-${review.id}`);
+  }
+
+  async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {
+    await this.copyText(kind === 'login' ? bot.login || '' : bot.password || '', `bot-${kind}-${bot.id}`);
+  }
+
+  botBrowserUrlById(botId: number): string {
+    return `/admin/dictionaries/accounts/${botId}/browser`;
+  }
+
+  async deleteBot(bot: WorkerBotItem): Promise<void> {
+    if (!bot?.id || this.isMutating(`bot-${bot.id}-delete`)) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить аккаунт',
+      message: `Удалить аккаунт "${bot.fio || bot.login || bot.id}"?`,
+      confirmText: 'Удалить',
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    await this.runMutation(
+      `bot-${bot.id}-delete`,
+      () => this.api.deleteWorkerBot(bot.id),
+      'Не удалось удалить аккаунт.'
+    );
   }
 
   async changeReviewBot(review: WorkerReviewItem): Promise<void> {

@@ -21,6 +21,7 @@ import {
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
+import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
@@ -95,6 +96,7 @@ type ChatBotLinkPoll = {
     AdminLayoutComponent,
     CompanyCreateModalComponent,
     FormsModule,
+    GamificationMeCardComponent,
     LoadErrorCardComponent,
     ManagerCompanyCardComponent,
     ManagerCompanyEditModalComponent,

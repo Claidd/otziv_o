@@ -217,11 +217,15 @@
       }
     </section>
 
+    <app-gamification-me-card class="mobile-personal-gamification" />
+
     <app-personal-reminders class="mobile-personal-reminders" mode="full" />
   </section>
 
   <section admin-right-content class="lead-stats worker-stats">
     <app-personal-reminders mode="alert" />
+
+    <app-gamification-me-card />
 
     @if (workerFilterAvailable()) {
       <label class="worker-filter-card">

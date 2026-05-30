@@ -52,8 +52,18 @@ public class OrderStatusNotificationService {
             String groupId,
             String message
     ) {
+        return sendProgressMessageToClientChat(order, clientId, groupId, message, true);
+    }
+
+    public boolean sendProgressMessageToClientChat(
+            Order order,
+            String clientId,
+            String groupId,
+            String message,
+            boolean includePreferenceControls
+    ) {
         log.info("📨 Отправка короткого отчёта в клиентский чат");
-        String sentChannel = sendProgressToActiveClientChat(order, clientId, groupId, message);
+        String sentChannel = sendProgressToActiveClientChat(order, clientId, groupId, message, includePreferenceControls);
         if (sentChannel != null) {
             log.info("✅ Короткий отчёт клиенту отправлен через {}", sentChannel);
             return true;
@@ -68,7 +78,8 @@ public class OrderStatusNotificationService {
             Order order,
             String clientId,
             String groupId,
-            String message
+            String message,
+            boolean includePreferenceControls
     ) {
         ChatPlatform activePlatform = activeChatPlatform(order);
         Long telegramChatId = telegramGroupChatId(order);
@@ -77,16 +88,22 @@ public class OrderStatusNotificationService {
 
         return switch (activePlatform) {
             case WHATSAPP -> hasText(groupId)
-                    ? sendToWhatsApp(order, clientId, groupId, publicationProgressPreferenceService.appendPlainOptOutHint(message))
+                    ? sendToWhatsApp(order, clientId, groupId, progressMessageForPlainChannel(message, includePreferenceControls))
                     : missingActiveChannel("WhatsApp", order);
             case TELEGRAM -> telegramChatId != null
-                    ? sendProgressToTelegram(telegramChatId, companyId, message)
+                    ? sendProgressToTelegram(telegramChatId, companyId, message, includePreferenceControls)
                     : missingActiveChannel("Telegram", order);
             case MAX -> maxChatId != null
-                    ? sendToMax(maxChatId, publicationProgressPreferenceService.appendPlainOptOutHint(message))
+                    ? sendToMax(maxChatId, progressMessageForPlainChannel(message, includePreferenceControls))
                     : missingActiveChannel("MAX", order);
             case UNKNOWN -> missingActiveChannel("неизвестный мессенджер", order);
         };
+    }
+
+    private String progressMessageForPlainChannel(String message, boolean includePreferenceControls) {
+        return includePreferenceControls
+                ? publicationProgressPreferenceService.appendPlainOptOutHint(message)
+                : message;
     }
 
     public boolean sendInformationalMessageToClientChat(
@@ -250,11 +267,14 @@ public class OrderStatusNotificationService {
     private String sendProgressToTelegram(
             Long telegramChatId,
             Long companyId,
-            String message
+            String message,
+            boolean includePreferenceControls
     ) {
         boolean sent;
         try {
-            sent = telegramService.sendPublicationProgressMessage(telegramChatId, message, companyId);
+            sent = includePreferenceControls
+                    ? telegramService.sendPublicationProgressMessage(telegramChatId, message, companyId)
+                    : telegramService.sendMessage(telegramChatId, message);
         } catch (Exception e) {
             log.warn("⚠️ Ошибка при отправке короткого отчёта в Telegram-группу {}", telegramChatId, e);
             return null;

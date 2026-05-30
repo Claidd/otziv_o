@@ -549,7 +549,12 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Override
     public Optional<Company> findByGroupId(String groupId) {
-        return companyRepository.findByGroupId(groupId);
+        List<Company> companies = companyRepository.findAllByGroupId(groupId);
+        if (companies.size() > 1) {
+            log.warn("Найдено {} компаний с одинаковым WhatsApp groupId={}. Для общей обработки выбрана первая: id={}",
+                    companies.size(), groupId, companies.getFirst().getId());
+        }
+        return companies.stream().findFirst();
     }
 
     private Manager operatorManager(Operator operator) {

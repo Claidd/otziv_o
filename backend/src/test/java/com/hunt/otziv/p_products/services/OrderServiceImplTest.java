@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.editing.OrderEditService;
@@ -109,6 +110,9 @@ class OrderServiceImplTest {
     @Mock
     private BusinessAuditService businessAuditService;
 
+    @Mock
+    private GamificationEventService gamificationEventService;
+
     @InjectMocks
     private OrderServiceImpl orderService;
 
@@ -149,10 +153,47 @@ class OrderServiceImplTest {
                 order,
                 null,
                 null,
-                "Company - Main filial. Опубликован новый отзыв 2 / 5."
+                "Company - Main filial. Опубликован новый отзыв 2 / 5.",
+                false
         );
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
         verify(reviewService, never()).save(reviewToPublish);
+    }
+
+    @Test
+    void changeStatusAndOrderCounterAddsProgressControlsOnlyForFirstPublishedReview() throws Exception {
+        Order order = order(10L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review reviewToPublish = review(2L, false, "Первый отзыв", details);
+        details.setReviews(List.of(reviewToPublish));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
+        when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
+        when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(1);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+                .thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORTS_ENABLED, true))
+                .thenReturn(true);
+        doAnswer(invocation -> {
+            Order synchronizedOrder = invocation.getArgument(0);
+            Integer actualPublished = invocation.getArgument(1);
+            synchronizedOrder.setCounter(actualPublished);
+            return null;
+        }).when(orderStatusCheckerService).validateCounterConsistency(same(order), eq(1));
+
+        assertTrue(orderService.changeStatusAndOrderCounter(2L));
+
+        verify(orderStatusNotificationService).sendProgressMessageToClientChat(
+                order,
+                null,
+                null,
+                "Company - Main filial. Опубликован новый отзыв 1 / 5.",
+                true
+        );
     }
 
     @Test
@@ -176,7 +217,8 @@ class OrderServiceImplTest {
                 same(order),
                 eq(null),
                 eq(null),
-                org.mockito.ArgumentMatchers.anyString()
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean()
         );
         verify(orderStatusCheckerService).checkAndMarkOrderCompleted(order);
     }

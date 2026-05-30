@@ -512,6 +512,14 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 """)
     Optional<Company> findByGroupId(String groupId);
 
+    @Query("""
+    SELECT c
+    FROM Company c
+    WHERE c.groupId = :groupId
+    ORDER BY c.id
+""")
+    List<Company> findAllByGroupId(String groupId);
+
     Optional<Company> findByTelegramGroupChatId(Long telegramGroupChatId);
 
     Optional<Company> findByMaxGroupChatId(Long maxGroupChatId);

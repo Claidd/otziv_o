@@ -216,6 +216,7 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\alloy"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\grafana"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\validate-flyway-migrations.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\init-letsencrypt.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\renew-letsencrypt.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\register-max-webhook.ps1"
@@ -437,12 +438,18 @@ set_env MAX_PROXY_HOST ""
 ensure_nginx_certs
 find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
+chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
-compose down --remove-orphans
 remove_repo_images "`$app_repo"
 remove_repo_images "`$web_repo"
 compose pull app nginx
+if docker ps --format '{{.Names}}' | grep -Fxq my-mysql; then
+  bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
+else
+  echo "MySQL container is not running yet; skipping pre-deploy Flyway validation."
+fi
+compose down --remove-orphans
 compose build whatsapp_lika whatsapp_vika
 compose up -d --remove-orphans
 sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"

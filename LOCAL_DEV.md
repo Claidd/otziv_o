@@ -36,7 +36,13 @@ docker compose -f compose.yaml down
 .\infrastructure\scripts\local\prod-like-smoke.ps1
 ```
 
-Скрипт сам создаст `.env.prod-local` из `.env.prod-local.example`, выполнит `docker compose -f compose.prod-local.yaml --env-file .env.prod-local up -d --build`, дождется `/actuator/health`, Keycloak realm и frontend на `http://localhost:8088`. Если Docker Desktop временно не видит Docker Hub, скрипт сам переключится на offline backend rebuild из локально собранного jar и не будет удалять volume.
+Скрипт сам создаст `.env.prod-local` из `.env.prod-local.example`, обновит локальную prod-like БД из VPS, применит локальные safety-настройки для мессенджеров, выполнит `docker compose -f compose.prod-local.yaml --env-file .env.prod-local up -d --build`, дождется `/actuator/health`, Keycloak realm и frontend на `http://localhost:8088`. Если Docker Desktop временно не видит Docker Hub, скрипт сам переключится на offline backend rebuild из локально собранного jar.
+
+Если нужно запустить smoke без обновления базы из VPS:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1 -SkipProdDbRestore
+```
 
 Если нужно принудительно обновить только backend image из локально собранного jar, без попытки пересобрать frontend image:
 
@@ -50,21 +56,12 @@ docker compose -f compose.yaml down
 
 - приложение: `http://localhost:8088`
 - MySQL: `127.0.0.1:3307`
+- phpMyAdmin: `http://127.0.0.1:6572`
 - Keycloak: `http://localhost:8088/keycloak`
 - Grafana: `http://localhost:8088/grafana`
 - Dozzle logs: `http://localhost:8089`
 
-phpMyAdmin для prod-like проверки поднимается только вручную:
-
-```powershell
-docker compose -f compose.prod-local.yaml --env-file .env.prod-local --profile db-admin up -d phpmyadmin
-```
-
-После этого он будет доступен на `http://127.0.0.1:6572`. Логин и пароль вводятся руками. Выключить:
-
-```powershell
-docker compose -f compose.prod-local.yaml --env-file .env.prod-local --profile db-admin stop phpmyadmin
-```
+phpMyAdmin для prod-like проверки поднимается автоматически вместе со стеком. Логин и пароль вводятся руками.
 
 По умолчанию prod-like стек использует отдельный volume `otziv-prod-local_mysql_data`. Если нужно проверить именно старую локальную базу из IDE-стека, укажи в `.env.prod-local`:
 
@@ -73,6 +70,27 @@ LOCAL_MYSQL_VOLUME=otziv_mysql_data
 ```
 
 Для проверки с данными VPS лучше восстановить dump в отдельный локальный volume и указывать его через `LOCAL_MYSQL_VOLUME`, чтобы не смешивать dev-данные и prod-like smoke.
+
+Можно восстановить prod-БД в локальный prod-like volume одной командой:
+
+```powershell
+.\infrastructure\scripts\local\restore-prod-db-local.ps1 `
+  -VpsHost 95.213.248.152 `
+  -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519
+```
+
+Скрипт скачает dump из контейнера `my-mysql` на VPS, пересоздаст локальный volume `otziv-prod-local_mysql_data`, восстановит dump и проверит `flyway_schema_history` против локальных `backend/src/main/resources/db/migration`. Если старая примененная миграция была изменена, скрипт остановится до запуска backend и покажет конкретный файл.
+
+Обычный `prod-like-smoke.ps1` теперь скачивает prod-БД сам. Если нужны нестандартные параметры VPS, передай их явно:
+
+```powershell
+.\infrastructure\scripts\local\prod-like-smoke.ps1 `
+  -VpsHost 95.213.248.152 `
+  -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 `
+  -OfflineAppBuild
+```
+
+Локальный smoke по умолчанию гасит внешние отправки: очищает токены Telegram/MAX для контейнера, отключает регистрацию/long polling ботов и перед стартом backend выставляет в локальной БД `client.messages.*.live-enabled=false`, `client.messages.immediate.enabled=false`, `telegram.reports.*.enabled=false`, `publication.health-monitor.enabled=false`, `whatsapp.group-sync.enabled=false`. Для осознанной проверки реальных мессенджеров есть флаг `-AllowLocalMessengerSending`.
 
 Если после legacy migration пользователь оказался клиентом, значит у него в локальной MySQL не было рабочей роли. Для локальной проверки можно назначить пользователя владельцем:
 

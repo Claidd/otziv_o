@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.dto.*;
@@ -75,6 +76,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
+    private final GamificationEventService gamificationEventService;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -461,6 +463,7 @@ public class OrderServiceImpl implements OrderService {
 
             review.setPublish(true);
             reviewRepository.save(review);
+            gamificationEventService.recordReviewPublished(review);
             businessAuditService.recordSafely(
                     "review_published",
                     "review",
@@ -519,8 +522,15 @@ public class OrderServiceImpl implements OrderService {
             String clientId = order != null && order.getManager() != null ? order.getManager().getClientId() : null;
             String groupId = order != null && order.getCompany() != null ? order.getCompany().getGroupId() : null;
             String message = buildPublishedReviewProgressMessage(order, actualPublished);
+            boolean includePreferenceControls = actualPublished == 1;
 
-            boolean sent = orderStatusNotificationService.sendProgressMessageToClientChat(order, clientId, groupId, message);
+            boolean sent = orderStatusNotificationService.sendProgressMessageToClientChat(
+                    order,
+                    clientId,
+                    groupId,
+                    message,
+                    includePreferenceControls
+            );
             if (sent) {
                 log.info("Короткий отчёт о публикации отправлен клиенту: {}", message);
             } else {

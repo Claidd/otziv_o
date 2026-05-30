@@ -16,7 +16,7 @@
       </nav>
 
       <div class="dictionary-actions">
-        @if (activeTab() !== 'settings' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <label class="dictionary-search" appTooltip="Поиск работает по текущему справочнику. Нажмите Enter или кнопку поиска, чтобы обновить список.">
             <span class="material-icons-sharp">search</span>
             <input
@@ -37,7 +37,7 @@
           </button>
         }
 
-        @if (activeTab() !== 'settings' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
@@ -620,6 +620,9 @@
                         </td>
                         <td>
                           <strong>{{ item.nextAttemptAt ? (item.nextAttemptAt | date:'dd.MM HH:mm') : '-' }}</strong>
+                          @if (monitorQueueTimingLabel(item)) {
+                            <span [class]="monitorQueueTimingClass(item)">{{ monitorQueueTimingLabel(item) }}</span>
+                          }
                           <span>{{ item.targetType }}</span>
                         </td>
                         <td>
@@ -760,10 +763,18 @@
       <article class="dictionary-card table-card">
         <div class="table-head">
           <div>
-            <p class="eyebrow">{{ activeTab() === 'autoresponder' ? 'Обзор' : 'Список' }}</p>
-            <h2>{{ activeTab() === 'autoresponder' ? 'Пульт автоответчика' : activeLabel() }}</h2>
+            <p class="eyebrow">{{ activeTab() === 'autoresponder' || activeTab() === 'gamification' ? 'Обзор' : 'Список' }}</p>
+            <h2>
+              {{
+                activeTab() === 'autoresponder'
+                  ? 'Пульт автоответчика'
+                  : activeTab() === 'gamification'
+                    ? 'Срез геймификации'
+                    : activeLabel()
+              }}
+            </h2>
           </div>
-          <span>{{ activeItemsTotal() }}</span>
+          <span>{{ activeTab() === 'gamification' ? (gamificationProgress()?.totalEvents ?? 0) : activeItemsTotal() }}</span>
         </div>
 
         <div class="table-scroll">
@@ -1016,6 +1027,177 @@
                     </tr>
                   } @empty {
                     <tr><td colspan="3" class="no-results">Текстов менеджеров нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @case ('gamification') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Показатель</th>
+                    <th>Значение</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="selected">
+                    <td>
+                      <strong>Контур</strong>
+                      <span>{{ gamificationForm.controls.shadowScoringEnabled.value ? 'теневой ledger активен' : 'теневой ledger выключен' }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ gamificationForm.controls.enabled.value ? 'включен' : 'выключен' }}</strong>
+                      <span>{{ gamificationForm.controls.eventsEnabled.value ? 'события пишутся' : 'живые события остановлены' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>События периода</strong>
+                      <span>{{ gamificationProgress()?.from | date:'dd.MM' }} - {{ gamificationProgress()?.to | date:'dd.MM' }}</span>
+                    </td>
+                    <td>
+                      <strong>{{ gamificationProgress()?.totalEvents ?? 0 }}</strong>
+                      <span>записей в журнале</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Предпросмотр</strong>
+                      <span>расчет без записи в профили</span>
+                    </td>
+                    <td>
+                      <strong>{{ gamificationScorePreview()?.totalPoints ?? 0 }}</strong>
+                      <span>очков</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Ledger</strong>
+                      <span>теневые начисления</span>
+                    </td>
+                    <td>
+                      <strong>{{ gamificationScoreLedger()?.totalPoints ?? 0 }}</strong>
+                      <span>очков</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>Участники</strong>
+                      <span>с балансом за период</span>
+                    </td>
+                    <td>
+                      <strong>{{ gamificationBalances()?.balances?.length ?? 0 }}</strong>
+                      <span>человек</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              @if (gamificationBackfill(); as backfill) {
+                <p class="settings-hint">
+                  Последний сбор: проверено {{ backfill.reviewedCandidates }}, создано {{ backfill.eventsCreated }}.
+                  Отзывы {{ backfill.reviewPublishedCreated }}/{{ backfill.reviewPublishedReviewed }},
+                  заказы {{ backfill.orderPaidCreated }}/{{ backfill.orderPaidReviewed }},
+                  плохие {{ backfill.badReviewTaskDoneCreated }}/{{ backfill.badReviewTaskDoneReviewed }},
+                  восстановления {{ backfill.reviewRecoveryTaskDoneCreated }}/{{ backfill.reviewRecoveryTaskDoneReviewed }}.
+                </p>
+              } @else {
+                <p class="settings-hint">
+                  Живые события сейчас выключены. Уже собранные события и ledger остаются доступны для проверки.
+                </p>
+              }
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Топ специалистов</th>
+                    <th>События</th>
+                    <th>Очки</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (actor of topWorkerGamificationScoreActors(); track trackGamificationScoreActor($index, actor)) {
+                    <tr>
+                      <td>
+                        <strong>{{ actor.actorName || actor.actorRole || 'Система' }}</strong>
+                        <span>{{ gamificationRoleLabel(actor.actorRole) }}</span>
+                      </td>
+                      <td>{{ actor.totalEvents }}</td>
+                      <td><strong>{{ actor.totalPoints }}</strong></td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="3" class="no-results">У специалистов за период очков пока нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Топ менеджеров</th>
+                    <th>События</th>
+                    <th>Очки</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (actor of topManagerGamificationScoreActors(); track trackGamificationScoreActor($index, actor)) {
+                    <tr>
+                      <td>
+                        <strong>{{ actor.actorName || actor.actorRole || 'Система' }}</strong>
+                        <span>{{ gamificationRoleLabel(actor.actorRole) }}</span>
+                      </td>
+                      <td>{{ actor.totalEvents }}</td>
+                      <td><strong>{{ actor.totalPoints }}</strong></td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="3" class="no-results">У менеджеров за период очков пока нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+
+              @if (topOtherGamificationScoreActors().length > 0) {
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Другие роли</th>
+                      <th>События</th>
+                      <th>Очки</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (actor of topOtherGamificationScoreActors(); track trackGamificationScoreActor($index, actor)) {
+                      <tr>
+                        <td>
+                          <strong>{{ actor.actorName || actor.actorRole || 'Система' }}</strong>
+                          <span>{{ gamificationRoleLabel(actor.actorRole) }}</span>
+                        </td>
+                        <td>{{ actor.totalEvents }}</td>
+                        <td><strong>{{ actor.totalPoints }}</strong></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Последние события</th>
+                    <th>Участник</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (event of recentGamificationEvents(); track trackGamificationEvent($index, event)) {
+                    <tr>
+                      <td>
+                        <strong>{{ gamificationEventLabel(event.eventType) }}</strong>
+                        <span>{{ event.createdAt | date:'dd.MM HH:mm' }}</span>
+                      </td>
+                      <td>{{ gamificationActor(event) }}</td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="2" class="no-results">Событий пока нет.</td></tr>
                   }
                 </tbody>
               </table>
@@ -1718,6 +1900,512 @@
                 <p>Тексты оплаты, начала, предложения, напоминания и старта откроются здесь.</p>
               </div>
             }
+          }
+
+          @case ('gamification') {
+            <form class="settings-form gamification-form" [formGroup]="gamificationForm" (ngSubmit)="saveActive()">
+              <section class="settings-section">
+                <div class="editor-guide">
+                  <span class="material-icons-sharp">emoji_events</span>
+                  <div>
+                    <h3>Геймификация отделена от рабочих процессов</h3>
+                    <p>Этот экран управляет только настройками контура. Очки, миссии и события будут подключаться отдельными шагами после включения нужных флагов.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
+                    <h3>Общее включение</h3>
+                    <p class="settings-hint">Главный переключатель держит весь контур выключенным, даже если роли и отображение разрешены.</p>
+                  </div>
+                  <span class="gamification-state" [class.enabled]="gamificationForm.controls.enabled.value">
+                    {{ gamificationForm.controls.enabled.value ? 'включена' : 'выключена' }}
+                  </span>
+                </div>
+
+                <div class="form-grid">
+                  <label class="checkbox wide" appTooltip="Глобально включает или выключает весь контур геймификации.">
+                    <input class="switch" type="checkbox" formControlName="enabled">
+                    <span>Геймификация включена</span>
+                  </label>
+
+                  <label class="checkbox" appTooltip="Разрешает будущие события и миссии специалистов.">
+                    <input class="switch" type="checkbox" formControlName="workerEnabled">
+                    <span>Специалисты</span>
+                  </label>
+
+                  <label class="checkbox" appTooltip="Разрешает будущие события и миссии менеджеров.">
+                    <input class="switch" type="checkbox" formControlName="managerEnabled">
+                    <span>Менеджеры</span>
+                  </label>
+
+                  <label class="checkbox" appTooltip="Разрешает будущие события и миссии операторов.">
+                    <input class="switch" type="checkbox" formControlName="operatorEnabled">
+                    <span>Операторы</span>
+                  </label>
+
+                  <label class="checkbox" appTooltip="Разрешает будущие события и миссии маркетологов.">
+                    <input class="switch" type="checkbox" formControlName="marketologEnabled">
+                    <span>Маркетологи</span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <h3>Отображение и события</h3>
+                <div class="form-grid">
+                  <label class="checkbox" appTooltip="Разрешает показывать будущий блок прогресса в личном кабинете.">
+                    <input class="switch" type="checkbox" formControlName="showInCabinet">
+                    <span>Показывать в личном кабинете</span>
+                  </label>
+
+                  <label class="checkbox" appTooltip="Разрешает показывать будущие бейджи и статусы в рейтинге.">
+                    <input class="switch" type="checkbox" formControlName="showInScore">
+                    <span>Показывать в рейтинге</span>
+                  </label>
+
+                  <label class="checkbox wide" appTooltip="Разрешает будущую запись событий геймификации в отдельную таблицу. Пока начисления не подключены, флаг ничего не пишет сам по себе.">
+                    <input class="switch" type="checkbox" formControlName="eventsEnabled">
+                    <span>Разрешить события геймификации</span>
+                  </label>
+
+                  <label class="checkbox wide" appTooltip="Пишет расчетные очки в отдельный ledger только для админской сверки. Пользователи их пока не видят.">
+                    <input class="switch" type="checkbox" formControlName="shadowScoringEnabled">
+                    <span>Теневое начисление очков</span>
+                  </label>
+                </div>
+
+                <p class="settings-hint">
+                  Теневой режим пишет только ledger для проверки баланса. Публичные баллы и рейтинги пока не включаются.
+                </p>
+              </section>
+
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
+                    <h3>Правила очков</h3>
+                    <p class="settings-hint">Правила используются только для предпросмотра. Реальные баллы пока не начисляются.</p>
+                  </div>
+                </div>
+
+                <div class="form-grid">
+                  <label class="checkbox" appTooltip="Сколько очков получил бы специалист за опубликованный отзыв.">
+                    <input class="switch" type="checkbox" formControlName="reviewPublishedRuleEnabled">
+                    <span>Отзыв опубликован</span>
+                  </label>
+                  <label>
+                    <span>Очков</span>
+                    <input type="number" min="0" max="1000" step="1" formControlName="reviewPublishedRulePoints">
+                  </label>
+
+                  <label class="checkbox" appTooltip="Сколько очков получил бы менеджер за закрытый оплатой заказ.">
+                    <input class="switch" type="checkbox" formControlName="orderPaidRuleEnabled">
+                    <span>Заказ закрыт оплатой</span>
+                  </label>
+                  <label>
+                    <span>Очков</span>
+                    <input type="number" min="0" max="1000" step="1" formControlName="orderPaidRulePoints">
+                  </label>
+
+                  <label class="checkbox" appTooltip="Сколько очков получил бы специалист за выполненную плохую задачу.">
+                    <input class="switch" type="checkbox" formControlName="badReviewTaskDoneRuleEnabled">
+                    <span>Плохой отзыв выполнен</span>
+                  </label>
+                  <label>
+                    <span>Очков</span>
+                    <input type="number" min="0" max="1000" step="1" formControlName="badReviewTaskDoneRulePoints">
+                  </label>
+
+                  <label class="checkbox" appTooltip="Сколько очков получил бы исполнитель восстановления.">
+                    <input class="switch" type="checkbox" formControlName="reviewRecoveryTaskDoneRuleEnabled">
+                    <span>Восстановление выполнено</span>
+                  </label>
+                  <label>
+                    <span>Очков</span>
+                    <input type="number" min="0" max="1000" step="1" formControlName="reviewRecoveryTaskDoneRulePoints">
+                  </label>
+                </div>
+
+                <div class="actions">
+                  <button type="button" class="secondary" (click)="resetGamificationForm()" [disabled]="saving()">Сбросить</button>
+                  <button type="button" (click)="saveGamificationRules()" [disabled]="saving()">Сохранить правила</button>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
+                    <h3>Прогресс периода</h3>
+                    <p class="settings-hint">Агрегация строится по журналу событий и ничего не начисляет.</p>
+                  </div>
+                  <div class="gamification-periods" aria-label="Период прогресса">
+                    <button type="button" [class.active]="gamificationProgressDays() === 1" (click)="setGamificationProgressDays(1)">Сегодня</button>
+                    <button type="button" [class.active]="gamificationProgressDays() === 7" (click)="setGamificationProgressDays(7)">7 дней</button>
+                    <button type="button" [class.active]="gamificationProgressDays() === 30" (click)="setGamificationProgressDays(30)">30 дней</button>
+                  </div>
+                </div>
+
+                @if (gamificationProgress(); as progress) {
+                  <div class="form-grid">
+                    <article class="gamification-progress-total">
+                      <span class="material-icons-sharp">insights</span>
+                      <div>
+                        <strong>{{ progress.totalEvents }}</strong>
+                        <span>{{ progress.from | date:'dd.MM' }} - {{ progress.to | date:'dd.MM' }}</span>
+                      </div>
+                    </article>
+
+                    @for (item of progress.eventTypes; track trackGamificationType($index, item)) {
+                      <article class="gamification-progress-tile">
+                        <strong>{{ item.events }}</strong>
+                        <span>{{ gamificationEventLabel(item.eventType) }}</span>
+                      </article>
+                    }
+                  </div>
+
+                  <div class="gamification-actors">
+                    @for (actor of progress.topActors; track trackGamificationActor($index, actor)) {
+                      <div class="gamification-actor-row">
+                        <span>{{ actor.actorName || actor.actorRole || 'Система' }}</span>
+                        <strong>{{ actor.events }}</strong>
+                      </div>
+                    } @empty {
+                      <p class="settings-hint">За выбранный период участников пока нет.</p>
+                    }
+                  </div>
+                } @else {
+                  <p class="settings-hint">Прогресс пока не загружен.</p>
+                }
+
+                @if (gamificationScorePreview(); as preview) {
+                  <div class="section-head">
+                    <div>
+                      <h3>Предпросмотр очков</h3>
+                      <p class="settings-hint">Итого {{ preview.totalPoints }} очков за период, без записи в профили.</p>
+                    </div>
+                  </div>
+
+                  <div class="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Участник</th>
+                          <th>Роль</th>
+                          <th>События</th>
+                          <th>Очки</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td colspan="4"><strong>Специалисты</strong></td>
+                        </tr>
+                        @for (actor of workerGamificationScoreActors(); track trackGamificationScoreActor($index, actor)) {
+                          <tr>
+                            <td>{{ actor.actorName || 'Система' }}</td>
+                            <td>{{ gamificationRoleLabel(actor.actorRole) }}</td>
+                            <td>{{ actor.totalEvents }}</td>
+                            <td><strong>{{ actor.totalPoints }}</strong></td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="4" class="no-results">У специалистов за выбранный период очков пока нет.</td>
+                          </tr>
+                        }
+                        <tr>
+                          <td colspan="4"><strong>Менеджеры</strong></td>
+                        </tr>
+                        @for (actor of managerGamificationScoreActors(); track trackGamificationScoreActor($index, actor)) {
+                          <tr>
+                            <td>{{ actor.actorName || 'Система' }}</td>
+                            <td>{{ gamificationRoleLabel(actor.actorRole) }}</td>
+                            <td>{{ actor.totalEvents }}</td>
+                            <td><strong>{{ actor.totalPoints }}</strong></td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="4" class="no-results">У менеджеров за выбранный период очков пока нет.</td>
+                          </tr>
+                        }
+                        @if (otherGamificationScoreActors().length > 0) {
+                          <tr>
+                            <td colspan="4"><strong>Другие роли</strong></td>
+                          </tr>
+                          @for (actor of otherGamificationScoreActors(); track trackGamificationScoreActor($index, actor)) {
+                            <tr>
+                              <td>{{ actor.actorName || 'Система' }}</td>
+                              <td>{{ gamificationRoleLabel(actor.actorRole) }}</td>
+                              <td>{{ actor.totalEvents }}</td>
+                              <td><strong>{{ actor.totalPoints }}</strong></td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+
+                @if (gamificationScoreLedger(); as ledger) {
+                  <div class="section-head">
+                    <div>
+                      <h3>Ledger теневого режима</h3>
+                      <p class="settings-hint">
+                        Записано {{ ledger.totalPoints }} очков. Разница с предпросмотром: {{ ledger.pointsDelta }}.
+                      </p>
+                    </div>
+                    <div class="panel-actions">
+                      <button
+                        type="button"
+                        class="compact-action"
+                        (click)="backfillGamificationEvents()"
+                        [disabled]="saving()"
+                        appTooltip="Собирает исторические события за выбранный период из уже существующих отзывов, заказов и задач, затем пересобирает ledger."
+                      >
+                        <span class="material-icons-sharp">history</span>
+                        Собрать историю
+                      </button>
+                      <button
+                        type="button"
+                        class="compact-action"
+                        (click)="rebuildGamificationLedger()"
+                        [disabled]="saving() || !gamificationForm.controls.shadowScoringEnabled.value"
+                        appTooltip="Пересобирает shadow-ledger за выбранный период по текущим правилам."
+                      >
+                        <span class="material-icons-sharp">refresh</span>
+                        Пересобрать
+                      </button>
+                      <span class="gamification-state" [class.enabled]="ledger.pointsDelta === 0">
+                        {{ ledger.pointsDelta === 0 ? 'сходится' : 'проверить' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  @if (gamificationLedgerRebuild(); as rebuild) {
+                    <p class="settings-hint">
+                      Последняя пересборка: событий {{ rebuild.eventsReviewed }}, удалено {{ rebuild.entriesDeleted }},
+                      создано {{ rebuild.entriesCreated }}, очков {{ rebuild.totalPoints }}.
+                    </p>
+                  }
+
+                  @if (gamificationBackfill(); as backfill) {
+                    <p class="settings-hint">
+                      История: проверено {{ backfill.reviewedCandidates }}, новых событий {{ backfill.eventsCreated }}.
+                      Отзывы {{ backfill.reviewPublishedCreated }}/{{ backfill.reviewPublishedReviewed }},
+                      заказы {{ backfill.orderPaidCreated }}/{{ backfill.orderPaidReviewed }},
+                      плохие {{ backfill.badReviewTaskDoneCreated }}/{{ backfill.badReviewTaskDoneReviewed }},
+                      восстановления {{ backfill.reviewRecoveryTaskDoneCreated }}/{{ backfill.reviewRecoveryTaskDoneReviewed }}.
+                    </p>
+                  }
+
+                  <div class="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Участник</th>
+                          <th>Роль</th>
+                          <th>Записей</th>
+                          <th>Очки</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td colspan="4"><strong>Специалисты</strong></td>
+                        </tr>
+                        @for (actor of workerGamificationLedgerActors(); track trackGamificationScoreActor($index, actor)) {
+                          <tr>
+                            <td>{{ actor.actorName || 'Система' }}</td>
+                            <td>{{ gamificationRoleLabel(actor.actorRole) }}</td>
+                            <td>{{ actor.totalEvents }}</td>
+                            <td><strong>{{ actor.totalPoints }}</strong></td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="4" class="no-results">У специалистов ledger пока пуст.</td>
+                          </tr>
+                        }
+                        <tr>
+                          <td colspan="4"><strong>Менеджеры</strong></td>
+                        </tr>
+                        @for (actor of managerGamificationLedgerActors(); track trackGamificationScoreActor($index, actor)) {
+                          <tr>
+                            <td>{{ actor.actorName || 'Система' }}</td>
+                            <td>{{ gamificationRoleLabel(actor.actorRole) }}</td>
+                            <td>{{ actor.totalEvents }}</td>
+                            <td><strong>{{ actor.totalPoints }}</strong></td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="4" class="no-results">У менеджеров ledger пока пуст.</td>
+                          </tr>
+                        }
+                        @if (otherGamificationLedgerActors().length > 0) {
+                          <tr>
+                            <td colspan="4"><strong>Другие роли</strong></td>
+                          </tr>
+                          @for (actor of otherGamificationLedgerActors(); track trackGamificationScoreActor($index, actor)) {
+                            <tr>
+                              <td>{{ actor.actorName || 'Система' }}</td>
+                              <td>{{ gamificationRoleLabel(actor.actorRole) }}</td>
+                              <td>{{ actor.totalEvents }}</td>
+                              <td><strong>{{ actor.totalPoints }}</strong></td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+
+                @if (gamificationBalances(); as balances) {
+                  <div class="section-head">
+                    <div>
+                      <h3>Баланс участников</h3>
+                      <p class="settings-hint">
+                        Read-only срез ledger за {{ balances.days }} дн.: кто сколько набрал и из каких действий.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Участник</th>
+                          <th>Роль</th>
+                          <th>Очки</th>
+                          <th>События</th>
+                          <th>Отзывы</th>
+                          <th>Заказы</th>
+                          <th>Плохие</th>
+                          <th>Восстановления</th>
+                          <th>Сроки</th>
+                          <th>Потеряно</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td colspan="10"><strong>Специалисты</strong></td>
+                        </tr>
+                        @for (balance of workerGamificationBalances(); track trackGamificationBalance($index, balance)) {
+                          <tr>
+                            <td>{{ balance.actorName || 'Система' }}</td>
+                            <td>{{ gamificationRoleLabel(balance.actorRole) }}</td>
+                            <td><strong>{{ balance.totalPoints }}</strong></td>
+                            <td>{{ balance.totalEvents }}</td>
+                            <td>{{ balance.reviewPublishedEvents }} / {{ balance.reviewPublishedPoints }}</td>
+                            <td>{{ balance.orderPaidEvents }} / {{ balance.orderPaidPoints }}</td>
+                            <td>{{ balance.badReviewTaskDoneEvents }} / {{ balance.badReviewTaskDonePoints }}</td>
+                            <td>{{ balance.reviewRecoveryTaskDoneEvents }} / {{ balance.reviewRecoveryTaskDonePoints }}</td>
+                            <td>{{ balance.onTimeEvents }} / {{ balance.delayedEvents }}</td>
+                            <td>{{ balance.lostPoints }}</td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="10" class="no-results">У специалистов баланса за период пока нет.</td>
+                          </tr>
+                        }
+                        <tr>
+                          <td colspan="10"><strong>Менеджеры</strong></td>
+                        </tr>
+                        @for (balance of managerGamificationBalances(); track trackGamificationBalance($index, balance)) {
+                          <tr>
+                            <td>{{ balance.actorName || 'Система' }}</td>
+                            <td>{{ gamificationRoleLabel(balance.actorRole) }}</td>
+                            <td><strong>{{ balance.totalPoints }}</strong></td>
+                            <td>{{ balance.totalEvents }}</td>
+                            <td>{{ balance.reviewPublishedEvents }} / {{ balance.reviewPublishedPoints }}</td>
+                            <td>{{ balance.orderPaidEvents }} / {{ balance.orderPaidPoints }}</td>
+                            <td>{{ balance.badReviewTaskDoneEvents }} / {{ balance.badReviewTaskDonePoints }}</td>
+                            <td>{{ balance.reviewRecoveryTaskDoneEvents }} / {{ balance.reviewRecoveryTaskDonePoints }}</td>
+                            <td>{{ balance.onTimeEvents }} / {{ balance.delayedEvents }}</td>
+                            <td>{{ balance.lostPoints }}</td>
+                          </tr>
+                        } @empty {
+                          <tr>
+                            <td colspan="10" class="no-results">У менеджеров баланса за период пока нет.</td>
+                          </tr>
+                        }
+                        @if (otherGamificationBalances().length > 0) {
+                          <tr>
+                            <td colspan="10"><strong>Другие роли</strong></td>
+                          </tr>
+                          @for (balance of otherGamificationBalances(); track trackGamificationBalance($index, balance)) {
+                            <tr>
+                              <td>{{ balance.actorName || 'Система' }}</td>
+                              <td>{{ gamificationRoleLabel(balance.actorRole) }}</td>
+                              <td><strong>{{ balance.totalPoints }}</strong></td>
+                              <td>{{ balance.totalEvents }}</td>
+                              <td>{{ balance.reviewPublishedEvents }} / {{ balance.reviewPublishedPoints }}</td>
+                              <td>{{ balance.orderPaidEvents }} / {{ balance.orderPaidPoints }}</td>
+                              <td>{{ balance.badReviewTaskDoneEvents }} / {{ balance.badReviewTaskDonePoints }}</td>
+                              <td>{{ balance.reviewRecoveryTaskDoneEvents }} / {{ balance.reviewRecoveryTaskDonePoints }}</td>
+                              <td>{{ balance.onTimeEvents }} / {{ balance.delayedEvents }}</td>
+                              <td>{{ balance.lostPoints }}</td>
+                            </tr>
+                          }
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
+                    <h3>Последние события</h3>
+                    <p class="settings-hint">Read-only журнал: здесь видно, какие реальные действия уже попали в контур геймификации.</p>
+                  </div>
+                  <span class="gamification-state enabled">{{ gamificationEvents().length }}</span>
+                </div>
+
+                <div class="table-scroll gamification-events-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Дата</th>
+                        <th>Событие</th>
+                        <th>Участник</th>
+                        <th>Объект</th>
+                        <th>Срок</th>
+                        <th>Компания</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (event of gamificationEvents(); track trackGamificationEvent($index, event)) {
+                        <tr>
+                          <td>{{ event.createdAt | date:'dd.MM.yyyy HH:mm' }}</td>
+                          <td>
+                            <strong>{{ gamificationEventLabel(event.eventType) }}</strong>
+                            <span>{{ event.source || event.payload }}</span>
+                          </td>
+                          <td>{{ gamificationActor(event) }}</td>
+                          <td>{{ gamificationEventTarget(event) }}</td>
+                          <td>{{ gamificationTimelinessLabel(event) }}</td>
+                          <td>{{ event.companyTitle || '-' }}</td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="6" class="no-results">Событий пока нет. Включите общий контур и события, затем дождитесь рабочих действий.</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              @if (gamificationSettings()?.updatedAt) {
+                <p class="settings-hint">
+                  Последнее изменение: {{ gamificationSettings()?.updatedAt | date:'dd.MM.yyyy HH:mm' }}
+                </p>
+              }
+
+              <div class="actions">
+                <button type="button" class="secondary" (click)="resetGamificationForm()" [disabled]="saving()">Сбросить</button>
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
           }
 
           @case ('settings') {

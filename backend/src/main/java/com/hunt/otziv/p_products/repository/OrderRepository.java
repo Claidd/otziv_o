@@ -1173,6 +1173,21 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Query("SELECT COUNT(o.id) FROM Order o")
     int countAllOrders();
 
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH o.manager m
+        LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.status
+        WHERE o.complete = true
+          AND o.payDay BETWEEN :from AND :to
+    """)
+    List<Order> findPaidForGamificationBackfill(@Param("from") LocalDate from,
+                                                @Param("to") LocalDate to);
+
     @Query("SELECT COUNT(o.id) FROM Order o WHERE o.manager = :manager")
     int countByManager(@Param("manager") Manager manager);
 

@@ -5,6 +5,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -59,6 +60,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final BotService botService;
     private final ReviewRecoveryNoticeScheduler recoveryNoticeScheduler;
     private final ReviewRecoveryHoldService recoveryHoldService;
+    private final GamificationEventService gamificationEventService;
 
     @Override
     @Transactional(readOnly = true)
@@ -149,6 +151,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         task.setCompletedDate(LocalDate.now());
         task.setCompletedBy(completedBy);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
+        gamificationEventService.recordReviewRecoveryTaskDone(savedTask);
         completeBatchIfReady(savedTask.getBatch());
 
         log.info("Задача восстановления {} выполнена, отзыв {}, заказ {}",

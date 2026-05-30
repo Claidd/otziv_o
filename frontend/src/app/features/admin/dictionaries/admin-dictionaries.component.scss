@@ -656,6 +656,49 @@ tr.selected td:first-child {
   line-height: 1.35;
 }
 
+.gamification-state {
+  display: inline-grid;
+  min-height: 1.8rem;
+  place-items: center;
+  border: 1px solid rgba(255, 0, 96, 0.22);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.06);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.gamification-state.enabled {
+  border-color: rgba(27, 156, 133, 0.28);
+  color: var(--otziv-success);
+  background: rgba(27, 156, 133, 0.08);
+}
+
+.gamification-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.gamification-periods button.active {
+  color: var(--otziv-white);
+  background: var(--otziv-info);
+}
+
+.gamification-actors {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.gamification-actor-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .section-head {
   display: flex;
   align-items: flex-start;

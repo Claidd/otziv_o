@@ -14,10 +14,12 @@ import {
   ApiService,
   BadReviewTaskItem,
   CompanyDeepReportState,
+  ManagerPaymentLinkResponse,
   OrderDetailsPayload,
   OrderReviewItem,
   ReviewRecoveryBatchItem,
   ReviewRecoveryTaskItem,
+  TbankPaymentStatus,
   ReviewUpdateRequest
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
@@ -470,6 +472,11 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     <button type="button" (click)="completeRecoveryTask(task)" [disabled]="!canEditRecoveryTask(task) || isMutating('recovery-complete-' + task.id)">
                       {{ isMutating('recovery-complete-' + task.id) ? '...' : 'восстановил' }}
                     </button>
+                    @if (canDeleteRecoveryTask(task)) {
+                      <button type="button" class="danger" (click)="deleteRecoveryTask(task)" [disabled]="isMutating('recovery-delete-' + task.id)">
+                        {{ isMutating('recovery-delete-' + task.id) ? '...' : 'удалить' }}
+                      </button>
+                    }
                   </div>
 
                   <footer>
@@ -500,6 +507,12 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                 <button type="button" (click)="refreshCompanyReport()" [disabled]="companyReportLoading()">
                   <span class="material-icons-sharp">refresh</span>
                   Обновить отчет
+                </button>
+              }
+              @if (canShowPaymentLinkAction()) {
+                <button type="button" (click)="createPaymentLink()" [disabled]="isMutating('payment-link')">
+                  <span class="material-icons-sharp">payments</span>
+                  {{ isMutating('payment-link') ? '...' : paymentLinkModeLabel() }}
                 </button>
               }
               <button type="button" class="primary" (click)="sendToCheck()" [disabled]="busy()">
@@ -1851,6 +1864,11 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       background: linear-gradient(145deg, rgba(108, 155, 207, 0.16) 0%, var(--otziv-white) 100%);
     }
 
+    .task-actions .danger {
+      color: var(--otziv-danger);
+      background: linear-gradient(145deg, rgba(239, 52, 95, 0.12) 0%, var(--otziv-white) 100%);
+    }
+
     .mobile-review-card footer .danger-link {
       color: var(--otziv-danger);
     }
@@ -1948,79 +1966,6 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       opacity: 0.5;
     }
 
-    :host-context(body.otziv-compact-phone) .order-details-mobile-page,
-    :host-context(body.otziv-short-phone) .order-details-mobile-page {
-      --otziv-review-text-height: 5.85rem;
-      --otziv-review-text-height-open: 6.4rem;
-      --otziv-review-answer-height: 2.05rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .review-display-field,
-    :host-context(body.otziv-compact-phone) .review-text-editor textarea,
-    :host-context(body.otziv-short-phone) .review-display-field,
-    :host-context(body.otziv-short-phone) .review-text-editor textarea {
-      font-size: 0.66rem;
-      line-height: 1.18;
-      padding: 0.42rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .review-display-field--answer,
-    :host-context(body.otziv-compact-phone) .review-answer-editor textarea,
-    :host-context(body.otziv-short-phone) .review-display-field--answer,
-    :host-context(body.otziv-short-phone) .review-answer-editor textarea {
-      padding: 0.3rem 0.42rem;
-      font-size: 0.5rem;
-      line-height: 1.08;
-    }
-
-    :host-context(body.otziv-compact-phone) .bot-line,
-    :host-context(body.otziv-short-phone) .bot-line {
-      min-height: 1.34rem;
-      font-size: 0.56rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .field-actions button,
-    :host-context(body.otziv-compact-phone) .review-actions button,
-    :host-context(body.otziv-compact-phone) .publish-button,
-    :host-context(body.otziv-compact-phone) .order-details-actions button,
-    :host-context(body.otziv-short-phone) .field-actions button,
-    :host-context(body.otziv-short-phone) .review-actions button,
-    :host-context(body.otziv-short-phone) .publish-button,
-    :host-context(body.otziv-short-phone) .order-details-actions button {
-      min-height: 1.36rem;
-      font-size: 0.5rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .task-meta-grid,
-    :host-context(body.otziv-short-phone) .task-meta-grid {
-      gap: 0.22rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .task-meta-grid span,
-    :host-context(body.otziv-compact-phone) .task-date-field,
-    :host-context(body.otziv-short-phone) .task-meta-grid span,
-    :host-context(body.otziv-short-phone) .task-date-field {
-      padding: 0.28rem 0.38rem;
-      font-size: 0.52rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .task-text-field,
-    :host-context(body.otziv-short-phone) .task-text-field {
-      min-height: 6.4rem;
-      max-height: 6.4rem;
-      padding: 0.46rem;
-      font-size: 0.66rem;
-      line-height: 1.2;
-    }
-
-    :host-context(body.otziv-compact-phone) .task-answer-field,
-    :host-context(body.otziv-short-phone) .task-answer-field {
-      min-height: 2.38rem;
-      max-height: 2.38rem;
-      padding: 0.38rem 0.44rem;
-      font-size: 0.56rem;
-    }
-
   `]
 })
 export class OrderDetailsPage implements OnInit, OnDestroy {
@@ -2044,6 +1989,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly companyReportLoading = signal(false);
   readonly companyReportError = signal<string | null>(null);
   readonly companyReportState = signal<CompanyDeepReportState | null>(null);
+  readonly tbankStatus = signal<TbankPaymentStatus | null>(null);
+  readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
   readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
   readonly companyReportBusy = computed(() => this.companyReportLoading() || !!this.companyReportState()?.activeJob);
   readonly companyReport = computed(() => (this.companyReportState()?.latestJob?.report ?? null) as CompanyReport | null);
@@ -2113,6 +2060,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.loadTbankStatus();
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
       const companyId = Number(params.get('companyId'));
       const orderId = Number(params.get('orderId'));
@@ -2988,6 +2936,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     return task.statusCode === 'PLANNED';
   }
 
+  canDeleteRecoveryTask(task: ReviewRecoveryTaskItem): boolean {
+    return this.canEditRecoveryTask(task)
+      && (this.auth.hasRealmRole('ADMIN') || this.auth.hasRealmRole('OWNER') || this.auth.hasRealmRole('MANAGER'));
+  }
+
   recoveryTaskTextValue(task: ReviewRecoveryTaskItem): string {
     return this.recoveryTaskDraft(task).recoveryText;
   }
@@ -3078,6 +3031,30 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       `recovery-complete-${task.id}`,
       () => this.api.completeManagerReviewRecoveryTask(orderId, task.id),
       'Не удалось отметить восстановление'
+    );
+  }
+
+  async deleteRecoveryTask(task: ReviewRecoveryTaskItem): Promise<void> {
+    const orderId = this.orderId();
+    if (!orderId || !this.canDeleteRecoveryTask(task)) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Удалить восстановление',
+      message: `Удалить задачу восстановления #${task.id}?`,
+      confirmText: 'Удалить',
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.runDetailsMutation(
+      `recovery-delete-${task.id}`,
+      () => this.api.deleteManagerReviewRecoveryTask(orderId, task.id),
+      'Не удалось удалить восстановление',
+      () => this.clearRecoveryTaskDraft(task.id)
     );
   }
 
@@ -3189,6 +3166,53 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   canRefreshCompanyReport(): boolean {
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  canShowPaymentLinkAction(): boolean {
+    const status = this.tbankStatus();
+    return !!this.details()
+      && !!status?.managerUiEnabled
+      && !!status.paymentLinksEnabled
+      && this.auth.hasRealmRole('ADMIN');
+  }
+
+  paymentLinkModeLabel(): string {
+    const status = this.tbankStatus();
+    if (!status) {
+      return 'Счет';
+    }
+    if (!status.enabled) {
+      return 'Тест-счет';
+    }
+    return status.applyConfirmedPayments ? 'Счет T-Bank' : 'Тест-счет';
+  }
+
+  createPaymentLink(): void {
+    const orderId = this.orderId();
+    if (!orderId || !this.canShowPaymentLinkAction() || this.isMutating('payment-link')) {
+      return;
+    }
+
+    this.mutationKey.set('payment-link');
+    this.error.set(null);
+    this.api.createManagerOrderPaymentLink(orderId).subscribe({
+      next: (response) => {
+        this.paymentLink.set(response);
+        this.mutationKey.set(null);
+        void this.copyText(response.copyText || response.url, 'payment-link');
+      },
+      error: (err) => {
+        this.error.set(this.errorMessage(err, 'Не удалось создать ссылку на оплату'));
+        this.mutationKey.set(null);
+      }
+    });
+  }
+
+  private loadTbankStatus(): void {
+    this.api.getTbankStatus().subscribe({
+      next: (status) => this.tbankStatus.set(status),
+      error: () => this.tbankStatus.set(null)
+    });
   }
 
   refreshCompanyReport(): void {

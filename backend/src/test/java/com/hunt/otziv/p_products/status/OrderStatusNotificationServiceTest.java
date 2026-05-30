@@ -326,7 +326,7 @@ class OrderStatusNotificationServiceTest {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
         String message = "Компания. Опубликован новый отзыв 3 / 10.";
-        String messageWithHint = message + "\n\nЕсли вы не хотите получать отчет о каждом отзыве, напишите в чат: отключить оповещения о каждой публикации.";
+        String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nОтправьте команду: отключить уведомления";
 
         when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
         when(whatsAppService.sendMessageToGroup("client", "group", messageWithHint)).thenReturn("ok");
@@ -341,13 +341,31 @@ class OrderStatusNotificationServiceTest {
     }
 
     @Test
+    void sendProgressMessageToClientChatKeepsWhatsAppPlainAfterFirstReview() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        String message = "Компания. Опубликован новый отзыв 3 / 10.";
+
+        when(whatsAppService.sendMessageToGroup("client", "group", message)).thenReturn("ok");
+
+        boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message, false);
+
+        assertTrue(result);
+        verify(whatsAppService).sendMessageToGroup("client", "group", message);
+        verify(publicationProgressPreferenceService, never()).appendPlainOptOutHint(message);
+        verifyNoInteractions(telegramService);
+        verifyNoInteractions(maxBotClient);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
     void sendProgressMessageToClientChatAddsOptOutHintForMax() {
         OrderStatusNotificationService service = service();
         Order order = orderWithManager(10L, "Компания", 123L);
         order.getCompany().setUrlChat("https://max.ru/join/SharedToken123");
         order.getCompany().setMaxGroupChatId(-200L);
         String message = "Компания. Опубликован новый отзыв 3 / 10.";
-        String messageWithHint = message + "\n\nЕсли вы не хотите получать отчет о каждом отзыве, напишите в чат: отключить оповещения о каждой публикации.";
+        String messageWithHint = message + "\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nОтправьте команду: отключить уведомления";
 
         when(publicationProgressPreferenceService.appendPlainOptOutHint(message)).thenReturn(messageWithHint);
         when(maxBotClient.sendMessageToChat(-200L, messageWithHint)).thenReturn(true);
@@ -358,6 +376,26 @@ class OrderStatusNotificationServiceTest {
         verify(maxBotClient).sendMessageToChat(-200L, messageWithHint);
         verifyNoInteractions(whatsAppService);
         verifyNoInteractions(telegramService);
+        verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void sendProgressMessageToClientChatKeepsTelegramPlainAfterFirstReview() {
+        OrderStatusNotificationService service = service();
+        Order order = orderWithManager(10L, "Компания", 123L);
+        order.getCompany().setUrlChat("https://t.me/shared_owner");
+        order.getCompany().setTelegramGroupChatId(-100L);
+        String message = "Компания. Опубликован новый отзыв 3 / 10.";
+
+        when(telegramService.sendMessage(-100L, message)).thenReturn(true);
+
+        boolean result = service.sendProgressMessageToClientChat(order, "client", "group", message, false);
+
+        assertTrue(result);
+        verify(telegramService).sendMessage(-100L, message);
+        verify(telegramService, never()).sendPublicationProgressMessage(-100L, message, order.getCompany().getId());
+        verifyNoInteractions(whatsAppService);
+        verifyNoInteractions(maxBotClient);
         verifyNoInteractions(orderRepository);
     }
 

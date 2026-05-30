@@ -7,6 +7,7 @@ import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -76,6 +77,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewEditService reviewEditService;
     private final OrderStatusCheckerService orderStatusCheckerService;
     private final BusinessAuditService businessAuditService;
+    private final GamificationEventService gamificationEventService;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -899,6 +901,9 @@ public class ReviewServiceImpl implements ReviewService {
         }
         if (publishChanged) {
             synchronizeOrderCounter(saveReview);
+            if (saveReview.isPublish()) {
+                gamificationEventService.recordReviewPublished(saveReview);
+            }
         }
     }
 
@@ -1067,6 +1072,7 @@ public class ReviewServiceImpl implements ReviewService {
         OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
 
         boolean isChanged = false;
+        boolean oldPublish = saveReview.isPublish();
 
         if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
             saveReview.setText(reviewDTO.getText());
@@ -1093,6 +1099,9 @@ public class ReviewServiceImpl implements ReviewService {
 
         if (isChanged) {
             reviewRepository.save(saveReview);
+            if (!oldPublish && saveReview.isPublish()) {
+                gamificationEventService.recordReviewPublished(saveReview);
+            }
         }
     }
 

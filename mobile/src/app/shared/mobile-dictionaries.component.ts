@@ -11,6 +11,7 @@ import {
   AdminCity,
   AdminClientMessageMonitor,
   AdminClientMessageMonitorAttempt,
+  AdminClientMessageMaintenancePreview,
   AdminClientMessageMonitorQueueItem,
   AdminClientMessageMonitorScenario,
   AdminClientMessageSettings,
@@ -48,6 +49,8 @@ interface SettingsRow {
 }
 
 type Draft = Record<string, string | number | boolean | null>;
+type ClientMessageMaintenanceAction = 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed';
+type ClientMessageManualAction = 'retry' | 'done' | 'disable';
 
 const TABS: DictionaryTab[] = [
   { key: 'categories', title: 'Категории', icon: 'category', description: 'структура услуг и подкатегорий', roles: 'all' },
@@ -84,17 +87,37 @@ const CLIENT_MESSAGE_MONITOR_POLLING_MS = 60000;
 const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
   workerEnabled: true,
   liveEnabled: true,
+  immediateEnabled: true,
   monitorEnabled: false,
   reviewCheckEnabled: true,
+  reviewCheckAutoArchiveEnabled: true,
+  clientTextReminderEnabled: true,
   paymentReminderEnabled: true,
   badReviewInvoiceEnabled: true,
+  badReviewAutoBanEnabled: true,
+  reviewRecoveryNoticeEnabled: true,
   paymentOverdueEnabled: true,
   paymentOverdueLiveEnabled: false,
   archiveReorderEnabled: true,
+  errorProtectionEnabled: true,
   reviewCheckIntervalDays: 2,
+  reviewCheckAutoArchiveDays: 30,
+  clientTextReminderIntervalDays: 3,
   paymentReminderIntervalDays: 2,
+  reviewCheckRetryDelayHours: 2,
+  paymentInvoiceRetryDelayHours: 2,
+  badReviewInvoiceRetryDelayHours: 2,
+  badReviewAutoBanDelayDays: 2,
+  reviewRecoveryNoticeRetryDelayHours: 2,
   paymentOverdueDays: 30,
   archiveReorderMonths: 3,
+  archiveReorderJitterDays: 10,
+  archiveOrderRetentionDays: 90,
+  errorProtectionThreshold: 20,
+  errorProtectionWindowMinutes: 10,
+  errorProtectionCooldownMinutes: 60,
+  whatsAppAuthRetryHours: 2,
+  whatsAppAuthAlertCooldownHours: 12,
   retentionDays: 90,
   tickBatchSize: 5,
   candidateLimit: 200,
@@ -105,6 +128,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
   maxGapSeconds: 90,
   businessWindows: '10:00-12:00,14:00-17:00,19:00-21:00',
   reviewCheckStatuses: 'На проверке',
+  clientTextReminderStatuses: 'Новый',
   paymentReminderStatuses: 'Выставлен счет,Напоминание',
   paymentOverdueStatuses: 'Выставлен счет,Напоминание',
   closedOrderStatuses: 'Оплачено,Архив,Бан,Не оплачено',
@@ -113,9 +137,15 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
   archiveInactiveOrderStatuses: 'Оплачено,Архив,Бан',
   openNextOrderRequestStatuses: 'PENDING,FAILED',
   reviewLinkBaseUrl: 'https://o-ogo.ru',
-  reviewReminderText: '{companyAndFilial}\n\nПроверьте, пожалуйста, отзывы по ссылке: {reviewLink}',
+  reviewReminderText: '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.\n\nСсылка на проверку отзывов: {reviewLink}',
+  clientTextReminderText: '{companyAndFilial}\n\nЗдравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №{orderId}, чтобы мы могли продолжить работу.',
+  publicationStartedText: '{companyAndFilial}\n\nСпасибо, правки получили. Отзывы переданы в публикацию. Будем присылать короткие отчёты по мере публикации.',
+  publicationProgressReportText: '{companyAndFilial}. Опубликован новый отзыв {progress}.',
   paymentInstructionSource: 'MANAGER_TEXT',
   paymentReminderText: '{companyAndFilial}\n\n{managerPayText} К оплате: {sum} руб.',
+  paymentLinkCopyText: '{companyAndFilial}\n\nЗдравствуйте, ваш заказ выполнен. К оплате: {sum} руб.\n\n{paymentInstruction}\n\n{paymentAfterword}',
+  paymentSuccessText: 'Оплата прошла успешно.\n\nНовый заказ принят в работу.\n{orderLine}{companyLine}Сумма: {sum}\nСтраница оплаты: {paymentPage}\n\n{receiptText}',
+  reviewRecoveryNoticeText: '{companyAndFilial}\n\nВсе отзывы по заказу №{orderId} восстановлены. Продолжаем работу.',
   archiveOfferText: '{company}, добрый день! Хотите повторить заказ?'
 };
 
@@ -448,12 +478,18 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   <div class="form-grid">
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().workerEnabled" (ngModelChange)="patchAutoresponder('workerEnabled', $event)"><span>Автоответчик включен</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().liveEnabled" (ngModelChange)="patchAutoresponder('liveEnabled', $event)"><span>Реальная отправка</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().immediateEnabled" (ngModelChange)="patchAutoresponder('immediateEnabled', $event)"><span>Быстрые отправки</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewCheckEnabled" (ngModelChange)="patchAutoresponder('reviewCheckEnabled', $event)"><span>Проверка отзывов</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewCheckAutoArchiveEnabled" (ngModelChange)="patchAutoresponder('reviewCheckAutoArchiveEnabled', $event)"><span>Автоархив проверки</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().clientTextReminderEnabled" (ngModelChange)="patchAutoresponder('clientTextReminderEnabled', $event)"><span>Запрос текста клиента</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentReminderEnabled" (ngModelChange)="patchAutoresponder('paymentReminderEnabled', $event)"><span>Напоминать об оплате</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().badReviewInvoiceEnabled" (ngModelChange)="patchAutoresponder('badReviewInvoiceEnabled', $event)"><span>Счет после плохого</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().badReviewAutoBanEnabled" (ngModelChange)="patchAutoresponder('badReviewAutoBanEnabled', $event)"><span>Бан после плохого</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().reviewRecoveryNoticeEnabled" (ngModelChange)="patchAutoresponder('reviewRecoveryNoticeEnabled', $event)"><span>Уведомлять о восстановлении</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentOverdueEnabled" (ngModelChange)="patchAutoresponder('paymentOverdueEnabled', $event)"><span>Просрочка оплаты</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().paymentOverdueLiveEnabled" (ngModelChange)="patchAutoresponder('paymentOverdueLiveEnabled', $event)"><span>Live-перевод просрочки</span></label>
                     <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().archiveReorderEnabled" (ngModelChange)="patchAutoresponder('archiveReorderEnabled', $event)"><span>Архивные предложения</span></label>
+                    <label class="toggle-row"><input type="checkbox" [ngModel]="autoresponder().errorProtectionEnabled" (ngModelChange)="patchAutoresponder('errorProtectionEnabled', $event)"><span>Защита от ошибок</span></label>
                     <label class="toggle-row wide"><input type="checkbox" [ngModel]="autoresponder().monitorEnabled" (ngModelChange)="patchAutoresponder('monitorEnabled', $event)"><span>Мониторинг автоответчика</span></label>
                   </div>
                 </article>
@@ -468,9 +504,23 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   </header>
                   <div class="form-grid">
                     <label><span>Интервал проверки, дней</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckIntervalDays" (ngModelChange)="patchAutoresponder('reviewCheckIntervalDays', $event)"></label>
+                    <label><span>Автоархив проверки, дней</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckAutoArchiveDays" (ngModelChange)="patchAutoresponder('reviewCheckAutoArchiveDays', $event)"></label>
+                    <label><span>Запрос текста, дней</span><input type="number" min="1" [ngModel]="autoresponder().clientTextReminderIntervalDays" (ngModelChange)="patchAutoresponder('clientTextReminderIntervalDays', $event)"></label>
                     <label><span>Интервал оплаты, дней</span><input type="number" min="1" [ngModel]="autoresponder().paymentReminderIntervalDays" (ngModelChange)="patchAutoresponder('paymentReminderIntervalDays', $event)"></label>
+                    <label><span>Повтор проверки, часов</span><input type="number" min="1" [ngModel]="autoresponder().reviewCheckRetryDelayHours" (ngModelChange)="patchAutoresponder('reviewCheckRetryDelayHours', $event)"></label>
+                    <label><span>Повтор оплаты, часов</span><input type="number" min="1" [ngModel]="autoresponder().paymentInvoiceRetryDelayHours" (ngModelChange)="patchAutoresponder('paymentInvoiceRetryDelayHours', $event)"></label>
+                    <label><span>Повтор плохого, часов</span><input type="number" min="1" [ngModel]="autoresponder().badReviewInvoiceRetryDelayHours" (ngModelChange)="patchAutoresponder('badReviewInvoiceRetryDelayHours', $event)"></label>
+                    <label><span>Бан после плохого, дней</span><input type="number" min="1" [ngModel]="autoresponder().badReviewAutoBanDelayDays" (ngModelChange)="patchAutoresponder('badReviewAutoBanDelayDays', $event)"></label>
+                    <label><span>Восстановление, часов</span><input type="number" min="1" [ngModel]="autoresponder().reviewRecoveryNoticeRetryDelayHours" (ngModelChange)="patchAutoresponder('reviewRecoveryNoticeRetryDelayHours', $event)"></label>
                     <label><span>Просрочка оплаты, дней</span><input type="number" min="1" [ngModel]="autoresponder().paymentOverdueDays" (ngModelChange)="patchAutoresponder('paymentOverdueDays', $event)"></label>
                     <label><span>Архив, месяцев</span><input type="number" min="1" [ngModel]="autoresponder().archiveReorderMonths" (ngModelChange)="patchAutoresponder('archiveReorderMonths', $event)"></label>
+                    <label><span>Разброс архива, дней</span><input type="number" min="0" [ngModel]="autoresponder().archiveReorderJitterDays" (ngModelChange)="patchAutoresponder('archiveReorderJitterDays', $event)"></label>
+                    <label><span>Хранить архив, дней</span><input type="number" min="1" [ngModel]="autoresponder().archiveOrderRetentionDays" (ngModelChange)="patchAutoresponder('archiveOrderRetentionDays', $event)"></label>
+                    <label><span>Порог ошибок</span><input type="number" min="1" [ngModel]="autoresponder().errorProtectionThreshold" (ngModelChange)="patchAutoresponder('errorProtectionThreshold', $event)"></label>
+                    <label><span>Окно ошибок, минут</span><input type="number" min="1" [ngModel]="autoresponder().errorProtectionWindowMinutes" (ngModelChange)="patchAutoresponder('errorProtectionWindowMinutes', $event)"></label>
+                    <label><span>Пауза ошибок, минут</span><input type="number" min="1" [ngModel]="autoresponder().errorProtectionCooldownMinutes" (ngModelChange)="patchAutoresponder('errorProtectionCooldownMinutes', $event)"></label>
+                    <label><span>WhatsApp retry, часов</span><input type="number" min="1" [ngModel]="autoresponder().whatsAppAuthRetryHours" (ngModelChange)="patchAutoresponder('whatsAppAuthRetryHours', $event)"></label>
+                    <label><span>WhatsApp alert, часов</span><input type="number" min="1" [ngModel]="autoresponder().whatsAppAuthAlertCooldownHours" (ngModelChange)="patchAutoresponder('whatsAppAuthAlertCooldownHours', $event)"></label>
                     <label><span>Дневной лимит</span><input type="number" min="1" [ngModel]="autoresponder().dailyLimit" (ngModelChange)="patchAutoresponder('dailyLimit', $event)"></label>
                     <label><span>Пачка за тик</span><input type="number" min="1" [ngModel]="autoresponder().tickBatchSize" (ngModelChange)="patchAutoresponder('tickBatchSize', $event)"></label>
                     <label><span>Лимит кандидатов</span><input type="number" min="1" [ngModel]="autoresponder().candidateLimit" (ngModelChange)="patchAutoresponder('candidateLimit', $event)"></label>
@@ -493,6 +543,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   </header>
                   <div class="form-grid">
                     <label class="wide"><span>Статусы проверки отзывов</span><input [ngModel]="autoresponder().reviewCheckStatuses" (ngModelChange)="patchAutoresponder('reviewCheckStatuses', $event)"></label>
+                    <label class="wide"><span>Статусы запроса текста</span><input [ngModel]="autoresponder().clientTextReminderStatuses" (ngModelChange)="patchAutoresponder('clientTextReminderStatuses', $event)"></label>
                     <label class="wide"><span>Статусы ожидания оплаты</span><input [ngModel]="autoresponder().paymentReminderStatuses" (ngModelChange)="patchAutoresponder('paymentReminderStatuses', $event)"></label>
                     <label class="wide"><span>Статусы просрочки оплаты</span><input [ngModel]="autoresponder().paymentOverdueStatuses" (ngModelChange)="patchAutoresponder('paymentOverdueStatuses', $event)"></label>
                     <label class="wide"><span>Закрытые статусы заказов</span><input [ngModel]="autoresponder().closedOrderStatuses" (ngModelChange)="patchAutoresponder('closedOrderStatuses', $event)"></label>
@@ -520,7 +571,13 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                       </select>
                     </label>
                     <label class="wide"><span>Текст проверки отзывов</span><textarea rows="5" [ngModel]="autoresponder().reviewReminderText" (ngModelChange)="patchAutoresponder('reviewReminderText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст запроса клиента</span><textarea rows="5" [ngModel]="autoresponder().clientTextReminderText" (ngModelChange)="patchAutoresponder('clientTextReminderText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст старта публикации</span><textarea rows="5" [ngModel]="autoresponder().publicationStartedText" (ngModelChange)="patchAutoresponder('publicationStartedText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст прогресса публикации</span><textarea rows="5" [ngModel]="autoresponder().publicationProgressReportText" (ngModelChange)="patchAutoresponder('publicationProgressReportText', $event)"></textarea></label>
                     <label class="wide"><span>Текст оплаты</span><textarea rows="5" [ngModel]="autoresponder().paymentReminderText" (ngModelChange)="patchAutoresponder('paymentReminderText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст платежной ссылки</span><textarea rows="5" [ngModel]="autoresponder().paymentLinkCopyText" (ngModelChange)="patchAutoresponder('paymentLinkCopyText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст успешной оплаты</span><textarea rows="5" [ngModel]="autoresponder().paymentSuccessText" (ngModelChange)="patchAutoresponder('paymentSuccessText', $event)"></textarea></label>
+                    <label class="wide"><span>Текст восстановления отзывов</span><textarea rows="5" [ngModel]="autoresponder().reviewRecoveryNoticeText" (ngModelChange)="patchAutoresponder('reviewRecoveryNoticeText', $event)"></textarea></label>
                     <label class="wide"><span>Текст архивного предложения</span><textarea rows="5" [ngModel]="autoresponder().archiveOfferText" (ngModelChange)="patchAutoresponder('archiveOfferText', $event)"></textarea></label>
                   </div>
                 </article>
@@ -565,6 +622,60 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                     </button>
                   </div>
                   <p class="monitor-note">Переключатель включает только экран наблюдения и периодическое обновление. Отправка автоответчика живет по настройкам раздела "Автоответчик".</p>
+                </article>
+
+                <article class="dict-card settings-card maintenance-card">
+                  <header>
+                    <span class="material-icons-sharp">fact_check</span>
+                    <div>
+                      <strong>Dry-run актуализации базы</strong>
+                      <small>{{ clientMessageMaintenancePreview()?.updatedAt ? 'обновлено ' + dateTimeLabel(clientMessageMaintenancePreview()!.updatedAt) : 'еще не загружено' }}</small>
+                    </div>
+                    <button
+                      type="button"
+                      (click)="loadClientMessageMaintenancePreview()"
+                      [disabled]="clientMessageMaintenancePreviewLoading() || maintenanceAction() !== null"
+                      aria-label="Проверить обслуживание"
+                    >
+                      <span class="material-icons-sharp">{{ clientMessageMaintenancePreviewLoading() ? 'hourglass_top' : 'refresh' }}</span>
+                    </button>
+                  </header>
+                  <p>Показывает, какие статусы, счета, плохие задачи, архивные предложения и даты публикаций можно привести в порядок без изменений в базе.</p>
+                  @if (clientMessageMaintenancePreviewError()) {
+                    <p class="danger-text">{{ clientMessageMaintenancePreviewError() }}</p>
+                  }
+                  @if (clientMessageMaintenancePreview(); as preview) {
+                    <div class="maintenance-preview-grid">
+                      <span><b>{{ preview.companyStatuses.shouldMoveToWork }}</b> вернуть в работу</span>
+                      <span><b>{{ preview.companyStatuses.workWithoutActiveOrders }}</b> поставить на стоп</span>
+                      <span><b>{{ preview.paymentStatuses.invoiceOrReminderOlderThanThreshold }}</b> старые счета</span>
+                      <span><b>{{ preview.unpaidRecovery.canCreateBadTasks }}</b> плохие задачи</span>
+                      <span><b>{{ preview.publication.suspicious }}</b> публикации</span>
+                      <span><b>{{ preview.archiveOffers.blockedByActiveOrders + preview.archiveOffers.blockedByOpenNextRequest }}</b> архивные офферы</span>
+                    </div>
+                    @if (preview.suggestedActions.length) {
+                      <div class="maintenance-action-list">
+                        @for (action of preview.suggestedActions; track action.title) {
+                          <span [class]="action.tone"><b>{{ action.count }}</b>{{ action.title }}</span>
+                        }
+                      </div>
+                    }
+                    @if (canApplyMaintenance()) {
+                      <div class="maintenance-button-row">
+                        <button type="button" class="ghost" (click)="applyClientMessageMaintenance('company-statuses')" [disabled]="maintenanceAction() !== null || (preview.companyStatuses.shouldMoveToWork + preview.companyStatuses.workWithoutActiveOrders) === 0">Статусы</button>
+                        <button type="button" class="ghost" (click)="applyClientMessageMaintenance('payment-overdue')" [disabled]="maintenanceAction() !== null || preview.paymentStatuses.invoiceOrReminderOlderThanThreshold === 0">Счета</button>
+                        <button type="button" class="ghost" (click)="applyClientMessageMaintenance('missing-bad-tasks')" [disabled]="maintenanceAction() !== null || preview.unpaidRecovery.canCreateBadTasks === 0">Плохие</button>
+                        <button type="button" class="ghost" (click)="applyClientMessageMaintenance('archive-offers')" [disabled]="maintenanceAction() !== null || (preview.archiveOffers.blockedByActiveOrders + preview.archiveOffers.blockedByOpenNextRequest) === 0">Архив</button>
+                        <button type="button" class="ghost" (click)="applyClientMessageMaintenance('publication-dates')" [disabled]="maintenanceAction() !== null || (preview.publication.farFuturePublishDate + preview.publication.longPublishSpan + preview.publication.undatedUnpublished) === 0">Даты</button>
+                        <button type="button" class="ghost" (click)="applyClientMessageMaintenance('publication-completed')" [disabled]="maintenanceAction() !== null || preview.publication.oldAllReviewsPublished === 0">Завершить</button>
+                      </div>
+                    }
+                  } @else {
+                    <div class="empty-state compact-empty">
+                      <span class="material-icons-sharp">checklist</span>
+                      <strong>Нажмите обновить, чтобы увидеть план обслуживания.</strong>
+                    </div>
+                  }
                 </article>
 
                 @if (clientMessageMonitorError()) {
@@ -636,6 +747,48 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                     </article>
                   }
 
+                  <article class="dict-card settings-card monitor-filter-card">
+                    <header>
+                      <span class="material-icons-sharp">filter_alt</span>
+                      <div>
+                        <strong>Фильтры мониторинга</strong>
+                        <small>очередь {{ filteredMonitorQueue().length }} · журнал {{ filteredMonitorAttempts().length }}</small>
+                      </div>
+                    </header>
+                    <div class="form-grid">
+                      <label>
+                        <span>Сценарий</span>
+                        <select [ngModel]="monitorScenarioFilter()" (ngModelChange)="setMonitorScenarioFilter($event)">
+                          <option value="ALL">Все сценарии</option>
+                          @for (scenario of monitor.scenarios; track scenario.scenario) {
+                            <option [value]="scenario.scenario">{{ scenario.label }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        <span>Очередь</span>
+                        <select [ngModel]="monitorQueueStatusFilter()" (ngModelChange)="setMonitorQueueStatusFilter($event)">
+                          <option value="ALL">Все кандидаты</option>
+                          <option value="DUE">Пора проверить</option>
+                          <option value="ERROR">С ошибкой</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Журнал</span>
+                        <select [ngModel]="monitorAttemptStatusFilter()" (ngModelChange)="setMonitorAttemptStatusFilter($event)">
+                          <option value="ALL">Все попытки</option>
+                          <option value="SENT">Отправлено</option>
+                          <option value="FAILED">Ошибка</option>
+                          <option value="SKIPPED">Пропущено</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Поиск</span>
+                        <input type="search" [ngModel]="monitorSearch()" (ngModelChange)="setMonitorSearch($event)" placeholder="Компания, заказ, ошибка">
+                      </label>
+                    </div>
+                  </article>
+
                   <article class="dict-card settings-card">
                     <header>
                       <span class="material-icons-sharp">playlist_add_check</span>
@@ -643,20 +796,46 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                         <strong>Очередь кандидатов</strong>
                         <small>следующие попытки и причины ошибок</small>
                       </div>
-                      <b>{{ monitor.queue.length }}</b>
+                      <b>{{ filteredMonitorQueue().length }}</b>
                     </header>
-                    @for (item of monitor.queue; track item.id) {
+                    @for (item of filteredMonitorQueue(); track item.id) {
                       <article class="dict-row monitor-row">
                         <span class="material-icons-sharp">{{ monitorScenarioIcon(item) }}</span>
                         <div>
                           <strong>{{ item.orderTitle || item.companyTitle }}</strong>
                           <small>{{ item.scenarioLabel }} · {{ item.statusTitle || 'без статуса' }}</small>
+                          <small>{{ item.readinessLabel || item.channelDetails || item.expectedChannel || 'канал уточняется' }}</small>
                           @if (item.lastErrorMessage) {
                             <small class="danger-text">{{ item.lastErrorMessage }}</small>
                           }
+                          <div class="monitor-row-actions">
+                            <button type="button" (click)="toggleMonitorQueueDetails(item)" [disabled]="!!clientMessageManualAction()">
+                              <span class="material-icons-sharp">{{ expandedMonitorQueueKey() === monitorQueueKey(item) ? 'expand_less' : 'preview' }}</span>
+                            </button>
+                            <button type="button" (click)="retryClientMessageCandidate(item)" [disabled]="!!clientMessageManualAction()">
+                              <span class="material-icons-sharp">{{ clientMessageManualAction() === monitorManualActionKey(item, 'retry') ? 'hourglass_top' : 'replay' }}</span>
+                            </button>
+                            <button type="button" (click)="markClientMessageCandidateDone(item)" [disabled]="!!clientMessageManualAction()">
+                              <span class="material-icons-sharp">{{ clientMessageManualAction() === monitorManualActionKey(item, 'done') ? 'hourglass_top' : 'task_alt' }}</span>
+                            </button>
+                            <button type="button" class="danger-link" (click)="disableClientMessageCandidate(item)" [disabled]="!!clientMessageManualAction()">
+                              <span class="material-icons-sharp">{{ clientMessageManualAction() === monitorManualActionKey(item, 'disable') ? 'hourglass_top' : 'block' }}</span>
+                            </button>
+                          </div>
                         </div>
                         <b>{{ item.nextAttemptAt ? dateTimeLabel(item.nextAttemptAt) : '-' }}</b>
                       </article>
+                      @if (expandedMonitorQueueKey() === monitorQueueKey(item)) {
+                        <article class="dict-card monitor-preview-card">
+                          <div class="meta-grid">
+                            <span>канал: {{ item.expectedChannel || '-' }}</span>
+                            <span>детали: {{ item.channelDetails || '-' }}</span>
+                            <span>оплата: {{ paymentInstructionSourceLabel(item.paymentInstructionSource) }}</span>
+                            <span>отправлено: {{ item.sentCount }} · ошибок: {{ item.consecutiveFailures }}</span>
+                          </div>
+                          <p>{{ item.messagePreview || item.readinessReason || 'Превью пока недоступно.' }}</p>
+                        </article>
+                      }
                     } @empty {
                       <p>В очереди пока пусто.</p>
                     }
@@ -669,9 +848,9 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                         <strong>Журнал попыток</strong>
                         <small>отправлено, пропущено, ошибки</small>
                       </div>
-                      <b>{{ monitor.attempts.length }}</b>
+                      <b>{{ filteredMonitorAttempts().length }}</b>
                     </header>
-                    @for (attempt of monitor.attempts; track attempt.id) {
+                    @for (attempt of filteredMonitorAttempts(); track attempt.id) {
                       <article class="dict-row monitor-row">
                         <span class="material-icons-sharp">{{ attempt.status === 'SENT' ? 'done' : (attempt.status === 'FAILED' ? 'error' : 'pause') }}</span>
                         <div>
@@ -909,6 +1088,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
     :host-context(.dark) .dictionary-search,:host-context(.dark) .dict-card,:host-context(.dark) .dict-row,:host-context(.dark) .empty-state{background:linear-gradient(145deg,rgba(31,38,41,.98),rgba(22,27,29,.96));border-color:rgba(151,169,183,.18);box-shadow:none}:host-context(.dark) .settings-compact-title{background:#151b1d;border-color:rgba(151,169,183,.2);color:var(--otziv-dark)}:host-context(.dark) .dictionary-tabs button{background:linear-gradient(145deg,rgba(31,38,41,.98),rgba(24,30,32,.94));box-shadow:none}:host-context(.dark) .dictionary-tabs button.active{background:linear-gradient(145deg,rgba(38,48,53,.98),rgba(25,31,34,.96));border-color:rgba(116,154,207,.5)}:host-context(.dark) .setting-summary-row{background:#151b1d;border-color:rgba(151,169,183,.2)}:host-context(.dark) .settings-card{background:linear-gradient(145deg,rgba(31,38,41,.98),rgba(22,27,29,.96))}
     .dictionary-tabs button{grid-template-columns:2rem minmax(0,1fr);grid-template-rows:1fr 1fr;column-gap:.48rem;align-items:center}.dictionary-tabs .material-icons-sharp{align-self:center;justify-self:center}.dictionary-tabs strong{align-self:end;line-height:.95}.dictionary-tabs small{align-self:start;line-height:1.05}
     .dictionary-tabs button{min-width:0;overflow:hidden}.dictionary-tabs strong,.dictionary-tabs small{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monitor-head-card{gap:.58rem}.monitor-head-card header{align-items:center}.monitor-control-row{display:grid;grid-template-columns:minmax(0,1fr)auto;align-items:center;gap:.52rem}.monitor-switch,.monitor-refresh{min-width:0;min-height:2.34rem;border:1px solid rgba(68,158,133,.35);border-radius:.82rem;background:#fff;color:#3c8374;font-size:.67rem;font-weight:900;box-shadow:0 .35rem .85rem rgba(31,44,71,.04)}.monitor-switch{display:flex;align-items:center;gap:.52rem;padding:0 .7rem;text-align:left}.monitor-switch:disabled,.monitor-refresh:disabled{opacity:.58}.switch-track{position:relative;display:inline-block;flex:0 0 3.12rem;width:3.12rem;height:1.52rem;border-radius:999px;background:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(31,44,71,.08);transition:background .16s ease}.switch-thumb{position:absolute;top:.17rem;left:.17rem;width:1.18rem;height:1.18rem;border-radius:50%;background:#fff;box-shadow:0 .14rem .28rem rgba(31,44,71,.2);transition:transform .16s ease}.monitor-switch.on .switch-track{background:#4aa08a}.monitor-switch.on .switch-thumb{transform:translateX(1.58rem)}.monitor-switch>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monitor-refresh{display:inline-flex;align-items:center;justify-content:center;gap:.34rem;padding:0 .76rem}.monitor-refresh .material-icons-sharp{font-size:1.12rem}.monitor-note{color:var(--otziv-info)!important;font-size:.66rem!important;line-height:1.32!important}@media(max-width:360px){.monitor-control-row{grid-template-columns:1fr}.monitor-refresh{width:100%}.dictionary-tabs{grid-auto-columns:minmax(6.45rem,1fr)}}
+    .maintenance-card .empty-state{min-height:4.2rem}.maintenance-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.42rem}.maintenance-preview-grid span,.maintenance-action-list span{display:flex;min-width:0;align-items:center;gap:.35rem;border:1px solid rgba(135,151,178,.2);border-radius:.72rem;padding:.48rem .55rem;background:rgba(255,255,255,.74);color:var(--otziv-info);font-size:.64rem;font-weight:900}.maintenance-preview-grid b,.maintenance-action-list b{color:var(--otziv-dark);font-size:.9rem}.maintenance-action-list,.maintenance-button-row,.monitor-row-actions{display:flex;flex-wrap:wrap;gap:.42rem}.maintenance-action-list span.safe{border-color:rgba(68,158,133,.22);color:#28806a}.maintenance-action-list span.warning{border-color:rgba(236,171,59,.28);color:#976000}.maintenance-action-list span.danger{border-color:rgba(239,52,95,.24);color:var(--otziv-danger)}.maintenance-button-row .ghost{flex:1 1 calc(33.33% - .42rem);min-width:5.3rem}.monitor-row-actions{margin-top:.38rem}.monitor-row-actions button{display:grid;place-items:center;width:2.05rem;height:2.05rem;min-height:2.05rem;padding:0}.monitor-row-actions .material-icons-sharp{font-size:1rem}.monitor-preview-card{margin-top:-.3rem;border-style:dashed}.monitor-preview-card p{overflow-wrap:anywhere}
     :host-context(.dark) .monitor-switch,:host-context(.dark) .monitor-refresh{background:#151b1d;border-color:rgba(74,160,138,.42);color:#9fd8ca}:host-context(.dark) .monitor-switch:not(.on) .switch-track{background:#2c363a}
   `]
 })
@@ -931,6 +1111,16 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   readonly clientMessageMonitorLoading = signal(false);
   readonly clientMessageMonitorSaving = signal(false);
   readonly clientMessageMonitorError = signal<string | null>(null);
+  readonly clientMessageMaintenancePreview = signal<AdminClientMessageMaintenancePreview | null>(null);
+  readonly clientMessageMaintenancePreviewLoading = signal(false);
+  readonly clientMessageMaintenancePreviewError = signal<string | null>(null);
+  readonly maintenanceAction = signal<ClientMessageMaintenanceAction | null>(null);
+  readonly clientMessageManualAction = signal<string | null>(null);
+  readonly expandedMonitorQueueKey = signal<string | null>(null);
+  readonly monitorScenarioFilter = signal('ALL');
+  readonly monitorQueueStatusFilter = signal('ALL');
+  readonly monitorAttemptStatusFilter = signal('ALL');
+  readonly monitorSearch = signal('');
 
   readonly categories = signal<AdminCategory[]>([]);
   readonly subCategories = signal<AdminSubCategory[]>([]);
@@ -1094,6 +1284,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
         case 'autoresponderMonitor':
           await this.loadAutoresponderSettings();
           await this.loadClientMessageMonitor(true);
+          await this.loadClientMessageMaintenancePreview(true);
           break;
       }
       this.markLoaded(this.activeTab());
@@ -1461,9 +1652,23 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   patchAutoresponder(key: keyof AdminClientMessageSettings, value: string | number | boolean): void {
     const numericKeys: Array<keyof AdminClientMessageSettings> = [
       'reviewCheckIntervalDays',
+      'reviewCheckAutoArchiveDays',
+      'clientTextReminderIntervalDays',
       'paymentReminderIntervalDays',
+      'reviewCheckRetryDelayHours',
+      'paymentInvoiceRetryDelayHours',
+      'badReviewInvoiceRetryDelayHours',
+      'badReviewAutoBanDelayDays',
+      'reviewRecoveryNoticeRetryDelayHours',
       'paymentOverdueDays',
       'archiveReorderMonths',
+      'archiveReorderJitterDays',
+      'archiveOrderRetentionDays',
+      'errorProtectionThreshold',
+      'errorProtectionWindowMinutes',
+      'errorProtectionCooldownMinutes',
+      'whatsAppAuthRetryHours',
+      'whatsAppAuthAlertCooldownHours',
       'retentionDays',
       'tickBatchSize',
       'candidateLimit',
@@ -1547,6 +1752,93 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       this.clientMessageMonitorError.set(this.errorMessage(error));
     } finally {
       this.clientMessageMonitorLoading.set(false);
+    }
+  }
+
+  async loadClientMessageMaintenancePreview(silent = false): Promise<void> {
+    if (!silent) {
+      this.clientMessageMaintenancePreviewLoading.set(true);
+    }
+    this.clientMessageMaintenancePreviewError.set(null);
+
+    try {
+      this.clientMessageMaintenancePreview.set(await firstValueFrom(this.api.getAdminClientMessageMaintenancePreview()));
+    } catch (error) {
+      this.clientMessageMaintenancePreviewError.set(this.errorMessage(error));
+    } finally {
+      this.clientMessageMaintenancePreviewLoading.set(false);
+    }
+  }
+
+  async applyClientMessageMaintenance(action: ClientMessageMaintenanceAction): Promise<void> {
+    if (this.maintenanceAction()) {
+      return;
+    }
+
+    this.maintenanceAction.set(action);
+    this.clientMessageMaintenancePreviewError.set(null);
+    try {
+      const response = await firstValueFrom(this.api.applyAdminClientMessageMaintenance(action));
+      this.clientMessageMaintenancePreview.set(response.preview);
+      this.notice.set(response.message || `Обслуживание выполнено: ${response.changed}.`);
+      await this.loadClientMessageMonitor(true);
+    } catch (error) {
+      this.clientMessageMaintenancePreviewError.set(this.errorMessage(error));
+    } finally {
+      this.maintenanceAction.set(null);
+    }
+  }
+
+  canApplyMaintenance(): boolean {
+    return this.adminMode;
+  }
+
+  monitorQueueKey(item: AdminClientMessageMonitorQueueItem): string {
+    return item.targetKey || String(item.id);
+  }
+
+  monitorManualActionKey(item: AdminClientMessageMonitorQueueItem, action: ClientMessageManualAction): string {
+    return `${item.id}:${action}`;
+  }
+
+  toggleMonitorQueueDetails(item: AdminClientMessageMonitorQueueItem): void {
+    const key = this.monitorQueueKey(item);
+    this.expandedMonitorQueueKey.set(this.expandedMonitorQueueKey() === key ? null : key);
+  }
+
+  async retryClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): Promise<void> {
+    await this.runClientMessageManualAction(item, 'retry', () => this.api.retryAdminClientMessageNow(item.id));
+  }
+
+  async markClientMessageCandidateDone(item: AdminClientMessageMonitorQueueItem): Promise<void> {
+    await this.runClientMessageManualAction(item, 'done', () => this.api.markAdminClientMessageCandidateDone(item.id));
+  }
+
+  async disableClientMessageCandidate(item: AdminClientMessageMonitorQueueItem): Promise<void> {
+    await this.runClientMessageManualAction(item, 'disable', () => this.api.disableAdminClientMessageCandidate(item.id));
+  }
+
+  private async runClientMessageManualAction(
+    item: AdminClientMessageMonitorQueueItem,
+    action: ClientMessageManualAction,
+    request: () => ReturnType<ApiService['retryAdminClientMessageNow']>
+  ): Promise<void> {
+    if (this.clientMessageManualAction()) {
+      return;
+    }
+
+    this.clientMessageManualAction.set(this.monitorManualActionKey(item, action));
+    this.clientMessageMonitorError.set(null);
+    try {
+      const monitor = await firstValueFrom(request());
+      this.clientMessageMonitor.set(monitor);
+      this.patchAutoresponder('monitorEnabled', monitor.enabled);
+      const label = action === 'retry' ? 'Повтор поставлен.' : action === 'done' ? 'Кандидат отмечен выполненным.' : 'Кандидат отключен.';
+      this.notice.set(label);
+    } catch (error) {
+      this.clientMessageMonitorError.set(this.errorMessage(error));
+    } finally {
+      this.clientMessageManualAction.set(null);
     }
   }
 
@@ -1757,9 +2049,23 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     return {
       ...value,
       reviewCheckIntervalDays: this.positiveNumber(value.reviewCheckIntervalDays, 2),
+      reviewCheckAutoArchiveDays: this.positiveNumber(value.reviewCheckAutoArchiveDays, 30),
+      clientTextReminderIntervalDays: this.positiveNumber(value.clientTextReminderIntervalDays, 3),
       paymentReminderIntervalDays: this.positiveNumber(value.paymentReminderIntervalDays, 2),
+      reviewCheckRetryDelayHours: this.positiveNumber(value.reviewCheckRetryDelayHours, 2),
+      paymentInvoiceRetryDelayHours: this.positiveNumber(value.paymentInvoiceRetryDelayHours, 2),
+      badReviewInvoiceRetryDelayHours: this.positiveNumber(value.badReviewInvoiceRetryDelayHours, 2),
+      badReviewAutoBanDelayDays: this.positiveNumber(value.badReviewAutoBanDelayDays, 2),
+      reviewRecoveryNoticeRetryDelayHours: this.positiveNumber(value.reviewRecoveryNoticeRetryDelayHours, 2),
       paymentOverdueDays: this.positiveNumber(value.paymentOverdueDays, 30),
       archiveReorderMonths: this.positiveNumber(value.archiveReorderMonths, 3),
+      archiveReorderJitterDays: this.positiveNumber(value.archiveReorderJitterDays, 10),
+      archiveOrderRetentionDays: this.positiveNumber(value.archiveOrderRetentionDays, 90),
+      errorProtectionThreshold: this.positiveNumber(value.errorProtectionThreshold, 20),
+      errorProtectionWindowMinutes: this.positiveNumber(value.errorProtectionWindowMinutes, 10),
+      errorProtectionCooldownMinutes: this.positiveNumber(value.errorProtectionCooldownMinutes, 60),
+      whatsAppAuthRetryHours: this.positiveNumber(value.whatsAppAuthRetryHours, 2),
+      whatsAppAuthAlertCooldownHours: this.positiveNumber(value.whatsAppAuthAlertCooldownHours, 12),
       retentionDays: this.positiveNumber(value.retentionDays, 90),
       tickBatchSize: this.positiveNumber(value.tickBatchSize, 5),
       candidateLimit: this.positiveNumber(value.candidateLimit, 200),
@@ -1770,6 +2076,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       maxGapSeconds: this.positiveNumber(value.maxGapSeconds, 90),
       businessWindows: this.text(value.businessWindows) || CLIENT_MESSAGE_DEFAULTS.businessWindows,
       reviewCheckStatuses: this.text(value.reviewCheckStatuses) || CLIENT_MESSAGE_DEFAULTS.reviewCheckStatuses,
+      clientTextReminderStatuses: this.text(value.clientTextReminderStatuses) || CLIENT_MESSAGE_DEFAULTS.clientTextReminderStatuses,
       paymentReminderStatuses: this.text(value.paymentReminderStatuses) || CLIENT_MESSAGE_DEFAULTS.paymentReminderStatuses,
       paymentOverdueStatuses: this.text(value.paymentOverdueStatuses) || CLIENT_MESSAGE_DEFAULTS.paymentOverdueStatuses,
       closedOrderStatuses: this.text(value.closedOrderStatuses) || CLIENT_MESSAGE_DEFAULTS.closedOrderStatuses,
@@ -1779,8 +2086,14 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       openNextOrderRequestStatuses: this.text(value.openNextOrderRequestStatuses) || CLIENT_MESSAGE_DEFAULTS.openNextOrderRequestStatuses,
       reviewLinkBaseUrl: this.text(value.reviewLinkBaseUrl) || CLIENT_MESSAGE_DEFAULTS.reviewLinkBaseUrl,
       reviewReminderText: this.text(value.reviewReminderText) || CLIENT_MESSAGE_DEFAULTS.reviewReminderText,
+      clientTextReminderText: this.text(value.clientTextReminderText) || CLIENT_MESSAGE_DEFAULTS.clientTextReminderText,
+      publicationStartedText: this.text(value.publicationStartedText) || CLIENT_MESSAGE_DEFAULTS.publicationStartedText,
+      publicationProgressReportText: this.text(value.publicationProgressReportText) || CLIENT_MESSAGE_DEFAULTS.publicationProgressReportText,
       paymentInstructionSource: value.paymentInstructionSource === 'TBANK_LINK' ? 'TBANK_LINK' : 'MANAGER_TEXT',
       paymentReminderText: this.text(value.paymentReminderText) || CLIENT_MESSAGE_DEFAULTS.paymentReminderText,
+      paymentLinkCopyText: this.text(value.paymentLinkCopyText) || CLIENT_MESSAGE_DEFAULTS.paymentLinkCopyText,
+      paymentSuccessText: this.text(value.paymentSuccessText) || CLIENT_MESSAGE_DEFAULTS.paymentSuccessText,
+      reviewRecoveryNoticeText: this.text(value.reviewRecoveryNoticeText) || CLIENT_MESSAGE_DEFAULTS.reviewRecoveryNoticeText,
       archiveOfferText: this.text(value.archiveOfferText) || CLIENT_MESSAGE_DEFAULTS.archiveOfferText
     };
   }
@@ -1812,11 +2125,17 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     return [
       s.workerEnabled,
       s.liveEnabled,
+      s.immediateEnabled,
       s.reviewCheckEnabled,
+      s.reviewCheckAutoArchiveEnabled,
+      s.clientTextReminderEnabled,
       s.paymentReminderEnabled,
       s.badReviewInvoiceEnabled,
+      s.badReviewAutoBanEnabled,
+      s.reviewRecoveryNoticeEnabled,
       s.paymentOverdueEnabled,
       s.archiveReorderEnabled,
+      s.errorProtectionEnabled,
       s.monitorEnabled
     ].filter(Boolean).length;
   }
@@ -1833,12 +2152,73 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     const monitor = this.clientMessageMonitor();
     return [
       { icon: 'playlist_add_check', title: 'Активных', value: String(monitor?.activeCandidates ?? 0), detail: 'кандидаты в очереди' },
-      { icon: 'bolt', title: 'Готово сейчас', value: String(monitor?.dueNow ?? 0), detail: 'можно отправлять' },
+      { icon: 'bolt', title: 'Готово сейчас', value: String(monitor?.readyToSendNow ?? monitor?.dueNow ?? 0), detail: 'можно отправлять' },
+      { icon: 'schedule', title: 'Ждет окна', value: String(monitor?.waitingForWindow ?? 0), detail: 'вне рабочих окон' },
+      { icon: 'link_off', title: 'Нет канала', value: String(monitor?.missingChannelBindings ?? 0), detail: 'нужна привязка чата' },
       { icon: 'send', title: 'Сегодня', value: String(monitor?.sentToday ?? 0), detail: 'отправлено' },
       { icon: 'priority_high', title: 'Ошибок', value: String(monitor?.failedToday ?? 0), detail: 'за сегодня' },
       { icon: 'pause_circle', title: 'Пропущено', value: String(monitor?.skippedToday ?? 0), detail: 'за сегодня' },
       { icon: 'block', title: 'Отключено', value: String(monitor?.disabledStates ?? 0), detail: 'состояний' }
     ];
+  }
+
+  setMonitorScenarioFilter(value: string): void {
+    this.monitorScenarioFilter.set(value || 'ALL');
+  }
+
+  setMonitorQueueStatusFilter(value: string): void {
+    this.monitorQueueStatusFilter.set(value || 'ALL');
+  }
+
+  setMonitorAttemptStatusFilter(value: string): void {
+    this.monitorAttemptStatusFilter.set(value || 'ALL');
+  }
+
+  setMonitorSearch(value: string): void {
+    this.monitorSearch.set(String(value || '').trim());
+  }
+
+  filteredMonitorQueue(): AdminClientMessageMonitorQueueItem[] {
+    const monitor = this.clientMessageMonitor();
+    if (!monitor) {
+      return [];
+    }
+    const scenario = this.monitorScenarioFilter();
+    const status = this.monitorQueueStatusFilter();
+    const search = this.monitorSearch().toLowerCase();
+
+    return monitor.queue.filter((item) => {
+      if (scenario !== 'ALL' && item.scenario !== scenario) {
+        return false;
+      }
+      if (status === 'ERROR' && !item.lastErrorMessage) {
+        return false;
+      }
+      if (status === 'DUE' && item.readiness !== 'DUE' && item.readinessLabel !== 'Пора проверить') {
+        return false;
+      }
+      return !search || this.monitorSearchText(item).includes(search);
+    });
+  }
+
+  filteredMonitorAttempts(): AdminClientMessageMonitorAttempt[] {
+    const monitor = this.clientMessageMonitor();
+    if (!monitor) {
+      return [];
+    }
+    const scenario = this.monitorScenarioFilter();
+    const status = this.monitorAttemptStatusFilter();
+    const search = this.monitorSearch().toLowerCase();
+
+    return monitor.attempts.filter((attempt) => {
+      if (scenario !== 'ALL' && attempt.scenario !== scenario) {
+        return false;
+      }
+      if (status !== 'ALL' && attempt.status !== status) {
+        return false;
+      }
+      return !search || this.monitorSearchText(attempt).includes(search);
+    });
   }
 
   monitorScenarioIcon(item: { scenario: string }): string {
@@ -1876,6 +2256,27 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
   paymentInstructionSourceLabel(source?: string | null): string {
     return source === 'TBANK_LINK' ? 'T-Bank ссылка' : 'текст менеджера';
+  }
+
+  private monitorSearchText(item: AdminClientMessageMonitorQueueItem | AdminClientMessageMonitorAttempt): string {
+    const statusText = 'statusLabel' in item ? item.statusLabel : item.statusTitle;
+    const errorText = 'errorMessage' in item ? item.errorMessage : (item as AdminClientMessageMonitorQueueItem).lastErrorMessage;
+    const channelText = 'channel' in item ? item.channel : (item as AdminClientMessageMonitorQueueItem).expectedChannel;
+    const channelDetails = 'channelDetails' in item ? item.channelDetails : null;
+    return [
+      item.scenarioLabel,
+      item.companyTitle,
+      item.orderTitle,
+      item.orderId,
+      item.companyId,
+      item.targetKey,
+      item.targetType,
+      statusText,
+      errorText,
+      channelText,
+      channelDetails,
+      item.messagePreview
+    ].filter((value) => value != null && String(value).trim() !== '').join(' ').toLowerCase();
   }
 
   private markLoaded(tab: DictionaryTabKey): void {

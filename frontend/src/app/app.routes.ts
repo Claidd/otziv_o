@@ -255,6 +255,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'gamification/progress',
+    loadComponent: () => import('./features/gamification/gamification-progress.component')
+      .then((m) => m.GamificationProgressComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+    }
+  },
+  {
     path: 'cabinet/whatsapp',
     loadComponent: () => import('./features/cabinet/whatsapp-bind.component')
       .then((m) => m.WhatsAppBindComponent),

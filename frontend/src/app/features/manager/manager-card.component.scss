@@ -65,8 +65,6 @@
 .order-card header {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
-  min-height: 1.5rem;
-  padding-inline: 2.85rem;
   text-align: center;
 }
 
@@ -78,7 +76,7 @@
   display: none;
 }
 
-.order-card .order-id-badge {
+.order-card header .order-id-badge {
   display: inline-grid;
   min-width: 2.1rem;
   min-height: 1.35rem;
@@ -245,8 +243,10 @@
 
 .order-card .card-id-line {
   position: absolute;
-  top: 0.66rem;
-  right: 0.66rem;
+  top: 0.48rem;
+  right: 0.48rem;
+  z-index: 2;
+  align-items: center;
 }
 
 .phone-row a,

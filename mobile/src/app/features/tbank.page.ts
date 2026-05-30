@@ -10,12 +10,15 @@ import {
 import { firstValueFrom } from 'rxjs';
 import {
   AdminPaymentLinkResponse,
+  AdminPaymentLinkSummaryResponse,
+  AdminPaymentLinksPageResponse,
   ApiService,
   ManualPaymentTaskResponse,
   ManualPaymentTaskStatus,
   ManualPaymentType,
   ManagerPaymentProfileResponse,
   ManagerPaymentProfileAssignmentRequest,
+  PaymentLinkListSource,
   PaymentInstructionSource,
   PaymentPolicy,
   PaymentProfilePolicyRequest,
@@ -114,12 +117,19 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
               </button>
             </app-mobile-search-bar>
 
-            <app-mobile-status-slider
-              [items]="paymentStatusItems()"
-              [activeKey]="statusFilter()"
-              ariaLabel="Статусы платежей"
-              (select)="selectPaymentStatus($event)"
-            />
+          <app-mobile-status-slider
+            [items]="paymentStatusItems()"
+            [activeKey]="statusFilter()"
+            ariaLabel="Статусы платежей"
+            (select)="selectPaymentStatus($event)"
+          />
+
+          <app-mobile-status-slider
+            [items]="paymentSourceItems()"
+            [activeKey]="paymentSource()"
+            ariaLabel="Источник платежей"
+            (select)="selectPaymentSource($event)"
+          />
           }
 
           @if (error()) {
@@ -1836,147 +1846,6 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       font-size: 2rem;
     }
 
-    :host-context(body.otziv-compact-phone) .tbank-page {
-      gap: 0.22rem;
-      padding: 0.3rem 0.42rem calc(0.16rem + env(safe-area-inset-bottom));
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-list {
-      grid-auto-columns: min(14.7rem, 80vw);
-      gap: 0.34rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card {
-      justify-content: flex-start;
-      gap: 0.16rem;
-      border-radius: 0.82rem;
-      padding: 0.38rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card header {
-      gap: 0.28rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card h2 {
-      font-size: 0.82rem;
-      line-height: 0.98;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card small {
-      font-size: 0.5rem;
-      line-height: 1.05;
-    }
-
-    :host-context(body.otziv-compact-phone) .status-pill {
-      min-height: 1.25rem;
-      max-width: 5rem;
-      padding: 0 0.36rem;
-      overflow: hidden;
-      font-size: 0.5rem;
-      text-overflow: ellipsis;
-    }
-
-    :host-context(body.otziv-compact-phone) .amount-row,
-    :host-context(body.otziv-compact-phone) .meta-grid,
-    :host-context(body.otziv-compact-phone) .payment-context-row {
-      gap: 0.22rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .amount-row span,
-    :host-context(body.otziv-compact-phone) .meta-grid span,
-    :host-context(body.otziv-compact-phone) .payment-context-row span {
-      min-height: 1.42rem;
-      border-radius: 0.58rem;
-      padding: 0.16rem 0.34rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-context-row span {
-      min-height: 2rem;
-      padding-block: 0.26rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .amount-row strong,
-    :host-context(body.otziv-compact-phone) .meta-grid strong,
-    :host-context(body.otziv-compact-phone) .payment-context-row strong {
-      font-size: 0.63rem;
-      line-height: 1;
-    }
-
-    :host-context(body.otziv-compact-phone) .amount-row small,
-    :host-context(body.otziv-compact-phone) .meta-grid small,
-    :host-context(body.otziv-compact-phone) .payment-context-row small {
-      font-size: 0.46rem;
-      line-height: 1;
-    }
-
-    :host-context(body.otziv-compact-phone) .copy-line {
-      min-height: 1.36rem;
-      gap: 0.2rem;
-      padding: 0 0.4rem;
-      font-size: 0.55rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .copy-line .material-icons-sharp {
-      font-size: 0.76rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .manual-note {
-      gap: 0.08rem;
-      border-radius: 0.58rem;
-      padding: 0.26rem 0.36rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .manual-note strong {
-      font-size: 0.58rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .manual-note small {
-      font-size: 0.5rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card footer {
-      gap: 0.18rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card footer button {
-      flex-basis: 3.35rem;
-      min-height: 1.28rem;
-      border-radius: 0.56rem;
-      padding: 0 0.28rem;
-      font-size: 0.48rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .payment-card footer .material-icons-sharp {
-      font-size: 0.68rem;
-    }
-
-    :host-context(body.otziv-compact-phone) .error-text {
-      max-height: 1.6rem;
-      border-radius: 0.56rem;
-      padding: 0.24rem 0.34rem;
-      font-size: 0.5rem;
-      line-height: 1.08;
-    }
-
-    :host-context(body.otziv-short-phone) .payment-list {
-      grid-auto-columns: min(14.25rem, 82vw);
-    }
-
-    :host-context(body.otziv-short-phone) .payment-card {
-      gap: 0.12rem;
-      padding: 0.32rem;
-    }
-
-    :host-context(body.otziv-short-phone) .amount-row span,
-    :host-context(body.otziv-short-phone) .meta-grid span,
-    :host-context(body.otziv-short-phone) .payment-context-row span {
-      min-height: 1.3rem;
-    }
-
-    :host-context(body.otziv-short-phone) .payment-context-row span {
-      min-height: 1.9rem;
-    }
-
     :host-context(body.otziv-dark-theme) .metric-tile,
     :host-context(body.otziv-dark-theme) .search-strip,
     :host-context(body.otziv-dark-theme) .date-strip,
@@ -2059,6 +1928,10 @@ export class TbankPage implements OnInit {
   readonly copied = signal<string | null>(null);
   readonly search = signal('');
   readonly statusFilter = signal<PaymentStatusFilter>('all');
+  readonly paymentSource = signal<PaymentLinkListSource>('LIVE');
+  readonly paymentTotalElements = signal(0);
+  readonly paymentTotalPages = signal(0);
+  readonly paymentSummary = signal<AdminPaymentLinkSummaryResponse | null>(null);
   readonly dateFrom = signal('');
   readonly dateTo = signal('');
   readonly dateSheetOpen = signal(false);
@@ -2078,7 +1951,7 @@ export class TbankPage implements OnInit {
     {
       key: 'payments',
       title: 'платежи',
-      value: `${this.filteredLinks().length}/${this.links().length}`,
+      value: `${this.links().length}/${this.paymentTotalElements() || this.links().length}`,
       icon: 'receipt_long',
       tone: 'blue'
     },
@@ -2115,38 +1988,50 @@ export class TbankPage implements OnInit {
     this.statusOptions.map((option) => ({
       key: option.key,
       title: option.label,
-      value: this.statusCount(option.key),
+      value: this.statusTotal(option.key),
       icon: option.icon,
       tone: option.tone
     }))
   );
 
+  readonly paymentSourceItems = computed<MobileStatusItem[]>(() => [
+    {
+      key: 'LIVE',
+      title: 'активные',
+      value: this.paymentSource() === 'LIVE' ? this.paymentTotalElements() : '',
+      icon: 'bolt',
+      tone: 'green'
+    },
+    {
+      key: 'ARCHIVE',
+      title: 'архив',
+      value: this.paymentSource() === 'ARCHIVE' ? this.paymentTotalElements() : '',
+      icon: 'archive',
+      tone: 'teal'
+    }
+  ]);
+
   readonly filteredLinks = computed(() => {
-    const search = this.search().trim().toLowerCase();
-    const from = this.dateFrom();
-    const to = this.dateTo();
-    const statusFilter = this.statusFilter();
     const direction = this.sortDirection();
     return this.links()
-      .filter((link) => this.matchesSearch(link, search))
-      .filter((link) => this.matchesStatusFilter(link, statusFilter))
-      .filter((link) => this.matchesDateRange(link, from, to))
       .sort((a, b) => {
         const diff = this.timeValue(a.createdAt) - this.timeValue(b.createdAt);
         return direction === 'asc' ? diff : -diff;
       });
   });
 
-  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.filteredLinks().length / PAGE_SIZE)));
+  readonly totalPages = computed(() => Math.max(1, this.paymentTotalPages() || 1));
 
   readonly pageLinks = computed(() => {
-    const page = Math.min(this.pageIndex(), this.totalPages() - 1);
-    const start = page * PAGE_SIZE;
-    return this.filteredLinks().slice(start, start + PAGE_SIZE);
+    return this.filteredLinks();
   });
 
   readonly hasFilters = computed(() => Boolean(
-    this.search().trim() || this.statusFilter() !== 'all' || this.dateFrom() || this.dateTo()
+    this.search().trim()
+      || this.statusFilter() !== 'all'
+      || this.paymentSource() !== 'LIVE'
+      || this.dateFrom()
+      || this.dateTo()
   ));
 
   readonly hasDateFilter = computed(() => Boolean(this.dateFrom() || this.dateTo()));
@@ -2280,15 +2165,15 @@ export class TbankPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const [status, links, profiles, manualTasks, runtimeSettings] = await Promise.all([
+      const [status, linksPage, profiles, manualTasks, runtimeSettings] = await Promise.all([
         firstValueFrom(this.api.getTbankStatus()),
-        firstValueFrom(this.api.getAdminTbankPaymentLinks()),
+        firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery())),
         firstValueFrom(this.api.getAdminTbankPaymentProfiles()),
         firstValueFrom(this.api.getAdminManualPaymentTasks()),
         firstValueFrom(this.api.getAdminTbankRuntimeSettings())
       ]);
       this.status.set(status);
-      this.links.set(links ?? []);
+      this.applyPaymentLinksPage(linksPage);
       this.manualTasks.set(manualTasks ?? []);
       this.runtimeSettings.set(runtimeSettings);
       this.applyProfilesState(profiles.profiles, profiles.managers);
@@ -2310,16 +2195,21 @@ export class TbankPage implements OnInit {
 
   setSearch(value: string): void {
     this.search.set(value ?? '');
-    this.resetPage();
+    this.resetPageAndLoad();
   }
 
   setStatusFilter(value: PaymentStatusFilter): void {
     this.statusFilter.set(value);
-    this.resetPage();
+    this.resetPageAndLoad();
   }
 
   selectPaymentStatus(value: string): void {
     this.setStatusFilter(value as PaymentStatusFilter);
+  }
+
+  selectPaymentSource(value: string): void {
+    this.paymentSource.set(value === 'ARCHIVE' ? 'ARCHIVE' : 'LIVE');
+    this.resetPageAndLoad();
   }
 
   setDateFrom(value: string): void {
@@ -2358,16 +2248,17 @@ export class TbankPage implements OnInit {
   applyDateSheet(): void {
     this.dateFrom.set(this.draftDateFrom());
     this.dateTo.set(this.draftDateTo());
-    this.resetPage();
     this.closeDateSheet();
+    this.resetPageAndLoad();
   }
 
   resetFilters(): void {
     this.search.set('');
     this.statusFilter.set('all');
+    this.paymentSource.set('LIVE');
     this.dateFrom.set('');
     this.dateTo.set('');
-    this.resetPage();
+    this.resetPageAndLoad();
   }
 
   resetPage(): void {
@@ -2376,10 +2267,12 @@ export class TbankPage implements OnInit {
 
   previousPage(): void {
     this.pageIndex.update((page) => Math.max(0, page - 1));
+    void this.loadPaymentLinks();
   }
 
   nextPage(): void {
     this.pageIndex.update((page) => Math.min(this.totalPages() - 1, page + 1));
+    void this.loadPaymentLinks();
   }
 
   toggleSort(): void {
@@ -2812,6 +2705,28 @@ export class TbankPage implements OnInit {
     return this.links().filter((link) => this.matchesStatusFilter(link, filter)).length;
   }
 
+  statusTotal(filter: PaymentStatusFilter): number {
+    const summary = this.paymentSummary();
+    if (summary && this.statusFilter() === 'all') {
+      switch (filter) {
+        case 'all':
+          return summary.totalElements;
+        case 'paid':
+          return summary.paid;
+        case 'manual':
+          return summary.manualPending;
+        case 'refunded':
+          return summary.refunded;
+        case 'failed':
+          return summary.rejected;
+      }
+    }
+    if (filter === this.statusFilter() && this.paymentTotalElements()) {
+      return this.paymentTotalElements();
+    }
+    return this.statusCount(filter);
+  }
+
   paymentTitle(link: AdminPaymentLinkResponse): string {
     return link.companyTitle || link.filialTitle || `Заказ ${link.orderId ?? '-'}`;
   }
@@ -2999,6 +2914,56 @@ export class TbankPage implements OnInit {
     this.profilePolicies.set(Object.fromEntries(
       (profiles ?? []).map((profile) => [profile.id, this.profileToPolicyDraft(profile)])
     ));
+  }
+
+  private async loadPaymentLinks(): Promise<void> {
+    if (this.loading()) {
+      return;
+    }
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      const page = await firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery()));
+      this.applyPaymentLinksPage(page);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось обновить журнал платежей.'));
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  private applyPaymentLinksPage(page: AdminPaymentLinksPageResponse): void {
+    this.links.set(page.items ?? []);
+    this.pageIndex.set(page.page ?? this.pageIndex());
+    this.paymentTotalElements.set(page.totalElements ?? 0);
+    this.paymentTotalPages.set(page.totalPages ?? 0);
+    this.paymentSummary.set(page.summary ?? null);
+    this.keepPageInRange();
+  }
+
+  private paymentLinkQuery(): {
+    page: number;
+    size: number;
+    status: PaymentStatusFilter;
+    search: string;
+    source: PaymentLinkListSource;
+    from: string;
+    to: string;
+  } {
+    return {
+      page: this.pageIndex(),
+      size: PAGE_SIZE,
+      status: this.statusFilter(),
+      search: this.search().trim(),
+      source: this.paymentSource(),
+      from: this.dateFrom(),
+      to: this.dateTo()
+    };
+  }
+
+  private resetPageAndLoad(): void {
+    this.resetPage();
+    void this.loadPaymentLinks();
   }
 
   private matchesSearch(link: AdminPaymentLinkResponse, search: string): boolean {

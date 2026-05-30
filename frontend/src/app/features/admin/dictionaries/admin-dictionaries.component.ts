@@ -15,6 +15,19 @@ import {
   AdminClientPublicationProgressReportSettings,
   AdminCity,
   AdminDictionariesApi,
+  AdminGamificationBalance,
+  AdminGamificationBalances,
+  AdminGamificationBackfill,
+  AdminGamificationEvent,
+  AdminGamificationProgress,
+  AdminGamificationRule,
+  AdminGamificationRulesRequest,
+  AdminGamificationRulesResponse,
+  AdminGamificationScoreLedger,
+  AdminGamificationScoreLedgerRebuild,
+  AdminGamificationScorePreview,
+  AdminGamificationSettings,
+  AdminGamificationSettingsRequest,
   AdminManagerText,
   AdminNagulSettings,
   AdminProduct,
@@ -58,7 +71,7 @@ import {
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'gamification' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -84,6 +97,18 @@ type DictionarySettingsResponse = {
   whatsAppGroupSyncSettings: AdminWhatsAppGroupSyncSettings;
   clientPublicationProgressReportSettings: AdminClientPublicationProgressReportSettings;
 };
+
+type GamificationDictionaryResponse = {
+  settings: AdminGamificationSettings;
+  rules: AdminGamificationRulesResponse;
+  progress: AdminGamificationProgress;
+  scorePreview: AdminGamificationScorePreview;
+  scoreLedger: AdminGamificationScoreLedger;
+  balances: AdminGamificationBalances;
+  events: AdminGamificationEvent[];
+};
+
+type GamificationProgressDays = 1 | 7 | 30;
 
 const PROMO_TEXT_LABELS: Record<number, string> = {
   1: 'предложение',
@@ -133,6 +158,10 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
     title: 'Тексты менеджеров',
     text: 'Персональные шаблоны сообщений, которые менеджер использует в работе.'
   },
+  gamification: {
+    title: 'Геймификация',
+    text: 'Отдельный контур настроек: глобальное включение, роли, показ в кабинете и события.'
+  },
   settings: {
     title: 'Рабочие настройки',
     text: 'Паузы, расписания отчетов и синхронизации, которые влияют на автоматические процессы.'
@@ -171,6 +200,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
     { key: 'promo', label: 'Промо', icon: 'smart_button' },
     { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' },
+    { key: 'gamification', label: 'Геймификация', icon: 'emoji_events' },
     { key: 'settings', label: 'Настройки', icon: 'tune' },
     { key: 'autoresponder', label: 'Автоответчик', icon: 'mark_chat_unread' },
     { key: 'autoresponderMonitor', label: 'Мониторинг', icon: 'monitor_heart' }
@@ -217,6 +247,29 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
   readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
   readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
+  readonly gamificationSettings = signal<AdminGamificationSettings | null>(null);
+  readonly gamificationRules = signal<AdminGamificationRule[]>([]);
+  readonly gamificationProgress = signal<AdminGamificationProgress | null>(null);
+  readonly gamificationProgressDays = signal<GamificationProgressDays>(1);
+  readonly gamificationScorePreview = signal<AdminGamificationScorePreview | null>(null);
+  readonly gamificationScoreLedger = signal<AdminGamificationScoreLedger | null>(null);
+  readonly gamificationLedgerRebuild = signal<AdminGamificationScoreLedgerRebuild | null>(null);
+  readonly gamificationBackfill = signal<AdminGamificationBackfill | null>(null);
+  readonly gamificationBalances = signal<AdminGamificationBalances | null>(null);
+  readonly gamificationEvents = signal<AdminGamificationEvent[]>([]);
+  readonly topWorkerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'WORKER').slice(0, 8));
+  readonly topManagerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'MANAGER').slice(0, 8));
+  readonly topOtherGamificationScoreActors = computed(() => this.withoutRoles(this.gamificationScorePreview()?.topActors ?? [], ['WORKER', 'MANAGER']).slice(0, 8));
+  readonly workerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'WORKER'));
+  readonly managerGamificationScoreActors = computed(() => this.byRole(this.gamificationScorePreview()?.topActors ?? [], 'MANAGER'));
+  readonly otherGamificationScoreActors = computed(() => this.withoutRoles(this.gamificationScorePreview()?.topActors ?? [], ['WORKER', 'MANAGER']));
+  readonly workerGamificationLedgerActors = computed(() => this.byRole(this.gamificationScoreLedger()?.topActors ?? [], 'WORKER'));
+  readonly managerGamificationLedgerActors = computed(() => this.byRole(this.gamificationScoreLedger()?.topActors ?? [], 'MANAGER'));
+  readonly otherGamificationLedgerActors = computed(() => this.withoutRoles(this.gamificationScoreLedger()?.topActors ?? [], ['WORKER', 'MANAGER']));
+  readonly workerGamificationBalances = computed(() => this.byRole(this.gamificationBalances()?.balances ?? [], 'WORKER'));
+  readonly managerGamificationBalances = computed(() => this.byRole(this.gamificationBalances()?.balances ?? [], 'MANAGER'));
+  readonly otherGamificationBalances = computed(() => this.withoutRoles(this.gamificationBalances()?.balances ?? [], ['WORKER', 'MANAGER']));
+  readonly recentGamificationEvents = computed(() => this.gamificationEvents().slice(0, 6));
   readonly clientMessageSettings = signal<AdminClientMessageSettings | null>(null);
   readonly clientMessageMonitor = signal<AdminClientMessageMonitor | null>(null);
   readonly clientMessageMaintenancePreview = signal<AdminClientMessageMaintenancePreview | null>(null);
@@ -321,6 +374,26 @@ export class AdminDictionariesComponent implements OnDestroy {
     whatsAppGroupSyncEnabled: [true],
     whatsAppGroupSyncIntervalMinutes: [30, [Validators.required, Validators.min(5), Validators.max(1440)]],
     clientPublicationProgressReportsEnabled: [true]
+  });
+
+  readonly gamificationForm = this.fb.nonNullable.group({
+    enabled: [false],
+    workerEnabled: [true],
+    managerEnabled: [true],
+    operatorEnabled: [true],
+    marketologEnabled: [true],
+    showInCabinet: [false],
+    showInScore: [false],
+    eventsEnabled: [false],
+    shadowScoringEnabled: [false],
+    reviewPublishedRuleEnabled: [true],
+    reviewPublishedRulePoints: [10],
+    orderPaidRuleEnabled: [true],
+    orderPaidRulePoints: [25],
+    badReviewTaskDoneRuleEnabled: [true],
+    badReviewTaskDoneRulePoints: [15],
+    reviewRecoveryTaskDoneRuleEnabled: [true],
+    reviewRecoveryTaskDoneRulePoints: [20]
   });
 
   readonly autoresponderForm = this.fb.nonNullable.group({
@@ -438,6 +511,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         return this.promoTexts().length;
       case 'managerTexts':
         return this.managerTexts().length;
+      case 'gamification':
+        return this.gamificationTotal();
       case 'settings':
         return this.settingsTotal();
       case 'autoresponder':
@@ -469,6 +544,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
       { label: 'Порог аккаунта', value: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3, icon: 'verified_user', tone: 'green' },
       { label: 'Сдвиг дат', value: this.nagulSettings()?.accountWalkDelayDays ?? 2, icon: 'date_range', tone: 'yellow' },
+      { label: 'Геймификация', value: this.gamificationSettings()?.enabled ? 1 : 0, icon: 'emoji_events', tone: this.gamificationSettings()?.enabled ? 'green' : 'pink' },
       { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
       { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' },
       { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' },
@@ -580,6 +656,13 @@ export class AdminDictionariesComponent implements OnDestroy {
         telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
         whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
         clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings(),
+        gamificationSettings: this.dictionariesApi.getGamificationSettings(),
+        gamificationRules: this.dictionariesApi.getGamificationRules(),
+        gamificationProgress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
+        gamificationScorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
+        gamificationScoreLedger: this.dictionariesApi.getGamificationScoreLedger(this.gamificationProgressDays()),
+        gamificationBalances: this.dictionariesApi.getGamificationBalances(this.gamificationProgressDays()),
+        gamificationEvents: this.dictionariesApi.getGamificationEvents(),
         clientMessageSettings: this.dictionariesApi.getClientMessageSettings()
       }).subscribe({
         next: ({
@@ -595,6 +678,13 @@ export class AdminDictionariesComponent implements OnDestroy {
           telegramReportSettings,
           whatsAppGroupSyncSettings,
           clientPublicationProgressReportSettings,
+          gamificationSettings,
+          gamificationRules,
+          gamificationProgress,
+          gamificationScorePreview,
+          gamificationScoreLedger,
+          gamificationBalances,
+          gamificationEvents,
           clientMessageSettings
         }) => {
           this.categories.set(categories);
@@ -610,6 +700,13 @@ export class AdminDictionariesComponent implements OnDestroy {
           this.applyTelegramReportSettings(telegramReportSettings);
           this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
           this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
+          this.applyGamificationSettings(gamificationSettings);
+          this.applyGamificationRules(gamificationRules);
+          this.gamificationProgress.set(gamificationProgress);
+          this.gamificationScorePreview.set(gamificationScorePreview);
+          this.gamificationScoreLedger.set(gamificationScoreLedger);
+          this.gamificationBalances.set(gamificationBalances);
+          this.gamificationEvents.set(gamificationEvents);
           this.applyClientMessageSettings(clientMessageSettings);
           this.loading.set(false);
           this.ensureDefaults();
@@ -643,6 +740,13 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.telegramReportSettings.set(null);
         this.whatsAppGroupSyncSettings.set(null);
         this.clientPublicationProgressReportSettings.set(null);
+        this.gamificationSettings.set(null);
+        this.gamificationRules.set([]);
+        this.gamificationProgress.set(null);
+        this.gamificationScorePreview.set(null);
+        this.gamificationScoreLedger.set(null);
+        this.gamificationBalances.set(null);
+        this.gamificationEvents.set([]);
         this.clientMessageSettings.set(null);
         this.loading.set(false);
         this.ensureDefaults();
@@ -678,6 +782,11 @@ export class AdminDictionariesComponent implements OnDestroy {
 
     if (this.activeTab() === 'settings') {
       this.resetSettingsForm();
+      return;
+    }
+
+    if (this.activeTab() === 'gamification') {
+      this.resetGamificationForm();
       return;
     }
 
@@ -1038,6 +1147,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'managerTexts':
         this.saveManagerText();
         return;
+      case 'gamification':
+        this.saveGamificationSettings();
+        return;
       case 'settings':
         this.saveSettings();
         return;
@@ -1314,6 +1426,57 @@ export class AdminDictionariesComponent implements OnDestroy {
     return !Number.isNaN(nextMs) && nextMs <= nowMs;
   }
 
+  monitorQueueTimingLabel(item: AdminClientMessageMonitorQueueItem): string | null {
+    const monitor = this.clientMessageMonitor();
+    if (!monitor || !item.nextAttemptAt) {
+      return null;
+    }
+    const nowMs = Date.parse(monitor.nowIrkutsk || monitor.updatedAt);
+    const nextMs = Date.parse(item.nextAttemptAt);
+    if (Number.isNaN(nowMs) || Number.isNaN(nextMs)) {
+      return null;
+    }
+    if (nextMs > nowMs) {
+      return 'по расписанию';
+    }
+
+    switch (item.readiness) {
+      case 'WAITING_WINDOW':
+        return 'просрочено, ждет рабочее окно';
+      case 'MISSING_CHANNEL':
+        return 'просрочено, нужна привязка';
+      case 'READY_TO_SEND':
+        return 'просрочено, готово к отправке';
+      case 'READY_TO_RUN':
+        return 'просрочено, готово к действию';
+      case 'PAUSED':
+        return 'просрочено, пауза';
+      case 'WORKER_DISABLED':
+        return 'просрочено, worker выключен';
+      case 'DRY_RUN':
+        return 'просрочено, dry-run';
+      case 'LOCKED':
+        return 'в обработке';
+      default:
+        return 'просрочено';
+    }
+  }
+
+  monitorQueueTimingClass(item: AdminClientMessageMonitorQueueItem): string {
+    const label = this.monitorQueueTimingLabel(item);
+    if (!label || label === 'по расписанию') {
+      return 'status-pill off';
+    }
+    const code = item.readiness ?? '';
+    if (code === 'MISSING_CHANNEL' || code === 'DRY_RUN' || code === 'WORKER_DISABLED') {
+      return 'status-pill danger';
+    }
+    if (code === 'READY_TO_SEND' || code === 'READY_TO_RUN') {
+      return 'status-pill';
+    }
+    return 'status-pill warning';
+  }
+
   private matchesMonitorQueueSearch(item: AdminClientMessageMonitorQueueItem, search: string): boolean {
     if (!search) {
       return true;
@@ -1459,7 +1622,7 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   deleteSelected(): void {
     const activeTab = this.activeTab();
-    if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'settings' || activeTab === 'autoresponder' || activeTab === 'autoresponderMonitor') {
+    if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'gamification' || activeTab === 'settings' || activeTab === 'autoresponder' || activeTab === 'autoresponderMonitor') {
       return;
     }
 
@@ -1544,6 +1707,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       accounts: this.bots().length,
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
+      gamification: this.gamificationTotal(),
       settings: this.settingsTotal(),
       autoresponder: this.autoresponderTotal(),
       autoresponderMonitor: this.monitorTotal()
@@ -1555,6 +1719,204 @@ export class AdminDictionariesComponent implements OnDestroy {
       + (this.telegramReportSettings() ? 1 : 0)
       + (this.whatsAppGroupSyncSettings() ? 1 : 0)
       + (this.clientPublicationProgressReportSettings() ? 1 : 0);
+  }
+
+  gamificationTotal(): number {
+    const settings = this.gamificationSettings();
+    if (!settings) {
+      return 0;
+    }
+    return [
+      settings.enabled,
+      settings.workerEnabled,
+      settings.managerEnabled,
+      settings.operatorEnabled,
+      settings.marketologEnabled,
+      settings.showInCabinet,
+      settings.showInScore,
+      settings.eventsEnabled,
+      settings.shadowScoringEnabled
+    ].filter(Boolean).length;
+  }
+
+  gamificationEventLabel(eventType: string | null | undefined): string {
+    return {
+      REVIEW_PUBLISHED: 'Отзыв опубликован',
+      ORDER_PAID: 'Заказ закрыт оплатой',
+      BAD_REVIEW_TASK_DONE: 'Плохой отзыв выполнен',
+      REVIEW_RECOVERY_TASK_DONE: 'Восстановление выполнено'
+    }[eventType ?? ''] ?? (eventType || 'Событие');
+  }
+
+  gamificationRoleLabel(role: string | null | undefined): string {
+    return {
+      WORKER: 'Специалист',
+      MANAGER: 'Менеджер',
+      OPERATOR: 'Оператор',
+      MARKETOLOG: 'Маркетолог'
+    }[role ?? ''] ?? (role || '-');
+  }
+
+  gamificationActor(event: AdminGamificationEvent): string {
+    if (event.actorName) {
+      return event.actorName;
+    }
+    if (event.actorRole) {
+      return event.actorRole;
+    }
+    return 'Система';
+  }
+
+  gamificationEventTarget(event: AdminGamificationEvent): string {
+    const parts = [
+      event.orderId ? `Заказ ${event.orderId}` : null,
+      event.reviewId ? `Отзыв ${event.reviewId}` : null,
+      event.badReviewTaskId ? `Плохая ${event.badReviewTaskId}` : null,
+      event.recoveryTaskId ? `Восстановление ${event.recoveryTaskId}` : null
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'Без привязки';
+  }
+
+  gamificationTimelinessLabel(event: AdminGamificationEvent): string {
+    if (!event.plannedDate || !event.actualDate) {
+      return 'без срока';
+    }
+    const delay = event.delayDays ?? 0;
+    if (delay <= 0) {
+      return 'в срок';
+    }
+    const percent = Math.round((event.timelinessMultiplier ?? 1) * 100);
+    return `+${delay} дн. · ${percent}%`;
+  }
+
+  trackGamificationEvent(_index: number, event: AdminGamificationEvent): number {
+    return event.id;
+  }
+
+  trackGamificationScoreActor(index: number, item: { actorUserId?: number | null; actorName?: string | null; actorRole?: string | null }): string {
+    return `${item.actorUserId ?? 'system'}-${item.actorRole ?? 'role'}-${item.actorName ?? index}`;
+  }
+
+  trackGamificationBalance(index: number, item: AdminGamificationBalance): string {
+    return `${item.actorUserId ?? 'system'}-${item.actorRole ?? 'role'}-${item.actorName ?? index}`;
+  }
+
+  private byRole<T extends { actorRole?: string | null }>(items: T[], role: string): T[] {
+    return items.filter((item) => item.actorRole === role);
+  }
+
+  private withoutRoles<T extends { actorRole?: string | null }>(items: T[], roles: string[]): T[] {
+    return items.filter((item) => !roles.includes(item.actorRole ?? ''));
+  }
+
+  setGamificationProgressDays(days: GamificationProgressDays): void {
+    if (this.gamificationProgressDays() === days) {
+      return;
+    }
+    this.gamificationProgressDays.set(days);
+    this.loadGamificationProgress();
+  }
+
+  trackGamificationType(_index: number, item: { eventType: string }): string {
+    return item.eventType;
+  }
+
+  trackGamificationActor(index: number, item: { actorUserId?: number | null; actorName?: string | null; actorRole?: string | null }): string {
+    return `${item.actorUserId ?? 'system'}-${item.actorRole ?? 'role'}-${item.actorName ?? index}`;
+  }
+
+  saveGamificationRules(): void {
+    const raw = this.gamificationForm.getRawValue();
+    const request: AdminGamificationRulesRequest = {
+      rules: [
+        { eventType: 'REVIEW_PUBLISHED', enabled: raw.reviewPublishedRuleEnabled, points: raw.reviewPublishedRulePoints },
+        { eventType: 'ORDER_PAID', enabled: raw.orderPaidRuleEnabled, points: raw.orderPaidRulePoints },
+        { eventType: 'BAD_REVIEW_TASK_DONE', enabled: raw.badReviewTaskDoneRuleEnabled, points: raw.badReviewTaskDoneRulePoints },
+        { eventType: 'REVIEW_RECOVERY_TASK_DONE', enabled: raw.reviewRecoveryTaskDoneRuleEnabled, points: raw.reviewRecoveryTaskDoneRulePoints }
+      ]
+    };
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.updateGamificationRules(request).subscribe({
+      next: (rules) => {
+        this.saving.set(false);
+        this.applyGamificationRules(rules);
+        this.loadGamificationProgress();
+        this.toastService.success('Правила очков сохранены', 'Предпросмотр обновлен');
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить правила очков');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Правила не сохранены', message);
+      }
+    });
+  }
+
+  rebuildGamificationLedger(): void {
+    if (!this.gamificationSettings()?.shadowScoringEnabled) {
+      this.toastService.error('Ledger не пересобран', 'Сначала включите теневое начисление очков');
+      return;
+    }
+
+    const days = this.gamificationProgressDays();
+    const confirmed = window.confirm(`Пересобрать shadow-ledger за ${days} дн.? Текущие shadow-записи за период будут заменены.`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.rebuildGamificationScoreLedger(days).subscribe({
+      next: (result) => {
+        this.saving.set(false);
+        this.gamificationLedgerRebuild.set(result);
+        this.loadGamificationProgress();
+        this.toastService.success(
+          'Ledger пересобран',
+          `Событий: ${result.eventsReviewed}, записей: ${result.entriesCreated}, очков: ${result.totalPoints}`
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось пересобрать ledger');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Ledger не пересобран', message);
+      }
+    });
+  }
+
+  backfillGamificationEvents(): void {
+    const days = this.gamificationProgressDays();
+    const confirmed = window.confirm(`Собрать исторические события геймификации за ${days} дн.? Дубли будут пропущены, ledger будет пересобран.`);
+    if (!confirmed) {
+      return;
+    }
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.backfillGamificationEvents(days).subscribe({
+      next: (result) => {
+        this.saving.set(false);
+        this.gamificationBackfill.set(result);
+        this.gamificationLedgerRebuild.set(result.ledgerRebuild);
+        this.loadGamificationProgress();
+        this.toastService.success(
+          'История собрана',
+          `Проверено: ${result.reviewedCandidates}, новых событий: ${result.eventsCreated}, очков: ${result.ledgerRebuild.totalPoints}`
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось собрать исторические события');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('История не собрана', message);
+      }
+    });
   }
 
   autoresponderTotal(): number {
@@ -1878,7 +2240,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.selectedId.set(null);
 
     const keyword = this.search();
-    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor>;
+    let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | GamificationDictionaryResponse | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor>;
     switch (this.activeTab()) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
@@ -1904,6 +2266,17 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'managerTexts':
         request = this.dictionariesApi.getManagerTexts(keyword);
         break;
+      case 'gamification':
+        request = forkJoin({
+          settings: this.dictionariesApi.getGamificationSettings(),
+          rules: this.dictionariesApi.getGamificationRules(),
+          progress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
+          scorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
+          scoreLedger: this.dictionariesApi.getGamificationScoreLedger(this.gamificationProgressDays()),
+          balances: this.dictionariesApi.getGamificationBalances(this.gamificationProgressDays()),
+          events: this.dictionariesApi.getGamificationEvents()
+        });
+        break;
       case 'settings':
         request = forkJoin({
           nagulSettings: this.dictionariesApi.getNagulSettings(),
@@ -1921,7 +2294,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     }
 
     request.subscribe({
-      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor) => {
+      next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | GamificationDictionaryResponse | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor) => {
         switch (this.activeTab()) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
@@ -1951,6 +2324,9 @@ export class AdminDictionariesComponent implements OnDestroy {
             break;
           case 'managerTexts':
             this.managerTexts.set(response as AdminManagerText[]);
+            break;
+          case 'gamification':
+            this.applyGamificationResponse(response as GamificationDictionaryResponse);
             break;
           case 'settings': {
             const payload = response as DictionarySettingsResponse;
@@ -2207,6 +2583,41 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.error.set(message);
         this.saving.set(false);
         this.toastService.error('Тексты не сохранены', message);
+      }
+    });
+  }
+
+  private saveGamificationSettings(): void {
+    const raw = this.gamificationForm.getRawValue();
+    const request: AdminGamificationSettingsRequest = {
+      enabled: raw.enabled,
+      workerEnabled: raw.workerEnabled,
+      managerEnabled: raw.managerEnabled,
+      operatorEnabled: raw.operatorEnabled,
+      marketologEnabled: raw.marketologEnabled,
+      showInCabinet: raw.showInCabinet,
+      showInScore: raw.showInScore,
+      eventsEnabled: raw.eventsEnabled,
+      shadowScoringEnabled: raw.shadowScoringEnabled
+    };
+
+    this.saving.set(true);
+    this.error.set(null);
+
+    this.dictionariesApi.updateGamificationSettings(request).subscribe({
+      next: (settings) => {
+        this.saving.set(false);
+        this.applyGamificationSettings(settings);
+        this.toastService.success(
+          'Геймификация сохранена',
+          settings.enabled ? 'Контур включен' : 'Контур выключен'
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось сохранить геймификацию');
+        this.error.set(message);
+        this.saving.set(false);
+        this.toastService.error('Геймификация не сохранена', message);
       }
     });
   }
@@ -2573,6 +2984,67 @@ export class AdminDictionariesComponent implements OnDestroy {
     });
   }
 
+  private applyGamificationSettings(response: AdminGamificationSettings): void {
+    this.gamificationSettings.set(response);
+    this.gamificationForm.patchValue({
+      enabled: response.enabled,
+      workerEnabled: response.workerEnabled,
+      managerEnabled: response.managerEnabled,
+      operatorEnabled: response.operatorEnabled,
+      marketologEnabled: response.marketologEnabled,
+      showInCabinet: response.showInCabinet,
+      showInScore: response.showInScore,
+      eventsEnabled: response.eventsEnabled,
+      shadowScoringEnabled: response.shadowScoringEnabled
+    });
+  }
+
+  private applyGamificationRules(response: AdminGamificationRulesResponse): void {
+    this.gamificationRules.set(response.rules);
+    const rule = (eventType: string): AdminGamificationRule | undefined =>
+      response.rules.find((item) => item.eventType === eventType);
+    this.gamificationForm.patchValue({
+      reviewPublishedRuleEnabled: rule('REVIEW_PUBLISHED')?.enabled ?? true,
+      reviewPublishedRulePoints: rule('REVIEW_PUBLISHED')?.points ?? 10,
+      orderPaidRuleEnabled: rule('ORDER_PAID')?.enabled ?? true,
+      orderPaidRulePoints: rule('ORDER_PAID')?.points ?? 25,
+      badReviewTaskDoneRuleEnabled: rule('BAD_REVIEW_TASK_DONE')?.enabled ?? true,
+      badReviewTaskDoneRulePoints: rule('BAD_REVIEW_TASK_DONE')?.points ?? 15,
+      reviewRecoveryTaskDoneRuleEnabled: rule('REVIEW_RECOVERY_TASK_DONE')?.enabled ?? true,
+      reviewRecoveryTaskDoneRulePoints: rule('REVIEW_RECOVERY_TASK_DONE')?.points ?? 20
+    });
+  }
+
+  private applyGamificationResponse(response: GamificationDictionaryResponse): void {
+    this.applyGamificationSettings(response.settings);
+    this.applyGamificationRules(response.rules);
+    this.gamificationProgress.set(response.progress);
+    this.gamificationScorePreview.set(response.scorePreview);
+    this.gamificationScoreLedger.set(response.scoreLedger);
+    this.gamificationBalances.set(response.balances);
+    this.gamificationEvents.set(response.events);
+  }
+
+  private loadGamificationProgress(): void {
+    forkJoin({
+      progress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
+      scorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
+      scoreLedger: this.dictionariesApi.getGamificationScoreLedger(this.gamificationProgressDays()),
+      balances: this.dictionariesApi.getGamificationBalances(this.gamificationProgressDays())
+    }).subscribe({
+      next: ({ progress, scorePreview, scoreLedger, balances }) => {
+        this.gamificationProgress.set(progress);
+        this.gamificationScorePreview.set(scorePreview);
+        this.gamificationScoreLedger.set(scoreLedger);
+        this.gamificationBalances.set(balances);
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось загрузить прогресс геймификации');
+        this.toastService.error('Прогресс не загружен', message);
+      }
+    });
+  }
+
   private applyClientMessageSettings(response: AdminClientMessageSettings): void {
     this.clientMessageSettings.set(response);
     this.autoresponderForm.patchValue(response);
@@ -2650,6 +3122,31 @@ export class AdminDictionariesComponent implements OnDestroy {
       whatsAppGroupSyncEnabled: this.whatsAppGroupSyncSettings()?.enabled ?? true,
       whatsAppGroupSyncIntervalMinutes: this.whatsAppGroupSyncSettings()?.intervalMinutes ?? 30,
       clientPublicationProgressReportsEnabled: this.clientPublicationProgressReportSettings()?.enabled ?? true
+    });
+  }
+
+  resetGamificationForm(): void {
+    const settings = this.gamificationSettings();
+    const rule = (eventType: string): AdminGamificationRule | undefined =>
+      this.gamificationRules().find((item) => item.eventType === eventType);
+    this.gamificationForm.reset({
+      enabled: settings?.enabled ?? false,
+      workerEnabled: settings?.workerEnabled ?? true,
+      managerEnabled: settings?.managerEnabled ?? true,
+      operatorEnabled: settings?.operatorEnabled ?? true,
+      marketologEnabled: settings?.marketologEnabled ?? true,
+      showInCabinet: settings?.showInCabinet ?? false,
+      showInScore: settings?.showInScore ?? false,
+      eventsEnabled: settings?.eventsEnabled ?? false,
+      shadowScoringEnabled: settings?.shadowScoringEnabled ?? false,
+      reviewPublishedRuleEnabled: rule('REVIEW_PUBLISHED')?.enabled ?? true,
+      reviewPublishedRulePoints: rule('REVIEW_PUBLISHED')?.points ?? 10,
+      orderPaidRuleEnabled: rule('ORDER_PAID')?.enabled ?? true,
+      orderPaidRulePoints: rule('ORDER_PAID')?.points ?? 25,
+      badReviewTaskDoneRuleEnabled: rule('BAD_REVIEW_TASK_DONE')?.enabled ?? true,
+      badReviewTaskDoneRulePoints: rule('BAD_REVIEW_TASK_DONE')?.points ?? 15,
+      reviewRecoveryTaskDoneRuleEnabled: rule('REVIEW_RECOVERY_TASK_DONE')?.enabled ?? true,
+      reviewRecoveryTaskDoneRulePoints: rule('REVIEW_RECOVERY_TASK_DONE')?.points ?? 20
     });
   }
 
@@ -2775,6 +3272,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       'accounts',
       'promo',
       'managerTexts',
+      'gamification',
       'settings',
       'autoresponder',
       'autoresponderMonitor'

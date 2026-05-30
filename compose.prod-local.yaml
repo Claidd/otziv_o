@@ -47,8 +47,6 @@ services:
   phpmyadmin:
     image: phpmyadmin:latest
     restart: unless-stopped
-    profiles:
-      - db-admin
     ports:
       - "127.0.0.1:${LOCAL_PHPMYADMIN_PORT:-6572}:80"
     environment:

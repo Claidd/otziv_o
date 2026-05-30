@@ -15,6 +15,7 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -69,6 +70,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
+    private final GamificationEventService gamificationEventService;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -147,6 +149,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         task.setStatus(BadReviewTaskStatus.DONE);
         task.setCompletedDate(LocalDate.now());
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
+        gamificationEventService.recordBadReviewTaskDone(savedTask);
         runCompletionSideEffects(savedTask);
         log.info("Плохая задача {} выполнена, заказ {}, доплата {}",
                 savedTask.getId(),

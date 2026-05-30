@@ -3,7 +3,7 @@ import { mobileBuildTarget } from './mobile-build-target';
 
 const isBrowser = typeof window !== 'undefined';
 const isNative = Capacitor.isNativePlatform();
-const localDevHost = isBrowser && window.location.hostname === 'localhost';
+const localDevHost = isBrowser && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const localDevPort = isBrowser && window.location.port === '4300';
 const isLocalWebDev = localDevHost && localDevPort;
 const localProdLikeBaseUrl = 'http://localhost:8088';

@@ -14,13 +14,14 @@ export interface CurrentUser {
 
 export type TbankRuntimeMode = 'TEST' | 'LIVE';
 export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK';
-export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_ONLY' | 'BANK_ONLY';
+export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_PAY_ONLY' | 'SBP_ONLY' | 'BANK_ONLY';
 export type PaymentPolicy = 'T_BANK_ONLY' | 'MANUAL_UNTIL_LIMIT_THEN_TBANK';
 export type PaymentMethod = 'BANK_FORM' | 'SBP_QR' | 'MANUAL_MOBILE_BANK' | 'MANUAL_EXTERNAL_LINK' | string;
 export type PaymentReceiptStatus = 'PENDING' | 'MARKED';
 export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK';
 export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
 export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
+export type PaymentLinkListSource = 'LIVE' | 'ARCHIVE';
 
 export interface AdminPaymentLinkResponse {
   id: number;
@@ -68,7 +69,42 @@ export interface AdminPaymentLinkResponse {
   initiatedAt?: string | null;
   paidAt?: string | null;
   sbpQrCreatedAt?: string | null;
+  archived?: boolean;
+  archivedAt?: string | null;
+  archiveReason?: string | null;
   refundable: boolean;
+}
+
+export interface AdminPaymentLinkSummaryResponse {
+  totalElements: number;
+  totalAmount: number;
+  totalAmountKopecks: number;
+  paid: number;
+  manualPending: number;
+  confirmed: number;
+  notificationsSent: number;
+  notificationErrors: number;
+  refundable: number;
+  refunded: number;
+  rejected: number;
+}
+
+export interface AdminPaymentLinksPageResponse {
+  items: AdminPaymentLinkResponse[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  source: PaymentLinkListSource | string;
+  summary: AdminPaymentLinkSummaryResponse;
+}
+
+export interface PaymentLinkArchiveRunResponse {
+  eligible: number;
+  archived: number;
+  deleted: number;
+  dryRun: boolean;
+  reason: string;
 }
 
 export interface PaymentProfileResponse {
@@ -91,6 +127,8 @@ export interface PaymentProfileResponse {
   manualMonthlySoftLimitKopecks?: number | null;
   manualMonthlyHardLimitKopecks?: number | null;
   manualMonthlyUsedKopecks: number;
+  manualMonthlyConfirmedKopecks?: number;
+  manualMonthlyPendingAmountKopecks?: number;
   manualMonthlyPendingCount: number;
 }
 
@@ -159,6 +197,19 @@ export interface CreateManualPaymentTaskRequest {
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
   comment?: string | null;
+}
+
+export interface ManagerPaymentLinkResponse {
+  token: string;
+  url: string;
+  orderId?: number | null;
+  amount: number;
+  amountKopecks: number;
+  status: string;
+  paymentMethod?: PaymentMethod;
+  expiresAt: string;
+  instructionText?: string | null;
+  copyText: string;
 }
 
 export interface TbankPaymentStatus {
@@ -1444,17 +1495,37 @@ export interface AdminClientPublicationProgressReportSettings {
 export interface AdminClientMessageSettings {
   workerEnabled: boolean;
   liveEnabled: boolean;
+  immediateEnabled: boolean;
   monitorEnabled: boolean;
   reviewCheckEnabled: boolean;
+  reviewCheckAutoArchiveEnabled: boolean;
+  clientTextReminderEnabled: boolean;
   paymentReminderEnabled: boolean;
   badReviewInvoiceEnabled: boolean;
+  badReviewAutoBanEnabled: boolean;
+  reviewRecoveryNoticeEnabled: boolean;
   paymentOverdueEnabled: boolean;
   paymentOverdueLiveEnabled: boolean;
   archiveReorderEnabled: boolean;
+  errorProtectionEnabled: boolean;
   reviewCheckIntervalDays: number;
+  reviewCheckAutoArchiveDays: number;
+  clientTextReminderIntervalDays: number;
   paymentReminderIntervalDays: number;
+  reviewCheckRetryDelayHours: number;
+  paymentInvoiceRetryDelayHours: number;
+  badReviewInvoiceRetryDelayHours: number;
+  badReviewAutoBanDelayDays: number;
+  reviewRecoveryNoticeRetryDelayHours: number;
   paymentOverdueDays: number;
   archiveReorderMonths: number;
+  archiveReorderJitterDays: number;
+  archiveOrderRetentionDays: number;
+  errorProtectionThreshold: number;
+  errorProtectionWindowMinutes: number;
+  errorProtectionCooldownMinutes: number;
+  whatsAppAuthRetryHours: number;
+  whatsAppAuthAlertCooldownHours: number;
   retentionDays: number;
   tickBatchSize: number;
   candidateLimit: number;
@@ -1465,6 +1536,7 @@ export interface AdminClientMessageSettings {
   maxGapSeconds: number;
   businessWindows: string;
   reviewCheckStatuses: string;
+  clientTextReminderStatuses: string;
   paymentReminderStatuses: string;
   paymentOverdueStatuses: string;
   closedOrderStatuses: string;
@@ -1474,8 +1546,14 @@ export interface AdminClientMessageSettings {
   openNextOrderRequestStatuses: string;
   reviewLinkBaseUrl: string;
   reviewReminderText: string;
+  clientTextReminderText: string;
+  publicationStartedText: string;
+  publicationProgressReportText: string;
   paymentInstructionSource: 'MANAGER_TEXT' | 'TBANK_LINK';
   paymentReminderText: string;
+  paymentLinkCopyText: string;
+  paymentSuccessText: string;
+  reviewRecoveryNoticeText: string;
   archiveOfferText: string;
 }
 
@@ -1484,6 +1562,9 @@ export interface AdminClientMessageMonitorScenario {
   label: string;
   activeCandidates: number;
   dueNow: number;
+  readyToSendNow?: number;
+  waitingForWindow?: number;
+  missingChannelBindings?: number;
   sentToday: number;
   sentSevenDays: number;
   failedToday: number;
@@ -1510,6 +1591,13 @@ export interface AdminClientMessageMonitorQueueItem {
   lastErrorMessage?: string | null;
   sentCount: number;
   consecutiveFailures: number;
+  expectedChannel?: string | null;
+  channelDetails?: string | null;
+  paymentInstructionSource?: 'MANAGER_TEXT' | 'TBANK_LINK' | string | null;
+  messagePreview?: string | null;
+  readiness?: string | null;
+  readinessLabel?: string | null;
+  readinessReason?: string | null;
   link?: string | null;
 }
 
@@ -1541,22 +1629,142 @@ export interface AdminClientMessageMonitor {
   liveEnabled: boolean;
   windowAllowed: boolean;
   businessWindows: string;
-  nowMoscow: string;
+  nowMoscow?: string;
+  nowIrkutsk?: string;
   updatedAt: string;
   nextAttemptAt?: string | null;
+  pausedUntil?: string | null;
+  pauseReason?: string | null;
   activeCandidates: number;
   dueNow: number;
+  readyToSendNow?: number;
+  waitingForWindow?: number;
+  missingChannelBindings?: number;
   sentToday: number;
   failedToday: number;
   skippedToday: number;
   disabledStates: number;
+  archiveDiagnostics?: AdminClientMessageArchiveDiagnostics | null;
   scenarios: AdminClientMessageMonitorScenario[];
   queue: AdminClientMessageMonitorQueueItem[];
   attempts: AdminClientMessageMonitorAttempt[];
 }
 
+export interface AdminClientMessageArchiveDiagnostics {
+  status: string;
+  totalInStatus: number;
+  ready: number;
+  tooFresh: number;
+  withoutChat: number;
+  blockedByActiveOrder: number;
+  blockedByOpenRequest: number;
+}
+
 export interface AdminClientMessageMonitorSettings {
   enabled: boolean;
+}
+
+export interface AdminClientMessageMaintenancePreview {
+  updatedAt: string;
+  paymentOverdueDays: number;
+  publicationStaleDays: number;
+  companyStatuses: AdminMaintenanceCompanyStatusPreview;
+  paymentStatuses: AdminMaintenancePaymentStatusPreview;
+  unpaidRecovery: AdminMaintenanceUnpaidRecoveryPreview;
+  publication: AdminMaintenancePublicationPreview;
+  archiveOffers: AdminMaintenanceArchiveOfferPreview;
+  suggestedActions: AdminMaintenanceActionItem[];
+}
+
+export interface AdminMaintenanceCompanyStatusPreview {
+  shouldMoveToWork: number;
+  stoppedWithActiveOrders: number;
+  newOrderWithActiveOrders: number;
+  bannedWithActiveOrders: number;
+  workWithoutActiveOrders: number;
+  newOrderWithoutActiveOrders: number;
+  samplesToWork: AdminMaintenanceCompanyStatusSample[];
+  samplesToStop: AdminMaintenanceCompanyStatusSample[];
+  samplesBannedWithActiveOrders: AdminMaintenanceCompanyStatusSample[];
+}
+
+export interface AdminMaintenanceCompanyStatusSample {
+  companyId: number;
+  companyTitle: string;
+  currentStatus: string;
+  activeOrders: number;
+  activeOrderStatuses: string;
+}
+
+export interface AdminMaintenancePaymentStatusPreview {
+  invoiceOrReminderTotal: number;
+  invoiceOrReminderOlderThanThreshold: number;
+  invoiceOrReminderOlderThanThirtyDays: number;
+  invoiceOrReminderWithoutActiveState: number;
+  overdueSamples: AdminMaintenanceOrderRiskSample[];
+}
+
+export interface AdminMaintenanceUnpaidRecoveryPreview {
+  total: number;
+  olderThanThreshold: number;
+  olderThanThreeHundredDays: number;
+  withoutBadTasks: number;
+  canCreateBadTasks: number;
+  withoutPublishedReviews: number;
+  withPendingBadTasks: number;
+  allBadTasksDone: number;
+  oldSamples: AdminMaintenanceOrderRiskSample[];
+}
+
+export interface AdminMaintenancePublicationPreview {
+  total: number;
+  suspicious: number;
+  olderThanStaleDays: number;
+  overdueUnpublished: number;
+  undatedUnpublished: number;
+  longPublishSpan: number;
+  farFuturePublishDate: number;
+  oldAllReviewsPublished: number;
+  oldWithFuturePublishDate: number;
+  oldSamples: AdminMaintenanceOrderRiskSample[];
+}
+
+export interface AdminMaintenanceArchiveOfferPreview {
+  activeStates: number;
+  dueNow: number;
+  blockedByActiveOrders: number;
+  blockedByOpenNextRequest: number;
+}
+
+export interface AdminMaintenanceOrderRiskSample {
+  orderId: number;
+  companyId?: number | null;
+  companyTitle: string;
+  status: string;
+  ageDays: number;
+  orderAmount?: number | null;
+  orderSum?: string | null;
+  reviews: number;
+  publishedReviews: number;
+  badTasks: number;
+  pendingBadTasks: number;
+  maxPublishDate?: string | null;
+  reason: string;
+}
+
+export interface AdminMaintenanceActionItem {
+  tone: 'safe' | 'warning' | 'danger' | string;
+  title: string;
+  description: string;
+  count: number;
+}
+
+export interface AdminMaintenanceApplyResponse {
+  action: string;
+  changed: number;
+  message: string;
+  appliedAt: string;
+  preview: AdminClientMessageMaintenancePreview;
 }
 
 export interface AdminSharedChatLinkSyncResponse {
@@ -1867,13 +2075,19 @@ export interface ManagerManualPaymentSettings {
   profileName: string;
   paymentPolicy: PaymentPolicy | string;
   manualPaymentEnabled: boolean;
+  manualPaymentType?: ManualPaymentType | string | null;
   manualPhone: string;
   manualRecipientName: string;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
 }
 
 export interface UpdateManagerManualPaymentSettingsRequest {
+  manualPaymentType?: ManualPaymentType | string | null;
   manualPhone: string;
   manualRecipientName: string;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
 }
 
 export interface DictionarySummaryItem {
@@ -1975,6 +2189,38 @@ export class ApiService {
     return this.http.put<ManagerManualPaymentSettings>(
       this.apiUrl('/api/cabinet/payment-profile/manual'),
       request
+    );
+  }
+
+  getManagerManualPaymentTasks(
+    options: { forceRefresh?: boolean } = {}
+  ): Observable<ManualPaymentTaskResponse[]> {
+    let params = new HttpParams();
+    if (options.forceRefresh) {
+      params = params.set('refresh', 'true');
+    }
+    return this.http.get<ManualPaymentTaskResponse[]>(
+      this.apiUrl('/api/cabinet/manual-payment-tasks'),
+      { params }
+    );
+  }
+
+  createManagerManualPaymentTask(
+    request: CreateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.post<ManualPaymentTaskResponse>(
+      this.apiUrl('/api/cabinet/manual-payment-tasks'),
+      request
+    );
+  }
+
+  updateManagerManualPaymentTaskStatus(
+    taskId: number,
+    status: ManualPaymentTaskStatus
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      this.apiUrl(`/api/cabinet/manual-payment-tasks/${taskId}/status`),
+      { status }
     );
   }
 
@@ -2273,10 +2519,46 @@ export class ApiService {
     return this.http.get<AdminClientMessageMonitor>(this.apiUrl('/api/admin/client-messages/monitor'));
   }
 
+  getAdminClientMessageMaintenancePreview(): Observable<AdminClientMessageMaintenancePreview> {
+    return this.http.get<AdminClientMessageMaintenancePreview>(
+      this.apiUrl('/api/admin/client-messages/maintenance/preview')
+    );
+  }
+
+  applyAdminClientMessageMaintenance(
+    action: 'company-statuses' | 'payment-overdue' | 'missing-bad-tasks' | 'archive-offers' | 'publication-dates' | 'publication-completed'
+  ): Observable<AdminMaintenanceApplyResponse> {
+    return this.http.post<AdminMaintenanceApplyResponse>(
+      this.apiUrl(`/api/admin/client-messages/maintenance/${action}`),
+      {}
+    );
+  }
+
   updateAdminClientMessageMonitorSettings(enabled: boolean): Observable<AdminClientMessageMonitorSettings> {
     return this.http.put<AdminClientMessageMonitorSettings>(
       this.apiUrl('/api/admin/client-messages/monitor'),
       { enabled }
+    );
+  }
+
+  retryAdminClientMessageNow(stateId: number): Observable<AdminClientMessageMonitor> {
+    return this.http.post<AdminClientMessageMonitor>(
+      this.apiUrl(`/api/admin/client-messages/monitor/states/${stateId}/retry-now`),
+      {}
+    );
+  }
+
+  disableAdminClientMessageCandidate(stateId: number): Observable<AdminClientMessageMonitor> {
+    return this.http.post<AdminClientMessageMonitor>(
+      this.apiUrl(`/api/admin/client-messages/monitor/states/${stateId}/disable`),
+      {}
+    );
+  }
+
+  markAdminClientMessageCandidateDone(stateId: number): Observable<AdminClientMessageMonitor> {
+    return this.http.post<AdminClientMessageMonitor>(
+      this.apiUrl(`/api/admin/client-messages/monitor/states/${stateId}/mark-done`),
+      {}
     );
   }
 
@@ -2495,6 +2777,12 @@ export class ApiService {
     );
   }
 
+  deleteManagerReviewRecoveryTask(orderId: number, taskId: number): Observable<OrderDetailsPayload> {
+    return this.http.delete<OrderDetailsPayload>(
+      this.apiUrl(`/api/manager/orders/${orderId}/recovery-tasks/${taskId}`)
+    );
+  }
+
   markManagerRecoveryClientNotified(orderId: number, batchId: number): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       this.apiUrl(`/api/manager/orders/${orderId}/recovery-batches/${batchId}/client-notified`),
@@ -2704,6 +2992,10 @@ export class ApiService {
     return this.http.post<void>(this.apiUrl(`/api/worker/recovery-tasks/${taskId}/bots/${botId}/deactivate`), {});
   }
 
+  deleteWorkerBot(botId: number): Observable<void> {
+    return this.http.delete<void>(this.apiUrl(`/api/worker/bots/${botId}`));
+  }
+
   logWorkerReviewCopyClick(reviewId: number, field: 'login' | 'password'): Observable<void> {
     return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`), { field });
   }
@@ -2878,8 +3170,46 @@ export class ApiService {
     return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/payments/public/tbank-status'));
   }
 
-  getAdminTbankPaymentLinks(): Observable<AdminPaymentLinkResponse[]> {
-    return this.http.get<AdminPaymentLinkResponse[]>(this.apiUrl('/api/admin/payments/tbank-links'));
+  createManagerOrderPaymentLink(orderId: number): Observable<ManagerPaymentLinkResponse> {
+    return this.http.post<ManagerPaymentLinkResponse>(
+      this.apiUrl(`/api/manager/orders/${orderId}/payment-link`),
+      {}
+    );
+  }
+
+  getAdminTbankPaymentLinks(params?: {
+    page?: number;
+    size?: number;
+    status?: string;
+    search?: string;
+    source?: PaymentLinkListSource;
+    from?: string;
+    to?: string;
+  }): Observable<AdminPaymentLinksPageResponse> {
+    let httpParams = new HttpParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          httpParams = httpParams.set(key, String(value));
+        }
+      });
+    }
+    return this.http.get<AdminPaymentLinksPageResponse>(
+      this.apiUrl('/api/admin/payments/tbank-links'),
+      { params: httpParams }
+    );
+  }
+
+  runAdminPaymentLinkArchive(dryRun: boolean, batchSize?: number): Observable<PaymentLinkArchiveRunResponse> {
+    let params = new HttpParams().set('dryRun', String(dryRun));
+    if (batchSize != null && Number.isFinite(batchSize) && batchSize > 0) {
+      params = params.set('batchSize', String(batchSize));
+    }
+    return this.http.post<PaymentLinkArchiveRunResponse>(
+      this.apiUrl('/api/admin/payments/tbank-links/archive/run'),
+      {},
+      { params }
+    );
   }
 
   cancelAdminTbankPaymentLink(linkId: number): Observable<AdminPaymentLinkResponse> {

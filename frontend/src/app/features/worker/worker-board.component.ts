@@ -20,6 +20,7 @@ import {
   WorkerSection
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
@@ -66,6 +67,7 @@ import { WorkerReviewCardComponent } from './worker-review-card.component';
   imports: [
     AdminLayoutComponent,
     FormsModule,
+    GamificationMeCardComponent,
     LoadErrorCardComponent,
     PersonalRemindersComponent,
     WorkerOrderCardComponent,

@@ -419,4 +419,26 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             LocalDate scheduledDate,
             Collection<Manager> managers
     );
+
+    @Query("""
+        SELECT DISTINCT t
+        FROM ReviewRecoveryTask t
+        LEFT JOIN FETCH t.order o
+        LEFT JOIN FETCH o.worker ow
+        LEFT JOIN FETCH ow.user
+        LEFT JOIN FETCH o.manager om
+        LEFT JOIN FETCH om.user
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH t.sourceReview
+        LEFT JOIN FETCH t.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH t.manager tm
+        LEFT JOIN FETCH tm.user
+        LEFT JOIN FETCH t.completedBy
+        WHERE t.status = :status
+          AND t.completedDate BETWEEN :from AND :to
+    """)
+    List<ReviewRecoveryTask> findDoneForGamificationBackfill(@Param("status") ReviewRecoveryTaskStatus status,
+                                                             @Param("from") LocalDate from,
+                                                             @Param("to") LocalDate to);
 }

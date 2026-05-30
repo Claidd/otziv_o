@@ -14,6 +14,7 @@ import {
   CompanyCreatePayload,
   CompanyCreateRequest,
   CompanyCreateSource,
+  DeviceToken,
   LeadItem,
   LeadPerson,
   OperatorBoard,
@@ -572,6 +573,34 @@ const OPERATOR_TABS: OperatorTab[] = [
                     </label>
                   </section>
                 }
+
+                @if (selectedPhone()?.deviceTokens?.length) {
+                  <section class="operator-device-token-list" aria-label="Привязанные устройства">
+                    <header>
+                      <span class="material-icons-sharp">phonelink_lock</span>
+                      <div>
+                        <strong>Устройства</strong>
+                        <small>device_token можно отвязать без удаления телефона</small>
+                      </div>
+                    </header>
+                    @for (token of selectedPhone()?.deviceTokens ?? []; track token.token) {
+                      <article>
+                        <div>
+                          <strong>{{ deviceTokenLabel(token) }}</strong>
+                          <small>{{ token.createdAt ? dateText(token.createdAt) : 'дата не указана' }} · {{ token.active ? 'активен' : 'выключен' }}</small>
+                        </div>
+                        <button
+                          type="button"
+                          class="danger"
+                          (click)="deletePhoneDeviceToken(token)"
+                          [disabled]="phoneTokenDeleting() === token.token || phoneSaving() || phoneDeleting()"
+                        >
+                          {{ phoneTokenDeleting() === token.token ? '...' : 'отвязать' }}
+                        </button>
+                      </article>
+                    }
+                  </section>
+                }
               </section>
 
               <div class="sheet-actions edit-actions">
@@ -954,6 +983,74 @@ const OPERATOR_TABS: OperatorTab[] = [
       background: var(--otziv-light);
     }
 
+    .operator-device-token-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      border: 1px solid rgba(108, 155, 207, 0.18);
+      border-radius: 0.9rem;
+      padding: 0.65rem;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .operator-device-token-list header,
+    .operator-device-token-list article {
+      display: grid;
+      align-items: center;
+      gap: 0.55rem;
+    }
+
+    .operator-device-token-list header {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .operator-device-token-list article {
+      grid-template-columns: minmax(0, 1fr) auto;
+      border: 1px solid rgba(103, 116, 131, 0.16);
+      border-radius: 0.72rem;
+      padding: 0.5rem;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .operator-device-token-list .material-icons-sharp {
+      color: var(--otziv-primary);
+    }
+
+    .operator-device-token-list div {
+      min-width: 0;
+    }
+
+    .operator-device-token-list strong,
+    .operator-device-token-list small {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .operator-device-token-list strong {
+      color: var(--otziv-dark);
+      font-size: 0.74rem;
+      font-weight: 900;
+    }
+
+    .operator-device-token-list small {
+      color: var(--otziv-info);
+      font-size: 0.61rem;
+      font-weight: 800;
+    }
+
+    .operator-device-token-list button {
+      min-height: 2rem;
+      border: 1px solid rgba(239, 52, 95, 0.22);
+      border-radius: 999px;
+      padding: 0 0.72rem;
+      background: rgba(239, 52, 95, 0.08);
+      color: var(--otziv-danger);
+      font-size: 0.64rem;
+      font-weight: 900;
+    }
+
     .operator-phone-list strong,
     .operator-phone-list span {
       overflow: hidden;
@@ -1031,6 +1128,7 @@ export class OperatorPage implements OnInit, OnDestroy {
   readonly phoneLoading = signal(false);
   readonly phoneSaving = signal(false);
   readonly phoneDeleting = signal(false);
+  readonly phoneTokenDeleting = signal<string | null>(null);
   readonly phoneError = signal<string | null>(null);
 
   readonly canManagePhones = computed(() => canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.operator, MOBILE_ACTIONS.manage));
@@ -1449,7 +1547,7 @@ export class OperatorPage implements OnInit, OnDestroy {
   }
 
   closePhones(): void {
-    if (this.phoneSaving() || this.phoneDeleting()) {
+    if (this.phoneSaving() || this.phoneDeleting() || this.phoneTokenDeleting()) {
       return;
     }
     this.phonesOpen.set(false);
@@ -1578,6 +1676,40 @@ export class OperatorPage implements OnInit, OnDestroy {
     } finally {
       this.phoneDeleting.set(false);
     }
+  }
+
+  async deletePhoneDeviceToken(token: DeviceToken): Promise<void> {
+    const phone = this.selectedPhone();
+    if (!phone || this.phoneTokenDeleting()) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Отвязать устройство',
+      message: `Отвязать устройство ${this.deviceTokenLabel(token)} от телефона ${phone.number}?`,
+      confirmText: 'Отвязать',
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.phoneTokenDeleting.set(token.token);
+    this.phoneError.set(null);
+
+    try {
+      await firstValueFrom(this.api.deleteOperatorPhoneDeviceToken(phone.id, token.token));
+      await this.loadPhones();
+    } catch (error) {
+      this.phoneError.set(this.apiErrorMessage(error, 'Не удалось отвязать устройство.'));
+    } finally {
+      this.phoneTokenDeleting.set(null);
+    }
+  }
+
+  deviceTokenLabel(token: DeviceToken): string {
+    const value = token.token || '';
+    return value.length > 14 ? `${value.slice(0, 6)}...${value.slice(-6)}` : value || 'device_token';
   }
 
   operatorName(operator?: PhoneOperatorOption | null): string {
@@ -1793,6 +1925,10 @@ export class OperatorPage implements OnInit, OnDestroy {
     const selected = selectedId ? phones.find((phone) => phone.id === selectedId) : null;
     if (selected) {
       this.selectPhone(selected);
+      return;
+    }
+    if (phones.length) {
+      this.selectPhone(phones[0]);
       return;
     }
     if (!this.phoneDraft()) {

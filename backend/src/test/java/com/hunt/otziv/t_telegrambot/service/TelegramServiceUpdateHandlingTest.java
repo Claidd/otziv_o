@@ -88,7 +88,7 @@ class TelegramServiceUpdateHandlingTest {
     void publicationProgressMessageIncludesInlineDisableButton() {
         CapturingTelegramService service = service();
         when(publicationProgressPreferenceService.appendTelegramOptOutHint("Отчет"))
-                .thenReturn("Отчет\n\nЕсли не хотите получать отчет, нажмите кнопку ниже.");
+                .thenReturn("Отчет\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nНажмите кнопку ниже.");
         when(publicationProgressPreferenceService.disableCallbackData(10L))
                 .thenReturn("publication_progress:disable:10");
 
@@ -97,8 +97,8 @@ class TelegramServiceUpdateHandlingTest {
         assertTrue(result);
         SendMessage sent = service.sentMessages.getFirst();
         InlineKeyboardMarkup markup = (InlineKeyboardMarkup) sent.getReplyMarkup();
-        assertEquals("Отчет\n\nЕсли не хотите получать отчет, нажмите кнопку ниже.", sent.getText());
-        assertEquals("Отключить оповещения о каждой публикации",
+        assertEquals("Отчет\n\nНе хотите получать сообщение о каждом опубликованном отзыве?\nНажмите кнопку ниже.", sent.getText());
+        assertEquals("Отключить уведомления",
                 markup.getKeyboard().getFirst().getFirst().getText());
         assertEquals("publication_progress:disable:10",
                 markup.getKeyboard().getFirst().getFirst().getCallbackData());

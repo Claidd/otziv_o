@@ -549,6 +549,24 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     @Query("SELECT r FROM Review r WHERE r.filial IN :filials")
     List<Review> findAllByFilials(@Param("filials") Set<Filial> filials);
 
+    @Query("""
+        SELECT DISTINCT r
+        FROM Review r
+        LEFT JOIN FETCH r.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH r.orderDetails d
+        LEFT JOIN FETCH d.order o
+        LEFT JOIN FETCH o.worker ow
+        LEFT JOIN FETCH ow.user
+        LEFT JOIN FETCH o.manager om
+        LEFT JOIN FETCH om.user
+        LEFT JOIN FETCH o.company
+        WHERE r.publish = true
+          AND r.publishedDate BETWEEN :from AND :to
+    """)
+    List<Review> findPublishedForGamificationBackfill(@Param("from") LocalDate from,
+                                                       @Param("to") LocalDate to);
+
     @Query(value = """
         SELECT DISTINCT used_bots.bot_id
         FROM (
