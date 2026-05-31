@@ -8,7 +8,6 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
-import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +20,6 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
     private final EmailService emailService;
     private final OrderRepository orderRepository;
-    private final OrderStatusNotificationService orderStatusNotificationService;
     private final OrderPaymentMessageBuilder orderPaymentMessageBuilder;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final OrderStatusService orderStatusService;
@@ -84,7 +82,6 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private String handlePublicStatus(Order order) {
         String clientId = order.getManager().getClientId();
         String groupId = order.getCompany().getGroupId();
-
         if (orderPaymentMessageBuilder.shouldSkipPublishedPayment(order)) {
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
             orderRepository.save(order);
@@ -101,36 +98,12 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
             return STATUS_PUBLIC;
         }
 
-        String message = preparePublishedPaymentMessage(order);
-        if (message == null) {
-            return STATUS_PUBLIC;
-        }
-
-        String appliedStatus = orderStatusNotificationService.sendMessageToClientChat(
-                STATUS_PUBLIC,
-                order,
-                clientId,
-                groupId,
-                message,
-                STATUS_TO_PAY
-        );
-        if (!STATUS_TO_PAY.equals(appliedStatus)) {
-            paymentInvoiceRetryScheduler.scheduleRetry(order);
-        }
-        return appliedStatus;
-    }
-
-    private String preparePublishedPaymentMessage(Order order) {
-        try {
-            return orderPaymentMessageBuilder.publishedOrderPaymentMessage(order);
-        } catch (RuntimeException e) {
-            order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
-            orderRepository.save(order);
-            paymentInvoiceRetryScheduler.scheduleRetry(order);
-            log.warn("Заказ {} опубликован, но счет клиенту не подготовлен. Публикация не откатывается.",
-                    order.getId(), e);
-            return null;
-        }
+        order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_PUBLIC));
+        orderRepository.save(order);
+        paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
+        log.info("Финальный счет после публикации поставлен в очередь, orderId={} clientId={} groupId={}",
+                order.getId(), clientId, groupId);
+        return STATUS_PUBLIC;
     }
 
     private boolean immediateClientMessagesEnabled() {

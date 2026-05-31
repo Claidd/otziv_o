@@ -1,10 +1,8 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-mobile-search-bar',
   standalone: true,
-  imports: [FormsModule],
   template: `
     <section class="mobile-search-bar" [class.has-extra]="hasExtraAction">
       <label>
@@ -13,8 +11,11 @@ import { FormsModule } from '@angular/forms';
           type="search"
           [placeholder]="placeholder"
           autocomplete="off"
-          [ngModel]="value"
-          (ngModelChange)="valueChange.emit($event)"
+          autocorrect="off"
+          enterkeyhint="search"
+          [value]="value"
+          (input)="handleInput($event)"
+          (search)="searchSubmit.emit()"
           (keydown.enter)="searchSubmit.emit()"
         >
       </label>
@@ -115,4 +116,8 @@ export class MobileSearchBarComponent {
   @Output() valueChange = new EventEmitter<string>();
   @Output() refresh = new EventEmitter<void>();
   @Output() searchSubmit = new EventEmitter<void>();
+
+  handleInput(event: Event): void {
+    this.valueChange.emit((event.target as HTMLInputElement | null)?.value ?? '');
+  }
 }

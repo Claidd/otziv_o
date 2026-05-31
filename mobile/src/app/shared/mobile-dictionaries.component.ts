@@ -1212,7 +1212,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
     }
-    this.searchTimer = setTimeout(() => void this.loadActive(), 1000);
+    this.searchTimer = setTimeout(() => void this.loadActive(), 450);
   }
 
   tabTone(index: number): MobileStatusItem['tone'] {

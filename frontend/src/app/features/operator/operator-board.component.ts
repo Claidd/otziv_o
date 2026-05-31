@@ -10,6 +10,7 @@ import { LeadItem, LeadPage, LeadPerson } from '../../core/leads.api';
 import { OperatorApi, OperatorBoard, OperatorBoardSection } from '../../core/operator.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
@@ -480,17 +481,9 @@ export class OperatorBoardComponent {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = value;
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-9999px';
-      document.body.append(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      textarea.remove();
+    if (!await copyTextToClipboard(value)) {
+      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      return;
     }
 
     this.copied.set(key);

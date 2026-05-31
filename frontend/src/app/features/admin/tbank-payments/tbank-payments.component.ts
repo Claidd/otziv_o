@@ -25,6 +25,7 @@ import type {
 } from '../../../core/payments.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
+import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
@@ -874,13 +875,13 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
-  copy(value: string | null | undefined, key: string): void {
+  async copy(value: string | null | undefined, key: string): Promise<void> {
     const text = value?.trim();
     if (!text) {
       return;
     }
 
-    void navigator.clipboard.writeText(text).then(() => {
+    if (await copyTextToClipboard(text)) {
       this.copied.set(key);
       window.setTimeout(() => {
         if (this.copied() === key) {
@@ -888,7 +889,9 @@ export class TbankPaymentsComponent implements OnDestroy {
         }
       }, 1600);
       this.toastService.success('Скопировано');
-    });
+    } else {
+      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+    }
   }
 
   statusLabel(status: string): string {

@@ -28,7 +28,6 @@ import com.hunt.otziv.l_lead.repository.PromoTextAssignmentRepository;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
-import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsRequest;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService;
@@ -90,7 +89,6 @@ public class ApiAdminDictionaryController {
     private final TelegramReportScheduleSettingsService telegramReportScheduleSettingsService;
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
-    private final TbankRuntimeSettingsService tbankRuntimeSettingsService;
     private final ScheduledClientMessageService scheduledClientMessageService;
 
     @Value("${app.nagul.cooldown:60}")
@@ -710,7 +708,6 @@ public class ApiAdminDictionaryController {
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT, requiredSettingText(request.clientTextReminderText(), "Укажите текст ожидания текста клиента"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PUBLICATION_STARTED_TEXT, requiredSettingText(request.publicationStartedText(), "Укажите текст передачи в публикацию"));
         appSettingService.setString(AppSettingService.CLIENT_PUBLICATION_PROGRESS_REPORT_TEXT, requiredSettingText(request.publicationProgressReportText(), "Укажите текст отчёта о публикации отзыва"));
-        appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_INSTRUCTION_SOURCE, requiredPaymentInstructionSource(request.paymentInstructionSource()));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_TEXT, requiredSettingText(request.paymentReminderText(), "Укажите текст оплаты"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT, requiredSettingText(request.paymentLinkCopyText(), "Укажите текст счета по платежной ссылке"));
         String paymentSuccessText = request.paymentSuccessText() == null
@@ -1267,32 +1264,6 @@ public class ApiAdminDictionaryController {
             throw badRequest(message + ": не больше 500 символов");
         }
         return text;
-    }
-
-    private String requiredPaymentInstructionSource(String value) {
-        String source = safe(value).trim().toUpperCase(Locale.ROOT);
-        if (source.isBlank()) {
-            return ScheduledClientMessageService.DEFAULT_PAYMENT_INSTRUCTION_SOURCE;
-        }
-        if ("MANAGER_TEXT".equals(source)) {
-            return source;
-        }
-        if ("TBANK_LINK".equals(source)) {
-            validateTbankLinksForClientMessages();
-            return source;
-        }
-        throw badRequest("Источник оплаты должен быть MANAGER_TEXT или TBANK_LINK");
-    }
-
-    private void validateTbankLinksForClientMessages() {
-        if (tbankRuntimeSettingsService.runtimeMode().isTest()) {
-            throw badRequest("В тестовом режиме нельзя отправлять клиентам ссылки T-Bank");
-        }
-        if (!tbankRuntimeSettingsService.isTbankEnabled()
-                || !tbankRuntimeSettingsService.isPaymentLinksEnabled()
-                || !tbankRuntimeSettingsService.isManagerUiEnabled()) {
-            throw badRequest("Для отправки ссылок T-Bank включите API, создание ссылок и UI менеджера в разделе T-Bank");
-        }
     }
 
     private String requiredTitle(String value) {

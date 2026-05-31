@@ -198,12 +198,12 @@ function Invoke-TbankPaymentConfigSmoke {
     $url = "$($BaseUrl.TrimEnd('/'))/api/payments/public/tbank-status"
     $status = Invoke-RestMethod -Uri $url -TimeoutSec 20
 
-    $expectedEnabled = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_ENABLED") -Default $false
-    $expectedPaymentLinks = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED") -Default $true
-    $expectedManagerUi = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_MANAGER_UI_ENABLED") -Default $false
-    $expectedApplyConfirmed = Convert-EnvBool -Value (Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_APPLY_CONFIRMED_PAYMENTS") -Default $false
+    $expectedEnabled = $false
+    $expectedPaymentLinks = $false
+    $expectedManagerUi = $false
+    $expectedApplyConfirmed = $false
     $expectedBaseUrl = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_BASE_URL"
-    $expectedRuntimeMode = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_RUNTIME_MODE"
+    $expectedRuntimeMode = "TEST"
 
     if ($status.enabled -ne $expectedEnabled) {
         throw "T-Bank enabled flag mismatch: expected $expectedEnabled, got $($status.enabled)."
@@ -247,11 +247,10 @@ function Disable-LocalExternalMessaging {
     }
 
     $tableCheckOutput = & docker @($ComposeArguments + @(
-        "exec", "-T", "mysql",
+        "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
         "mysql",
         "--default-character-set=utf8mb4",
         "-u$mysqlUser",
-        "-p$mysqlPassword",
         $mysqlDatabase,
         "-N", "-B",
         "-e",
@@ -277,7 +276,21 @@ VALUES
   ('publication.health-monitor.enabled', 'false', NOW(6)),
   ('telegram.reports.morning.enabled', 'false', NOW(6)),
   ('telegram.reports.evening.enabled', 'false', NOW(6)),
-  ('whatsapp.group-sync.enabled', 'false', NOW(6))
+  ('whatsapp.group-sync.enabled', 'false', NOW(6)),
+  ('archive.orders.schedule.worker.enabled', 'false', NOW(6)),
+  ('archive.orders.schedule.enabled', 'false', NOW(6)),
+  ('archive.orders.apply.enabled', 'false', NOW(6)),
+  ('archive.orders.run.mode', 'dry-run', NOW(6)),
+  ('payment.links.archive.enabled', 'false', NOW(6)),
+  ('payments.tbank.runtime-mode', 'TEST', NOW(6)),
+  ('payments.tbank.enabled', 'false', NOW(6)),
+  ('payments.tbank.payment-links-enabled', 'false', NOW(6)),
+  ('payments.tbank.manager-ui-enabled', 'false', NOW(6)),
+  ('payments.tbank.apply-confirmed-payments', 'false', NOW(6)),
+  ('payments.tbank.tpay-enabled', 'false', NOW(6)),
+  ('payments.tbank.sberpay-enabled', 'false', NOW(6)),
+  ('payments.tbank.mirpay-enabled', 'false', NOW(6)),
+  ('client.messages.payment-instruction-source', 'MANAGER_TEXT', NOW(6))
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at);
 
 SELECT setting_key, setting_value
@@ -290,17 +303,30 @@ WHERE setting_key IN (
   'publication.health-monitor.enabled',
   'telegram.reports.morning.enabled',
   'telegram.reports.evening.enabled',
-  'whatsapp.group-sync.enabled'
+  'whatsapp.group-sync.enabled',
+  'archive.orders.schedule.worker.enabled',
+  'archive.orders.schedule.enabled',
+  'archive.orders.apply.enabled',
+  'archive.orders.run.mode',
+  'payment.links.archive.enabled',
+  'payments.tbank.runtime-mode',
+  'payments.tbank.enabled',
+  'payments.tbank.payment-links-enabled',
+  'payments.tbank.manager-ui-enabled',
+  'payments.tbank.apply-confirmed-payments',
+  'payments.tbank.tpay-enabled',
+  'payments.tbank.sberpay-enabled',
+  'payments.tbank.mirpay-enabled',
+  'client.messages.payment-instruction-source'
 )
 ORDER BY setting_key;
 "@
 
     $mysqlArgs = $ComposeArguments + @(
-        "exec", "-T", "mysql",
+        "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
         "mysql",
         "--default-character-set=utf8mb4",
         "-u$mysqlUser",
-        "-p$mysqlPassword",
         $mysqlDatabase,
         "-e",
         $sql
@@ -403,8 +429,16 @@ function Invoke-KeycloakAdminCli {
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
 
-    $output = & docker @($ComposeArguments + @("exec", "-T", "keycloak", "/opt/keycloak/bin/kcadm.sh") + $Arguments) 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & docker @($ComposeArguments + @("exec", "-T", "keycloak", "/opt/keycloak/bin/kcadm.sh") + $Arguments) 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -ne 0) {
         $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
         throw "kcadm command failed: $($Arguments -join ' '): $text"
     }
@@ -1205,9 +1239,15 @@ if (-not $SkipProdDbRestore) {
     }
 
     Write-Host "Refreshing local prod-like DB from VPS before smoke. Pass -SkipProdDbRestore to keep the existing local DB."
-    $restoreArgs = @("-EnvFile", $envPath, "-ComposeFile", $composePath, "-VpsHost", $VpsHost, "-VpsUser", $VpsUser, "-VpsPort", "$VpsPort")
+    $restoreArgs = @{
+        EnvFile = $envPath
+        ComposeFile = $composePath
+        VpsHost = $VpsHost
+        VpsUser = $VpsUser
+        VpsPort = $VpsPort
+    }
     if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
-        $restoreArgs += @("-SshKey", $SshKey)
+        $restoreArgs["SshKey"] = $SshKey
     }
     & $restoreScript @restoreArgs
     if ($LASTEXITCODE -ne 0) {
@@ -1318,6 +1358,11 @@ try {
 
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
     Disable-LocalExternalMessaging -ComposeArguments $composeArgs -EnvPath $envPath
+    if (-not $NoUp) {
+        Write-Host "Restarting backend so local safety settings are loaded from the refreshed DB."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "--force-recreate", "--no-deps", "app"))
+        Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health after local safety reload" -Deadline $deadline
+    }
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline

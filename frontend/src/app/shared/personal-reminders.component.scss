@@ -166,6 +166,7 @@
 }
 
 button.reminder-icon-button.reminder-icon-button,
+button.reminder-delete-button.reminder-delete-button,
 button.reminder-action-button.reminder-action-button,
 button.reminder-client-notified-button.reminder-client-notified-button,
 button.reminder-payment-button.reminder-payment-button,
@@ -210,9 +211,30 @@ button.reminder-icon-button.done {
   background: rgba(27, 156, 133, 0.12);
 }
 
-button.reminder-icon-button.danger {
+button.reminder-delete-button.reminder-delete-button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 0.95rem;
+  min-height: 0.95rem;
+  margin-top: 0.62rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
   color: var(--otziv-danger);
+  background: transparent;
+  box-shadow: none;
+}
+
+button.reminder-delete-button.reminder-delete-button:hover,
+button.reminder-delete-button.reminder-delete-button:focus-visible {
   background: rgba(255, 0, 96, 0.1);
+}
+
+button.reminder-delete-button.reminder-delete-button span {
+  font-size: 0.98rem;
+  font-weight: 900;
 }
 
 button.reminder-client-notified-button.reminder-client-notified-button,
@@ -356,6 +378,7 @@ button.reminder-action-button.reminder-action-button span {
 
 .personal-reminder {
   align-items: flex-start;
+  gap: 0.45rem;
 }
 
 .personal-reminder.due {
@@ -367,12 +390,23 @@ button.reminder-action-button.reminder-action-button span {
     var(--otziv-white);
 }
 
+.personal-reminder__leading {
+  display: flex;
+  flex: 0 0 1.25rem;
+  width: 1.25rem;
+  min-width: 1.25rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.03rem;
+}
+
 .personal-reminder__icon {
   flex: 0 0 auto;
   width: 1.25rem;
   padding-top: 0.08rem;
   color: var(--otziv-info);
   font-size: 1rem;
+  text-align: center;
 }
 
 .personal-reminder.due .personal-reminder__icon {

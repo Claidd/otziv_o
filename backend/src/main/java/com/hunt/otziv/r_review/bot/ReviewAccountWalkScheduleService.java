@@ -9,6 +9,7 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
@@ -23,6 +24,7 @@ public class ReviewAccountWalkScheduleService {
 
     private static final int DEFAULT_WALKED_COUNTER_THRESHOLD = 3;
     private static final int DEFAULT_WALK_DELAY_DAYS = 2;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
 
     private final ReviewRepository reviewRepository;
     private final AppSettingService appSettingService;
@@ -110,6 +112,7 @@ public class ReviewAccountWalkScheduleService {
         List<Review> orderReviews = reviewRepository.findAllByOrderIdForAccountWalkSchedule(orderId);
         boolean shiftStarted = false;
         LocalDate previousDate = null;
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
         int shiftedCount = 0;
 
         for (Review review : orderReviews) {
@@ -128,6 +131,12 @@ public class ReviewAccountWalkScheduleService {
 
             int removeDays = Math.min(delayDays, currentDelay);
             LocalDate candidateDate = shiftDate(review.getPublishedDate(), -removeDays);
+            if (candidateDate.isBefore(today)) {
+                review.setAccountWalkDelayDays(currentDelay - removeDays);
+                shiftedCount++;
+                previousDate = review.getPublishedDate();
+                continue;
+            }
             if (previousDate == null || daysBetween(previousDate, candidateDate) >= delayDays) {
                 review.setPublishedDate(candidateDate);
                 review.setAccountWalkDelayDays(currentDelay - removeDays);

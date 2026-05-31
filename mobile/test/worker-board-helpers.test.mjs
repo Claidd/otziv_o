@@ -7,6 +7,7 @@ const {
   ORDER_STATUS_ACTIONS,
   WORKER_SECTIONS,
   isWorkerReviewSection,
+  workerDefaultSortDirection,
   workerReviewTitle,
   workerReviewToneClass,
   workerSectionIcon,
@@ -18,6 +19,8 @@ test('keeps worker section navigation stable', () => {
   assert.equal(JSON.stringify(WORKER_SECTIONS), JSON.stringify(['new', 'correct', 'nagul', 'recovery', 'publish', 'bad', 'all']));
   assert.equal(workerSectionLabel('nagul'), 'Выгул');
   assert.equal(workerSectionIcon('publish'), 'published_with_changes');
+  assert.equal(workerDefaultSortDirection('new'), 'desc');
+  assert.equal(workerDefaultSortDirection('nagul'), 'desc');
 });
 
 test('separates order and review worker sections', () => {

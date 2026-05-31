@@ -1201,7 +1201,7 @@ export class OperatorPage implements OnInit, OnDestroy {
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
     }
-    this.searchTimer = setTimeout(() => this.applySearch(), 1000);
+    this.searchTimer = setTimeout(() => this.applySearch(), 450);
   }
 
   applySearch(): void {

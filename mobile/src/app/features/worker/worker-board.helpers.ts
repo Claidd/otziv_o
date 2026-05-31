@@ -95,6 +95,10 @@ export function isWorkerReviewSection(section: WorkerBoardSection): boolean {
   return REVIEW_SECTIONS.has(section);
 }
 
+export function workerDefaultSortDirection(_section: WorkerBoardSection): 'desc' {
+  return 'desc';
+}
+
 export function workerReviewToneClass(review: WorkerReviewItem, section: WorkerBoardSection): string {
   if (review.badTask || section === 'bad') {
     return 'tone-bad';

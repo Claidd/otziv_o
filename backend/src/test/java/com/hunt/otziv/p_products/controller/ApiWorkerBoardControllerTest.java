@@ -349,8 +349,8 @@ class ApiWorkerBoardControllerTest {
                 pageableCaptor.capture()
         );
         Pageable pageable = pageableCaptor.getValue();
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
+        assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
+        assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("id").getDirection());
         verify(reviewService, never()).hasActiveNagulReviews(principal);
     }
 
@@ -371,8 +371,8 @@ class ApiWorkerBoardControllerTest {
                 pageableCaptor.capture()
         );
         Pageable pageable = pageableCaptor.getValue();
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
+        assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("scheduledDate").getDirection());
+        assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("id").getDirection());
         verify(reviewService, never()).hasActiveNagulReviews(principal);
     }
 
@@ -472,7 +472,7 @@ class ApiWorkerBoardControllerTest {
         assertTrue(response.warning());
         assertTrue(response.message().contains("без изменений"));
         assertTrue(response.message().contains("ждут клиента"));
-        verify(orderService).getAllOrderDTOAndKeywordByWorker(principal, "", "Новый", 0, 10);
+        verify(orderBoardQueryService).getAllOrderDTOAndKeywordByWorker(worker, "", "Новый", 0, 10, "desc");
         verify(reviewService, never()).hasActiveNagulReviews(principal);
     }
 
@@ -492,7 +492,7 @@ class ApiWorkerBoardControllerTest {
         assertEquals("correct", response.section());
         assertTrue(response.warning());
         assertTrue(response.message().contains("Коррекции"));
-        verify(orderService).getAllOrderDTOAndKeywordByWorker(principal, "", "Коррекция", 0, 10);
+        verify(orderBoardQueryService).getAllOrderDTOAndKeywordByWorker(worker, "", "Коррекция", 0, 10, "desc");
         verify(reviewService, never()).hasActiveNagulReviews(principal);
     }
 

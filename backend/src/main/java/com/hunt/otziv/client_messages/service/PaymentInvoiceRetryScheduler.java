@@ -43,6 +43,19 @@ public class PaymentInvoiceRetryScheduler {
     }
 
     @Transactional
+    public void scheduleInitialInvoice(Order order) {
+        if (!canSchedule(order)) {
+            return;
+        }
+        scheduleOrderRetry(
+                order,
+                ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+                orderTargetKey(order),
+                0
+        );
+    }
+
+    @Transactional
     public void scheduleReviewCheckRetry(Order order) {
         if (!canSchedule(order)) {
             return;

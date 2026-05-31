@@ -126,8 +126,6 @@ class OrderServiceImplTest {
         Review reviewToPublish = review(2L, false, "Новый отзыв", details);
         details.setReviews(List.of(alreadyPublished, reviewToPublish));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(2);
@@ -169,8 +167,6 @@ class OrderServiceImplTest {
         Review reviewToPublish = review(2L, false, "Первый отзыв", details);
         details.setReviews(List.of(reviewToPublish));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(1);
@@ -205,8 +201,6 @@ class OrderServiceImplTest {
         Review reviewToPublish = review(2L, false, "Финальный отзыв", details);
         details.setReviews(List.of(reviewToPublish));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(10L)).thenReturn(5);
@@ -224,6 +218,25 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void changeStatusAndOrderCounterTreatsAlreadyPublishedReviewAsIdempotentSuccess() throws Exception {
+        Order order = order(10L, 5);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review publishedReview = review(2L, true, "Уже опубликованный отзыв", details);
+        details.setReviews(List.of(publishedReview));
+        order.setDetails(List.of(details));
+
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(publishedReview));
+
+        assertTrue(orderService.changeStatusAndOrderCounter(2L));
+
+        verify(orderRepository, never()).findByIdForCounterUpdate(10L);
+        verify(reviewRepository, never()).save(publishedReview);
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService, orderStatusNotificationService);
+    }
+
+    @Test
     void changeStatusAndOrderCounterReportsDuplicateCardNumber() {
         Order order = order(10L, 0);
         OrderDetails details = new OrderDetails();
@@ -234,8 +247,6 @@ class OrderServiceImplTest {
         Review duplicateReview = review(2L, false, duplicateText, details);
         details.setReviews(List.of(firstReview, duplicateReview));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(10L));
         when(orderRepository.findByIdForCounterUpdate(10L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(duplicateReview));
         when(reviewRepository.existsPublishedByTextExcludingReviewId(duplicateText, 2L)).thenReturn(true);
@@ -263,8 +274,6 @@ class OrderServiceImplTest {
         Review duplicateReview = review(2L, false, duplicateText, details);
         details.setReviews(List.of(firstReview, duplicateReview));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(11L));
         when(orderRepository.findByIdForCounterUpdate(11L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(duplicateReview));
         when(reviewArchiveService.existsByTextExcludingOwnSource(duplicateText, 2L, 11L)).thenReturn(true);
@@ -292,8 +301,6 @@ class OrderServiceImplTest {
         Review placeholderReview = review(2L, false, "текст отзыва Нужно подсавить текст", details);
         details.setReviews(List.of(placeholderReview));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(13L));
         when(orderRepository.findByIdForCounterUpdate(13L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(placeholderReview));
 
@@ -320,8 +327,6 @@ class OrderServiceImplTest {
         reviewToPublish.setBot(bot(99L, "Впиши Имя Фамилию", "79000000000", true));
         details.setReviews(List.of(reviewToPublish));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(14L));
         when(orderRepository.findByIdForCounterUpdate(14L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
 
@@ -348,8 +353,6 @@ class OrderServiceImplTest {
         Review reviewToPublish = review(2L, false, shortText, details);
         details.setReviews(List.of(reviewToPublish));
         order.setDetails(List.of(details));
-
-        when(reviewRepository.findOrderIdByReviewId(2L)).thenReturn(Optional.of(12L));
         when(orderRepository.findByIdForCounterUpdate(12L)).thenReturn(Optional.of(order));
         when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
         when(reviewRepository.countPublishedByOrderId(12L)).thenReturn(5);

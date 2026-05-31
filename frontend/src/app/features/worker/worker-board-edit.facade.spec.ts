@@ -370,4 +370,28 @@ describe('WorkerBoardEditFacade', () => {
     expect(state.facade.reviewEditDraft()?.url).toBe('new-photo.jpg');
     expect(state.calls).toContain('load-board');
   });
+
+  it('keeps server publication date after assigning new account', () => {
+    const state = createFacade({
+      details: orderDetails({
+        reviews: [orderReview({ id: 7, publishedDate: '2026-05-29' })]
+      }),
+      updateReview: orderReview({
+        id: 7,
+        publishedDate: '2026-06-01',
+        vigul: false,
+        botFio: 'Впиши Имя Фамилию',
+        botPassword: 'new-password'
+      })
+    });
+
+    state.facade.openReviewEdit(workerReview({ id: 7, publishedDate: '2026-05-29' }));
+    state.facade.assignReviewNewAccount();
+    state.facade.saveReviewEdit();
+
+    expect(state.calls).toContain('new-account:20:7');
+    expect(state.lastReviewRequest?.publishedDate).toBe('2026-06-01');
+    expect(state.lastReviewRequest?.vigul).toBe(false);
+    expect(state.lastReviewRequest?.botName).toBe('Впиши Имя Фамилию');
+  });
 });

@@ -20,6 +20,7 @@ import {
   OrderCardItem
 } from '../../core/manager.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -126,6 +127,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly chatBotLinkPollTimeoutMs = 90000;
   private readonly chatBotLinkPolls = new Map<number, ChatBotLinkPoll>();
   private readonly chatBotLinkPollTimers = new Map<number, number>();
+  private readonly paymentCopyCache = new Map<number, string>();
   private chatBotLinkRefreshInFlight = false;
 
   readonly sections = MANAGER_SECTIONS;
@@ -463,12 +465,23 @@ export class ManagerBoardComponent implements OnDestroy {
       return;
     }
 
+    const cachedPaymentText = this.paymentCopyCache.get(order.id);
+    if (cachedPaymentText) {
+      await this.copyText(cachedPaymentText, `payment-${order.id}`, 'Текст счета скопирован');
+      return;
+    }
+
     try {
       const response = await firstValueFrom(this.paymentsApi.createOrderPaymentLink(order.id));
+      const paymentText = response.copyText || response.url;
+      if (paymentText) {
+        this.paymentCopyCache.set(order.id, paymentText);
+      }
       await this.copyText(
-        response.copyText || response.url,
+        paymentText,
         `payment-${order.id}`,
-        'Текст счета скопирован'
+        'Текст счета скопирован',
+        'Счет создан. Если iPhone не дал скопировать, нажмите "счет" еще раз.'
       );
     } catch (err) {
       const message = this.errorMessage(err, 'Не удалось создать ссылку на оплату');
@@ -780,15 +793,19 @@ export class ManagerBoardComponent implements OnDestroy {
     return section === 'orders' ? '/orders' : '/companies';
   }
 
-  private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
+  private async copyText(
+    text: string,
+    copiedKey: string,
+    toast: string,
+    failureToast = 'Браузер не дал доступ к буферу обмена'
+  ): Promise<boolean> {
     const value = text.trim();
 
     if (!value) {
-      return;
+      return false;
     }
 
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyTextToClipboard(value)) {
       this.copied.set(copiedKey);
       this.toastService.success('Скопировано', toast);
       window.setTimeout(() => {
@@ -796,9 +813,11 @@ export class ManagerBoardComponent implements OnDestroy {
           this.copied.set(null);
         }
       }, 1200);
-    } catch {
-      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      return true;
     }
+
+    this.toastService.error('Не скопировано', failureToast);
+    return false;
   }
 
   private openCreatedCompanyOrders(companyId: number, companyTitle: string): void {

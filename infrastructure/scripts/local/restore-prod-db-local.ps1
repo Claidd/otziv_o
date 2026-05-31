@@ -163,8 +163,8 @@ function Test-LocalFlywayChecksums {
 
     $local = Get-LocalMigrationChecksums -MigrationDir $MigrationDir
     $rows = & docker @($ComposeArguments + @(
-        "exec", "-T", "mysql",
-        "mysql", "-u$mysqlUser", "-p$mysqlPassword", $mysqlDatabase,
+        "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
+        "mysql", "-u$mysqlUser", $mysqlDatabase,
         "-N", "-B",
         "-e", "SELECT version, checksum FROM flyway_schema_history WHERE success = 1 AND checksum IS NOT NULL"
     ))
@@ -231,16 +231,29 @@ VALUES
   ('publication.health-monitor.enabled', 'false', NOW(6)),
   ('telegram.reports.morning.enabled', 'false', NOW(6)),
   ('telegram.reports.evening.enabled', 'false', NOW(6)),
-  ('whatsapp.group-sync.enabled', 'false', NOW(6))
+  ('whatsapp.group-sync.enabled', 'false', NOW(6)),
+  ('archive.orders.schedule.worker.enabled', 'false', NOW(6)),
+  ('archive.orders.schedule.enabled', 'false', NOW(6)),
+  ('archive.orders.apply.enabled', 'false', NOW(6)),
+  ('archive.orders.run.mode', 'dry-run', NOW(6)),
+  ('payment.links.archive.enabled', 'false', NOW(6)),
+  ('payments.tbank.runtime-mode', 'TEST', NOW(6)),
+  ('payments.tbank.enabled', 'false', NOW(6)),
+  ('payments.tbank.payment-links-enabled', 'false', NOW(6)),
+  ('payments.tbank.manager-ui-enabled', 'false', NOW(6)),
+  ('payments.tbank.apply-confirmed-payments', 'false', NOW(6)),
+  ('payments.tbank.tpay-enabled', 'false', NOW(6)),
+  ('payments.tbank.sberpay-enabled', 'false', NOW(6)),
+  ('payments.tbank.mirpay-enabled', 'false', NOW(6)),
+  ('client.messages.payment-instruction-source', 'MANAGER_TEXT', NOW(6))
 ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = VALUES(updated_at);
 "@
 
     Invoke-External -FilePath "docker" -Arguments ($ComposeArguments + @(
-        "exec", "-T", "mysql",
+        "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
         "mysql",
         "--default-character-set=utf8mb4",
         "-u$mysqlUser",
-        "-p$mysqlPassword",
         $mysqlDatabase,
         "-e",
         $sql
@@ -307,7 +320,7 @@ if (-not $SkipDownload) {
     $remoteStamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $remoteDump = "/tmp/otziv-prod-$remoteStamp.sql.gz"
     $remoteDumpQuoted = ConvertTo-BashSingleQuoted -Value $remoteDump
-    $remoteCommand = "set -Eeuo pipefail; docker exec my-mysql sh -lc 'mysqldump --single-transaction --quick --routines --triggers --no-tablespaces -u`"`$MYSQL_USER`" -p`"`$MYSQL_PASSWORD`" `"`$MYSQL_DATABASE`"' | gzip -1 > $remoteDumpQuoted; ls -lh $remoteDumpQuoted"
+    $remoteCommand = "set -Eeuo pipefail; docker exec my-mysql sh -lc 'MYSQL_PWD=`"`$MYSQL_PASSWORD`" mysqldump --single-transaction --quick --routines --triggers --no-tablespaces -u`"`$MYSQL_USER`" `"`$MYSQL_DATABASE`"' | gzip -1 > $remoteDumpQuoted; ls -lh $remoteDumpQuoted"
 
     Write-Host "Creating production dump on VPS..."
     Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $remoteCommand))
@@ -357,7 +370,7 @@ try {
     Write-Host "Restoring dump into local MySQL..."
     Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
         "exec", "-T", "mysql",
-        "sh", "-lc", "gzip -dc /backup/$dumpFileName | mysql -u`"`$MYSQL_USER`" -p`"`$MYSQL_PASSWORD`" `"`$MYSQL_DATABASE`""
+        "sh", "-lc", "gzip -dc /backup/$dumpFileName | MYSQL_PWD=`"`$MYSQL_PASSWORD`" mysql -u`"`$MYSQL_USER`" `"`$MYSQL_DATABASE`""
     ))
 
     Disable-RestoredDbExternalMessaging -ComposeArguments $composeArgs -EnvValues $envValues

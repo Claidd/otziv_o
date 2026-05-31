@@ -346,12 +346,13 @@ public class ApiManagerReviewController {
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/publish")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public OrderDetailsResponse publishOrderReview(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             Authentication authentication
     ) throws Exception {
+        requireReviewForOrder(orderId, reviewId);
         if (!orderService.changeStatusAndOrderCounter(reviewId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным");
         }

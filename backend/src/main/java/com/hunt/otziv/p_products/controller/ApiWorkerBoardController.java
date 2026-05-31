@@ -624,7 +624,7 @@ public class ApiWorkerBoardController {
 
         return "Все".equals(status)
                 ? orderBoardQueryService.getWorkerBoardOrderDTOAndKeywordByWorkerAll(principal, keyword, pageNumber, pageSize, sortDirection)
-                : orderService.getAllOrderDTOAndKeywordByWorker(principal, keyword, status, pageNumber, pageSize);
+                : orderBoardQueryService.getAllOrderDTOAndKeywordByWorker(resolveWorker(principal), keyword, status, pageNumber, pageSize, sortDirection);
     }
 
     private PageResponse<WorkerReviewResponse> loadReviewResponses(
@@ -1645,25 +1645,25 @@ public class ApiWorkerBoardController {
                 .comparing(ReviewDTOOne::getPublishedDate, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(ReviewDTOOne::getId, Comparator.nullsLast(Comparator.naturalOrder()));
 
-        return "asc".equals(sortDirection) ? comparator : comparator.reversed();
+        return "asc".equals(sortDirection) ? comparator.reversed() : comparator;
     }
 
     private Sort reviewSort(String sortDirection) {
         return "asc".equals(sortDirection)
-                ? Sort.by("publishedDate").ascending().and(Sort.by("id").ascending())
-                : Sort.by("publishedDate").descending().and(Sort.by("id").descending());
+                ? Sort.by("publishedDate").descending().and(Sort.by("id").descending())
+                : Sort.by("publishedDate").ascending().and(Sort.by("id").ascending());
     }
 
     private Sort badReviewTaskSort(String sortDirection) {
         return "asc".equals(sortDirection)
-                ? Sort.by("scheduledDate").ascending().and(Sort.by("id").ascending())
-                : Sort.by("scheduledDate").descending().and(Sort.by("id").descending());
+                ? Sort.by("scheduledDate").descending().and(Sort.by("id").descending())
+                : Sort.by("scheduledDate").ascending().and(Sort.by("id").ascending());
     }
 
     private Sort recoveryTaskSort(String sortDirection) {
         return "asc".equals(sortDirection)
-                ? Sort.by("scheduledDate").ascending().and(Sort.by("id").ascending())
-                : Sort.by("scheduledDate").descending().and(Sort.by("id").descending());
+                ? Sort.by("scheduledDate").descending().and(Sort.by("id").descending())
+                : Sort.by("scheduledDate").ascending().and(Sort.by("id").ascending());
     }
 
     private String normalizeSection(String section) {

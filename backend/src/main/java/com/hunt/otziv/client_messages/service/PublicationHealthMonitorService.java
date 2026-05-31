@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -29,13 +30,15 @@ public class PublicationHealthMonitorService {
     private static final int PUBLICATION_SPAN_LIMIT_DAYS = 75;
     private static final int PUBLICATION_FUTURE_LIMIT_DAYS = 90;
     private static final int PUBLICATION_FIRST_FUTURE_LIMIT_DAYS = 21;
-    private static final int ISSUE_SAMPLE_LIMIT = 12;
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AppSettingService appSettingService;
     private final UserRepository userRepository;
     private final ManagerRepository managerRepository;
     private final TelegramService telegramService;
+
+    @Value("${otziv.app-base-url:https://o-ogo.ru}")
+    private String appBaseUrl;
 
     @Scheduled(
             cron = "${publication.health-monitor.cron:0 20 9 * * *}",
@@ -70,7 +73,7 @@ public class PublicationHealthMonitorService {
             log.warn("Ежедневный монитор публикаций не отправлен владельцам: нет Telegram chatId");
             return;
         }
-        recipients.forEach(chatId -> telegramService.sendMessage(chatId, message));
+        recipients.forEach(chatId -> telegramService.sendMessage(chatId, message, "HTML"));
     }
 
     private void sendManagerReports() {
@@ -83,39 +86,40 @@ public class PublicationHealthMonitorService {
         managerIdsByChat.forEach((chatId, managerIds) -> {
             PublicationReport report = publicationReport(managerIds);
             if (report.suspicious() > 0) {
-                telegramService.sendMessage(chatId, buildMessage(report, "ваши компании"));
+                telegramService.sendMessage(chatId, buildMessage(report, "ваши компании"), "HTML");
             }
         });
     }
 
     private String buildMessage(PublicationReport report, String scope) {
         StringBuilder message = new StringBuilder();
-        message.append("Монитор публикаций (")
-                .append(scope)
-                .append("): найдено проблемных заказов: ")
+        message.append("<b>Монитор публикаций</b>\n")
+                .append(html(scope))
+                .append("\n\n")
+                .append("Проблемных заказов: <b>")
                 .append(report.suspicious())
-                .append("\n\n");
+                .append("</b>");
 
         for (IssueGroup issue : report.issues()) {
             if (issue.count() <= 0) {
                 continue;
             }
-            message.append("- ")
-                    .append(issue.title())
-                    .append(": ")
+            message.append("\n\n")
+                    .append("<b>")
+                    .append(html(issue.title()))
+                    .append("</b>\n")
+                    .append(html(issue.hint()))
+                    .append("\n")
+                    .append("Найдено: <b>")
                     .append(issue.count())
-                    .append("\n");
+                    .append("</b>\n");
 
-            issue.samples().forEach(sample -> message
-                    .append("  #")
-                    .append(sample.orderId())
-                    .append(" ")
-                    .append(safeTitle(sample.companyTitle()))
-                    .append("\n"));
-
-            long hidden = issue.count() - issue.samples().size();
-            if (hidden > 0) {
-                message.append("  ... еще ").append(hidden).append("\n");
+            int index = 1;
+            for (OrderIssueSample sample : issue.samples()) {
+                message.append(index++)
+                        .append(". ")
+                        .append(orderLink(sample))
+                        .append("\n");
             }
         }
         return message.toString().trim();
@@ -164,20 +168,60 @@ public class PublicationHealthMonitorService {
                 """.formatted(blankTextCondition(), invalidAccountCondition(), templateAccountCondition()), params, Long.class);
 
         List<IssueGroup> issues = List.of(
-                issue("Пустой/шаблонный текст после статуса \"Новые\"", "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + blankTextCondition() + " THEN 1 ELSE 0 END) > 0", params),
-                issue("Нет назначенного/активного аккаунта с логином", "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + invalidAccountCondition() + " THEN 1 ELSE 0 END) > 0", params),
-                issue("Шаблонное имя аккаунта после выгула", "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + templateAccountCondition() + " THEN 1 ELSE 0 END) > 0", params),
-                issue("Дата публикации в прошлом, publish=false", "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND r.review_publish_date < CURDATE() THEN 1 ELSE 0 END) > 0", params),
-                issue("Все отзывы publish=true, заказ еще в Публикации", "COUNT(r.review_id) > 0 AND SUM(CASE WHEN r.review_publish = 0 OR r.review_publish IS NULL THEN 1 ELSE 0 END) = 0", params),
-                issue("Первая будущая публикация слишком далеко", "MIN(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND r.review_publish_date >= CURDATE() THEN r.review_publish_date ELSE NULL END) > :publicationFirstFutureCutoffDate", params),
-                issue("Даты растянуты больше лимита", "DATEDIFF(MAX(r.review_publish_date), MIN(r.review_publish_date)) > :publicationSpanLimitDays", params),
-                issue("Отзывы без даты публикации", "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND r.review_publish_date IS NULL THEN 1 ELSE 0 END) > 0", params)
+                issue(
+                        "Пустой/шаблонный текст в заказе на публикации",
+                        "Заказ уже в статусе \"Публикация\". Откройте заказ и проверьте неопубликованные отзывы: текст пустой или похож на заготовку \"Текст отзыва\".",
+                        "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + blankTextCondition() + " THEN 1 ELSE 0 END) > 0",
+                        params
+                ),
+                issue(
+                        "Нет рабочего аккаунта для публикации",
+                        "Заказ уже в статусе \"Публикация\". Откройте неопубликованные отзывы и проверьте аккаунт: он должен быть назначен, активен и с логином.",
+                        "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + invalidAccountCondition() + " THEN 1 ELSE 0 END) > 0",
+                        params
+                ),
+                issue(
+                        "Шаблонное имя аккаунта после выгула",
+                        "Заказ уже в статусе \"Публикация\". У выгулянного неопубликованного отзыва имя аккаунта осталось шаблонным, например \"Впиши имя фамилию\".",
+                        "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + templateAccountCondition() + " THEN 1 ELSE 0 END) > 0",
+                        params
+                ),
+                issue(
+                        "Просроченная дата публикации",
+                        "Заказ уже в статусе \"Публикация\". Есть неопубликованный отзыв, дата публикации которого уже прошла.",
+                        "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND r.review_publish_date < CURDATE() THEN 1 ELSE 0 END) > 0",
+                        params
+                ),
+                issue(
+                        "Все отзывы опубликованы, заказ еще в публикации",
+                        "В заказе не осталось неопубликованных отзывов. Проверьте счет/оплату и переведите заказ дальше по процессу.",
+                        "COUNT(r.review_id) > 0 AND SUM(CASE WHEN r.review_publish = 0 OR r.review_publish IS NULL THEN 1 ELSE 0 END) = 0",
+                        params
+                ),
+                issue(
+                        "Первая будущая публикация слишком далеко",
+                        "Заказ уже в статусе \"Публикация\". Ближайший неопубликованный отзыв запланирован слишком далеко, проверьте даты.",
+                        "MIN(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND r.review_publish_date >= CURDATE() THEN r.review_publish_date ELSE NULL END) > :publicationFirstFutureCutoffDate",
+                        params
+                ),
+                issue(
+                        "Даты публикаций растянуты больше лимита",
+                        "Заказ уже в статусе \"Публикация\". Разброс дат между первым и последним отзывом слишком большой, проверьте график.",
+                        "DATEDIFF(MAX(r.review_publish_date), MIN(r.review_publish_date)) > :publicationSpanLimitDays",
+                        params
+                ),
+                issue(
+                        "Отзывы без даты публикации",
+                        "Заказ уже в статусе \"Публикация\". Есть неопубликованный отзыв без назначенной даты публикации.",
+                        "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND r.review_publish_date IS NULL THEN 1 ELSE 0 END) > 0",
+                        params
+                )
         );
 
         return new PublicationReport(suspicious, issues);
     }
 
-    private IssueGroup issue(String title, String havingCondition, MapSqlParameterSource params) {
+    private IssueGroup issue(String title, String hint, String havingCondition, MapSqlParameterSource params) {
         String fromGroupedOrders = """
                 FROM orders o
                 JOIN order_statuses os ON os.order_status_id = o.order_status
@@ -194,16 +238,16 @@ public class PublicationHealthMonitorService {
         long count = jdbc.queryForObject("SELECT COUNT(*) FROM (SELECT o.order_id " + fromGroupedOrders + ") issue_orders",
                 params, Long.class);
         List<OrderIssueSample> samples = jdbc.query("""
-                SELECT o.order_id, c.company_title
+                SELECT o.order_id, c.company_id, c.company_title
                 """ + fromGroupedOrders + """
                 ORDER BY TIMESTAMPDIFF(DAY, COALESCE(o.order_status_changed_at, o.order_changed, o.order_created), NOW()) DESC,
                          o.order_id DESC
-                LIMIT :sampleLimit
                 """, params, (rs, rowNum) -> new OrderIssueSample(
                 rs.getLong("order_id"),
+                rs.getLong("company_id"),
                 rs.getString("company_title")
         ));
-        return new IssueGroup(title, count, samples);
+        return new IssueGroup(title, hint, count, samples);
     }
 
     private MapSqlParameterSource baseParams(List<Long> managerIds) {
@@ -214,8 +258,7 @@ public class PublicationHealthMonitorService {
                 .addValue("publicationStaleDays", PUBLICATION_STALE_DAYS)
                 .addValue("publicationSpanLimitDays", PUBLICATION_SPAN_LIMIT_DAYS)
                 .addValue("publicationFutureCutoffDate", LocalDate.now().plusDays(PUBLICATION_FUTURE_LIMIT_DAYS))
-                .addValue("publicationFirstFutureCutoffDate", LocalDate.now().plusDays(PUBLICATION_FIRST_FUTURE_LIMIT_DAYS))
-                .addValue("sampleLimit", ISSUE_SAMPLE_LIMIT);
+                .addValue("publicationFirstFutureCutoffDate", LocalDate.now().plusDays(PUBLICATION_FIRST_FUTURE_LIMIT_DAYS));
     }
 
     private String blankTextCondition() {
@@ -285,12 +328,48 @@ public class PublicationHealthMonitorService {
         return companyTitle == null || companyTitle.isBlank() ? "Без названия" : companyTitle.trim();
     }
 
+    private String orderLink(OrderIssueSample sample) {
+        String label = "#" + sample.orderId() + " " + safeTitle(sample.companyTitle());
+        if (sample.companyId() == null || sample.companyId() <= 0 || sample.orderId() == null) {
+            return html(label);
+        }
+        return "<a href=\"" + htmlAttribute(orderUrl(sample.companyId(), sample.orderId())) + "\">"
+                + html(label)
+                + "</a>";
+    }
+
+    private String orderUrl(Long companyId, Long orderId) {
+        return normalizedAppBaseUrl() + "/orders/" + companyId + "/" + orderId;
+    }
+
+    private String normalizedAppBaseUrl() {
+        String value = appBaseUrl == null || appBaseUrl.isBlank() ? "https://o-ogo.ru" : appBaseUrl.trim();
+        while (value.endsWith("/")) {
+            value = value.substring(0, value.length() - 1);
+        }
+        return value;
+    }
+
+    private String html(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
+    }
+
+    private String htmlAttribute(String value) {
+        return html(value).replace("\"", "&quot;");
+    }
+
     private record PublicationReport(long suspicious, List<IssueGroup> issues) {
     }
 
-    private record IssueGroup(String title, long count, List<OrderIssueSample> samples) {
+    private record IssueGroup(String title, String hint, long count, List<OrderIssueSample> samples) {
     }
 
-    private record OrderIssueSample(Long orderId, String companyTitle) {
+    private record OrderIssueSample(Long orderId, Long companyId, String companyTitle) {
     }
 }

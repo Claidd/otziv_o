@@ -38,6 +38,10 @@ type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answe
 type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
 type RecoveryTaskCopyKind = 'botLogin' | 'botPassword';
 type ReviewEditableField = 'text' | 'answer';
+type ReviewTextEditState = {
+  review: OrderReviewItem;
+  field: ReviewEditableField;
+};
 type ReviewSideNoteField = 'order' | 'company';
 type BadReviewTaskDraft = {
   taskText: string;
@@ -123,6 +127,13 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
               [class.review-mobile-strip--expanded]="reviewsExpanded()"
               aria-label="Отзывы заказа"
               (scroll)="onReviewScroll($event)"
+              (pointerdown)="onReviewPointerDown($event)"
+              (pointerup)="onReviewPointerUp($event)"
+              (pointercancel)="onReviewPointerCancel()"
+              (pointerleave)="onReviewPointerLeave($event)"
+              (touchstart)="onReviewTouchStart($event)"
+              (touchend)="onReviewTouchEnd($event)"
+              (touchcancel)="onReviewPointerCancel()"
             >
               @for (review of details.reviews; track review.id; let index = $index) {
                 <app-mobile-review-card-shell
@@ -150,61 +161,30 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     [class.open]="isReviewTextOpen(review)"
                     [class.editing]="isReviewFieldEditing(review, 'text')"
                   >
-                    @if (isReviewFieldEditing(review, 'text')) {
-                      <textarea
-                        [name]="'text-' + review.id"
-                        [attr.data-review-textarea]="review.id"
-                        [ngModel]="reviewFieldValue(review, 'text')"
-                        (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
-                        placeholder="Текст отзыва"
-                      ></textarea>
-                      <div class="field-actions mobile-keyboard-actions">
-                        <button type="button" (click)="cancelReviewFieldEdit(review, 'text')" [disabled]="isMutating(saveFieldMutationKey(review, 'text'))">Отмена</button>
-                        <button type="button" class="save" (click)="saveReviewField(review, 'text')" [disabled]="!canSaveReviewField(review, 'text')">
-                          {{ isMutating(saveFieldMutationKey(review, 'text')) ? '...' : 'Сохранить' }}
-                        </button>
-                      </div>
-                    } @else {
-                      <button
-                        class="review-display-field"
-                        type="button"
-                        [class.empty]="!reviewFieldValue(review, 'text').trim()"
-                        (click)="startReviewTextInlineEdit(review)"
-                      >
-                        {{ reviewFieldValue(review, 'text').trim() || 'Текст отзыва' }}
+                    <button
+                      class="review-display-field"
+                      type="button"
+                      [class.empty]="!reviewFieldValue(review, 'text').trim()"
+                      (click)="openReviewTextEdit(review, 'text')"
+                    >
+                      {{ reviewFieldValue(review, 'text').trim() || 'Текст отзыва' }}
+                    </button>
+                    @if (shouldShowTextToggle(review)) {
+                      <button class="text-toggle" type="button" (click)="toggleReviewText(review)">
+                        {{ isReviewTextOpen(review) ? 'свернуть' : 'развернуть' }}
                       </button>
-                      @if (shouldShowTextToggle(review)) {
-                        <button class="text-toggle" type="button" (click)="toggleReviewText(review)">
-                          {{ isReviewTextOpen(review) ? 'свернуть' : 'развернуть' }}
-                        </button>
-                      }
                     }
                   </section>
 
                   <section class="review-answer-editor" [class.editing]="isReviewFieldEditing(review, 'answer')">
-                    @if (isReviewFieldEditing(review, 'answer')) {
-                      <textarea
-                        [name]="'answer-' + review.id"
-                        [ngModel]="reviewFieldValue(review, 'answer')"
-                        (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
-                        placeholder="Ответ на отзыв или замечание"
-                      ></textarea>
-                      <div class="field-actions mobile-keyboard-actions">
-                        <button type="button" (click)="cancelReviewFieldEdit(review, 'answer')" [disabled]="isMutating(saveFieldMutationKey(review, 'answer'))">Отмена</button>
-                        <button type="button" class="save" (click)="saveReviewField(review, 'answer')" [disabled]="!canSaveReviewField(review, 'answer')">
-                          {{ isMutating(saveFieldMutationKey(review, 'answer')) ? '...' : 'Сохранить' }}
-                        </button>
-                      </div>
-                    } @else {
-                      <button
-                        class="review-display-field review-display-field--answer"
-                        type="button"
-                        [class.empty]="!reviewFieldValue(review, 'answer').trim()"
-                        (click)="openReviewEdit(review, 'answer')"
-                      >
-                        {{ reviewFieldValue(review, 'answer').trim() || 'Ответ на отзыв или замечание' }}
-                      </button>
-                    }
+                    <button
+                      class="review-display-field review-display-field--answer"
+                      type="button"
+                      [class.empty]="!reviewFieldValue(review, 'answer').trim()"
+                      (click)="openReviewTextEdit(review, 'answer')"
+                    >
+                      {{ reviewFieldValue(review, 'answer').trim() || 'Ответ на отзыв или замечание' }}
+                    </button>
                   </section>
 
                   <div class="bot-line" [class.empty]="hasUnavailableBot(review)" [class.compact]="hasCompactBotPrompt(review)">
@@ -509,12 +489,6 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                   Обновить отчет
                 </button>
               }
-              @if (canShowPaymentLinkAction()) {
-                <button type="button" (click)="createPaymentLink()" [disabled]="isMutating('payment-link')">
-                  <span class="material-icons-sharp">payments</span>
-                  {{ isMutating('payment-link') ? '...' : paymentLinkModeLabel() }}
-                </button>
-              }
               <button type="button" class="primary" (click)="sendToCheck()" [disabled]="busy()">
                 {{ isMutating('send-check') ? '...' : 'На проверку' }}
               </button>
@@ -667,6 +641,48 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                 }
               </footer>
             </section>
+          </ng-template>
+        </ion-modal>
+
+        <ion-modal
+          class="sheet-modal review-edit-sheet review-text-edit-sheet"
+          [isOpen]="reviewTextEdit() !== null"
+          (didDismiss)="closeReviewTextEdit()"
+        >
+          <ng-template>
+            <form class="sheet-body sheet-form review-text-edit-form" (ngSubmit)="saveReviewTextEdit()">
+              <header class="sheet-head review-text-edit-head">
+                <div>
+                  <p class="sheet-note">{{ reviewTextEditNote() }}</p>
+                  <h2>{{ reviewTextEditTitle() }}</h2>
+                </div>
+                <button class="icon-button" type="button" (click)="closeReviewTextEdit()" [disabled]="reviewTextEditSaving()" aria-label="Закрыть">
+                  <span class="material-icons-sharp">close</span>
+                </button>
+              </header>
+
+              <label class="sheet-field review-text-edit-field">
+                <span>{{ reviewTextEditLabel() }}</span>
+                <textarea
+                  name="reviewTextFullEditor"
+                  [ngModel]="reviewTextEditValue()"
+                  (ngModelChange)="setReviewTextEditValue($event)"
+                  [placeholder]="reviewTextEditPlaceholder()"
+                  [disabled]="reviewTextEditSaving()"
+                ></textarea>
+              </label>
+
+              @if (reviewTextEditError()) {
+                <p class="sheet-error">{{ reviewTextEditError() }}</p>
+              }
+
+              <footer class="sheet-actions review-text-edit-actions mobile-keyboard-actions">
+                <button class="secondary" type="button" (click)="closeReviewTextEdit()" [disabled]="reviewTextEditSaving()">Отмена</button>
+                <button type="submit" [disabled]="!canSaveReviewTextEdit()">
+                  {{ reviewTextEditSaving() ? 'Сохраняю' : 'Сохранить' }}
+                </button>
+              </footer>
+            </form>
           </ng-template>
         </ion-modal>
 
@@ -1303,6 +1319,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       scroll-padding-inline: var(--otziv-page-padding-x, 0.68rem);
       scroll-snap-type: x mandatory;
       scrollbar-width: none;
+      touch-action: pan-x pan-y;
+      overscroll-behavior-x: contain;
     }
 
     .review-mobile-strip::-webkit-scrollbar {
@@ -1506,6 +1524,13 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       padding-bottom: 1.05rem;
       resize: none;
       white-space: pre-wrap;
+    }
+
+    .review-text-editor .review-display-field {
+      display: flex;
+      align-content: flex-start;
+      align-items: flex-start;
+      justify-content: flex-start;
     }
 
     .review-answer-editor {
@@ -1915,6 +1940,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       gap: 0.46rem;
       padding: 0.52rem;
       font-family: var(--otziv-font-family);
+      touch-action: manipulation;
     }
 
     .order-details-actions button {
@@ -1928,6 +1954,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      touch-action: manipulation;
     }
 
     .order-details-actions .material-icons-sharp {
@@ -1970,6 +1997,9 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 })
 export class OrderDetailsPage implements OnInit, OnDestroy {
   private routeSubscription?: Subscription;
+  private reviewSwipeStart: { x: number; y: number; index: number; pointerId: number } | null = null;
+  private reviewTouchStart: { x: number; y: number; index: number } | null = null;
+  private lastReviewSwipeHandledAt = 0;
 
   readonly orderId = signal<number | null>(null);
   readonly companyId = signal<number | null>(null);
@@ -2011,6 +2041,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly reviewEditDeleting = signal(false);
   readonly reviewEditUploading = signal(false);
   readonly reviewEditError = signal<string | null>(null);
+  readonly reviewTextEdit = signal<ReviewTextEditState | null>(null);
+  readonly reviewTextEditValue = signal('');
+  readonly reviewTextEditSaving = signal(false);
+  readonly reviewTextEditError = signal<string | null>(null);
   readonly badReviewTaskDrafts = signal<Record<number, BadReviewTaskDraft>>({});
   readonly savedBadReviewTaskId = signal<number | null>(null);
   readonly recoveryTaskDrafts = signal<Record<number, RecoveryTaskDraft>>({});
@@ -2169,6 +2203,86 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.activeReviewIndex.set(bestIndex);
   }
 
+  onReviewPointerDown(event: PointerEvent): void {
+    if (this.reviewsExpanded() || !event.isPrimary) {
+      return;
+    }
+
+    this.reviewSwipeStart = {
+      x: event.clientX,
+      y: event.clientY,
+      index: this.activeReviewIndex(),
+      pointerId: event.pointerId
+    };
+  }
+
+  onReviewPointerUp(event: PointerEvent): void {
+    const start = this.reviewSwipeStart;
+    this.reviewSwipeStart = null;
+
+    if (!start || start.pointerId !== event.pointerId || this.reviewsExpanded()) {
+      return;
+    }
+
+    this.finishReviewSwipe(start.x, start.y, event.clientX, event.clientY, start.index);
+  }
+
+  onReviewPointerCancel(): void {
+    this.reviewSwipeStart = null;
+    this.reviewTouchStart = null;
+  }
+
+  onReviewPointerLeave(event: PointerEvent): void {
+    if (event.pointerType === 'mouse') {
+      this.reviewSwipeStart = null;
+    }
+  }
+
+  onReviewTouchStart(event: TouchEvent): void {
+    if (this.reviewsExpanded() || event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    this.reviewTouchStart = {
+      x: touch.clientX,
+      y: touch.clientY,
+      index: this.activeReviewIndex()
+    };
+  }
+
+  onReviewTouchEnd(event: TouchEvent): void {
+    const start = this.reviewTouchStart;
+    this.reviewTouchStart = null;
+
+    if (!start || this.reviewsExpanded() || !event.changedTouches.length) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    this.finishReviewSwipe(start.x, start.y, touch.clientX, touch.clientY, start.index);
+  }
+
+  private finishReviewSwipe(startX: number, startY: number, endX: number, endY: number, startIndex: number): void {
+    const now = Date.now();
+    if (now - this.lastReviewSwipeHandledAt < 220) {
+      return;
+    }
+
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const isHorizontalSwipe = Math.abs(deltaX) > 22 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25;
+
+    if (!isHorizontalSwipe) {
+      return;
+    }
+
+    this.lastReviewSwipeHandledAt = now;
+    const max = Math.max(0, this.totalDetailCards() - 1);
+    const direction = deltaX < 0 ? 1 : -1;
+    this.goToReviewIndex(Math.max(0, Math.min(max, startIndex + direction)));
+  }
+
   badTaskCardIndex(index: number): number {
     return (this.details()?.reviews.length ?? 0) + index;
   }
@@ -2268,6 +2382,113 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   saveFieldMutationKey(review: OrderReviewItem, field: ReviewEditableField): string {
     return `save-${field}-${review.id}`;
+  }
+
+  openReviewTextEdit(review: OrderReviewItem, field: ReviewEditableField): void {
+    if (!this.details()?.canEditReviews) {
+      this.error.set('Редактирование отзывов недоступно для этого заказа.');
+      return;
+    }
+
+    if (this.reviewTextEditSaving()) {
+      return;
+    }
+
+    this.editingFieldKey.set(null);
+    this.reviewTextEdit.set({ review, field });
+    this.reviewTextEditValue.set(this.reviewFieldValue(review, field));
+    this.reviewTextEditError.set(null);
+    window.setTimeout(() => this.focusReviewTextEditor(), 150);
+  }
+
+  closeReviewTextEdit(): void {
+    if (this.reviewTextEditSaving()) {
+      return;
+    }
+
+    this.reviewTextEdit.set(null);
+    this.reviewTextEditValue.set('');
+    this.reviewTextEditError.set(null);
+    this.blurActiveControl();
+  }
+
+  setReviewTextEditValue(value: string): void {
+    this.reviewTextEditValue.set(value);
+  }
+
+  reviewTextEditTitle(): string {
+    return this.reviewTextEdit()?.field === 'answer' ? 'Ответ или замечание' : 'Текст отзыва';
+  }
+
+  reviewTextEditLabel(): string {
+    return this.reviewTextEdit()?.field === 'answer' ? 'Ответ на отзыв или замечание' : 'Текст отзыва';
+  }
+
+  reviewTextEditPlaceholder(): string {
+    return this.reviewTextEdit()?.field === 'answer'
+      ? 'Впишите ответ на отзыв или внутреннее замечание'
+      : 'Впишите текст отзыва';
+  }
+
+  reviewTextEditNote(): string {
+    const state = this.reviewTextEdit();
+    if (!state) {
+      return 'Редактор';
+    }
+
+    const title = state.review.companyTitle || this.details()?.companyTitle || 'Компания';
+    return `${title} · #${state.review.id}`;
+  }
+
+  canSaveReviewTextEdit(): boolean {
+    const state = this.reviewTextEdit();
+    if (!state || this.reviewTextEditSaving()) {
+      return false;
+    }
+
+    const value = this.reviewTextEditValue();
+    if (state.field === 'text' && !value.trim()) {
+      return false;
+    }
+
+    return value !== this.reviewFieldSourceValue(state.review, state.field);
+  }
+
+  saveReviewTextEdit(): void {
+    const state = this.reviewTextEdit();
+    if (!state) {
+      return;
+    }
+
+    const value = this.reviewTextEditValue();
+    if (state.field === 'text' && !value.trim()) {
+      this.reviewTextEditError.set('Заполните текст отзыва.');
+      return;
+    }
+
+    if (!this.canSaveReviewTextEdit()) {
+      this.closeReviewTextEdit();
+      return;
+    }
+
+    this.reviewTextEditSaving.set(true);
+    this.reviewTextEditError.set(null);
+    const request = state.field === 'text'
+      ? this.api.updateManagerOrderReviewText(state.review.orderId, state.review.id, value)
+      : this.api.updateManagerOrderReviewAnswer(state.review.orderId, state.review.id, value);
+
+    request.subscribe({
+      next: (updatedReview) => {
+        this.applyUpdatedReview(updatedReview);
+        this.clearReviewDrafts(updatedReview.id);
+        this.reviewTextEditSaving.set(false);
+        this.closeReviewTextEdit();
+      },
+      error: (err) => {
+        this.reviewTextEditError.set(this.errorMessage(err, 'Не удалось сохранить отзыв.'));
+        this.reviewTextEditSaving.set(false);
+      }
+    });
   }
 
   toggleReviewText(review: OrderReviewItem): void {
@@ -3172,7 +3393,9 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const status = this.tbankStatus();
     return !!this.details()
       && !!status?.managerUiEnabled
+      && !!status.enabled
       && !!status.paymentLinksEnabled
+      && !!status.applyConfirmedPayments
       && this.auth.hasRealmRole('ADMIN');
   }
 
@@ -3359,6 +3582,17 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const position = element.value.length;
     element.setSelectionRange(position, position);
     element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+  }
+
+  private focusReviewTextEditor(): void {
+    const element = document.querySelector<HTMLTextAreaElement>('.review-text-edit-sheet textarea[name="reviewTextFullEditor"]');
+    if (!element) {
+      return;
+    }
+
+    element.focus({ preventScroll: true });
+    const position = element.value.length;
+    element.setSelectionRange(position, position);
   }
 
   private blurActiveControl(): void {

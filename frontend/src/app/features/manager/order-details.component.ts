@@ -22,6 +22,7 @@ import { PaymentsApi } from '../../core/payments.api';
 import type { ManagerPaymentLinkResponse, TbankPaymentStatus } from '../../core/payments.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
 import {
@@ -384,6 +385,13 @@ export class OrderDetailsComponent {
       return;
     }
 
+    const existingPaymentLink = this.paymentLink();
+    const existingPaymentText = existingPaymentLink?.copyText || existingPaymentLink?.url;
+    if (existingPaymentText) {
+      void this.copyText(existingPaymentText, 'payment-link', 'Ссылка на оплату скопирована');
+      return;
+    }
+
     this.mutationKey.set('payment-link');
     this.error.set(null);
     this.paymentsApi.createOrderPaymentLink(orderId)
@@ -392,7 +400,12 @@ export class OrderDetailsComponent {
         next: (response) => {
           this.paymentLink.set(response);
           this.mutationKey.set(null);
-          void this.copyText(response.copyText || response.url, 'payment-link', 'Ссылка на оплату скопирована');
+          void this.copyText(
+            response.copyText || response.url,
+            'payment-link',
+            'Ссылка на оплату скопирована',
+            'Ссылка создана. Если iPhone не дал скопировать, нажмите кнопку еще раз.'
+          );
         },
         error: (err) => {
           const message = this.errorMessage(err, 'Не удалось создать ссылку на оплату');
@@ -1276,16 +1289,19 @@ export class OrderDetailsComponent {
         this.editReview.set(updatedReview);
         this.reviewEditDraft.update((draft) => draft ? {
           ...draft,
+          publishedDate: updatedReview.publishedDate || null,
           vigul: !!updatedReview.vigul,
           botName: updatedReview.botFio ?? '',
           botPassword: updatedReview.botPassword ?? ''
         } : this.toReviewEditDraft(updatedReview));
+        this.writeOrderDetailsSessionDraft();
 
         this.reviewEditNewAccountSaving.set(false);
         this.toastService.success(
           'Аккаунт назначен',
           this.botChangeMessage(oldBotId, updatedReview.botId ?? null)
         );
+        this.loadDetails();
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось назначить новый аккаунт');
@@ -2416,14 +2432,18 @@ export class OrderDetailsComponent {
       .trim();
   }
 
-  private async copyText(text: string, key: string, toast: string): Promise<void> {
+  private async copyText(
+    text: string,
+    key: string,
+    toast: string,
+    failureToast = 'Браузер не дал доступ к буферу обмена'
+  ): Promise<boolean> {
     const value = (text ?? '').trim();
     if (!value) {
-      return;
+      return false;
     }
 
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyTextToClipboard(value)) {
       this.copied.set(key);
       this.toastService.success('Скопировано', toast);
       window.setTimeout(() => {
@@ -2431,9 +2451,11 @@ export class OrderDetailsComponent {
           this.copied.set(null);
         }
       }, 1200);
-    } catch {
-      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      return true;
     }
+
+    this.toastService.error('Не скопировано', failureToast);
+    return false;
   }
 
   private applyUpdatedOrderReview(updatedReview: OrderReviewItem): void {

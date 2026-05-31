@@ -104,11 +104,11 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     manage: MOBILE_ROLES.ownerAdmin
   },
   tbank: {
-    view: MOBILE_ROLES.admin,
-    create: MOBILE_ROLES.admin,
-    edit: MOBILE_ROLES.admin,
-    delete: MOBILE_ROLES.admin,
-    manage: MOBILE_ROLES.admin
+    view: MOBILE_ROLES.ownerAdmin,
+    create: MOBILE_ROLES.ownerAdmin,
+    edit: MOBILE_ROLES.ownerAdmin,
+    delete: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.ownerAdmin
   },
   dictionaries: {
     view: MOBILE_ROLES.manager,

@@ -348,6 +348,7 @@ export class WorkerBoardEditFacade {
         this.editReview.set(updatedReview);
         this.reviewEditDraft.update((draft) => draft ? {
           ...draft,
+          publishedDate: updatedReview.publishedDate || null,
           vigul: !!updatedReview.vigul,
           botName: updatedReview.botFio ?? '',
           botPassword: updatedReview.botPassword ?? ''

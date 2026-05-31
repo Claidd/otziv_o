@@ -306,6 +306,81 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                     }
                   </section>
 
+                  <section class="profile-chart-grid" aria-label="Графики личного кабинета">
+                    @if (profileSalaryDayChart(); as chart) {
+                      <article class="mobile-chart-card mobile-chart-card--salary">
+                        <div class="chart-head">
+                          <h3>Зарплаты по дням</h3>
+                          <small>{{ profile()?.date || selectedDate() }}</small>
+                        </div>
+                        <div class="bar-chart-frame">
+                          <div class="y-axis">
+                            @for (tick of chart.ticks; track $index) {
+                              <span>{{ tick }}</span>
+                            }
+                          </div>
+                          <div class="bar-chart daily salary">
+                            @for (point of chart.points; track point.label) {
+                              <div class="bar-item" [title]="point.label + ': ' + moneyLabel(point.value)">
+                                <span class="bar" [style.height.%]="point.height"></span>
+                                <span class="bar-label">{{ point.label }}</span>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      </article>
+                    }
+
+                    @if (profileSalaryMonthChart(); as chart) {
+                      <article class="mobile-chart-card mobile-chart-card--salary">
+                        <div class="chart-head">
+                          <h3>Зарплаты по месяцам</h3>
+                          <small>все годы</small>
+                        </div>
+                        <div class="line-legend">
+                          @for (series of chart.series; track series.label) {
+                            <span><i [style.background]="series.color"></i>{{ series.label }}</span>
+                          }
+                        </div>
+                        <div class="line-chart-frame">
+                          <div class="y-axis line">
+                            @for (tick of chart.ticks; track $index) {
+                              <span>{{ tick }}</span>
+                            }
+                          </div>
+                          <div class="line-chart-scroll">
+                            <div class="line-chart-plot">
+                              <svg class="line-chart" [attr.viewBox]="chart.viewBox" preserveAspectRatio="none" role="img" aria-label="Зарплаты по месяцам">
+                                @for (lineY of chart.gridLines; track lineY) {
+                                  <line class="grid-line" [attr.x1]="chart.plotStart" [attr.x2]="chart.plotEnd" [attr.y1]="lineY" [attr.y2]="lineY"></line>
+                                }
+                                @for (series of chart.series; track series.label) {
+                                  <polyline class="year-line" [attr.points]="series.points" [attr.stroke]="series.color"></polyline>
+                                }
+                              </svg>
+                              @for (series of chart.series; track series.label) {
+                                @for (point of series.pointsData; track point.label) {
+                                  <span
+                                    class="chart-dot"
+                                    [style.left.%]="point.x"
+                                    [style.top.%]="point.y"
+                                    [style.background]="series.color"
+                                    [title]="series.label + ' · ' + point.label + ': ' + moneyLabel(point.value)"
+                                  ></span>
+                                }
+                              }
+                            </div>
+                            <div class="x-axis line">
+                              @for (month of chart.months; track month) {
+                                <span>{{ month }}</span>
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      </article>
+                    }
+                  </section>
+
                   <section class="profile-actions">
                     <a class="pill-button" routerLink="/tabs/profile">
                       <span class="material-icons-sharp">person</span>
@@ -888,10 +963,22 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       padding-bottom: 0.65rem;
     }
 
+    .analytics-view .mobile-chart-card {
+      gap: 0.48rem;
+      padding: 0.58rem 0.42rem;
+    }
+
     .profile-view {
       overflow-y: auto;
       padding-bottom: 0.35rem;
     }
+
+    .profile-view > .identity-card { order: 10; }
+    .profile-view > .manual-payment-card { order: 15; }
+    .profile-view > .metric-grid { order: 20; }
+    .profile-view > .profile-chart-grid { order: 30; }
+    .profile-view > .profile-actions { order: 90; }
+    .profile-view > .manual-task-card { order: 100; }
 
     .people-view {
       overflow-y: auto;
@@ -1176,6 +1263,13 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       max-width: 100%;
     }
 
+    .profile-chart-grid {
+      display: grid;
+      gap: 0.65rem;
+      min-width: 0;
+      max-width: 100%;
+    }
+
     .data-card {
       display: grid;
       position: relative;
@@ -1357,8 +1451,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     }
 
     .line-chart-frame .y-axis {
-      height: 14rem;
-      padding: 1rem 0 1.15rem;
+      height: var(--otziv-home-line-chart-height, 11.1rem);
+      padding: 0.72rem 0 0.9rem;
     }
 
     .bar-chart-frame .y-axis {
@@ -1381,7 +1475,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     .line-chart-plot {
       position: relative;
       width: 100%;
-      height: 14rem;
+      height: var(--otziv-home-line-chart-height, 11.1rem);
     }
 
     .line-chart {
@@ -1418,7 +1512,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       display: grid;
       grid-template-columns: repeat(12, minmax(0, 1fr));
       gap: 0;
-      padding: 0 0.15rem 0.65rem;
+      padding: 0 0.15rem 0.5rem;
       font-size: 0.56rem;
       font-weight: 900;
       line-height: 1;
@@ -1489,6 +1583,40 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     :host-context(body.otziv-compact-phone) .bar-label,
     :host-context(body.otziv-short-phone) .bar-label {
       font-size: 0.4rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .analytics-view,
+    :host-context(body.otziv-short-phone) .analytics-view {
+      --otziv-home-line-chart-height: 9.4rem;
+      gap: 0.48rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .analytics-view .mobile-chart-card,
+    :host-context(body.otziv-short-phone) .analytics-view .mobile-chart-card {
+      gap: 0.36rem;
+      padding: 0.48rem 0.36rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .analytics-view .line-legend,
+    :host-context(body.otziv-short-phone) .analytics-view .line-legend {
+      font-size: 0.52rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .analytics-view .chart-head h3,
+    :host-context(body.otziv-short-phone) .analytics-view .chart-head h3 {
+      font-size: 0.92rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .analytics-view .line-chart-frame .y-axis,
+    :host-context(body.otziv-short-phone) .analytics-view .line-chart-frame .y-axis {
+      height: var(--otziv-home-line-chart-height);
+      padding: 0.58rem 0 0.78rem;
+      font-size: 0.54rem;
+    }
+
+    :host-context(body.otziv-compact-phone) .analytics-view .line-chart-scroll,
+    :host-context(body.otziv-short-phone) .analytics-view .line-chart-scroll {
+      padding-left: 2.28rem;
     }
 
     .section-caption,
@@ -1966,7 +2094,7 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   showManualPaymentSettings(): boolean {
-    return this.isManagerUser() && Boolean(this.manualPaymentSettings()?.manualPaymentEnabled);
+    return this.canManageManualPaymentSettings() && Boolean(this.manualPaymentSettings()?.manualPaymentEnabled);
   }
 
   showManualPaymentTasks(): boolean {
@@ -2274,6 +2402,14 @@ export class HomePage implements OnInit, OnDestroy {
     return cabinetDailyBarChartFrom(this.analytics()?.stats?.zpPayMap, this.selectedDate());
   }
 
+  profileSalaryMonthChart(): CabinetLineChart {
+    return cabinetYearlyLineChartFrom(this.profile()?.workerZp?.zpPayMapMonth, { allTime: true });
+  }
+
+  profileSalaryDayChart(): CabinetBarChart {
+    return cabinetDailyBarChartFrom(this.profile()?.workerZp?.zpPayMap, this.selectedDate());
+  }
+
   metricTone(row: Row): MetricTone {
     const percent = row.percent;
     if (percent == null) {
@@ -2389,7 +2525,7 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   private async loadManualPaymentSettings(forceRefresh = false): Promise<void> {
-    if (!this.isManagerUser()) {
+    if (!this.canManageManualPaymentSettings()) {
       this.clearManualPaymentSettings();
       return;
     }
@@ -2491,6 +2627,10 @@ export class HomePage implements OnInit, OnDestroy {
 
   private isManagerUser(): boolean {
     return this.auth.hasRealmRole('MANAGER');
+  }
+
+  private canManageManualPaymentSettings(): boolean {
+    return this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin) && this.isManagerUser();
   }
 
   private applyRouteSection(params: ParamMap): boolean {

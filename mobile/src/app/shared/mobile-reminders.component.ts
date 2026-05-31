@@ -151,7 +151,23 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
             } @else {
               <div class="mobile-reminder-list">
                 @for (reminder of activeReminders(); track reminder.id) {
-                  <article class="mobile-reminder-card" [class.due]="isDue(reminder)" [class.expanded]="isExpanded(reminder)">
+                  <article
+                    class="mobile-reminder-card"
+                    [class.due]="isDue(reminder)"
+                    [class.expanded]="isExpanded(reminder)"
+                    [class.has-delete]="canEdit(reminder)"
+                  >
+                    @if (canEdit(reminder)) {
+                      <button
+                        class="reminder-delete-button"
+                        type="button"
+                        (click)="delete(reminder)"
+                        [disabled]="mutatingId() === reminder.id"
+                        aria-label="Удалить напоминание"
+                      >
+                        ×
+                      </button>
+                    }
                     <span class="material-icons-sharp reminder-card-icon">{{ reminderIcon(reminder) }}</span>
                     <button class="mobile-reminder-body" type="button" (click)="toggle(reminder)">
                       <strong>{{ reminder.title || 'Без названия' }}</strong>
@@ -207,9 +223,6 @@ export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClien
                         </button>
                         <button type="button" (click)="complete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Готово">
                           <span class="material-icons-sharp">done</span>
-                        </button>
-                        <button class="danger" type="button" (click)="delete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Удалить">
-                          <span class="material-icons-sharp">delete</span>
                         </button>
                       } @else {
                         <button type="button" (click)="complete(reminder)" [disabled]="mutatingId() === reminder.id" aria-label="Готово">

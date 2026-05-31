@@ -2704,13 +2704,12 @@
                         <span>Live-перевод просрочки в целевой статус</span>
                       </label>
 
-                      <label appTooltip="MANAGER_TEXT оставляет текущий текст менеджера. TBANK_LINK создает актуальную /pay-ссылку по платежным профилям, лимитам и заданиям из раздела T-Bank.">
+                      <div class="readonly-setting" appTooltip="Источник платежной инструкции меняется только в разделе T-Bank, чтобы не вернуть старый текст менеджера случайным сохранением автоответчика.">
                         <span>Источник оплаты</span>
-                        <select formControlName="paymentInstructionSource">
-                          <option value="MANAGER_TEXT">Текст менеджера</option>
-                          <option value="TBANK_LINK">T-Bank /pay ссылка</option>
-                        </select>
-                      </label>
+                        <strong>{{ paymentInstructionSourceLabel(clientMessageSettings()?.paymentInstructionSource) }}</strong>
+                        <small>Меняется в разделе T-Bank.</small>
+                        <a href="/admin/tbank-payments">Открыть T-Bank</a>
+                      </div>
 
                       <label appTooltip="Через сколько дней после выставления счета отправлять и повторять напоминание.">
                         <span>Интервал оплаты, дней</span>

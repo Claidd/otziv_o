@@ -20,17 +20,24 @@ const WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAP
 const WHATSAPP_GROUPS_CACHE_TTL_MS = parsePositiveInt(process.env.WHATSAPP_GROUPS_CACHE_TTL_MS, 600000);
 const WHATSAPP_GROUP_INVITE_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_TIMEOUT_MS, 2000);
 const WHATSAPP_GROUP_INVITE_CONCURRENCY = parsePositiveInt(process.env.WHATSAPP_GROUP_INVITE_CONCURRENCY, 16);
+const WHATSAPP_PUPPETEER_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_PUPPETEER_TIMEOUT_MS, 300000);
+const WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS, 300000);
+const WHATSAPP_STARTUP_READY_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_STARTUP_READY_TIMEOUT_MS, 600000);
+const WHATSAPP_READY_WATCHDOG_INTERVAL_MS = parsePositiveInt(process.env.WHATSAPP_READY_WATCHDOG_INTERVAL_MS, 15000);
 
 let client = null;
 let ready = false;
 let authenticated = false;
 let currentQr = null;
 let currentQrDataUrl = null;
+let clientStartedAt = null;
+let authenticatedAt = null;
 let lastQrAt = null;
 let lastReadyAt = null;
 let lastState = "starting";
 let lastError = null;
 let restartTimer = null;
+let readyWatchdogTimer = null;
 let groupsCache = null;
 let groupsCacheAt = null;
 let groupsRefreshPromise = null;
@@ -67,6 +74,36 @@ function parseBoolean(value) {
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(String(value || ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function errorMessage(error) {
+  if (error && error.stack) {
+    return String(error.stack);
+  }
+  if (error && error.message) {
+    return String(error.message);
+  }
+  return String(error || "Unknown error");
+}
+
+function isRecoverableBrowserError(error) {
+  const message = errorMessage(error);
+  return /ProtocolError|Runtime\.callFunctionOn timed out|Network\.getResponseBody|Target closed|Session closed|Execution context was destroyed|Navigation timeout/i
+    .test(message);
+}
+
+function handleProcessError(kind, error) {
+  const message = errorMessage(error);
+  lastError = message.split(/\r?\n/, 1)[0] || message;
+  log("error", `Unhandled ${kind}`, { error: message });
+
+  if (isRecoverableBrowserError(error)) {
+    lastState = `recovering_${kind}`;
+    scheduleRestart();
+    return;
+  }
+
+  setTimeout(() => process.exit(1), 100);
 }
 
 async function withTimeout(promiseFactory, timeoutMs, description) {
@@ -185,10 +222,15 @@ function statusPayload() {
     state: lastState,
     lastQrAt,
     lastReadyAt,
+    clientStartedAt,
+    authenticatedAt,
     lastError,
     hasQr: Boolean(currentQr),
     proxyEnabled: WHATSAPP_PROXY_ENABLED,
     proxyConfigured: Boolean(proxyServerArg()),
+    puppeteerTimeoutMs: WHATSAPP_PUPPETEER_TIMEOUT_MS,
+    readyAfterAuthTimeoutMs: WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS,
+    startupReadyTimeoutMs: WHATSAPP_STARTUP_READY_TIMEOUT_MS,
     groupsTimeoutMs: WHATSAPP_GROUPS_TIMEOUT_MS,
     groupsResponseTimeoutMs: WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS,
     groupsCacheTtlMs: WHATSAPP_GROUPS_CACHE_TTL_MS,
@@ -241,8 +283,8 @@ function createClient() {
     puppeteer: {
       executablePath: CHROMIUM_PATH,
       headless: true,
-      timeout: 120000,
-      protocolTimeout: 120000,
+      timeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
+      protocolTimeout: WHATSAPP_PUPPETEER_TIMEOUT_MS,
       args: launchArgs,
     },
   });
@@ -254,6 +296,8 @@ function wireClientEvents(instance) {
     lastQrAt = new Date().toISOString();
     lastState = "qr";
     ready = false;
+    authenticated = false;
+    authenticatedAt = null;
     try {
       currentQrDataUrl = await QRCode.toDataURL(qr);
     } catch (error) {
@@ -267,6 +311,7 @@ function wireClientEvents(instance) {
 
   instance.on("authenticated", () => {
     authenticated = true;
+    authenticatedAt = new Date().toISOString();
     lastState = "authenticated";
     log("info", "Authenticated");
   });
@@ -274,6 +319,7 @@ function wireClientEvents(instance) {
   instance.on("auth_failure", (message) => {
     authenticated = false;
     ready = false;
+    authenticatedAt = null;
     lastState = "auth_failure";
     lastError = String(message || "Authentication failure");
     log("error", "Authentication failure", { error: lastError });
@@ -285,6 +331,7 @@ function wireClientEvents(instance) {
     authenticated = true;
     currentQr = null;
     currentQrDataUrl = null;
+    authenticatedAt = authenticatedAt || new Date().toISOString();
     lastReadyAt = new Date().toISOString();
     lastState = "ready";
     lastError = null;
@@ -299,6 +346,7 @@ function wireClientEvents(instance) {
   instance.on("disconnected", (reason) => {
     ready = false;
     authenticated = false;
+    authenticatedAt = null;
     lastState = "disconnected";
     lastError = String(reason || "Disconnected");
     log("warn", "Client disconnected", { reason: lastError });
@@ -313,6 +361,14 @@ function wireClientEvents(instance) {
 }
 
 async function startClient() {
+  ready = false;
+  authenticated = false;
+  authenticatedAt = null;
+  currentQr = null;
+  currentQrDataUrl = null;
+  lastQrAt = null;
+  clientStartedAt = new Date().toISOString();
+  lastState = "starting";
   client = createClient();
   wireClientEvents(client);
   log("info", "Initializing WhatsApp client", {
@@ -324,6 +380,48 @@ async function startClient() {
     proxyType: WHATSAPP_PROXY_ENABLED && WHATSAPP_PROXY_HOST ? WHATSAPP_PROXY_TYPE : undefined,
   });
   await client.initialize();
+}
+
+function startReadyWatchdog() {
+  if (readyWatchdogTimer) {
+    return;
+  }
+
+  readyWatchdogTimer = setInterval(() => {
+    if (ready || restartTimer) {
+      return;
+    }
+
+    const now = Date.now();
+    if (authenticated && authenticatedAt) {
+      const authenticatedAgeMs = now - Date.parse(authenticatedAt);
+      if (authenticatedAgeMs >= WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS) {
+        lastError = `Ready event was not received ${authenticatedAgeMs}ms after authentication`;
+        log("warn", "WhatsApp ready watchdog restarting authenticated client", {
+          authenticatedAgeMs,
+          readyAfterAuthTimeoutMs: WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS,
+          state: lastState,
+        });
+        scheduleRestart();
+      }
+      return;
+    }
+
+    if (currentQr || !clientStartedAt) {
+      return;
+    }
+
+    const startupAgeMs = now - Date.parse(clientStartedAt);
+    if (startupAgeMs >= WHATSAPP_STARTUP_READY_TIMEOUT_MS) {
+      lastError = `Ready event was not received ${startupAgeMs}ms after startup`;
+      log("warn", "WhatsApp ready watchdog restarting startup-stuck client", {
+        startupAgeMs,
+        startupReadyTimeoutMs: WHATSAPP_STARTUP_READY_TIMEOUT_MS,
+        state: lastState,
+      });
+      scheduleRestart();
+    }
+  }, WHATSAPP_READY_WATCHDOG_INTERVAL_MS);
 }
 
 function scheduleRestart() {
@@ -658,10 +756,19 @@ app.use((error, req, res, next) => {
   });
 });
 
+process.on("unhandledRejection", (reason) => {
+  handleProcessError("rejection", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  handleProcessError("exception", error);
+});
+
 app.listen(PORT, () => {
   log("info", "WhatsApp gateway HTTP server started", { port: PORT, serverUrl: SERVER_URL });
 });
 
+startReadyWatchdog();
 startClient().catch((error) => {
   lastError = error.message;
   lastState = "startup_failed";
@@ -674,6 +781,10 @@ async function shutdown(signal) {
   if (restartTimer) {
     clearTimeout(restartTimer);
     restartTimer = null;
+  }
+  if (readyWatchdogTimer) {
+    clearInterval(readyWatchdogTimer);
+    readyWatchdogTimer = null;
   }
   try {
     if (client) {

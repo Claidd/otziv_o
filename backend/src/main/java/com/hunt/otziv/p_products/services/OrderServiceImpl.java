@@ -43,7 +43,12 @@ import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
@@ -77,6 +82,7 @@ public class OrderServiceImpl implements OrderService {
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
     private final GamificationEventService gamificationEventService;
+    private final PlatformTransactionManager transactionManager;
 
     public static final String ADMIN = "ROLE_ADMIN";
     public static final String OWNER = "ROLE_OWNER";
@@ -483,9 +489,11 @@ public class OrderServiceImpl implements OrderService {
 
             orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
             log.info("Счётчик заказа после синхронизации: {}", order.getCounter());
-            notifyClientAboutPublishedReviewProgress(order, actualPublished);
-            orderStatusCheckerService.checkAndMarkOrderCompleted(order);
+            schedulePublishedReviewClientUpdates(order, actualPublished);
 
+            return true;
+        } catch (ReviewAlreadyPublishedException e) {
+            log.info("Публикация отзыва id={} пропущена: отзыв уже опубликован", reviewId);
             return true;
         } catch (ResponseStatusException e) {
             log.warn("Публикация отзыва id={} отклонена: {}", reviewId, e.getReason());
@@ -539,6 +547,68 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception e) {
             log.warn("Короткий отчёт о публикации не отправлен из-за ошибки. Заказ продолжит обработку", e);
         }
+    }
+
+    private void schedulePublishedReviewClientUpdates(Order order, int actualPublished) {
+        Long orderId = order == null ? null : order.getId();
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            sendPublishedReviewClientUpdates(order, actualPublished);
+            return;
+        }
+
+        runAfterCommit(() -> sendPublishedReviewClientUpdates(orderId, actualPublished));
+    }
+
+    private void sendPublishedReviewClientUpdates(Long orderId, int actualPublished) {
+        try {
+            TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+            transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            transactionTemplate.executeWithoutResult(status -> sendPublishedReviewClientUpdatesInCurrentTransaction(
+                    orderId,
+                    actualPublished
+            ));
+        } catch (Exception e) {
+            log.error("Клиентские действия после публикации не выполнены для заказа {}", orderId, e);
+        }
+    }
+
+    private void sendPublishedReviewClientUpdatesInCurrentTransaction(Long orderId, int actualPublished) {
+        Order order = orderRepository.findByIdForMutation(orderId).orElse(null);
+        if (order == null) {
+            log.warn("Клиентские действия после публикации пропущены: заказ {} не найден", orderId);
+            return;
+        }
+
+        notifyClientAboutPublishedReviewProgress(order, actualPublished);
+        try {
+            orderStatusCheckerService.checkAndMarkOrderCompleted(order);
+        } catch (Exception e) {
+            throw new IllegalStateException("Не удалось завершить клиентские действия после публикации", e);
+        }
+    }
+
+    private void sendPublishedReviewClientUpdates(Order order, int actualPublished) {
+        try {
+            notifyClientAboutPublishedReviewProgress(order, actualPublished);
+            orderStatusCheckerService.checkAndMarkOrderCompleted(order);
+        } catch (Exception e) {
+            log.error("Клиентские действия после публикации не выполнены для заказа {}",
+                    order == null ? null : order.getId(), e);
+        }
+    }
+
+    private void runAfterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
     }
 
     private String reviewCardLabel(Order order, Review target) {
@@ -639,23 +709,22 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private ReviewPublicationTarget validateAndRetrievePublicationTarget(Long reviewId) {
-        Long orderId = reviewRepository.findOrderIdByReviewId(reviewId)
-                .orElseThrow(() -> new IllegalStateException("Отзыв или заказ не найден: id=" + reviewId));
-
-        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
-        Review review = reviewRepository.findByIdForPublication(reviewId).orElse(null);
-
-        if (review == null) {
-            throw new IllegalStateException("Отзыв не найден: id=" + reviewId);
-        }
+        Review review = reviewRepository.findByIdForPublication(reviewId)
+                .orElseThrow(() -> new IllegalStateException("Отзыв не найден: id=" + reviewId));
 
         OrderDetails details = review.getOrderDetails();
-        if (details == null || details.getOrder() == null || !Objects.equals(details.getOrder().getId(), orderId)) {
+        Long orderId = details != null && details.getOrder() != null ? details.getOrder().getId() : null;
+        if (orderId == null) {
             throw new IllegalStateException("OrderDetails или Order отсутствуют у отзыва id=" + reviewId);
         }
 
-        if (order == null || review.isPublish()) {
-            throw new IllegalStateException("Заказ не найден или отзыв уже опубликован. id=" + reviewId);
+        if (review.isPublish()) {
+            throw new ReviewAlreadyPublishedException();
+        }
+
+        Order order = orderRepository.findByIdForCounterUpdate(orderId).orElse(null);
+        if (order == null) {
+            throw new IllegalStateException("Заказ не найден. id=" + reviewId);
         }
 
         return new ReviewPublicationTarget(review, order);
@@ -669,6 +738,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private record ReviewPublicationTarget(Review review, Order order) {
+    }
+
+    private static class ReviewAlreadyPublishedException extends RuntimeException {
     }
 
     @Override

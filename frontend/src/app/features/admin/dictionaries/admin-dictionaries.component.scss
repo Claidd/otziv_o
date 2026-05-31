@@ -520,11 +520,13 @@ tr.selected td:first-child {
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip] > span:first-child,
+.readonly-setting[data-tooltip] > span:first-child,
 .dictionary-search[data-tooltip] input {
   padding-right: 1.75rem;
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]::before,
+.readonly-setting[data-tooltip]::before,
 .dictionary-search[data-tooltip]::before {
   content: "help";
   position: absolute;
@@ -553,6 +555,7 @@ tr.selected td:first-child {
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]::after,
+.readonly-setting[data-tooltip]::after,
 .dictionary-search[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
@@ -579,6 +582,7 @@ tr.selected td:first-child {
 }
 
 :is(.editor-card, .category-form, .subcategory-form) label[data-tooltip]:is(:hover, .tooltip-open)::after,
+.readonly-setting[data-tooltip]:is(:hover, .tooltip-open)::after,
 .dictionary-search[data-tooltip]:is(:hover, .tooltip-open)::after {
   opacity: 1;
   visibility: visible;
@@ -854,6 +858,48 @@ tr.selected td:first-child {
 
 .form-grid .wide {
   grid-column: 1 / -1;
+}
+
+.readonly-setting {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  min-height: 4.85rem;
+  align-content: center;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: 0.7rem;
+  padding: 0.62rem 0.75rem;
+  background: var(--otziv-muted-surface);
+}
+
+.readonly-setting > span {
+  margin: 0;
+  color: var(--otziv-info);
+  font-size: 0.78rem;
+}
+
+.readonly-setting strong {
+  color: var(--otziv-dark);
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.readonly-setting small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.readonly-setting a {
+  width: fit-content;
+  color: var(--otziv-primary);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.readonly-setting a:hover {
+  text-decoration: underline;
 }
 
 .subcategory-form input[readonly] {

@@ -1879,7 +1879,7 @@ export class LeadsPage implements OnInit, OnDestroy {
       clearTimeout(this.searchTimer);
     }
 
-    this.searchTimer = setTimeout(() => this.applySearch(), 1000);
+    this.searchTimer = setTimeout(() => this.applySearch(), 450);
   }
 
   applySearch(): void {

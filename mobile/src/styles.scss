@@ -92,12 +92,12 @@
   --otziv-card-control-height: 1.6rem;
   --otziv-card-control-font-size: 0.63rem;
   --otziv-card-control-padding-x: 0.46rem;
-  --otziv-status-tile-min: 6.35rem;
-  --otziv-status-tile-height: 2.62rem;
+  --otziv-status-tile-min: 6.82rem;
+  --otziv-status-tile-height: 3.08rem;
   --otziv-search-control-height: 1.98rem;
   --otziv-search-action-size: 1.98rem;
-  --otziv-pager-button-size: 2.08rem;
-  --otziv-pager-height: 2.78rem;
+  --otziv-pager-button-size: 2.32rem;
+  --otziv-pager-height: 3.24rem;
   --otziv-note-height: 3.05rem;
   --otziv-lead-comment-height: 4.45rem;
   --otziv-review-text-height: 7.2rem;
@@ -140,12 +140,12 @@ body.otziv-compact-phone {
   --otziv-card-control-height: 1.56rem;
   --otziv-card-control-font-size: 0.62rem;
   --otziv-card-control-padding-x: 0.4rem;
-  --otziv-status-tile-min: 5.55rem;
-  --otziv-status-tile-height: 2.16rem;
+  --otziv-status-tile-min: 6.04rem;
+  --otziv-status-tile-height: 2.58rem;
   --otziv-search-control-height: 1.66rem;
   --otziv-search-action-size: 1.66rem;
-  --otziv-pager-button-size: 1.82rem;
-  --otziv-pager-height: 2.38rem;
+  --otziv-pager-button-size: 2.06rem;
+  --otziv-pager-height: 2.84rem;
   --otziv-note-height: 2.88rem;
   --otziv-lead-comment-height: 3.9rem;
   --otziv-review-text-height: 6.72rem;
@@ -168,12 +168,12 @@ body.otziv-short-phone {
   --otziv-card-control-height: 1.54rem;
   --otziv-card-control-font-size: 0.61rem;
   --otziv-card-control-padding-x: 0.38rem;
-  --otziv-status-tile-min: 5.55rem;
-  --otziv-status-tile-height: 2.26rem;
+  --otziv-status-tile-min: 6.04rem;
+  --otziv-status-tile-height: 2.66rem;
   --otziv-search-control-height: 1.74rem;
   --otziv-search-action-size: 1.74rem;
-  --otziv-pager-button-size: 1.96rem;
-  --otziv-pager-height: 2.54rem;
+  --otziv-pager-button-size: 2.16rem;
+  --otziv-pager-height: 3rem;
   --otziv-note-height: 2.62rem;
   --otziv-lead-comment-height: 3.45rem;
   --otziv-review-text-height: 6.1rem;
@@ -294,7 +294,7 @@ body.otziv-keyboard-open .otziv-tabbar {
 }
 
 body.otziv-keyboard-open ion-content {
-  --keyboard-offset: var(--otziv-keyboard-height);
+  --keyboard-offset: var(--otziv-keyboard-panel-bottom);
 }
 
 ion-router-outlet {
@@ -929,6 +929,19 @@ ion-button {
   padding-top: 0.08rem;
 }
 
+.review-text-edit-field {
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.review-text-edit-field textarea {
+  height: 100%;
+  min-height: 0;
+  font-weight: 650;
+  resize: none;
+  scrollbar-width: thin;
+}
+
 .company-create-sheet {
   --border-radius: 0;
   --height: 100%;
@@ -1037,13 +1050,18 @@ ion-button {
 }
 
 .mobile-reminder-card {
+  --reminder-card-padding: 0.68rem;
+  --reminder-icon-offset: 0.22rem;
+  --reminder-icon-size: 1.9rem;
+  --reminder-delete-size: 1.34rem;
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: flex-start;
   gap: 0.55rem;
   border: 1px solid rgba(103, 116, 131, 0.16);
   border-radius: 0.95rem;
-  padding: 0.68rem;
+  padding: var(--reminder-card-padding);
   color: var(--otziv-dark);
   background: linear-gradient(160deg, var(--otziv-white) 0%, var(--otziv-tone-walk-surface) 100%);
 }
@@ -1053,10 +1071,35 @@ ion-button {
   background: linear-gradient(160deg, var(--otziv-tone-correction-surface) 0%, var(--otziv-white) 72%);
 }
 
+.reminder-delete-button {
+  display: grid;
+  width: var(--reminder-delete-size);
+  height: var(--reminder-delete-size);
+  place-items: center;
+  position: absolute;
+  left: calc(var(--reminder-card-padding) + var(--reminder-icon-offset) + ((var(--reminder-icon-size) - var(--reminder-delete-size)) / 2));
+  top: calc(var(--reminder-card-padding) + var(--reminder-icon-size) + 0.02rem);
+  z-index: 2;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: var(--otziv-danger);
+  background: transparent;
+  font: 800 1.34rem/1 Arial, sans-serif;
+}
+
+.mobile-reminder-card.has-delete .reminder-card-icon {
+  margin-left: 0.22rem;
+}
+
+.reminder-delete-button:disabled {
+  opacity: 0.45;
+}
+
 .reminder-card-icon {
   display: grid;
-  width: 1.9rem;
-  height: 1.9rem;
+  width: var(--reminder-icon-size);
+  height: var(--reminder-icon-size);
   place-items: center;
   border-radius: 0.68rem;
   color: var(--otziv-primary);
@@ -3145,6 +3188,25 @@ app-leads .lead-list .mobile-lead-card .lead-comment-editor {
 
 app-mobile-status-slider .mobile-status-slider {
   max-width: 100%;
+  padding-bottom: 0.1rem;
+}
+
+app-mobile-status-slider .status-tile {
+  padding-block: 0.46rem;
+}
+
+app-mobile-status-slider .status-tile .material-icons-sharp {
+  width: 1.94rem;
+  height: 1.94rem;
+  font-size: 1.1rem;
+}
+
+app-mobile-status-slider .status-tile strong {
+  font-size: 0.98rem;
+}
+
+app-mobile-status-slider .status-tile small {
+  font-size: 0.64rem;
 }
 
 app-mobile-status-slider .status-tile,
@@ -3187,20 +3249,47 @@ body.otziv-short-phone app-mobile-header ion-toolbar {
   --min-height: 3rem;
 }
 
+body app-tabs .otziv-tabbar {
+  height: calc(2.56rem + env(safe-area-inset-bottom));
+  padding-top: 0.04rem;
+  padding-bottom: calc(0.08rem + env(safe-area-inset-bottom));
+}
+
+body app-tabs .otziv-tabbar :is(ion-tab-button, .smart-tab-button) {
+  align-self: center;
+  height: 2.08rem !important;
+  border-radius: 0.52rem !important;
+}
+
+body app-tabs .otziv-tabbar ion-icon {
+  font-size: 1.03rem !important;
+}
+
+body app-tabs .otziv-tabbar :is(ion-label, .tab-label) {
+  margin-top: 0.04rem !important;
+  font-size: clamp(0.47rem, 1.95vw, 0.52rem) !important;
+  line-height: 1.12 !important;
+}
+
 body.otziv-compact-phone app-tabs .otziv-tabbar,
 body.otziv-short-phone app-tabs .otziv-tabbar {
-  height: calc(2.62rem + env(safe-area-inset-bottom));
-  padding-top: 0.03rem;
+  height: calc(2.48rem + env(safe-area-inset-bottom));
+  padding-top: 0.04rem;
   padding-bottom: calc(0.08rem + env(safe-area-inset-bottom));
 }
 
 body.otziv-short-phone app-tabs .otziv-tabbar {
-  height: calc(2.44rem + env(safe-area-inset-bottom));
+  height: calc(2.42rem + env(safe-area-inset-bottom));
+}
+
+body.otziv-compact-phone app-tabs .otziv-tabbar :is(ion-tab-button, .smart-tab-button),
+body.otziv-short-phone app-tabs .otziv-tabbar :is(ion-tab-button, .smart-tab-button) {
+  height: 2.02rem !important;
 }
 
 body.otziv-compact-phone app-tabs .otziv-tabbar ion-icon,
 body.otziv-short-phone app-tabs .otziv-tabbar ion-icon {
-  font-size: 0.92rem !important;
+  font-size: 1.03rem !important;
 }
 
 body.otziv-compact-phone app-tabs .otziv-tabbar ion-label,
@@ -3208,7 +3297,8 @@ body.otziv-compact-phone app-tabs .otziv-tabbar .tab-label,
 body.otziv-short-phone app-tabs .otziv-tabbar ion-label,
 body.otziv-short-phone app-tabs .otziv-tabbar .tab-label {
   margin-top: 0.03rem !important;
-  font-size: 0.43rem !important;
+  font-size: 0.46rem !important;
+  line-height: 1.12 !important;
 }
 
 body.otziv-compact-phone app-mobile-bottom-pager .mobile-bottom-pager,
@@ -3231,19 +3321,19 @@ body.otziv-short-phone app-mobile-bottom-pager .mobile-pager-nav {
 
 body.otziv-compact-phone app-mobile-status-slider .material-icons-sharp,
 body.otziv-short-phone app-mobile-status-slider .material-icons-sharp {
-  width: 1.46rem;
-  height: 1.46rem;
-  font-size: 0.84rem;
+  width: 1.76rem;
+  height: 1.76rem;
+  font-size: 1rem;
 }
 
 body.otziv-compact-phone app-mobile-status-slider strong,
 body.otziv-short-phone app-mobile-status-slider strong {
-  font-size: 0.8rem;
+  font-size: 0.92rem;
 }
 
 body.otziv-compact-phone app-mobile-status-slider small,
 body.otziv-short-phone app-mobile-status-slider small {
-  font-size: 0.54rem;
+  font-size: 0.6rem;
 }
 
 body.otziv-compact-phone app-mobile-order-card .mobile-order-card header a,
@@ -3508,8 +3598,8 @@ body.otziv-short-phone app-manager .mobile-page-bottom-pager .mobile-pager-nav s
   --otziv-unified-note-height: 2.32rem;
   --otziv-unified-note-min-height: 2.1rem;
   --otziv-unified-comment-height: 2.64rem;
-  --otziv-unified-pager-height: 2.74rem;
-  --otziv-unified-pager-button-size: 2.02rem;
+  --otziv-unified-pager-height: 2.87rem;
+  --otziv-unified-pager-button-size: 2.06rem;
   --otziv-unified-pager-back-width: 2.62rem;
   --otziv-unified-pager-gap: 0.26rem;
 }
@@ -3531,8 +3621,8 @@ body.otziv-short-phone {
   --otziv-unified-note-height: 2.16rem;
   --otziv-unified-note-min-height: 1.96rem;
   --otziv-unified-comment-height: 2.42rem;
-  --otziv-unified-pager-height: 2.64rem;
-  --otziv-unified-pager-button-size: 1.94rem;
+  --otziv-unified-pager-height: 2.73rem;
+  --otziv-unified-pager-button-size: 1.98rem;
   --otziv-unified-pager-back-width: 2.54rem;
   --otziv-unified-pager-gap: 0.22rem;
 }
@@ -3870,6 +3960,32 @@ app-mobile-bottom-pager {
   --otziv-pager-back-width: var(--otziv-unified-pager-back-width);
 }
 
+body :is(
+  app-leads .leads-page,
+  app-manager .manager-page,
+  app-worker .worker-page,
+  app-operator .operator-page,
+  app-manager-archive .archive-mobile-page,
+  app-order-details-mobile .order-details-mobile-page,
+  app-review-check-mobile .review-check-page,
+  app-tbank-page .tbank-page
+) {
+  --otziv-page-padding-bottom: 0.08rem;
+  padding-bottom: calc(var(--otziv-page-padding-bottom) + env(safe-area-inset-bottom)) !important;
+}
+
+app-mobile-bottom-pager.mobile-page-bottom-pager {
+  flex: 0 0 var(--otziv-unified-pager-height) !important;
+  margin-top: auto !important;
+  margin-bottom: 0.18rem !important;
+  transform: none !important;
+}
+
+body:is(.otziv-compact-phone, .otziv-short-phone) app-mobile-bottom-pager.mobile-page-bottom-pager {
+  margin-bottom: 0.14rem !important;
+  transform: none !important;
+}
+
 app-mobile-bottom-pager.mobile-page-bottom-pager .mobile-bottom-pager,
 body.otziv-compact-phone app-mobile-bottom-pager.mobile-page-bottom-pager .mobile-bottom-pager,
 body.otziv-short-phone app-mobile-bottom-pager.mobile-page-bottom-pager .mobile-bottom-pager,
@@ -3882,7 +3998,7 @@ body.otziv-short-phone app-manager .mobile-page-bottom-pager .mobile-bottom-page
   gap: var(--otziv-unified-pager-gap) !important;
   height: var(--otziv-unified-pager-height) !important;
   min-height: var(--otziv-unified-pager-height) !important;
-  padding: 0.28rem !important;
+  padding: 0.25rem !important;
   border-radius: 0.82rem !important;
 }
 
@@ -3919,7 +4035,7 @@ body.otziv-short-phone app-mobile-bottom-pager.mobile-page-bottom-pager .mobile-
 body.otziv-compact-phone app-manager .mobile-page-bottom-pager .mobile-pager-nav,
 body.otziv-short-phone app-manager .mobile-page-bottom-pager .mobile-pager-nav {
   position: absolute !important;
-  inset: 0.28rem !important;
+  inset: 0.25rem !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) var(--otziv-unified-pager-back-width) !important;
   align-items: center !important;
@@ -5256,6 +5372,326 @@ body:is(.otziv-compact-phone, .otziv-short-phone) app-order-details-mobile .task
   font-size: 0.56rem;
 }
 
+/* Roomier board cards: use the free vertical space in company, order and review cards
+   while keeping their control rhythm identical across sections. */
+body :is(app-leads, app-manager, app-worker, app-manager-archive, app-order-details-mobile, app-review-check-mobile) {
+  --otziv-board-card-width: min(16.35rem, 82vw);
+  --otziv-detail-card-width: min(16.35rem, 84vw);
+  --otziv-card-padding: 0.72rem;
+  --otziv-card-gap: 0.46rem;
+  --otziv-card-control-height: 1.92rem;
+  --otziv-card-control-font-size: 0.76rem;
+  --otziv-card-control-padding-x: 0.56rem;
+  --otziv-note-alert-size: 1.22rem;
+  --otziv-unified-list-gap: 0.62rem;
+  --otziv-unified-card-padding: 0.72rem;
+  --otziv-unified-card-gap: 0.46rem;
+  --otziv-unified-title-size: 1.08rem;
+  --otziv-unified-subtitle-size: 0.66rem;
+  --otziv-unified-control-height: 1.94rem;
+  --otziv-unified-control-font-size: 0.78rem;
+  --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-phone-font-size: 0.9rem;
+  --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-note-height: 2.82rem;
+  --otziv-unified-note-min-height: 2.5rem;
+  --otziv-unified-comment-height: 3.3rem;
+  --otziv-review-text-height: 8.65rem;
+  --otziv-review-text-height-open: 9.7rem;
+  --otziv-review-answer-height: 3.15rem;
+}
+
+body.otziv-roomy-phone app-worker {
+  --otziv-review-text-height: clamp(8.55rem, 22vh, 9.55rem);
+  --otziv-review-text-height-open: clamp(9.35rem, 24vh, 10.45rem);
+  --otziv-review-answer-height: 3.05rem;
+}
+
+body:is(.otziv-compact-phone, .otziv-short-phone) :is(app-leads, app-manager, app-worker, app-manager-archive, app-order-details-mobile, app-review-check-mobile) {
+  --otziv-board-card-width: min(15.55rem, 82vw);
+  --otziv-detail-card-width: min(15.7rem, 84vw);
+  --otziv-card-padding: 0.56rem;
+  --otziv-card-gap: 0.34rem;
+  --otziv-card-control-height: 1.72rem;
+  --otziv-card-control-font-size: 0.68rem;
+  --otziv-card-control-padding-x: 0.46rem;
+  --otziv-note-alert-size: 1.12rem;
+  --otziv-unified-list-gap: 0.46rem;
+  --otziv-unified-card-padding: 0.56rem;
+  --otziv-unified-card-gap: 0.34rem;
+  --otziv-unified-title-size: 0.98rem;
+  --otziv-unified-subtitle-size: 0.58rem;
+  --otziv-unified-control-height: 1.72rem;
+  --otziv-unified-control-font-size: 0.68rem;
+  --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-phone-font-size: 0.8rem;
+  --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
+  --otziv-unified-note-height: 2.28rem;
+  --otziv-unified-note-min-height: 2.05rem;
+  --otziv-unified-comment-height: 2.72rem;
+  --otziv-review-text-height: 7.35rem;
+  --otziv-review-text-height-open: 8.15rem;
+  --otziv-review-answer-height: 2.62rem;
+}
+
+body app-manager .manager-list .company-mobile-card .lead-phone-row,
+body app-manager-archive .archive-list .archive-order-card .lead-phone-row {
+  grid-template-columns: minmax(0, 1fr) var(--otziv-unified-control-height) !important;
+}
+
+body app-manager .manager-list .company-mobile-card .lead-phone-row :is(a, button),
+body app-manager-archive .archive-list .archive-order-card .lead-phone-row :is(a, button) {
+  min-height: var(--otziv-unified-control-height) !important;
+  font-size: var(--otziv-unified-phone-font-size) !important;
+}
+
+body app-manager .manager-list .company-mobile-card .lead-phone-row button,
+body app-manager-archive .archive-list .archive-order-card .lead-phone-row button {
+  min-width: var(--otziv-unified-control-height) !important;
+  width: var(--otziv-unified-control-height) !important;
+  padding-inline: 0 !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .review-field--text textarea,
+body app-order-details-mobile :is(.review-text-editor textarea, .review-text-editor .review-display-field) {
+  font-size: calc(var(--otziv-unified-field-font-size) + 0.04rem) !important;
+  line-height: 1.28 !important;
+}
+
+body app-worker .worker-list .mobile-worker-review-card .review-field--answer textarea,
+body app-order-details-mobile :is(.review-answer-editor textarea, .review-display-field--answer) {
+  font-size: var(--otziv-unified-field-font-size) !important;
+  line-height: 1.2 !important;
+}
+
+body app-order-details-mobile .mobile-review-card :is(header a, header strong) {
+  font-size: var(--otziv-unified-title-size) !important;
+  line-height: 1.06 !important;
+}
+
+body app-order-details-mobile .mobile-review-card :is(small, footer span, footer .review-edit-link) {
+  font-size: var(--otziv-unified-subtitle-size) !important;
+}
+
+body app-order-details-mobile :is(.field-actions button, .review-actions button, .publish-button, .order-details-actions button) {
+  min-height: var(--otziv-unified-control-height) !important;
+  font-size: var(--otziv-unified-control-font-size) !important;
+}
+
+body app-order-details-mobile {
+  --otziv-detail-card-width: min(17.15rem, 86vw);
+  --otziv-card-padding: 0.6rem 0.46rem;
+  --otziv-review-text-height: clamp(10.35rem, 27vh, 12.1rem);
+  --otziv-review-text-height-open: clamp(11.4rem, 31vh, 13.25rem);
+  --otziv-review-answer-height: 2.9rem;
+}
+
+body.otziv-roomy-phone app-order-details-mobile {
+  --otziv-detail-card-width: min(18.3rem, 87vw);
+  --otziv-card-padding: 0.58rem 0.42rem;
+  --otziv-card-gap: 0.56rem;
+  --otziv-unified-control-height: 2.08rem;
+  --otziv-unified-control-font-size: 0.84rem;
+  --otziv-review-text-height: clamp(11.35rem, 30vh, 13.2rem);
+  --otziv-review-text-height-open: clamp(12.35rem, 34vh, 14.45rem);
+  --otziv-review-answer-height: 3.05rem;
+}
+
+body:is(.otziv-compact-phone, .otziv-short-phone) app-order-details-mobile {
+  --otziv-detail-card-width: min(15.7rem, 84vw);
+  --otziv-card-padding: 0.5rem 0.36rem;
+  --otziv-review-text-height: 8.35rem;
+  --otziv-review-text-height-open: 9.15rem;
+  --otziv-review-answer-height: 2.62rem;
+}
+
+body app-order-details-mobile .review-mobile-strip app-mobile-review-card-shell.layout-details {
+  flex-basis: var(--otziv-detail-card-width) !important;
+}
+
+body app-order-details-mobile app-mobile-review-card-shell.layout-details .mobile-review-card-shell {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-content: space-between !important;
+  justify-items: stretch !important;
+  gap: var(--otziv-card-gap) !important;
+  padding: var(--otziv-card-padding) !important;
+}
+
+body app-order-details-mobile app-mobile-review-card-shell.layout-details .mobile-review-card-shell > :is(
+  .review-text-editor,
+  .review-answer-editor,
+  .review-note-panel,
+  .bot-line,
+  .review-actions,
+  .task-meta-grid,
+  .task-text-field,
+  .task-answer-field,
+  .publish-button
+) {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  grid-column: 1 / -1 !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
+}
+
+body app-order-details-mobile .review-text-editor :is(textarea, .review-display-field) {
+  display: block !important;
+  height: var(--otziv-review-text-height) !important;
+  min-height: var(--otziv-review-text-height) !important;
+  padding: 0.66rem !important;
+  padding-bottom: 1.1rem !important;
+  text-align: left !important;
+}
+
+body app-order-details-mobile .review-answer-editor :is(textarea, .review-display-field--answer) {
+  height: var(--otziv-review-answer-height) !important;
+  min-height: var(--otziv-review-answer-height) !important;
+  padding-inline: 0.62rem !important;
+  font-size: calc(var(--otziv-unified-field-font-size) - 0.12rem) !important;
+  font-weight: 600 !important;
+  line-height: 1.12 !important;
+}
+
+body app-order-details-mobile .bot-line {
+  min-height: var(--otziv-unified-control-height) !important;
+  padding-inline: 0.5rem !important;
+  font-size: var(--otziv-unified-control-font-size) !important;
+  line-height: 1.08 !important;
+}
+
+body app-order-details-mobile .review-actions {
+  gap: 0.34rem !important;
+}
+
+body app-order-details-mobile .review-actions button,
+body app-order-details-mobile .publish-button {
+  padding-inline: 0.38rem !important;
+}
+
+body app-order-details-mobile .order-details-actions {
+  gap: 0.5rem !important;
+  padding: 0.58rem !important;
+}
+
+body app-order-details-mobile .order-details-actions button {
+  min-height: calc(var(--otziv-unified-control-height) + 0.1rem) !important;
+  padding-inline: 0.52rem !important;
+  font-size: calc(var(--otziv-unified-control-font-size) - 0.08rem) !important;
+  font-weight: 700 !important;
+  line-height: 1.08 !important;
+  white-space: normal !important;
+}
+
+body app-leads {
+  --otziv-lead-card-width: min(16.9rem, 84vw);
+  --otziv-lead-card-padding: 0.76rem;
+  --otziv-lead-card-gap: 0.5rem;
+  --otziv-lead-title-size: 1.08rem;
+  --otziv-lead-subtitle-size: 0.66rem;
+  --otziv-lead-control-height: 2rem;
+  --otziv-lead-control-font-size: 0.78rem;
+  --otziv-lead-phone-font-size: 0.92rem;
+  --otziv-lead-comment-height: 3.35rem;
+}
+
+body.otziv-roomy-phone app-leads {
+  --otziv-lead-card-width: min(18.35rem, 86vw);
+  --otziv-lead-card-padding: 0.86rem;
+  --otziv-lead-card-gap: 0.62rem;
+  --otziv-lead-title-size: 1.15rem;
+  --otziv-lead-subtitle-size: 0.72rem;
+  --otziv-lead-control-height: 2.18rem;
+  --otziv-lead-control-font-size: 0.86rem;
+  --otziv-lead-phone-font-size: 1.02rem;
+  --otziv-lead-comment-height: 3.85rem;
+}
+
+body:is(.otziv-compact-phone, .otziv-short-phone) app-leads {
+  --otziv-lead-card-width: min(15.9rem, 84vw);
+  --otziv-lead-card-padding: 0.62rem;
+  --otziv-lead-card-gap: 0.42rem;
+  --otziv-lead-title-size: 1.02rem;
+  --otziv-lead-subtitle-size: 0.62rem;
+  --otziv-lead-control-height: 1.86rem;
+  --otziv-lead-control-font-size: 0.72rem;
+  --otziv-lead-phone-font-size: 0.86rem;
+  --otziv-lead-comment-height: 3rem;
+}
+
+body app-leads .lead-list {
+  gap: var(--otziv-lead-card-gap) !important;
+}
+
+body app-leads .lead-list .mobile-lead-card {
+  flex-basis: var(--otziv-lead-card-width) !important;
+  width: var(--otziv-lead-card-width) !important;
+  max-width: var(--otziv-lead-card-width) !important;
+  padding: var(--otziv-lead-card-padding) !important;
+  gap: var(--otziv-lead-card-gap) !important;
+}
+
+body app-leads .lead-list .mobile-lead-card .lead-card-head strong {
+  font-size: var(--otziv-lead-title-size) !important;
+  line-height: 1.08 !important;
+}
+
+body app-leads .lead-list .mobile-lead-card :is(.lead-card-head small, .lead-card-foot span, .lead-card-foot button) {
+  font-size: var(--otziv-lead-subtitle-size) !important;
+}
+
+body app-leads .lead-list .mobile-lead-card .lead-phone-row {
+  grid-template-columns: minmax(0, 1fr) var(--otziv-lead-control-height) !important;
+  gap: 0.46rem !important;
+}
+
+body app-leads .lead-list .mobile-lead-card .lead-phone-row :is(a, .lead-phone-open) {
+  min-height: var(--otziv-lead-control-height) !important;
+  height: var(--otziv-lead-control-height) !important;
+  font-size: var(--otziv-lead-phone-font-size) !important;
+}
+
+body app-leads .lead-list .mobile-lead-card .lead-phone-row > button:not(.lead-phone-open) {
+  width: var(--otziv-lead-control-height) !important;
+  min-width: var(--otziv-lead-control-height) !important;
+  height: var(--otziv-lead-control-height) !important;
+  padding-inline: 0 !important;
+  font-size: var(--otziv-lead-control-font-size) !important;
+}
+
+body app-leads .lead-list .mobile-lead-card :is(.lead-meta-row span, .lead-contact-link, .lead-card-actions button) {
+  min-height: var(--otziv-lead-control-height) !important;
+  height: var(--otziv-lead-control-height) !important;
+  padding-inline: 0.56rem !important;
+  font-size: var(--otziv-lead-control-font-size) !important;
+  line-height: 1.08 !important;
+}
+
+body app-leads .lead-list .mobile-lead-card .lead-comment-editor {
+  min-height: var(--otziv-lead-comment-height) !important;
+  flex-basis: var(--otziv-lead-comment-height) !important;
+}
+
+body app-leads .lead-list .mobile-lead-card .lead-comment-editor .lead-card-comment {
+  min-height: var(--otziv-lead-comment-height) !important;
+  height: var(--otziv-lead-comment-height) !important;
+  max-height: var(--otziv-lead-comment-height) !important;
+  padding: 0.6rem !important;
+  font-size: calc(var(--otziv-lead-control-font-size) + 0.02rem) !important;
+  line-height: 1.22 !important;
+}
+
+body app-leads .lead-list .mobile-lead-card :is(
+  .lead-card-head,
+  .lead-meta-row,
+  .lead-contact-row,
+  .lead-card-actions,
+  .lead-card-foot
+) {
+  gap: calc(var(--otziv-lead-card-gap) - 0.08rem) !important;
+}
+
 /* Native Android keeps a lot of fling momentum in horizontal card rails.
    Stop at every card so one light swipe does not skip half of the list. */
 body :is(
@@ -5281,10 +5717,52 @@ body :is(
   app-operator .operator-list .operator-lead-card,
   app-manager-archive .archive-list .archive-order-card,
   app-order-details-mobile .review-mobile-strip .mobile-review-card,
+  app-order-details-mobile .review-mobile-strip .mobile-review-card-shell,
   app-review-check-mobile .review-check-list .review-check-card,
   app-tbank-page .payment-list .payment-card
 ) {
   scroll-snap-stop: always !important;
+}
+
+/* Some Android WebViews report less usable vertical space than CSS dvh suggests,
+   especially with gesture/navigation bars or larger system text. Keep every
+   board card reachable by letting the card itself scroll vertically. */
+body :is(
+  app-leads .lead-list .mobile-lead-card,
+  app-manager .manager-list .manager-card,
+  app-manager .manager-list .order-mobile-card,
+  app-worker .worker-list .mobile-worker-order-card,
+  app-worker .worker-list .mobile-worker-review-card,
+  app-worker .worker-list .mobile-review-card-shell,
+  app-operator .operator-list .operator-lead-card,
+  app-manager-archive .archive-list .archive-order-card,
+  app-order-details-mobile .review-mobile-strip .mobile-review-card,
+  app-order-details-mobile .review-mobile-strip .mobile-review-card-shell,
+  app-review-check-mobile .review-check-list .review-check-card,
+  app-tbank-page .payment-list .payment-card
+) {
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+body :is(
+  app-leads .lead-list .mobile-lead-card,
+  app-manager .manager-list .manager-card,
+  app-manager .manager-list .order-mobile-card,
+  app-worker .worker-list .mobile-worker-order-card,
+  app-worker .worker-list .mobile-worker-review-card,
+  app-worker .worker-list .mobile-review-card-shell,
+  app-operator .operator-list .operator-lead-card,
+  app-manager-archive .archive-list .archive-order-card,
+  app-order-details-mobile .review-mobile-strip .mobile-review-card,
+  app-order-details-mobile .review-mobile-strip .mobile-review-card-shell,
+  app-review-check-mobile .review-check-list .review-check-card,
+  app-tbank-page .payment-list .payment-card
+)::-webkit-scrollbar {
+  display: none !important;
 }
 
 body :is(

@@ -10,6 +10,7 @@ import {
   REVIEW_RECOVERY_BATCH_SOURCE
 } from './personal-reminders.service';
 import { apiErrorMessage } from './api-error-message';
+import { copyTextToClipboard } from './clipboard-copy';
 import { ToastService } from './toast.service';
 import type { ToastAction } from './toast.service';
 import { ManagerApi } from '../core/manager.api';
@@ -186,10 +187,11 @@ export class PersonalRemindersComponent implements OnInit {
 
     this.copyingPaymentReminderId.set(reminder.id);
     try {
-      await navigator.clipboard.writeText(text);
-      this.toastService.success('Скопировано', 'Текст счета скопирован');
-    } catch {
-      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      if (await copyTextToClipboard(text)) {
+        this.toastService.success('Скопировано', 'Текст счета скопирован');
+      } else {
+        this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      }
     } finally {
       this.copyingPaymentReminderId.set(null);
     }
@@ -411,6 +413,10 @@ export class PersonalRemindersComponent implements OnInit {
 
   isBadReviewReminder(reminder: PersonalReminder): boolean {
     return this.isBadReviewTaskReminder(reminder) || this.isBadReviewOrderReadyReminder(reminder);
+  }
+
+  isUserReminder(reminder: PersonalReminder): boolean {
+    return !this.isRecoveryCompletionReminder(reminder) && !this.isBadReviewReminder(reminder);
   }
 
   hasPaymentCopyText(reminder: PersonalReminder): boolean {

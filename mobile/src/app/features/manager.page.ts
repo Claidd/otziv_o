@@ -1962,7 +1962,7 @@ export class ManagerPage implements OnInit, OnDestroy {
 
     this.searchTimer = setTimeout(() => {
       this.applySearch();
-    }, 1000);
+    }, 450);
   }
 
   applySearch(): void {
@@ -2886,18 +2886,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       return;
     }
 
-    const key = `company-phone-${company.id}`;
-    try {
-      await navigator.clipboard.writeText(phone);
-      this.copiedKey.set(key);
-      window.setTimeout(() => {
-        if (this.copiedKey() === key) {
-          this.copiedKey.set(null);
-        }
-      }, 1100);
-    } catch {
-      this.error.set('Не удалось скопировать телефон.');
-    }
+    await this.copyText(phone, `company-phone-${company.id}`, 'Не удалось скопировать телефон.');
   }
 
   async copyOrderPhone(order: OrderItem): Promise<void> {
@@ -3536,12 +3525,13 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   private async copyText(text: string, key: string, fallback: string): Promise<void> {
-    if (!text.trim()) {
+    const value = text.trim();
+    if (!value) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(text);
+      await this.writeClipboard(value);
       this.copiedKey.set(key);
       window.setTimeout(() => {
         if (this.copiedKey() === key) {
@@ -3550,6 +3540,45 @@ export class ManagerPage implements OnInit, OnDestroy {
       }, 1100);
     } catch {
       this.error.set(fallback);
+    }
+  }
+
+  private async writeClipboard(value: string): Promise<void> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+    } catch {
+      // Some mobile/in-app browsers expose Clipboard API but deny access.
+    }
+
+    if (this.writeClipboardLegacy(value)) {
+      return;
+    }
+
+    throw new Error('Clipboard access denied');
+  }
+
+  private writeClipboardLegacy(value: string): boolean {
+    const textArea = document.createElement('textarea');
+    textArea.value = value;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '0';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    textArea.setSelectionRange(0, value.length);
+
+    try {
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    } finally {
+      document.body.removeChild(textArea);
     }
   }
 

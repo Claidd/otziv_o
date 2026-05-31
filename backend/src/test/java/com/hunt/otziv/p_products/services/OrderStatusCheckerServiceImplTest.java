@@ -5,6 +5,7 @@ import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
@@ -107,50 +108,41 @@ class OrderStatusCheckerServiceImplTest {
     }
 
     @Test
-    void checkAndMarkOrderCompletedSchedulesPaymentInvoiceRetryWhenClientMessageFails() throws Exception {
+    void checkAndMarkOrderCompletedQueuesPaymentInvoiceInsteadOfSendingSynchronously() throws Exception {
         Order order = payableOrder(50L);
+        OrderStatus publicStatus = orderStatus(6L, "Опубликовано");
 
         enableImmediateMessages();
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order)).thenReturn("счет");
-        when(orderStatusNotificationService.sendMessageToClientChat(
-                eq("Опубликовано"),
-                eq(order),
-                eq("client-50"),
-                eq("group-50"),
-                eq("счет"),
-                eq("Выставлен счет")
-        )).thenReturn("Опубликовано");
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(publicStatus);
 
         service().checkAndMarkOrderCompleted(order);
 
-        verify(paymentInvoiceRetryScheduler).scheduleRetry(order);
+        assertEquals(publicStatus, order.getStatus());
+        verify(orderRepository).save(order);
+        verify(paymentInvoiceRetryScheduler).scheduleInitialInvoice(order);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessage(order);
+        verifyNoInteractions(orderStatusNotificationService);
     }
 
     @Test
-    void checkAndMarkOrderCompletedDoesNotScheduleRetryWhenInvoiceWasSent() throws Exception {
+    void checkAndMarkOrderCompletedDoesNotSendInvoiceSynchronously() throws Exception {
         Order order = payableOrder(51L);
+        OrderStatus publicStatus = orderStatus(6L, "Опубликовано");
 
         enableImmediateMessages();
-        when(orderPaymentMessageBuilder.publishedOrderPaymentMessage(order)).thenReturn("счет");
-        when(orderStatusNotificationService.sendMessageToClientChat(
-                eq("Опубликовано"),
-                eq(order),
-                eq("client-51"),
-                eq("group-51"),
-                eq("счет"),
-                eq("Выставлен счет")
-        )).thenReturn("Выставлен счет");
+        when(orderStatusService.getOrderStatusByTitle("Опубликовано")).thenReturn(publicStatus);
 
         service().checkAndMarkOrderCompleted(order);
 
-        verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
+        verify(paymentInvoiceRetryScheduler).scheduleInitialInvoice(order);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessage(order);
+        verifyNoInteractions(orderStatusNotificationService);
     }
 
     private OrderStatusCheckerServiceImpl service() {
         return new OrderStatusCheckerServiceImpl(
                 emailService,
                 orderRepository,
-                orderStatusNotificationService,
                 orderPaymentMessageBuilder,
                 paymentInvoiceRetryScheduler,
                 orderStatusService,
@@ -189,5 +181,12 @@ class OrderStatusCheckerServiceImplTest {
         order.setManager(manager);
         order.getCompany().setGroupId("group-" + id);
         return order;
+    }
+
+    private OrderStatus orderStatus(Long id, String title) {
+        OrderStatus status = new OrderStatus();
+        status.setId(id);
+        status.setTitle(title);
+        return status;
     }
 }

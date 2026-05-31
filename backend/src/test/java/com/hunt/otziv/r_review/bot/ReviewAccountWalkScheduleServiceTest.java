@@ -86,6 +86,28 @@ class ReviewAccountWalkScheduleServiceTest {
     }
 
     @Test
+    void unwalkedToWalkedDoesNotRestorePublicationDateIntoPast() {
+        ReviewAccountWalkScheduleService service = service();
+        OrderDetails details = details(250L);
+        LocalDate currentFutureDate = LocalDate.now().plusDays(1);
+        Review trigger = review(15L, details, currentFutureDate, false);
+        trigger.setAccountWalkDelayDays(2);
+        trigger.setBot(bot(6));
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
+        when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(250L))
+                .thenReturn(List.of(trigger));
+
+        service.synchronizeAfterAccountChange(trigger, false);
+
+        assertTrue(trigger.isVigul());
+        assertEquals(0, trigger.getAccountWalkDelayDays());
+        assertEquals(currentFutureDate, trigger.getPublishedDate());
+        verify(reviewRepository).saveAll(List.of(trigger));
+    }
+
+    @Test
     void sameWalkStateDoesNotShiftDates() {
         ReviewAccountWalkScheduleService service = service();
         OrderDetails details = details(300L);

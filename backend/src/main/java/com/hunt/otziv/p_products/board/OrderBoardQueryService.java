@@ -374,8 +374,7 @@ public class OrderBoardQueryService {
         Sort idSort = "asc".equalsIgnoreCase(sortDirection)
                 ? Sort.by("id").descending()
                 : Sort.by("id").ascending();
-        Sort sort = Sort.by("waitingForClient").ascending().and(changedSort).and(idSort);
-        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), sort);
+        return PageRequest.of(Math.max(pageNumber, 0), Math.max(pageSize, 1), changedSort.and(idSort));
     }
 
     private Pageable workerBoardPageable(int pageNumber, int pageSize) {

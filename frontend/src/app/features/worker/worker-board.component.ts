@@ -20,6 +20,7 @@ import {
   WorkerSection
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
@@ -765,8 +766,7 @@ export class WorkerBoardComponent implements OnDestroy {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyTextToClipboard(value)) {
       this.copied.set(copiedKey);
       this.toastService.success('Скопировано', toast);
       window.setTimeout(() => {
@@ -774,9 +774,10 @@ export class WorkerBoardComponent implements OnDestroy {
           this.copied.set(null);
         }
       }, 1200);
-    } catch {
-      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      return;
     }
+
+    this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
   }
 
   private errorMessage(err: unknown, fallback: string): string {

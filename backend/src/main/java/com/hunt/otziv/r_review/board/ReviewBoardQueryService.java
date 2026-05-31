@@ -36,7 +36,7 @@ public class ReviewBoardQueryService {
     private int liveSliceRetentionDays;
 
     public Pageable reviewPageable(int pageNumber, int pageSize, String sortDirection) {
-        Sort.Direction direction = "desc".equalsIgnoreCase(sortDirection)
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection)
                 ? Sort.Direction.DESC
                 : Sort.Direction.ASC;
         Sort sort = Sort.by(direction, "publishedDate").and(Sort.by(direction, "id"));
@@ -120,7 +120,7 @@ public class ReviewBoardQueryService {
         conditions.add(keywordPredicate(keywordLong != null, keywordUuid != null));
 
         String where = " WHERE " + String.join(" AND ", conditions);
-        String direction = "desc".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
+        String direction = "asc".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
         String orderBy = " ORDER BY r.publishedDate " + direction + ", r.id " + direction;
 
         TypedQuery<Long> idQuery = entityManager.createQuery(

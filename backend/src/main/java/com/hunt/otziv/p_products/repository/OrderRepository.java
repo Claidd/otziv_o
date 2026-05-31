@@ -95,16 +95,16 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Query("""
         SELECT o.id AS id,
                c.id AS companyId,
-               COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) AS statusChangedAt
+               o.waitingForClientChangedAt AS statusChangedAt
         FROM Order o
         LEFT JOIN o.company c
         JOIN o.status s
         WHERE o.complete = false
           AND o.waitingForClient = true
-          AND COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) IS NOT NULL
-          AND COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) <= :cutoff
+          AND o.waitingForClientChangedAt IS NOT NULL
+          AND o.waitingForClientChangedAt <= :cutoff
           AND s.title IN :statuses
-        ORDER BY COALESCE(o.waitingForClientChangedAt, o.statusChangedAt) ASC, o.id ASC
+        ORDER BY o.waitingForClientChangedAt ASC, o.id ASC
     """)
     List<ClientMessageCandidate> findClientTextWaitingMessageCandidates(@Param("statuses") Collection<String> statuses,
                                                                         @Param("cutoff") LocalDateTime cutoff,
@@ -283,7 +283,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 SELECT o.id
                 FROM Order o
                 WHERE o.worker = :worker
-                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
+                ORDER BY o.changed ASC, o.id ASC
             """,
             countQuery = "SELECT COUNT(o.id) FROM Order o WHERE o.worker = :worker"
     )
@@ -296,7 +296,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 FROM Order o
                 WHERE o.worker = :worker
                   AND o.status.title IN :liveStatuses
-                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
+                ORDER BY o.changed ASC, o.id ASC
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -316,12 +316,10 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 WHERE o.worker = :worker
                   AND o.status.title IN :liveStatuses
                 ORDER BY
-                  o.waitingForClient ASC,
-                  CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END,
-                  CASE WHEN :sortDirection = 'asc' THEN o.changed END ASC,
-                  CASE WHEN :sortDirection = 'desc' THEN o.changed END DESC,
-                  CASE WHEN :sortDirection = 'asc' THEN o.id END ASC,
-                  CASE WHEN :sortDirection = 'desc' THEN o.id END DESC
+                  CASE WHEN :sortDirection = 'desc' THEN o.changed END ASC,
+                  CASE WHEN :sortDirection = 'asc' THEN o.changed END DESC,
+                  CASE WHEN :sortDirection = 'desc' THEN o.id END ASC,
+                  CASE WHEN :sortDirection = 'asc' THEN o.id END DESC
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -551,7 +549,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
                    OR STR(o.id) = :keyword)
-                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
+                ORDER BY o.changed ASC, o.id ASC
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -576,7 +574,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                   AND (LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
                    OR STR(o.id) = :keyword)
-                ORDER BY o.waitingForClient ASC, CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END, o.changed DESC, o.id DESC
+                ORDER BY o.changed ASC, o.id ASC
             """,
             countQuery = """
                 SELECT COUNT(o.id)
@@ -604,12 +602,10 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                    OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
                    OR STR(o.id) = :keyword)
                 ORDER BY
-                  o.waitingForClient ASC,
-                  CASE WHEN o.status.title = 'Публикация' THEN 0 ELSE 1 END,
-                  CASE WHEN :sortDirection = 'asc' THEN o.changed END ASC,
-                  CASE WHEN :sortDirection = 'desc' THEN o.changed END DESC,
-                  CASE WHEN :sortDirection = 'asc' THEN o.id END ASC,
-                  CASE WHEN :sortDirection = 'desc' THEN o.id END DESC
+                  CASE WHEN :sortDirection = 'desc' THEN o.changed END ASC,
+                  CASE WHEN :sortDirection = 'asc' THEN o.changed END DESC,
+                  CASE WHEN :sortDirection = 'desc' THEN o.id END ASC,
+                  CASE WHEN :sortDirection = 'asc' THEN o.id END DESC
             """,
             countQuery = """
                 SELECT COUNT(o.id)

@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { PaymentsApi, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../../core/payments.api';
 
 @Component({
@@ -317,14 +318,16 @@ export class PayPageComponent {
     });
   }
 
-  copyManualValue(value?: string | null): void {
+  async copyManualValue(value?: string | null): Promise<void> {
     const text = value?.trim();
     if (!text) {
       return;
     }
-    void navigator.clipboard.writeText(text).then(() => {
+    if (await copyTextToClipboard(text)) {
       this.message.set('Скопировано.');
-    });
+    } else {
+      this.message.set('Не получилось скопировать. Выделите текст вручную.');
+    }
   }
 
   openManualPaymentUrl(): void {

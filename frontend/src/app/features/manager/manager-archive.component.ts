@@ -19,6 +19,7 @@ import {
 import { AuthService } from '../../core/auth.service';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
+import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { orderReviewCopyText, reviewCheckPath } from '../../shared/order-review-copy-text';
 import { ToastService } from '../../shared/toast.service';
@@ -465,8 +466,7 @@ export class ManagerArchiveComponent implements OnDestroy {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(value);
+    if (await copyTextToClipboard(value)) {
       this.copied.set(copiedKey);
       this.toastService.success('Скопировано', toast);
       window.setTimeout(() => {
@@ -474,9 +474,10 @@ export class ManagerArchiveComponent implements OnDestroy {
           this.copied.set(null);
         }
       }, 1200);
-    } catch {
-      this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+      return;
     }
+
+    this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
   }
 
   private applyRouteState(params: ParamMap): void {

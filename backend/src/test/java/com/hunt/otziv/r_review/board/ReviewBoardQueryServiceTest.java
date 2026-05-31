@@ -49,8 +49,8 @@ class ReviewBoardQueryServiceTest {
 
         assertEquals(0, pageable.getPageNumber());
         assertEquals(1, pageable.getPageSize());
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("publishedDate").getDirection());
-        assertEquals(Sort.Direction.DESC, pageable.getSort().getOrderFor("id").getDirection());
+        assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("publishedDate").getDirection());
+        assertEquals(Sort.Direction.ASC, pageable.getSort().getOrderFor("id").getDirection());
     }
 
     @Test

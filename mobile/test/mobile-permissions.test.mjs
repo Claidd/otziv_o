@@ -14,9 +14,10 @@ test('keeps public mobile home available only after authentication guard handles
   assert.equal(canUseAction([], MOBILE_SECTIONS.home, MOBILE_ACTIONS.view), true);
 });
 
-test('keeps admin-only actions out of manager-only controls', () => {
+test('keeps finance actions available to owner/admin and out of manager-only controls', () => {
   assert.equal(canUseAction(['ADMIN'], MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view), true);
-  assert.equal(canUseAction(['OWNER'], MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view), false);
+  assert.equal(canUseAction(['OWNER'], MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['MANAGER'], MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view), false);
   assert.equal(canUseAction(['MANAGER'], MOBILE_SECTIONS.leads, MOBILE_ACTIONS.import), false);
   assert.equal(canUseAction(['OWNER'], MOBILE_SECTIONS.leads, MOBILE_ACTIONS.assign), true);
   assert.equal(canUseAction(['MANAGER'], MOBILE_SECTIONS.leads, MOBILE_ACTIONS.assign), false);

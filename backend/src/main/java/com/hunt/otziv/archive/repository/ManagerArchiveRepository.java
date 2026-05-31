@@ -842,7 +842,7 @@ public class ManagerArchiveRepository {
     }
 
     private String orderDirection(String sortDirection) {
-        return "asc".equalsIgnoreCase(sortDirection) ? "ASC" : "DESC";
+        return "asc".equalsIgnoreCase(sortDirection) ? "DESC" : "ASC";
     }
 
     private ManagerArchiveOrderListItem orderListItem(ResultSet rs) throws SQLException {

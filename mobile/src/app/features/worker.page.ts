@@ -51,6 +51,7 @@ import {
   ORDER_STATUS_ACTIONS,
   WORKER_SECTIONS,
   isWorkerReviewSection,
+  workerDefaultSortDirection,
   workerReviewTitle,
   workerReviewToneClass,
   workerSectionIcon,
@@ -1374,7 +1375,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.keyword.set(value);
     this.pageNumber.set(0);
     this.clearSearchTimer();
-    this.searchTimer = setTimeout(() => void this.load(), 1000);
+    this.searchTimer = setTimeout(() => void this.load(), 450);
   }
 
   applySearch(): void {
@@ -1417,6 +1418,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   openAllSection(load = true): void {
     this.activeSection.set('all');
     this.pageNumber.set(0);
+    this.sortDirection.set(workerDefaultSortDirection('all'));
     this.listExpanded.set(false);
     this.sectionSheetOpen.set(false);
     if (load) {
@@ -1431,6 +1433,7 @@ export class WorkerPage implements OnInit, OnDestroy {
 
     this.activeSection.set(section);
     this.pageNumber.set(0);
+    this.sortDirection.set(workerDefaultSortDirection(section));
     this.listExpanded.set(false);
     this.sectionSheetOpen.set(false);
     void this.load();
@@ -1443,6 +1446,8 @@ export class WorkerPage implements OnInit, OnDestroy {
   changeWorkerFilter(worker: WorkerOption | null): void {
     this.selectedWorkerId.set(worker?.id ?? null);
     this.pageNumber.set(0);
+    this.sortDirection.set(workerDefaultSortDirection(this.activeSection()));
+    this.listExpanded.set(false);
     this.workerSheetOpen.set(false);
     void this.load();
   }
@@ -1486,6 +1491,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.keyword.set('');
     this.pageNumber.set(0);
     this.activeSection.set(this.workerSectionForOrderStatus(status.status));
+    this.sortDirection.set(workerDefaultSortDirection(this.activeSection()));
     void this.load();
   }
 
@@ -2353,6 +2359,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   private selectDefaultSection(load = true): void {
     this.activeSection.set(DEFAULT_WORKER_SECTION);
     this.pageNumber.set(0);
+    this.sortDirection.set(workerDefaultSortDirection(DEFAULT_WORKER_SECTION));
     this.listExpanded.set(false);
     this.sectionSheetOpen.set(false);
     if (load) {
