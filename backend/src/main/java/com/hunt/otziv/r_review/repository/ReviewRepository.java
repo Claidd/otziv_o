@@ -446,6 +446,32 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     Set<Long> findActiveBotIdsByUnpublishedReviewsInFilials(@Param("filialIds") Collection<Long> filialIds,
                                                             @Param("excludedReviewId") Long excludedReviewId);
 
+    @Query("""
+        SELECT DISTINCT r.bot.id
+        FROM Review r
+        WHERE r.publish = false
+          AND r.bot IS NOT NULL
+          AND r.bot.id IS NOT NULL
+          AND r.bot.id <> 1
+          AND (:excludedReviewId IS NULL OR r.id <> :excludedReviewId)
+    """)
+    Set<Long> findReservedBotIdsByUnpublishedReviews(@Param("excludedReviewId") Long excludedReviewId);
+
+    @Query("""
+        SELECT DISTINCT r
+        FROM Review r
+        LEFT JOIN FETCH r.bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH r.filial f
+        LEFT JOIN FETCH f.city
+        LEFT JOIN FETCH f.company
+        WHERE b.id = :botId
+          AND r.publish = false
+          AND (:excludedReviewId IS NULL OR r.id <> :excludedReviewId)
+    """)
+    List<Review> findUnpublishedReviewsByBotIdForReassignment(@Param("botId") Long botId,
+                                                              @Param("excludedReviewId") Long excludedReviewId);
+
     Page<Review> findByWorkerAndPublishedDateAndPublishFalse(Worker worker, LocalDate publishedDate, Pageable pageable);
 
     @Query("""

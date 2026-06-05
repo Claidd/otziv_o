@@ -2,6 +2,7 @@ package com.hunt.otziv.review_recovery.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
@@ -61,6 +62,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final ReviewRecoveryNoticeScheduler recoveryNoticeScheduler;
     private final ReviewRecoveryHoldService recoveryHoldService;
     private final GamificationEventService gamificationEventService;
+    private final BusinessAuditService businessAuditService;
 
     @Override
     @Transactional(readOnly = true)
@@ -211,7 +213,9 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (currentBotId != null && currentBotId > 0) {
             Bot bot = botService.findBotById(currentBotId);
             if (bot != null) {
+                boolean oldActive = bot.isActive();
                 bot.setActive(false);
+                auditActiveChange(bot, oldActive, false, "review recovery task block button");
                 botService.save(bot);
             }
         }
@@ -416,6 +420,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                         .build());
 
         if (batch.getStatus() == ReviewRecoveryBatchStatus.COMPLETED) {
+            deleteCompletionReminder(batch);
             batch.setStatus(ReviewRecoveryBatchStatus.OPEN);
             batch.setCompletedAt(null);
             batch.setClientNotifiedAt(null);
@@ -695,5 +700,22 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
     private int toIntCount(long count) {
         return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
+    }
+
+    private void auditActiveChange(Bot bot, boolean oldActive, boolean newActive, String details) {
+        if (oldActive == newActive || bot == null || bot.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                "bot_active_changed",
+                "bot",
+                bot.getId(),
+                null,
+                null,
+                oldActive,
+                newActive,
+                details
+        );
     }
 }

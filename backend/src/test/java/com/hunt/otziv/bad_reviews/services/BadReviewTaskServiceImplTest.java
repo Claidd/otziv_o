@@ -8,9 +8,11 @@ import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -70,6 +72,12 @@ class BadReviewTaskServiceImplTest {
 
     @Mock
     private ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
+
+    @Mock
+    private GamificationEventService gamificationEventService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
 
     @InjectMocks
     private BadReviewTaskServiceImpl service;

@@ -30,6 +30,7 @@ import {
   RecoveryClientNotifiedDetail
 } from '../../shared/personal-reminders.service';
 import { reviewCheckPath } from '../../shared/order-review-copy-text';
+import { sortReviewsById } from '../../shared/review-ordering';
 import {
   readSessionDraft,
   removeSessionDraft,
@@ -155,7 +156,7 @@ export class OrderDetailsComponent {
   readonly reviewPublicationGlobalDateMax = localDateInputValue(REVIEW_PUBLICATION_MAX_FUTURE_DAYS);
 
   readonly layoutTitle = computed(() => this.details()?.title || 'Детали заказа');
-  readonly reviews = computed(() => this.details()?.reviews ?? []);
+  readonly reviews = computed(() => sortReviewsById(this.details()?.reviews));
   readonly visibleReviews = computed(() => this.reviews());
   readonly showReviewFastSelect = computed(() => this.reviews().length > 20);
   readonly showReviewNavigation = computed(() => this.mobileReviewLayout() && this.reviews().length > 1);
@@ -209,7 +210,7 @@ export class OrderDetailsComponent {
       return null;
     }
 
-    const review = details.reviews.find((item) => item.id === Number(match[1]));
+    const review = this.reviews().find((item) => item.id === Number(match[1]));
     if (!review) {
       return null;
     }
@@ -2130,11 +2131,12 @@ export class OrderDetailsComponent {
 
     const cardNumbers: number[] = [];
     const seenCardNumbers = new Set<number>();
-    const reviewIndexes = new Map(details.reviews.map((review, index) => [review.id, index + 1]));
+    const reviews = this.reviews();
+    const reviewIndexes = new Map(reviews.map((review, index) => [review.id, index + 1]));
 
     for (const [key, value] of Object.entries(this.reviewFieldDrafts())) {
       const match = /^(\d+)-(text|answer)$/.exec(key);
-      const review = match ? details.reviews.find((item) => item.id === Number(match[1])) : null;
+      const review = match ? reviews.find((item) => item.id === Number(match[1])) : null;
       const field = match?.[2] as ReviewEditableField | undefined;
       const cardNumber = review ? reviewIndexes.get(review.id) : null;
 

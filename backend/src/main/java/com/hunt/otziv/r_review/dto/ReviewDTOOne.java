@@ -50,6 +50,8 @@ public class ReviewDTOOne {
 
     private int botCounter;
 
+    private boolean botActive;
+
     private String companyTitle;
 
     private String commentCompany;

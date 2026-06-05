@@ -392,7 +392,9 @@ export type MobileOrderCopyKind = 'review' | 'payment';
 
     .phone-row a {
       color: #36708d;
-      font-size: 0.82rem;
+      font-size: var(--otziv-unified-phone-font-size, 1rem);
+      text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
     }
 
     .phone-row button {

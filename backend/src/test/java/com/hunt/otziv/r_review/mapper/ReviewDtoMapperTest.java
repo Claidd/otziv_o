@@ -54,6 +54,7 @@ class ReviewDtoMapperTest {
         assertEquals("bot-login", dto.getBotLogin());
         assertEquals("bot-pass", dto.getBotPassword());
         assertEquals(2, dto.getBotCounter());
+        assertTrue(dto.isBotActive());
         assertEquals("Иркутск", dto.getFilialCity());
         assertEquals("Центр", dto.getFilialTitle());
         assertEquals("https://filial.example", dto.getFilialUrl());

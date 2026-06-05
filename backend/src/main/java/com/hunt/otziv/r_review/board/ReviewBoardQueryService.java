@@ -85,7 +85,6 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
                 addReadyReviewTextConditions(conditions);
-                addReadyReviewAccountConditions(conditions);
             }
             case ORDER_STATUS -> {
                 conditions.add("os.title = :status");
@@ -158,7 +157,6 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
                 addReadyReviewTextConditions(conditions);
-                addReadyReviewAccountConditions(conditions);
             }
             case ORDER_STATUS -> {
                 conditions.add("os.title = :status");

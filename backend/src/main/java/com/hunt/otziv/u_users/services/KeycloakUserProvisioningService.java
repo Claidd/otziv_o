@@ -251,6 +251,7 @@ public class KeycloakUserProvisioningService {
                 request.getPassword(),
                 request.isTemporary()
         );
+        keycloakAdminClient.logoutUserSessions(user.getKeycloakId());
     }
 
     @Transactional

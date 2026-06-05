@@ -616,6 +616,12 @@ const EMPTY_ARCHIVE_PAGE: Page<ArchiveOrderListItem> = {
       font-weight: 900;
     }
 
+    .archive-order-card .lead-phone-row a {
+      font-size: var(--otziv-unified-phone-font-size, 1rem);
+      text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
+    }
+
     .archive-order-card .lead-card-actions a,
     .archive-modal-actions a {
       display: inline-flex;

@@ -125,10 +125,12 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly overdueAlertStorageKeyPrefix = 'otziv-manager-overdue-alert:v2';
   private readonly chatBotLinkPollDelayMs = 8000;
   private readonly chatBotLinkPollTimeoutMs = 90000;
+  private readonly searchDelayMs = 500;
   private readonly chatBotLinkPolls = new Map<number, ChatBotLinkPoll>();
   private readonly chatBotLinkPollTimers = new Map<number, number>();
   private readonly paymentCopyCache = new Map<number, string>();
   private chatBotLinkRefreshInFlight = false;
+  private searchTimer: number | null = null;
 
   readonly sections = MANAGER_SECTIONS;
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
@@ -254,6 +256,7 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearSearchTimer();
     for (const timer of this.chatBotLinkPollTimers.values()) {
       window.clearTimeout(timer);
     }
@@ -399,14 +402,36 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   search(): void {
+    this.clearSearchTimer();
     this.pageNumber.set(0);
     this.replaceCurrentHistoryState();
     this.loadBoard();
   }
 
+  onKeywordChange(value: string): void {
+    this.keyword.set(value);
+    this.scheduleSearch();
+  }
+
   clearSearch(): void {
     this.keyword.set('');
     this.search();
+  }
+
+  private scheduleSearch(): void {
+    this.clearSearchTimer();
+    this.searchTimer = window.setTimeout(() => {
+      this.searchTimer = null;
+      this.search();
+    }, this.searchDelayMs);
+  }
+
+  private clearSearchTimer(): void {
+    if (this.searchTimer === null) {
+      return;
+    }
+    window.clearTimeout(this.searchTimer);
+    this.searchTimer = null;
   }
 
   changePageSize(value: string | number): void {

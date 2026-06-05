@@ -10,6 +10,7 @@ volumes:
     name: docker_mysql_data
   keycloak_pg_data:
   loki_data:
+  tempo_data:
   alloy_data:
   grafana_data:
   prometheus_data:
@@ -36,10 +37,11 @@ services:
       - ./data/mysql_backup:/backup
       - ./data/bots:/var/lib/mysql-files
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      test: ["CMD-SHELL", "mysql --protocol=TCP -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} $${MYSQL_DATABASE} -e 'SELECT 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 30
+      start_period: 60s
     networks:
       - internal_net
 
@@ -86,7 +88,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     restart: unless-stopped
-    mem_limit: 1g
+    mem_limit: 2g
     command: start --import-realm
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
@@ -136,6 +138,10 @@ services:
       OTZIV_APP_BASE_URL: ${OTZIV_APP_BASE_URL:-https://o-ogo.ru}
       TZ: ${TZ:-Asia/Irkutsk}
       JAVA_OPTS: "${JAVA_OPTS:--Xms256m -Xmx768m -XX:MaxRAMPercentage=75} -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes="
+      OTZIV_SERVICE_NAME: ${OTZIV_SERVICE_NAME:-otziv-backend}
+      OTZIV_TRACING_SAMPLING_PROBABILITY: ${OTZIV_TRACING_SAMPLING_PROBABILITY:-1.0}
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${OTZIV_OTLP_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
+      MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
       DATABASE_URL: ${DATABASE_URL}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -365,7 +371,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 10m
     depends_on:
       app:
         condition: service_healthy
@@ -403,7 +409,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 10m
     depends_on:
       app:
         condition: service_healthy
@@ -431,6 +437,8 @@ services:
       app:
         condition: service_healthy
       keycloak:
+        condition: service_healthy
+      grafana:
         condition: service_healthy
     networks:
       - internal_net
@@ -507,6 +515,23 @@ services:
     networks:
       - internal_net
 
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3200/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal_net
+
   alloy:
     image: grafana/alloy:v1.16.0
     container_name: alloy
@@ -556,6 +581,8 @@ services:
       prometheus:
         condition: service_healthy
       loki:
+        condition: service_healthy
+      tempo:
         condition: service_healthy
     networks:
       - internal_net

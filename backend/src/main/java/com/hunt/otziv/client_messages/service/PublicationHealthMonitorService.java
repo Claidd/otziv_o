@@ -176,7 +176,7 @@ public class PublicationHealthMonitorService {
                 ),
                 issue(
                         "Нет рабочего аккаунта для публикации",
-                        "Заказ уже в статусе \"Публикация\". Откройте неопубликованные отзывы и проверьте аккаунт: он должен быть назначен, активен и с логином.",
+                        "Заказ уже в статусе \"Публикация\". Если отзыв еще не опубликован на площадке, замените аккаунт: он должен быть назначен, активен, с логином и паролем. Если отзыв уже опубликован вручную, его можно спокойно отметить опубликованным.",
                         "SUM(CASE WHEN (r.review_publish = 0 OR r.review_publish IS NULL) AND " + invalidAccountCondition() + " THEN 1 ELSE 0 END) > 0",
                         params
                 ),
@@ -284,6 +284,8 @@ public class PublicationHealthMonitorService {
                   OR b.bot_active = 0
                   OR b.bot_login IS NULL
                   OR TRIM(b.bot_login) = ''
+                  OR b.bot_password IS NULL
+                  OR TRIM(b.bot_password) = ''
                 )
                 """;
     }

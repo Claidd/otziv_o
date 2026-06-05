@@ -885,7 +885,7 @@ public class OpenAiResponsesClient {
                         .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
                         .build();
 
-                HttpResponse<String> response = httpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                HttpResponse<String> response = yandexHttpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
                     String httpError = "YandexGPT Responses API вернул HTTP " + response.statusCode() + ": " + limit(response.body(), 800);
                     rememberCheck("http_error", response.statusCode(), httpError);
@@ -1436,6 +1436,12 @@ public class OpenAiResponsesClient {
         }
 
         return builder.build();
+    }
+
+    private HttpClient yandexHttpClient() {
+        return HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
     }
 
     private Map<String, Object> deepResearchSchema(OpenAiResearchReportOptions options) {

@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.dto.BotDTO;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -42,12 +43,14 @@ public class BotServiceImpl implements BotService {
     private final StatusBotService statusBotService;
     private final BotsRepository botsRepository;
     private final WorkerService workerService;
+    private final BusinessAuditService businessAuditService;
 
-    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService) {
+    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService, BusinessAuditService businessAuditService) {
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botsRepository = botsRepository;
         this.workerService = workerService;
+        this.businessAuditService = businessAuditService;
     }
 
     @Override
@@ -105,7 +108,9 @@ public class BotServiceImpl implements BotService {
         }
         /*Проверяем не равен ли флаг активности, если нет, то меняем флаг на тру*/
         if (!Objects.equals(botDTO.isActive(), saveBot.isActive())){
+            boolean oldActive = saveBot.isActive();
             saveBot.setActive(botDTO.isActive());
+            auditActiveChange(saveBot, oldActive, saveBot.isActive(), "manual bot directory update");
             isChanged = true;
             log.info("Обновили Активность");
         }
@@ -237,8 +242,10 @@ public class BotServiceImpl implements BotService {
             return Optional.empty();
         }
 
+        boolean oldActive = reserveBot.isActive();
         reserveBot.setBotCity(targetCity);
         reserveBot.setActive(true);
+        auditActiveChange(reserveBot, oldActive, true, "reserve bot claimed for city " + targetCity.getId());
         Bot savedBot = botsRepository.save(reserveBot);
         log.info("Резервный бот ID {} закреплен за городом {} ({})",
                 savedBot.getId(), targetCity.getTitle(), targetCity.getId());
@@ -263,7 +270,7 @@ public class BotServiceImpl implements BotService {
                 NEW_ACCOUNT_NAME,
                 NEW_ACCOUNT_SOURCE_CITY_ID
         ));
-        candidates.removeIf(bot -> bot.getId() == null || excludedIds.contains(bot.getId()));
+        candidates.removeIf(bot -> bot.getId() == null || !bot.isActive() || excludedIds.contains(bot.getId()));
 
         if (candidates.isEmpty()) {
             log.warn("Нет доступных аккаунтов '{}' в городе {}", NEW_ACCOUNT_NAME, NEW_ACCOUNT_SOURCE_CITY_ID);
@@ -271,8 +278,10 @@ public class BotServiceImpl implements BotService {
         }
 
         Bot selectedBot = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        boolean oldActive = selectedBot.isActive();
         selectedBot.setBotCity(targetCity);
         selectedBot.setActive(true);
+        auditActiveChange(selectedBot, oldActive, true, "new account claimed for city " + targetCity.getId());
 
         Bot savedBot = botsRepository.save(selectedBot);
         log.info("Новый аккаунт ID {} закреплен за городом {} ({})",
@@ -285,6 +294,23 @@ public class BotServiceImpl implements BotService {
     public Bot save(Bot bot) { // Сохранение ботов
         return botsRepository.save(bot);
     } // Сохранение ботов
+
+    private void auditActiveChange(Bot bot, boolean oldActive, boolean newActive, String details) {
+        if (oldActive == newActive || bot == null || bot.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                "bot_active_changed",
+                "bot",
+                bot.getId(),
+                null,
+                null,
+                oldActive,
+                newActive,
+                details
+        );
+    }
 
     private BotDTO toDto(Bot bot){ // Перевод бота в дто - начало
         return BotDTO.builder()
@@ -330,6 +356,4 @@ public class BotServiceImpl implements BotService {
 
 
 }
-
-
 

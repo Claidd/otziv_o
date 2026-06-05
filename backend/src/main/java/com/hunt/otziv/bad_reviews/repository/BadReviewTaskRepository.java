@@ -7,6 +7,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -51,6 +52,10 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     List<BadReviewTask> findAllByOrderIdOrderByCreatedDesc(@Param("orderId") Long orderId);
 
     List<BadReviewTask> findAllByOrderIdAndStatus(Long orderId, BadReviewTaskStatus status);
+
+    @Modifying
+    @Query("DELETE FROM BadReviewTask t WHERE t.order.id = :orderId")
+    int deleteAllByOrderId(@Param("orderId") Long orderId);
 
     boolean existsByOrderIdAndSourceReviewIdAndStatusIn(
             Long orderId,

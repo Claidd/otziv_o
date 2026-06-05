@@ -100,6 +100,17 @@ public class PaymentLinkArchiveService {
         );
     }
 
+    @Transactional
+    public int archiveForDeletedOrder(Long orderId) {
+        List<Long> ids = repository.findLiveIdsByOrderId(orderId);
+        if (ids.isEmpty()) {
+            return 0;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        repository.archiveIds(ids, now, "ORDER_DELETED", System.currentTimeMillis());
+        return repository.deleteLiveIds(ids);
+    }
+
     @Scheduled(cron = "0 35 3 * * *", zone = "Asia/Irkutsk")
     @Transactional
     public void scheduledArchive() {

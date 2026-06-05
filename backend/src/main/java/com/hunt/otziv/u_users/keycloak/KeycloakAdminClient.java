@@ -204,6 +204,18 @@ public class KeycloakAdminClient {
         }
     }
 
+    public void logoutUserSessions(String keycloakUserId) {
+        try {
+            restClient.post()
+                    .uri(adminUri("users", keycloakUserId, "logout"))
+                    .headers(this::setBearerAuth)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            throw keycloakException("Failed to logout Keycloak user sessions", e);
+        }
+    }
+
     public void deleteUser(String keycloakUserId) {
         if (keycloakUserId == null || keycloakUserId.isBlank()) {
             return;

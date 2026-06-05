@@ -185,6 +185,7 @@ class PaymentLinkServiceTest {
         profile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
         profile.setManualPhone("+79990000000");
         profile.setManualRecipientName("Иван И.");
+        profile.setManualComment("Оплата заказа №{orderId}");
         profile.setManualMonthlyHardLimitKopecks(100000L);
         when(paymentProfileService.selectForManager(any())).thenReturn(profile);
         when(paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
@@ -225,7 +226,7 @@ class PaymentLinkServiceTest {
         assertTrue(response.instructionText().contains("Получатель: Иван И."));
         assertTrue(response.instructionText().contains("Комментарий: Оплата заказа №12"));
         assertFalse(response.copyText().contains("https://example.ru/pay/"));
-        assertTrue(response.copyText().contains("После оплаты отправьте чек менеджеру."));
+        assertTrue(response.copyText().contains("После оплаты отправьте чек в этот чат."));
     }
 
     @Test
@@ -274,6 +275,8 @@ class PaymentLinkServiceTest {
         assertTrue(response.instructionText().contains("Ссылка на оплату: https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR"));
         assertTrue(response.instructionText().contains("Получатель: Сивохин И.И."));
         assertFalse(response.instructionText().contains("Получатель: Оплатить через Альфа-Банк"));
+        assertNull(link.getManualComment());
+        assertFalse(response.instructionText().contains("Комментарий:"));
     }
 
     @Test
@@ -315,7 +318,7 @@ class PaymentLinkServiceTest {
         ManagerPaymentLinkResponse response = service.createForOrder(24L);
 
         assertEquals(
-                "ООО Шаблон\n\nИтого 500\n\nСсылка на оплату: https://pay.example/link\nПолучатель: Получатель П.\nКомментарий: Оплата заказа №24\n\nФинал: После оплаты отправьте чек менеджеру.",
+                "ООО Шаблон\n\nИтого 500\n\nСсылка на оплату: https://pay.example/link\nПолучатель: Получатель П.\n\nФинал: После оплаты отправьте чек в этот чат.",
                 response.copyText()
         );
     }
@@ -375,6 +378,7 @@ class PaymentLinkServiceTest {
         task.setStatus(ManualPaymentTaskStatus.ACTIVE);
         task.setManualPhone("+79001234567");
         task.setManualRecipientName("Петр П.");
+        task.setComment("Задание на оплату №{orderId}");
         task.setTargetAmountKopecks(100000L);
         when(manualPaymentTaskService.findRoutableTask(any(), eq(profile), eq(50000L), any()))
                 .thenReturn(Optional.of(task));
@@ -400,6 +404,7 @@ class PaymentLinkServiceTest {
         assertSame(task, link.getManualPaymentTask());
         assertEquals("+79001234567", link.getManualPhone());
         assertEquals("Петр П.", link.getManualRecipientName());
+        assertEquals("Задание на оплату №16", link.getManualComment());
         assertEquals("MANUAL_MOBILE_BANK", response.paymentMethod());
         verify(paymentLinkRepository, never()).sumManualReservedAndConfirmedForPeriod(
                 any(),
@@ -645,6 +650,82 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByTokenWithOrder("token")).thenReturn(Optional.of(link));
 
         assertEquals("client@example.ru", service.publicLink("token").payerEmail());
+    }
+
+    @Test
+    void publicLinkReturnsLatestActiveLinkWhenOldTokenWasRetired() {
+        PaymentLinkService service = service(properties());
+        Order order = order(22115L, "ООО Старая ссылка", BigDecimal.valueOf(3000));
+        PaymentLink oldLink = new PaymentLink();
+        oldLink.setId(1L);
+        oldLink.setOrder(order);
+        oldLink.setToken("old-token");
+        oldLink.setAmountKopecks(300000L);
+        oldLink.setDescription("Оплата услуг");
+        oldLink.setStatus(PaymentLinkStatus.EXPIRED);
+        oldLink.setExpiresAt(LocalDateTime.now().plusDays(80));
+
+        PaymentLink newLink = new PaymentLink();
+        newLink.setId(2L);
+        newLink.setOrder(order);
+        newLink.setToken("new-token");
+        newLink.setAmountKopecks(300000L);
+        newLink.setDescription("Оплата услуг");
+        newLink.setStatus(PaymentLinkStatus.CREATED);
+        newLink.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("old-token")).thenReturn(Optional.of(oldLink));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(22115L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.of(newLink));
+
+        var response = service.publicLink("old-token");
+
+        assertEquals("new-token", response.token());
+        assertEquals("CREATED", response.status());
+        assertTrue(response.payable());
+    }
+
+    @Test
+    void publicLinkCreatesReplacementWhenOldTokenHasNoActiveSuccessor() {
+        PaymentLinkService service = service(properties());
+        Order order = order(22116L, "ООО Автозамена", BigDecimal.valueOf(3000));
+        PaymentLink oldLink = new PaymentLink();
+        oldLink.setId(1L);
+        oldLink.setOrder(order);
+        oldLink.setToken("old-token");
+        oldLink.setAmountKopecks(300000L);
+        oldLink.setDescription("Оплата услуг");
+        oldLink.setStatus(PaymentLinkStatus.EXPIRED);
+        oldLink.setExpiresAt(LocalDateTime.now().plusDays(80));
+
+        PaymentLink newLink = new PaymentLink();
+        newLink.setId(2L);
+        newLink.setOrder(order);
+        newLink.setToken("created-token");
+        newLink.setAmountKopecks(300000L);
+        newLink.setDescription("Оплата услуг");
+        newLink.setStatus(PaymentLinkStatus.CREATED);
+        newLink.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("old-token")).thenReturn(Optional.of(oldLink));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(22116L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.empty(), Optional.empty(), Optional.of(newLink));
+        when(orderRepository.findByIdForMutation(22116L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(22116L)).thenReturn(null);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.publicLink("old-token");
+
+        assertEquals("created-token", response.token());
+        assertEquals("CREATED", response.status());
+        assertTrue(response.payable());
+        verify(paymentLinkRepository).save(any(PaymentLink.class));
     }
 
     @Test

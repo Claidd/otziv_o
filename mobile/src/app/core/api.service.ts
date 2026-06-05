@@ -124,6 +124,7 @@ export interface PaymentProfileResponse {
   manualRecipientName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
   manualMonthlySoftLimitKopecks?: number | null;
   manualMonthlyHardLimitKopecks?: number | null;
   manualMonthlyUsedKopecks: number;
@@ -158,6 +159,7 @@ export interface PaymentProfilePolicyRequest {
   manualRecipientName?: string | null;
   manualPaymentUrl?: string | null;
   manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
   manualMonthlySoftLimitKopecks?: number | null;
   manualMonthlyHardLimitKopecks?: number | null;
 }

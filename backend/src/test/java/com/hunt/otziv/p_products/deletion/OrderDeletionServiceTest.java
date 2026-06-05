@@ -4,12 +4,14 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import jakarta.persistence.EntityManager;
@@ -53,7 +55,13 @@ class OrderDeletionServiceTest {
     private ReviewService reviewService;
 
     @Mock
+    private BadReviewTaskService badReviewTaskService;
+
+    @Mock
     private NextOrderRequestService nextOrderRequestService;
+
+    @Mock
+    private PaymentLinkArchiveService paymentLinkArchiveService;
 
     @Mock
     private CompanyService companyService;
@@ -80,13 +88,16 @@ class OrderDeletionServiceTest {
         authenticateWithRole("ROLE_ADMIN");
         when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
         when(orderDetailsService.findByOrderId(10L)).thenReturn(List.of(firstDetail, secondDetail));
+        when(badReviewTaskService.deleteAllByOrderId(10L)).thenReturn(3);
 
         boolean result = service.deleteOrder(10L, principal);
 
         assertTrue(result);
-        InOrder inOrder = inOrder(reviewService, orderDetailsService, entityManager, orderRepository);
+        InOrder inOrder = inOrder(badReviewTaskService, reviewService, orderDetailsService, paymentLinkArchiveService, entityManager, orderRepository);
+        inOrder.verify(badReviewTaskService).deleteAllByOrderId(10L);
         inOrder.verify(reviewService).deleteAllByIdIn(List.of(1L, 2L));
         inOrder.verify(orderDetailsService).deleteAllByOrderId(10L);
+        inOrder.verify(paymentLinkArchiveService).archiveForDeletedOrder(10L);
         inOrder.verify(entityManager).flush();
         inOrder.verify(entityManager).clear();
         inOrder.verify(orderRepository).deleteById(10L);
@@ -223,8 +234,10 @@ class OrderDeletionServiceTest {
                 orderRepository,
                 orderDetailsService,
                 reviewService,
+                badReviewTaskService,
                 new OrderDeletionPolicy(),
                 nextOrderRequestService,
+                paymentLinkArchiveService,
                 companyService,
                 companyStatusService,
                 entityManager

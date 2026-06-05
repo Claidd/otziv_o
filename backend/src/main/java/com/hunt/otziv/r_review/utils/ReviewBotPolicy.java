@@ -23,11 +23,19 @@ public final class ReviewBotPolicy {
     }
 
     public static boolean hasUsablePublicationBot(Bot bot) {
+        return bot != null && bot.isActive() && hasRealPublicationBot(bot);
+    }
+
+    public static boolean hasRealPublicationBot(Review review) {
+        return review != null && hasRealPublicationBot(review.getBot());
+    }
+
+    public static boolean hasRealPublicationBot(Bot bot) {
         if (bot == null || bot.getId() == null || STUB_BOT_ID == bot.getId()) {
             return false;
         }
-        return bot.isActive()
-                && hasText(bot.getLogin())
+        return hasText(bot.getLogin())
+                && hasText(bot.getPassword())
                 && !isTemplateBotName(bot.getFio());
     }
 

@@ -29,6 +29,8 @@ public interface BadReviewTaskService {
 
     void deleteOrderReadyReminder(Order order);
 
+    int deleteAllByOrderId(Long orderId);
+
     BadReviewTask changeTaskBot(Long taskId);
 
     BadReviewTask deactivateAndChangeTaskBot(Long taskId, Long botId);

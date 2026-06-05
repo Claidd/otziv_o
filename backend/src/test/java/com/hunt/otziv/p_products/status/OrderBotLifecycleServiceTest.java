@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.status;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -36,6 +37,9 @@ class OrderBotLifecycleServiceTest {
 
     @Mock
     private ReviewService reviewService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
 
     @Test
     void assignBotsIfNeededAssignsOnlyWhenReviewsHaveMissingBots() {
@@ -132,7 +136,7 @@ class OrderBotLifecycleServiceTest {
     }
 
     private OrderBotLifecycleService service() {
-        return new OrderBotLifecycleService(botAssignmentService, botService, reviewService);
+        return new OrderBotLifecycleService(botAssignmentService, botService, reviewService, businessAuditService);
     }
 
     private Order order(Long id, Filial filial, List<Review> reviews) {

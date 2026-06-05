@@ -45,6 +45,7 @@ type ProfilePolicyDraft = {
   manualRecipientName: string;
   manualPaymentUrl: string;
   manualPaymentButtonLabel: string;
+  manualComment: string;
   manualMonthlyLimitRubles: string;
 };
 
@@ -621,6 +622,10 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.updateProfilePolicyDraft(profileId, { manualPaymentButtonLabel: value ?? '' });
   }
 
+  setProfileManualComment(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualComment: value ?? '' });
+  }
+
   setProfileManualLimit(
     profileId: number,
     value: string | number | null
@@ -645,6 +650,7 @@ export class TbankPaymentsComponent implements OnDestroy {
         manualRecipientName: draft.manualRecipientName.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
         manualPaymentUrl: draft.manualPaymentUrl.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
         manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        manualComment: draft.manualComment.trim(),
         manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
         manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
       };
@@ -679,6 +685,7 @@ export class TbankPaymentsComponent implements OnDestroy {
         manualRecipientName: draft.manualRecipientName.trim(),
         manualPaymentUrl: draft.manualPaymentUrl.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
         manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        manualComment: draft.manualComment.trim(),
         manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
         manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
       };
@@ -1342,6 +1349,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualRecipientName: TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
       manualPaymentUrl: TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
       manualPaymentButtonLabel: TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualComment: '',
       manualMonthlyLimitRubles: String(TbankPaymentsComponent.DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
     };
   }
@@ -1354,6 +1362,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualRecipientName: profile.manualRecipientName ?? TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
       manualPaymentUrl: profile.manualPaymentUrl ?? TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
       manualPaymentButtonLabel: profile.manualPaymentButtonLabel ?? TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualComment: profile.manualComment ?? '',
       manualMonthlyLimitRubles: String(this.kopecksToRubles(profile.manualMonthlyHardLimitKopecks)
         ?? this.kopecksToRubles(profile.manualMonthlySoftLimitKopecks)
         ?? TbankPaymentsComponent.DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)

@@ -166,6 +166,7 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\loki"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\tempo"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\alloy"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\grafana"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh"
@@ -196,8 +197,14 @@ try {
         $sshArgs += @("-i", $SshKey)
         $scpArgs += @("-i", $SshKey)
     }
-    $sshArgs += @("-p", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
-    $scpArgs += @("-P", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
+    $sshKeepAliveArgs = @(
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ServerAliveInterval=20",
+        "-o", "ServerAliveCountMax=12",
+        "-o", "TCPKeepAlive=yes"
+    )
+    $sshArgs += @("-p", "$VpsPort") + $sshKeepAliveArgs
+    $scpArgs += @("-P", "$VpsPort") + $sshKeepAliveArgs
 
     $mkdirScript = "mkdir -p $(ConvertTo-BashSingleQuoted $VpsPath)"
     Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $mkdirScript))

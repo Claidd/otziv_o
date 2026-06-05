@@ -22,6 +22,12 @@ class ReviewBotPolicyTest {
         assertTrue(ReviewBotPolicy.hasUsablePublicationBot(review(bot(12L, "Анна Иванова", "login", true))));
     }
 
+    @Test
+    void realPublicationBotAcceptsInactiveRealAccountWithCredentials() {
+        assertTrue(ReviewBotPolicy.hasRealPublicationBot(review(bot(13L, "Анна Иванова", "login", false))));
+        assertFalse(ReviewBotPolicy.hasUsablePublicationBot(review(bot(13L, "Анна Иванова", "login", false))));
+    }
+
     private Review review(Bot bot) {
         Review review = new Review();
         review.setBot(bot);
@@ -33,6 +39,7 @@ class ReviewBotPolicyTest {
         bot.setId(id);
         bot.setFio(fio);
         bot.setLogin(login);
+        bot.setPassword("password");
         bot.setActive(active);
         return bot;
     }

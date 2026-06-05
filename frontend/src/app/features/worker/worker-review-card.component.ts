@@ -279,8 +279,12 @@ export class WorkerReviewCardComponent {
   }
 
   botLabel(): string {
+    if (this.hasInactiveRealPublicationBot()) {
+      return 'аккаунт неактивен - можно закрыть';
+    }
+
     if (this.hasUnavailableBot()) {
-      return 'нет доступных аккаунтов';
+      return 'смените аккаунт';
     }
 
     if (this.review.botFio) {
@@ -291,8 +295,46 @@ export class WorkerReviewCardComponent {
   }
 
   hasUnavailableBot(): boolean {
+    if (!this.review.botId || this.review.botId === 1) {
+      return true;
+    }
+
+    const botFio = (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
     return (
-      (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов'
+      botFio === 'нет доступных аккаунтов' ||
+      botFio === 'добавьте аккаунты и нажмите сменить' ||
+      (this.activeSection === 'publish' && this.isTemplateBotName(botFio))
+    );
+  }
+
+  hasInactiveRealPublicationBot(): boolean {
+    return (
+      this.activeSection === 'publish' &&
+      this.review.botActive === false &&
+      this.canPublishWithCurrentBot()
+    );
+  }
+
+  canPublishWithCurrentBot(): boolean {
+    if (!this.review.botId || this.review.botId === 1) {
+      return false;
+    }
+
+    const botFio = (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    return (
+      !!this.review.botLogin?.trim() &&
+      !!this.review.botPassword?.trim() &&
+      botFio !== 'нет доступных аккаунтов' &&
+      botFio !== 'добавьте аккаунты и нажмите сменить' &&
+      !this.isTemplateBotName(botFio)
+    );
+  }
+
+  private isTemplateBotName(botFio: string): boolean {
+    return (
+      botFio === 'впишите имя фамилию' ||
+      botFio === 'впиши имя фамилию' ||
+      botFio === 'впишите фамилию имя'
     );
   }
 
@@ -333,11 +375,25 @@ export class WorkerReviewCardComponent {
       return 'ОПУБЛИКОВАНО';
     }
 
+    if (this.cannotPublishBecauseBotUnavailable()) {
+      return 'СМЕНИТЕ АККАУНТ';
+    }
+
     return this.activeSection === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ';
   }
 
   isPublishedPublishAction(): boolean {
     return this.activeSection === 'publish' && !this.isBadTask() && !!this.review.publish;
+  }
+
+  cannotPublishBecauseBotUnavailable(): boolean {
+    return (
+      this.activeSection === 'publish' &&
+      !this.isBadTask() &&
+      !this.isRecoveryTask() &&
+      !this.review.publish &&
+      !this.canPublishWithCurrentBot()
+    );
   }
 
   isMutating(key: string): boolean {

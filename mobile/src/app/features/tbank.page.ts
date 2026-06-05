@@ -55,6 +55,7 @@ type ProfilePolicyDraft = {
   manualRecipientName: string;
   manualPaymentUrl: string;
   manualPaymentButtonLabel: string;
+  manualComment: string;
   manualMonthlyLimitRubles: string;
 };
 
@@ -812,6 +813,15 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                         [ngModel]="profilePolicy(profile.id).manualRecipientName"
                         (ngModelChange)="setProfileManualRecipient(profile.id, $event)"
                         placeholder="Имя в банке"
+                      >
+                    </label>
+                    <label class="profile-field">
+                      <span>Комментарий</span>
+                      <input
+                        type="text"
+                        [ngModel]="profilePolicy(profile.id).manualComment"
+                        (ngModelChange)="setProfileManualComment(profile.id, $event)"
+                        placeholder="Оплата заказа №{orderId}"
                       >
                     </label>
                   }
@@ -2452,6 +2462,10 @@ export class TbankPage implements OnInit {
     this.updateProfilePolicyDraft(profileId, { manualPaymentButtonLabel: value ?? '' });
   }
 
+  setProfileManualComment(profileId: number, value: string): void {
+    this.updateProfilePolicyDraft(profileId, { manualComment: value ?? '' });
+  }
+
   setProfileManualLimit(profileId: number, value: string | number | null): void {
     this.updateProfilePolicyDraft(profileId, {
       manualMonthlyLimitRubles: value == null ? '' : String(value)
@@ -3066,6 +3080,7 @@ export class TbankPage implements OnInit {
         manualRecipientName: draft.manualRecipientName.trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
         manualPaymentUrl: draft.manualPaymentUrl.trim() || DEFAULT_MANUAL_PAYMENT_URL,
         manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        manualComment: draft.manualComment.trim(),
         manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
         manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
       };
@@ -3090,6 +3105,7 @@ export class TbankPage implements OnInit {
       manualRecipientName: DEFAULT_MANUAL_RECIPIENT_NAME,
       manualPaymentUrl: DEFAULT_MANUAL_PAYMENT_URL,
       manualPaymentButtonLabel: DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualComment: '',
       manualMonthlyLimitRubles: String(DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)
     };
   }
@@ -3102,6 +3118,7 @@ export class TbankPage implements OnInit {
       manualRecipientName: profile.manualRecipientName ?? DEFAULT_MANUAL_RECIPIENT_NAME,
       manualPaymentUrl: profile.manualPaymentUrl ?? DEFAULT_MANUAL_PAYMENT_URL,
       manualPaymentButtonLabel: profile.manualPaymentButtonLabel ?? DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      manualComment: profile.manualComment ?? '',
       manualMonthlyLimitRubles: String(this.kopecksToRubles(profile.manualMonthlyHardLimitKopecks)
         ?? this.kopecksToRubles(profile.manualMonthlySoftLimitKopecks)
         ?? DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES)

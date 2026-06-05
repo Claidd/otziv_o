@@ -18,7 +18,7 @@
     }
 
     @if (details(); as details) {
-      @if (!details.reviews.length) {
+      @if (!reviewCheckReviews().length) {
         <div class="empty-state">
           <span class="material-icons-sharp">rate_review</span>
           <p>Список отзывов пуст. Сообщите менеджеру об этом.</p>
@@ -369,8 +369,8 @@
                     aria-label="Номер или ID отзыва"
                   >
                 </label>
-                <span>{{ activeReviewSlide() + 1 }} из {{ details.reviews.length }}</span>
-                <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= details.reviews.length - 1" title="Следующий отзыв">
+                <span>{{ activeReviewSlide() + 1 }} из {{ reviewCheckReviews().length }}</span>
+                <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= reviewCheckReviews().length - 1" title="Следующий отзыв">
                   <span class="material-icons-sharp">chevron_right</span>
                 </button>
               </nav>
@@ -409,7 +409,7 @@
                 </div>
               } @else {
                 <div class="review-carousel-dots">
-                  @for (dotReview of details.reviews; track trackReviewDot($index, dotReview); let i = $index) {
+                  @for (dotReview of reviewCheckReviews(); track trackReviewDot($index, dotReview); let i = $index) {
                     <button
                       type="button"
                       [class.active]="activeReviewSlide() === i"
@@ -583,7 +583,7 @@
           <article class="stat-card blue">
             <div>
               <span>Всего отзывов</span>
-              <strong>{{ details.reviews.length }}</strong>
+              <strong>{{ reviewCheckReviews().length }}</strong>
             </div>
             <i class="material-icons-sharp">reviews</i>
           </article>
@@ -711,7 +711,7 @@
       <article class="stat-card blue">
         <div>
           <span>Всего отзывов</span>
-          <strong>{{ details.reviews.length }}</strong>
+          <strong>{{ reviewCheckReviews().length }}</strong>
         </div>
         <i class="material-icons-sharp">reviews</i>
       </article>

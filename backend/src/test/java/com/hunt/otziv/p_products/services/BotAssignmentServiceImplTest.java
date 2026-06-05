@@ -66,6 +66,26 @@ class BotAssignmentServiceImplTest {
     }
 
     @Test
+    void getAvailableBotsByRulesExcludesInactiveAndReservedBots() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot inactive = bot(101L, "Впишите Имя Фамилию", 0);
+        inactive.setActive(false);
+        Bot reserved = bot(102L, "Впишите Имя Фамилию", 0);
+        Bot free = bot(103L, "Впишите Имя Фамилию", 0);
+
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(inactive, reserved, free));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(102L));
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+
+        List<Bot> available = service.getAvailableBotsByRules(filial, false, 1);
+
+        assertEquals(List.of(free), available);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void assignBotForReviewChangeExcludesCompanyUsedBotsWhenClaimingReserveBot() {
         BotAssignmentServiceImpl service = service();
@@ -77,6 +97,7 @@ class BotAssignmentServiceImplTest {
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of());
         when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(777L));
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(888L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botService.claimReserveBotForCity(eq(city), anyCollection())).thenReturn(Optional.empty());
         when(botService.findBotById(1L)).thenReturn(stubBot);
@@ -85,7 +106,7 @@ class BotAssignmentServiceImplTest {
 
         ArgumentCaptor<Collection<Long>> excludedIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         verify(botService).claimReserveBotForCity(eq(city), excludedIdsCaptor.capture());
-        assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 9L)));
+        assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 888L, 9L)));
         assertSame(stubBot, assigned);
     }
 

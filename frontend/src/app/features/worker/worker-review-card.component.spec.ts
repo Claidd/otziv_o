@@ -185,6 +185,58 @@ describe('WorkerReviewCardComponent', () => {
     ).toBe('Не назначено');
   });
 
+  it('shows inactive real account warning and keeps publication action available', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    fixture.componentInstance.review = review({ botActive: false });
+    fixture.componentInstance.activeSection = 'publish';
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe(
+      'аккаунт неактивен - можно закрыть',
+    );
+    const publishButton = element.querySelector<HTMLButtonElement>('.publish-button');
+    expect(publishButton?.textContent?.trim()).toBe('ОПУБЛИКОВАЛ');
+    expect(publishButton?.disabled).toBe(false);
+  });
+
+  it('blocks publication when account credentials are incomplete', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    fixture.componentInstance.review = review({ botPassword: '' });
+    fixture.componentInstance.activeSection = 'publish';
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('Bot Name 2');
+    const publishButton = element.querySelector<HTMLButtonElement>('.publish-button');
+    expect(publishButton?.textContent?.trim()).toBe('СМЕНИТЕ АККАУНТ');
+    expect(publishButton?.disabled).toBe(true);
+  });
+
+  it('allows template accounts in walk section but blocks them in publication section', () => {
+    const render = (activeSection: WorkerReviewCardComponent['activeSection']): HTMLElement => {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      fixture.componentInstance.review = review({
+        botFio: 'Впиши Имя Фамилию',
+        botActive: true,
+        botCounter: 0,
+      });
+      fixture.componentInstance.activeSection = activeSection;
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    };
+
+    let element = render('nagul');
+    expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('Впиши Имя Фамилию');
+    expect(element.querySelector<HTMLButtonElement>('.publish-button')?.disabled).toBe(false);
+
+    element = render('publish');
+    expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('смените аккаунт');
+    expect(element.querySelector<HTMLButtonElement>('.publish-button')?.disabled).toBe(true);
+  });
+
   it('marks publication date as overdue only when it is before today', () => {
     const formatDate = (date: Date): string => {
       const year = date.getFullYear();

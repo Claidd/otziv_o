@@ -18,7 +18,8 @@
 
 .dictionary-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 0.55rem;
 }
 
@@ -29,14 +30,23 @@
   overflow-x: auto;
   gap: 0.35rem;
   width: 100%;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  padding-bottom: 0.2rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(121, 151, 191, 0.72) transparent;
+  -ms-overflow-style: auto;
 }
 
 .dictionary-tabs::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  height: 0.35rem;
+}
+
+.dictionary-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dictionary-tabs::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(121, 151, 191, 0.72);
 }
 
 .dictionary-tabs:hover,
@@ -47,7 +57,7 @@
 
 .dictionary-tabs button {
   display: inline-flex;
-  flex: 1 0 6.9rem;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 2.1rem;
   align-items: center;
@@ -55,11 +65,14 @@
   gap: 0.22rem;
   border: 1px solid rgba(103, 116, 131, 0.24);
   border-radius: 999px;
-  padding: 0 0.35rem;
+  padding: 0 0.72rem;
+  max-width: 11rem;
   color: var(--otziv-dark);
   background: var(--otziv-white);
   font-size: 0.74rem;
   font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -84,8 +97,8 @@
 
 .dictionary-actions {
   display: flex;
-  width: 100%;
-  flex: 1 1 100%;
+  width: auto;
+  flex: 0 0 auto;
   justify-content: flex-end;
 }
 
@@ -1385,10 +1398,11 @@ tr.selected td:first-child {
   }
 
   .dictionary-toolbar {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dictionary-actions {
+    width: 100%;
     flex: 1 1 100%;
   }
 }

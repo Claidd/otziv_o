@@ -87,6 +87,7 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
+  private readonly searchDelayMs = 500;
 
   readonly sections = WORKER_SECTIONS;
   readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
@@ -108,6 +109,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly overdueModalOpen = signal(false);
   readonly selectedWorkerId = signal<number | null>(null);
   private boardNoticeTimer: number | null = null;
+  private searchTimer: number | null = null;
 
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
   readonly currentReviews = computed(() => this.board()?.reviews.content ?? []);
@@ -213,6 +215,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearSearchTimer();
     this.clearBoardNoticeTimer();
   }
 
@@ -287,13 +290,35 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   search(): void {
+    this.clearSearchTimer();
     this.pageNumber.set(0);
     this.loadBoard();
+  }
+
+  onKeywordChange(value: string): void {
+    this.keyword.set(value);
+    this.scheduleSearch();
   }
 
   clearSearch(): void {
     this.keyword.set('');
     this.search();
+  }
+
+  private scheduleSearch(): void {
+    this.clearSearchTimer();
+    this.searchTimer = window.setTimeout(() => {
+      this.searchTimer = null;
+      this.search();
+    }, this.searchDelayMs);
+  }
+
+  private clearSearchTimer(): void {
+    if (this.searchTimer === null) {
+      return;
+    }
+    window.clearTimeout(this.searchTimer);
+    this.searchTimer = null;
   }
 
   changePageSize(value: string | number): void {

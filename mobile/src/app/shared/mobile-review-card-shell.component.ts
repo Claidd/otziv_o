@@ -94,7 +94,7 @@ export type MobileReviewPhotoMode = 'none' | 'link' | 'button' | 'file';
 
     :host(.layout-details) {
       flex-basis: var(--otziv-detail-card-width, min(15.4rem, 79vw));
-      scroll-snap-align: start;
+      scroll-snap-align: center;
     }
 
     :host-context(.worker-list--expanded),

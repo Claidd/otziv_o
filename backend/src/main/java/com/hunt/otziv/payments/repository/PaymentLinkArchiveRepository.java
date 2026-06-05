@@ -165,6 +165,18 @@ public class PaymentLinkArchiveRepository {
                 .addValue("limit", Math.max(1, limit)), Long.class);
     }
 
+    public List<Long> findLiveIdsByOrderId(Long orderId) {
+        if (orderId == null) {
+            return List.of();
+        }
+        return jdbc.queryForList("""
+                SELECT pl.id
+                FROM payment_links pl
+                WHERE pl.order_id = :orderId
+                ORDER BY pl.created_at ASC, pl.id ASC
+                """, Map.of("orderId", orderId), Long.class);
+    }
+
     public int archiveIds(Collection<Long> ids, LocalDateTime archivedAt, String reason, Long batchId) {
         if (ids == null || ids.isEmpty()) {
             return 0;

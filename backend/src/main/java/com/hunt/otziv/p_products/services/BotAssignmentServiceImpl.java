@@ -58,6 +58,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         log.info("Назначение ботов для новых отзывов: vigul={}, требуется {} ботов", vigul, neededForOrder);
 
         Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(defaultFilial);
+        usedBotIdsInCompany.addAll(getReservedBotIdsByUnpublishedReviews(null));
         Set<Long> usedBotIdsInThisOrder = new HashSet<>(usedBotIdsInCompany);
 
         if (hasPerReviewFilials(orderDTO)) {
@@ -149,6 +150,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             log.info("Требуется назначить {} ботов, vigul = {}", neededBots, vigul);
 
             Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial);
+            usedBotIdsInCompany.addAll(getReservedBotIdsByUnpublishedReviews(null));
 
             // 3. Получаем доступных ботов по правилам
             List<Bot> availableBots = getAvailableBotsByRules(filial, vigul, neededBots, usedBotIdsInCompany);
@@ -216,13 +218,23 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         Set<Long> usedBotIdsForThisChange = new HashSet<>(getUsedBotIdsInCompany(filial));
+        usedBotIdsForThisChange.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
+        if (review.getBot() != null && review.getBot().getId() != null) {
+            usedBotIdsForThisChange.add(review.getBot().getId());
+        }
         if (excludedBotIds != null) {
             usedBotIdsForThisChange.addAll(excludedBotIds.stream()
                     .filter(Objects::nonNull)
                     .collect(Collectors.toSet()));
         }
 
-        List<Bot> availableBots = getAvailableBotsByRules(filial, review.isVigul(), 1, usedBotIdsForThisChange);
+        List<Bot> availableBots = getAvailableBotsByRules(
+                filial,
+                review.isVigul(),
+                1,
+                usedBotIdsForThisChange,
+                review.getId()
+        );
         Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsForThisChange, 0, filial);
 
         log.info("Бот ID {} ({}) выбран по общим правилам для замены в отзыве ID {}",
@@ -242,6 +254,14 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                                               boolean vigul,
                                               int neededForOrder,
                                               Set<Long> blockedBotIds) {
+        return getAvailableBotsByRules(filial, vigul, neededForOrder, blockedBotIds, null);
+    }
+
+    private List<Bot> getAvailableBotsByRules(Filial filial,
+                                              boolean vigul,
+                                              int neededForOrder,
+                                              Set<Long> blockedBotIds,
+                                              Long excludedReviewId) {
         log.info("Получение доступных ботов для филиала ID {}, vigul={}, требуется={}",
                 filial.getId(), vigul, neededForOrder);
 
@@ -250,7 +270,11 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         log.info("Всего ботов в городе {}: {}", filial.getCity().getTitle(), allCityBots.size());
 
         // 2. Получаем ID ботов, которые нельзя использовать для текущего назначения
-        Set<Long> excludedBotIds = blockedBotIds == null ? Set.of() : blockedBotIds;
+        Set<Long> excludedBotIds = new HashSet<>();
+        if (blockedBotIds != null) {
+            excludedBotIds.addAll(blockedBotIds);
+        }
+        excludedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(excludedReviewId));
         log.info("Ботов исключено для филиала {}: {}", filial.getId(), excludedBotIds.size());
 
         // 3. Получаем ID ботов, занятых в активных отзывах других филиалов
@@ -262,6 +286,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         List<Bot> idealBots = allCityBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
+                .filter(Bot::isActive)
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
                 .filter(bot -> {
@@ -284,6 +309,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             List<Bot> fallbackBots = allCityBots.stream()
                     .filter(Objects::nonNull)
                     .filter(bot -> bot.getId() != null)
+                    .filter(Bot::isActive)
                     .filter(bot -> !excludedBotIds.contains(bot.getId()))
                     .filter(bot -> {
                         if (bot.getStatus() == null) return false;
@@ -472,6 +498,23 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         return usedBotIds;
+    }
+
+    private Set<Long> getReservedBotIdsByUnpublishedReviews(Long excludedReviewId) {
+        try {
+            Set<Long> botIds = reviewRepository.findReservedBotIdsByUnpublishedReviews(excludedReviewId);
+            if (botIds == null) {
+                return new HashSet<>();
+            }
+
+            return botIds.stream()
+                    .filter(Objects::nonNull)
+                    .filter(botId -> !STUB_BOT_ID.equals(botId))
+                    .collect(Collectors.toCollection(HashSet::new));
+        } catch (Exception e) {
+            log.error("Ошибка при получении занятых ботов по неопубликованным отзывам", e);
+            return new HashSet<>();
+        }
     }
 
     private Set<Long> getUsedBotIdsGlobally(Filial currentFilial) {

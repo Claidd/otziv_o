@@ -83,6 +83,9 @@ public class PaymentProfile {
     @Column(name = "manual_payment_button_label", length = 80)
     private String manualPaymentButtonLabel = ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_BUTTON_LABEL;
 
+    @Column(name = "manual_comment", length = 255)
+    private String manualComment;
+
     @Column(name = "manual_monthly_soft_limit_kopecks")
     private Long manualMonthlySoftLimitKopecks = DEFAULT_MANUAL_MONTHLY_LIMIT_KOPECKS;
 

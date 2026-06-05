@@ -333,7 +333,11 @@
     </section>
   }
 
-  <div class="bot-line" [class.bot-line--empty]="hasUnavailableBot()">
+  <div
+    class="bot-line"
+    [class.bot-line--empty]="hasUnavailableBot()"
+    [class.bot-line--inactive]="hasInactiveRealPublicationBot()"
+  >
     <span>{{ botLabel() }}</span>
   </div>
 
@@ -377,6 +381,7 @@
     (click)="doneRequested.emit()"
     [disabled]="
       isPublishedPublishAction() ||
+      cannotPublishBecauseBotUnavailable() ||
       isMutating('review-' + review.id + '-publish') ||
       isMutating('review-' + review.id + '-nagul')
     "

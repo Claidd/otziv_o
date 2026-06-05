@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
@@ -28,6 +29,7 @@ public class OrderBotLifecycleService {
     private final BotAssignmentService botAssignmentService;
     private final BotService botService;
     private final ReviewService reviewService;
+    private final BusinessAuditService businessAuditService;
 
     public void assignBotsIfNeeded(Order order) {
         try {
@@ -97,15 +99,18 @@ public class OrderBotLifecycleService {
                 return;
             }
 
+            boolean oldActive = bot.isActive();
             int currentCounter = bot.getCounter();
             bot.setCounter(currentCounter + 1);
 
             if (bot.getCounter() >= HIGH_COUNTER_THRESHOLD) {
                 bot.setStatus(botService.changeStatus(HIGH_STATUS));
                 bot.setActive(false);
+                auditActiveChange(bot, oldActive, false, "auto disabled after high publication counter");
             } else if (bot.getCounter() >= MEDIUM_COUNTER_THRESHOLD) {
                 bot.setStatus(botService.changeStatus(MEDIUM_STATUS));
                 bot.setActive(false);
+                auditActiveChange(bot, oldActive, false, "auto disabled after medium publication counter");
             }
 
             botService.save(bot);
@@ -113,5 +118,22 @@ public class OrderBotLifecycleService {
             log.error("Ошибка при обновлении бота id={}", bot != null ? bot.getId() : null, e);
             throw e;
         }
+    }
+
+    private void auditActiveChange(Bot bot, boolean oldActive, boolean newActive, String details) {
+        if (oldActive == newActive || bot == null || bot.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                "bot_active_changed",
+                "bot",
+                bot.getId(),
+                null,
+                null,
+                oldActive,
+                newActive,
+                details
+        );
     }
 }

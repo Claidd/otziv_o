@@ -5,7 +5,9 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -66,6 +68,12 @@ class ReviewRecoveryTaskServiceImplTest {
     @Mock
     private ReviewRecoveryHoldService recoveryHoldService;
 
+    @Mock
+    private GamificationEventService gamificationEventService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
+
     @InjectMocks
     private ReviewRecoveryTaskServiceImpl service;
 
@@ -123,6 +131,42 @@ class ReviewRecoveryTaskServiceImplTest {
         ReviewRecoveryTask task = service.createTask(101L, user(2L));
 
         assertEquals(LocalDate.of(2026, 5, 17), task.getScheduledDate());
+    }
+
+    @Test
+    void createTaskReopensCompletedBatchAndDeletesStaleCompletionReminder() {
+        ReviewRecoveryBatch batch = batch(30L, order(10L), ReviewRecoveryBatchStatus.COMPLETED);
+        batch.setCompletedAt(Instant.parse("2026-05-31T06:09:00Z"));
+        Review review = review(101L, "следующий текст", batch.getOrder(), null);
+
+        when(reviewRepository.findById(101L)).thenReturn(Optional.of(review));
+        when(batchRepository.findFirstByOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
+                .thenReturn(Optional.of(batch));
+        when(batchRepository.save(batch)).thenReturn(batch);
+        when(taskRepository.maxScheduledDateByBatchId(30L, ReviewRecoveryTaskStatus.CANCELLED))
+                .thenReturn(LocalDate.of(2026, 5, 31));
+        when(taskRepository.save(any(ReviewRecoveryTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewRecoveryTask task = service.createTask(101L, user(2L));
+
+        assertEquals(ReviewRecoveryBatchStatus.OPEN, batch.getStatus());
+        assertEquals(null, batch.getCompletedAt());
+        assertEquals(LocalDate.of(2026, 6, 3), task.getScheduledDate());
+        verify(personalReminderService).deleteSystemReminder(
+                batch.getManager().getUser(),
+                "Восстановление завершено: Компания 10",
+                "Компания: Компания 10\nЗаказ #10\nЧат: https://chat.example/10\nВсе восстановления завершены, можно написать клиенту."
+        );
+        verify(personalReminderService).deleteSystemReminderBySource(
+                batch.getManager().getUser(),
+                PersonalReminderService.SOURCE_REVIEW_RECOVERY_BATCH,
+                30L
+        );
+        verify(personalReminderService).deleteSystemRemindersByTitlePrefixAndTextFragment(
+                batch.getManager().getUser(),
+                "Восстановление завершено",
+                "#10"
+        );
     }
 
     @Test

@@ -52,7 +52,7 @@
               type="text"
               placeholder="Найти"
               [ngModel]="keyword()"
-              (ngModelChange)="keyword.set($event)"
+              (ngModelChange)="onKeywordChange($event)"
               (keyup.enter)="search()"
             >
           </label>
@@ -104,7 +104,7 @@
               {{ lead.telephoneLead }}
             </a>
             <button type="button" (click)="copyPhone(lead)" title="Скопировать телефон">
-              {{ copied() === 'телефон' ? '✓' : 'T' }}
+              {{ isPhoneCopied(lead) ? '✓' : 'T' }}
             </button>
           </div>
 

@@ -213,6 +213,7 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\loki"
+    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\tempo"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\alloy"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\grafana"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh"
@@ -252,8 +253,14 @@ try {
         $sshArgs += @("-i", $SshKey)
         $scpArgs += @("-i", $SshKey)
     }
-    $sshArgs += @("-p", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
-    $scpArgs += @("-P", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
+    $sshKeepAliveArgs = @(
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ServerAliveInterval=20",
+        "-o", "ServerAliveCountMax=12",
+        "-o", "TCPKeepAlive=yes"
+    )
+    $sshArgs += @("-p", "$VpsPort") + $sshKeepAliveArgs
+    $scpArgs += @("-P", "$VpsPort") + $sshKeepAliveArgs
 
     $mkdirScript = "mkdir -p $(ConvertTo-BashSingleQuoted $VpsPath)"
     Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $mkdirScript))
@@ -370,6 +377,44 @@ remove_repo_images() {
   done
 }
 
+wait_service_healthy() {
+  service_name="`$1"
+  timeout_seconds="`$2"
+  started_at="`$(date +%s)"
+
+  echo "Waiting for `$service_name to become healthy..."
+  while true; do
+    container_id="`$(compose ps -q "`$service_name" | head -n 1 || true)"
+    if [ -n "`$container_id" ]; then
+      state="`$(docker inspect -f '{{.State.Status}}' "`$container_id" 2>/dev/null || true)"
+      health="`$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "`$container_id" 2>/dev/null || true)"
+
+      if [ "`$health" = "healthy" ] || { [ "`$health" = "none" ] && [ "`$state" = "running" ]; }; then
+        echo "`$service_name is ready (`$state/`$health)."
+        return 0
+      fi
+
+      if [ "`$state" = "exited" ] || [ "`$state" = "dead" ]; then
+        echo "`$service_name stopped while waiting (`$state/`$health)." >&2
+        docker logs --tail 120 "`$container_id" >&2 || true
+        return 1
+      fi
+    fi
+
+    now="`$(date +%s)"
+    if [ "`$((now - started_at))" -ge "`$timeout_seconds" ]; then
+      echo "Timed out waiting for `$service_name to become healthy." >&2
+      if [ -n "`$container_id" ]; then
+        docker inspect -f '{{.Name}} state={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} restarts={{.RestartCount}}' "`$container_id" >&2 || true
+        docker logs --tail 120 "`$container_id" >&2 || true
+      fi
+      return 1
+    fi
+
+    sleep 5
+  done
+}
+
 ensure_nginx_certs() {
   mkdir -p data/nginx/certs data/nginx/www data/nginx/logs
 
@@ -449,9 +494,15 @@ if docker ps --format '{{.Names}}' | grep -Fxq my-mysql; then
 else
   echo "MySQL container is not running yet; skipping pre-deploy Flyway validation."
 fi
-compose down --remove-orphans
 compose build whatsapp_lika whatsapp_vika
-compose up -d --remove-orphans
+compose up -d --remove-orphans mysql keycloak-postgres keycloak loki tempo prometheus grafana
+wait_service_healthy mysql 600
+wait_service_healthy keycloak 900
+wait_service_healthy grafana 600
+compose up -d --no-deps --force-recreate app
+wait_service_healthy app 1200
+compose up -d --no-deps --force-recreate nginx whatsapp_lika whatsapp_vika
+compose up -d --remove-orphans phpmyadmin dozzle alloy
 sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
 compose ps
 "@

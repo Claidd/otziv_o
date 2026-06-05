@@ -471,6 +471,7 @@ export class PayPageComponent {
 
   private applyPayment(payment: PublicPaymentLink, preserveEmail = false): void {
     const typedEmail = this.email().trim();
+    this.applyCanonicalToken(payment.token);
     this.payment.set(payment);
     if (!preserveEmail || !typedEmail) {
       this.email.set(payment.payerEmail ?? '');
@@ -490,6 +491,19 @@ export class PayPageComponent {
       !this.sbpBanksLoading()
     ) {
       this.loadSbpBanks();
+    }
+  }
+
+  private applyCanonicalToken(token?: string | null): void {
+    const cleanToken = token?.trim();
+    if (!cleanToken || cleanToken === this.token()) {
+      return;
+    }
+
+    this.token.set(cleanToken);
+    const replacementUrl = `/pay/${encodeURIComponent(cleanToken)}`;
+    if (window.location.pathname !== replacementUrl) {
+      window.history.replaceState(window.history.state, '', replacementUrl);
     }
   }
 

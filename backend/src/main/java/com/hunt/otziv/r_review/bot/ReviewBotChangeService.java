@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.bot;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
@@ -42,6 +43,7 @@ public class ReviewBotChangeService {
     private final BotAssignmentService botAssignmentService;
     private final FilialService filialService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final BusinessAuditService businessAuditService;
 
     @Transactional
     public void changeBot(Long reviewId) {
@@ -91,12 +93,17 @@ public class ReviewBotChangeService {
                 botActiveToFalse(botId);
             }
 
-            Set<Long> excludedBotIds = botId != null && botId > 0 ? Set.of(botId) : Set.of();
+            Set<Long> excludedBotIds = new HashSet<>();
+            if (botId != null && botId > 0) {
+                excludedBotIds.add(botId);
+            }
             assignBotUsingSharedRules(review, excludedBotIds);
             accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
+            addAssignedBotToExcluded(review, excludedBotIds);
 
             log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
             reviewRepository.save(review);
+            reassignUnpublishedReviewsForBlockedBot(botId, review.getId(), excludedBotIds);
 
         } catch (Exception e) {
             log.error("Что-то пошло не так и бот не деактивирован", e);
@@ -123,6 +130,7 @@ public class ReviewBotChangeService {
         }
 
         Set<Long> excludedBotIds = getUsedBotIdsInCompany(filial, review.getId());
+        excludedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
         if (review.getBot() != null && review.getBot().getId() != null) {
             excludedBotIds.add(review.getBot().getId());
         }
@@ -167,14 +175,17 @@ public class ReviewBotChangeService {
 
         Set<Long> usedBotIdsInCompany = getUsedBotIdsInCompany(filial, review.getId());
         Set<Long> usedBotIdsGlobally = getUsedBotIdsGlobally(filial, review.getId());
+        Set<Long> reservedBotIds = getReservedBotIdsByUnpublishedReviews(review.getId());
 
         boolean vigul = review.isVigul();
 
         List<Bot> idealBots = allBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
+                .filter(Bot::isActive)
                 .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
                 .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
+                .filter(bot -> !reservedBotIds.contains(bot.getId()))
                 .filter(this::hasNewStatus)
                 .collect(Collectors.toList());
 
@@ -188,7 +199,9 @@ public class ReviewBotChangeService {
         List<Bot> fallbackBots = allBots.stream()
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
+                .filter(Bot::isActive)
                 .filter(bot -> !usedBotIdsInCompany.contains(bot.getId()))
+                .filter(bot -> !reservedBotIds.contains(bot.getId()))
                 .filter(this::hasNewStatus)
                 .collect(Collectors.toList());
 
@@ -241,6 +254,52 @@ public class ReviewBotChangeService {
         }
     }
 
+    private void reassignUnpublishedReviewsForBlockedBot(Long blockedBotId, Long currentReviewId, Set<Long> excludedBotIds) {
+        if (blockedBotId == null || blockedBotId <= 0 || STUB_BOT_ID.equals(blockedBotId)) {
+            return;
+        }
+
+        List<Review> affectedReviews;
+        try {
+            affectedReviews = reviewRepository.findUnpublishedReviewsByBotIdForReassignment(blockedBotId, currentReviewId);
+        } catch (Exception e) {
+            log.error("Не удалось получить отзывы для каскадной замены бота {}", blockedBotId, e);
+            return;
+        }
+
+        if (affectedReviews == null || affectedReviews.isEmpty()) {
+            return;
+        }
+
+        int reassigned = 0;
+        for (Review affectedReview : affectedReviews) {
+            if (affectedReview == null) {
+                continue;
+            }
+
+            boolean oldWalked = accountWalkScheduleService.isWalkedAccount(affectedReview.getBot());
+            assignBotUsingSharedRules(affectedReview, excludedBotIds);
+            accountWalkScheduleService.synchronizeAfterAccountChange(affectedReview, oldWalked);
+            addAssignedBotToExcluded(affectedReview, excludedBotIds);
+            reassigned++;
+        }
+
+        reviewRepository.saveAll(affectedReviews);
+        log.info("После блокировки бота {} выполнена каскадная замена в {} неопубликованных отзывах",
+                blockedBotId, reassigned);
+    }
+
+    private void addAssignedBotToExcluded(Review review, Set<Long> excludedBotIds) {
+        if (review == null || review.getBot() == null || review.getBot().getId() == null) {
+            return;
+        }
+
+        Long botId = review.getBot().getId();
+        if (!STUB_BOT_ID.equals(botId)) {
+            excludedBotIds.add(botId);
+        }
+    }
+
     private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
         Bot selectedBot = botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
         review.setBot(selectedBot);
@@ -253,6 +312,23 @@ public class ReviewBotChangeService {
         }
 
         updateVigulBasedOnBotCounter(review);
+    }
+
+    private Set<Long> getReservedBotIdsByUnpublishedReviews(Long excludedReviewId) {
+        try {
+            Set<Long> botIds = reviewRepository.findReservedBotIdsByUnpublishedReviews(excludedReviewId);
+            if (botIds == null) {
+                return new HashSet<>();
+            }
+
+            return botIds.stream()
+                    .filter(Objects::nonNull)
+                    .filter(botId -> !STUB_BOT_ID.equals(botId))
+                    .collect(Collectors.toCollection(HashSet::new));
+        } catch (Exception e) {
+            log.error("Ошибка при получении занятых ботов по неопубликованным отзывам", e);
+            return new HashSet<>();
+        }
     }
 
     private void notifyIfCityHasFewBots(Review review) {
@@ -281,7 +357,9 @@ public class ReviewBotChangeService {
                 return false;
             }
 
+            boolean oldActive = bot.isActive();
             bot.setActive(false);
+            auditActiveChange(bot, oldActive, false, "review card block button");
             botService.save(bot);
             return true;
 
@@ -422,5 +500,22 @@ public class ReviewBotChangeService {
 
     private boolean isTemplateBotName(Bot bot) {
         return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
+    }
+
+    private void auditActiveChange(Bot bot, boolean oldActive, boolean newActive, String details) {
+        if (oldActive == newActive || bot == null || bot.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                "bot_active_changed",
+                "bot",
+                bot.getId(),
+                null,
+                null,
+                oldActive,
+                newActive,
+                details
+        );
     }
 }

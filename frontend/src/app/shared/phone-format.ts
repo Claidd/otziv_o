@@ -12,6 +12,16 @@ export function phoneDigits(phone?: string | null): string {
   return digits;
 }
 
+export function phoneDigitsWithoutCountryCode(phone?: string | null): string {
+  const digits = phoneDigits(phone);
+
+  if (digits.length === 11 && digits.startsWith('7')) {
+    return digits.slice(1);
+  }
+
+  return digits;
+}
+
 export function formatPhoneForDisplay(phone?: string | null): string {
   const digits = phoneDigits(phone);
 

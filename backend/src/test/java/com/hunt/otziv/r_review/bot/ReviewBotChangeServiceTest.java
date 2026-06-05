@@ -3,6 +3,7 @@ package com.hunt.otziv.r_review.bot;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -13,6 +14,7 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -54,6 +56,9 @@ class ReviewBotChangeServiceTest {
 
     @Mock
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
 
     @Test
     void changeBotAssignsNewBotAndUpdatesVigulByCounter() {
@@ -104,6 +109,46 @@ class ReviewBotChangeServiceTest {
                 contains("Иркутск")
         );
         verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void deActivateAndChangeBotReassignsOtherUnpublishedReviewsWithBlockedBot() {
+        ReviewBotChangeService service = service();
+        City city = city(9L, "Иркутск");
+        Filial filial = filial(3L, city);
+        Bot blockedBot = bot(5L, "Старый Бот", 0);
+        blockedBot.setActive(true);
+        Bot currentReplacement = bot(8L, "Иван Петров", 4);
+        Bot affectedReplacement = bot(9L, "Петр Иванов", 1);
+
+        Review currentReview = new Review();
+        currentReview.setId(21L);
+        currentReview.setFilial(filial);
+        currentReview.setBot(blockedBot);
+
+        Review affectedReview = new Review();
+        affectedReview.setId(22L);
+        affectedReview.setFilial(filial);
+        affectedReview.setBot(blockedBot);
+
+        when(reviewRepository.findById(21L)).thenReturn(Optional.of(currentReview));
+        when(botService.getFindAllByFilialCityId(9L)).thenReturn(List.of(blockedBot));
+        when(botService.findBotById(5L)).thenReturn(blockedBot);
+        when(botAssignmentService.assignBotForReviewChange(same(currentReview), anyCollection()))
+                .thenReturn(currentReplacement);
+        when(botAssignmentService.assignBotForReviewChange(same(affectedReview), anyCollection()))
+                .thenReturn(affectedReplacement);
+        when(reviewRepository.findUnpublishedReviewsByBotIdForReassignment(5L, 21L))
+                .thenReturn(List.of(affectedReview));
+
+        service.deActivateAndChangeBot(21L, null);
+
+        assertFalse(blockedBot.isActive());
+        assertSame(currentReplacement, currentReview.getBot());
+        assertSame(affectedReplacement, affectedReview.getBot());
+        ArgumentCaptor<Iterable<Review>> savedReviewsCaptor = ArgumentCaptor.forClass(Iterable.class);
+        verify(reviewRepository).saveAll(savedReviewsCaptor.capture());
+        assertTrue(savedReviewsCaptor.getValue().iterator().hasNext());
     }
 
     @Test
@@ -197,7 +242,8 @@ class ReviewBotChangeServiceTest {
                 emailService,
                 botAssignmentService,
                 filialService,
-                accountWalkScheduleService
+                accountWalkScheduleService,
+                businessAuditService
         );
     }
 
@@ -206,6 +252,7 @@ class ReviewBotChangeServiceTest {
         bot.setId(id);
         bot.setFio(fio);
         bot.setCounter(counter);
+        bot.setActive(true);
         bot.setStatus(newStatus());
         return bot;
     }

@@ -52,7 +52,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.client_messages.service.ScheduledClientMessageService.DEFAULT_PUBLICATION_PROGRESS_REPORT_TEXT;
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
-import static com.hunt.otziv.r_review.utils.ReviewBotPolicy.hasUsablePublicationBot;
+import static com.hunt.otziv.r_review.utils.ReviewBotPolicy.hasRealPublicationBot;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholder;
 import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isShortCommonReviewText;
 
@@ -435,7 +435,7 @@ public class OrderServiceImpl implements OrderService {
                 );
             }
 
-            if (!hasUsablePublicationBot(review)) {
+            if (!hasRealPublicationBot(review)) {
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Нельзя опубликовать отзыв: назначьте реальный аккаунт. Проблемная карточка: "

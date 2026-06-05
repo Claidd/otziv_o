@@ -344,6 +344,53 @@ class OrderServiceImplTest {
     }
 
     @Test
+    void changeStatusAndOrderCounterAllowsInactiveRealAccount() throws Exception {
+        Order order = order(15L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review reviewToPublish = review(2L, false, "Готовый текст отзыва", details);
+        reviewToPublish.setBot(bot(99L, "Иван Петров", "79000000000", false));
+        details.setReviews(List.of(reviewToPublish));
+        order.setDetails(List.of(details));
+        when(orderRepository.findByIdForCounterUpdate(15L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
+        when(reviewRepository.countPublishedByOrderId(15L)).thenReturn(1);
+
+        assertTrue(orderService.changeStatusAndOrderCounter(2L));
+
+        assertTrue(reviewToPublish.isPublish());
+        verify(reviewRepository).save(reviewToPublish);
+        verify(orderBotLifecycleService).updateBotCounterAndStatus(reviewToPublish.getBot());
+    }
+
+    @Test
+    void changeStatusAndOrderCounterRejectsAccountWithoutPassword() {
+        Order order = order(16L, 0);
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+
+        Review reviewToPublish = review(2L, false, "Готовый текст отзыва", details);
+        reviewToPublish.getBot().setPassword("");
+        details.setReviews(List.of(reviewToPublish));
+        order.setDetails(List.of(details));
+        when(orderRepository.findByIdForCounterUpdate(16L)).thenReturn(Optional.of(order));
+        when(reviewRepository.findByIdForPublication(2L)).thenReturn(Optional.of(reviewToPublish));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> orderService.changeStatusAndOrderCounter(2L)
+        );
+
+        assertEquals(
+                "Нельзя опубликовать отзыв: назначьте реальный аккаунт. Проблемная карточка: №1 (отзыв #2).",
+                exception.getReason()
+        );
+        verify(reviewRepository, never()).save(reviewToPublish);
+        verifyNoInteractions(orderBotLifecycleService, reviewArchiveService, orderStatusCheckerService);
+    }
+
+    @Test
     void changeStatusAndOrderCounterAllowsShortCommonReviewTextWithoutHistoryLookup() throws Exception {
         Order order = order(12L, 0);
         OrderDetails details = new OrderDetails();
@@ -397,6 +444,7 @@ class OrderServiceImplTest {
         bot.setId(id);
         bot.setFio(fio);
         bot.setLogin(login);
+        bot.setPassword("password");
         bot.setActive(active);
         return bot;
     }

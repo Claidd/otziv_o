@@ -20,6 +20,7 @@ public record PaymentProfileResponse(
         String manualRecipientName,
         String manualPaymentUrl,
         String manualPaymentButtonLabel,
+        String manualComment,
         Long manualMonthlySoftLimitKopecks,
         Long manualMonthlyHardLimitKopecks,
         long manualMonthlyUsedKopecks,

@@ -4,6 +4,7 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.b_bots.repository.StatusBotRepository;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.u_users.model.Worker;
@@ -76,6 +77,7 @@ public class BotImportService {
     private final StatusBotRepository statusBotRepository;
     private final WorkerRepository workerRepository;
     private final CityRepository cityRepository;
+    private final BusinessAuditService businessAuditService;
 
     @Transactional
     public BotImportResult importBots(MultipartFile file) {
@@ -158,8 +160,9 @@ public class BotImportService {
 
         int added = 0;
         if (!botsToSave.isEmpty()) {
-            for (Bot ignored : botsRepository.saveAll(botsToSave)) {
+            for (Bot savedBot : botsRepository.saveAll(botsToSave)) {
                 added++;
+                auditImportedActiveValue(savedBot);
             }
         }
 
@@ -545,6 +548,23 @@ public class BotImportService {
 
     private ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+
+    private void auditImportedActiveValue(Bot bot) {
+        if (bot == null || bot.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                "bot_active_changed",
+                "bot",
+                bot.getId(),
+                null,
+                null,
+                null,
+                bot.isActive(),
+                "bot import initial active value"
+        );
     }
 
     public record BotImportResult(

@@ -162,12 +162,14 @@ public class ReviewDtoMapper {
             String botLogin = "";
             String botPassword = "";
             Integer botCounter = 0;
+            boolean botActive = false;
 
             if (bot != null) {
                 botId = bot.getId();
                 botLogin = Optional.ofNullable(bot.getLogin()).orElse("");
                 botPassword = Optional.ofNullable(bot.getPassword()).orElse("");
                 botCounter = safeBotCounter(bot);
+                botActive = bot.isActive();
             }
 
             return ReviewDTOOne.builder()
@@ -186,6 +188,7 @@ public class ReviewDtoMapper {
                     .botLogin(botLogin)
                     .botPassword(botPassword)
                     .botCounter(botCounter)
+                    .botActive(botActive)
                     .companyTitle(companyTitle)
                     .productTitle(productTitle)
                     .filialId(filialId)

@@ -15,6 +15,7 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
+import { sortReviewsById } from '../../shared/review-ordering';
 import {
   readSessionDraft,
   removeSessionDraft,
@@ -99,7 +100,7 @@ export class ReviewCheckComponent {
       return null;
     }
 
-    const review = details.reviews.find((item) => item.id === Number(match[1]));
+    const review = this.reviewCheckReviews().find((item) => item.id === Number(match[1]));
     if (!review) {
       return null;
     }
@@ -120,7 +121,7 @@ export class ReviewCheckComponent {
 
     return `${details.companyTitle || 'Компания'}${details.filialTitle ? ' - ' + details.filialTitle : ''}`;
   });
-  readonly reviewCheckReviews = computed(() => this.details()?.reviews ?? []);
+  readonly reviewCheckReviews = computed(() => sortReviewsById(this.details()?.reviews));
   readonly visibleReviews = computed(() => this.reviewCheckReviews());
   readonly showReviewFastSelect = computed(() => this.reviewCheckReviews().length > 20);
   readonly showReviewNavigation = computed(() => this.mobileReviewLayout() && this.reviewCheckReviews().length > 1);

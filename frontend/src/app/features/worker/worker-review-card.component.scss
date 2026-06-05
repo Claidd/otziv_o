@@ -500,6 +500,24 @@
   white-space: nowrap;
 }
 
+.bot-line--empty {
+  border-color: rgba(239, 47, 106, 0.28);
+  background: #ffe8f0;
+}
+
+.bot-line--empty span {
+  color: #c72158;
+}
+
+.bot-line--inactive {
+  border-color: rgba(194, 129, 32, 0.34);
+  background: #fff4dc;
+}
+
+.bot-line--inactive span {
+  color: #94620e;
+}
+
 @media (max-width: 860px) {
   .worker-card {
     flex: 0 0 min(21rem, calc(100vw - 4rem));

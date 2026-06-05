@@ -157,6 +157,35 @@ class ReviewBoardQueryServiceTest {
         verify(countQuery, never()).setParameter(eq("status"), org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    void countReviewIdsForPublishBoardDoesNotHideReviewsWithUnavailableAccounts() {
+        ReviewBoardQueryService service = new ReviewBoardQueryService(entityManager);
+        LocalDate localDate = LocalDate.of(2026, 6, 2);
+        Worker worker = new Worker();
+        ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
+
+        when(entityManager.createQuery(queryCaptor.capture(), eq(Long.class))).thenReturn(countQuery);
+        stubQueryParameters(countQuery);
+        when(countQuery.getSingleResult()).thenReturn(3L);
+
+        long count = service.countReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH,
+                ReviewBoardScope.WORKER,
+                localDate,
+                null,
+                worker,
+                null,
+                null
+        );
+
+        assertEquals(3L, count);
+        assertTrue(queryCaptor.getValue().contains("TRIM(r.text) <> ''"));
+        assertTrue(!queryCaptor.getValue().contains("b.active = true"));
+        assertTrue(!queryCaptor.getValue().contains("b.id <> 1"));
+        verify(countQuery).setParameter(eq("localDate"), eq(localDate));
+        verify(countQuery).setParameter(eq("worker"), same(worker));
+    }
+
     private void stubQueryParameters(TypedQuery<Long> query) {
         when(query.setParameter(anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(query);
     }

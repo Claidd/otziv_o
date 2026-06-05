@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -123,17 +123,11 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
           @if (details(); as details) {
             <section
+              #reviewStrip
               class="review-mobile-strip"
               [class.review-mobile-strip--expanded]="reviewsExpanded()"
               aria-label="Отзывы заказа"
               (scroll)="onReviewScroll($event)"
-              (pointerdown)="onReviewPointerDown($event)"
-              (pointerup)="onReviewPointerUp($event)"
-              (pointercancel)="onReviewPointerCancel()"
-              (pointerleave)="onReviewPointerLeave($event)"
-              (touchstart)="onReviewTouchStart($event)"
-              (touchend)="onReviewTouchEnd($event)"
-              (touchcancel)="onReviewPointerCancel()"
             >
               @for (review of details.reviews; track review.id; let index = $index) {
                 <app-mobile-review-card-shell
@@ -1317,14 +1311,35 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       overflow-y: hidden;
       padding: 0 var(--otziv-page-padding-x, 0.68rem) 0.12rem;
       scroll-padding-inline: var(--otziv-page-padding-x, 0.68rem);
-      scroll-snap-type: x mandatory;
+      scroll-snap-type: x proximity;
       scrollbar-width: none;
-      touch-action: pan-x pan-y;
       overscroll-behavior-x: contain;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
     }
 
     .review-mobile-strip::-webkit-scrollbar {
       display: none;
+    }
+
+    .review-mobile-strip--dragging {
+      scroll-snap-type: none !important;
+      cursor: grabbing;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .review-mobile-strip:not(.review-mobile-strip--expanded) .mobile-review-card,
+    .review-mobile-strip:not(.review-mobile-strip--expanded) .mobile-review-card *,
+    :host ::ng-deep .review-mobile-strip:not(.review-mobile-strip--expanded) app-mobile-review-card-shell.layout-details .mobile-review-card-shell {
+      touch-action: pan-y;
+    }
+
+    .review-mobile-strip:not(.review-mobile-strip--expanded) .mobile-review-card,
+    :host ::ng-deep .review-mobile-strip:not(.review-mobile-strip--expanded) app-mobile-review-card-shell.layout-details .mobile-review-card-shell {
+      overflow: hidden !important;
+      overscroll-behavior: contain;
+      scroll-snap-stop: normal !important;
     }
 
     .review-mobile-strip--expanded {
@@ -1354,7 +1369,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       overflow: hidden;
       background: linear-gradient(180deg, var(--otziv-tone-walk-surface) 0%, var(--otziv-white) 42%, var(--otziv-white) 100%);
       box-shadow: 0 0.55rem 1.2rem rgba(132, 139, 200, 0.14);
-      scroll-snap-align: start;
+      scroll-snap-align: center;
     }
 
     .review-mobile-strip--expanded .mobile-review-card {
@@ -1997,9 +2012,24 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 })
 export class OrderDetailsPage implements OnInit, OnDestroy {
   private routeSubscription?: Subscription;
-  private reviewSwipeStart: { x: number; y: number; index: number; pointerId: number } | null = null;
-  private reviewTouchStart: { x: number; y: number; index: number } | null = null;
-  private lastReviewSwipeHandledAt = 0;
+  private reviewStripCleanup?: () => void;
+  private reviewDrag: {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    moved: boolean;
+  } | null = null;
+  private suppressReviewClickUntil = 0;
+
+  @ViewChild('reviewStrip')
+  set reviewStripRef(ref: ElementRef<HTMLElement> | undefined) {
+    this.reviewStripCleanup?.();
+    this.reviewStripCleanup = undefined;
+    if (ref?.nativeElement) {
+      this.reviewStripCleanup = this.attachReviewStripDrag(ref.nativeElement);
+    }
+  }
 
   readonly orderId = signal<number | null>(null);
   readonly companyId = signal<number | null>(null);
@@ -2111,6 +2141,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routeSubscription?.unsubscribe();
+    this.reviewStripCleanup?.();
+    this.reviewStripCleanup = undefined;
   }
 
   refresh(event: RefresherCustomEvent): void {
@@ -2190,11 +2222,13 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
-    const left = container.getBoundingClientRect().left;
+    const containerRect = container.getBoundingClientRect();
+    const center = containerRect.left + containerRect.width / 2;
     let bestIndex = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
     cards.forEach((card, index) => {
-      const distance = Math.abs(card.getBoundingClientRect().left - left);
+      const cardRect = card.getBoundingClientRect();
+      const distance = Math.abs(cardRect.left + cardRect.width / 2 - center);
       if (distance < bestDistance) {
         bestDistance = distance;
         bestIndex = index;
@@ -2203,84 +2237,198 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.activeReviewIndex.set(bestIndex);
   }
 
-  onReviewPointerDown(event: PointerEvent): void {
-    if (this.reviewsExpanded() || !event.isPrimary) {
-      return;
-    }
+  private attachReviewStripDrag(container: HTMLElement): () => void {
+    const options: AddEventListenerOptions = { capture: true, passive: false };
+    const touchPointerId = -1;
 
-    this.reviewSwipeStart = {
-      x: event.clientX,
-      y: event.clientY,
-      index: this.activeReviewIndex(),
-      pointerId: event.pointerId
+    const onPointerDown = (event: PointerEvent): void => {
+      if (this.reviewsExpanded() || this.reviewDrag || !event.isPrimary || event.button > 0) {
+        return;
+      }
+
+      this.reviewDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        scrollLeft: container.scrollLeft,
+        moved: false
+      };
+      try {
+        container.setPointerCapture?.(event.pointerId);
+      } catch {
+        // Some Android WebView builds reject capture when a nested control owns the touch target.
+      }
+    };
+
+    const onPointerMove = (event: PointerEvent): void => {
+      const drag = this.reviewDrag;
+      if (!drag || drag.pointerId !== event.pointerId || this.reviewsExpanded()) {
+        return;
+      }
+
+      const deltaX = event.clientX - drag.startX;
+      const deltaY = event.clientY - drag.startY;
+      if (!drag.moved && Math.abs(deltaX) < 7 && Math.abs(deltaY) < 7) {
+        return;
+      }
+
+      if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+        return;
+      }
+
+      drag.moved = true;
+      event.preventDefault();
+      event.stopPropagation();
+      container.classList.add('review-mobile-strip--dragging');
+      container.scrollLeft = drag.scrollLeft - deltaX;
+    };
+
+    const endDrag = (event: PointerEvent): void => {
+      const drag = this.reviewDrag;
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return;
+      }
+
+      this.reviewDrag = null;
+      try {
+        container.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // Ignore WebView capture-release quirks.
+      }
+      if (!drag.moved) {
+        container.classList.remove('review-mobile-strip--dragging');
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.suppressReviewClickUntil = Date.now() + 400;
+      this.snapReviewStripToNearest(container);
+    };
+
+    const cancelDrag = (event: PointerEvent): void => {
+      if (this.reviewDrag?.pointerId !== event.pointerId) {
+        return;
+      }
+      this.reviewDrag = null;
+      container.classList.remove('review-mobile-strip--dragging');
+    };
+
+    const onTouchStart = (event: TouchEvent): void => {
+      if (this.reviewsExpanded() || this.reviewDrag || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      this.reviewDrag = {
+        pointerId: touchPointerId,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        scrollLeft: container.scrollLeft,
+        moved: false
+      };
+    };
+
+    const onTouchMove = (event: TouchEvent): void => {
+      const drag = this.reviewDrag;
+      if (!drag || drag.pointerId !== touchPointerId || this.reviewsExpanded() || event.touches.length !== 1) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - drag.startX;
+      const deltaY = touch.clientY - drag.startY;
+      if (!drag.moved && Math.abs(deltaX) < 7 && Math.abs(deltaY) < 7) {
+        return;
+      }
+
+      if (Math.abs(deltaX) <= Math.abs(deltaY)) {
+        return;
+      }
+
+      drag.moved = true;
+      event.preventDefault();
+      event.stopPropagation();
+      container.classList.add('review-mobile-strip--dragging');
+      container.scrollLeft = drag.scrollLeft - deltaX;
+    };
+
+    const endTouchDrag = (event: TouchEvent): void => {
+      const drag = this.reviewDrag;
+      if (!drag || drag.pointerId !== touchPointerId) {
+        return;
+      }
+
+      this.reviewDrag = null;
+      if (!drag.moved) {
+        container.classList.remove('review-mobile-strip--dragging');
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.suppressReviewClickUntil = Date.now() + 400;
+      this.snapReviewStripToNearest(container);
+    };
+
+    const onClick = (event: MouseEvent): void => {
+      if (Date.now() < this.suppressReviewClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    container.addEventListener('pointerdown', onPointerDown, options);
+    container.addEventListener('pointermove', onPointerMove, options);
+    container.addEventListener('pointerup', endDrag, options);
+    container.addEventListener('pointercancel', cancelDrag, options);
+    container.addEventListener('click', onClick, options);
+    container.addEventListener('touchstart', onTouchStart, options);
+    container.addEventListener('touchmove', onTouchMove, options);
+    container.addEventListener('touchend', endTouchDrag, options);
+    container.addEventListener('touchcancel', endTouchDrag, options);
+
+    return () => {
+      container.removeEventListener('pointerdown', onPointerDown, options);
+      container.removeEventListener('pointermove', onPointerMove, options);
+      container.removeEventListener('pointerup', endDrag, options);
+      container.removeEventListener('pointercancel', cancelDrag, options);
+      container.removeEventListener('click', onClick, options);
+      container.removeEventListener('touchstart', onTouchStart, options);
+      container.removeEventListener('touchmove', onTouchMove, options);
+      container.removeEventListener('touchend', endTouchDrag, options);
+      container.removeEventListener('touchcancel', endTouchDrag, options);
     };
   }
 
-  onReviewPointerUp(event: PointerEvent): void {
-    const start = this.reviewSwipeStart;
-    this.reviewSwipeStart = null;
-
-    if (!start || start.pointerId !== event.pointerId || this.reviewsExpanded()) {
+  private snapReviewStripToNearest(container: HTMLElement): void {
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('.mobile-review-card'));
+    if (!cards.length) {
+      container.classList.remove('review-mobile-strip--dragging');
       return;
     }
 
-    this.finishReviewSwipe(start.x, start.y, event.clientX, event.clientY, start.index);
-  }
+    const center = container.getBoundingClientRect().left + container.clientWidth / 2;
+    let bestCard = cards[0];
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    cards.forEach((card, index) => {
+      const rect = card.getBoundingClientRect();
+      const distance = Math.abs(rect.left + rect.width / 2 - center);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestCard = card;
+        bestIndex = index;
+      }
+    });
 
-  onReviewPointerCancel(): void {
-    this.reviewSwipeStart = null;
-    this.reviewTouchStart = null;
-  }
-
-  onReviewPointerLeave(event: PointerEvent): void {
-    if (event.pointerType === 'mouse') {
-      this.reviewSwipeStart = null;
-    }
-  }
-
-  onReviewTouchStart(event: TouchEvent): void {
-    if (this.reviewsExpanded() || event.touches.length !== 1) {
-      return;
-    }
-
-    const touch = event.touches[0];
-    this.reviewTouchStart = {
-      x: touch.clientX,
-      y: touch.clientY,
-      index: this.activeReviewIndex()
-    };
-  }
-
-  onReviewTouchEnd(event: TouchEvent): void {
-    const start = this.reviewTouchStart;
-    this.reviewTouchStart = null;
-
-    if (!start || this.reviewsExpanded() || !event.changedTouches.length) {
-      return;
-    }
-
-    const touch = event.changedTouches[0];
-    this.finishReviewSwipe(start.x, start.y, touch.clientX, touch.clientY, start.index);
-  }
-
-  private finishReviewSwipe(startX: number, startY: number, endX: number, endY: number, startIndex: number): void {
-    const now = Date.now();
-    if (now - this.lastReviewSwipeHandledAt < 220) {
-      return;
-    }
-
-    const deltaX = endX - startX;
-    const deltaY = endY - startY;
-    const isHorizontalSwipe = Math.abs(deltaX) > 22 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25;
-
-    if (!isHorizontalSwipe) {
-      return;
-    }
-
-    this.lastReviewSwipeHandledAt = now;
-    const max = Math.max(0, this.totalDetailCards() - 1);
-    const direction = deltaX < 0 ? 1 : -1;
-    this.goToReviewIndex(Math.max(0, Math.min(max, startIndex + direction)));
+    this.activeReviewIndex.set(bestIndex);
+    const target = bestCard.offsetLeft - Math.max(0, (container.clientWidth - bestCard.offsetWidth) / 2);
+    const max = container.scrollWidth - container.clientWidth;
+    container.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: 'smooth' });
+    window.setTimeout(() => {
+      container.classList.remove('review-mobile-strip--dragging');
+    }, 260);
   }
 
   badTaskCardIndex(index: number): number {

@@ -139,6 +139,7 @@ public class PaymentProfileService {
             profile.setManualRecipientName(recipientOrDefault(update.manualRecipientName()));
             profile.setManualPaymentUrl(paymentUrlOrDefault(update.manualPaymentUrl()));
             profile.setManualPaymentButtonLabel(buttonLabelOrDefault(update.manualPaymentButtonLabel()));
+            profile.setManualComment(limit(update.manualComment(), 255));
             profile.setManualMonthlySoftLimitKopecks(nonNegative(update.manualMonthlySoftLimitKopecks()));
             profile.setManualMonthlyHardLimitKopecks(nonNegative(update.manualMonthlyHardLimitKopecks()));
             validateManualPolicy(profile);
@@ -257,6 +258,7 @@ public class PaymentProfileService {
                 recipientOrDefault(profile.getManualRecipientName()),
                 paymentUrlOrDefault(profile.getManualPaymentUrl()),
                 buttonLabelOrDefault(profile.getManualPaymentButtonLabel()),
+                limit(profile.getManualComment(), 255),
                 manualLimitOrDefault(profile.getManualMonthlySoftLimitKopecks()),
                 manualLimitOrDefault(profile.getManualMonthlyHardLimitKopecks()),
                 manualUsed,

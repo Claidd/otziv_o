@@ -1,4 +1,4 @@
-import { formatPhoneForDisplay, phoneDigits } from './phone-format';
+import { formatPhoneForDisplay, phoneDigits, phoneDigitsWithoutCountryCode } from './phone-format';
 
 describe('phone format helpers', () => {
   it('formats russian phone numbers for card display', () => {
@@ -11,6 +11,13 @@ describe('phone format helpers', () => {
     expect(phoneDigits('7-908-643-10-55')).toBe('79086431055');
     expect(phoneDigits('+7 (908) 643-10-55')).toBe('79086431055');
     expect(phoneDigits('9086431055')).toBe('79086431055');
+  });
+
+  it('returns russian phone copy values without country code when needed', () => {
+    expect(phoneDigitsWithoutCountryCode('7-908-643-10-55')).toBe('9086431055');
+    expect(phoneDigitsWithoutCountryCode('+7 (908) 643-10-55')).toBe('9086431055');
+    expect(phoneDigitsWithoutCountryCode('89086431055')).toBe('9086431055');
+    expect(phoneDigitsWithoutCountryCode('9086431055')).toBe('9086431055');
   });
 
   it('leaves non-standard display values readable', () => {

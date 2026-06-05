@@ -965,6 +965,15 @@
                       >
                     </label>
                   }
+                  <label class="profile-field">
+                    <span>Комментарий</span>
+                    <input
+                      type="text"
+                      [ngModel]="profilePolicy(profile.id).manualComment"
+                      (ngModelChange)="setProfileManualComment(profile.id, $event)"
+                      placeholder="Оплата заказа №{orderId}"
+                    >
+                  </label>
                 </div>
               }
             </article>

@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -24,6 +24,7 @@ import { apiErrorMessage } from '../../shared/api-error-message';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { phoneDigitsWithoutCountryCode } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
 
 type LeadMutation = 'send' | 'resend' | 'archive' | 'new' | 'toWork';
@@ -66,12 +67,15 @@ type CompanyCreateContext = {
   templateUrl: './leads-board.component.html',
   styleUrl: './leads-board.component.scss'
 })
-export class LeadsBoardComponent {
+export class LeadsBoardComponent implements OnDestroy {
   private readonly leadsApi = inject(LeadsApi);
   private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
   private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
   private readonly router = inject(Router);
+  private readonly searchDelayMs = 500;
+  private searchTimer: number | null = null;
+  private copiedTimer: number | null = null;
   private readonly emptyPage: LeadPage = {
     content: [],
     pageNumber: 0,
@@ -192,6 +196,11 @@ export class LeadsBoardComponent {
     this.loadBoard();
   }
 
+  ngOnDestroy(): void {
+    this.clearSearchTimer();
+    this.clearCopiedTimer();
+  }
+
   loadBoard(): void {
     this.loading.set(true);
     this.error.set(null);
@@ -218,13 +227,35 @@ export class LeadsBoardComponent {
   }
 
   search(): void {
+    this.clearSearchTimer();
     this.pageNumber.set(0);
     this.loadBoard();
+  }
+
+  onKeywordChange(value: string): void {
+    this.keyword.set(value);
+    this.scheduleSearch();
   }
 
   clearSearch(): void {
     this.keyword.set('');
     this.search();
+  }
+
+  private scheduleSearch(): void {
+    this.clearSearchTimer();
+    this.searchTimer = window.setTimeout(() => {
+      this.searchTimer = null;
+      this.search();
+    }, this.searchDelayMs);
+  }
+
+  private clearSearchTimer(): void {
+    if (this.searchTimer === null) {
+      return;
+    }
+    window.clearTimeout(this.searchTimer);
+    this.searchTimer = null;
   }
 
   setBucket(bucket: LeadBucketKey): void {
@@ -353,11 +384,15 @@ export class LeadsBoardComponent {
   }
 
   async copyPhone(lead: LeadItem): Promise<void> {
-    await this.copyText(lead.telephoneLead, 'телефон');
+    await this.copyText(phoneDigitsWithoutCountryCode(lead.telephoneLead), 'телефон', this.phoneCopyKey(lead));
   }
 
   async copyPromo(item: PromoItem): Promise<void> {
     await this.copyText(item.text, item.label);
+  }
+
+  isPhoneCopied(lead: LeadItem): boolean {
+    return this.copied() === this.phoneCopyKey(lead);
   }
 
   openCreateModal(): void {
@@ -935,7 +970,7 @@ export class LeadsBoardComponent {
     return changed ? { ...page, content } : page;
   }
 
-  private async copyText(value: string, label: string): Promise<void> {
+  private async copyText(value: string, label: string, copiedKey: string = label): Promise<void> {
     if (!value) {
       this.toastService.info('Нечего копировать', `Поле "${label}" пустое`);
       return;
@@ -946,9 +981,27 @@ export class LeadsBoardComponent {
       return;
     }
 
-    this.copied.set(label);
+    this.copied.set(copiedKey);
     this.toastService.success('Скопировано', label);
-    window.setTimeout(() => this.copied.set(null), 1400);
+    this.clearCopiedTimer();
+    this.copiedTimer = window.setTimeout(() => {
+      if (this.copied() === copiedKey) {
+        this.copied.set(null);
+      }
+      this.copiedTimer = null;
+    }, 1400);
+  }
+
+  private phoneCopyKey(lead: LeadItem): string {
+    return `phone:${lead.id}`;
+  }
+
+  private clearCopiedTimer(): void {
+    if (this.copiedTimer === null) {
+      return;
+    }
+    window.clearTimeout(this.copiedTimer);
+    this.copiedTimer = null;
   }
 
   private errorMessage(err: unknown, fallback: string): string {

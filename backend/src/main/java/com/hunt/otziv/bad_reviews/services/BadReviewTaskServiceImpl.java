@@ -6,6 +6,7 @@ import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
 import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -71,6 +72,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
     private final GamificationEventService gamificationEventService;
+    private final BusinessAuditService businessAuditService;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -457,6 +459,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     @Override
     @Transactional
+    public int deleteAllByOrderId(Long orderId) {
+        if (orderId == null) {
+            return 0;
+        }
+        int deleted = badReviewTaskRepository.deleteAllByOrderId(orderId);
+        log.info("Удалено плохих задач заказа {}: {}", orderId, deleted);
+        return deleted;
+    }
+
+    @Override
+    @Transactional
     public BadReviewTask changeTaskBot(Long taskId) {
         BadReviewTask task = requireTask(taskId);
         Bot nextBot = pickReplacementBot(task);
@@ -483,7 +496,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (currentBotId != null && currentBotId > 0) {
             Bot bot = botService.findBotById(currentBotId);
             if (bot != null) {
+                boolean oldActive = bot.isActive();
                 bot.setActive(false);
+                auditActiveChange(bot, oldActive, false, "bad review task block button");
                 botService.save(bot);
             }
         }
@@ -916,6 +931,23 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     private int toIntCount(long count) {
         return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
+    }
+
+    private void auditActiveChange(Bot bot, boolean oldActive, boolean newActive, String details) {
+        if (oldActive == newActive || bot == null || bot.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                "bot_active_changed",
+                "bot",
+                bot.getId(),
+                null,
+                null,
+                oldActive,
+                newActive,
+                details
+        );
     }
 
     private static final class MutableSummary {

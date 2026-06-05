@@ -822,6 +822,12 @@ const OPERATOR_TABS: OperatorTab[] = [
       font-weight: 900;
     }
 
+    .operator-lead-card .lead-phone-row a {
+      font-size: var(--otziv-unified-phone-font-size, 1rem);
+      text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
+    }
+
     .operator-comment-editor {
       flex: 0 0 clamp(5rem, 16vh, 6.4rem);
       min-height: 5rem;

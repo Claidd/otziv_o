@@ -16,7 +16,7 @@
       </nav>
 
       <div class="dictionary-actions">
-        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <label class="dictionary-search" appTooltip="Поиск работает по текущему справочнику. Нажмите Enter или кнопку поиска, чтобы обновить список.">
             <span class="material-icons-sharp">search</span>
             <input
@@ -37,7 +37,7 @@
           </button>
         }
 
-        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
@@ -159,6 +159,8 @@
         }
       </article>
     </section>
+    } @else if (activeTab() === 'specialistTransfer') {
+    <app-specialist-transfer />
     } @else if (activeTab() === 'autoresponderMonitor') {
     <section class="dictionary-monitor-page">
       <article class="dictionary-card editor-card autoresponder-monitor">

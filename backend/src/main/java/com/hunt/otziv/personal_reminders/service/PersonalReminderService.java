@@ -57,6 +57,7 @@ public class PersonalReminderService {
         User user = currentUser(principal);
 
         return reminderRepository.findByUserIdAndCompletedAtIsNullOrderByUpdatedAtDesc(user.getId()).stream()
+                .filter(this::isVisibleReminder)
                 .sorted(Comparator
                         .comparingInt(this::dueRank)
                         .thenComparing(reminder -> reminder.getRemindAt() == null ? Instant.MAX : reminder.getRemindAt())
@@ -377,6 +378,30 @@ public class PersonalReminderService {
         return reminder != null
                 && (SOURCE_REVIEW_RECOVERY_BATCH.equals(reminder.getSourceType())
                 || titleStartsWith(reminder, RECOVERY_COMPLETED_TITLE_PREFIX));
+    }
+
+    private boolean isVisibleReminder(PersonalReminder reminder) {
+        if (!isRecoveryCompletionReminder(reminder)) {
+            return true;
+        }
+
+        return activeCompletedRecoveryBatchId(reminder) != null;
+    }
+
+    private Long activeCompletedRecoveryBatchId(PersonalReminder reminder) {
+        if (reminder == null) {
+            return null;
+        }
+
+        if (SOURCE_REVIEW_RECOVERY_BATCH.equals(reminder.getSourceType()) && reminder.getSourceId() != null) {
+            return recoveryBatchRepository.findById(reminder.getSourceId())
+                    .filter(batch -> batch.getStatus() == ReviewRecoveryBatchStatus.COMPLETED)
+                    .map(ReviewRecoveryBatch::getId)
+                    .orElse(null);
+        }
+
+        Long orderId = reminder.getSourceOrderId() != null ? reminder.getSourceOrderId() : recoveryOrderId(reminder);
+        return recoveryBatchId(reminder, orderId);
     }
 
     private boolean isBadReviewReminder(PersonalReminder reminder) {

@@ -340,16 +340,23 @@ public class PaymentLinkService {
 
     @Transactional
     public PublicPaymentLinkResponse publicLink(String token) {
+        LocalDateTime now = LocalDateTime.now();
         PaymentLink link = findPublicLink(token);
         syncTbankStateIfNeeded(link);
         expireIfPastDue(link);
+        PaymentLink resolvedLink = resolveReplacementPublicLink(link, now, true);
+        if (resolvedLink != link) {
+            link = resolvedLink;
+            syncTbankStateIfNeeded(link);
+            expireIfPastDue(link);
+        }
         expireIfAmountChanged(link);
         return toPublicResponse(link);
     }
 
     @Transactional(readOnly = true)
     public List<PublicSbpBankResponse> publicSbpBanks(String token, String deviceType, String os) {
-        PaymentLink link = findPublicLink(token);
+        PaymentLink link = resolveReplacementPublicLink(findPublicLink(token), LocalDateTime.now(), false);
         validatePayable(link);
         validateTbankPayment(link);
 
@@ -593,7 +600,7 @@ public class PaymentLinkService {
             String clientIp,
             String userAgent
     ) {
-        PaymentLink link = findPublicLink(token);
+        PaymentLink link = resolveReplacementPublicLink(findPublicLink(token), LocalDateTime.now(), true);
         validatePayable(link);
         validateTbankPayment(link);
         validateConsents(offerConsent, privacyConsent, receiptConsent);
@@ -668,7 +675,7 @@ public class PaymentLinkService {
             String clientIp,
             String userAgent
     ) {
-        PaymentLink link = findPublicLink(token);
+        PaymentLink link = resolveReplacementPublicLink(findPublicLink(token), LocalDateTime.now(), true);
         validatePayable(link);
         validateTbankPayment(link);
         validateConsents(offerConsent, privacyConsent, receiptConsent);
@@ -1121,6 +1128,69 @@ public class PaymentLinkService {
         }
         return paymentLinkRepository.findByTokenWithOrder(cleanToken)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+    }
+
+    private PaymentLink resolveReplacementPublicLink(PaymentLink link, LocalDateTime now, boolean createIfMissing) {
+        if (!shouldResolveReplacementPublicLink(link, now)) {
+            return link;
+        }
+
+        Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
+        Optional<PaymentLink> replacement = paymentLinkRepository
+                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(orderId, REUSABLE_STATUSES, now)
+                .filter(candidate -> !sameLinkId(candidate, link));
+        if (replacement.isPresent() || !createIfMissing) {
+            return replacement.orElse(link);
+        }
+
+        return createReplacementPublicLink(orderId, now).orElse(link);
+    }
+
+    private Optional<PaymentLink> createReplacementPublicLink(Long orderId, LocalDateTime now) {
+        if (orderId == null || orderId <= 0 || !runtimeSettingsService.isPaymentLinksEnabled()) {
+            return Optional.empty();
+        }
+        try {
+            createForOrder(orderId);
+        } catch (ResponseStatusException e) {
+            log.warn(
+                    "Public payment link replacement skipped: orderId={}, status={}, reason={}",
+                    orderId,
+                    e.getStatusCode(),
+                    normalize(e.getReason())
+            );
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            log.warn("Public payment link replacement failed: orderId={}", orderId, e);
+            return Optional.empty();
+        }
+
+        return paymentLinkRepository
+                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(orderId, REUSABLE_STATUSES, now)
+                .filter(candidate -> candidate.getExpiresAt() != null && candidate.getExpiresAt().isAfter(now));
+    }
+
+    private boolean shouldResolveReplacementPublicLink(PaymentLink link, LocalDateTime now) {
+        if (link == null || link.getOrder() == null || link.getOrder().getId() == null) {
+            return false;
+        }
+        if (link.getStatus() == PaymentLinkStatus.CONFIRMED
+                || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED
+                || link.getStatus() == PaymentLinkStatus.AMOUNT_MISMATCH
+                || link.getStatus() == PaymentLinkStatus.AUTHORIZED
+                || REFUNDED_STATUSES.contains(link.getStatus())) {
+            return false;
+        }
+        return link.getStatus() == PaymentLinkStatus.EXPIRED
+                || link.getStatus() == PaymentLinkStatus.FAILED
+                || link.getStatus() == PaymentLinkStatus.REJECTED
+                || (link.getExpiresAt() != null && !link.getExpiresAt().isAfter(now));
+    }
+
+    private boolean sameLinkId(PaymentLink left, PaymentLink right) {
+        Long leftId = left == null ? null : left.getId();
+        Long rightId = right == null ? null : right.getId();
+        return leftId != null && leftId.equals(rightId);
     }
 
     private void validatePayable(PaymentLink link) {
@@ -1605,7 +1675,7 @@ public class PaymentLinkService {
         link.setManualRecipientName(manualRecipientName(profile.getManualRecipientName()));
         link.setManualPaymentUrl(manualPaymentUrl(profile.getManualPaymentUrl()));
         link.setManualPaymentButtonLabel(manualButtonLabel(profile.getManualPaymentButtonLabel()));
-        link.setManualComment(manualComment(link));
+        link.setManualComment(manualComment(profile.getManualComment(), link));
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
     }
 
@@ -1620,7 +1690,7 @@ public class PaymentLinkService {
         link.setManualRecipientName(manualRecipientName(task.getManualRecipientName()));
         link.setManualPaymentUrl(manualPaymentUrl(task.getManualPaymentUrl()));
         link.setManualPaymentButtonLabel(manualButtonLabel(task.getManualPaymentButtonLabel()));
-        link.setManualComment(manualComment(link));
+        link.setManualComment(manualComment(task.getComment(), link));
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
     }
 
@@ -1784,17 +1854,33 @@ public class PaymentLinkService {
         if (!isManualPayment(link)) {
             return "Ссылка на оплату: " + url;
         }
+        String comment = manualComment(link);
         if (manualPaymentType(link) == ManualPaymentType.EXTERNAL_LINK) {
-            return String.join("\n",
+            return manualPaymentInstruction(
                     "Ссылка на оплату: " + manualPaymentUrl(link.getManualPaymentUrl()),
-                    "Получатель: " + manualRecipientName(link),
-                    "Комментарий: " + manualComment(link)
+                    manualRecipientName(link),
+                    comment
+            );
+        }
+        return manualPaymentInstruction(
+                "Ссылка на оплату: " + normalize(link.getManualPhone()),
+                manualRecipientName(link),
+                comment
+        );
+    }
+
+    private String manualPaymentInstruction(String paymentLine, String recipient, String comment) {
+        String cleanComment = normalize(comment);
+        if (cleanComment.isBlank()) {
+            return String.join("\n",
+                    paymentLine,
+                    "Получатель: " + recipient
             );
         }
         return String.join("\n",
-                "Ссылка на оплату: " + normalize(link.getManualPhone()),
-                "Получатель: " + manualRecipientName(link),
-                "Комментарий: " + manualComment(link)
+                paymentLine,
+                "Получатель: " + recipient,
+                "Комментарий: " + cleanComment
         );
     }
 
@@ -1802,7 +1888,7 @@ public class PaymentLinkService {
         if (!isManualPayment(link)) {
             return "";
         }
-        return "После оплаты отправьте чек менеджеру.";
+        return "После оплаты отправьте чек в этот чат.";
     }
 
     private String paymentLinkValue(PaymentLink link, String url) {
@@ -1828,8 +1914,25 @@ public class PaymentLinkService {
     }
 
     private String manualComment(PaymentLink link) {
+        String stored = normalize(link.getManualComment());
+        if (!stored.isBlank()) {
+            return stored;
+        }
+        return "";
+    }
+
+    private String manualComment(String template, PaymentLink link) {
+        String clean = limit(template, 255);
+        if (clean.isBlank()) {
+            return null;
+        }
+        String comment = limit(clean.replace("{orderId}", orderIdText(link)), 255);
+        return comment.isBlank() ? null : comment;
+    }
+
+    private String orderIdText(PaymentLink link) {
         Long orderId = link.getOrder() == null ? null : link.getOrder().getId();
-        return orderId == null ? "Оплата заказа" : "Оплата заказа №" + orderId;
+        return orderId == null ? "" : String.valueOf(orderId);
     }
 
     private String heading(Order order) {

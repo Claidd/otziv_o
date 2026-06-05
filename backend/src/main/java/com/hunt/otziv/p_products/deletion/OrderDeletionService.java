@@ -3,11 +3,13 @@ package com.hunt.otziv.p_products.deletion;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import jakarta.persistence.EntityManager;
@@ -64,8 +66,10 @@ public class OrderDeletionService {
     private final OrderRepository orderRepository;
     private final OrderDetailsService orderDetailsService;
     private final ReviewService reviewService;
+    private final BadReviewTaskService badReviewTaskService;
     private final OrderDeletionPolicy orderDeletionPolicy;
     private final NextOrderRequestService nextOrderRequestService;
+    private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
     private final EntityManager entityManager;
@@ -89,6 +93,8 @@ public class OrderDeletionService {
                 String deletedOrderStatus = safeStatusTitle(orderToDelete);
                 List<OrderDetails> orderDetails = orderDetailsService.findByOrderId(orderId);
                 log.info("Найдено {} деталей заказа для удаления", orderDetails.size());
+
+                int deletedBadReviewTasks = badReviewTaskService.deleteAllByOrderId(orderId);
 
                 int totalDeletedReviews = 0;
 
@@ -118,6 +124,8 @@ public class OrderDeletionService {
                 log.info("Успешно удалено {} деталей заказа", orderDetails.size());
 
                 nextOrderRequestService.cancelForDeletedCreatedOrder(orderToDelete);
+                int archivedPaymentLinks = paymentLinkArchiveService.archiveForDeletedOrder(orderId);
+                log.info("Архивировано и удалено {} платежных ссылок заказа ID: {}", archivedPaymentLinks, orderId);
 
                 clearPersistenceContextBeforeOrderDelete(orderId);
 
@@ -127,8 +135,8 @@ public class OrderDeletionService {
 
                 stopCompanyIfDeletedLastNewOrder(companyId, deletedOrderStatus, orderId);
 
-                log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов",
-                        orderId, orderDetails.size(), totalDeletedReviews);
+                log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов, {} плохих задач",
+                        orderId, orderDetails.size(), totalDeletedReviews, deletedBadReviewTasks);
 
                 return true;
 

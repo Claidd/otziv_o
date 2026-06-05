@@ -2414,7 +2414,7 @@ app-manager .order-mobile-card .order-phone-row {
 
 app-manager .order-mobile-card .order-phone-row a {
   color: #36708d;
-  font-size: 0.82rem;
+  font-size: var(--otziv-unified-phone-font-size, 1rem);
 }
 
 app-manager .order-mobile-card .order-phone-row button {
@@ -2677,7 +2677,7 @@ app-worker .worker-list .mobile-worker-order-card .order-link-actions a {
 
 app-worker .worker-list .mobile-worker-order-card .order-phone-row a {
   color: #36708d;
-  font-size: 0.82rem !important;
+  font-size: var(--otziv-unified-phone-font-size, 1rem) !important;
 }
 
 app-worker .worker-list .mobile-worker-order-card .order-phone-row button {
@@ -3393,7 +3393,7 @@ app-operator .operator-list .operator-lead-card .lead-phone-row a,
 app-manager-archive .archive-list .archive-order-card .lead-phone-row a {
   color: #36708d;
   font-family: var(--otziv-card-title-font);
-  font-size: 0.82rem !important;
+  font-size: var(--otziv-unified-phone-font-size, 1rem) !important;
   font-weight: 900;
   letter-spacing: 0;
   line-height: 1;
@@ -3593,7 +3593,7 @@ body.otziv-short-phone app-manager .mobile-page-bottom-pager .mobile-pager-nav s
   --otziv-unified-action-height: var(--otziv-unified-control-height);
   --otziv-unified-control-font-size: 0.67rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.75rem;
+  --otziv-unified-phone-font-size: 0.98rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.32rem;
   --otziv-unified-note-min-height: 2.1rem;
@@ -3616,7 +3616,7 @@ body.otziv-short-phone {
   --otziv-unified-action-height: var(--otziv-unified-control-height);
   --otziv-unified-control-font-size: 0.63rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.71rem;
+  --otziv-unified-phone-font-size: 0.94rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.16rem;
   --otziv-unified-note-min-height: 1.96rem;
@@ -3638,7 +3638,7 @@ body.otziv-roomy-phone {
   --otziv-unified-action-height: var(--otziv-unified-control-height);
   --otziv-unified-control-font-size: 0.72rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.82rem;
+  --otziv-unified-phone-font-size: 1.04rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.9rem;
   --otziv-unified-note-min-height: 2.7rem;
@@ -4234,15 +4234,6 @@ body.otziv-short-phone app-manager .manager-list--orders .order-mobile-card .ord
   text-align: center !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-}
-
-app-mobile-order-card .mobile-order-card .phone-row a,
-app-leads .lead-list .mobile-lead-card .lead-phone-row .lead-phone-open,
-app-leads .lead-list .mobile-lead-card .lead-phone-row a,
-app-manager .manager-list .company-mobile-card .lead-phone-row a,
-app-operator .operator-list .operator-lead-card .lead-phone-row a,
-app-manager-archive .archive-list .archive-order-card .lead-phone-row a {
-  font-size: var(--otziv-unified-phone-font-size) !important;
 }
 
 app-mobile-order-card .mobile-order-card .phone-row button,
@@ -4896,7 +4887,7 @@ body.otziv-roomy-phone {
   --otziv-unified-action-height: var(--otziv-unified-control-height);
   --otziv-unified-control-font-size: 0.9rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 1rem;
+  --otziv-unified-phone-font-size: 1.04rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 4rem;
   --otziv-unified-note-min-height: 3.45rem;
@@ -4962,14 +4953,6 @@ body.otziv-roomy-phone app-worker .worker-list .mobile-worker-review-card :is(.b
   padding-inline: 0.5rem !important;
   font-size: var(--otziv-unified-control-font-size) !important;
   line-height: 1.06 !important;
-}
-
-body.otziv-roomy-phone app-mobile-order-card .mobile-order-card .phone-row a,
-body.otziv-roomy-phone app-leads .lead-list .mobile-lead-card .lead-phone-row :is(a, .lead-phone-open),
-body.otziv-roomy-phone app-manager .manager-list .company-mobile-card .lead-phone-row a,
-body.otziv-roomy-phone app-operator .operator-list .operator-lead-card .lead-phone-row a,
-body.otziv-roomy-phone app-manager-archive .archive-list .archive-order-card .lead-phone-row a {
-  font-size: var(--otziv-unified-phone-font-size) !important;
 }
 
 body.otziv-roomy-phone app-mobile-order-card .mobile-order-card .card-actions :is(button, a),
@@ -5321,8 +5304,8 @@ body.otziv-short-phone app-tbank-page .payment-context-row span {
 }
 
 body:is(.otziv-compact-phone, .otziv-short-phone) app-order-details-mobile .order-details-mobile-page {
-  --otziv-review-text-height: 5.85rem;
-  --otziv-review-text-height-open: 6.4rem;
+  --otziv-review-text-height: 10.4rem;
+  --otziv-review-text-height-open: 11.6rem;
   --otziv-review-answer-height: 2.05rem;
 }
 
@@ -5391,7 +5374,7 @@ body :is(app-leads, app-manager, app-worker, app-manager-archive, app-order-deta
   --otziv-unified-control-height: 1.94rem;
   --otziv-unified-control-font-size: 0.78rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.9rem;
+  --otziv-unified-phone-font-size: 1rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.82rem;
   --otziv-unified-note-min-height: 2.5rem;
@@ -5424,7 +5407,7 @@ body:is(.otziv-compact-phone, .otziv-short-phone) :is(app-leads, app-manager, ap
   --otziv-unified-control-height: 1.72rem;
   --otziv-unified-control-font-size: 0.68rem;
   --otziv-unified-field-font-size: var(--otziv-unified-control-font-size);
-  --otziv-unified-phone-font-size: 0.8rem;
+  --otziv-unified-phone-font-size: 0.94rem;
   --otziv-unified-action-font-size: var(--otziv-unified-control-font-size);
   --otziv-unified-note-height: 2.28rem;
   --otziv-unified-note-min-height: 2.05rem;
@@ -5481,8 +5464,8 @@ body app-order-details-mobile :is(.field-actions button, .review-actions button,
 body app-order-details-mobile {
   --otziv-detail-card-width: min(17.15rem, 86vw);
   --otziv-card-padding: 0.6rem 0.46rem;
-  --otziv-review-text-height: clamp(10.35rem, 27vh, 12.1rem);
-  --otziv-review-text-height-open: clamp(11.4rem, 31vh, 13.25rem);
+  --otziv-review-text-height: 15.6rem;
+  --otziv-review-text-height-open: 17rem;
   --otziv-review-answer-height: 2.9rem;
 }
 
@@ -5492,16 +5475,16 @@ body.otziv-roomy-phone app-order-details-mobile {
   --otziv-card-gap: 0.56rem;
   --otziv-unified-control-height: 2.08rem;
   --otziv-unified-control-font-size: 0.84rem;
-  --otziv-review-text-height: clamp(11.35rem, 30vh, 13.2rem);
-  --otziv-review-text-height-open: clamp(12.35rem, 34vh, 14.45rem);
+  --otziv-review-text-height: 17.8rem;
+  --otziv-review-text-height-open: 19.2rem;
   --otziv-review-answer-height: 3.05rem;
 }
 
 body:is(.otziv-compact-phone, .otziv-short-phone) app-order-details-mobile {
   --otziv-detail-card-width: min(15.7rem, 84vw);
   --otziv-card-padding: 0.5rem 0.36rem;
-  --otziv-review-text-height: 8.35rem;
-  --otziv-review-text-height-open: 9.15rem;
+  --otziv-review-text-height: 10.4rem;
+  --otziv-review-text-height-open: 11.6rem;
   --otziv-review-answer-height: 2.62rem;
 }
 
@@ -5592,7 +5575,7 @@ body app-leads {
   --otziv-lead-subtitle-size: 0.66rem;
   --otziv-lead-control-height: 2rem;
   --otziv-lead-control-font-size: 0.78rem;
-  --otziv-lead-phone-font-size: 0.92rem;
+  --otziv-lead-phone-font-size: var(--otziv-unified-phone-font-size);
   --otziv-lead-comment-height: 3.35rem;
 }
 
@@ -5604,7 +5587,7 @@ body.otziv-roomy-phone app-leads {
   --otziv-lead-subtitle-size: 0.72rem;
   --otziv-lead-control-height: 2.18rem;
   --otziv-lead-control-font-size: 0.86rem;
-  --otziv-lead-phone-font-size: 1.02rem;
+  --otziv-lead-phone-font-size: var(--otziv-unified-phone-font-size);
   --otziv-lead-comment-height: 3.85rem;
 }
 
@@ -5616,7 +5599,7 @@ body:is(.otziv-compact-phone, .otziv-short-phone) app-leads {
   --otziv-lead-subtitle-size: 0.62rem;
   --otziv-lead-control-height: 1.86rem;
   --otziv-lead-control-font-size: 0.72rem;
-  --otziv-lead-phone-font-size: 0.86rem;
+  --otziv-lead-phone-font-size: var(--otziv-unified-phone-font-size);
   --otziv-lead-comment-height: 3rem;
 }
 
@@ -5700,7 +5683,6 @@ body :is(
   app-worker .worker-list,
   app-operator .operator-list,
   app-manager-archive .archive-list,
-  app-order-details-mobile .review-mobile-strip,
   app-review-check-mobile .review-check-list,
   app-tbank-page .payment-list
 ) {
@@ -5716,8 +5698,6 @@ body :is(
   app-worker .worker-list .mobile-review-card-shell,
   app-operator .operator-list .operator-lead-card,
   app-manager-archive .archive-list .archive-order-card,
-  app-order-details-mobile .review-mobile-strip .mobile-review-card,
-  app-order-details-mobile .review-mobile-strip .mobile-review-card-shell,
   app-review-check-mobile .review-check-list .review-check-card,
   app-tbank-page .payment-list .payment-card
 ) {
@@ -5736,8 +5716,6 @@ body :is(
   app-worker .worker-list .mobile-review-card-shell,
   app-operator .operator-list .operator-lead-card,
   app-manager-archive .archive-list .archive-order-card,
-  app-order-details-mobile .review-mobile-strip .mobile-review-card,
-  app-order-details-mobile .review-mobile-strip .mobile-review-card-shell,
   app-review-check-mobile .review-check-list .review-check-card,
   app-tbank-page .payment-list .payment-card
 ) {
@@ -5757,8 +5735,6 @@ body :is(
   app-worker .worker-list .mobile-review-card-shell,
   app-operator .operator-list .operator-lead-card,
   app-manager-archive .archive-list .archive-order-card,
-  app-order-details-mobile .review-mobile-strip .mobile-review-card,
-  app-order-details-mobile .review-mobile-strip .mobile-review-card-shell,
   app-review-check-mobile .review-check-list .review-check-card,
   app-tbank-page .payment-list .payment-card
 )::-webkit-scrollbar {
@@ -5774,4 +5750,24 @@ body :is(
 ) {
   scroll-snap-type: none !important;
   overscroll-behavior-x: auto !important;
+}
+
+/* Final phone-number contract. Keep after card/control overrides. */
+body app-leads .lead-list .mobile-lead-card .lead-phone-row a,
+body app-leads .lead-list .mobile-lead-card .lead-phone-row .lead-phone-open,
+body app-manager .manager-list .company-mobile-card .lead-phone-row a,
+body app-manager .manager-list .order-mobile-card .order-phone-row a,
+body app-mobile-order-card .mobile-order-card .phone-row a,
+body app-worker .worker-list .mobile-worker-order-card .order-phone-row a,
+body app-operator .operator-list .operator-lead-card .lead-phone-row a,
+body app-manager-archive .archive-list .archive-order-card .lead-phone-row a,
+body.otziv-compact-phone app-manager .manager-list--orders .order-mobile-card .order-phone-row a,
+body.otziv-short-phone app-manager .manager-list--orders .order-mobile-card .order-phone-row a {
+  font-family: var(--otziv-card-title-font) !important;
+  font-size: var(--otziv-unified-phone-font-size, 1rem) !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  text-size-adjust: 100% !important;
+  -webkit-text-size-adjust: 100% !important;
 }

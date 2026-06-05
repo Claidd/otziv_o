@@ -62,6 +62,7 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
+import { SpecialistTransferComponent } from '../specialist-transfer/specialist-transfer.component';
 import {
   DeviceToken,
   OperatorPhone,
@@ -71,7 +72,7 @@ import {
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'gamification' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'specialistTransfer' | 'gamification' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -158,6 +159,10 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
     title: 'Тексты менеджеров',
     text: 'Персональные шаблоны сообщений, которые менеджер использует в работе.'
   },
+  specialistTransfer: {
+    title: 'Передача компаний',
+    text: 'Операционный перенос текущих компаний, активных заказов и неопубликованных отзывов между специалистами.'
+  },
   gamification: {
     title: 'Геймификация',
     text: 'Отдельный контур настроек: глобальное включение, роли, показ в кабинете и события.'
@@ -178,7 +183,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective, SpecialistTransferComponent],
   templateUrl: './admin-dictionaries.component.html',
   styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })
@@ -200,6 +205,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
     { key: 'promo', label: 'Промо', icon: 'smart_button' },
     { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' },
+    { key: 'specialistTransfer', label: 'Передача', icon: 'sync_alt' },
     { key: 'gamification', label: 'Геймификация', icon: 'emoji_events' },
     { key: 'settings', label: 'Настройки', icon: 'tune' },
     { key: 'autoresponder', label: 'Автоответчик', icon: 'mark_chat_unread' },
@@ -511,6 +517,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         return this.promoTexts().length;
       case 'managerTexts':
         return this.managerTexts().length;
+      case 'specialistTransfer':
+        return 0;
       case 'gamification':
         return this.gamificationTotal();
       case 'settings':
@@ -1147,6 +1155,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'managerTexts':
         this.saveManagerText();
         return;
+      case 'specialistTransfer':
+        return;
       case 'gamification':
         this.saveGamificationSettings();
         return;
@@ -1622,7 +1632,13 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   deleteSelected(): void {
     const activeTab = this.activeTab();
-    if (activeTab === 'promo' || activeTab === 'managerTexts' || activeTab === 'gamification' || activeTab === 'settings' || activeTab === 'autoresponder' || activeTab === 'autoresponderMonitor') {
+    if (activeTab === 'promo'
+      || activeTab === 'managerTexts'
+      || activeTab === 'specialistTransfer'
+      || activeTab === 'gamification'
+      || activeTab === 'settings'
+      || activeTab === 'autoresponder'
+      || activeTab === 'autoresponderMonitor') {
       return;
     }
 
@@ -1707,6 +1723,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       accounts: this.bots().length,
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
+      specialistTransfer: 0,
       gamification: this.gamificationTotal(),
       settings: this.settingsTotal(),
       autoresponder: this.autoresponderTotal(),
@@ -1989,6 +2006,10 @@ export class AdminDictionariesComponent implements OnDestroy {
       return 'Рассылки и выгул';
     }
 
+    if (this.activeTab() === 'specialistTransfer') {
+      return 'Передача текущей работы';
+    }
+
     if (this.activeTab() === 'autoresponder') {
       return 'Клиентские автоответы';
     }
@@ -2235,6 +2256,10 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   private loadActive(): void {
+    if (this.activeTab() === 'specialistTransfer') {
+      return;
+    }
+
     this.loading.set(true);
     this.error.set(null);
     this.selectedId.set(null);
@@ -2266,6 +2291,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'managerTexts':
         request = this.dictionariesApi.getManagerTexts(keyword);
         break;
+      case 'specialistTransfer':
+        return;
       case 'gamification':
         request = forkJoin({
           settings: this.dictionariesApi.getGamificationSettings(),
@@ -3272,6 +3299,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       'accounts',
       'promo',
       'managerTexts',
+      'specialistTransfer',
       'gamification',
       'settings',
       'autoresponder',

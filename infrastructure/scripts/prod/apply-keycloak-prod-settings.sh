@@ -37,6 +37,60 @@ kc() {
   compose exec -T keycloak /opt/keycloak/bin/kcadm.sh "$@"
 }
 
+kc_login() {
+  kc config credentials \
+    --server http://localhost:8080/keycloak \
+    --realm master \
+    --user "$ADMIN_USER" \
+    --password "$ADMIN_PASSWORD"
+}
+
+kc_retry() {
+  set +e
+  output="$(kc "$@" 2>&1)"
+  status="$?"
+  set -e
+
+  if [ "$status" -ne 0 ]; then
+    case "$output" in
+      *"HTTP 401 Unauthorized"*|*"Unauthorized"*)
+        echo "Keycloak admin token expired; refreshing credentials." >&2
+        if kc_login >/dev/null 2>&1; then
+          set +e
+          output="$(kc "$@" 2>&1)"
+          status="$?"
+          set -e
+        fi
+        ;;
+    esac
+  fi
+
+  if [ "$status" -ne 0 ]; then
+    echo "$output" >&2
+    return "$status"
+  fi
+
+  printf '%s\n' "$output"
+}
+
+client_uuid_by_id() {
+  client_id="$1"
+  output="$(kc_retry get clients -r "$REALM" -q clientId="$client_id" --fields id --format csv --noquotes)"
+  printf '%s\n' "$output" \
+    | tr -d '\r' \
+    | tail -n 1
+}
+
+protocol_mapper_id() {
+  client_uuid="$1"
+  mapper_name="$2"
+  output="$(kc_retry get "clients/$client_uuid/protocol-mappers/models" -r "$REALM" \
+    --fields id,name --format csv --noquotes)"
+  printf '%s\n' "$output" \
+    | tr -d '\r' \
+    | awk -F, -v mapper_name="$mapper_name" '$2 == mapper_name { print $1; exit }'
+}
+
 APP_BASE_URL="${OTZIV_APP_BASE_URL:-$(env_value OTZIV_APP_BASE_URL)}"
 KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-$(env_value KEYCLOAK_PUBLIC_URL)}"
 REALM="${KEYCLOAK_ADMIN_REALM:-$(env_value KEYCLOAK_ADMIN_REALM)}"
@@ -91,11 +145,7 @@ echo "Applying Keycloak production settings for $KEYCLOAK_PUBLIC_URL."
 
 configured="0"
 for attempt in $(seq 1 30); do
-  if kc config credentials \
-    --server http://localhost:8080/keycloak \
-    --realm master \
-    --user "$ADMIN_USER" \
-    --password "$ADMIN_PASSWORD" >/dev/null 2>&1; then
+  if kc_login >/dev/null 2>&1; then
     configured="1"
     break
   fi
@@ -108,7 +158,7 @@ if [ "$configured" != "1" ]; then
   exit 1
 fi
 
-kc update "realms/$REALM" \
+kc_retry update "realms/$REALM" \
   -s sslRequired=external \
   -s loginTheme=otziv \
   -s accessTokenLifespan=600 \
@@ -118,18 +168,14 @@ kc update "realms/$REALM" \
   -s offlineSessionMaxLifespanEnabled=true \
   -s "offlineSessionMaxLifespan=$MOBILE_SESSION_SECONDS"
 
-frontend_client_uuid="$(
-  kc get clients -r "$REALM" -q clientId=otziv-frontend --fields id --format csv --noquotes \
-    | tr -d '\r' \
-    | tail -n 1
-)"
+frontend_client_uuid="$(client_uuid_by_id otziv-frontend)"
 
 if [ -n "$frontend_client_uuid" ] && [ "$frontend_client_uuid" != "id" ]; then
-  kc update "clients/$frontend_client_uuid" -r "$REALM" \
+  kc_retry update "clients/$frontend_client_uuid" -r "$REALM" \
     -s "redirectUris=$FRONTEND_REDIRECT_URIS" \
     -s "webOrigins=$FRONTEND_WEB_ORIGINS"
 
-  kc update "clients/$frontend_client_uuid" -r "$REALM" \
+  kc_retry update "clients/$frontend_client_uuid" -r "$REALM" \
     -s "attributes.\"pkce.code.challenge.method\"=S256" \
     -s "attributes.\"post.logout.redirect.uris\"=$FRONTEND_LOGOUT_REDIRECT_URIS" \
     || echo "Warning: could not update optional frontend client attributes." >&2
@@ -137,14 +183,10 @@ else
   echo "Warning: frontend Keycloak client otziv-frontend was not found." >&2
 fi
 
-mobile_client_uuid="$(
-  kc get clients -r "$REALM" -q clientId="$MOBILE_CLIENT_ID" --fields id --format csv --noquotes \
-    | tr -d '\r' \
-    | tail -n 1
-)"
+mobile_client_uuid="$(client_uuid_by_id "$MOBILE_CLIENT_ID")"
 
 if [ -z "$mobile_client_uuid" ] || [ "$mobile_client_uuid" = "id" ]; then
-  kc create clients -r "$REALM" \
+  kc_retry create clients -r "$REALM" \
     -s "clientId=$MOBILE_CLIENT_ID" \
     -s name="Otziv Mobile App" \
     -s description="Ionic Capacitor mobile application" \
@@ -157,15 +199,11 @@ if [ -z "$mobile_client_uuid" ] || [ "$mobile_client_uuid" = "id" ]; then
     -s serviceAccountsEnabled=false \
     -s frontchannelLogout=true
 
-  mobile_client_uuid="$(
-    kc get clients -r "$REALM" -q clientId="$MOBILE_CLIENT_ID" --fields id --format csv --noquotes \
-      | tr -d '\r' \
-      | tail -n 1
-  )"
+  mobile_client_uuid="$(client_uuid_by_id "$MOBILE_CLIENT_ID")"
 fi
 
 if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
-  kc update "clients/$mobile_client_uuid" -r "$REALM" \
+  kc_retry update "clients/$mobile_client_uuid" -r "$REALM" \
     -s enabled=true \
     -s publicClient=true \
     -s standardFlowEnabled=true \
@@ -177,22 +215,17 @@ if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
     -s "redirectUris=$MOBILE_REDIRECT_URIS" \
     -s "webOrigins=$MOBILE_WEB_ORIGINS"
 
-  kc update "clients/$mobile_client_uuid" -r "$REALM" \
+  kc_retry update "clients/$mobile_client_uuid" -r "$REALM" \
     -s "attributes.\"pkce.code.challenge.method\"=S256" \
     -s "attributes.\"client.session.idle.timeout\"=$MOBILE_SESSION_SECONDS" \
     -s "attributes.\"client.session.max.lifespan\"=$MOBILE_SESSION_SECONDS" \
     -s "attributes.\"post.logout.redirect.uris\"=$MOBILE_LOGOUT_REDIRECT_URIS" \
     || echo "Warning: could not update optional mobile client attributes." >&2
 
-  mobile_roles_mapper_id="$(
-    kc get "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
-      --fields id,name --format csv --noquotes \
-      | tr -d '\r' \
-      | awk -F, '$2 == "realm roles" { print $1; exit }'
-  )"
+  mobile_roles_mapper_id="$(protocol_mapper_id "$mobile_client_uuid" "realm roles")"
 
   if [ -n "$mobile_roles_mapper_id" ]; then
-    kc update "clients/$mobile_client_uuid/protocol-mappers/models/$mobile_roles_mapper_id" -r "$REALM" \
+    kc_retry update "clients/$mobile_client_uuid/protocol-mappers/models/$mobile_roles_mapper_id" -r "$REALM" \
       -s name="realm roles" \
       -s protocol=openid-connect \
       -s protocolMapper=oidc-usermodel-realm-role-mapper \
@@ -203,7 +236,7 @@ if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
       -s "config.\"claim.name\"=roles" \
       -s "config.\"jsonType.label\"=String"
   else
-    kc create "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
+    kc_retry create "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
       -s name="realm roles" \
       -s protocol=openid-connect \
       -s protocolMapper=oidc-usermodel-realm-role-mapper \
@@ -215,15 +248,10 @@ if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
       -s "config.\"jsonType.label\"=String"
   fi
 
-  mobile_audience_mapper_id="$(
-    kc get "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
-      --fields id,name --format csv --noquotes \
-      | tr -d '\r' \
-      | awk -F, '$2 == "backend audience" { print $1; exit }'
-  )"
+  mobile_audience_mapper_id="$(protocol_mapper_id "$mobile_client_uuid" "backend audience")"
 
   if [ -n "$mobile_audience_mapper_id" ]; then
-    kc update "clients/$mobile_client_uuid/protocol-mappers/models/$mobile_audience_mapper_id" -r "$REALM" \
+    kc_retry update "clients/$mobile_client_uuid/protocol-mappers/models/$mobile_audience_mapper_id" -r "$REALM" \
       -s name="backend audience" \
       -s protocol=openid-connect \
       -s protocolMapper=oidc-audience-mapper \
@@ -231,7 +259,7 @@ if [ -n "$mobile_client_uuid" ] && [ "$mobile_client_uuid" != "id" ]; then
       -s "config.\"id.token.claim\"=false" \
       -s "config.\"access.token.claim\"=true"
   else
-    kc create "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
+    kc_retry create "clients/$mobile_client_uuid/protocol-mappers/models" -r "$REALM" \
       -s name="backend audience" \
       -s protocol=openid-connect \
       -s protocolMapper=oidc-audience-mapper \
@@ -243,11 +271,7 @@ else
   echo "Warning: mobile Keycloak client $MOBILE_CLIENT_ID was not found and could not be created." >&2
 fi
 
-backend_client_uuid="$(
-  kc get clients -r "$REALM" -q clientId="$BACKEND_CLIENT_ID" --fields id --format csv --noquotes \
-    | tr -d '\r' \
-    | tail -n 1
-)"
+backend_client_uuid="$(client_uuid_by_id "$BACKEND_CLIENT_ID")"
 
 if [ -n "$backend_client_uuid" ] && [ "$backend_client_uuid" != "id" ]; then
   backend_update_args="
@@ -260,7 +284,7 @@ if [ -n "$backend_client_uuid" ] && [ "$backend_client_uuid" != "id" ]; then
   "
 
   if [ -n "$BACKEND_CLIENT_SECRET" ]; then
-    kc update "clients/$backend_client_uuid" -r "$REALM" \
+    kc_retry update "clients/$backend_client_uuid" -r "$REALM" \
       -s enabled=true \
       -s publicClient=false \
       -s serviceAccountsEnabled=true \
@@ -270,22 +294,17 @@ if [ -n "$backend_client_uuid" ] && [ "$backend_client_uuid" != "id" ]; then
       -s "secret=$BACKEND_CLIENT_SECRET"
   else
     echo "Warning: KEYCLOAK_ADMIN_CLIENT_SECRET is empty; backend client secret was not changed." >&2
-    kc update "clients/$backend_client_uuid" -r "$REALM" \
+    kc_retry update "clients/$backend_client_uuid" -r "$REALM" \
       $backend_update_args
   fi
 
-  kc add-roles -r "$REALM" --uusername "service-account-$BACKEND_CLIENT_ID" --rolename ADMIN \
+  kc_retry add-roles -r "$REALM" --uusername "service-account-$BACKEND_CLIENT_ID" --rolename ADMIN \
     || echo "Warning: could not add ADMIN role to backend service account." >&2
 
-  backend_audience_mapper_id="$(
-    kc get "clients/$backend_client_uuid/protocol-mappers/models" -r "$REALM" \
-      --fields id,name --format csv --noquotes \
-      | tr -d '\r' \
-      | awk -F, '$2 == "otziv-backend-audience" { print $1; exit }'
-  )"
+  backend_audience_mapper_id="$(protocol_mapper_id "$backend_client_uuid" "otziv-backend-audience")"
 
   if [ -n "$backend_audience_mapper_id" ]; then
-    kc update "clients/$backend_client_uuid/protocol-mappers/models/$backend_audience_mapper_id" -r "$REALM" \
+    kc_retry update "clients/$backend_client_uuid/protocol-mappers/models/$backend_audience_mapper_id" -r "$REALM" \
       -s name=otziv-backend-audience \
       -s protocol=openid-connect \
       -s protocolMapper=oidc-audience-mapper \
@@ -293,7 +312,7 @@ if [ -n "$backend_client_uuid" ] && [ "$backend_client_uuid" != "id" ]; then
       -s "config.\"id.token.claim\"=false" \
       -s "config.\"access.token.claim\"=true"
   else
-    kc create "clients/$backend_client_uuid/protocol-mappers/models" -r "$REALM" \
+    kc_retry create "clients/$backend_client_uuid/protocol-mappers/models" -r "$REALM" \
       -s name=otziv-backend-audience \
       -s protocol=openid-connect \
       -s protocolMapper=oidc-audience-mapper \

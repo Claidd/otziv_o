@@ -44,6 +44,7 @@ export interface WorkerReviewItem {
   botLogin: string;
   botPassword: string;
   botCounter: number;
+  botActive?: boolean;
   companyTitle: string;
   commentCompany: string;
   orderComments: string;
