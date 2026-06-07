@@ -39,6 +39,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.hunt.otziv.logs.LogMasking.maskPhone;
+
 @Service
 @Slf4j
 public class LeadServiceImpl implements LeadService {
@@ -1137,7 +1139,6 @@ public class LeadServiceImpl implements LeadService {
         Lead lead = leadsRepository.findById(leadId).orElseThrow();
         Operator operator = lead.getTelephone().getTelephoneOperator();
 //        Operator operator = operatorService.getOperatorByTelephoneId(lead.getTelephone().getId());
-        System.out.println(operator);
         int count = operator.getCount();
         if (count == 0){
             operator.setCount(1);
@@ -1469,7 +1470,7 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Transactional
     public void saveOrUpdateByTelephoneLead(Lead incomingLead) {
-        log.info("📨 saveOrUpdateByTelephoneLead: {}", incomingLead.getTelephoneLead());
+        log.info("📨 saveOrUpdateByTelephoneLead: {}", maskPhone(incomingLead.getTelephoneLead()));
 
         Optional<Lead> existing = leadsRepository.findByTelephoneLead(incomingLead.getTelephoneLead());
 
@@ -1502,11 +1503,11 @@ public class LeadServiceImpl implements LeadService {
             lead.setTelephone(incomingLead.getTelephone());
 
             leadsRepository.save(lead);
-            log.info("🔁 Обновили существующего лида: {}", lead.getTelephoneLead());
+            log.info("🔁 Обновили существующего лида: {}", maskPhone(lead.getTelephoneLead()));
 
         } else {
             leadsRepository.save(incomingLead);
-            log.info("🆕 Добавили нового лида: {}", incomingLead.getTelephoneLead());
+            log.info("🆕 Добавили нового лида: {}", maskPhone(incomingLead.getTelephoneLead()));
         }
     }
 

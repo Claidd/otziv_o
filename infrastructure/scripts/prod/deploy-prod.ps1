@@ -163,6 +163,11 @@ if ([string]::IsNullOrWhiteSpace($RemoteEnvFile) -or $RemoteEnvFile.Contains("/"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
 $buildCompose = Join-Path $repoRoot "docker-compose.build.yaml"
 $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
 $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
@@ -175,14 +180,14 @@ if (-not (Test-Path -LiteralPath $buildCompose)) {
     throw "Missing build compose file: $buildCompose"
 }
 
-$envFilePath = if ([System.IO.Path]::IsPathRooted($EnvFile)) {
-    $EnvFile
-} else {
-    Join-Path $repoRoot $EnvFile
-}
+$envFilePath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
 
 if (-not $SkipEnvUpload -and -not (Test-Path -LiteralPath $envFilePath)) {
     throw "Env file not found: $envFilePath. Create it or pass -SkipEnvUpload."
+}
+
+if (-not $SkipEnvUpload) {
+    Write-Host "Using env file: $envFilePath"
 }
 
 Write-Host "Building and pushing:"
@@ -233,6 +238,8 @@ try {
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_JWK_SET_URI" -Value "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
         Set-EnvFileValue -Path $stageEnv -Name "KEYCLOAK_ADMIN_SERVER_URL" -Value "http://keycloak:8080/keycloak"
         Set-EnvFileValue -Path $stageEnv -Name "KC_PROXY_TRUSTED_ADDRESSES" -Value "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
+        Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_BOT_REGISTRATION_ENABLED" -Value "true"
+        Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_BOT_SENDING_ENABLED" -Value "true"
         $outboundProxyHost = Get-EnvFileValue -Path $stageEnv -Name "OPENAI_PROXY_HOST" -DefaultValue $VpsHost
         $outboundProxyPort = Get-EnvFileValue -Path $stageEnv -Name "OPENAI_PROXY_PORT" -DefaultValue "8888"
         Set-EnvFileValue -Path $stageEnv -Name "TELEGRAM_PROXY_ENABLED" -Value "true"
@@ -437,11 +444,13 @@ cd "`$remote_path"
 
 backup_dir=".deploy-backups/`$deploy_tag"
 mkdir -p "`$backup_dir"
+chmod 700 .deploy-backups "`$backup_dir" || true
 if [ -f docker-compose.yaml ]; then
   cp docker-compose.yaml "`$backup_dir/docker-compose.yaml"
 fi
 if [ -f "`$env_file" ]; then
   cp "`$env_file" "`$backup_dir/`$env_file"
+  chmod 600 "`$backup_dir/`$env_file" || true
 fi
 
 tar -xzf "`$bundle_path" -C "`$remote_path"
@@ -461,6 +470,8 @@ if [ "`$uploaded_env" != "1" ]; then
   set_env WEB_IMAGE "`$web_image"
 fi
 
+chmod 600 "`$env_file" || true
+
 set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
 set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
 set_env MAX_BOT_WEBHOOK_UPDATE_TYPES "bot_started,bot_added,message_created"
@@ -472,6 +483,8 @@ set_env KEYCLOAK_ISSUER_URI "https://o-ogo.ru/keycloak/realms/otziv"
 set_env KEYCLOAK_JWK_SET_URI "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
 set_env KEYCLOAK_ADMIN_SERVER_URL "http://keycloak:8080/keycloak"
 set_env KC_PROXY_TRUSTED_ADDRESSES "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
+set_env TELEGRAM_BOT_REGISTRATION_ENABLED "true"
+set_env TELEGRAM_BOT_SENDING_ENABLED "true"
 outbound_proxy_host="`$(get_env OPENAI_PROXY_HOST "`$vps_host")"
 outbound_proxy_port="`$(get_env OPENAI_PROXY_PORT "8888")"
 set_env TELEGRAM_PROXY_ENABLED "true"

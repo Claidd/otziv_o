@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
+import { CommonBillingApi, type CommonInvoiceDetailsResponse } from '../../core/common-billing.api';
 import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import { PaymentsApi } from '../../core/payments.api';
 import {
@@ -61,6 +62,7 @@ import {
 import { ManagerBoardActionFacade } from './manager-board-action.facade';
 import { ManagerCompanyCardComponent } from './manager-company-card.component';
 import type {
+  ManagerCompanyBillingDraftChange,
   ManagerCompanyEditDraftChange,
   ManagerCompanyFilialUpdateRequest
 } from './manager-company-edit-modal.component';
@@ -114,6 +116,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly historyStateKey = MANAGER_HISTORY_STATE_KEY;
   private readonly managerApi = inject(ManagerApi);
   private readonly paymentsApi = inject(PaymentsApi);
+  private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
   private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
@@ -159,6 +162,7 @@ export class ManagerBoardComponent implements OnDestroy {
 
   private readonly companyFacade = new ManagerBoardCompanyFacade({
     managerApi: this.managerApi,
+    commonBillingApi: this.commonBillingApi,
     toastService: this.toastService,
     loadBoard: () => this.loadBoard(),
     patchBoard: (updater) => this.patchBoard(updater),
@@ -186,12 +190,23 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly editSaving = this.companyFacade.editSaving;
   readonly editError = this.companyFacade.editError;
   readonly editDeleteKey = this.companyFacade.editDeleteKey;
+  readonly companyBillingAccounts = this.companyFacade.billingAccounts;
+  readonly companyBillingSelectedAccountId = this.companyFacade.billingSelectedAccountId;
+  readonly companyBillingDraft = this.companyFacade.billingDraft;
+  readonly companyBillingLoading = this.companyFacade.billingLoading;
+  readonly companyBillingError = this.companyFacade.billingError;
+  readonly companyBillingMutating = this.companyFacade.billingMutating;
+  readonly companyBillingSearch = this.companyFacade.billingCompanySearch;
+  readonly companyBillingSearchResults = this.companyFacade.billingCompanySearchResults;
+  readonly companyBillingSearchLoading = this.companyFacade.billingCompanySearchLoading;
+  readonly companyBillingSearchError = this.companyFacade.billingCompanySearchError;
   readonly editOrder = this.orderFacade.editOrder;
   readonly orderDraft = this.orderFacade.orderDraft;
   readonly orderLoading = this.orderFacade.orderLoading;
   readonly orderSaving = this.orderFacade.orderSaving;
   readonly orderError = this.orderFacade.orderError;
   readonly orderDeleting = this.orderFacade.orderDeleting;
+  readonly orderCancelingPayment = this.orderFacade.orderCancelingPayment;
   readonly createOrderPayload = this.orderFacade.createOrderPayload;
   readonly createOrderDraft = this.orderFacade.createOrderDraft;
   readonly createOrderLoading = this.orderFacade.createOrderLoading;
@@ -481,6 +496,16 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   async copyOrderText(order: OrderCardItem, kind: 'review' | 'payment'): Promise<void> {
+    if (order.commonInvoice) {
+      const url = order.commonInvoicePublicUrl || '';
+      await this.copyText(
+        url,
+        `${kind}-${order.id}`,
+        kind === 'payment' ? 'Ссылка общего счета скопирована' : 'Ссылка состава скопирована'
+      );
+      return;
+    }
+
     if (kind === 'review') {
       await this.copyText(
         managerOrderReviewCopyText(order, this.board()?.promoTexts ?? []),
@@ -627,6 +652,38 @@ export class ManagerBoardComponent implements OnDestroy {
     this.companyFacade.updateCompanyFilial(request);
   }
 
+  selectCompanyBillingAccount(accountId: number | null): void {
+    this.companyFacade.selectCompanyBillingAccount(accountId);
+  }
+
+  handleCompanyBillingDraftChange(change: ManagerCompanyBillingDraftChange): void {
+    this.companyFacade.handleCompanyBillingDraftChange(change);
+  }
+
+  createCompanyBillingAccount(): void {
+    this.companyFacade.createCompanyBillingAccount();
+  }
+
+  saveCompanyBillingAccount(): void {
+    this.companyFacade.saveCompanyBillingAccount();
+  }
+
+  connectCurrentCompanyToBillingAccount(accountId: number): void {
+    this.companyFacade.connectCurrentCompanyToBillingAccount(accountId);
+  }
+
+  removeCompanyFromBillingAccount(companyId: number): void {
+    this.companyFacade.removeCompanyFromBillingAccount(companyId);
+  }
+
+  onCompanyBillingSearchChange(value: string): void {
+    this.companyFacade.onBillingCompanySearchChange(value);
+  }
+
+  addCompanyToBillingAccount(company: CompanyCardItem): void {
+    this.companyFacade.addCompanyToBillingAccount(company);
+  }
+
   openCompanyOrderCreate(company: CompanyCardItem): void {
     this.orderFacade.openCompanyOrderCreate(company);
   }
@@ -644,6 +701,11 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   openOrderEdit(order: OrderCardItem): void {
+    if (order.commonInvoice) {
+      void this.router.navigateByUrl(`/admin/common-billing?invoiceId=${order.commonInvoiceId ?? Math.abs(order.id)}`);
+      return;
+    }
+
     this.orderFacade.openOrderEdit(order);
   }
 
@@ -663,12 +725,88 @@ export class ManagerBoardComponent implements OnDestroy {
     this.orderFacade.deleteOrderEdit();
   }
 
+  cancelOrderPayment(): void {
+    this.orderFacade.cancelOrderPayment();
+  }
+
   updateCompanyStatus(company: CompanyCardItem, action: StatusAction): void {
     this.actionFacade.updateCompanyStatus(company, action);
   }
 
   updateOrderStatus(order: OrderCardItem, action: StatusAction): void {
+    if (order.commonInvoice) {
+      this.updateCommonInvoiceStatus(order, action);
+      return;
+    }
+
     this.actionFacade.updateOrderStatus(order, action);
+  }
+
+  private updateCommonInvoiceStatus(order: OrderCardItem, action: StatusAction): void {
+    const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
+    const key = `order-${order.id}-${action.status}`;
+    this.mutationKey.set(key);
+
+    const request = (() => {
+      switch (action.status) {
+        case 'Выставлен счет':
+          return this.commonBillingApi.sendInvoice(invoiceId);
+        case 'Напоминание':
+          return this.commonBillingApi.remind(invoiceId);
+        case 'Не оплачено':
+          return this.commonBillingApi.markUnpaid(invoiceId);
+        case 'Бан':
+          return this.commonBillingApi.markBan(invoiceId);
+        case 'Оплачено':
+          return this.commonBillingApi.markPaid(invoiceId);
+        default:
+          return null;
+      }
+    })();
+
+    if (!request) {
+      this.mutationKey.set(null);
+      return;
+    }
+
+    request.subscribe({
+      next: (details) => {
+        this.mutationKey.set(null);
+        this.toastService.success(
+          'Общий счет обновлен',
+          `${order.companyTitle}: ${this.commonInvoiceStatusLabel(details, action.status)}`
+        );
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.mutationKey.set(null);
+        this.toastService.error('Общий счет не обновлен', this.errorMessage(err, 'Не удалось изменить общий счет'));
+      }
+    });
+  }
+
+  private commonInvoiceStatusLabel(details: CommonInvoiceDetailsResponse, fallback: string): string {
+    switch (details.summary?.status) {
+      case 'COLLECTING':
+        return 'Ожидает общего счета';
+      case 'READY':
+        return 'Опубликовано';
+      case 'INVOICED':
+        return 'Выставлен счет';
+      case 'REMINDER':
+      case 'PARTIALLY_PAID':
+        return 'Напоминание';
+      case 'NEEDS_ATTENTION':
+        return 'Требует внимания';
+      case 'PAID':
+        return 'Оплачено';
+      case 'UNPAID':
+        return 'Не оплачено';
+      case 'BAN':
+        return 'Бан';
+      default:
+        return fallback;
+    }
   }
 
   toggleOrderClientWaiting(order: OrderCardItem): void {
@@ -705,7 +843,11 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   orderActions(order: OrderCardItem): StatusAction[] {
-    return managerOrderActions(order, Boolean(this.selectedCompany()));
+    return managerOrderActions(order, Boolean(this.selectedCompany()), this.canForceBan());
+  }
+
+  private canForceBan(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   }
 
   trackStatus(_index: number, status: string): string {

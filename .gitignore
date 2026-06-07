@@ -28,6 +28,7 @@ backend/.idea
 .yaml
 .env
 .env.*
+!.env.example
 !backend/.env.local.example
 !.env.prod.example
 !.env.prod-local.example
@@ -54,12 +55,14 @@ logs/
 *.log
 data/
 frontend/angular-dev-server.*.log
+mobile/screenshots/*.log
 data/app-logs/
 data/nginx/logs/
 docker/sent-hashes/
 sent-hashes/
 .m2/
 tmp-keycloak-login-check/
+.gitleaks-staged-index-*/
 
 # managed
 **.data.json

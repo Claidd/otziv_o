@@ -42,6 +42,7 @@ public class TelegramService extends TelegramLongPollingBot {
     private static final long SEND_RETRY_DELAY_MS = 1_500L;
 
     private final String botUsername;
+    private final boolean sendingEnabled;
     private final List<Long> adminChatIds;
     private final ObjectProvider<PersonalService> personalServiceProvider;
     private final UserService userService;
@@ -52,6 +53,7 @@ public class TelegramService extends TelegramLongPollingBot {
             DefaultBotOptions botOptions,
             @Value("${telegram.bot.token:}") String botToken,
             @Value("${telegram.bot.username:}") String botUsername,
+            @Value("${telegram.bot.sending-enabled:true}") boolean sendingEnabled,
             @Value("${telegram.admin.chat-ids:}") String adminChatIds,
             ObjectProvider<PersonalService> personalServiceProvider,
             UserService userService,
@@ -60,6 +62,7 @@ public class TelegramService extends TelegramLongPollingBot {
     ) {
         super(botOptions, botToken);
         this.botUsername = botUsername;
+        this.sendingEnabled = sendingEnabled;
         this.adminChatIds = parseAdminChatIds(adminChatIds);
         this.personalServiceProvider = personalServiceProvider;
         this.userService = userService;
@@ -255,6 +258,10 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     public boolean sendMessageWithInlineButton(long chatId, String text, String buttonText, String callbackData) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
         if (!looksLikeTelegramBotToken(getBotToken())) {
             log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
             return false;
@@ -271,6 +278,10 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     public boolean sendMessage(long chatId, String text, String parseMode) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
         if (!looksLikeTelegramBotToken(getBotToken())) {
             log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
             return false;
@@ -353,6 +364,9 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     private void answerCallback(String callbackQueryId, String text) {
+        if (!sendingEnabled) {
+            return;
+        }
         if (!hasText(callbackQueryId)) {
             return;
         }

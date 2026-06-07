@@ -37,6 +37,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
   @Input() actions: StatusAction[] = [];
   @Input() copied: string | null = null;
   @Input() mutationKey: string | null = null;
+  @Input() paymentCopyDisabled = false;
   activeCategoryPopover: CategoryPopover | null = null;
   unchangedCityOpen = false;
   private unchangedCityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,6 +104,10 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   orderFilialUrl(): string {
+    if (this.isCommonInvoice()) {
+      return this.orderDetailsUrl();
+    }
+
     return this.cleanUrl(this.order.filialUrl) || this.orderDetailsUrl();
   }
 
@@ -151,6 +156,10 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   showBadReviewSummary(): boolean {
+    if (this.isCommonInvoice()) {
+      return false;
+    }
+
     return managerShowBadReviewSummary(this.order);
   }
 
@@ -163,6 +172,10 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   canManageClientWaiting(): boolean {
+    if (this.isCommonInvoice()) {
+      return false;
+    }
+
     return this.order.status === 'Новый' || this.order.status === 'Коррекция' || !!this.order.waitingForClient;
   }
 
@@ -178,11 +191,21 @@ export class ManagerOrderCardComponent implements OnDestroy {
     return this.order.waitingForClient ? 'ждет клиента' : 'клиент';
   }
 
+  paymentCopyTitle(): string {
+    return this.paymentCopyDisabled
+      ? 'Одиночный счет отключен: заказ входит в общий счет'
+      : 'Создать или скопировать ссылку на оплату';
+  }
+
   isClientWaitingMutating(): boolean {
     return this.mutationKey === this.clientWaitingMutationKey();
   }
 
   isUnchangedAlert(): boolean {
+    if (this.isCommonInvoice()) {
+      return Boolean((this.order.commonInvoiceLastError ?? '').trim());
+    }
+
     return this.unchangedDays() >= 2;
   }
 
@@ -191,10 +214,18 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   unchangedCityLabel(): string {
+    if (this.isCommonInvoice()) {
+      return this.order.commonInvoiceLastError || 'Ошибок по общему счету нет';
+    }
+
     return this.cleanLabel(this.order.filialCity) || 'Город филиала не указан';
   }
 
   unchangedCityTitle(): string {
+    if (this.isCommonInvoice()) {
+      return this.unchangedCityLabel();
+    }
+
     return `Город филиала: ${this.unchangedCityLabel()}`;
   }
 
@@ -253,6 +284,10 @@ export class ManagerOrderCardComponent implements OnDestroy {
   }
 
   private statusTone(): OrderTone {
+    if (this.isCommonInvoice() && this.order.status === 'Ожидает общего счета') {
+      return 'wait';
+    }
+
     if (this.order.waitingForClient) {
       return null;
     }
@@ -282,6 +317,23 @@ export class ManagerOrderCardComponent implements OnDestroy {
 
   workerLabel(): string {
     return this.order.workerUserFio || '-';
+  }
+
+  openEdit(event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    this.editOpened.emit();
+  }
+
+  isCommonInvoice(): boolean {
+    return Boolean(this.order.commonInvoice);
+  }
+
+  commonInvoiceSummaryLabel(): string {
+    const ready = this.order.commonInvoiceReadyOrders ?? this.order.counter ?? 0;
+    const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
+    const paid = this.order.commonInvoicePaidOrders ?? 0;
+    return `Готово ${ready}/${total}, оплачено ${paid}/${total}`;
   }
 
   trackAction(index: number, action: StatusAction): string {

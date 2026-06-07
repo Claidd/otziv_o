@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const QRCode = require("qrcode");
@@ -477,15 +478,20 @@ async function handleIncomingMessage(message) {
 }
 
 async function postBackendWebhook(path, payload) {
+  const body = JSON.stringify(payload);
   const headers = { "Content-Type": "application/json" };
   if (WEBHOOK_SECRET) {
     headers["X-WhatsApp-Webhook-Secret"] = WEBHOOK_SECRET;
+    headers["X-WhatsApp-Webhook-Signature"] = `sha256=${crypto
+      .createHmac("sha256", WEBHOOK_SECRET)
+      .update(body, "utf8")
+      .digest("hex")}`;
   }
 
   const response = await fetch(`${SERVER_URL}${path}`, {
     method: "POST",
     headers,
-    body: JSON.stringify(payload),
+    body,
   });
 
   if (!response.ok) {

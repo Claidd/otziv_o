@@ -152,7 +152,13 @@ function ConvertTo-CurlConfigValue {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
-$envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
+$envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
+Write-Host "Using env file: $envPath"
 
 $proxyHost = Get-Setting -Name "OPENAI_PROXY_HOST"
 $proxyPort = Get-Setting -Name "OPENAI_PROXY_PORT" -DefaultValue "3128"

@@ -22,6 +22,7 @@ public interface OrderService {
     boolean deleteNewReview(Long orderId, Long reviewId);
 //    boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO);
     boolean changeStatusForOrder(Long orderID, String title) throws Exception;
+    boolean changeStatusForPrivilegedOrder(Long orderID, String title) throws Exception;
     OrderDTO getOrderDTO(Long orderId);
     Order getOrder(Long orderId);
     List<OrderDTO> getAllOrderDTO();

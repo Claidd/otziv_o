@@ -350,7 +350,6 @@ public class BotServiceImpl implements BotService {
         a = phone.split("9");
         a[0] = "+79";
         String b = a[0] + a[1];
-        System.out.println(b);
         return b;
     } // Вспомогательный метод для корректировки номера телефона
 

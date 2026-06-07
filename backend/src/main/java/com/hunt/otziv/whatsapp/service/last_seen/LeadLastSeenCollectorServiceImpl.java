@@ -25,6 +25,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 @Slf4j
@@ -41,9 +42,11 @@ public class LeadLastSeenCollectorServiceImpl {
     private final Map<String, ScheduledExecutorService> executors = new ConcurrentHashMap<>();
     private final Map<String, LastSeenStatDto> statsPerClient = new ConcurrentHashMap<>();
     private final Set<String> finishedClients = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean summarySent = new AtomicBoolean(false);
 
     private LocalTime startTime;
     private LocalTime endTime;
+    private volatile long collectionRunId = 0;
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
 
 //    @Scheduled(cron = "0 40 18 * * *", zone = "Asia/Irkutsk")
@@ -59,15 +62,20 @@ public class LeadLastSeenCollectorServiceImpl {
         }
     }
 
-    public void startLastSeenCollection() {
+    public synchronized void startLastSeenCollection() {
         log.info("\n================== START LAST SEEN COLLECTION ==================");
-        startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
+        long runId = ++collectionRunId;
+        resetCollectionState();
 
         List<WhatsAppProperties.ClientConfig> clients = properties.getClients();
         if (clients == null || clients.isEmpty()) {
             log.warn("⚠️ Нет активных клиентов для проверки lastSeen");
             return;
         }
+
+        startTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
+        activeClients.clear();
+        clients.forEach(c -> activeClients.put(c.getId(), true));
 
         adminNotifierService.notifyAdmin("🚀 Началась ночная проверка lastSeen по всем клиентам");
 
@@ -92,39 +100,46 @@ public class LeadLastSeenCollectorServiceImpl {
             log.info("🟨 [COLLECT] Клиент {}: старт через {} сек (лидов: {})",
                     client.getId(), initialDelay, leads.size());
 
-            executor.schedule(() -> runQueueProcessor(client.getId()), initialDelay, TimeUnit.SECONDS);
+            executor.schedule(() -> runQueueProcessor(client.getId(), runId), initialDelay, TimeUnit.SECONDS);
         }
     }
 
-    private void runQueueProcessor(String clientId) {
+    private void runQueueProcessor(String clientId, long runId) {
         Queue<Lead> queue = leadQueues.get(clientId);
         ScheduledExecutorService executor = executors.get(clientId);
 
-        if (queue == null || executor == null) return;
+        if (queue == null || executor == null || executor.isShutdown() || runId != collectionRunId) return;
 
-        executor.execute(() -> {
-            while (!queue.isEmpty() && !executor.isShutdown()) {
-                Lead lead = queue.poll();
-                if (lead != null) {
-                    processorProvider.getObject().processLead(clientId, lead);
-                }
+        try {
+            executor.execute(() -> {
+                while (!queue.isEmpty() && !executor.isShutdown()) {
+                    if (runId != collectionRunId) {
+                        return;
+                    }
 
-                if (!queue.isEmpty()) {
-                    int delay = calculateRandomPeriodByLeadCount(queue.size());
-                    LocalDateTime nextRun = LocalDateTime.now().plusSeconds(delay);
-                    log.info("⏳ [SCHEDULE] Следующий лид для {} будет обработан через {} сек (в {})",
-                            clientId, delay, nextRun.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+                    Lead lead = queue.poll();
+                    if (lead != null) {
+                        processorProvider.getObject().processLead(clientId, lead);
+                    }
 
-                    try {
-                        TimeUnit.SECONDS.sleep(delay);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
+                    if (!queue.isEmpty()) {
+                        int delay = calculateRandomPeriodByLeadCount(queue.size());
+                        LocalDateTime nextRun = LocalDateTime.now().plusSeconds(delay);
+                        log.info("⏳ [SCHEDULE] Следующий лид для {} будет обработан через {} сек (в {})",
+                                clientId, delay, nextRun.format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+
+                        try {
+                            TimeUnit.SECONDS.sleep(delay);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
                     }
                 }
-            }
-            markClientFinished(clientId);
-        });
+                markClientFinished(clientId, runId);
+            });
+        } catch (RejectedExecutionException ignored) {
+        }
     }
 
     private int calculateRandomPeriodByLeadCount(int leadCount) {
@@ -150,15 +165,24 @@ public class LeadLastSeenCollectorServiceImpl {
         stat.setHiddenOrNotWhatsApp(stat.getHiddenOrNotWhatsApp() + hidden);
     }
 
-    public void markClientFinished(String clientId) {
+    public synchronized void markClientFinished(String clientId) {
+        markClientFinished(clientId, collectionRunId);
+    }
+
+    private synchronized void markClientFinished(String clientId, long runId) {
+        if (runId != collectionRunId) {
+            return;
+        }
+
         finishedClients.add(clientId);
         ScheduledExecutorService executor = executors.remove(clientId);
         if (executor != null) executor.shutdown();
+        leadQueues.remove(clientId);
         checkAllClientsFinished();
     }
 
     private void checkAllClientsFinished() {
-        if (finishedClients.size() == properties.getClients().size()) {
+        if (finishedClients.size() == currentClientCount() && summarySent.compareAndSet(false, true)) {
             endTime = LocalTime.now(ZoneId.of("Asia/Irkutsk"));
 
             StringBuilder report = new StringBuilder();
@@ -225,26 +249,15 @@ public class LeadLastSeenCollectorServiceImpl {
 
 
     @PreDestroy
-    public void shutdownExecutors() {
+    public synchronized void shutdownExecutors() {
         log.info("\n====================== SHUTDOWN EXECUTORS =========================");
 
-        for (ScheduledExecutorService executor : executors.values()) {
-            try {
-                executor.shutdown();
-                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        executors.clear();
+        stopExecutors(true);
+        leadQueues.clear();
         log.info("==================================================================\n");
     }
 
-    public void stopClientScheduler(String clientId) {
+    public synchronized void stopClientScheduler(String clientId) {
         activeClients.put(clientId, false);
         ScheduledExecutorService executor = executors.remove(clientId);
         if (executor != null) {
@@ -256,6 +269,49 @@ public class LeadLastSeenCollectorServiceImpl {
         checkAllClientsFinished();
     }
 
+    private void resetCollectionState() {
+        stopExecutors(false);
+        leadQueues.clear();
+        statsPerClient.clear();
+        finishedClients.clear();
+        summarySent.set(false);
+        endTime = null;
+    }
+
+    private int currentClientCount() {
+        List<WhatsAppProperties.ClientConfig> clients = properties.getClients();
+        return clients == null ? 0 : clients.size();
+    }
+
+    private void stopExecutors(boolean awaitTermination) {
+        List<ScheduledExecutorService> toStop = new ArrayList<>(executors.values());
+        executors.clear();
+
+        for (ScheduledExecutorService executor : toStop) {
+            shutdownExecutor(executor, awaitTermination);
+        }
+    }
+
+    private void shutdownExecutor(ScheduledExecutorService executor, boolean awaitTermination) {
+        if (executor == null) {
+            return;
+        }
+
+        try {
+            if (awaitTermination) {
+                executor.shutdown();
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } else {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
     public List<WhatsAppProperties.ClientConfig> getActiveOperatorClients() {
         return properties.getClients() != null
                 ? properties.getClients().stream()
@@ -264,9 +320,4 @@ public class LeadLastSeenCollectorServiceImpl {
                 : List.of();
     }
 }
-
-
-
-
-
 

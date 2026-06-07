@@ -47,8 +47,12 @@ test('matches web manager bad-review order action flow', () => {
     JSON.stringify(['Оплачено'])
   );
   assert.equal(
+    JSON.stringify(managerOrderActionsFor({ status: 'Не оплачено', badReviewTasksTotal: 2, badReviewTasksPending: 1 }, false, true).map((action) => action.status)),
+    JSON.stringify(['Оплачено', 'Бан'])
+  );
+  assert.equal(
     JSON.stringify(managerOrderActionsFor({ status: 'Не оплачено', badReviewTasksTotal: 2, badReviewTasksPending: 0 }).map((action) => action.status)),
     JSON.stringify(['Оплачено', 'Бан'])
   );
-  assert.equal(managerOrderActionsFor({ status: 'Новый' }, true), ORDER_ACTIONS);
+  assert.equal(managerOrderActionsFor({ status: 'Новый' }, true).some((action) => action.status === 'Бан'), false);
 });

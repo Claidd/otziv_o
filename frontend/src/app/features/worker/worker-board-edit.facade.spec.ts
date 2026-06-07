@@ -41,6 +41,7 @@ function orderEdit(overrides: Partial<OrderEditPayload> = {}): OrderEditPayload 
     workers: [{ id: 3, label: 'Worker' }],
     canComplete: true,
     canDelete: true,
+    canCancelPayment: false,
     ...overrides
   };
 }

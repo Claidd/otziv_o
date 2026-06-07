@@ -7,6 +7,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -109,6 +111,12 @@ class OrderStatusTransitionServiceTest {
     @Mock
     private BusinessAuditService businessAuditService;
 
+    @Mock
+    private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+
+    @Mock
+    private CommonBillingService commonBillingService;
+
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
         OrderStatusTransitionService service = service();
@@ -147,6 +155,67 @@ class OrderStatusTransitionServiceTest {
         verify(orderTransactionService, never()).handlePaymentStatus(order);
         verify(manualPaymentAutoConfirmationService, never()).confirmForPaidOrder(order);
         verify(manualPaymentAutoConfirmationService, never()).retireOpenLinksForPaidOrder(order);
+    }
+
+    @Test
+    void financialStatusRejectsOrderInsideActiveCommonInvoice() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(91L, "Опубликовано");
+
+        when(orderRepository.findByIdForMutation(91L)).thenReturn(Optional.of(order));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInActiveCommonInvoice(91L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(91L, "Выставлен счет")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Финансовый статус заказа внутри общего счета меняется только через общий счет",
+                exception.getReason()
+        );
+        verify(orderStatusService, never()).getOrderStatusByTitle("Выставлен счет");
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void privilegedBanRejectsOrderInsideActiveCommonInvoice() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(93L, "Не оплачено");
+
+        when(orderRepository.findByIdForMutation(93L)).thenReturn(Optional.of(order));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInActiveCommonInvoice(93L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForPrivilegedOrder(93L, "Бан")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Финансовый статус заказа внутри общего счета меняется только через общий счет",
+                exception.getReason()
+        );
+        verify(orderStatusService, never()).getOrderStatusByTitle("Бан");
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void commonBillingInternalStatusChangeBypassesFinancialGuard() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(92L, "Выставлен счет");
+        OrderStatus notPaid = status("Не оплачено");
+
+        when(orderRepository.findByIdForMutation(92L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("Не оплачено")).thenReturn(notPaid);
+
+        assertTrue(service.changeStatusForCommonBillingOrder(92L, "Не оплачено"));
+
+        assertSame(notPaid, order.getStatus());
+        verify(badReviewTaskService).createTasksForUnpaidOrder(order);
     }
 
     @Test
@@ -592,6 +661,26 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void publicStatusForCommonInvoiceDoesNotSendSinglePaymentMessage() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(63L, "Публикация", "Компания", "group");
+
+        when(orderRepository.findByIdForMutation(63L)).thenReturn(Optional.of(order));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.completePublishedOrderIntoCommonInvoice(order)).thenReturn(true);
+
+        assertTrue(service.changeStatusForOrder(63L, "Опубликовано"));
+
+        verify(orderBotLifecycleService).assignBotsIfNeeded(order);
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Опубликовано");
+        verify(commonBillingService).completePublishedOrderIntoCommonInvoice(order);
+        verify(orderPaymentMessageBuilder, never()).publishedOrderPaymentMessage(order);
+        verifyNoInteractions(orderStatusNotificationService);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleRetry(order);
+        verify(mobilePushBusinessNotificationService).notifyManagerOrderPublished(order);
+    }
+
+    @Test
     void publicStatusKeepsManualTransitionSuccessfulWhenClientMessageFails() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(61L, "Публикация", "Компания", "group");
@@ -906,7 +995,8 @@ class OrderStatusTransitionServiceTest {
                 manualPaymentAutoConfirmationService,
                 paymentInvoiceRetryScheduler,
                 appSettingService,
-                businessAuditService
+                businessAuditService,
+                commonBillingServiceProvider
         );
     }
 

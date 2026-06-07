@@ -46,6 +46,9 @@ class NextOrderRequestServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private NextOrderFailureNotifier nextOrderFailureNotifier;
+
     @Test
     void openForPaidOrderChecksActiveOrdersOnlyInsideSameFilial() {
         NextOrderRequestService service = service();
@@ -111,7 +114,8 @@ class NextOrderRequestServiceTest {
                 orderRepository,
                 companyService,
                 companyStatusService,
-                eventPublisher
+                eventPublisher,
+                nextOrderFailureNotifier
         );
     }
 

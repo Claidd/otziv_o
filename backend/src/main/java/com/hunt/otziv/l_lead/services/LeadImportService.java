@@ -14,6 +14,7 @@ import com.hunt.otziv.u_users.model.Operator;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.MarketologRepository;
 import com.hunt.otziv.u_users.repository.OperatorRepository;
+import com.hunt.otziv.uploads.service.FileUploadGuard;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -148,6 +149,7 @@ public class LeadImportService {
     private final MarketologRepository marketologRepository;
     private final TelephoneRepository telephoneRepository;
     private final LeadImportTelephonePoolRepository telephonePoolRepository;
+    private final FileUploadGuard fileUploadGuard;
 
     @Transactional
     public LeadImportResult importLeads(MultipartFile file) {
@@ -356,14 +358,18 @@ public class LeadImportService {
     }
 
     private List<List<String>> readRows(MultipartFile file) {
-        String extension = extension(file.getOriginalFilename());
+        String extension = fileUploadGuard.requireSupportedImportFile(file);
         try {
             if ("xlsx".equals(extension) || "xls".equals(extension)) {
-                return readWorkbookRows(file);
+                List<List<String>> rows = readWorkbookRows(file);
+                fileUploadGuard.requireImportRowLimit(rows.size());
+                return rows;
             }
 
-            if ("csv".equals(extension) || "tsv".equals(extension) || extension.isBlank()) {
-                return readDelimitedRows(file);
+            if ("csv".equals(extension) || "tsv".equals(extension)) {
+                List<List<String>> rows = readDelimitedRows(file);
+                fileUploadGuard.requireImportRowLimit(rows.size());
+                return rows;
             }
         } catch (IOException exception) {
             throw badRequest("Файл не удалось прочитать");
@@ -903,12 +909,6 @@ public class LeadImportService {
             return '\t';
         }
         return semicolons >= commas ? ';' : ',';
-    }
-
-    private String extension(String fileName) {
-        String safeFileName = fileName == null ? "" : fileName.trim().toLowerCase(Locale.ROOT);
-        int dotIndex = safeFileName.lastIndexOf('.');
-        return dotIndex < 0 ? "" : safeFileName.substring(dotIndex + 1);
     }
 
     private void addError(List<String> errors, String message) {

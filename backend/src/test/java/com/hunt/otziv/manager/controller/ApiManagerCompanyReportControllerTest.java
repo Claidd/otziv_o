@@ -2,6 +2,7 @@ package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.manager.dto.api.CompanyDeepReportStateResponse;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -28,6 +29,9 @@ class ApiManagerCompanyReportControllerTest {
     @Mock
     private DeepCompanyResearchJobService deepCompanyResearchJobService;
 
+    @Mock
+    private ManagerAccessService managerAccessService;
+
     private final ManagerPermissionService managerPermissionService = new ManagerPermissionService();
 
     @Test
@@ -35,7 +39,8 @@ class ApiManagerCompanyReportControllerTest {
         ApiManagerCompanyReportController controller = new ApiManagerCompanyReportController(
                 orderService,
                 deepCompanyResearchJobService,
-                managerPermissionService
+                managerPermissionService,
+                managerAccessService
         );
         when(orderService.getOrderDTO(55L)).thenReturn(order());
         when(deepCompanyResearchJobService.findActive(1085L)).thenReturn(Optional.empty());

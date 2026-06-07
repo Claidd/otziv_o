@@ -33,6 +33,7 @@ type ManagerBoardOrderApi = Pick<
   | 'getOrderEdit'
   | 'updateOrder'
   | 'deleteOrder'
+  | 'cancelOrderPayment'
 >;
 
 type ManagerBoardOrderToast = Pick<ToastService, 'success' | 'error'>;
@@ -53,6 +54,7 @@ export class ManagerBoardOrderFacade {
   readonly orderSaving = signal(false);
   readonly orderError = signal<string | null>(null);
   readonly orderDeleting = signal(false);
+  readonly orderCancelingPayment = signal(false);
   readonly createOrderPayload = signal<CompanyOrderCreatePayload | null>(null);
   readonly createOrderDraft = signal<CompanyOrderCreateRequest | null>(null);
   readonly createOrderLoading = signal(false);
@@ -142,6 +144,7 @@ export class ManagerBoardOrderFacade {
     this.orderLoading.set(true);
     this.orderError.set(null);
     this.orderDeleting.set(false);
+    this.orderCancelingPayment.set(false);
 
     this.deps.managerApi.getOrderEdit(order.id).subscribe({
       next: (payload) => {
@@ -158,7 +161,7 @@ export class ManagerBoardOrderFacade {
   }
 
   closeOrderEdit(): void {
-    if (this.orderLoading() || this.orderSaving() || this.orderDeleting()) {
+    if (this.orderLoading() || this.orderSaving() || this.orderDeleting() || this.orderCancelingPayment()) {
       return;
     }
 
@@ -177,7 +180,7 @@ export class ManagerBoardOrderFacade {
     const order = this.editOrder();
     const draft = this.orderDraft();
 
-    if (!order || !draft) {
+    if (!order || !draft || this.orderCancelingPayment()) {
       return;
     }
 
@@ -204,7 +207,7 @@ export class ManagerBoardOrderFacade {
   deleteOrderEdit(): void {
     const order = this.editOrder();
 
-    if (!order || this.orderDeleting()) {
+    if (!order || this.orderDeleting() || this.orderCancelingPayment()) {
       return;
     }
 
@@ -228,6 +231,40 @@ export class ManagerBoardOrderFacade {
         this.orderDeleting.set(false);
         this.orderError.set(message);
         this.deps.toastService.error('Заказ не удален', message);
+      }
+    });
+  }
+
+  cancelOrderPayment(): void {
+    const order = this.editOrder();
+
+    if (!order || this.orderCancelingPayment()) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Отменить оплату заказа #${order.id}? ЗП и чек будут деактивированы, следующий заказ отменен, заказ вернется в "Напоминание".`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    this.orderCancelingPayment.set(true);
+    this.orderError.set(null);
+
+    this.deps.managerApi.cancelOrderPayment(order.id).subscribe({
+      next: (payload) => {
+        this.applyOrderCardPatch(payload);
+        this.applyOrderEditPayload(payload);
+        this.orderCancelingPayment.set(false);
+        this.deps.toastService.success('Оплата отменена', `Заказ #${order.id} возвращен в Напоминание`);
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        const message = this.deps.errorMessage(err, 'Не удалось отменить оплату');
+        this.orderCancelingPayment.set(false);
+        this.orderError.set(message);
+        this.deps.toastService.error('Оплата не отменена', message);
       }
     });
   }

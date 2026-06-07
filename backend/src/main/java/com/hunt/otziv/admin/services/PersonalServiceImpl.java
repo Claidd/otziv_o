@@ -651,7 +651,6 @@ public class PersonalServiceImpl implements PersonalService {
         // Получаем данные о всех заказах с разными данными
         Map<String, Map<String, Long>>  allOrders = orderService.getAllOrdersToMonthByStatus(firstDayOfMonth, lastDayOfMonth, "Новый", "В проверку", "На проверке", "Коррекция", "Опубликовано", "Выставлен счет", "Напоминание", "Не оплачено");
         Map<String, Long> leadsNewAndInWork = leadService.getAllLeadsToMonthToManager("Новый", firstDayOfMonth, lastDayOfMonth);
-        System.out.println(leadsNewAndInWork);
         Long zpTotal = zps.values().stream()
                 .mapToLong(Pair::getSecond) // Извлекаем сумму зарплаты
                 .sum();
@@ -1343,7 +1342,6 @@ public class PersonalServiceImpl implements PersonalService {
         Set<Manager> managerList = new HashSet<>();
         managerList.add(manager);
         List<Long> inWorkleadList = leadService.getAllLeadsByDateAndStatusToOwnerForTelegram(localDate, "В работе", managerList);// берем всех лидов за текущий месяц + статус
-        System.out.println(inWorkleadList.size());
         return ManagersListDTO.builder()
                 .id(manager.getId())
                 .userId(manager.getUser().getId())

@@ -48,6 +48,7 @@ services:
 
   phpmyadmin:
     image: phpmyadmin:latest
+    profiles: ["db-admin"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:${LOCAL_PHPMYADMIN_PORT:-6572}:80"
@@ -182,7 +183,11 @@ services:
       TZ: ${TZ:-Asia/Irkutsk}
       JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx768m -XX:MaxRAMPercentage=75 -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=}
       OTZIV_SERVICE_NAME: ${OTZIV_SERVICE_NAME:-otziv-backend}
-      OTZIV_TRACING_SAMPLING_PROBABILITY: ${OTZIV_TRACING_SAMPLING_PROBABILITY:-1.0}
+      OTZIV_TRACING_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      MANAGEMENT_TRACING_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      MANAGEMENT_TRACING_EXPORT_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: ${OTZIV_TRACING_ENABLED:-false}
+      OTZIV_TRACING_SAMPLING_PROBABILITY: ${OTZIV_TRACING_SAMPLING_PROBABILITY:-0.1}
       MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: ${OTZIV_OTLP_TRACES_ENDPOINT:-http://tempo:4318/v1/traces}
       MANAGEMENT_OTLP_METRICS_EXPORT_ENABLED: "false"
       DATABASE_URL: ${DATABASE_URL}
@@ -259,7 +264,8 @@ services:
       MAIL_STARTTLS_ENABLE: ${MAIL_STARTTLS_ENABLE:-true}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN_LOCAL_DOCKER}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME_LOCAL_DOCKER}
-      TELEGRAM_BOT_REGISTRATION_ENABLED: ${TELEGRAM_BOT_REGISTRATION_ENABLED:-true}
+      TELEGRAM_BOT_REGISTRATION_ENABLED: ${TELEGRAM_BOT_REGISTRATION_ENABLED:-false}
+      TELEGRAM_BOT_SENDING_ENABLED: ${TELEGRAM_BOT_SENDING_ENABLED:-false}
       TELEGRAM_PROXY_ENABLED: ${TELEGRAM_PROXY_ENABLED:-false}
       TELEGRAM_PROXY_HOST: ${TELEGRAM_PROXY_HOST:-}
       TELEGRAM_PROXY_PORT: ${TELEGRAM_PROXY_PORT:-8888}
@@ -269,11 +275,13 @@ services:
       WHATSAPP_PROXY_HOST: ${WHATSAPP_PROXY_HOST:-}
       WHATSAPP_PROXY_PORT: ${WHATSAPP_PROXY_PORT:-8888}
       WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-}
+      WHATSAPP_WEBHOOK_HMAC_REQUIRED: ${WHATSAPP_WEBHOOK_HMAC_REQUIRED:-true}
       WHATSAPP_HEALTH_MONITOR_ENABLED: ${WHATSAPP_HEALTH_MONITOR_ENABLED:-false}
       WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED: ${WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED:-false}
       MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
       MAX_BOT_USERNAME: ${MAX_BOT_USERNAME:-}
       MAX_BOT_WEBHOOK_SECRET: ${MAX_BOT_WEBHOOK_SECRET:-}
+      MAX_BOT_WEBHOOK_HMAC_REQUIRED: ${MAX_BOT_WEBHOOK_HMAC_REQUIRED:-true}
       MAX_BOT_WEBHOOK_URL: ${MAX_BOT_WEBHOOK_URL:-}
       MAX_BOT_WEBHOOK_UPDATE_TYPES: ${MAX_BOT_WEBHOOK_UPDATE_TYPES:-bot_started,bot_added,message_created}
       MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED: ${MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED:-false}
@@ -407,6 +415,7 @@ services:
 
   dozzle:
     image: amir20/dozzle
+    profiles: ["observability"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:8089:8080"
@@ -425,6 +434,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
     restart: unless-stopped
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -449,6 +459,7 @@ services:
 
   loki:
     image: grafana/loki:2.9.8
+    profiles: ["observability"]
     restart: unless-stopped
     command: -config.file=/etc/loki/loki-config.yaml
     volumes:
@@ -465,6 +476,7 @@ services:
 
   tempo:
     image: grafana/tempo:2.6.1
+    profiles: ["observability"]
     restart: unless-stopped
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
@@ -481,6 +493,7 @@ services:
 
   alloy:
     image: grafana/alloy:v1.16.0
+    profiles: ["observability"]
     restart: unless-stopped
     command:
       - run
@@ -506,13 +519,20 @@ services:
 
   grafana:
     image: grafana/grafana:10.3.1
+    profiles: ["observability"]
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:${LOCAL_GRAFANA_PORT:-3001}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_SERVER_ROOT_URL: ${OTZIV_APP_BASE_URL}/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_METRICS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_COOKIE_SECURE: "false"
+      GF_SECURITY_COOKIE_SAMESITE: "lax"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro

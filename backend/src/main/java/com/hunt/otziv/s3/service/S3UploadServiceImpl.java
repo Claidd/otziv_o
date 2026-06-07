@@ -1,5 +1,6 @@
 package com.hunt.otziv.s3.service;
 
+import com.hunt.otziv.uploads.service.FileUploadGuard;
 import lombok.RequiredArgsConstructor;
 
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +16,11 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.UUID;
 
-@Slf4j // Добавь эту аннотацию наверху класса (если используешь Lombok)
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class S3UploadServiceImpl implements S3UploadService {
@@ -36,21 +38,17 @@ public class S3UploadServiceImpl implements S3UploadService {
     private String publicBaseUrl;
 
     private final S3Client s3Client;
+    private final FileUploadGuard fileUploadGuard;
 
     @Override
     public String uploadFile(MultipartFile file, String folder, @Nullable String oldUrl, Long reviewId) {
-        String filename;
-        if (reviewId != null){
-            filename = reviewId + "-" + file.getOriginalFilename();
-        }
-        else {
-            filename = UUID.randomUUID() + "-" + file.getOriginalFilename();
-        }
-        String key = folder + "/" + filename;
+        FileUploadGuard.ImageCheck imageCheck = fileUploadGuard.requireSupportedImage(file);
+        String filename = generatedImageName(reviewId);
+        String key = normalizeFolder(folder) + "/" + filename;
 
         deleteOldFile(oldUrl);
 
-        byte[] processedImage = processImage(file);
+        byte[] processedImage = processImage(imageCheck.bytes());
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucket)
@@ -85,10 +83,10 @@ public class S3UploadServiceImpl implements S3UploadService {
         s3Client.deleteObject(deleteRequest);
     }
 
-    private byte[] processImage(MultipartFile file) {
+    private byte[] processImage(byte[] source) {
         try {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Thumbnails.of(file.getInputStream())
+            Thumbnails.of(new ByteArrayInputStream(source))
                     .size(1200, 1000)
                     .crop(Positions.CENTER)
                     .outputFormat("jpg")
@@ -100,6 +98,23 @@ public class S3UploadServiceImpl implements S3UploadService {
             log.error("Ошибка при обработке изображения", e);
             throw new RuntimeException("Не удалось обработать изображение", e);
         }
+    }
+
+    private String generatedImageName(@Nullable Long reviewId) {
+        if (reviewId != null) {
+            return reviewId + "-" + UUID.randomUUID() + ".jpg";
+        }
+        return UUID.randomUUID() + ".jpg";
+    }
+
+    private String normalizeFolder(String folder) {
+        if (folder == null || folder.isBlank()) {
+            return "uploads";
+        }
+        return folder.replace("\\", "/")
+                .replaceAll("^/+", "")
+                .replaceAll("/+$", "")
+                .replaceAll("[^a-zA-Z0-9/_-]", "-");
     }
 
     private String extractObjectKey(String oldUrl) {
@@ -135,4 +150,3 @@ public class S3UploadServiceImpl implements S3UploadService {
         return value;
     }
 }
-

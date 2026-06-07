@@ -81,9 +81,6 @@ public class FilialServiceImpl implements FilialService{
         boolean isChanged = false;
 
         /*Временная проверка сравнений*/
-        System.out.println("title: " + !Objects.equals(filialDTO.getTitle(), saveFilial.getTitle()));
-        System.out.println("url: " + !Objects.equals(filialDTO.getUrl(), saveFilial.getUrl()));
-        System.out.println("Город: " + !Objects.equals(filialDTO.getCity().getId(), saveFilial.getCity().getId()));
 
         if (!Objects.equals(filialDTO.getTitle(), saveFilial.getTitle())){ /*Проверка смены названия*/
             log.info("Обновляем названия филиала");

@@ -26,7 +26,6 @@ public class ProductController {
     private String products(Model model){
         model.addAttribute("products", productService.findAll());
         for (Product product : productService.findAll()) {
-            System.out.println(product);
         }
         return "products/products_list.html";
     }
@@ -35,7 +34,6 @@ public class ProductController {
     private String getProducts(Model model){
         model.addAttribute("products", productService.findAll());
         for (Product product : productService.findAll()) {
-            System.out.println(product);
         }
         return "products/products.html";
     }
@@ -59,7 +57,6 @@ public class ProductController {
 
     @PostMapping("/edit/delete/{productId}")
     private String DeleteProducts(@ModelAttribute("editProductDto") ProductDTO editProductDto, Model model, RedirectAttributes rm, @PathVariable Long productId){
-        System.out.println(editProductDto);
         if (productService.delete(editProductDto)){
             rm.addFlashAttribute("saveSuccess", "true");
         }
@@ -76,7 +73,6 @@ public class ProductController {
 
     @PostMapping("/add")
     private String AddPostProducts(@ModelAttribute("newProductDto") ProductDTO newProductDto, Model model, RedirectAttributes rm){
-        System.out.println(newProductDto);
         if (productService.save(newProductDto)){
             rm.addFlashAttribute("saveSuccess", "true");
         }

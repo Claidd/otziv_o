@@ -27,6 +27,7 @@ function order(overrides: Partial<OrderEditPayload> = {}): OrderEditPayload {
     workers: [option(41, 'Worker')],
     canComplete: true,
     canDelete: true,
+    canCancelPayment: false,
     ...overrides
   };
 }
@@ -93,6 +94,27 @@ describe('ManagerOrderEditModalComponent', () => {
     expect(closed).toBe(true);
     expect(deleted).toBe(true);
     expect(submitted).toBe(true);
+  });
+
+  it('emits payment cancel action for paid orders', async () => {
+    const fixture = TestBed.createComponent(ManagerOrderEditModalComponent);
+    const component = fixture.componentInstance;
+    let paymentCanceled = false;
+    component.order = order({ status: 'Оплачено', canCancelPayment: true });
+    component.draft = draft();
+    component.paymentCanceled.subscribe(() => {
+      paymentCanceled = true;
+    });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const cancelButton = Array.from(element.querySelectorAll<HTMLButtonElement>('button.danger'))
+      .find((button) => button.textContent?.includes('Отменить оплату'));
+    cancelButton?.click();
+
+    expect(paymentCanceled).toBe(true);
   });
 
   it('emits typed draft changes', () => {

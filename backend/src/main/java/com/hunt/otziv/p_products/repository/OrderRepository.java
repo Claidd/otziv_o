@@ -27,6 +27,10 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     @Override
     List<Order> findAll();
 
+    boolean existsByIdAndManager_IdIn(Long id, Collection<Long> managerIds);
+
+    boolean existsByIdAndWorker_Id(Long id, Long workerId);
+
     @Query("""
         SELECT DISTINCT o
         FROM Order o
@@ -929,6 +933,25 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                                                           @Param("excludedOrderId") Long excludedOrderId,
                                                           @Param("inactiveStatuses") Set<String> inactiveStatuses,
                                                           Pageable pageable);
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.status s
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH c.manager cm
+        LEFT JOIN FETCH cm.user
+        LEFT JOIN FETCH o.manager m
+        LEFT JOIN FETCH m.user
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
+        WHERE c.id = :companyId
+          AND o.complete = false
+          AND s.title IN :statuses
+        ORDER BY o.id ASC
+    """)
+    List<Order> findCommonBillingBackfillOrders(@Param("companyId") Long companyId,
+                                                @Param("statuses") Collection<String> statuses);
 
     @Query("""
         SELECT o.id

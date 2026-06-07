@@ -97,6 +97,30 @@ public class OrderDTOList {
 
     private String maxBotInviteUrl;
 
+    private boolean commonInvoice;
+
+    private Long commonInvoiceId;
+
+    private Long commonBillingAccountId;
+
+    private String commonInvoiceStatus;
+
+    private String commonInvoicePublicUrl;
+
+    private Integer commonInvoiceTotalOrders;
+
+    private Integer commonInvoiceReadyOrders;
+
+    private Integer commonInvoicePaidOrders;
+
+    private BigDecimal commonInvoiceAmount;
+
+    private BigDecimal commonInvoicePaid;
+
+    private BigDecimal commonInvoiceRemaining;
+
+    private String commonInvoiceLastError;
+
 
 //    private Integer amount;
 //

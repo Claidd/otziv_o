@@ -12,7 +12,7 @@
 //    private static final String SSH_USERNAME = "root";
 //    private static final String SSH_HOST = "ssh root@95.213.248.152";
 //    private static final int SSH_PORT = 22;
-//    private static final String SSH_PASSWORD = "iVVEPsjuPB4c";
+//    private static final String SSH_PASSWORD = "";
 //
 //    public void performBackupAndSendEmail() {
 //        System.out.println("Зашли в отправку бэка");

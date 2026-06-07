@@ -21,6 +21,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Override
     List<Company> findAll();
 
+    boolean existsByIdAndManager_IdIn(Long id, Collection<Long> managerIds);
+
     @Query("""
         SELECT DISTINCT c
         FROM Company c

@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.status;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -19,10 +20,12 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.ws.rs.NotFoundException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -49,6 +52,13 @@ public class OrderStatusTransitionService {
     private static final String STATUS_ARCHIVE = "Архив";
     private static final String STATUS_BAN = "Бан";
     private static final String STATUS_REMINDER = "Напоминание";
+    private static final Set<String> COMMON_BILLING_FINANCIAL_STATUSES = Set.of(
+            STATUS_PAYMENT,
+            STATUS_TO_PAY,
+            STATUS_REMINDER,
+            STATUS_NOT_PAID,
+            STATUS_BAN
+    );
 
     private final OrderRepository orderRepository;
     private final OrderStatusService orderStatusService;
@@ -68,13 +78,39 @@ public class OrderStatusTransitionService {
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
+    private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, false, false);
+    }
+
+    @Transactional
+    public boolean changeStatusForPrivilegedOrder(Long orderID, String title) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, false, true);
+    }
+
+    @Transactional
+    public boolean changeStatusForCommonBillingOrder(Long orderID, String title) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, true, false);
+    }
+
+    @Transactional
+    public boolean changeStatusForPrivilegedCommonBillingOrder(Long orderID, String title) throws Exception {
+        return changeStatusForOrderInternal(orderID, title, true, true);
+    }
+
+    private boolean changeStatusForOrderInternal(
+            Long orderID,
+            String title,
+            boolean allowCommonBillingFinancialStatus,
+            boolean allowBanWithPendingBadTasks
+    ) throws Exception {
         try {
             Order order = orderRepository.findByIdForMutation(orderID)
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
+            ensureCommonBillingFinancialStatusAllowed(order, title, allowCommonBillingFinancialStatus);
             String oldStatus = safeStatusTitle(order);
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
@@ -86,7 +122,7 @@ public class OrderStatusTransitionService {
                 case STATUS_TO_PUBLISH -> handleToPublicStatus(order);
                 case STATUS_TO_PAY -> handleManualToPayStatus(order);
                 case STATUS_NOT_PAID -> handleNotPaidStatus(order);
-                case STATUS_BAN -> handleBanStatus(order);
+                case STATUS_BAN -> handleBanStatus(order, allowBanWithPendingBadTasks);
                 default -> {
                     order.setStatus(orderStatusService.getOrderStatusByTitle(title));
                     orderRepository.save(order);
@@ -102,6 +138,23 @@ public class OrderStatusTransitionService {
         } catch (Exception e) {
             log.error("При смене статуса произошли какие-то проблемы", e);
             throw e;
+        }
+    }
+
+    private void ensureCommonBillingFinancialStatusAllowed(
+            Order order,
+            String title,
+            boolean allowCommonBillingFinancialStatus
+    ) {
+        if (allowCommonBillingFinancialStatus || !COMMON_BILLING_FINANCIAL_STATUSES.contains(title)) {
+            return;
+        }
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        if (commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Финансовый статус заказа внутри общего счета меняется только через общий счет"
+            );
         }
     }
 
@@ -139,7 +192,7 @@ public class OrderStatusTransitionService {
         return updated;
     }
 
-    private boolean handleBanStatus(Order order) {
+    private boolean handleBanStatus(Order order, boolean allowPendingBadTasks) {
         var summary = badReviewTaskService.getSummaryForOrder(order.getId());
         boolean badReviewFinalInvoiceReady = summary != null && summary.pending() == 0 && summary.done() > 0;
         String currentStatus = safeStatusTitle(order);
@@ -152,7 +205,7 @@ public class OrderStatusTransitionService {
                     "Перевести заказ в Бан можно из статуса \"Не оплачено\" или после финального счета за плохие отзывы"
             );
         }
-        if (summary != null && summary.pending() > 0) {
+        if (!allowPendingBadTasks && summary != null && summary.pending() > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выполните все плохие задачи заказа");
         }
 
@@ -664,6 +717,13 @@ public class OrderStatusTransitionService {
                 mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
                 log.info("Счет после публикации пропущен: заказ ID {} по продукту 'Восстановление' без суммы к оплате",
                         order.getId());
+                return true;
+            }
+
+            CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+            if (commonBillingService != null && commonBillingService.completePublishedOrderIntoCommonInvoice(order)) {
+                mobilePushBusinessNotificationService.notifyManagerOrderPublished(order);
+                log.info("Заказ ID {} завершен внутри общего счета, одиночный счет не отправлялся", order.getId());
                 return true;
             }
 

@@ -1,5 +1,6 @@
 package com.hunt.otziv.text_generator.service.parser;
 
+import com.hunt.otziv.security.OutboundUrlGuard;
 import com.hunt.otziv.text_generator.service.toGPT.ReviewGeneratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 public class WebsiteParserServiceImpl implements WebsiteParserService{
 
     private final ReviewGeneratorService reviewGeneratorService;
+    private final OutboundUrlGuard urlGuard;
 
 
     private static final int MAX_PAGES = 20; // Ограничим, чтобы не зациклиться
@@ -31,6 +33,7 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
         visitedUrls.clear();
         if (rootUrl == null || rootUrl.isBlank()) return "⚠️ Не указан сайт.";
         if (!rootUrl.startsWith("http")) rootUrl = "https://" + rootUrl;
+        if (!urlGuard.isAllowed(rootUrl)) return "⚠️ Сайт не прошел проверку безопасности URL.";
 
         try {
             URI rootUri = new URI(rootUrl);
@@ -53,7 +56,11 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
             log.info("🔗 Чтение страницы: {}", url);
             visitedUrls.add(url);
 
-            Document doc = Jsoup.connect(url).get();
+            if (!urlGuard.isAllowed(url)) return "";
+            Document doc = Jsoup.connect(url)
+                    .timeout(8000)
+                    .followRedirects(false)
+                    .get();
 
             // Удаляем шум перед извлечением
             doc.select(" script, style, .menu, .sidebar, .breadcrumbs").remove();
@@ -63,7 +70,7 @@ public class WebsiteParserServiceImpl implements WebsiteParserService{
             Elements links = doc.select("a[href]");
             for (Element link : links) {
                 String absHref = link.absUrl("href");
-                if (absHref.contains(domain)) {
+                if (absHref.contains(domain) && urlGuard.isAllowed(absHref)) {
                     allText.append(crawl(absHref.split("#")[0], domain, depth + 1));
                 }
             }

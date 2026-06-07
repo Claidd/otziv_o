@@ -188,7 +188,6 @@ public class Company {
         if (statusChangedAt == null) {
             statusChangedAt = LocalDateTime.now();
         }
-        System.out.println(LocalDate.now().plusDays(10));
     }
 
     public void setStatus(CompanyStatus status) {

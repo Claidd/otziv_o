@@ -11,7 +11,7 @@
         <small>Заказ #{{ order?.id }}</small>
         <h2 id="order-edit-title">Редактирование заказа</h2>
       </div>
-      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || deleting" title="Закрыть">
+      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || deleting || cancelingPayment" title="Закрыть">
         <span class="material-icons-sharp">close</span>
       </button>
     </header>
@@ -146,16 +146,26 @@
             </label>
           </div>
 
-          <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete">
-            @if (order.canDelete) {
-              <button type="button" class="danger" (click)="deleted.emit()" [disabled]="saving || deleting">
-                {{ deleting ? 'Удаляю...' : 'Удалить' }}
-              </button>
+          <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete || order.canCancelPayment">
+            @if (order.canDelete || order.canCancelPayment) {
+              <div class="lead-edit-actions-group">
+                @if (order.canCancelPayment) {
+                  <button type="button" class="danger" (click)="paymentCanceled.emit()" [disabled]="saving || deleting || cancelingPayment">
+                    {{ cancelingPayment ? 'Отменяю оплату...' : 'Отменить оплату' }}
+                  </button>
+                }
+
+                @if (order.canDelete) {
+                  <button type="button" class="danger" (click)="deleted.emit()" [disabled]="saving || deleting || cancelingPayment">
+                    {{ deleting ? 'Удаляю...' : 'Удалить' }}
+                  </button>
+                }
+              </div>
             }
 
             <div class="lead-edit-actions-group">
-              <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || deleting">Отмена</button>
-              <button type="submit" [disabled]="saving || deleting || orderEditForm.invalid">
+              <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || deleting || cancelingPayment">Отмена</button>
+              <button type="submit" [disabled]="saving || deleting || cancelingPayment || orderEditForm.invalid">
                 {{ saving ? 'Сохраняю...' : 'Сохранить' }}
               </button>
             </div>

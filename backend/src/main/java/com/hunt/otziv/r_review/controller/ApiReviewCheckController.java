@@ -77,7 +77,8 @@ public class ApiReviewCheckController {
             Authentication authentication
     ) {
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
-        updateReviews(orderDetails, request);
+        requireLiveClientMutationAllowed(orderDetails, authentication);
+        updateReviews(orderDetails, request, permissions(authentication).canSeeInternalInfo());
         return buildResponse(orderDetailId, authentication);
     }
 
@@ -94,6 +95,7 @@ public class ApiReviewCheckController {
         }
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
         requireReviewInDetails(orderDetails, reviewId);
 
@@ -117,6 +119,7 @@ public class ApiReviewCheckController {
         }
 
         OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
         requireReviewInDetails(orderDetails, reviewId);
 
@@ -140,8 +143,9 @@ public class ApiReviewCheckController {
         }
 
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Публикация", authentication);
+        requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
-        OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
+        OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request, permissions.canSeeInternalInfo());
         validateReviewTextsReadyForAction(updateDto, "Нельзя разрешить публикацию: заполните текст всех отзывов");
         saveUpdateDto(updateDto);
 
@@ -179,9 +183,10 @@ public class ApiReviewCheckController {
         }
 
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
+        requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
 
-        updateReviews(orderDetails, request);
+        updateReviews(orderDetails, request, permissions.canSeeInternalInfo());
 
         if (!orderService.changeStatusForOrder(order.getId(), "Коррекция")) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось отправить заказ на коррекцию");
@@ -310,8 +315,12 @@ public class ApiReviewCheckController {
         return new ReviewCheckNotesResponse(safe(order.getZametka()), safe(company.getCommentsCompany()));
     }
 
-    private void updateReviews(OrderDetails orderDetails, ReviewCheckUpdateRequest request) {
-        OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request);
+    private void updateReviews(
+            OrderDetails orderDetails,
+            ReviewCheckUpdateRequest request,
+            boolean allowPublicationFields
+    ) {
+        OrderDetailsDTO updateDto = toUpdateDto(orderDetails, request, allowPublicationFields);
         saveUpdateDto(updateDto);
     }
 
@@ -332,6 +341,14 @@ public class ApiReviewCheckController {
     }
 
     private OrderDetailsDTO toUpdateDto(OrderDetails orderDetails, ReviewCheckUpdateRequest request) {
+        return toUpdateDto(orderDetails, request, true);
+    }
+
+    private OrderDetailsDTO toUpdateDto(
+            OrderDetails orderDetails,
+            ReviewCheckUpdateRequest request,
+            boolean allowPublicationFields
+    ) {
         if (request == null || request.reviews() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзывы не переданы");
         }
@@ -357,9 +374,11 @@ public class ApiReviewCheckController {
                             .id(current.getId())
                             .text(valueOrCurrent(item.text(), current.getText()))
                             .answer(valueOrCurrent(item.answer(), current.getAnswer()))
-                            .publish(item.publish() != null ? item.publish() : current.isPublish())
-                            .publishedDate(parseDateOrCurrent(item.publishedDate(), current.getPublishedDate()))
-                            .url(valueOrCurrent(item.url(), current.getUrl()))
+                            .publish(allowPublicationFields && item.publish() != null ? item.publish() : current.isPublish())
+                            .publishedDate(allowPublicationFields
+                                    ? parseDateOrCurrent(item.publishedDate(), current.getPublishedDate())
+                                    : current.getPublishedDate())
+                            .url(allowPublicationFields ? valueOrCurrent(item.url(), current.getUrl()) : safe(current.getUrl()))
                             .build();
                 })
                 .toList();
@@ -385,19 +404,19 @@ public class ApiReviewCheckController {
         Company company = order.getCompany();
         Filial filial = order.getFilial();
         List<Review> reviews = safeReviews(orderDetails);
-        ReviewCheckPermissions permissions = permissions(authentication);
+        ReviewCheckPermissions permissions = livePermissions(order, authentication);
 
         boolean approved = isApprovedForPublication(reviews);
         String workerFio = workerFio(reviews, order);
 
         return new ReviewCheckResponse(
                 orderDetails.getId(),
-                order.getId(),
-                company != null ? company.getId() : null,
+                permissions.canOpenManagerLinks() ? order.getId() : null,
+                permissions.canOpenManagerLinks() && company != null ? company.getId() : null,
                 company != null ? safe(company.getTitle()) : "",
                 filial != null ? safe(filial.getTitle()) : "",
                 order.getStatus() != null ? safe(order.getStatus().getTitle()) : "",
-                workerFio,
+                permissions.canSeeInternalInfo() ? workerFio : "",
                 permissions.canSeeInternalInfo() ? safe(order.getZametka()) : "",
                 permissions.canSeeInternalInfo() && company != null ? safe(company.getCommentsCompany()) : "",
                 safe(orderDetails.getComment()),
@@ -420,12 +439,12 @@ public class ApiReviewCheckController {
 
         return new ReviewCheckResponse(
                 archived.orderDetailId(),
-                archived.orderId(),
-                archived.companyId(),
+                permissions.canOpenManagerLinks() ? archived.orderId() : null,
+                permissions.canOpenManagerLinks() ? archived.companyId() : null,
                 archived.companyTitle(),
                 archived.filialTitle(),
                 archived.status(),
-                archived.workerFio(),
+                permissions.canSeeInternalInfo() ? archived.workerFio() : "",
                 permissions.canSeeInternalInfo() ? archived.orderComments() : "",
                 permissions.canSeeInternalInfo() ? archived.companyComments() : "",
                 archived.comment(),
@@ -578,6 +597,26 @@ public class ApiReviewCheckController {
         );
     }
 
+    private ReviewCheckPermissions livePermissions(Order order, Authentication authentication) {
+        ReviewCheckPermissions base = permissions(authentication);
+        if (base.canSeeInternalInfo() || clientMutationAllowed(order)) {
+            return base;
+        }
+
+        return new ReviewCheckPermissions(
+                base.authenticated(),
+                base.canSeeInternalInfo(),
+                base.canSeeBot(),
+                false,
+                false,
+                false,
+                base.canSendToCheck(),
+                base.canMarkPaid(),
+                base.canOpenManagerLinks(),
+                base.canEditNotes()
+        );
+    }
+
     private ReviewCheckPermissions archivedPermissions(Authentication authentication) {
         ReviewCheckPermissions base = permissions(authentication);
         return new ReviewCheckPermissions(
@@ -596,6 +635,28 @@ public class ApiReviewCheckController {
 
     private String restoredBy(Authentication authentication) {
         return isAuthenticated(authentication) ? authentication.getName() : "anonymous-review-check";
+    }
+
+    private void requireLiveClientMutationAllowed(OrderDetails orderDetails, Authentication authentication) {
+        if (permissions(authentication).canSeeInternalInfo()) {
+            return;
+        }
+
+        Order order = requireOrder(orderDetails);
+        if (clientMutationAllowed(order)) {
+            return;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Проверка отзывов уже закрыта для клиентских правок"
+        );
+    }
+
+    private boolean clientMutationAllowed(Order order) {
+        String status = order != null && order.getStatus() != null ? safe(order.getStatus().getTitle()) : "";
+        String normalizedStatus = status.trim().toLowerCase().replace('ё', 'е');
+        return Set.of("в проверку", "на проверке", "коррекция").contains(normalizedStatus);
     }
 
     private void requireCanEditNotes(Authentication authentication) {

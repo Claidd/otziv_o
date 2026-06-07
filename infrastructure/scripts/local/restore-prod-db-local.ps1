@@ -276,22 +276,20 @@ if (-not $SkipDownload -and [string]::IsNullOrWhiteSpace($VpsHost)) {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
 $composePath = if ([System.IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $repoRoot $ComposeFile }
-$envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
-$envExamplePath = Join-Path $repoRoot ".env.prod-local.example"
+$envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 $migrationDir = Join-Path $repoRoot "backend\src\main\resources\db\migration"
 $backupDir = Join-Path $repoRoot "data\mysql_backup"
 
 if (-not (Test-Path -LiteralPath $composePath)) {
     throw "Compose file not found: $composePath"
 }
-if (-not (Test-Path -LiteralPath $envPath)) {
-    if (-not (Test-Path -LiteralPath $envExamplePath)) {
-        throw "Env file not found: $envPath"
-    }
-    Copy-Item -LiteralPath $envExamplePath -Destination $envPath
-    Write-Host "Created $envPath from .env.prod-local.example."
-}
+Write-Host "Using env file: $envPath"
 if (-not (Test-Path -LiteralPath $migrationDir)) {
     throw "Migration directory not found: $migrationDir"
 }

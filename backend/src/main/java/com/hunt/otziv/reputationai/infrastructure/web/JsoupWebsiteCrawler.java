@@ -3,14 +3,16 @@ package com.hunt.otziv.reputationai.infrastructure.web;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
+import com.hunt.otziv.security.OutboundUrlGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jsoup.Jsoup;
 import org.jsoup.Connection;
+import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -49,6 +51,7 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
     );
 
     private final ReputationAiProperties properties;
+    private final OutboundUrlGuard urlGuard;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -71,7 +74,10 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                 break;
             }
 
-            crawlRoot(normalizeUrl(url), pages, visited, normalizedDeepCrawlHosts);
+            String normalized = normalizeUrl(url);
+            if (!normalized.isBlank() && urlGuard.isAllowed(normalized)) {
+                crawlRoot(normalized, pages, visited, normalizedDeepCrawlHosts);
+            }
         }
 
         return pages;
@@ -107,7 +113,7 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
             }
 
             try {
-                Document document = connect(currentUrl).get();
+                Document document = fetch(currentUrl, false).parse();
                 String text = limit(buildPageText(document, currentUrl));
                 if (!text.isBlank() && !isBlockedOrServicePage(document.title(), text, currentUrl)) {
                     pages.add(new CrawledPage(currentUrl, document.title(), text));
@@ -136,8 +142,26 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                 .userAgent(properties.getUserAgent())
                 .referrer("https://yandex.ru/")
                 .timeout((int) properties.getWebsiteTimeout().toMillis())
-                .followRedirects(true)
+                .followRedirects(false)
                 .ignoreHttpErrors(true);
+    }
+
+    private Connection.Response fetch(String url, boolean ignoreContentType) throws IOException {
+        String currentUrl = url;
+        urlGuard.assertAllowed(currentUrl);
+        for (int redirects = 0; redirects <= urlGuard.maxRedirects(); redirects++) {
+            Connection.Response response = connect(currentUrl)
+                    .ignoreContentType(ignoreContentType)
+                    .execute();
+            int status = response.statusCode();
+            if (status < 300 || status >= 400) {
+                return response;
+            }
+
+            currentUrl = urlGuard.resolveRedirect(currentUrl, response.header("Location"));
+        }
+
+        throw new IOException("Too many redirects");
     }
 
     private void enqueue(String url, String rootHost, Queue<String> queue, Set<String> queued, Set<String> visited) {
@@ -146,6 +170,7 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                 || visited.contains(normalized)
                 || queued.contains(normalized)
                 || !rootHost.equals(host(normalized))
+                || !urlGuard.isAllowed(normalized)
                 || isKnownPlatformServiceUrl(normalized)
                 || isLikelyAssetUrl(normalized)) {
             return;
@@ -163,16 +188,13 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                     ? uri.getHost()
                     : uri.getRawAuthority();
             String sitemapUrl = scheme + "://" + authority + "/sitemap.xml";
-            String sitemap = connect(sitemapUrl)
-                    .ignoreContentType(true)
-                    .execute()
-                    .body();
+            String sitemap = fetch(sitemapUrl, true).body();
 
             LinkedHashSet<String> urls = new LinkedHashSet<>();
             Matcher matcher = SITEMAP_LOC_PATTERN.matcher(sitemap == null ? "" : sitemap);
             while (matcher.find() && urls.size() < properties.getMaxWebsitePages() * MAX_QUEUED_URLS_MULTIPLIER) {
                 String url = normalizeUrl(matcher.group(1));
-                if (rootHost.equals(host(url)) && !isLikelyAssetUrl(url)) {
+                if (rootHost.equals(host(url)) && urlGuard.isAllowed(url) && !isLikelyAssetUrl(url)) {
                     urls.add(url);
                 }
             }

@@ -331,8 +331,6 @@ public class UserServiceImpl implements UserService {
     ) throws IOException {
         log.info("Вошли в обновление");
 
-        String originalFilename = imageFile != null ? imageFile.getOriginalFilename() : null;
-
         if (userDTO.getOperators() == null) {
             userDTO.setOperators(new HashSet<>());
         }
@@ -416,12 +414,7 @@ public class UserServiceImpl implements UserService {
             log.info("Обновили активность");
         }
 
-        if (originalFilename != null
-                && (originalFilename.endsWith(".jpg")
-                || originalFilename.endsWith(".png")
-                || originalFilename.endsWith(".jpeg")
-                || originalFilename.endsWith(".webp"))) {
-
+        if (imageFile != null && !imageFile.isEmpty()) {
             Image imageDelete = saveUser.getImage();
             if (imageDelete != null) {
                 imageRepository.delete(imageDelete);

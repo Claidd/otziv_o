@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.next_order.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
@@ -32,6 +33,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final CompanyStatusService companyStatusService;
     private final OrderStatusService orderStatusService;
     private final BadReviewTaskService badReviewTaskService;
+    private final NextOrderFailureNotifier nextOrderFailureNotifier;
     private final NextOrderRequestService nextOrderRequestService;
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
     private final GamificationEventService gamificationEventService;
@@ -47,6 +49,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             CompanyStatusService companyStatusService,
             OrderStatusService orderStatusService,
             BadReviewTaskService badReviewTaskService,
+            NextOrderFailureNotifier nextOrderFailureNotifier,
             NextOrderRequestService nextOrderRequestService,
             MobilePushBusinessNotificationService mobilePushBusinessNotificationService,
             GamificationEventService gamificationEventService
@@ -58,6 +61,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.companyStatusService = companyStatusService;
         this.orderStatusService = orderStatusService;
         this.badReviewTaskService = badReviewTaskService;
+        this.nextOrderFailureNotifier = nextOrderFailureNotifier;
         this.nextOrderRequestService = nextOrderRequestService;
         this.mobilePushBusinessNotificationService = mobilePushBusinessNotificationService;
         this.gamificationEventService = gamificationEventService;
@@ -66,6 +70,12 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     @Override
     @Transactional
     public boolean handlePaymentStatus(Order order) throws Exception {
+        return handlePaymentStatus(order, true);
+    }
+
+    @Override
+    @Transactional
+    public boolean handlePaymentStatus(Order order, boolean createNextOrder) throws Exception {
         boolean wasAlreadyPaid = order != null
                 && order.getStatus() != null
                 && STATUS_PAYMENT.equals(order.getStatus().getTitle());
@@ -104,7 +114,14 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                 orderRepository.save(order);
                 companyService.save(checkStatusToCompany(company));
                 badReviewTaskService.cancelPendingTasksForOrder(order);
-                nextOrderRequestService.openForPaidOrder(order);
+                if (createNextOrder) {
+                    try {
+                        nextOrderRequestService.openForPaidOrder(order);
+                    } catch (RuntimeException e) {
+                        log.warn("Не удалось открыть заявку на следующий заказ после оплаты заказа {}", order.getId(), e);
+                        nextOrderFailureNotifier.notifyManager(order, null, "оплата обычного заказа", e);
+                    }
+                }
             } else {
                 log.error("Проблемы при сохранении ЗП");
             }

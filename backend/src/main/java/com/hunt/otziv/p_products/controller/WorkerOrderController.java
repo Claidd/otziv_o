@@ -45,7 +45,6 @@ public class WorkerOrderController {
     @GetMapping("/bot") // Страница с кнопками "Добавить акк" и "Список всех аккаунтов"
     public String BotAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
         String userRole = gerRole(principal);
-        System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех ботов для админа");
@@ -68,7 +67,6 @@ public class WorkerOrderController {
     @GetMapping("/bot_list") // Страница "Список всех аккаунтов"
     public String BotAllList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal){
         String userRole = gerRole(principal);
-        System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
@@ -97,7 +95,6 @@ public class WorkerOrderController {
         long startTime = System.nanoTime();
         LocalDate localDate = LocalDate.now();
         String userRole = gerRole(principal);
-        System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
@@ -138,7 +135,6 @@ public class WorkerOrderController {
     public String CorrectAllOrdersList(@RequestParam(defaultValue = "") String keyword, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
-        System.out.println(userRole);
 
         if ("ROLE_ADMIN".equals(userRole)){
             log.info("Зашли список всех заказов для админа");
@@ -179,7 +175,6 @@ public class WorkerOrderController {
     public String ToNagulOrdersList(@RequestParam(defaultValue = "") String keyword, RedirectAttributes rm, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
-        System.out.println(userRole);
         LocalDate localDate = LocalDate.now();
         LocalDate nagulDateLimit = nagulLookaheadDate(localDate);
 
@@ -225,7 +220,6 @@ public class WorkerOrderController {
     public String ToPublishedAllOrdersList(@RequestParam(defaultValue = "") String keyword, RedirectAttributes rm, Model model, Principal principal, @RequestParam(defaultValue = "0") int pageNumber){
         long startTime = System.nanoTime();
         String userRole = gerRole(principal);
-        System.out.println(userRole);
         LocalDate localDate = LocalDate.now();
 
         if ("ROLE_ADMIN".equals(userRole)){

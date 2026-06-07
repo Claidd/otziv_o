@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -58,11 +59,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
+import static com.hunt.otziv.logs.LogMasking.maskPaymentId;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -76,6 +80,8 @@ public class PaymentLinkService {
     private static final String OFFER_PATH = "/offer";
     private static final String PRIVACY_PATH = "/privacy";
     private static final String RECEIPT_CONSENT_PATH = "/receipt-consent";
+    private static final String STATUS_PAYMENT = "Оплачено";
+    private static final String MANUAL_PAID_RETIRED_REASON = "Заказ отмечен оплаченным вручную; старая ссылка закрыта";
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
             PaymentLinkStatus.INITIATED,
@@ -170,6 +176,7 @@ public class PaymentLinkService {
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final AppSettingService appSettingService;
+    private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -812,7 +819,12 @@ public class PaymentLinkService {
         }
 
         if (linkCandidate.isEmpty()) {
-            log.warn("T-Bank webhook ignored: payment link not found for OrderId={}, PaymentId={}", orderId, paymentId);
+            CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+            if (commonBillingService != null && commonBillingService.handleTbankWebhook(payload)) {
+                return;
+            }
+            log.warn("T-Bank webhook ignored: payment link not found for OrderId={}, PaymentId={}",
+                    maskPaymentId(orderId), maskPaymentId(paymentId));
             return;
         }
 
@@ -1174,6 +1186,9 @@ public class PaymentLinkService {
         if (link == null || link.getOrder() == null || link.getOrder().getId() == null) {
             return false;
         }
+        if (isManualPaidRetiredLink(link)) {
+            return true;
+        }
         if (link.getStatus() == PaymentLinkStatus.CONFIRMED
                 || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED
                 || link.getStatus() == PaymentLinkStatus.AMOUNT_MISMATCH
@@ -1185,6 +1200,17 @@ public class PaymentLinkService {
                 || link.getStatus() == PaymentLinkStatus.FAILED
                 || link.getStatus() == PaymentLinkStatus.REJECTED
                 || (link.getExpiresAt() != null && !link.getExpiresAt().isAfter(now));
+    }
+
+    private boolean isManualPaidRetiredLink(PaymentLink link) {
+        if (link.getStatus() != PaymentLinkStatus.CANCELED
+                || !MANUAL_PAID_RETIRED_REASON.equals(normalize(link.getLastError()))
+                || !normalize(link.getTbankPaymentId()).isBlank()) {
+            return false;
+        }
+        Order order = link.getOrder();
+        String statusTitle = order.getStatus() == null ? "" : normalize(order.getStatus().getTitle());
+        return !STATUS_PAYMENT.equals(statusTitle);
     }
 
     private boolean sameLinkId(PaymentLink left, PaymentLink right) {

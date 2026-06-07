@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static com.hunt.otziv.logs.LogMasking.maskPhone;
+
 
 @Service
 @Slf4j
@@ -42,10 +44,10 @@ public class LeadLastSeenProcessorServiceImpl {
         long startTime = System.currentTimeMillis();
 
         log.info("▶ [PROCESS LEAD] Старт обработки лида {} (номер: {}) для клиента {} в {}",
-                lead.getId(), phone, clientId, LocalDateTime.now(IRKUTSK_ZONE));
+                lead.getId(), maskPhone(phone), clientId, LocalDateTime.now(IRKUTSK_ZONE));
 
         try {
-            log.info("⏱ [{}] Шаг 1: Запрашиваем статус WhatsApp у Node.js (телефон: {})", clientId, phone);
+            log.info("⏱ [{}] Шаг 1: Запрашиваем статус WhatsApp у Node.js (телефон: {})", clientId, maskPhone(phone));
             long statusStart = System.currentTimeMillis();
 
             Optional<WhatsAppUserStatusDto> statusOpt =
@@ -56,7 +58,7 @@ public class LeadLastSeenProcessorServiceImpl {
 
             if (statusOpt.isEmpty()) {
                 log.warn("⚠ [{}] Не удалось получить статус WhatsApp для {} (elapsed: {} мс)",
-                        clientId, phone, System.currentTimeMillis() - startTime);
+                        clientId, maskPhone(phone), System.currentTimeMillis() - startTime);
                 collectorProvider.getObject().incrementStat(clientId, 1, 0, 0, 1);
                 return;
             }
@@ -64,8 +66,8 @@ public class LeadLastSeenProcessorServiceImpl {
             WhatsAppUserStatusDto status = statusOpt.get();
             String stage = status.getStage() != null ? status.getStage() : "unknown";
 
-            log.info("ℹ [{}] Ответ получен (stage={}): registered={}, lastSeenRaw={}, parsedLastSeen={}",
-                    clientId, stage, status.getRegistered(), status.getRawLastSeen(), status.getParsedLastSeen());
+            log.info("ℹ [{}] Ответ получен (stage={}): registered={}, parsedLastSeenPresent={}",
+                    clientId, stage, status.getRegistered(), status.getParsedLastSeen() != null);
 
             long dbStart = System.currentTimeMillis();
 
@@ -76,7 +78,7 @@ public class LeadLastSeenProcessorServiceImpl {
                 leadRepository.save(lead);
                 collectorProvider.getObject().incrementStat(clientId, 1, 0, 0, 1);
                 log.info("📵 [{}] {} — номер не зарегистрирован (stage={}), статус 'Оффлайн' (DB save {} мс)",
-                        clientId, phone, stage, System.currentTimeMillis() - dbStart);
+                        clientId, maskPhone(phone), stage, System.currentTimeMillis() - dbStart);
                 return;
             }
 
@@ -98,7 +100,7 @@ public class LeadLastSeenProcessorServiceImpl {
 
                 collectorProvider.getObject().incrementStat(clientId, 1, 1, 1, 0);
                 log.info("📅 [{}] {} — lastSeen={}, менеджер назначен ID={} (DB save {} мс)",
-                        clientId, phone, status.getParsedLastSeen(), nextManagerId, System.currentTimeMillis() - dbStart);
+                        clientId, maskPhone(phone), status.getParsedLastSeen(), nextManagerId, System.currentTimeMillis() - dbStart);
             } else {
                 // lastSeen отсутствует — ставим оффлайн
                 lead.setLastSeen(null);
@@ -106,15 +108,15 @@ public class LeadLastSeenProcessorServiceImpl {
                 leadRepository.save(lead);
                 collectorProvider.getObject().incrementStat(clientId, 1, 1, 0, 1);
                 log.info("📴 [{}] {} — lastSeen отсутствует (stage={}), статус 'Оффлайн' (DB save {} мс)",
-                        clientId, phone, stage, System.currentTimeMillis() - dbStart);
+                        clientId, maskPhone(phone), stage, System.currentTimeMillis() - dbStart);
             }
 
             log.info("✅ [{}] Лид {} ({}): обработка завершена за {} мс (с начала)",
-                    clientId, lead.getId(), phone, System.currentTimeMillis() - startTime);
+                    clientId, lead.getId(), maskPhone(phone), System.currentTimeMillis() - startTime);
 
         } catch (Exception e) {
             log.error("❌ [{}] Ошибка обработки lastSeen для {}: {} (elapsed: {} мс)",
-                    clientId, phone, e.getMessage(), System.currentTimeMillis() - startTime);
+                    clientId, maskPhone(phone), e.getMessage(), System.currentTimeMillis() - startTime);
             collectorProvider.getObject().incrementStat(clientId, 1, 0, 0, 1);
         }
     }
@@ -142,8 +144,6 @@ public class LeadLastSeenProcessorServiceImpl {
 
 
 }
-
-
 
 
 

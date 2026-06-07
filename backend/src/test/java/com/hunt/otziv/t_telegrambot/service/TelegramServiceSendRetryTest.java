@@ -44,6 +44,7 @@ class TelegramServiceSendRetryTest {
             super(new DefaultBotOptions(),
                     "123456:abcdefghijklmnopqrstuvwxyz",
                     "test_bot",
+                    true,
                     "",
                     null,
                     null,

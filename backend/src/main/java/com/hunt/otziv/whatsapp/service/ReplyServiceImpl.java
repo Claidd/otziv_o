@@ -45,15 +45,15 @@ public class ReplyServiceImpl implements ReplyService {
 
     @Override
     public void processIncomingReply(WhatsAppReplyDTO reply) {
-        log.info("\n🟦 [REPLY] Входящий ответ от клиента\n├─ Клиент: {}\n├─ Телефон: {}\n└─ Сообщение: {}",
-                reply.getClientId(), reply.getFrom(), reply.getMessage());
+        log.info("WhatsApp personal reply received: clientId={}, from={}, messageLength={}",
+                reply.getClientId(), maskPhone(reply.getFrom()), textLength(reply.getMessage()));
 
         String telephoneNumber = reply.getFrom().replaceAll("@c\\.us$", "");
-        log.debug("🔍 Извлечён номер телефона: {}", telephoneNumber);
+        log.debug("WhatsApp personal reply phone extracted: {}", maskPhone(telephoneNumber));
 
         Optional<Lead> leadOpt = leadService.getByTelephoneLead(telephoneNumber);
         if (leadOpt.isEmpty()) {
-            log.warn("❌ Не найден лид по номеру {}", telephoneNumber);
+            log.warn("WhatsApp personal reply ignored: lead not found for {}", maskPhone(telephoneNumber));
             return;
         }
 
@@ -64,7 +64,7 @@ public class ReplyServiceImpl implements ReplyService {
             List<String> declineKeywords = List.of("нет", "не надо", "не нужно", "отстаньте", "не интересует", "не хочу", "спам", "хватит", "отпишитесь");
 
             if (declineKeywords.stream().anyMatch(messageText::contains)) {
-                log.info("⛔ Клиент отказался: '{}'", messageText);
+                log.info("WhatsApp personal reply declined offer: leadId={}", lead.getId());
                 return;
             }
 
@@ -82,10 +82,10 @@ public class ReplyServiceImpl implements ReplyService {
 
             String offerText = offerList.get(ThreadLocalRandom.current().nextInt(offerList.size()));
             offerService.sendOfferAsync(lead, clientId, telephoneNumber, offerText);
-            log.info("📨 Оффер поставлен в очередь: клиент {}", telephoneNumber);
+            log.info("WhatsApp offer queued: leadId={}, client={}", lead.getId(), maskPhone(telephoneNumber));
         } else {
             notifyAdminIfMessageContainsLink(lead, reply);
-            log.info("✅ Оффер уже отправлялся ранее клиенту {}", telephoneNumber);
+            log.info("WhatsApp personal reply processed after offer: leadId={}", lead.getId());
         }
     }
 
@@ -118,7 +118,7 @@ public class ReplyServiceImpl implements ReplyService {
                 escapeMarkdown(message));
 
         notificationService.sendAdminAlert(msg, adminChatIds);
-        log.info("📢 Уведомление отправлено админам: {}", telephone);
+        log.info("WhatsApp personal reply admin notification sent: leadId={}", lead.getId());
     }
 
     private String escapeMarkdown(String text) {
@@ -133,12 +133,8 @@ public class ReplyServiceImpl implements ReplyService {
 
     @Override
     public void processGroupReply(WhatsAppGroupReplyDTO reply) {
-        log.info("\n🟦 [GROUP REPLY] Получен ответ из группы"
-                        + "\n├─ Группа: '{}'"
-                        + "\n├─ Отправитель (raw): '{}'"
-                        + "\n├─ Сообщение: '{}'"
-                        + "\n└─ GroupId: {}",
-                reply.getGroupName(), reply.getFrom(), reply.getMessage(), reply.getGroupId());
+        log.info("WhatsApp group reply received: groupId={}, groupNamePresent={}, from={}, messageLength={}",
+                reply.getGroupId(), hasText(reply.getGroupName()), maskPhone(reply.getFrom()), textLength(reply.getMessage()));
 
         // 1. Поиск по GroupId
         Optional<Company> optCompany = companyService.findByGroupId(reply.getGroupId());
@@ -156,7 +152,8 @@ public class ReplyServiceImpl implements ReplyService {
                     ? rawName.substring(0, rawName.indexOf("."))
                     : rawName;
 
-            log.debug("➡ Используем телефон '{}' и заголовок '{}'", telephoneNumber, title);
+            log.debug("WhatsApp group reply fallback lookup: phone={}, titlePresent={}",
+                    maskPhone(telephoneNumber), hasText(title));
 
             // 3. Поиск по телефону и названию
             optCompany = companyService.getCompanyByTelephonAndTitle(telephoneNumber, title);
@@ -169,12 +166,12 @@ public class ReplyServiceImpl implements ReplyService {
                     return;
                 }
 
-                log.warn("❌ Компания не найдена ни по GroupId {}, ни по номеру '{}' + названию '{}', ни по названию группы '{}'",
-                        reply.getGroupId(), telephoneNumber, title, reply.getGroupName());
+                log.warn("WhatsApp group reply ignored: company not found for groupId={}, phone={}, titlePresent={}, groupNamePresent={}",
+                        reply.getGroupId(), maskPhone(telephoneNumber), hasText(title), hasText(reply.getGroupName()));
                 return;
             } else {
-                log.info("🔍 Найдена компания '{}' по телефону '{}' и названию '{}'",
-                        optCompany.get().getTitle(), telephoneNumber, title);
+                log.info("WhatsApp group reply company found by fallback: companyId={}, phone={}, titlePresent={}",
+                        optCompany.get().getId(), maskPhone(telephoneNumber), hasText(title));
             }
         }
 
@@ -204,5 +201,25 @@ public class ReplyServiceImpl implements ReplyService {
             return;
         }
         whatsAppService.sendMessageToGroup(reply.getClientId(), reply.getGroupId(), message);
+    }
+
+    private static int textLength(String value) {
+        return value == null ? 0 : value.length();
+    }
+
+    private static String maskPhone(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String normalized = value.replaceAll("@c\\.us$", "");
+        String digits = normalized.replaceAll("\\D+", "");
+        if (digits.length() < 4) {
+            return "***";
+        }
+        return "***" + digits.substring(digits.length() - 4);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

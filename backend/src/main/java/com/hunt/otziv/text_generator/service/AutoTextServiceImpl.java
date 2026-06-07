@@ -378,13 +378,10 @@ public class AutoTextServiceImpl implements AutoTextService{
 
     private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
         List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());
-        System.out.println("Боты вытащенные из базы по определнному городу: " + bots.size());
         List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
 
         List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-        System.out.println("Боты вытащенные из базы по определнному городу для удаления: " +  botsCompany.size());
         bots.removeAll(botsCompany);
-        System.out.println("Оставшиеся: " + bots.size());
         return bots;
     }
 

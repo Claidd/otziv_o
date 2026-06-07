@@ -5,8 +5,10 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
@@ -62,6 +64,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageImpl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -729,6 +732,49 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void publicLinkCreatesReplacementForManualPaidRetiredLinkWhenOrderReturnedToReminder() {
+        PaymentLinkService service = service(properties());
+        Order order = order(22671L, "КЛИМАТпроф", BigDecimal.valueOf(2500));
+        order.setStatus(OrderStatus.builder().title("Напоминание").build());
+
+        PaymentLink oldLink = new PaymentLink();
+        oldLink.setId(800L);
+        oldLink.setOrder(order);
+        oldLink.setToken("old-token");
+        oldLink.setAmountKopecks(250000L);
+        oldLink.setDescription("Оплата услуг");
+        oldLink.setStatus(PaymentLinkStatus.CANCELED);
+        oldLink.setLastError("Заказ отмечен оплаченным вручную; старая ссылка закрыта");
+        oldLink.setExpiresAt(LocalDateTime.now().plusDays(80));
+
+        PaymentLink newLink = new PaymentLink();
+        newLink.setId(801L);
+        newLink.setOrder(order);
+        newLink.setToken("new-token");
+        newLink.setAmountKopecks(250000L);
+        newLink.setDescription("Оплата услуг");
+        newLink.setStatus(PaymentLinkStatus.CREATED);
+        newLink.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("old-token")).thenReturn(Optional.of(oldLink));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(22671L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.empty(), Optional.empty(), Optional.of(newLink));
+        when(orderRepository.findByIdForMutation(22671L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(22671L)).thenReturn(null);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.publicLink("old-token");
+
+        assertEquals("new-token", response.token());
+        assertEquals("CREATED", response.status());
+        assertTrue(response.payable());
+        verify(paymentLinkRepository).save(any(PaymentLink.class));
+    }
+
+    @Test
     void publicLinkSynchronizesInitiatedPaymentFromTbankGetState() {
         TbankPaymentProperties properties = properties();
         properties.setEnabled(true);
@@ -1248,6 +1294,9 @@ class PaymentLinkServiceTest {
     }
 
     private PaymentLinkService service(TbankPaymentProperties properties, TbankTokenSigner signer) {
+        @SuppressWarnings("unchecked")
+        ObjectProvider<CommonBillingService> commonBillingServiceProvider = org.mockito.Mockito.mock(ObjectProvider.class);
+        org.mockito.Mockito.lenient().when(commonBillingServiceProvider.getIfAvailable()).thenReturn(null);
         return new PaymentLinkService(
                 paymentLinkRepository,
                 orderRepository,
@@ -1262,7 +1311,8 @@ class PaymentLinkServiceTest {
                 manualPaymentTaskService,
                 paymentInvoiceRetryScheduler,
                 paymentLinkArchiveService,
-                appSettingService
+                appSettingService,
+                commonBillingServiceProvider
         );
     }
 

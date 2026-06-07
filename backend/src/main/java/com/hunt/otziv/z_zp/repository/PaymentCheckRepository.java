@@ -18,6 +18,8 @@ public interface PaymentCheckRepository extends CrudRepository<PaymentCheck, Lon
     @NotNull
     List<PaymentCheck> findAll();
 
+    List<PaymentCheck> findByOrderIdAndActiveTrue(Long orderId);
+
 //    @Query("SELECT p FROM PaymentCheck p WHERE YEAR(p.created) = YEAR(:localDate) AND MONTH(p.created) = MONTH(:localDate)")
 //    List<PaymentCheck> findAllToDate(LocalDate localDate);
 

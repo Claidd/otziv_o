@@ -40,6 +40,37 @@ export interface PublicPaymentInitResponse {
   qrImage?: string | null;
 }
 
+export interface PublicCommonInvoiceOrder {
+  orderId: number;
+  companyId: number;
+  companyTitle: string;
+  filialTitle?: string | null;
+  orderStatus: string;
+  originalOrderStatus?: string | null;
+  amount: number;
+  amountKopecks: number;
+  ready: boolean;
+  paid: boolean;
+  unpaid: boolean;
+  detachable?: boolean;
+  paidAt?: string | null;
+}
+
+export interface PublicCommonInvoice {
+  token: string;
+  title: string;
+  accountName: string;
+  status: string;
+  amount: number;
+  paid: number;
+  remaining: number;
+  amountKopecks: number;
+  paidKopecks: number;
+  remainingKopecks: number;
+  payable: boolean;
+  orders: PublicCommonInvoiceOrder[];
+}
+
 export interface PublicSbpBank {
   bankId: string;
   nspkBankId?: string | null;
@@ -317,6 +348,13 @@ export class PaymentsApi {
     );
   }
 
+  getPublicCommonInvoice(token: string): Observable<PublicCommonInvoice> {
+    return this.http.get<PublicCommonInvoice>(
+      `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}`,
+      { context: this.publicContext }
+    );
+  }
+
   initPublicPayment(
     token: string,
     email: string,
@@ -326,6 +364,20 @@ export class PaymentsApi {
   ): Observable<PublicPaymentInitResponse> {
     return this.http.post<PublicPaymentInitResponse>(
       `${appEnvironment.apiBaseUrl}/api/payments/public/${encodeURIComponent(token)}/init`,
+      { email, offerConsent, privacyConsent, receiptConsent },
+      { context: this.publicContext }
+    );
+  }
+
+  initPublicCommonInvoicePayment(
+    token: string,
+    email: string,
+    offerConsent: boolean,
+    privacyConsent: boolean,
+    receiptConsent: boolean
+  ): Observable<PublicPaymentInitResponse> {
+    return this.http.post<PublicPaymentInitResponse>(
+      `${appEnvironment.apiBaseUrl}/api/payments/public/group/${encodeURIComponent(token)}/init`,
       { email, offerConsent, privacyConsent, receiptConsent },
       { context: this.publicContext }
     );

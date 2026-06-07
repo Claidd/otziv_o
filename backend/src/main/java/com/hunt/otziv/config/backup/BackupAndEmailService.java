@@ -60,7 +60,7 @@
 //    private void createDatabaseBackup(String containerId, String backupFilePath) {
 //        String dbName = "otziv";
 //        String dbUser = "hunt";
-//        String dbPassword = "Rkfql54532111";
+//        String dbPassword = "";
 //        String command = String.format(
 //                "docker exec -i %s sh -c 'mysqldump -u%s -p%s %s > %s'",
 //                containerId,
@@ -179,7 +179,7 @@
 //    private void createDatabaseBackup(String containerId, String backupFilePath) {
 //        String dbName = "otziv";
 //        String dbUser = "hunt";
-//        String dbPassword = "Rkfql54532111";
+//        String dbPassword = "";
 //        String command = String.format(
 //                "docker exec %s sh -c 'mysqldump -u%s -p%s %s > /share/backup-otziv.sql'",
 //                containerId,
@@ -310,7 +310,7 @@
 //    private void createDatabaseBackup(String containerId, String backupFilePath) {
 //        String dbName = "otziv";
 //        String dbUser = "hunt";
-//        String dbPassword = "Rkfql54532111";
+//        String dbPassword = "";
 //        String command = String.format(
 //                "docker exec -i %s /usr/bin/mysqldump -u %s -p %s %s > %s",
 //                containerId,
@@ -395,7 +395,7 @@
 //    private void createDatabaseBackup(String backupFilePath) {
 //        String dbName = "otziv";
 //        String dbUser = "hunt";
-//        String dbPassword = "Rkfql54532111";
+//        String dbPassword = "";
 //        String command = String.format(
 //                "docker exec -i %s /usr/bin/mysqldump -u%s -p%s %s > %s",
 //                "bb7ece6dd86a", // Замените на имя вашего контейнера
@@ -495,7 +495,7 @@
 //        System.out.println("Зашли в отправку");
 //        String dbName = "otziv";
 //        String dbUser  = "hunt";
-//        String dbPassword = "545321";
+//        String dbPassword = "";
 //        String backupFileName = new SimpleDateFormat("ddMMyyyyddHHmmss").format(new Date()) + ".sql";
 //        String backupFilePath = "/tmp/" + backupFileName;
 //        String command = String.format(
@@ -658,7 +658,7 @@
 //        System.out.println("Зашли в отправку бэка");
 //        String dbName = "otziv";
 //        String dbUser = "hunt";
-//        String dbPassword = "545321";
+//        String dbPassword = "";
 //        String backupFileName = new SimpleDateFormat("ddMMyyyyHHmmss").format(new Date()) + ".sql";
 //        String backupFilePath = "/tmp/" + backupFileName;
 //
@@ -734,7 +734,7 @@
 //    System.out.println("Зашли в отправку бэка");
 //    String dbName = "otziv";
 //    String dbUser = "hunt";
-//    String dbPassword = "545321";
+//    String dbPassword = "";
 //    String backupFileName = new SimpleDateFormat("ddMMyyyyHHmmss").format(new Date()) + ".sql";
 //    String backupFilePath = "/tmp/" + backupFileName;
 //    createDatabaseBackup(backupFilePath);
@@ -807,7 +807,7 @@
 //    private void createDatabaseBackup(String backupFilePath) {
 //        String dbName = "otziv";
 //        String dbUser = "hunt";
-//        String dbPassword = "545321";
+//        String dbPassword = "";
 //        String command = String.format(
 //                "docker exec -i %s /usr/bin/mysqldump -u%s -p%s %s > %s",
 //                "1991f1d92c9c", // Замените на имя вашего контейнера

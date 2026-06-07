@@ -19,7 +19,7 @@ class OrderCreationServiceImplTest {
     void repeatOrderKeepsClientTextWaitingModeFromSourceHistory() {
         OrderCreationServiceImpl service = new OrderCreationServiceImpl(
                 null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null
+                null, null, null, null, null, null, null, null, null
         );
         Order sourceOrder = sourceOrder();
         sourceOrder.setWaitingForClient(false);

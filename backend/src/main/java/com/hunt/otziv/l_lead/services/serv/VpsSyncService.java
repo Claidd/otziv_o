@@ -26,6 +26,8 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
+import static com.hunt.otziv.logs.LogMasking.maskPhone;
+
 
 @Slf4j
 @Service
@@ -146,7 +148,7 @@ public class VpsSyncService {
                 sendDtoToVps(dto);
 
                 syncQueueRepo.delete(queued);
-                log.info("✅ Повторная отправка успешна: {}", dto.getTelephoneLead());
+                log.info("✅ Повторная отправка успешна: {}", maskPhone(dto.getTelephoneLead()));
 
             } catch (Exception e) {
                 queued.setRetryCount(queued.getRetryCount() + 1);
@@ -155,7 +157,7 @@ public class VpsSyncService {
                 syncQueueRepo.save(queued);
 
                 log.warn("⚠ Повторная отправка лида {} не удалась ({} попыток): {}",
-                        queued.getTelephoneLead(), queued.getRetryCount(), safeErr(e));
+                        maskPhone(queued.getTelephoneLead()), queued.getRetryCount(), safeErr(e));
             }
         }
     }
@@ -262,7 +264,6 @@ public class VpsSyncService {
 //        }
 //    }
 //}
-
 
 
 

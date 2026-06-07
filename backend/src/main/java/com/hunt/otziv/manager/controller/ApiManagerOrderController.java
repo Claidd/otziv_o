@@ -4,11 +4,13 @@ import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.manager.dto.api.OrderEditResponse;
 import com.hunt.otziv.manager.dto.api.OrderUpdateRequest;
 import com.hunt.otziv.manager.dto.api.StatusChangeRequest;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.manager.services.ManagerBoardEditAssembler;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.payment.OrderPaymentCancellationService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -42,6 +44,8 @@ public class ApiManagerOrderController {
     private final ReviewService reviewService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
+    private final ManagerAccessService managerAccessService;
+    private final OrderPaymentCancellationService orderPaymentCancellationService;
 
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -52,6 +56,7 @@ public class ApiManagerOrderController {
             HttpServletRequest servletRequest,
             Authentication authentication
     ) throws Exception {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         String status = requireStatus(request);
         servletRequest.setAttribute("status", status);
         if (managerPermissionService.hasOnlyWorkerRole(authentication) && !"В проверку".equals(status)) {
@@ -64,7 +69,9 @@ public class ApiManagerOrderController {
             requireCompleteCounter(order, status);
         }
 
-        boolean updated = orderService.changeStatusForOrder(orderId, status);
+        boolean updated = "Бан".equals(status) && managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER")
+                ? orderService.changeStatusForPrivilegedOrder(orderId, status)
+                : orderService.changeStatusForOrder(orderId, status);
 
         if (!updated) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Статус заказа не изменен");
@@ -82,6 +89,7 @@ public class ApiManagerOrderController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         return managerBoardEditAssembler.buildOrderEditResponse(orderService.getOrderDTO(orderId), principal, authentication);
     }
 
@@ -93,6 +101,7 @@ public class ApiManagerOrderController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         OrderDTO current = orderService.getOrderDTO(orderId);
         OrderDTO update = toOrderUpdateDto(current, request, orderId, authentication);
 
@@ -111,14 +120,28 @@ public class ApiManagerOrderController {
 
     @DeleteMapping("/orders/{orderId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public void deleteOrder(
             @PathVariable Long orderId,
-            Principal principal
+            Principal principal,
+            Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (!orderService.deleteOrder(orderId, principal)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Заказ не удален: недостаточно прав или статус не позволяет удаление");
         }
+    }
+
+    @PostMapping("/orders/{orderId}/payment-cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public OrderEditResponse cancelOrderPayment(
+            @PathVariable Long orderId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        orderPaymentCancellationService.cancelPayment(orderId, principal);
+        return managerBoardEditAssembler.buildOrderEditResponse(orderService.getOrderDTO(orderId), principal, authentication);
     }
 
     private OrderDTO toOrderUpdateDto(

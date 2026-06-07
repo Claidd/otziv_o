@@ -28,6 +28,7 @@ public class OrderCompanyStatusService {
     private static final String STATUS_PAYMENT = "Оплачено";
     private static final String STATUS_PUBLIC = "Опубликовано";
     private static final String STATUS_TO_PAY = "Выставлен счет";
+    private static final String STATUS_REMINDER = "Напоминание";
     private static final String STATUS_ARCHIVE = "Архив";
     private static final String STATUS_BAN = "Бан";
 
@@ -142,6 +143,7 @@ public class OrderCompanyStatusService {
                 STATUS_TO_PUBLISH,
                 STATUS_PUBLIC,
                 STATUS_TO_PAY,
+                STATUS_REMINDER,
                 STATUS_TO_CHECK,
                 STATUS_CORRECTION,
                 STATUS_IN_CHECK,

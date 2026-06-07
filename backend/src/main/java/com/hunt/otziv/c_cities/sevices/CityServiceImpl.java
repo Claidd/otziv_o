@@ -47,7 +47,6 @@ public class CityServiceImpl implements CityService{
         log.info("Достали Продукт");
         boolean isChanged = false;
         /*Временная проверка сравнений*/
-        System.out.println("City title: " + !Objects.equals(cityDTO.getCityTitle(), saveCity.getTitle()));
         if (!Objects.equals(cityDTO.getCityTitle(), saveCity.getTitle())){ /*Проверка смены названия*/
             log.info("Обновляем Город");
             saveCity.setTitle(cityDTO.getCityTitle());

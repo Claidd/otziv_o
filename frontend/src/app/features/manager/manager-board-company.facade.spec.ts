@@ -89,6 +89,35 @@ function createFacade(config: {
   const sourcePayload = config.payload ?? companyPayload();
   const deps: ManagerBoardCompanyFacadeDeps = {
     managerApi: {
+      getBoard: () => {
+        calls.push('billing-search');
+        return of({
+          companies: {
+            content: [],
+            number: 0,
+            size: 8,
+            totalElements: 0,
+            totalPages: 0,
+            first: true,
+            last: true
+          },
+          orders: {
+            content: [],
+            number: 0,
+            size: 0,
+            totalElements: 0,
+            totalPages: 0,
+            first: true,
+            last: true
+          },
+          section: 'companies',
+          status: 'Все',
+          companyStatuses: [],
+          orderStatuses: [],
+          metrics: [],
+          promoTexts: []
+        });
+      },
       getCompanyEdit: (companyId: number) => {
         calls.push(`get-company:${companyId}`);
         return of(sourcePayload);

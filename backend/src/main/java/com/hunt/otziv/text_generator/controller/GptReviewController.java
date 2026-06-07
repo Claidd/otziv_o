@@ -26,7 +26,6 @@ public class GptReviewController {
             @RequestParam(defaultValue = "позитивный") String tone) {
         long startTime = System.nanoTime();
         String review = reviewService.generateReview(product, category, tone);
-        System.out.println(review);
         checkTimeMethod("Время создания отзыва: ", startTime);
         return ResponseEntity.ok(review);
     }

@@ -76,10 +76,13 @@ export function managerStatusLabel(status: string): string {
 
 export function managerOrderActionsFor(
   order: ManagerOrderActionSource,
-  showAllActions = false
+  showAllActions = false,
+  canForceBan = false
 ): readonly OrderStatusAction[] {
   if (showAllActions) {
-    return ORDER_ACTIONS;
+    return canShowBanAction(order, canForceBan)
+      ? ORDER_ACTIONS
+      : ORDER_ACTIONS.filter((action) => action.status !== 'Бан');
   }
 
   const status = order.status ?? '';
@@ -118,12 +121,20 @@ export function managerOrderActionsFor(
   }
 
   if (
-    status === 'Не оплачено'
-    && (order.badReviewTasksTotal ?? 0) > 0
-    && (order.badReviewTasksPending ?? 0) === 0
+    canShowBanAction(order, canForceBan)
   ) {
     actions.push(ORDER_ACTIONS[8]);
   }
 
   return actions;
+}
+
+function canShowBanAction(order: ManagerOrderActionSource, canForceBan: boolean): boolean {
+  const status = order.status ?? '';
+  if (canForceBan) {
+    return status === 'Не оплачено';
+  }
+  return status === 'Не оплачено'
+    && (order.badReviewTasksTotal ?? 0) > 0
+    && (order.badReviewTasksPending ?? 0) === 0;
 }

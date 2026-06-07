@@ -3,6 +3,7 @@ package com.hunt.otziv.maxbot.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.maxbot.service.MaxBotUpdateService;
+import com.hunt.otziv.webhook.security.WebhookSignatureVerifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,17 +23,30 @@ public class MaxBotWebhookController {
 
     private final MaxBotUpdateService maxBotUpdateService;
     private final ObjectMapper objectMapper;
+    private final WebhookSignatureVerifier signatureVerifier;
 
     @Value("${max.bot.webhook-secret:}")
     private String webhookSecret;
 
+    @Value("${max.bot.webhook.hmac-required:false}")
+    private boolean hmacRequired;
+
     @PostMapping
     public ResponseEntity<Void> handleWebhook(
             @RequestHeader(value = "X-Max-Bot-Api-Secret", required = false) String secret,
+            @RequestHeader(value = "X-Max-Bot-Webhook-Signature", required = false) String signature,
             @RequestBody String requestBody
     ) {
-        if (hasText(webhookSecret) && !webhookSecret.equals(secret)) {
+        if (!hasText(webhookSecret)) {
+            log.error("MAX webhook rejected: webhook secret is not configured");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
+        if (!signatureVerifier.verifyHeaderSecret(webhookSecret, secret)) {
             log.warn("MAX webhook rejected: invalid secret header");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        if (!signatureVerifier.verifyOptionalHmacSha256(requestBody, webhookSecret, signature, hmacRequired)) {
+            log.warn("MAX webhook rejected: invalid HMAC signature");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
@@ -41,6 +55,7 @@ public class MaxBotWebhookController {
             return ResponseEntity.badRequest().build();
         }
 
+        log.info("MAX webhook accepted");
         maxBotUpdateService.handleUpdate(update);
         return ResponseEntity.ok().build();
     }

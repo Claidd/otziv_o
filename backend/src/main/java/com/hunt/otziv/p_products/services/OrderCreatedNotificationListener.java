@@ -6,6 +6,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -19,6 +20,7 @@ public class OrderCreatedNotificationListener {
     private final TelegramService telegramService;
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
 
+    @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void notifyWorker(OrderCreatedEvent event) {
         if (event == null || event.orderId() == null) {

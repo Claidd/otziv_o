@@ -102,7 +102,7 @@ public class MaxBotClient {
             );
             return parseJson(response.getBody(), "MAX updates");
         } catch (RestClientResponseException e) {
-            log.warn("MAX updates HTTP {}: {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+            log.warn("MAX updates HTTP {}", e.getStatusCode().value());
             return null;
         } catch (ResourceAccessException e) {
             log.warn("MAX updates недоступны: {}", e.getMessage());

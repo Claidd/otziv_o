@@ -44,6 +44,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import static com.hunt.otziv.logs.LogMasking.maskPhone;
+import static com.hunt.otziv.logs.LogMasking.textLength;
+
 
 @Service
 @Slf4j
@@ -183,7 +186,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
     📱 Телефон: {}
     📋 Текущий статус: {}
     🕒 Время: {}
-    """, lead.getId(), lead.getTelephoneLead(), lead.getLidStatus(), LocalDateTime.now());
+    """, lead.getId(), maskPhone(lead.getTelephoneLead()), lead.getLidStatus(), LocalDateTime.now());
 
         // Отправляем — и проставляем статус только по факту результата
         taskExecutor.execute(() -> {
@@ -207,13 +210,13 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
 
             String rawMessage = helloText.get(ThreadLocalRandom.current().nextInt(helloText.size()));
             String message = humanizer.generate(rawMessage);
-            log.debug("📨 [MESSAGE] {}", message);
+            log.debug("📨 [MESSAGE] generatedLength={}", textLength(message));
 
             String normalizedPhone = normalizePhone(lead.getTelephoneLead());
             String result = sendWithRetry(client.getId(), normalizedPhone, message, lead);
 
             if ("not_whatsapp".equals(result)) {
-                log.warn("📵 Номер {} не зарегистрирован в WhatsApp — ставим 'Нет ватсап'", lead.getTelephoneLead());
+                log.warn("📵 Номер {} не зарегистрирован в WhatsApp — ставим 'Нет ватсап'", maskPhone(lead.getTelephoneLead()));
                 leadStatusService.prepareLeadForSending(lead, "Нет ватсап");
 
                 // 👉 публикуем событие на обновление лида
@@ -279,7 +282,7 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
                 WhatsAppSendResult result = WhatsAppSendResult.parse(response);
 
                 if (result.hasStatus("not_whatsapp")) {
-                    log.warn("📵 [CHECK] {} → not_whatsapp", phone);
+                    log.warn("📵 [CHECK] {} -> not_whatsapp", maskPhone(phone));
                     return "not_whatsapp";
                 }
 
@@ -336,9 +339,11 @@ public class LeadProcessorServiceImpl implements LeadProcessorService {
             try { TimeUnit.SECONDS.sleep(delaySeconds); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             String result2 = sendWithRetry(clientId, normalizePhone(myTelephone), message2, null);
             if ("ok".equals(result2) || (result2 != null && result2.contains("\"status\":\"ok\""))) {
-                log.info("📨 [CONTROL] Отправлено контрольное сообщение на {}: {}", myTelephone, message2);
+                log.info("📨 [CONTROL] Отправлено контрольное сообщение на {}, messageLength={}",
+                        maskPhone(myTelephone), textLength(message2));
             } else {
-                log.warn("⚠️ [CONTROL] Ошибка при контрольной отправке на {}: {}", myTelephone, message2);
+                log.warn("⚠️ [CONTROL] Ошибка при контрольной отправке на {}, messageLength={}",
+                        maskPhone(myTelephone), textLength(message2));
             }
         });
     }

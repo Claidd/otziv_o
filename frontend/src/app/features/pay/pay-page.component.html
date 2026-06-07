@@ -185,7 +185,17 @@
                   [ngModel]="offerConsent()"
                   (ngModelChange)="offerConsent.set($event)"
                 >
-                <span>Согласен с <a routerLink="/offer">публичной офертой</a> и <a routerLink="/privacy">политикой персональных данных</a>.</span>
+                <span>Согласен с <a routerLink="/offer">публичной офертой</a>.</span>
+              </label>
+
+              <label class="consent">
+                <input
+                  type="checkbox"
+                  name="privacyConsent"
+                  [ngModel]="privacyConsent()"
+                  (ngModelChange)="privacyConsent.set($event)"
+                >
+                <span>Согласен с <a routerLink="/privacy">политикой персональных данных</a>.</span>
               </label>
 
               <label class="consent">

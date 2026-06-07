@@ -21,6 +21,8 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
     @NotNull
     List<Zp> findAll();
 
+    List<Zp> findByOrderIdAndActiveTrue(Long orderId);
+
     @Query("SELECT z FROM Zp z WHERE z.userId = :userId AND z.created >= :startDate AND z.created < :endDate")
     List<Zp> getAllWorkerZpInPeriod(@Param("userId") Long userId,
                                     @Param("startDate") LocalDate startDate,

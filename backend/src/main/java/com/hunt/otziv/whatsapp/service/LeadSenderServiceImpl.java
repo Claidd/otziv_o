@@ -18,6 +18,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
@@ -35,13 +36,14 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     private List<WhatsAppProperties.ClientConfig> clients;
 
     /** Список для общего graceful shutdown (как было) */
-    private final List<ScheduledExecutorService> executors = new ArrayList<>();
+    private final Set<ScheduledExecutorService> executors = ConcurrentHashMap.newKeySet();
 
     /** Быстрый доступ: clientId -> executor этого клиента */
     private final Map<String, ScheduledExecutorService> executorsByClient = new ConcurrentHashMap<>();
 
     /** Флаг активности клиента (ручная/автоматическая деактивация) */
     private final Map<String, Boolean> activeClients = new ConcurrentHashMap<>();
+    private volatile long dispatchRunId = 0;
 
     private static final String NEW_STATUS = "Новый";
 
@@ -78,10 +80,12 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     }
 
     // @Scheduled(cron = "0 00 11 * * *")
-    public void startDailyDispatch() {
+    public synchronized void startDailyDispatch() {
         log.info("\n===================== START DAILY DISPATCH =======================");
 
         log.info("🟦 [DISPATCH] ⏰ Ежедневный запуск рассылки");
+        long runId = ++dispatchRunId;
+        stopAllClientSchedulers(false);
 
         if (clients == null || clients.isEmpty()) {
             log.warn("🟥 [DISPATCH] ❌ Нет клиентов с ролью operator — рассылка не запущена");
@@ -120,9 +124,15 @@ public class LeadSenderServiceImpl implements LeadSenderService {
                     client.getId(), initialDelay, leadCount);
 
             executor.schedule(() -> {
+                if (runId != dispatchRunId) {
+                    return;
+                }
+
                 leadProcessorService.processLead(client);
                 // сразу запускаем рекурсивное планирование с актуальным числом лидов
-                scheduleNextMessage(executor, client);
+                if (!executor.isShutdown()) {
+                    scheduleNextMessage(executor, client, runId);
+                }
             }, initialDelay, TimeUnit.SECONDS);
         }
 
@@ -135,30 +145,43 @@ public class LeadSenderServiceImpl implements LeadSenderService {
 
     /** Планирование следующего сообщения с актуальным состоянием очереди лидов */
     private void scheduleNextMessage(ScheduledExecutorService executor,
-                                     WhatsAppProperties.ClientConfig client) {
+                                     WhatsAppProperties.ClientConfig client,
+                                     long runId) {
+        if (executor.isShutdown() || runId != dispatchRunId) {
+            return;
+        }
+
         Long telephoneId = Long.valueOf(client.getId().replaceAll("\\D+", ""));
         int currentLeads = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS);
         int delay = calculateRandomPeriodByLeadCount(currentLeads);
 
-        executor.schedule(() -> {
-            if (Boolean.FALSE.equals(activeClients.get(client.getId()))) {
-                log.info("🟩 [DISPATCH] ✅ Клиент {} завершён (деактивирован)", client.getId());
-                return;
-            }
+        try {
+            executor.schedule(() -> {
+                if (runId != dispatchRunId) {
+                    return;
+                }
 
-            // Если лидов уже нет — завершаем клиента и не планируем дальше
-            int left = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS);
-            if (left <= 0) {
-                log.info("📭 [DISPATCH] Нет новых лидов для клиента {} — останавливаем планировщик", client.getId());
-                stopClientScheduler(client.getId());
-                return;
-            }
+                if (Boolean.FALSE.equals(activeClients.get(client.getId()))) {
+                    log.info("🟩 [DISPATCH] ✅ Клиент {} завершён (деактивирован)", client.getId());
+                    return;
+                }
 
-            leadProcessorService.processLead(client);
-            // Рекурсивно планируем следующий запуск
-            scheduleNextMessage(executor, client);
+                // Если лидов уже нет — завершаем клиента и не планируем дальше
+                int left = leadService.countNewLeadsByClient(telephoneId, NEW_STATUS);
+                if (left <= 0) {
+                    log.info("📭 [DISPATCH] Нет новых лидов для клиента {} — останавливаем планировщик", client.getId());
+                    stopClientScheduler(client.getId());
+                    return;
+                }
 
-        }, delay, TimeUnit.SECONDS);
+                leadProcessorService.processLead(client);
+                // Рекурсивно планируем следующий запуск
+                scheduleNextMessage(executor, client, runId);
+
+            }, delay, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException ignored) {
+            return;
+        }
 
         LocalDateTime nextTime = LocalDateTime.now().plusSeconds(delay);
         log.info("⏱ [DISPATCH] Клиент {}: следующее сообщение в {} (через {} сек, новых лидов сейчас: {})",
@@ -191,42 +214,57 @@ public class LeadSenderServiceImpl implements LeadSenderService {
     }
 
     @PreDestroy
-    public void shutdownExecutors() {
+    public synchronized void shutdownExecutors() {
         log.info("\n====================== SHUTDOWN EXECUTORS =========================");
 
-        // Останавливаем «адресно» каждый executor клиента
-        executorsByClient.values().forEach(ex -> {
-            try {
-                ex.shutdown();
-            } catch (Exception ignore) {}
-        });
-        executorsByClient.clear();
-
-        // Плюс общий список (на случай старых ссылок)
-        for (ScheduledExecutorService executor : executors) {
-            try {
-                executor.shutdown();
-                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    executor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                Thread.currentThread().interrupt();
-            } catch (Exception ignore) {
-            }
-        }
-        executors.clear();
+        dispatchRunId++;
+        stopAllClientSchedulers(true);
 
         log.info("==================================================================\n");
     }
 
-    public void stopClientScheduler(String clientId) {
+    public synchronized void stopClientScheduler(String clientId) {
         activeClients.put(clientId, false);
         ScheduledExecutorService ex = executorsByClient.remove(clientId);
         if (ex != null) {
             ex.shutdownNow();
+            executors.remove(ex);
         }
         log.info("🛑 [DISPATCH] Клиент {} деактивирован вручную", clientId);
+    }
+
+    private void stopAllClientSchedulers(boolean awaitTermination) {
+        Set<ScheduledExecutorService> toStop = ConcurrentHashMap.newKeySet();
+        toStop.addAll(executorsByClient.values());
+        toStop.addAll(executors);
+
+        executorsByClient.clear();
+        executors.clear();
+
+        for (ScheduledExecutorService executor : toStop) {
+            shutdownExecutor(executor, awaitTermination);
+        }
+    }
+
+    private void shutdownExecutor(ScheduledExecutorService executor, boolean awaitTermination) {
+        if (executor == null) {
+            return;
+        }
+
+        try {
+            if (awaitTermination) {
+                executor.shutdown();
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } else {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        } catch (Exception ignore) {
+        }
     }
 
     public List<WhatsAppProperties.ClientConfig> getActiveOperatorClients() {
@@ -488,6 +526,3 @@ public class LeadSenderServiceImpl implements LeadSenderService {
 //        lead.setLidStatus("SENT");
 //        lead.setUpdateStatus(LocalDate.now());
 //    }
-
-
-

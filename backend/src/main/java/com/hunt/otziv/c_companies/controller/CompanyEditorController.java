@@ -140,7 +140,6 @@ public class CompanyEditorController {
         model.addAttribute("newCompany", companyService.convertToDtoToManagerNotLead(principal));
         List<CategoryDTO> categories = categoryService.getAllCategories().stream().sorted(Comparator.comparing(CategoryDTO::getCategoryTitle)).toList();
         List<CityDTO> citiesList = cityService.getAllCities().stream().sorted(Comparator.comparing(CityDTO::getCityTitle)).toList();
-        System.out.println(citiesList);
         model.addAttribute("categories", categories);
         model.addAttribute("cities", citiesList);
         return "companies/new_company";
@@ -150,7 +149,6 @@ public class CompanyEditorController {
     @PostMapping("/add_company")
     String addCompanyToManager(Principal principal, @ModelAttribute("newCompany") @Valid CompanyDTO companyDTO, BindingResult bindingResult, Model model) { // Добавление новой компании из лида Менеджера
         log.info("1.Начинаем сохранение компании");
-        System.out.println(companyDTO.getFilial());
         companyValidation.validate(companyDTO, bindingResult);
         if (bindingResult.hasErrors()) {
             log.info("1.1 Вошли в ошибку");

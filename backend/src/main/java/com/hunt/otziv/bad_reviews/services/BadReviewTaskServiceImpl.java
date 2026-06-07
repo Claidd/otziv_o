@@ -15,6 +15,7 @@ import com.hunt.otziv.client_messages.model.ScheduledClientMessageAttempt;
 import com.hunt.otziv.client_messages.model.ScheduledMessageAttemptStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -69,6 +70,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final AppSettingService appSettingService;
     private final OrderStatusNotificationService orderStatusNotificationService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
     private final GamificationEventService gamificationEventService;
@@ -185,6 +187,12 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (isBadReviewFinalInvoice(summary)) {
             paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Финальный счет после плохих пересчитывается");
         }
+        if (refreshCommonInvoiceForLinkedOrder(order)) {
+            log.info("Счет после плохого отзыва не отправлен отдельно: заказ {} входит в общий счет", order.getId());
+            recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "common_billing_linked",
+                    "Заказ входит в общий счет; сумма общего счета пересчитана", badReviewInvoicePreview(order, summary), 0);
+            return;
+        }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)) {
             log.info("Счет после плохого отзыва пропущен настройкой, orderId={}, taskId={}", order.getId(), task.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "bad_review_invoice_disabled",
@@ -249,6 +257,19 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return;
         }
         paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
+    }
+
+    private boolean refreshCommonInvoiceForLinkedOrder(Order order) {
+        if (order == null || order.getId() == null) {
+            return false;
+        }
+        try {
+            CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+            return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(order.getId());
+        } catch (RuntimeException e) {
+            log.warn("Не удалось пересчитать общий счет после плохого отзыва для заказа {}", order.getId(), e);
+            return false;
+        }
     }
 
     private boolean isBadReviewFinalInvoice(BadReviewTaskSummary summary) {

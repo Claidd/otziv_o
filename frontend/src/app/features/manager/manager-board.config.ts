@@ -84,6 +84,14 @@ export const MANAGER_ORDER_ACTIONS: StatusAction[] = [
   { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
 ];
 
+export const MANAGER_COMMON_INVOICE_ACTIONS: StatusAction[] = [
+  { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
+  { label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' },
+  { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
+  { label: 'в бан', status: 'Бан', icon: 'block' },
+  { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
+];
+
 export const MANAGER_PAGE_SIZE_OPTIONS = [5, 10, 15];
 const ALL_STATUS = 'Все';
 const WORKING_STATUS_LABEL = 'Все';
@@ -127,8 +135,10 @@ export const DEFAULT_MANAGER_ORDER_STATUSES = [
   'Коррекция',
   'Публикация',
   'Опубликовано',
+  'Ожидает общего счета',
   'Выставлен счет',
   'Напоминание',
+  'Требует внимания',
   'Не оплачено',
   'Бан'
 ];
@@ -199,6 +209,10 @@ export function managerStatusDisplayLabel(status: string): string {
 }
 
 export function managerPayableOrderSum(order: OrderCardItem): number {
+  if (order.commonInvoice) {
+    return order.commonInvoiceRemaining ?? order.sum ?? 0;
+  }
+
   return order.totalSumWithBadReviews ?? order.sum ?? 0;
 }
 
@@ -211,6 +225,15 @@ export function managerShowBadReviewSummary(order: OrderCardItem): boolean {
 }
 
 export function managerProgress(order: OrderCardItem): number {
+  if (order.commonInvoice) {
+    const total = order.commonInvoiceTotalOrders ?? order.amount ?? 0;
+    const ready = order.commonInvoiceReadyOrders ?? order.counter ?? 0;
+    if (!total || !ready) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round((ready / total) * 100)));
+  }
+
   if (!order.amount || !order.counter) {
     return 0;
   }
@@ -228,6 +251,10 @@ export function managerCompanyChatUrl(company: CompanyCardItem): string {
 }
 
 export function managerOrderChatUrl(order: OrderCardItem): string {
+  if (order.commonInvoice) {
+    return order.commonInvoicePublicUrl || order.companyUrlChat || '';
+  }
+
   return managerChatBotInviteUrl(order) || order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
 }
 
@@ -236,6 +263,10 @@ export function managerCompanyNeedsChatBot(company: CompanyCardItem): boolean {
 }
 
 export function managerOrderNeedsChatBot(order: OrderCardItem): boolean {
+  if (order.commonInvoice) {
+    return false;
+  }
+
   return Boolean(managerChatBotInviteUrl(order));
 }
 
@@ -257,6 +288,10 @@ export function managerCompanyChatBindingWarning(company: CompanyCardItem): stri
 }
 
 export function managerOrderChatBindingWarning(order: OrderCardItem): string {
+  if (order.commonInvoice) {
+    return order.commonInvoiceLastError || '';
+  }
+
   return managerChatBindingWarningForValues(
     order.companyUrlChat,
     order.groupId,
@@ -270,6 +305,10 @@ export function managerCompanyHeaderUrl(company: CompanyCardItem): string {
 }
 
 export function managerOrderHeaderUrl(order: OrderCardItem): string {
+  if (order.commonInvoice) {
+    return order.commonInvoicePublicUrl || managerOrderDetailsUrl(order);
+  }
+
   return managerChatBotInviteUrl(order) || order.companyUrlChat || managerOrderDetailsUrl(order);
 }
 
@@ -354,6 +393,11 @@ export function managerCompanyOrderUrl(_company: CompanyCardItem): string {
 }
 
 export function managerOrderDetailsUrl(order: OrderCardItem): string {
+  if (order.commonInvoice) {
+    const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
+    return `/admin/common-billing?invoiceId=${invoiceId}`;
+  }
+
   return `/orders/${order.companyId}/${order.id}`;
 }
 
@@ -362,10 +406,18 @@ export function managerOrderInfoUrl(order: OrderCardItem): string {
 }
 
 export function managerOrderReviewUrl(order: OrderCardItem): string {
+  if (order.commonInvoice) {
+    return order.commonInvoicePublicUrl || managerOrderDetailsUrl(order);
+  }
+
   return order.orderDetailsId ? managerReviewCheckPath(order.orderDetailsId) : '';
 }
 
 export function managerOrderReviewCopyText(order: OrderCardItem, promoTexts: string[]): string {
+  if (order.commonInvoice) {
+    return order.commonInvoicePublicUrl || '';
+  }
+
   return orderReviewCopyText(order, promoTexts);
 }
 
@@ -373,9 +425,53 @@ export function managerOptionLabel(option: ManagerOption): string {
   return option.label || `ID ${option.id}`;
 }
 
-export function managerOrderActions(order: OrderCardItem, showAllActions: boolean): StatusAction[] {
+function canShowBanAction(order: OrderCardItem, canForceBan: boolean): boolean {
+  if (canForceBan) {
+    return order.status === 'Не оплачено';
+  }
+  return order.status === 'Не оплачено'
+    && (order.badReviewTasksTotal ?? 0) > 0
+    && (order.badReviewTasksPending ?? 0) === 0;
+}
+
+function withoutBanAction(actions: StatusAction[], order: OrderCardItem, canForceBan: boolean): StatusAction[] {
+  if (canShowBanAction(order, canForceBan)) {
+    return actions;
+  }
+  return actions.filter((action) => action.status !== 'Бан');
+}
+
+export function managerOrderActions(order: OrderCardItem, showAllActions: boolean, canForceBan = false): StatusAction[] {
+  if (order.commonInvoice) {
+    if (order.status === 'Требует внимания') {
+      return [];
+    }
+
+    if (order.status === 'Опубликовано') {
+      return [MANAGER_COMMON_INVOICE_ACTIONS[0]];
+    }
+
+    if (order.status === 'Выставлен счет' || order.status === 'Напоминание') {
+      return [
+        MANAGER_COMMON_INVOICE_ACTIONS[1],
+        MANAGER_COMMON_INVOICE_ACTIONS[2],
+        MANAGER_COMMON_INVOICE_ACTIONS[4]
+      ];
+    }
+
+    if (order.status === 'Не оплачено') {
+      const actions = [MANAGER_COMMON_INVOICE_ACTIONS[4]];
+      if (canShowBanAction(order, canForceBan)) {
+        actions.push(MANAGER_COMMON_INVOICE_ACTIONS[3]);
+      }
+      return actions;
+    }
+
+    return [];
+  }
+
   if (showAllActions) {
-    return MANAGER_ORDER_ACTIONS;
+    return withoutBanAction(MANAGER_ORDER_ACTIONS, order, canForceBan);
   }
 
   const actions: StatusAction[] = [];
@@ -413,7 +509,7 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
     actions.push(MANAGER_ORDER_ACTIONS[9]);
   }
 
-  if (order.status === 'Не оплачено' && (order.badReviewTasksTotal ?? 0) > 0 && (order.badReviewTasksPending ?? 0) === 0) {
+  if (canShowBanAction(order, canForceBan)) {
     actions.push(MANAGER_ORDER_ACTIONS[8]);
   }
 

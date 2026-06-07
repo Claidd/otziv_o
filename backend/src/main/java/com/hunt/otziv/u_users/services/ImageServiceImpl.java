@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.uploads.service.FileUploadGuard;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.repository.ImageRepository;
 import com.hunt.otziv.u_users.services.service.ImageService;
@@ -13,8 +14,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +26,7 @@ import java.util.stream.Collectors;
 public class ImageServiceImpl implements ImageService {
 
     private final ImageRepository imageRepository;
+    private final FileUploadGuard fileUploadGuard;
 
 
     @Override
@@ -37,9 +41,10 @@ public class ImageServiceImpl implements ImageService {
 
     @Override
     public Image saveCompressedProfileImage(MultipartFile file) throws IOException {
+        FileUploadGuard.ImageCheck imageCheck = fileUploadGuard.requireSupportedImage(file);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        Thumbnails.of(file.getInputStream())
+        Thumbnails.of(new ByteArrayInputStream(imageCheck.bytes()))
                 .size(512, 512)
                 .crop(Positions.CENTER)
                 .outputFormat("jpg")
@@ -48,7 +53,7 @@ public class ImageServiceImpl implements ImageService {
 
         Image image = new Image();
         image.setName(file.getName());
-        image.setOriginalFileName(file.getOriginalFilename());
+        image.setOriginalFileName("profile-" + UUID.randomUUID() + ".jpg");
         image.setContentType(MediaType.IMAGE_JPEG_VALUE);
         image.setSize((long) baos.size());
         image.setBytes(baos.toByteArray());

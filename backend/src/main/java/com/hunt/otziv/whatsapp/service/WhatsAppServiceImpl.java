@@ -105,7 +105,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
 
     @Override
     public String sendMessageToGroup(String clientId, String groupId, String message) {
-        log.info("🚀 Попытка отправить сообщение в группу через {} на {}", clientId, groupId);
+        log.info("WhatsApp group send request started: clientId={}, groupIdPresent={}", clientId, hasText(groupId));
 
         if (groupId == null || groupId.isBlank()) {
             log.warn("WhatsApp-сообщение в группу не отправлено: groupId пустой");
@@ -123,16 +123,17 @@ public class WhatsAppServiceImpl implements WhatsAppService {
                     "message", message
             ));
 
-            log.info("📦 POST {} payload: {}", url, request.getBody());
+            log.info("WhatsApp group send request: url={}, groupIdPresent={}, messageLength={}",
+                    url, hasText(groupId), message.length());
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
-            log.info("✅ Ответ от {}: {}", clientId, response.getBody());
+            log.info("WhatsApp group send response: clientId={}, status={}", clientId, response.getStatusCode().value());
             return response.getBody() != null ? response.getBody() : "ok";
         } catch (WhatsAppConfigurationException e) {
             log.warn("WhatsApp-сообщение в группу не отправлено: {}", e.getMessage());
             return WhatsAppSendResult.error(e.getCode(), e.getMessage()).toJson();
         } catch (RestClientResponseException e) {
             String error = "WhatsApp API вернул HTTP " + e.getStatusCode().value();
-            log.warn("{} для клиента {}. Ответ: {}", error, clientId, e.getResponseBodyAsString());
+            log.warn("{} для клиента {}", error, clientId);
             return httpSendError(e, error).toJson();
         } catch (ResourceAccessException e) {
             String error = "WhatsApp-клиент недоступен: " + e.getMessage();
@@ -148,9 +149,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     }
 
     public String sendMessage(String clientId, String phone, String message) {
-        log.info("🚀 Попытка отправить сообщение через {} на {}", clientId, phone);
-
         String normalized = normalizePhone(phone);
+        log.info("WhatsApp send request started: clientId={}, phone={}", clientId, maskPhone(normalized));
         if (!hasText(normalized)) {
             log.warn("WhatsApp-сообщение не отправлено: телефон пустой");
             return WhatsAppSendResult.error("missing_phone", "Телефон не должен быть пустым").toJson();
@@ -168,17 +168,18 @@ public class WhatsAppServiceImpl implements WhatsAppService {
                     "message", message
             ));
 
-            log.info("📦 POST {} payload: {}", url, request.getBody());
+            log.info("WhatsApp send request: url={}, clientId={}, phone={}, messageLength={}",
+                    url, clientId, maskPhone(normalized), message.length());
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
 
-            log.info("✅ Ответ от {}: {}", clientId, response.getBody());
+            log.info("WhatsApp send response: clientId={}, status={}", clientId, response.getStatusCode().value());
             return response.getBody() != null ? response.getBody() : "ok";
         } catch (WhatsAppConfigurationException e) {
             log.warn("WhatsApp-сообщение не отправлено: {}", e.getMessage());
             return WhatsAppSendResult.error(e.getCode(), e.getMessage()).toJson();
         } catch (RestClientResponseException e) {
             String error = "WhatsApp API вернул HTTP " + e.getStatusCode().value();
-            log.warn("{} для клиента {}. Ответ: {}", error, clientId, e.getResponseBodyAsString());
+            log.warn("{} для клиента {}", error, clientId);
             return httpSendError(e, error).toJson();
         } catch (ResourceAccessException e) {
             String error = "WhatsApp-клиент недоступен: " + e.getMessage();
@@ -349,6 +350,17 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         return value != null && !value.trim().isEmpty();
     }
 
+    private String maskPhone(String value) {
+        if (!hasText(value)) {
+            return "";
+        }
+        String digits = value.replaceAll("\\D+", "");
+        if (digits.length() < 4) {
+            return "***";
+        }
+        return "***" + digits.substring(digits.length() - 4);
+    }
+
     private List<WhatsAppGroupInfo> parseGroups(String rawBody) throws JsonProcessingException {
         if (!hasText(rawBody)) {
             return List.of();
@@ -459,13 +471,13 @@ public class WhatsAppServiceImpl implements WhatsAppService {
                 if (body.getRegistered() != null) {
                     return Optional.of(body);
                 } else {
-                    log.warn("📥 [ACTIVE USER] 'registered' = null для {}: {}", normalized, body);
+                    log.warn("📥 [ACTIVE USER] 'registered' = null для {}", maskPhone(normalized));
                 }
             } else {
-                log.warn("📥 [ACTIVE USER] Неизвестный статус или пустой ответ для {}: {}", normalized, body);
+                log.warn("📥 [ACTIVE USER] Неизвестный статус или пустой ответ для {}", maskPhone(normalized));
             }
         } catch (Exception e) {
-            log.warn("❌ [ACTIVE USER] Ошибка при запросе активности для {}: {}", normalized, e.getMessage());
+            log.warn("❌ [ACTIVE USER] Ошибка при запросе активности для {}: {}", maskPhone(normalized), e.getMessage());
         }
 
         return Optional.empty();
@@ -486,13 +498,13 @@ public class WhatsAppServiceImpl implements WhatsAppService {
         long start = System.currentTimeMillis();
 
         try {
-            log.info("▶ [{}] Запрос статуса WhatsApp ({}), URL: {}", clientId, normalized, url);
+            log.info("▶ [{}] Запрос статуса WhatsApp для {}", clientId, maskPhone(normalized));
 
             ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
             Map<String, Object> body = response.getBody();
 
             if (body == null || !"ok".equals(body.get("status"))) {
-                log.warn("📥 [{}] Не удалось получить статус для {}: {}", clientId, normalized, body);
+                log.warn("📥 [{}] Не удалось получить статус для {}", clientId, maskPhone(normalized));
                 return Optional.empty();
             }
 
@@ -508,8 +520,8 @@ public class WhatsAppServiceImpl implements WhatsAppService {
 
             String formattedLastSeen = parsedLastSeen != null ? parsedLastSeen.format(IRKUTSK_FORMAT) : null;
 
-            log.info("✅ [{}] Статус для {} (stage={}): registered={}, lastSeen={}, rawLastSeen='{}' (elapsed: {} мс)",
-                    clientId, normalized, stage, registered, formattedLastSeen, rawLastSeen, System.currentTimeMillis() - start);
+            log.info("✅ [{}] Статус для {} (stage={}): registered={}, lastSeen={} (elapsed: {} мс)",
+                    clientId, maskPhone(normalized), stage, registered, formattedLastSeen, System.currentTimeMillis() - start);
 
             WhatsAppUserStatusDto dto = new WhatsAppUserStatusDto();
             dto.setStatus("ok");
@@ -525,10 +537,10 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             return Optional.of(dto);
 
         } catch (ResourceAccessException e) {
-            log.error("⏱ [{}] Таймаут при запросе статуса для {}: {}", clientId, normalized, e.getMessage());
+            log.error("⏱ [{}] Таймаут при запросе статуса для {}: {}", clientId, maskPhone(normalized), e.getMessage());
             return Optional.empty();
         } catch (Exception e) {
-            log.warn("❌ [{}] Ошибка при получении статуса для {}: {}", clientId, normalized, e.getMessage());
+            log.warn("❌ [{}] Ошибка при получении статуса для {}: {}", clientId, maskPhone(normalized), e.getMessage());
             return Optional.empty();
         }
     }
@@ -707,8 +719,4 @@ public class WhatsAppServiceImpl implements WhatsAppService {
 //            return Optional.empty();
 //        }
 //    }
-
-
-
-
 

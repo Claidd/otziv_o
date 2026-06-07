@@ -3,6 +3,7 @@ package com.hunt.otziv.manager.services;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
@@ -14,6 +15,7 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,10 +35,13 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,11 +75,28 @@ class ManagerBoardServiceTest {
     @Mock
     private UserMetricSnapshotService metricSnapshotService;
 
+    @Mock
+    private CommonBillingService commonBillingService;
+
     @Spy
     private ManagerPermissionService managerPermissionService = new ManagerPermissionService();
 
+    @Mock
+    private ManagerAccessService managerAccessService;
+
     @InjectMocks
     private ManagerBoardService service;
+
+    @BeforeEach
+    void setUpCommonBillingDefaults() {
+        lenient().when(commonBillingService.countLinkedManagerBoardOrders(nullable(Set.class))).thenReturn(Map.of());
+        lenient().when(commonBillingService.countManagerBoardCards(nullable(Set.class))).thenReturn(Map.of());
+        lenient().when(commonBillingService.managerBoardCards(any(), any(), nullable(Long.class), nullable(Set.class), any()))
+                .thenReturn(List.of());
+        lenient().when(commonBillingService.linkedBoardOrderIds(any())).thenReturn(Set.of());
+        lenient().when(commonBillingService.countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class)))
+                .thenReturn(0);
+    }
 
     @Test
     void getBoardNormalizesOrderRequestAndKeepsCompanyPageEmpty() {
@@ -124,6 +146,58 @@ class ManagerBoardServiceTest {
                 .orElseThrow()
                 .label());
         verify(badReviewTaskService).enrichOrderList(List.of(order));
+    }
+
+    @Test
+    void getBoardCapsCommonInvoiceCardsToPageSize() {
+        Principal principal = () -> "admin";
+        Authentication admin = authentication("ROLE_ADMIN");
+        OrderDTOList ordinary = OrderDTOList.builder()
+                .id(7L)
+                .status("Новый")
+                .build();
+        OrderDTOList firstCommon = OrderDTOList.builder()
+                .id(-101L)
+                .status("Выставлен счет")
+                .build();
+        OrderDTOList secondCommon = OrderDTOList.builder()
+                .id(-102L)
+                .status("Выставлен счет")
+                .build();
+        OrderDTOList thirdCommon = OrderDTOList.builder()
+                .id(-103L)
+                .status("Выставлен счет")
+                .build();
+
+        when(orderService.getAllOrderDTOAndKeyword("needle", 0, 2, "desc"))
+                .thenReturn(new PageImpl<>(List.of(ordinary), PageRequest.of(0, 2), 2));
+        when(commonBillingService.managerBoardCards("Все", "needle", null, null, "desc"))
+                .thenReturn(List.of(firstCommon, secondCommon, thirdCommon));
+        when(companyService.countCompaniesByStatus())
+                .thenReturn(Map.of());
+        when(orderService.countOrdersByStatus())
+                .thenReturn(Map.of());
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
+                .thenReturn(List.of());
+
+        ManagerBoardResponse response = service.getBoard(
+                "orders",
+                null,
+                " needle ",
+                0,
+                2,
+                "desc",
+                null,
+                principal,
+                admin
+        );
+
+        assertEquals(2, response.orders().content().size());
+        assertEquals(List.of(firstCommon, secondCommon), response.orders().content());
+        assertEquals(5, response.orders().totalElements());
+        verify(badReviewTaskService).enrichOrderList(List.of(firstCommon, secondCommon));
     }
 
     @Test

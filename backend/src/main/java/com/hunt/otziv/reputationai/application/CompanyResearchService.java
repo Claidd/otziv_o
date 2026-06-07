@@ -15,6 +15,7 @@ import com.hunt.otziv.reputationai.infrastructure.search.SearchQuery;
 import com.hunt.otziv.reputationai.infrastructure.search.SearchResult;
 import com.hunt.otziv.reputationai.infrastructure.web.CrawledPage;
 import com.hunt.otziv.reputationai.infrastructure.web.WebsiteCrawler;
+import com.hunt.otziv.security.OutboundUrlGuard;
 import com.hunt.otziv.reputationai.persistence.ReputationResearchSnapshotEntity;
 import com.hunt.otziv.reputationai.persistence.ReputationResearchSnapshotRepository;
 import lombok.RequiredArgsConstructor;
@@ -1267,6 +1268,9 @@ public class CompanyResearchService {
 
         String lowerHost = host.toLowerCase(Locale.ROOT);
         if (pageRoleClassifier.isServiceOrLegalPage(normalized, "", "")) {
+            return false;
+        }
+        if (!OutboundUrlGuard.isPublicHttpUrl(normalized)) {
             return false;
         }
 

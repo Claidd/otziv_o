@@ -24,6 +24,7 @@ public record OrderEditResponse(
         List<OptionResponse> managers,
         List<OptionResponse> workers,
         boolean canComplete,
-        boolean canDelete
+        boolean canDelete,
+        boolean canCancelPayment
 ) {
 }

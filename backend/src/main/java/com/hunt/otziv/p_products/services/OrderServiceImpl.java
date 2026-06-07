@@ -378,6 +378,12 @@ public class OrderServiceImpl implements OrderService {
         return orderStatusTransitionService.changeStatusForOrder(orderID, title);
     }
 
+    @Override
+    @Transactional
+    public boolean changeStatusForPrivilegedOrder(Long orderID, String title) throws Exception {
+        return orderStatusTransitionService.changeStatusForPrivilegedOrder(orderID, title);
+    }
+
     @Transactional
     protected void saveReviewsToArchive(List<Review> reviews) {
         if (reviews == null || reviews.isEmpty()) {

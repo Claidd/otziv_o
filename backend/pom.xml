@@ -307,6 +307,35 @@
 			</plugin>
 		</plugins>
 	</build>
+	<profiles>
+		<profile>
+			<id>security-audit</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.owasp</groupId>
+						<artifactId>dependency-check-maven</artifactId>
+						<version>12.1.0</version>
+						<configuration>
+							<formats>
+								<format>HTML</format>
+								<format>JSON</format>
+							</formats>
+							<failBuildOnCVSS>7.0</failBuildOnCVSS>
+							<dataDirectory>${project.build.directory}/dependency-check-data</dataDirectory>
+						</configuration>
+						<executions>
+							<execution>
+								<goals>
+									<goal>check</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 	<repositories>
 		<repository>
 			<id>maven_central</id>

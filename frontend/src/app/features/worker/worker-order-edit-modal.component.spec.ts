@@ -27,6 +27,7 @@ function order(overrides: Partial<OrderEditPayload> = {}): OrderEditPayload {
     workers: [option(41, 'Worker')],
     canComplete: true,
     canDelete: true,
+    canCancelPayment: false,
     ...overrides
   };
 }

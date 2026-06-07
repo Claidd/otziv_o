@@ -26,6 +26,8 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     List<PaymentLink> findTop100ByOrderByCreatedAtDesc();
 
+    boolean existsByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
+
     @Query(
             value = """
                 SELECT link

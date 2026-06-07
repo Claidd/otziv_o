@@ -15,6 +15,7 @@ import com.hunt.otziv.manager.dto.api.ReviewEditorUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskUpdateRequest;
 import com.hunt.otziv.manager.dto.api.ReviewTextUpdateRequest;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.manager.services.ManagerBoardEditAssembler;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.model.Order;
@@ -79,6 +80,7 @@ public class ApiManagerReviewController {
     private final UserService userService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
+    private final ManagerAccessService managerAccessService;
     private final Map<Long, Boolean> reviewHelpDraftLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/orders/{orderId}/details")
@@ -87,6 +89,7 @@ public class ApiManagerReviewController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 
@@ -96,6 +99,7 @@ public class ApiManagerReviewController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (!orderService.addNewReview(orderId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не добавлен");
         }
@@ -110,6 +114,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         if (!autoTextService.changeReviewText(reviewId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AI не сгенерировал безопасный текст отзыва. Старый текст оставлен без изменений.");
@@ -126,6 +131,7 @@ public class ApiManagerReviewController {
             @RequestBody ReviewEditorUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null || isBlank(request.text())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
@@ -175,6 +181,7 @@ public class ApiManagerReviewController {
             @RequestParam("file") MultipartFile file,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Файл не выбран");
         }
@@ -193,6 +200,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         if (!orderService.deleteNewReview(orderId, reviewId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не удален");
@@ -209,6 +217,7 @@ public class ApiManagerReviewController {
             @RequestBody ReviewTextUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null || isBlank(request.text())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
@@ -228,6 +237,7 @@ public class ApiManagerReviewController {
             @RequestBody ReviewAnswerUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null || request.answer() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ответ на отзыв не указан");
         }
@@ -247,6 +257,7 @@ public class ApiManagerReviewController {
             @RequestBody ReviewNoteUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null || request.comment() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка отзыва не указана");
         }
@@ -265,6 +276,7 @@ public class ApiManagerReviewController {
             @RequestBody OrderNoteUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null || request.orderComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка заказа не указана");
         }
@@ -286,6 +298,7 @@ public class ApiManagerReviewController {
             @RequestBody CompanyNoteUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null || request.companyComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
         }
@@ -309,6 +322,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         reviewService.changeBot(reviewId);
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
@@ -321,6 +335,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
 
         try {
@@ -340,6 +355,7 @@ public class ApiManagerReviewController {
             @PathVariable Long botId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId);
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
@@ -352,6 +368,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) throws Exception {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         if (!orderService.changeStatusAndOrderCounter(reviewId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным");
@@ -367,6 +384,7 @@ public class ApiManagerReviewController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         try {
             boolean belongsToOrder = badReviewTaskService.getTasksByOrderId(orderId).stream()
                     .anyMatch(task -> Objects.equals(task.getId(), taskId));
@@ -390,6 +408,7 @@ public class ApiManagerReviewController {
             @RequestBody BadReviewTaskUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные плохой задачи не переданы");
         }
@@ -411,6 +430,7 @@ public class ApiManagerReviewController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         try {
             requireBadReviewTaskForOrder(orderId, taskId);
             badReviewTaskService.changeTaskBot(taskId);
@@ -429,6 +449,7 @@ public class ApiManagerReviewController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         try {
             boolean belongsToOrder = badReviewTaskService.getTasksByOrderId(orderId).stream()
                     .anyMatch(task -> Objects.equals(task.getId(), taskId));
@@ -451,6 +472,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         reviewRecoveryTaskService.createTask(reviewId, currentUser(authentication));
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
@@ -461,8 +483,10 @@ public class ApiManagerReviewController {
     public ReputationSingleReviewDraftResult createReviewHelpDraft(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
-            @RequestBody(required = false) ReputationSingleReviewDraftRequest request
+            @RequestBody(required = false) ReputationSingleReviewDraftRequest request,
+            Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         ReviewDTO review = requireReviewForOrder(orderId, reviewId);
         Order order = orderService.getOrder(orderId);
         if (order == null || order.getCompany() == null || order.getCompany().getId() == null) {
@@ -504,6 +528,7 @@ public class ApiManagerReviewController {
             @PathVariable Long reviewId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (reviewHelpDraftLocks.putIfAbsent(orderId, Boolean.TRUE) != null) {
             log.info("REVIEW_HELP_DRAFT_SINGLE_DUPLICATE orderId={} reviewId={} reason=already_running", orderId, reviewId);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "AI-помощь уже готовит тексты для этого заказа");
@@ -601,6 +626,7 @@ public class ApiManagerReviewController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (reviewHelpDraftLocks.putIfAbsent(orderId, Boolean.TRUE) != null) {
             log.info("REVIEW_HELP_DRAFTS_DUPLICATE orderId={} reason=already_running", orderId);
             throw new ResponseStatusException(HttpStatus.CONFLICT, "AI-помощь уже готовит тексты для этого заказа");
@@ -702,6 +728,7 @@ public class ApiManagerReviewController {
             @RequestBody ReviewRecoveryTaskUpdateRequest request,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные восстановления не переданы");
         }
@@ -718,6 +745,7 @@ public class ApiManagerReviewController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireRecoveryTaskForOrder(orderId, taskId);
         reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
@@ -730,6 +758,7 @@ public class ApiManagerReviewController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireRecoveryTaskForOrder(orderId, taskId);
         reviewRecoveryTaskService.cancelTask(taskId);
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
@@ -742,6 +771,7 @@ public class ApiManagerReviewController {
             @PathVariable Long batchId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         requireRecoveryBatchForOrder(orderId, batchId);
         reviewRecoveryTaskService.markClientNotified(batchId, currentUser(authentication));
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);

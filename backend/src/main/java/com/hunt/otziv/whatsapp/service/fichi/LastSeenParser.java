@@ -22,7 +22,9 @@ import java.time.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class LastSeenParser {
 
     private static final ZoneId IRKUTSK_ZONE = ZoneId.of("Asia/Irkutsk");
@@ -135,7 +137,7 @@ public class LastSeenParser {
             return Optional.of(result);
         }
 
-        System.out.println("[LastSeenParser] Не удалось распарсить: " + statusText);
+        log.debug("[LastSeenParser] Не удалось распарсить: {}", statusText);
         return Optional.empty(); // если ничего не распознали
     }
 
@@ -143,7 +145,7 @@ public class LastSeenParser {
      * Логирует результат парсинга для отладки.
      */
     private static void logParsed(String original, LocalDateTime result) {
-        System.out.println("[LastSeenParser] Распознано: '" + original + "' → " + result);
+        log.debug("[LastSeenParser] Распознано: '{}' -> {}", original, result);
     }
 
     /**
@@ -171,7 +173,6 @@ public class LastSeenParser {
         return LocalTime.MIDNIGHT;
     }
 }
-
 
 
 

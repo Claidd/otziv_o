@@ -105,7 +105,7 @@ describe('ManagerOrderCardComponent', () => {
     element.querySelector<HTMLButtonElement>('.phone-row button')?.click();
     element.querySelector<HTMLButtonElement>('.order-links button')?.click();
     element.querySelector<HTMLButtonElement>('.order-status-actions button')?.click();
-    element.querySelector<HTMLAnchorElement>('footer a')?.click();
+    element.querySelector<HTMLButtonElement>('.worker-edit-button')?.click();
 
     expect(copiedPhone).toBe('79086431055');
     expect(copyKind).toBe('review');
@@ -131,7 +131,7 @@ describe('ManagerOrderCardComponent', () => {
     element.querySelector<HTMLButtonElement>('.client-waiting-action')?.click();
 
     expect(toggled).toBe(true);
-    expect(element.querySelector('footer a')?.textContent?.trim()).toBe('Worker');
+    expect(element.querySelector('.worker-edit-button')?.textContent?.trim()).toBe('Worker');
   });
 
   it('marks orders without changes for two or more days', () => {

@@ -218,7 +218,7 @@ public class SecurityConfig {
                 "/api/manager/orders/*/reviews/*/new-account",
                 "/api/manager/orders/*/reviews/*/bots/*/deactivate"
         ).hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
-        auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*").authenticated();
+        auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/reviews/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/recovery-tasks/*").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
@@ -227,6 +227,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/payments/public/**").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/payments/tbank/webhook").permitAll();
+        auth.requestMatchers("/api/common-billing/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/webhook", "/webhook/**").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/leads/import").permitAll();
         auth.requestMatchers(HttpMethod.POST, "/api/leads/sync").permitAll();

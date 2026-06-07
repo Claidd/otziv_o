@@ -1371,21 +1371,7 @@ public class CompanyServiceImpl implements CompanyService{
         }
 
         /*Временная проверка сравнений*/
-        System.out.println("title: " + !Objects.equals(companyDTO.getTitle(), saveCompany.getTitle()));
-        System.out.println("telephone: " + !Objects.equals(changeNumberPhone(companyDTO.getTelephone()), changeNumberPhone(saveCompany.getTelephone())));
-        System.out.println("city: " + !Objects.equals(companyDTO.getCity(), saveCompany.getCity()));
-        System.out.println("urlChat: " + !Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat()));
-        System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
-        System.out.println("active: " + !Objects.equals(companyDTO.isActive(), saveCompany.isActive()));
-        System.out.println("publicationReports: " + !Objects.equals(companyDTO.isPublicationProgressReportsEnabled(), saveCompany.isPublicationProgressReportsEnabled()));
-        System.out.println("comments: " +  !Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany()));
-        System.out.println("status: " + !Objects.equals(statusId(companyDTO.getStatus()), statusId(saveCompany.getStatus())));
-        System.out.println("category: " + !Objects.equals(categoryId(companyDTO.getCategoryCompany()), categoryId(saveCompany.getCategoryCompany())));
 
-        System.out.println("subCategory: " + !Objects.equals(subCategoryId(companyDTO.getSubCategory()), subCategoryId(saveCompany.getSubCategory())));
-        System.out.println("manager: " + !Objects.equals(managerId(companyDTO.getManager()), managerId(saveCompany.getManager())));
-        System.out.println("workerId: " +  (newWorkerDTO.getWorkerId() != 0));
-        System.out.println("filial: " +  (!companyDTO.getFilial().getTitle().isEmpty()));
 
         if (!Objects.equals(companyDTO.getTitle(), saveCompany.getTitle())){ /*Проверка смены названия*/
             log.info("Обновляем названия компании");
@@ -1414,10 +1400,7 @@ public class CompanyServiceImpl implements CompanyService{
         }
         if (!Objects.equals(companyDTO.getEmail(), saveCompany.getEmail())){ /*Проверка смены мейл*/
             log.info("Обновляем мейл");
-            System.out.println("email: " + !Objects.equals(companyDTO.getEmail(), saveCompany.getEmail()));
-            System.out.println(companyDTO.getEmail());
             saveCompany.setEmail(companyDTO.getEmail());
-            System.out.println(saveCompany.getEmail());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.isActive(), saveCompany.isActive())){ /*Проверка активности*/
@@ -1499,7 +1482,6 @@ public class CompanyServiceImpl implements CompanyService{
         }
         if  (isChanged){
             log.info("3. Начали сохранять обновленную компанию в БД");
-            System.out.println(saveCompany.getEmail());
             companyRepository.save(saveCompany);
             log.info("4. Сохранили обновленную компанию в БД");
         }

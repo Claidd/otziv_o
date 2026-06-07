@@ -1,6 +1,7 @@
 package com.hunt.otziv.reputationai.infrastructure.web;
 
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
+import com.hunt.otziv.security.OutboundUrlGuard;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -82,7 +83,7 @@ class JsoupWebsiteCrawlerTest {
         ReputationAiProperties properties = new ReputationAiProperties();
         properties.setMaxWebsitePages(3);
         properties.setMaxWebsiteChars(8000);
-        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(properties);
+        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(properties, OutboundUrlGuard.allowLocalAddressesForTests());
 
         List<CrawledPage> pages = crawler.crawl(List.of(baseUrl() + "/"));
         String text = pages.stream()
@@ -99,7 +100,7 @@ class JsoupWebsiteCrawlerTest {
 
     @Test
     void keepsReviewPlatformsSinglePage() {
-        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(new ReputationAiProperties());
+        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(new ReputationAiProperties(), OutboundUrlGuard.allowLocalAddressesForTests());
 
         assertThat(crawler.shouldFollowInternalLinks("yandex.ru")).isFalse();
         assertThat(crawler.shouldFollowInternalLinks("2gis.ru")).isFalse();
@@ -135,7 +136,7 @@ class JsoupWebsiteCrawlerTest {
 
         ReputationAiProperties properties = new ReputationAiProperties();
         properties.setMaxWebsitePages(4);
-        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(properties);
+        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(properties, OutboundUrlGuard.allowLocalAddressesForTests());
 
         List<CrawledPage> pages = crawler.crawl(List.of(baseUrl() + "/"), Set.of("official.example"));
 
@@ -145,7 +146,7 @@ class JsoupWebsiteCrawlerTest {
 
     @Test
     void rejectsKnownYandexServiceUrlsButKeepsMapCards() {
-        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(new ReputationAiProperties());
+        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(new ReputationAiProperties(), OutboundUrlGuard.allowLocalAddressesForTests());
 
         assertThat(crawler.isKnownPlatformServiceUrl("https://yandex.ru/legal/maps_mobile_agreement/ru")).isTrue();
         assertThat(crawler.isKnownPlatformServiceUrl("https://yandex.ru/support/business-priority/ru/manage/sticker")).isTrue();

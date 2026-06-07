@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
@@ -54,6 +55,9 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Mock
+    private CommonBillingService commonBillingService;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -139,6 +143,20 @@ class OrderStatusCheckerServiceImplTest {
         verifyNoInteractions(orderStatusNotificationService);
     }
 
+    @Test
+    void checkAndMarkOrderCompletedUsesCommonBillingInsteadOfSingleInvoice() throws Exception {
+        Order order = payableOrder(52L);
+
+        when(commonBillingService.completePublishedOrderIntoCommonInvoice(order)).thenReturn(true);
+
+        service().checkAndMarkOrderCompleted(order);
+
+        verify(commonBillingService).completePublishedOrderIntoCommonInvoice(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleInitialInvoice(order);
+        verify(orderRepository, never()).save(order);
+        verifyNoInteractions(orderStatusNotificationService, appSettingService);
+    }
+
     private OrderStatusCheckerServiceImpl service() {
         return new OrderStatusCheckerServiceImpl(
                 emailService,
@@ -146,7 +164,8 @@ class OrderStatusCheckerServiceImplTest {
                 orderPaymentMessageBuilder,
                 paymentInvoiceRetryScheduler,
                 orderStatusService,
-                appSettingService
+                appSettingService,
+                commonBillingService
         );
     }
 

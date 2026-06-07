@@ -169,7 +169,6 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     @Transactional
     protected void saveCheckCompany(Order order, BigDecimal sum){ // Сохранить Чек в БД
         log.info("Зашли в создание чека");
-        System.out.println(sum);
         PaymentCheck paymentCheck = new PaymentCheck();
         paymentCheck.setTitle(order.getCompany().getTitle());
         paymentCheck.setCompanyId(order.getCompany().getId());

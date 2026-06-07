@@ -24,6 +24,8 @@ import java.security.Principal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
+import static com.hunt.otziv.logs.LogMasking.maskToken;
+
 @Controller
 @LegacyMvc
 @Slf4j
@@ -131,7 +133,7 @@ public class OperatorController {
         }
         TelephoneIDAndTimeDTO telephone = deviceTokenService.getTelephoneIdByToken(token);
         if (telephone == null) {
-            log.warn("Токен [{}] не найден в базе", token);
+            log.warn("Токен [{}] не найден в базе", maskToken(token));
         } else {
             log.debug("Получен telephoneId из токена: {}", telephone.getTelephoneID());
         }

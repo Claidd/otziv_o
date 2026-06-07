@@ -231,6 +231,7 @@ export class CabinetApi {
   private readonly scoreCache = new Map<string, CacheEntry<ScoreResponse>>();
   private readonly analyticsCache = new Map<string, CacheEntry<AnalyticsResponse>>();
   private readonly cabinetCacheTtlMs = 3 * 60 * 60_000;
+  private readonly cabinetCacheMaxEntries = 200;
 
   constructor(
     private readonly http: HttpClient,
@@ -389,6 +390,8 @@ export class CabinetApi {
     requestFactory: () => Observable<T>
   ): Observable<T> {
     const now = Date.now();
+    this.removeExpiredEntries(cache, now);
+
     const cached = cache.get(key);
 
     if (!options.forceRefresh && cached && cached.expiresAt > now) {
@@ -407,8 +410,27 @@ export class CabinetApi {
       expiresAt: now + this.cabinetCacheTtlMs,
       request$
     });
+    this.trimCache(cache);
 
     return request$;
+  }
+
+  private removeExpiredEntries<T>(cache: Map<string, CacheEntry<T>>, now: number): void {
+    for (const [entryKey, entry] of cache) {
+      if (entry.expiresAt <= now) {
+        cache.delete(entryKey);
+      }
+    }
+  }
+
+  private trimCache<T>(cache: Map<string, CacheEntry<T>>): void {
+    while (cache.size > this.cabinetCacheMaxEntries) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey === undefined) {
+        return;
+      }
+      cache.delete(oldestKey);
+    }
   }
 
   private cacheKey(scope: string, ...parts: string[]): string {

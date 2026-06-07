@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
@@ -24,6 +25,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final OrderStatusService orderStatusService;
     private final AppSettingService appSettingService;
+    private final CommonBillingService commonBillingService;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -88,6 +90,11 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
             log.info("Счет после публикации пропущен: заказ {} по продукту 'Восстановление' без суммы к оплате",
                     order.getId());
             return STATUS_PUBLIC;
+        }
+
+        if (commonBillingService.completePublishedOrderIntoCommonInvoice(order)) {
+            log.info("Финальный одиночный счет не отправлен: заказ {} ожидает общий счет", order.getId());
+            return CommonBillingService.STATUS_WAITING_COMMON_INVOICE;
         }
 
         if (!immediateClientMessagesEnabled()) {

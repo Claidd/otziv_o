@@ -6,7 +6,9 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReviewAccountWalkScheduleServiceTest {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
 
     @Mock
     private ReviewRepository reviewRepository;
@@ -61,9 +65,11 @@ class ReviewAccountWalkScheduleServiceTest {
     void unwalkedToWalkedRemovesStoredDelayWhereSpacingAllows() {
         ReviewAccountWalkScheduleService service = service();
         OrderDetails details = details(200L);
-        Review trigger = review(10L, details, LocalDate.of(2026, 6, 3), false);
-        Review following = review(11L, details, LocalDate.of(2026, 6, 5), false);
-        Review untouched = review(12L, details, LocalDate.of(2026, 6, 8), false);
+        LocalDate restoredTriggerDate = futureBusinessDate(10);
+        LocalDate restoredFollowingDate = restoredTriggerDate.plusDays(2);
+        Review trigger = review(10L, details, restoredTriggerDate.plusDays(2), false);
+        Review following = review(11L, details, restoredFollowingDate.plusDays(2), false);
+        Review untouched = review(12L, details, restoredFollowingDate.plusDays(5), false);
         trigger.setAccountWalkDelayDays(2);
         following.setAccountWalkDelayDays(2);
         trigger.setBot(bot(3));
@@ -79,9 +85,9 @@ class ReviewAccountWalkScheduleServiceTest {
         assertEquals(0, trigger.getAccountWalkDelayDays());
         assertEquals(0, following.getAccountWalkDelayDays());
         assertEquals(0, untouched.getAccountWalkDelayDays());
-        assertEquals(LocalDate.of(2026, 6, 1), trigger.getPublishedDate());
-        assertEquals(LocalDate.of(2026, 6, 3), following.getPublishedDate());
-        assertEquals(LocalDate.of(2026, 6, 8), untouched.getPublishedDate());
+        assertEquals(restoredTriggerDate, trigger.getPublishedDate());
+        assertEquals(restoredFollowingDate, following.getPublishedDate());
+        assertEquals(restoredFollowingDate.plusDays(5), untouched.getPublishedDate());
         verify(reviewRepository).saveAll(List.of(trigger, following, untouched));
     }
 
@@ -151,8 +157,17 @@ class ReviewAccountWalkScheduleServiceTest {
         bot.setId((long) counter + 10);
         bot.setFio("Тестовый Аккаунт " + counter);
         bot.setLogin("bot" + counter);
+        bot.setPassword("secret");
         bot.setActive(true);
         bot.setCounter(counter);
         return bot;
+    }
+
+    private LocalDate futureBusinessDate(int daysAhead) {
+        LocalDate date = LocalDate.now(BUSINESS_ZONE).plusDays(daysAhead);
+        while (date.getDayOfWeek() == DayOfWeek.SATURDAY) {
+            date = date.plusDays(1);
+        }
+        return date;
     }
 }

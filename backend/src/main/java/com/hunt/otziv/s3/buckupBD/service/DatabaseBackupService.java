@@ -175,31 +175,38 @@ public class DatabaseBackupService {
             long writtenInPart = 0;
 
             Path partPath = nextPartPath(file, partIndex);
-            OutputStream os = Files.newOutputStream(partPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            parts.add(partPath);
+            OutputStream os = null;
+            try {
+                os = Files.newOutputStream(partPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                parts.add(partPath);
 
-            int read;
-            while ((read = is.read(buffer)) != -1) {
-                int offset = 0;
-                while (offset < read) {
-                    long left = partSizeBytes - writtenInPart;
-                    int toWrite = (int) Math.min(left, read - offset);
+                int read;
+                while ((read = is.read(buffer)) != -1) {
+                    int offset = 0;
+                    while (offset < read) {
+                        long left = partSizeBytes - writtenInPart;
+                        int toWrite = (int) Math.min(left, read - offset);
 
-                    os.write(buffer, offset, toWrite);
-                    offset += toWrite;
-                    writtenInPart += toWrite;
+                        os.write(buffer, offset, toWrite);
+                        offset += toWrite;
+                        writtenInPart += toWrite;
 
-                    if (writtenInPart >= partSizeBytes) {
-                        os.close();
-                        partIndex++;
-                        partPath = nextPartPath(file, partIndex);
-                        os = Files.newOutputStream(partPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-                        parts.add(partPath);
-                        writtenInPart = 0;
+                        if (writtenInPart >= partSizeBytes) {
+                            os.close();
+                            os = null;
+                            partIndex++;
+                            partPath = nextPartPath(file, partIndex);
+                            os = Files.newOutputStream(partPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                            parts.add(partPath);
+                            writtenInPart = 0;
+                        }
                     }
                 }
+            } finally {
+                if (os != null) {
+                    os.close();
+                }
             }
-            os.close();
         }
 
         // если последняя часть пустая — убрать
@@ -244,4 +251,3 @@ public class DatabaseBackupService {
     }
 
 }
-

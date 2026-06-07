@@ -7,7 +7,6 @@ import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.l_lead.repository.TelephoneRepository;
-import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -23,6 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+
+import static com.hunt.otziv.logs.LogMasking.hasText;
+import static com.hunt.otziv.logs.LogMasking.maskEmail;
+import static com.hunt.otziv.logs.LogMasking.maskPhone;
+import static com.hunt.otziv.logs.LogMasking.maskPhones;
 
 // README-инструкция (для команды)
 /**
@@ -69,20 +73,22 @@ public class LeadSyncController {
     @PostMapping(value = "/sync", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> syncLead(@RequestBody LeadDtoTransfer dto) {
         log.info("\n==================== [SYNC LEAD] ====================");
-        log.info("📥 Получен LeadDtoTransfer: {}", dto);
+        log.info("Lead transfer received: telephone={}, email={}, cityPresent={}, operatorId={}, managerId={}, marketologId={}, telephoneId={}",
+                maskPhone(dto.getTelephoneLead()), maskEmail(dto.getEmails()), hasText(dto.getCityLead()),
+                dto.getOperatorId(), dto.getManagerId(), dto.getMarketologId(), dto.getTelephoneId());
 
         Lead existing = leadRepository.findByTelephoneLead(dto.getTelephoneLead()).orElse(null);
 
         if (existing != null) {
             leadMapper.updateEntityFromTransfer(existing, dto, operatorRepo, managerRepo, marketologRepo, telephoneRepo);
             leadRepository.save(existing);
-            log.info("🟩 Лид {} обновлён (ID={})", existing.getTelephoneLead(), existing.getId());
+            log.info("🟩 Лид обновлён: id={}, telephone={}", existing.getId(), maskPhone(existing.getTelephoneLead()));
             log.info("==================== [END SYNC LEAD] ====================\n");
             return ResponseEntity.ok("Лид обновлён");
         } else {
             Lead newLead = leadMapper.toEntity(dto, operatorRepo, managerRepo, marketologRepo, telephoneRepo);
             leadRepository.save(newLead);
-            log.info("🟢 Лид {} создан (ID={})", newLead.getTelephoneLead(), newLead.getId());
+            log.info("🟢 Лид создан: id={}, telephone={}", newLead.getId(), maskPhone(newLead.getTelephoneLead()));
             log.info("==================== [END SYNC LEAD] ====================\n");
             return ResponseEntity.ok("Лид создан");
         }
@@ -95,7 +101,9 @@ public class LeadSyncController {
     @PostMapping(value = "/update", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, String>> updateLead(@RequestBody LeadUpdateDto dto) {
         log.info("\n==================== [SYNC UPDATE] ====================");
-        log.info("📥 [SYNC] Получен LeadUpdateDto: {}", dto);
+        log.info("[SYNC] Lead update received: leadId={}, telephone={}, email={}, cityPresent={}, operatorId={}, managerId={}, marketologId={}, telephoneId={}",
+                dto.getLeadId(), maskPhone(dto.getTelephoneLead()), maskEmail(dto.getEmails()), hasText(dto.getCityLead()),
+                dto.getOperatorId(), dto.getManagerId(), dto.getMarketologId(), dto.getTelephoneId());
 
         if (dto.getTelephoneLead() == null || dto.getTelephoneLead().isBlank()) {
             log.warn("🟥 [SYNC] Отсутствует telephoneLead в запросе");
@@ -107,7 +115,7 @@ public class LeadSyncController {
         Lead lead = findByAnyPhoneCandidate(candidates);
 
         if (lead == null) {
-            log.warn("🟥 [SYNC] Лид не найден по телефонам {}", candidates);
+            log.warn("🟥 [SYNC] Лид не найден по телефонам {}", maskPhones(candidates));
             log.info("==================== [END SYNC UPDATE] ====================\n");
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of(
@@ -189,45 +197,45 @@ public class LeadSyncController {
     private Map<String, String> collectChangedFields(Lead oldLead, Lead newLead) {
         Map<String, String> changes = new LinkedHashMap<>();
         if (!Objects.equals(oldLead.getTelephoneLead(), newLead.getTelephoneLead()))
-            changes.put("📞 Телефон", oldLead.getTelephoneLead() + " → " + newLead.getTelephoneLead());
+            changes.put("Телефон", maskPhone(oldLead.getTelephoneLead()) + " -> " + maskPhone(newLead.getTelephoneLead()));
         if (!Objects.equals(oldLead.getCompanyName(), newLead.getCompanyName()))
-            changes.put("🏢 Компания", oldLead.getCompanyName() + " → " + newLead.getCompanyName());
+            changes.put("Компания", oldLead.getCompanyName() + " -> " + newLead.getCompanyName());
         if (!Objects.equals(oldLead.getPhones(), newLead.getPhones()))
-            changes.put("☎️ Телефоны", oldLead.getPhones() + " → " + newLead.getPhones());
+            changes.put("Телефоны", "changed");
         if (!Objects.equals(oldLead.getMobilePhones(), newLead.getMobilePhones()))
-            changes.put("📱 Мобильные", oldLead.getMobilePhones() + " → " + newLead.getMobilePhones());
+            changes.put("Мобильные", "changed");
         if (!Objects.equals(oldLead.getWhatsappPhones(), newLead.getWhatsappPhones()))
-            changes.put("🟢 WhatsApp", oldLead.getWhatsappPhones() + " → " + newLead.getWhatsappPhones());
+            changes.put("WhatsApp", "changed");
         if (!Objects.equals(oldLead.getEmails(), newLead.getEmails()))
-            changes.put("✉️ Email", oldLead.getEmails() + " → " + newLead.getEmails());
+            changes.put("Email", maskEmail(oldLead.getEmails()) + " -> " + maskEmail(newLead.getEmails()));
         if (!Objects.equals(oldLead.getWebsites(), newLead.getWebsites()))
-            changes.put("🌐 Сайты", oldLead.getWebsites() + " → " + newLead.getWebsites());
+            changes.put("Сайты", oldLead.getWebsites() + " -> " + newLead.getWebsites());
         if (!Objects.equals(oldLead.getVkUrl(), newLead.getVkUrl()))
-            changes.put("VK", oldLead.getVkUrl() + " → " + newLead.getVkUrl());
+            changes.put("VK", oldLead.getVkUrl() + " -> " + newLead.getVkUrl());
         if (!Objects.equals(oldLead.getTelegramUrl(), newLead.getTelegramUrl()))
-            changes.put("TG", oldLead.getTelegramUrl() + " → " + newLead.getTelegramUrl());
+            changes.put("TG", oldLead.getTelegramUrl() + " -> " + newLead.getTelegramUrl());
         if (!Objects.equals(oldLead.getIndustries(), newLead.getIndustries()))
-            changes.put("Отрасли", oldLead.getIndustries() + " → " + newLead.getIndustries());
+            changes.put("Отрасли", oldLead.getIndustries() + " -> " + newLead.getIndustries());
         if (!Objects.equals(oldLead.getCompanyType(), newLead.getCompanyType()))
-            changes.put("Тип", oldLead.getCompanyType() + " → " + newLead.getCompanyType());
+            changes.put("Тип", oldLead.getCompanyType() + " -> " + newLead.getCompanyType());
         if (!Objects.equals(oldLead.getRegion(), newLead.getRegion()))
-            changes.put("Регион", oldLead.getRegion() + " → " + newLead.getRegion());
+            changes.put("Регион", oldLead.getRegion() + " -> " + newLead.getRegion());
         if (!Objects.equals(oldLead.getAddress(), newLead.getAddress()))
-            changes.put("Адрес", oldLead.getAddress() + " → " + newLead.getAddress());
+            changes.put("Адрес", "changed");
         if (!Objects.equals(oldLead.getCityLead(), newLead.getCityLead()))
-            changes.put("🌆 Город", oldLead.getCityLead() + " → " + newLead.getCityLead());
+            changes.put("Город", oldLead.getCityLead() + " -> " + newLead.getCityLead());
         if (!Objects.equals(oldLead.getCommentsLead(), newLead.getCommentsLead()))
-            changes.put("💬 Комментарий", oldLead.getCommentsLead() + " → " + newLead.getCommentsLead());
+            changes.put("Комментарий", "changed");
         if (!Objects.equals(oldLead.getLidStatus(), newLead.getLidStatus()))
-            changes.put("📋 Статус", oldLead.getLidStatus() + " → " + newLead.getLidStatus());
+            changes.put("Статус", oldLead.getLidStatus() + " -> " + newLead.getLidStatus());
         if (!Objects.equals(oldLead.getManager(), newLead.getManager()))
-            changes.put("🧑‍💼 Менеджер", safeUserId(oldLead.getManager()) + " → " + safeUserId(newLead.getManager()));
+            changes.put("Менеджер", safeUserId(oldLead.getManager()) + " -> " + safeUserId(newLead.getManager()));
         if (!Objects.equals(oldLead.getOperator(), newLead.getOperator()))
-            changes.put("🎧 Оператор", safeUserId(oldLead.getOperator()) + " → " + safeUserId(newLead.getOperator()));
+            changes.put("Оператор", safeUserId(oldLead.getOperator()) + " -> " + safeUserId(newLead.getOperator()));
         if (!Objects.equals(oldLead.getMarketolog(), newLead.getMarketolog()))
-            changes.put("📈 Маркетолог", safeUserId(oldLead.getMarketolog()) + " → " + safeUserId(newLead.getMarketolog()));
+            changes.put("Маркетолог", safeUserId(oldLead.getMarketolog()) + " -> " + safeUserId(newLead.getMarketolog()));
         if (!Objects.equals(oldLead.getLastSeen(), newLead.getLastSeen()))
-            changes.put("📅 Last Seen", String.valueOf(oldLead.getLastSeen()) + " → " + newLead.getLastSeen());
+            changes.put("Last Seen", String.valueOf(oldLead.getLastSeen()) + " -> " + newLead.getLastSeen());
         return changes;
     }
 

@@ -14,6 +14,7 @@ import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ArchiveCompanyMessageCandidateRepository;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -49,6 +50,7 @@ import java.util.Objects;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -139,6 +141,7 @@ public class ScheduledClientMessageService {
     private final ReviewRecoveryHoldService reviewRecoveryHoldService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
+    private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final Clock clock = Clock.systemDefaultZone();
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
@@ -743,6 +746,15 @@ public class ScheduledClientMessageService {
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
+        if (refreshCommonInvoiceForLinkedOrder(order)) {
+            markDone(
+                    state,
+                    nowStorage,
+                    "common_billing_linked",
+                    "Заказ входит в общий счет; одиночный счет после плохого не отправляется"
+            );
+            return;
+        }
 
         String status = statusTitle(order);
         if (badReviewInvoiceTerminalStatuses().contains(status)) {
@@ -810,6 +822,14 @@ public class ScheduledClientMessageService {
         if (summary != null && summary.pending() == 0 && summary.done() > 0) {
             paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
         }
+    }
+
+    private boolean refreshCommonInvoiceForLinkedOrder(Order order) {
+        if (order == null || order.getId() == null) {
+            return false;
+        }
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(order.getId());
     }
 
     private void autoBanAfterBadReviews(ScheduledClientMessageState state, LocalDateTime nowStorage) {

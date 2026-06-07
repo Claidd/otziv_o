@@ -15,6 +15,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -66,6 +67,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
     private final BotAssignmentService botAssignmentService;
     private final NextOrderRequestService nextOrderRequestService;
     private final ApplicationEventPublisher eventPublisher;
+    private final CommonBillingService commonBillingService;
 
     private static final String STATUS_COMPANY_IN_WORK = "В работе";
 
@@ -105,6 +107,7 @@ public class OrderCreationServiceImpl implements OrderCreationService {
             // 7. Обновляем счётчики компании
             updateCompanyCounter(order, companyId);
             log.info("7. Обновили счётчики компании");
+            commonBillingService.attachOrderIfNeeded(order);
             nextOrderRequestService.completeOpenRequestForCreatedOrder(order);
 
             eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()));

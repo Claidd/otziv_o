@@ -2,6 +2,7 @@ package com.hunt.otziv.manager.services;
 
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerBoardResponse;
@@ -63,7 +64,9 @@ public class ManagerBoardService {
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
+    private final ManagerAccessService managerAccessService;
     private final UserMetricSnapshotService metricSnapshotService;
+    private final CommonBillingService commonBillingService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -179,16 +182,74 @@ public class ManagerBoardService {
             String sortDirection
     ) {
         if (companyId != null) {
-            return orderService.getAllOrderDTOCompanyIdAndKeyword(companyId, keyword, pageNumber, pageSize, sortDirection);
+            managerAccessService.requireCompanyAccess(companyId, authentication);
         }
+        Set<Long> visibleManagerIds = visibleManagerIds(principal, authentication);
+        List<OrderDTOList> commonCards = commonBillingService.managerBoardCards(
+                status,
+                keyword,
+                companyId,
+                visibleManagerIds,
+                sortDirection
+        );
 
-        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+        int pageStart = pageNumber * pageSize;
+        List<OrderDTOList> visibleCommonCards = commonCards.stream()
+                .skip(pageStart)
+                .limit(pageSize)
+                .toList();
+        int ordinaryLimit = Math.max(0, pageSize - visibleCommonCards.size());
+        long ordinaryOffset = Math.max(0L, (long) pageStart - commonCards.size());
+        int ordinaryPageNumber = (int) (ordinaryOffset / pageSize);
+        int ordinarySkip = (int) (ordinaryOffset % pageSize);
+
+        Page<OrderDTOList> firstOrdinaryPage = loadRawOrders(
+                principal,
+                authentication,
+                keyword,
+                status,
+                ordinaryPageNumber,
+                pageSize,
+                companyId,
+                sortDirection
+        );
+
+        List<OrderDTOList> content = new ArrayList<>(visibleCommonCards);
+        content.addAll(collectOrdinaryWindow(
+                firstOrdinaryPage,
+                ordinarySkip,
+                ordinaryLimit,
+                principal,
+                authentication,
+                keyword,
+                status,
+                companyId,
+                sortDirection
+        ));
+
+        int linkedTotal = commonBillingService.countLinkedBoardOrdersMatching(status, keyword, companyId, visibleManagerIds);
+        long total = Math.max(0, firstOrdinaryPage.getTotalElements() - linkedTotal) + commonCards.size();
+        return new PageImpl<>(content, PageRequest.of(pageNumber, pageSize), total);
+    }
+
+    private Page<OrderDTOList> loadRawOrders(
+            Principal principal,
+            Authentication authentication,
+            String keyword,
+            String status,
+            int pageNumber,
+            int pageSize,
+            Long companyId,
+            String sortDirection
+    ) {
+        if (companyId != null) {
+            managerAccessService.requireCompanyAccess(companyId, authentication);
+            return orderService.getAllOrderDTOCompanyIdAndKeyword(companyId, keyword, pageNumber, pageSize, sortDirection);
+        } else if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             return "Все".equals(status)
                     ? orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize, sortDirection)
                     : orderService.getAllOrderDTOAndKeywordAndStatus(keyword, status, pageNumber, pageSize, sortDirection);
-        }
-
-        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+        } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
             return "Все".equals(status)
                     ? orderService.getAllOrderDTOAndKeywordByOwnerAll(principal, keyword, pageNumber, pageSize, sortDirection)
                     : orderService.getAllOrderDTOAndKeywordByOwner(principal, keyword, status, pageNumber, pageSize, sortDirection);
@@ -311,13 +372,22 @@ public class ManagerBoardService {
     }
 
     private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication) {
+        Map<String, Integer> counts;
         if (managerPermissionService.hasRole(authentication, "ADMIN")) {
-            return orderService.countOrdersByStatus();
+            counts = orderService.countOrdersByStatus();
+        } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            counts = orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
+        } else {
+            counts = orderService.countOrdersByStatusToManager(resolveManager(principal));
         }
-        if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            return orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
-        }
-        return orderService.countOrdersByStatusToManager(resolveManager(principal));
+
+        Set<Long> visibleManagerIds = visibleManagerIds(principal, authentication);
+        Map<String, Integer> merged = new java.util.HashMap<>(counts == null ? Map.of() : counts);
+        commonBillingService.countLinkedManagerBoardOrders(visibleManagerIds)
+                .forEach((status, count) -> merged.computeIfPresent(status, (_status, value) -> Math.max(0, value - count)));
+        commonBillingService.countManagerBoardCards(visibleManagerIds)
+                .forEach((status, count) -> merged.merge(status, count, Integer::sum));
+        return merged;
     }
 
     private int countStatus(Map<String, Integer> counts, String status) {
@@ -359,6 +429,66 @@ public class ManagerBoardService {
 
     private Set<Manager> resolveOwnerManagers(Principal principal) {
         return userService.findManagersByUserName(principal.getName());
+    }
+
+    private List<OrderDTOList> collectOrdinaryWindow(
+            Page<OrderDTOList> firstPage,
+            int skipOnFirstPage,
+            int limit,
+            Principal principal,
+            Authentication authentication,
+            String keyword,
+            String status,
+            Long companyId,
+            String sortDirection
+    ) {
+        if (limit <= 0) {
+            return List.of();
+        }
+        List<OrderDTOList> content = new ArrayList<>(limit);
+        Page<OrderDTOList> page = firstPage;
+        int skip = Math.max(0, skipOnFirstPage);
+        while (page != null && content.size() < limit) {
+            Set<Long> linkedOrderIds = commonBillingService.linkedBoardOrderIds(
+                    page.getContent().stream()
+                            .map(OrderDTOList::getId)
+                            .filter(id -> id != null && id > 0)
+                            .toList()
+            );
+            page.getContent().stream()
+                    .skip(skip)
+                    .filter(order -> order.getId() == null || !linkedOrderIds.contains(order.getId()))
+                    .limit(limit - content.size())
+                    .forEach(content::add);
+            if (content.size() >= limit || !page.hasNext()) {
+                break;
+            }
+            page = loadRawOrders(
+                    principal,
+                    authentication,
+                    keyword,
+                    status,
+                    page.getNumber() + 1,
+                    page.getSize(),
+                    companyId,
+                    sortDirection
+            );
+            skip = 0;
+        }
+        return content;
+    }
+
+    private Set<Long> visibleManagerIds(Principal principal, Authentication authentication) {
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            return null;
+        }
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            return resolveOwnerManagers(principal).stream()
+                    .map(Manager::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+        }
+        Manager manager = resolveManager(principal);
+        return manager == null || manager.getId() == null ? Set.of() : Set.of(manager.getId());
     }
 
     private String normalizeStatus(String status) {

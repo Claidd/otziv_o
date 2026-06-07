@@ -21,11 +21,13 @@ export class ManagerOrderEditModalComponent {
   @Input() draft: OrderUpdateRequest | null = null;
   @Input() saving = false;
   @Input() deleting = false;
+  @Input() cancelingPayment = false;
   @Input() error: string | null = null;
 
   @Output() readonly closed = new EventEmitter<void>();
   @Output() readonly submitted = new EventEmitter<void>();
   @Output() readonly deleted = new EventEmitter<void>();
+  @Output() readonly paymentCanceled = new EventEmitter<void>();
   @Output() readonly draftChange = new EventEmitter<ManagerOrderEditDraftChange>();
 
   setField<K extends keyof OrderUpdateRequest>(field: K, value: OrderUpdateRequest[K]): void {

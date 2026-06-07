@@ -31,7 +31,6 @@ public class SubCategoryController {
 
     @GetMapping("/{id}/{categoryTitle}")
     public String showAllSubCategories(@PathVariable Long id,@PathVariable String categoryTitle, Model model) { // Лист подкатегории
-        System.out.println(categoryTitle);
         List<SubCategoryDTO> subCategories = subCategoryService.getSubcategoriesByCategoryId(id).stream().sorted(Comparator.comparing(SubCategoryDTO::getSubCategoryTitle)).toList();
         model.addAttribute("subCategories", subCategories);
         model.addAttribute("subCategoryDTO", new SubCategoryDTO());

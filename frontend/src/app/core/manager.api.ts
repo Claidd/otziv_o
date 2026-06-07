@@ -234,6 +234,18 @@ export interface OrderCardItem {
   maxGroupChatId?: number | null;
   maxGroupLinked?: boolean;
   maxBotInviteUrl?: string;
+  commonInvoice?: boolean;
+  commonInvoiceId?: number | null;
+  commonBillingAccountId?: number | null;
+  commonInvoiceStatus?: string | null;
+  commonInvoicePublicUrl?: string | null;
+  commonInvoiceTotalOrders?: number | null;
+  commonInvoiceReadyOrders?: number | null;
+  commonInvoicePaidOrders?: number | null;
+  commonInvoiceAmount?: number | null;
+  commonInvoicePaid?: number | null;
+  commonInvoiceRemaining?: number | null;
+  commonInvoiceLastError?: string | null;
 }
 
 export interface ManagerMetric {
@@ -425,6 +437,7 @@ export interface OrderEditPayload {
   workers: ManagerOption[];
   canComplete: boolean;
   canDelete: boolean;
+  canCancelPayment: boolean;
 }
 
 export interface OrderUpdateRequest {
@@ -743,6 +756,10 @@ export class ManagerApi {
 
   updateOrder(orderId: number, request: OrderUpdateRequest): Observable<OrderEditPayload> {
     return this.http.put<OrderEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}`, request);
+  }
+
+  cancelOrderPayment(orderId: number): Observable<OrderEditPayload> {
+    return this.http.post<OrderEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/payment-cancel`, {});
   }
 
   deleteOrder(orderId: number): Observable<void> {

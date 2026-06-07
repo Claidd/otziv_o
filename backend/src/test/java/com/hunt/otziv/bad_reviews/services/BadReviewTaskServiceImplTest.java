@@ -11,6 +11,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageAttemptRepository;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
@@ -28,12 +29,14 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -68,6 +71,12 @@ class BadReviewTaskServiceImplTest {
     private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
 
     @Mock
+    private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+
+    @Mock
+    private CommonBillingService commonBillingService;
+
+    @Mock
     private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
 
     @Mock
@@ -81,6 +90,12 @@ class BadReviewTaskServiceImplTest {
 
     @InjectMocks
     private BadReviewTaskServiceImpl service;
+
+    @BeforeEach
+    void setUpProviders() {
+        ReflectionTestUtils.setField(service, "paymentLinkServiceProvider", paymentLinkServiceProvider);
+        ReflectionTestUtils.setField(service, "commonBillingServiceProvider", commonBillingServiceProvider);
+    }
 
     @Test
     void createTasksForUnpaidOrderCopiesReviewBotSnapshot() {
@@ -316,6 +331,36 @@ class BadReviewTaskServiceImplTest {
                 "счет после плохого отзыва"
         );
         verify(paymentInvoiceRetryScheduler).scheduleBadReviewAutoBan(order);
+    }
+
+    @Test
+    void completeTaskRefreshesCommonInvoiceInsteadOfSendingSingleBadReviewInvoice() {
+        Order order = order(18L);
+        order.getManager().setClientId("client-18");
+        order.getManager().setPayText("Оплатите по ссылке Альфа.");
+        order.getCompany().setGroupId("group-18");
+        order.setStatus(OrderStatus.builder().title("Не оплачено").build());
+        BadReviewTask task = BadReviewTask.builder()
+                .id(48L)
+                .order(order)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findById(48L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(18L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.refreshLinkedOrderAmount(18L)).thenReturn(true);
+
+        service.completeTask(48L);
+
+        verify(commonBillingService).refreshLinkedOrderAmount(18L);
+        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(order);
     }
 
     @Test

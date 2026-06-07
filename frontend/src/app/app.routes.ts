@@ -84,6 +84,11 @@ export const routes: Routes = [
     data: { result: 'fail' }
   },
   {
+    path: 'pay/group/:token',
+    loadComponent: () => import('./features/pay/pay-group-page.component')
+      .then((m) => m.PayGroupPageComponent)
+  },
+  {
     path: 'pay/:token',
     loadComponent: () => import('./features/pay/pay-page.component')
       .then((m) => m.PayPageComponent)
@@ -138,6 +143,11 @@ export const routes: Routes = [
     path: 'legacy-migration',
     loadComponent: () => import('./features/auth/legacy-migration.component')
       .then((m) => m.LegacyMigrationComponent)
+  },
+  {
+    path: 'auth/restart',
+    loadComponent: () => import('./features/auth/auth-restart.component')
+      .then((m) => m.AuthRestartComponent)
   },
   {
     path: 'leads',
@@ -297,6 +307,15 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/common-billing',
+    loadComponent: () => import('./features/admin/common-billing/common-billing.component')
+      .then((m) => m.CommonBillingComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER']
     }
   },
   {

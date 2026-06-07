@@ -231,10 +231,12 @@ public class ManagerBoardEditAssembler {
             Authentication authentication
     ) {
         boolean adminOrOwner = managerPermissionService.hasRole(authentication, "ADMIN") || managerPermissionService.hasRole(authentication, "OWNER");
+        String statusTitle = optionLabel(order.getStatus());
         boolean canDelete = orderDeletionPolicy.canDelete(
                 managerPermissionService.primaryReviewRole(authentication),
-                optionLabel(order.getStatus())
+                statusTitle
         );
+        boolean canCancelPayment = adminOrOwner && "Оплачено".equals(statusTitle);
         OptionResponse currentManager = option(order.getManager());
         List<OptionResponse> managers = managerPermissionService.hasOnlyWorkerRole(authentication)
                 ? currentManager == null ? List.of() : List.of(currentManager)
@@ -261,7 +263,8 @@ public class ManagerBoardEditAssembler {
                 managers,
                 workerOptions(order),
                 adminOrOwner,
-                canDelete
+                canDelete,
+                canCancelPayment
         );
     }
 

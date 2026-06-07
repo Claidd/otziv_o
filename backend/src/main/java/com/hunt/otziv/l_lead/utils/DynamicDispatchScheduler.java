@@ -11,6 +11,7 @@ import com.hunt.otziv.l_lead.repository.DispatchSettingsRepository;
 import com.hunt.otziv.whatsapp.service.LeadSenderServiceImpl;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -50,7 +51,11 @@ public class DynamicDispatchScheduler {
     }
 
 
-    private void scheduleNext() {
+    private synchronized void scheduleNext() {
+        if (scheduler.isShutdown()) {
+            return;
+        }
+
         String cron = settingsRepository.findById(1L)
                 .map(DispatchSettings::getCronExpression)
                 .orElse("0 0 14 * * *");
@@ -68,7 +73,8 @@ public class DynamicDispatchScheduler {
         if (timeToNextExecution.isPresent()) {
             Duration delay = timeToNextExecution.get();
             log.info("📆 Следующий запуск через: {}", delay);
-            scheduler.schedule(() -> {
+            ScheduledExecutorService currentScheduler = scheduler;
+            currentScheduler.schedule(() -> {
                 try {
                     log.info("🚀 Запуск рассылки по расписанию из БД");
                     leadSenderService.startDailyDispatch();
@@ -82,7 +88,9 @@ public class DynamicDispatchScheduler {
                 } catch (Exception e) {
                     log.error("❌ Ошибка при выполнении рассылки", e);
                 } finally {
-                    scheduleNext(); // Запланировать следующий запуск
+                    if (scheduler == currentScheduler && !currentScheduler.isShutdown()) {
+                        scheduleNext(); // Запланировать следующий запуск
+                    }
                 }
             }, delay.toMillis(), TimeUnit.MILLISECONDS);
         } else {
@@ -91,7 +99,7 @@ public class DynamicDispatchScheduler {
     }
 
     @Scheduled(fixedRate = 300000) // каждые 5 минут
-    public void checkForCronUpdates() {
+    public synchronized void checkForCronUpdates() {
         String currentCron = settingsRepository.findById(1L)
                 .map(DispatchSettings::getCronExpression)
                 .orElse("0 0 14 * * *");
@@ -99,14 +107,35 @@ public class DynamicDispatchScheduler {
         if (!currentCron.equals(lastCronExpression)) {
             log.info("🔄 Cron изменён: {} → {}. Перепланируем...", lastCronExpression, currentCron);
 
-            // ❗ ЗАВЕРШИТЬ старый scheduler
-            scheduler.shutdownNow();
-
-            // ❗ СОЗДАТЬ новый
-            scheduler = Executors.newSingleThreadScheduledExecutor();
+            restartScheduler();
 
             lastCronExpression = currentCron;
             scheduleInitialTask();
+        }
+    }
+
+    @PreDestroy
+    public synchronized void shutdownScheduler() {
+        shutdownScheduler(scheduler);
+    }
+
+    private void restartScheduler() {
+        shutdownScheduler(scheduler);
+        scheduler = Executors.newSingleThreadScheduledExecutor();
+    }
+
+    private void shutdownScheduler(ScheduledExecutorService executor) {
+        if (executor == null) {
+            return;
+        }
+
+        executor.shutdownNow();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("⚠️ Dynamic dispatch scheduler did not stop within timeout");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -126,7 +155,7 @@ public class DynamicDispatchScheduler {
                     entity,
                     String.class
             );
-            log.info("✅ Ответ получен: {}", response.getBody());
+            log.info("✅ Ответ cron получен от VPS");
             String vpsCron = response.getBody();
 
             DispatchSettings local = settingsRepository.findById(1L).orElse(null);
@@ -140,5 +169,3 @@ public class DynamicDispatchScheduler {
         }
     }
 }
-
-

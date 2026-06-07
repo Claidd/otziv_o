@@ -44,6 +44,7 @@ public class NextOrderRequestService {
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
     private final ApplicationEventPublisher eventPublisher;
+    private final NextOrderFailureNotifier nextOrderFailureNotifier;
 
     @Transactional
     public Optional<NextOrderRequest> openForPaidOrder(Order sourceOrder) {
@@ -201,6 +202,12 @@ public class NextOrderRequestService {
             requestRepository.save(request);
             refreshCompanyStatusForOpenRequests(request.getCompany().getId());
             log.error("Автоматический следующий заказ по заявке {} не создан", requestId, cause);
+            nextOrderFailureNotifier.notifyManager(
+                    request.getSourceOrder(),
+                    null,
+                    "автосоздание следующего заказа по заявке #" + requestId,
+                    cause
+            );
         });
     }
 

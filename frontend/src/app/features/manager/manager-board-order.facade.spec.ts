@@ -94,6 +94,7 @@ function orderPayload(overrides: Partial<OrderEditPayload> = {}): OrderEditPaylo
     workers: [option(41, 'Worker')],
     canComplete: true,
     canDelete: true,
+    canCancelPayment: false,
     ...overrides
   };
 }
@@ -138,6 +139,16 @@ function createFacade(config: {
       deleteOrder: (orderId: number) => {
         calls.push(`delete-order:${orderId}`);
         return of(void 0);
+      },
+      cancelOrderPayment: (orderId: number) => {
+        calls.push(`cancel-payment:${orderId}`);
+        return of({
+          ...sourceOrderPayload,
+          status: 'Напоминание',
+          complete: false,
+          payDay: '',
+          canCancelPayment: false
+        });
       }
     },
     toastService: {
@@ -239,6 +250,20 @@ describe('ManagerBoardOrderFacade', () => {
     expect(state.calls).toContain('delete-order:30');
     expect(state.facade.editOrder()).toBeNull();
     expect(state.toastMessages).toContain('success:Заказ удален:Заказ #30 удален');
+    expect(state.calls).toContain('load-board');
+  });
+
+  it('cancels order payment after confirmation', () => {
+    const state = createFacade({ orderPayload: orderPayload({ status: 'Оплачено', complete: true, canCancelPayment: true }) });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    state.facade.openOrderEdit(order({ id: 30 }));
+    state.facade.cancelOrderPayment();
+
+    expect(state.calls).toContain('cancel-payment:30');
+    expect(state.facade.editOrder()?.status).toBe('Напоминание');
+    expect(state.facade.editOrder()?.canCancelPayment).toBe(false);
+    expect(state.toastMessages).toContain('success:Оплата отменена:Заказ #30 возвращен в Напоминание');
     expect(state.calls).toContain('load-board');
   });
 });

@@ -6,6 +6,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -107,6 +108,9 @@ class ReviewServiceImplTest {
 
     @Mock
     private BusinessAuditService businessAuditService;
+
+    @Mock
+    private GamificationEventService gamificationEventService;
 
     @InjectMocks
     private ReviewServiceImpl reviewService;

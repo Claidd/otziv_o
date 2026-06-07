@@ -14,6 +14,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.hunt.otziv.logs.LogMasking.maskPhone;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -28,7 +30,7 @@ public class OfferService {
     @Async
     public void sendOfferAsync(Lead lead, String clientId, String telephoneNumber, String offerText) {
         if (!phonesInProgress.add(telephoneNumber)) {
-            log.info("⚠️ Оффер для {} уже в процессе. Повтор блокирован.", telephoneNumber);
+            log.info("⚠️ Оффер для {} уже в процессе. Повтор блокирован.", maskPhone(telephoneNumber));
             return;
         }
 
@@ -40,7 +42,7 @@ public class OfferService {
             );
 
             if (result.isOk()) {
-                log.info("✅ Оффер успешно отправлен клиенту {}", telephoneNumber);
+                log.info("✅ Оффер успешно отправлен клиенту {}", maskPhone(telephoneNumber));
 
                 // вместо: lead.setOffer(true); leadService.saveLead(lead); leadEventPublisher.publishUpdate(lead);
                 // вызываем единый транзакционный метод
@@ -48,7 +50,7 @@ public class OfferService {
 
             } else {
                 log.warn("❌ Ошибка при отправке оффера клиенту {}: code={}, error={}",
-                        telephoneNumber, result.code(), result.displayError());
+                        maskPhone(telephoneNumber), result.code(), result.displayError());
             }
         } finally {
             phonesInProgress.remove(telephoneNumber);
@@ -57,12 +59,12 @@ public class OfferService {
 
     private void delayBeforeSending(String telephoneNumber) {
         int delaySeconds = ThreadLocalRandom.current().nextInt(10, 61);
-        log.info("⏳ Ждём {} секунд перед отправкой оффера клиенту {}", delaySeconds, telephoneNumber);
+        log.info("⏳ Ждём {} секунд перед отправкой оффера клиенту {}", delaySeconds, maskPhone(telephoneNumber));
         try {
             Thread.sleep(delaySeconds * 1000L);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("⏰ Ожидание прервано для {}", telephoneNumber);
+            log.warn("⏰ Ожидание прервано для {}", maskPhone(telephoneNumber));
         }
     }
 }

@@ -45,7 +45,6 @@ public class ReviewController {
     //    =========================================== REVIEW EDIT =======================================================
     @GetMapping("/editReview/{reviewId}")
     String ReviewEdit(@PathVariable Long reviewId, Model model){
-        System.out.println("Вошли в обновление отзыва");
         ReviewDTO reviewDTO = reviewService.getReviewDTOById(reviewId);
         model.addAttribute("reviewDTO", reviewDTO);
         model.addAttribute("products", productService.findAll());

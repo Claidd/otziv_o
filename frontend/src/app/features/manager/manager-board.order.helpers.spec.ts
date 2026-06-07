@@ -77,6 +77,7 @@ function orderPayload(overrides: Partial<OrderEditPayload> = {}): OrderEditPaylo
     workers: [],
     canComplete: true,
     canDelete: true,
+    canCancelPayment: false,
     ...overrides
   };
 }

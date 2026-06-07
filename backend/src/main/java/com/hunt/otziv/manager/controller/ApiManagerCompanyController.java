@@ -23,6 +23,7 @@ import com.hunt.otziv.manager.dto.api.CompanyUpdateRequest;
 import com.hunt.otziv.manager.dto.api.FilialUpdateRequest;
 import com.hunt.otziv.manager.dto.api.OptionResponse;
 import com.hunt.otziv.manager.dto.api.StatusChangeRequest;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.manager.services.ManagerBoardEditAssembler;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
@@ -71,6 +72,7 @@ public class ApiManagerCompanyController {
     private final OrderCreationService orderCreationService;
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
+    private final ManagerAccessService managerAccessService;
 
     @PostMapping("/companies/{companyId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -78,8 +80,10 @@ public class ApiManagerCompanyController {
     public void updateCompanyStatus(
             @PathVariable Long companyId,
             @RequestBody StatusChangeRequest request,
-            HttpServletRequest servletRequest
+            HttpServletRequest servletRequest,
+            Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         String status = requireStatus(request);
         servletRequest.setAttribute("status", status);
         boolean updated = companyService.changeStatusForCompany(companyId, status);
@@ -96,12 +100,17 @@ public class ApiManagerCompanyController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
     }
 
     @GetMapping("/companies/{companyId}/order-create")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
-    public CompanyOrderCreateResponse getCompanyOrderCreate(@PathVariable Long companyId) {
+    public CompanyOrderCreateResponse getCompanyOrderCreate(
+            @PathVariable Long companyId,
+            Authentication authentication
+    ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         return managerBoardEditAssembler.buildCompanyOrderCreateResponse(companyService.getCompaniesDTOById(companyId));
     }
 
@@ -110,8 +119,10 @@ public class ApiManagerCompanyController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public CompanyOrderCreateResultResponse createCompanyOrder(
             @PathVariable Long companyId,
-            @RequestBody CompanyOrderCreateRequest request
+            @RequestBody CompanyOrderCreateRequest request,
+            Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         CompanyDTO company = companyService.getCompaniesDTOById(companyId);
         Product product = managerBoardEditAssembler.validateCompanyOrderCreateRequest(company, request);
 
@@ -147,6 +158,7 @@ public class ApiManagerCompanyController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         CompanyDTO current = companyService.getCompaniesDTOById(companyId);
 
         try {
@@ -165,8 +177,10 @@ public class ApiManagerCompanyController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public void updateCompanyNote(
             @PathVariable Long companyId,
-            @RequestBody CompanyNoteUpdateRequest request
+            @RequestBody CompanyNoteUpdateRequest request,
+            Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         if (request == null || request.companyComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
         }
@@ -188,6 +202,7 @@ public class ApiManagerCompanyController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         if (!companyService.deleteWorkers(companyId, workerId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не удален из компании");
         }
@@ -203,6 +218,7 @@ public class ApiManagerCompanyController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         if (!companyService.deleteFilial(companyId, filialId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Филиал не удален из компании");
         }
@@ -219,6 +235,7 @@ public class ApiManagerCompanyController {
             Principal principal,
             Authentication authentication
     ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
         CompanyDTO company = companyService.getCompaniesDTOById(companyId);
         if (!companyHasFilial(company, filialId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Филиал не найден у компании");

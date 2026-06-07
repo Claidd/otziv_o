@@ -11,6 +11,7 @@
     [switch]$SkipOpenAiProxyIpSync,
     [switch]$UseConfiguredOutboundProxy,
     [switch]$WithDbAdmin,
+    [switch]$WithObservability,
     [switch]$WithReputationAiSmoke,
     [int]$ReputationAiCompanyId = 1,
     [switch]$SkipReputationAiOpenAiRouteCheck,
@@ -1212,22 +1213,19 @@ function Invoke-OfflineAppBuild {
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+$envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
+if (-not (Test-Path -LiteralPath $envResolverPath)) {
+    throw "Env resolver script not found: $envResolverPath"
+}
+. $envResolverPath
 $composePath = if ([System.IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $repoRoot $ComposeFile }
-$envPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $repoRoot $EnvFile }
-$envExamplePath = Join-Path $repoRoot ".env.prod-local.example"
+$envPath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot
 
 if (-not (Test-Path -LiteralPath $composePath)) {
     throw "Compose file not found: $composePath"
 }
 
-if (-not (Test-Path -LiteralPath $envPath)) {
-    if (-not (Test-Path -LiteralPath $envExamplePath)) {
-        throw "Env file not found: $envPath"
-    }
-
-    Copy-Item -LiteralPath $envExamplePath -Destination $envPath
-    Write-Host "Created $envPath from .env.prod-local.example."
-}
+Write-Host "Using env file: $envPath"
 
 if (-not $SkipProdDbRestore) {
     $restoreScript = Join-Path $scriptRoot "restore-prod-db-local.ps1"
@@ -1310,6 +1308,14 @@ if (
 $composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
 if ($WithDbAdmin) {
     $composeArgs += @("--profile", "db-admin")
+}
+if ($WithObservability) {
+    $composeArgs += @("--profile", "observability")
+    $env:OTZIV_TRACING_ENABLED = "true"
+    Write-Host "Local observability is enabled: Loki, Tempo, Alloy, Prometheus, Grafana and Dozzle will be started."
+} else {
+    $env:OTZIV_TRACING_ENABLED = "false"
+    Write-Host "Local observability is disabled. Pass -WithObservability to start Loki, Tempo, Alloy, Prometheus, Grafana and Dozzle."
 }
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
 

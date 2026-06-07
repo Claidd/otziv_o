@@ -26,6 +26,7 @@ export class PayPageComponent {
   readonly message = signal('');
   readonly email = signal('');
   readonly offerConsent = signal(false);
+  readonly privacyConsent = signal(false);
   readonly receiptConsent = signal(false);
   readonly sbpPaymentPayload = signal('');
   readonly sbpPaymentUrl = signal('');
@@ -146,6 +147,7 @@ export class PayPageComponent {
       email &&
       email.includes('@') &&
       this.offerConsent() &&
+      this.privacyConsent() &&
       this.receiptConsent() &&
       !this.sbpSubmitting() &&
       !this.bankSubmitting() &&
@@ -225,7 +227,7 @@ export class PayPageComponent {
       this.token(),
       this.email().trim(),
       this.offerConsent(),
-      this.offerConsent(),
+      this.privacyConsent(),
       this.receiptConsent(),
       bankId || null
     ).subscribe({
@@ -270,7 +272,7 @@ export class PayPageComponent {
       this.token(),
       this.email().trim(),
       this.offerConsent(),
-      this.offerConsent(),
+      this.privacyConsent(),
       this.receiptConsent()
     ).subscribe({
       next: (response) => {

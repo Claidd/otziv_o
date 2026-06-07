@@ -80,8 +80,6 @@ public class UsersController {
 
     @GetMapping("/delete/operator/{username}/{operatorId}")
     public String deleteOperatorByUser(@PathVariable(name="username") String username, @PathVariable(name="operatorId") Long operatorId){
-        System.out.println(username);
-        System.out.println(operatorId);
         userService.deleteOperator(username, operatorId);
         log.info("Удаление оператора прошло успешно");
         return "redirect:/allUsers";
@@ -89,8 +87,6 @@ public class UsersController {
 
     @GetMapping("/delete/manager/{username}/{managerId}")
     public String deleteManagerByUser(@PathVariable(name="username") String username, @PathVariable(name="managerId") Long managerId){
-        System.out.println(username);
-        System.out.println(managerId);
         userService.deleteManager(username, managerId);
         log.info("Удаление менеджера прошло успешно");
         return "redirect:/allUsers";
@@ -98,16 +94,12 @@ public class UsersController {
 
     @GetMapping("/delete/worker/{username}/{workerId}")
     public String deleteWorkerByUser(@PathVariable(name="username") String username, @PathVariable(name="workerId") Long workerId){
-        System.out.println(username);
-        System.out.println(workerId);
         userService.deleteWorker(username, workerId);
         log.info("Удаление работника прошло успешно");
         return "redirect:/allUsers";
     }
     @GetMapping("/delete/marketolog/{username}/{marketologId}")
     public String deleteMarketologByUser(@PathVariable(name="username") String username, @PathVariable(name="marketologId") Long marketologId){
-        System.out.println(username);
-        System.out.println(marketologId);
         log.info("Входим в удаление маркетолога");
         userService.deleteMarketolog(username, marketologId);
         log.info("Удаление маркетолога прошло успешно");

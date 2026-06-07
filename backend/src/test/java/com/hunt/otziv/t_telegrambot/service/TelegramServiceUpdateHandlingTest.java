@@ -140,6 +140,7 @@ class TelegramServiceUpdateHandlingTest {
             super(new DefaultBotOptions(),
                     "123456:abcdefghijklmnopqrstuvwxyz",
                     "test_bot",
+                    true,
                     "",
                     personalServiceProvider,
                     userService,

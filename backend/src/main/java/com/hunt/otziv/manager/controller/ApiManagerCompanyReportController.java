@@ -2,6 +2,7 @@ package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.manager.dto.api.CompanyDeepReportStateResponse;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -32,12 +33,14 @@ public class ApiManagerCompanyReportController {
     private final OrderService orderService;
     private final DeepCompanyResearchJobService deepCompanyResearchJobService;
     private final ManagerPermissionService managerPermissionService;
+    private final ManagerAccessService managerAccessService;
 
     @GetMapping
     public CompanyDeepReportStateResponse state(
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         CompanyContext company = resolveCompany(orderId);
         return buildState(company, authentication);
     }
@@ -47,6 +50,7 @@ public class ApiManagerCompanyReportController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         CompanyContext company = resolveCompany(orderId);
         Optional<DeepCompanyResearchJobStatus> activeJob = deepCompanyResearchJobService.findActive(company.companyId());
         if (activeJob.isPresent()) {
@@ -72,6 +76,7 @@ public class ApiManagerCompanyReportController {
             @PathVariable Long orderId,
             Authentication authentication
     ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
         CompanyContext company = resolveCompany(orderId);
         startDeepReport(company.companyId());
         return buildState(company, authentication);

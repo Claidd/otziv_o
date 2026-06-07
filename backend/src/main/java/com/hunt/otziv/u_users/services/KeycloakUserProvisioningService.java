@@ -218,10 +218,6 @@ public class KeycloakUserProvisioningService {
             throw new ResponseStatusException(BAD_REQUEST, "Profile photo is required");
         }
 
-        if (!isSupportedProfileImage(photo)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Only jpg, jpeg, png and webp images are supported");
-        }
-
         Image oldImage = user.getImage();
         Image newImage = imageService.saveCompressedProfileImage(photo);
         user.setImage(newImage);
@@ -791,19 +787,6 @@ public class KeycloakUserProvisioningService {
         }
 
         return value.trim();
-    }
-
-    private boolean isSupportedProfileImage(MultipartFile file) {
-        String fileName = file.getOriginalFilename();
-        if (!hasText(fileName)) {
-            return false;
-        }
-
-        String normalized = fileName.toLowerCase(Locale.ROOT);
-        return normalized.endsWith(".jpg")
-                || normalized.endsWith(".jpeg")
-                || normalized.endsWith(".png")
-                || normalized.endsWith(".webp");
     }
 
     private boolean hasText(String value) {

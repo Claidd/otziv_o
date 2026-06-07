@@ -106,8 +106,19 @@ describe('manager-board config helpers', () => {
       'Оплачено',
       'Бан'
     ]);
+    expect(managerOrderActions(order({
+      status: 'Не оплачено',
+      badReviewTasksTotal: 2,
+      badReviewTasksPending: 1
+    }), false).map((action) => action.status)).toEqual(['Оплачено']);
+    expect(managerOrderActions(order({
+      status: 'Не оплачено',
+      badReviewTasksTotal: 2,
+      badReviewTasksPending: 1
+    }), false, true).map((action) => action.status)).toEqual(['Оплачено', 'Бан']);
     expect(managerOrderActions(order({ status: 'Бан' }), false).map((action) => action.status)).toEqual(['Оплачено']);
-    expect(managerOrderActions(order({ status: 'Новый' }), true)).toBe(MANAGER_ORDER_ACTIONS);
+    expect(managerOrderActions(order({ status: 'Новый' }), true).map((action) => action.status)).not.toContain('Бан');
+    expect(managerOrderActions(order({ commonInvoice: true, status: 'Требует внимания' }), true)).toEqual([]);
   });
 
   it('calculates order labels, amounts, progress and review links', () => {

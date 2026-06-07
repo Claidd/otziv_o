@@ -124,6 +124,18 @@ public class PersonalReminderService {
         createSystemReminder(user, title, text, "datetime", Instant.now(), null, sourceType, sourceId, sourceOrderId);
     }
 
+    @Transactional(readOnly = true)
+    public boolean hasOpenSystemReminder(User user, String sourceType, Long sourceId) {
+        if (user == null || user.getId() == null || sourceId == null || sourceId <= 0) {
+            return false;
+        }
+        return reminderRepository.existsByUserIdAndSourceTypeAndSourceIdAndCompletedAtIsNull(
+                user.getId(),
+                trimOrDefault(sourceType, ""),
+                sourceId
+        );
+    }
+
     private void createSystemReminder(
             User user,
             String title,

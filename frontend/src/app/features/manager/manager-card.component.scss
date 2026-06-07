@@ -62,6 +62,15 @@
   gap: 0.55rem;
 }
 
+.order-card--common {
+  border-style: dashed;
+}
+
+.order-card--common .order-id-badge {
+  min-width: 2.6rem;
+  color: #2f6f65;
+}
+
 .order-card header {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
@@ -154,6 +163,25 @@
   color: var(--otziv-info);
   font-size: 0.74rem;
   font-weight: 800;
+}
+
+.manager-card footer .worker-edit-button {
+  appearance: none;
+  border: 0;
+  min-height: auto;
+  padding: 0;
+  color: var(--otziv-info);
+  background: transparent;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.manager-card footer .worker-edit-button:hover,
+.manager-card footer .worker-edit-button:focus-visible {
+  color: var(--otziv-primary);
 }
 
 .manager-card footer .unchanged-age-wrap {
@@ -259,6 +287,11 @@
   border-radius: 999px;
   padding: 0 0.55rem;
   background: var(--otziv-field-background);
+}
+
+.common-invoice-row span {
+  flex: 1 1 100%;
+  white-space: normal;
 }
 
 .phone-row a {

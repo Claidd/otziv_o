@@ -98,242 +98,7 @@
               >
             </label>
 
-            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
-              <span>Контакты и ссылки</span>
-              <div class="company-extra-grid">
-                <label class="lead-edit-field">
-                  <span>Телефоны</span>
-                  <textarea
-                    name="phones"
-                    rows="2"
-                    [ngModel]="draft.phones"
-                    (ngModelChange)="setField('phones', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Мобильные</span>
-                  <textarea
-                    name="mobilePhones"
-                    rows="2"
-                    [ngModel]="draft.mobilePhones"
-                    (ngModelChange)="setField('mobilePhones', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>WhatsApp</span>
-                  <textarea
-                    name="whatsappPhones"
-                    rows="2"
-                    [ngModel]="draft.whatsappPhones"
-                    (ngModelChange)="setField('whatsappPhones', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Email</span>
-                  <textarea
-                    name="emails"
-                    rows="2"
-                    [ngModel]="draft.emails"
-                    (ngModelChange)="setField('emails', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Сайты</span>
-                  <textarea
-                    name="websites"
-                    rows="2"
-                    [ngModel]="draft.websites"
-                    (ngModelChange)="setField('websites', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>VK</span>
-                  <textarea
-                    name="vkUrl"
-                    rows="2"
-                    [ngModel]="draft.vkUrl"
-                    (ngModelChange)="setField('vkUrl', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field company-extra-grid__wide">
-                  <span>Telegram</span>
-                  <textarea
-                    name="telegramUrl"
-                    rows="2"
-                    [ngModel]="draft.telegramUrl"
-                    (ngModelChange)="setField('telegramUrl', $event)"
-                  ></textarea>
-                </label>
-              </div>
-            </section>
-
-            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
-              <span>Сведения</span>
-              <div class="company-extra-grid">
-                <label class="lead-edit-field">
-                  <span>Регион</span>
-                  <input
-                    name="region"
-                    type="text"
-                    [ngModel]="draft.region"
-                    (ngModelChange)="setField('region', $event)"
-                  >
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Адрес</span>
-                  <input
-                    name="address"
-                    type="text"
-                    [ngModel]="draft.address"
-                    (ngModelChange)="setField('address', $event)"
-                  >
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Отрасли</span>
-                  <textarea
-                    name="industries"
-                    rows="2"
-                    [ngModel]="draft.industries"
-                    (ngModelChange)="setField('industries', $event)"
-                  ></textarea>
-                </label>
-
-                <label class="lead-edit-field">
-                  <span>Тип</span>
-                  <textarea
-                    name="companyType"
-                    rows="2"
-                    [ngModel]="draft.companyType"
-                    (ngModelChange)="setField('companyType', $event)"
-                  ></textarea>
-                </label>
-              </div>
-            </section>
-
-            <label class="lead-edit-field">
-              <span>Категория</span>
-              <select
-                name="categoryId"
-                [ngModel]="draft.categoryId"
-                (ngModelChange)="categoryChanged.emit($event)"
-              >
-                @for (category of company.categories; track trackOption($index, category)) {
-                  <option [ngValue]="category.id">{{ optionLabel(category) }}</option>
-                }
-              </select>
-            </label>
-
-            <label class="lead-edit-field">
-              <span>Подкатегория</span>
-              <select
-                name="subCategoryId"
-                [ngModel]="draft.subCategoryId"
-                (ngModelChange)="setField('subCategoryId', $event)"
-              >
-                @for (subCategory of company.subCategories; track trackOption($index, subCategory)) {
-                  <option [ngValue]="subCategory.id">{{ optionLabel(subCategory) }}</option>
-                }
-              </select>
-            </label>
-
-            <label class="lead-edit-field">
-              <span>Статус</span>
-              <select
-                name="statusId"
-                required
-                [ngModel]="draft.statusId"
-                (ngModelChange)="setField('statusId', $event)"
-              >
-                @for (status of company.statuses; track trackOption($index, status)) {
-                  <option [ngValue]="status.id">{{ optionLabel(status) }}</option>
-                }
-              </select>
-            </label>
-
-            @if (company.canChangeManager) {
-              <label class="lead-edit-field">
-                <span>Менеджер</span>
-                <select
-                  name="managerId"
-                  [ngModel]="draft.managerId"
-                  (ngModelChange)="setField('managerId', $event)"
-                >
-                  @for (manager of company.managers; track trackOption($index, manager)) {
-                    <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
-                  }
-                </select>
-              </label>
-            }
-
-            <label class="lead-edit-field lead-edit-field--wide">
-              <span>Комментарий</span>
-              <textarea
-                name="commentsCompany"
-                rows="3"
-                [ngModel]="draft.commentsCompany"
-                (ngModelChange)="setField('commentsCompany', $event)"
-              ></textarea>
-            </label>
-
-            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
-              <span>Специалисты компании</span>
-              <div class="company-edit-list">
-                @for (worker of company.currentWorkers; track trackOption($index, worker)) {
-                  <div class="company-edit-row">
-                    <span>{{ optionLabel(worker) }}</span>
-                    <button type="button" class="secondary worker-delete" (click)="workerDeleted.emit(worker)" [disabled]="!!deleteKey">
-                      {{ deleteKey === 'worker-' + worker.id ? 'Удаляю...' : 'Удалить' }}
-                    </button>
-                  </div>
-                } @empty {
-                  <small>Специалисты не назначены</small>
-                }
-              </div>
-            </section>
-
-            <label class="lead-edit-field">
-              <span>Добавить специалиста</span>
-              <select
-                name="newWorkerId"
-                [ngModel]="draft.newWorkerId"
-                (ngModelChange)="setField('newWorkerId', $event)"
-              >
-                <option [ngValue]="null">Не добавлять</option>
-                @for (worker of company.workers; track trackOption($index, worker)) {
-                  <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
-                }
-              </select>
-            </label>
-
-            <label class="lead-edit-field">
-              <span>Активность</span>
-              <input
-                name="active"
-                type="checkbox"
-                [ngModel]="draft.active"
-                (ngModelChange)="setField('active', $event)"
-              >
-            </label>
-
-            <label class="lead-edit-field">
-              <span>Отчеты клиенту</span>
-              <input
-                name="publicationProgressReportsEnabled"
-                type="checkbox"
-                [ngModel]="draft.publicationProgressReportsEnabled"
-                (ngModelChange)="setField('publicationProgressReportsEnabled', $event)"
-              >
-            </label>
-
-            <section class="lead-edit-field lead-edit-field--wide company-edit-section">
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--filials">
               <span>Филиалы</span>
               <div class="company-edit-list">
                 @for (filial of company.filials; track filial.id) {
@@ -419,41 +184,371 @@
                   <small>Филиалы не добавлены</small>
                 }
               </div>
+
+              <div class="company-extra-grid company-filial-create">
+                <label class="lead-edit-field company-edit-new-filial company-edit-new-filial--city">
+                  <span>Город нового филиала</span>
+                  <select
+                    name="newFilialCityId"
+                    [ngModel]="draft.newFilialCityId"
+                    (ngModelChange)="setField('newFilialCityId', $event)"
+                  >
+                    <option [ngValue]="null">Не добавлять</option>
+                    @for (city of company.cities; track trackOption($index, city)) {
+                      <option [ngValue]="city.id">{{ optionLabel(city) }}</option>
+                    }
+                  </select>
+                </label>
+
+                <label class="lead-edit-field company-edit-new-filial company-edit-new-filial--address">
+                  <span>Адрес нового филиала</span>
+                  <input
+                    name="newFilialTitle"
+                    type="text"
+                    [ngModel]="draft.newFilialTitle"
+                    (ngModelChange)="setField('newFilialTitle', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field lead-edit-field--wide company-edit-new-filial company-edit-new-filial--url">
+                  <span>Ссылка 2ГИС нового филиала</span>
+                  <input
+                    name="newFilialUrl"
+                    type="text"
+                    [ngModel]="draft.newFilialUrl"
+                    (ngModelChange)="setField('newFilialUrl', $event)"
+                  >
+                </label>
+              </div>
             </section>
 
             <label class="lead-edit-field">
-              <span>Город нового филиала</span>
+              <span>Категория</span>
               <select
-                name="newFilialCityId"
-                [ngModel]="draft.newFilialCityId"
-                (ngModelChange)="setField('newFilialCityId', $event)"
+                name="categoryId"
+                [ngModel]="draft.categoryId"
+                (ngModelChange)="categoryChanged.emit($event)"
               >
-                <option [ngValue]="null">Не добавлять</option>
-                @for (city of company.cities; track trackOption($index, city)) {
-                  <option [ngValue]="city.id">{{ optionLabel(city) }}</option>
+                @for (category of company.categories; track trackOption($index, category)) {
+                  <option [ngValue]="category.id">{{ optionLabel(category) }}</option>
                 }
               </select>
             </label>
 
             <label class="lead-edit-field">
-              <span>Адрес нового филиала</span>
-              <input
-                name="newFilialTitle"
-                type="text"
-                [ngModel]="draft.newFilialTitle"
-                (ngModelChange)="setField('newFilialTitle', $event)"
+              <span>Подкатегория</span>
+              <select
+                name="subCategoryId"
+                [ngModel]="draft.subCategoryId"
+                (ngModelChange)="setField('subCategoryId', $event)"
               >
+                @for (subCategory of company.subCategories; track trackOption($index, subCategory)) {
+                  <option [ngValue]="subCategory.id">{{ optionLabel(subCategory) }}</option>
+                }
+              </select>
             </label>
 
-            <label class="lead-edit-field lead-edit-field--wide">
-              <span>Ссылка 2ГИС нового филиала</span>
-              <input
-                name="newFilialUrl"
-                type="text"
-                [ngModel]="draft.newFilialUrl"
-                (ngModelChange)="setField('newFilialUrl', $event)"
+            <label class="lead-edit-field">
+              <span>Статус</span>
+              <select
+                name="statusId"
+                required
+                [ngModel]="draft.statusId"
+                (ngModelChange)="setField('statusId', $event)"
               >
+                @for (status of company.statuses; track trackOption($index, status)) {
+                  <option [ngValue]="status.id">{{ optionLabel(status) }}</option>
+                }
+              </select>
             </label>
+
+            @if (company.canChangeManager) {
+              <label class="lead-edit-field">
+                <span>Менеджер</span>
+                <select
+                  name="managerId"
+                  [ngModel]="draft.managerId"
+                  (ngModelChange)="setField('managerId', $event)"
+                >
+                  @for (manager of company.managers; track trackOption($index, manager)) {
+                    <option [ngValue]="manager.id">{{ optionLabel(manager) }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            <label class="lead-edit-field lead-edit-field--wide">
+              <span>Комментарий</span>
+              <textarea
+                name="commentsCompany"
+                rows="3"
+                [ngModel]="draft.commentsCompany"
+                (ngModelChange)="setField('commentsCompany', $event)"
+              ></textarea>
+            </label>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--workers">
+              <span>Специалисты компании</span>
+              <div class="company-edit-list">
+                @for (worker of company.currentWorkers; track trackOption($index, worker)) {
+                  <div class="company-edit-row">
+                    <span>{{ optionLabel(worker) }}</span>
+                    <button type="button" class="secondary worker-delete" (click)="workerDeleted.emit(worker)" [disabled]="!!deleteKey">
+                      {{ deleteKey === 'worker-' + worker.id ? 'Удаляю...' : 'Удалить' }}
+                    </button>
+                  </div>
+                } @empty {
+                  <small>Специалисты не назначены</small>
+                }
+              </div>
+
+              <label class="lead-edit-field company-edit-new-worker">
+                <span>Добавить специалиста</span>
+                <select
+                  name="newWorkerId"
+                  [ngModel]="draft.newWorkerId"
+                  (ngModelChange)="setField('newWorkerId', $event)"
+                >
+                  <option [ngValue]="null">Не добавлять</option>
+                  @for (worker of company.workers; track trackOption($index, worker)) {
+                    <option [ngValue]="worker.id">{{ optionLabel(worker) }}</option>
+                  }
+                </select>
+              </label>
+            </section>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--settings">
+              <span>Настройки</span>
+              <div class="company-switch-grid">
+                <label class="company-switch-field">
+                  <span>
+                    <strong>Активность</strong>
+                    <small>Компания доступна в работе</small>
+                  </span>
+                  <input
+                    name="active"
+                    type="checkbox"
+                    [ngModel]="draft.active"
+                    (ngModelChange)="setField('active', $event)"
+                  >
+                </label>
+
+                <label class="company-switch-field">
+                  <span>
+                    <strong>Отчеты клиенту</strong>
+                    <small>Публиковать прогресс по заказам</small>
+                  </span>
+                  <input
+                    name="publicationProgressReportsEnabled"
+                    type="checkbox"
+                    [ngModel]="draft.publicationProgressReportsEnabled"
+                    (ngModelChange)="setField('publicationProgressReportsEnabled', $event)"
+                  >
+                </label>
+              </div>
+            </section>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--billing company-billing-section">
+              <div class="company-billing-title">
+                <span>Общие счета</span>
+                <strong [class.enabled]="!!currentCompanyBillingAccount()">{{ billingStatusText() }}</strong>
+              </div>
+
+              @if (billingError) {
+                <p class="company-billing-state error">{{ billingError }}</p>
+              }
+
+              @if (billingLoading) {
+                <p class="company-billing-state">Загружаю связи общих счетов...</p>
+              } @else if (billingDraft; as billingDraft) {
+                <div class="company-billing-grid">
+                  <aside class="company-billing-accounts" aria-label="Связи общих счетов">
+                    @for (account of visibleBillingAccounts(); track trackBillingAccount($index, account)) {
+                      <button
+                        type="button"
+                        class="company-billing-account"
+                        [class.active]="billingSelectedAccountId === account.id"
+                        (click)="billingAccountSelected.emit(account.id)"
+                        [disabled]="!!billingMutating"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">
+                          {{ billingAccountHasCurrentCompany(account) ? 'account_tree' : 'link' }}
+                        </span>
+                        <div>
+                          <strong>{{ account.name }}</strong>
+                          <small>
+                            {{ billingAccountCompanyCount(account) }} комп. ·
+                            {{ billingAccountHasCurrentCompany(account) ? 'участвует' : 'другая связь' }}
+                          </small>
+                        </div>
+                      </button>
+                    } @empty {
+                      <div class="company-billing-empty">
+                        <span class="material-icons-sharp" aria-hidden="true">add_card</span>
+                        <div>
+                          <strong>Связей пока нет</strong>
+                          <small>Включите общий счет справа</small>
+                        </div>
+                      </div>
+                    }
+                  </aside>
+
+                  <div class="company-billing-settings">
+                    <label class="lead-edit-field company-billing-name">
+                      <span>Название связи</span>
+                      <input
+                        name="commonBillingName"
+                        type="text"
+                        [ngModel]="billingDraft.name"
+                        [ngModelOptions]="{ standalone: true }"
+                        (ngModelChange)="setBillingField('name', $event)"
+                      >
+                    </label>
+
+                    <div class="company-billing-toggles">
+                      <label class="company-switch-field">
+                        <span>
+                          <strong>
+                            {{ billingSelectedAccountId === null ? 'Общий счет' : 'Общий счет включен' }}
+                          </strong>
+                          <small>
+                            {{
+                              billingSelectedAccountId === null
+                                ? 'Включение создаст связь для этой компании'
+                                : 'Заказы подключенных компаний собираются в один счет'
+                            }}
+                          </small>
+                        </span>
+                        <input
+                          type="checkbox"
+                          [ngModel]="billingDraft.enabled"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setBillingField('enabled', $event)"
+                          [disabled]="!!billingMutating"
+                        >
+                      </label>
+                      <label class="company-switch-field">
+                        <span>
+                          <strong>Новые заказы после полной оплаты</strong>
+                          <small>Работает только внутри общего счета</small>
+                        </span>
+                        <input
+                          type="checkbox"
+                          [ngModel]="billingDraft.autoRepeatOrders"
+                          [ngModelOptions]="{ standalone: true }"
+                          (ngModelChange)="setBillingField('autoRepeatOrders', $event)"
+                          [disabled]="!!billingMutating"
+                        >
+                      </label>
+                    </div>
+
+                    <p class="company-billing-explanation">
+                      <span class="material-icons-sharp" aria-hidden="true">info</span>
+                      <span>{{ billingExplanation() }}</span>
+                    </p>
+
+                    @if (selectedBillingAccount(); as billingAccount) {
+                      <div class="company-billing-actions">
+                        @if (billingAccountHasCurrentCompany(billingAccount)) {
+                          <button
+                            type="button"
+                            class="secondary danger"
+                            (click)="billingCompanyRemoved.emit(company.id)"
+                            [disabled]="!!billingMutating"
+                          >
+                            <span class="material-icons-sharp" aria-hidden="true">link_off</span>
+                            <span>
+                              <strong>Исключить компанию</strong>
+                              <small>Убрать из будущих общих счетов</small>
+                            </span>
+                          </button>
+                        } @else {
+                          <button
+                            type="button"
+                            (click)="billingCurrentCompanyConnected.emit(billingAccount.id)"
+                            [disabled]="!!billingMutating || !billingAccountCanChangeCompanies(billingAccount)"
+                          >
+                            <span class="material-icons-sharp" aria-hidden="true">add_link</span>
+                            <span>
+                              <strong>Подключить компанию</strong>
+                              <small>{{ billingCompanyActionHint(billingAccount, 'Новые заказы пойдут в эту связь') }}</small>
+                            </span>
+                          </button>
+                        }
+                      </div>
+                    }
+
+                    @if (selectedBillingAccount(); as billingAccount) {
+                      <div class="company-billing-linked">
+                        <div class="company-billing-subtitle">
+                          <strong>Компании в связи</strong>
+                          <small>Новые заказы этих компаний попадут в один общий счет</small>
+                        </div>
+
+                        @for (linkedCompany of billingAccount.companies; track trackBillingCompany($index, linkedCompany)) {
+                          <article [class.disabled]="!linkedCompany.enabled">
+                            <div>
+                              <strong>{{ linkedCompany.companyTitle || 'Компания ' + linkedCompany.companyId }}</strong>
+                              <small>
+                                ID {{ linkedCompany.companyId }} ·
+                                {{ linkedCompany.enabled ? 'участвует' : 'исключена из будущих счетов' }}
+                              </small>
+                            </div>
+                            @if (linkedCompany.enabled) {
+                              <button
+                                type="button"
+                                title="Исключить из будущих общих счетов"
+                                (click)="billingCompanyRemoved.emit(linkedCompany.companyId)"
+                                [disabled]="!!billingMutating"
+                              >
+                                <span class="material-icons-sharp" aria-hidden="true">remove</span>
+                              </button>
+                            }
+                          </article>
+                        }
+                      </div>
+
+                      <div class="company-billing-search">
+                        <label class="lead-edit-field">
+                          <span>Добавить другую компанию</span>
+                          <input
+                            type="text"
+                            [ngModel]="billingCompanySearch"
+                            [ngModelOptions]="{ standalone: true }"
+                            (ngModelChange)="billingCompanySearchChanged.emit($event)"
+                            placeholder="Название, город, телефон"
+                          >
+                        </label>
+
+                        @if (billingCompanySearchLoading) {
+                          <p class="company-billing-state">Ищу компании...</p>
+                        } @else if (billingCompanySearchError) {
+                          <p class="company-billing-state error">{{ billingCompanySearchError }}</p>
+                        } @else if (billingCompanySearchResults.length) {
+                          <div class="company-billing-results">
+                            @for (searchCompany of billingCompanySearchResults; track trackBillingCompanySearch($index, searchCompany)) {
+                              <button
+                                type="button"
+                                (click)="billingCompanyAdded.emit(searchCompany)"
+                                [disabled]="!!billingMutating || !billingAccountCanChangeCompanies(billingAccount) || billingCompanyAlreadyLinked(searchCompany.id)"
+                              >
+                                <span class="material-icons-sharp" aria-hidden="true">
+                                  {{ billingCompanyAlreadyLinked(searchCompany.id) ? 'check_circle' : 'add_business' }}
+                                </span>
+                                <div>
+                                  <strong>{{ searchCompany.title }}</strong>
+                                  <small>ID {{ searchCompany.id }} · {{ searchCompany.city || 'город не указан' }} · {{ searchCompany.status }}</small>
+                                </div>
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </section>
 
             <label class="lead-edit-field">
               <span>Дата создания</span>
@@ -469,11 +564,131 @@
               <span>Следующая рассылка</span>
               <input type="text" [value]="company.dateNewTry" readonly>
             </label>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--contacts">
+              <span>Контакты и ссылки</span>
+              <div class="company-extra-grid">
+                <label class="lead-edit-field">
+                  <span>Телефоны</span>
+                  <textarea
+                    name="phones"
+                    rows="2"
+                    [ngModel]="draft.phones"
+                    (ngModelChange)="setField('phones', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Мобильные</span>
+                  <textarea
+                    name="mobilePhones"
+                    rows="2"
+                    [ngModel]="draft.mobilePhones"
+                    (ngModelChange)="setField('mobilePhones', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>WhatsApp</span>
+                  <textarea
+                    name="whatsappPhones"
+                    rows="2"
+                    [ngModel]="draft.whatsappPhones"
+                    (ngModelChange)="setField('whatsappPhones', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Email</span>
+                  <textarea
+                    name="emails"
+                    rows="2"
+                    [ngModel]="draft.emails"
+                    (ngModelChange)="setField('emails', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Сайты</span>
+                  <textarea
+                    name="websites"
+                    rows="2"
+                    [ngModel]="draft.websites"
+                    (ngModelChange)="setField('websites', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>VK</span>
+                  <textarea
+                    name="vkUrl"
+                    rows="2"
+                    [ngModel]="draft.vkUrl"
+                    (ngModelChange)="setField('vkUrl', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field company-extra-grid__wide">
+                  <span>Telegram</span>
+                  <textarea
+                    name="telegramUrl"
+                    rows="2"
+                    [ngModel]="draft.telegramUrl"
+                    (ngModelChange)="setField('telegramUrl', $event)"
+                  ></textarea>
+                </label>
+              </div>
+            </section>
+
+            <section class="lead-edit-field lead-edit-field--wide company-edit-section company-edit-section--details">
+              <span>Сведения</span>
+              <div class="company-extra-grid">
+                <label class="lead-edit-field">
+                  <span>Регион</span>
+                  <input
+                    name="region"
+                    type="text"
+                    [ngModel]="draft.region"
+                    (ngModelChange)="setField('region', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Адрес</span>
+                  <input
+                    name="address"
+                    type="text"
+                    [ngModel]="draft.address"
+                    (ngModelChange)="setField('address', $event)"
+                  >
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Отрасли</span>
+                  <textarea
+                    name="industries"
+                    rows="2"
+                    [ngModel]="draft.industries"
+                    (ngModelChange)="setField('industries', $event)"
+                  ></textarea>
+                </label>
+
+                <label class="lead-edit-field">
+                  <span>Тип</span>
+                  <textarea
+                    name="companyType"
+                    rows="2"
+                    [ngModel]="draft.companyType"
+                    (ngModelChange)="setField('companyType', $event)"
+                  ></textarea>
+                </label>
+              </div>
+            </section>
           </div>
 
           <div class="lead-edit-actions">
-            <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || !!deleteKey">Отмена</button>
-            <button type="submit" [disabled]="saving || !!deleteKey || companyEditForm.invalid">
+            <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || !!deleteKey || !!billingMutating">Отмена</button>
+            <button type="submit" [disabled]="saving || !!deleteKey || !!billingMutating || companyEditForm.invalid">
               {{ saving ? 'Сохраняю...' : 'Сохранить' }}
             </button>
           </div>

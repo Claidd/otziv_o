@@ -10,6 +10,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.MarketologRepository;
 import com.hunt.otziv.u_users.repository.OperatorRepository;
+import com.hunt.otziv.uploads.service.FileUploadGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,15 @@ class LeadImportServiceTest {
                 managerRepository,
                 marketologRepository,
                 telephoneRepository,
-                telephonePoolRepository
+                telephonePoolRepository,
+                new FileUploadGuard(
+                        5 * 1024 * 1024,
+                        20_000_000,
+                        8000,
+                        8000,
+                        5 * 1024 * 1024,
+                        5000
+                )
         );
     }
 
