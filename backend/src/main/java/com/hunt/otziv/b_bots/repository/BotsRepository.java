@@ -3,6 +3,8 @@ package com.hunt.otziv.b_bots.repository;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -78,6 +80,59 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
         LEFT JOIN b.botCity bc
     """)
     List<AdminBotRow> findAllAdminRows();
+
+    @Query(
+            value = """
+                SELECT b.id AS id,
+                       b.login AS login,
+                       b.password AS password,
+                       b.fio AS fio,
+                       b.active AS active,
+                       b.counter AS counter,
+                       s.id AS statusId,
+                       s.botStatusTitle AS statusTitle,
+                       w.id AS workerId,
+                       u.fio AS workerFio,
+                       u.username AS workerUsername,
+                       bc.id AS cityId,
+                       bc.title AS cityTitle
+                FROM Bot b
+                LEFT JOIN b.status s
+                LEFT JOIN b.worker w
+                LEFT JOIN w.user u
+                LEFT JOIN b.botCity bc
+                WHERE :keyword IS NULL
+                   OR :keyword = ''
+                   OR LOWER(STR(b.id)) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(b.login, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(b.password, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(b.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(u.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(u.username, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(s.botStatusTitle, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(bc.title, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                ORDER BY LOWER(COALESCE(b.fio, '')), b.id
+            """,
+            countQuery = """
+                SELECT COUNT(b.id)
+                FROM Bot b
+                LEFT JOIN b.status s
+                LEFT JOIN b.worker w
+                LEFT JOIN w.user u
+                LEFT JOIN b.botCity bc
+                WHERE :keyword IS NULL
+                   OR :keyword = ''
+                   OR LOWER(STR(b.id)) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(b.login, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(b.password, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(b.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(u.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(u.username, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(s.botStatusTitle, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+                   OR LOWER(COALESCE(bc.title, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
+            """
+    )
+    Page<AdminBotRow> findAdminRows(@Param("keyword") String keyword, Pageable pageable);
 
     @Query("""
         SELECT b

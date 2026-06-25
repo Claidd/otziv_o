@@ -156,6 +156,8 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
   readonly selectedCompany = signal<SelectedCompany | null>(null);
+  readonly selectedManagerId = signal<number | null>(null);
+  readonly selectedControl = signal<string | null>(null);
   readonly companyCreateContext = signal<CompanyCreateContext | null>(null);
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
   readonly overdueModalOpen = signal(false);
@@ -307,6 +309,8 @@ export class ManagerBoardComponent implements OnDestroy {
       status: this.activeStatus(),
       keyword: this.keyword(),
       companyId: this.activeSection() === 'orders' ? this.selectedCompany()?.id : undefined,
+      managerId: this.activeSection() === 'orders' ? this.selectedManagerId() : null,
+      control: this.activeSection() === 'orders' ? this.selectedControl() : null,
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
       sortDirection: this.sortDirection()
@@ -702,7 +706,7 @@ export class ManagerBoardComponent implements OnDestroy {
 
   openOrderEdit(order: OrderCardItem): void {
     if (order.commonInvoice) {
-      void this.router.navigateByUrl(`/admin/common-billing?invoiceId=${order.commonInvoiceId ?? Math.abs(order.id)}`);
+      void this.router.navigateByUrl(`/manager/common-billing?invoiceId=${order.commonInvoiceId ?? Math.abs(order.id)}`);
       return;
     }
 
@@ -917,7 +921,9 @@ export class ManagerBoardComponent implements OnDestroy {
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
       sortDirection: this.sortDirection(),
-      selectedCompany: this.selectedCompany()
+      selectedCompany: this.selectedCompany(),
+      managerId: this.selectedManagerId(),
+      control: this.selectedControl()
     };
   }
 
@@ -930,6 +936,8 @@ export class ManagerBoardComponent implements OnDestroy {
     this.pageSize.set(view.pageSize);
     this.sortDirection.set(view.sortDirection);
     this.selectedCompany.set(view.selectedCompany);
+    this.selectedManagerId.set(view.managerId);
+    this.selectedControl.set(view.control);
     this.mobileMenuOpen.set(false);
   }
 
@@ -1017,6 +1025,8 @@ export class ManagerBoardComponent implements OnDestroy {
       status: this.activeStatus(),
       keyword: this.keyword(),
       companyId: this.activeSection() === 'orders' ? this.selectedCompany()?.id : undefined,
+      managerId: this.activeSection() === 'orders' ? this.selectedManagerId() : null,
+      control: this.activeSection() === 'orders' ? this.selectedControl() : null,
       pageNumber: this.pageNumber(),
       pageSize: this.pageSize(),
       sortDirection: this.sortDirection()

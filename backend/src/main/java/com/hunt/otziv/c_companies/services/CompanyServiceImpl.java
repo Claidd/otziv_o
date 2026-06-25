@@ -19,6 +19,7 @@ import com.hunt.otziv.c_companies.model.CompanyInfo;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
@@ -94,6 +95,7 @@ public class CompanyServiceImpl implements CompanyService{
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final MaxGroupLinkService maxGroupLinkService;
     private final NextOrderRequestRepository nextOrderRequestRepository;
+    private final PublicationProgressPreferenceService publicationProgressPreferenceService;
 
     @Value("${otziv.board.live-slice.retention-days:90}")
     private int liveSliceRetentionDays;
@@ -1410,7 +1412,9 @@ public class CompanyServiceImpl implements CompanyService{
         }
         if (!Objects.equals(companyDTO.isPublicationProgressReportsEnabled(), saveCompany.isPublicationProgressReportsEnabled())){
             log.info("Обновляем настройку коротких отчетов о публикациях");
-            saveCompany.setPublicationProgressReportsEnabled(companyDTO.isPublicationProgressReportsEnabled());
+            boolean enabled = companyDTO.isPublicationProgressReportsEnabled();
+            saveCompany.setPublicationProgressReportsEnabled(enabled);
+            publicationProgressPreferenceService.setCompanyPreference(companyId, enabled);
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany())){ /*Проверка комментарий*/

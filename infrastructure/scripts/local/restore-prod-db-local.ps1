@@ -1,7 +1,7 @@
 param(
     [string]$VpsHost = "",
-    [string]$VpsUser = "root",
-    [int]$VpsPort = 22,
+    [string]$VpsUser = "hunt",
+    [int]$VpsPort = 22022,
     [string]$SshKey = "",
     [string]$EnvFile = ".env.prod-local",
     [string]$ComposeFile = "compose.prod-local.yaml",
@@ -24,7 +24,7 @@ The script restores into a dedicated local Docker volume by default and validate
 Flyway checksums before the local backend is started.
 
 Example:
-  .\infrastructure\scripts\local\restore-prod-db-local.ps1 -VpsHost 95.213.248.152 -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519
+  .\infrastructure\scripts\local\restore-prod-db-local.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519
 
 Useful options:
   -DumpPath .\data\mysql_backup\prod.sql.gz   Restore an already downloaded dump.

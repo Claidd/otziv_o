@@ -30,7 +30,7 @@ public class ReviewBotChangeService {
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
-    private static final Set<Long> NEW_ACCOUNT_EXCLUDED_CITY_IDS = Set.of(320L, 326L);
+    private static final Set<Long> OWN_CITY_NEW_ACCOUNT_CITY_IDS = Set.of(320L, 326L);
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",
@@ -125,18 +125,13 @@ public class ReviewBotChangeService {
             throw new RuntimeException("Город филиала не найден");
         }
 
-        if (NEW_ACCOUNT_EXCLUDED_CITY_IDS.contains(cityId)) {
-            throw new RuntimeException("Новый аккаунт недоступен для филиалов с городом 320 или 326");
-        }
-
         Set<Long> excludedBotIds = getUsedBotIdsInCompany(filial, review.getId());
         excludedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
         if (review.getBot() != null && review.getBot().getId() != null) {
             excludedBotIds.add(review.getBot().getId());
         }
 
-        Bot selectedBot = botService.claimNewAccountForCity(city, excludedBotIds)
-                .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Впиши Имя Фамилию\" в городе 325"));
+        Bot selectedBot = claimNewAccount(city, cityId, excludedBotIds);
 
         review.setBot(selectedBot);
         accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
@@ -144,6 +139,17 @@ public class ReviewBotChangeService {
 
         log.info("Новый аккаунт ID {} назначен отзыву ID {} для города филиала {}",
                 selectedBot.getId(), reviewId, cityId);
+    }
+
+    private Bot claimNewAccount(City city, Long cityId, Set<Long> excludedBotIds) {
+        if (OWN_CITY_NEW_ACCOUNT_CITY_IDS.contains(cityId)) {
+            return botService.claimNewAccountFromOwnCity(city, excludedBotIds)
+                    .orElseThrow(() -> new RuntimeException(
+                            "Нет доступных чистых аккаунтов \"Впиши Имя Фамилию\" в городе " + cityId));
+        }
+
+        return botService.claimNewAccountForCity(city, excludedBotIds)
+                .orElseThrow(() -> new RuntimeException("Нет доступных аккаунтов \"Впиши Имя Фамилию\" в городе 325"));
     }
 
     public List<Bot> findAllBotsMinusFilial(Review review) {

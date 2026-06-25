@@ -24,6 +24,7 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
+import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftTarget;
@@ -37,11 +38,14 @@ import com.hunt.otziv.s3.service.S3UploadService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.WorkerActivityService;
+import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,6 +59,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -81,6 +86,7 @@ public class ApiManagerReviewController {
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
     private final ManagerAccessService managerAccessService;
+    private final WorkerActivityService workerActivityService;
     private final Map<Long, Boolean> reviewHelpDraftLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/orders/{orderId}/details")
@@ -225,6 +231,16 @@ public class ApiManagerReviewController {
         if (!reviewService.updateReviewText(orderId, reviewId, request.text())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_TEXT_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review_text",
+                null
+        );
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
@@ -245,6 +261,16 @@ public class ApiManagerReviewController {
         if (!reviewService.updateReviewAnswer(orderId, reviewId, request.answer())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_ANSWER_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review_answer",
+                null
+        );
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
@@ -265,6 +291,16 @@ public class ApiManagerReviewController {
         if (!reviewService.updateReviewNote(orderId, reviewId, request.comment())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_NOTE_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review_note",
+                null
+        );
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
@@ -284,6 +320,16 @@ public class ApiManagerReviewController {
         Order order = orderService.getOrder(orderId);
         order.setZametka(request.orderComments());
         orderService.save(order);
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.ORDER_NOTE_UPDATE,
+                "order",
+                orderId,
+                orderId,
+                null,
+                "order_note",
+                null
+        );
 
         return new OrderNotesResponse(
                 normalize(order.getZametka()),
@@ -311,6 +357,16 @@ public class ApiManagerReviewController {
 
         company.setCommentsCompany(request.companyComments());
         companyService.save(company);
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.COMPANY_NOTE_UPDATE,
+                "company",
+                company.getId(),
+                orderId,
+                null,
+                "company_note",
+                null
+        );
 
         return new OrderNotesResponse(normalize(order.getZametka()), normalize(company.getCommentsCompany()));
     }
@@ -325,6 +381,16 @@ public class ApiManagerReviewController {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         reviewService.changeBot(reviewId);
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_BOT_CHANGE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review",
+                null
+        );
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
@@ -340,6 +406,16 @@ public class ApiManagerReviewController {
 
         try {
             reviewService.assignNewAccount(reviewId);
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.REVIEW_BOT_CHANGE,
+                    "review",
+                    reviewId,
+                    orderId,
+                    reviewId,
+                    "review",
+                    "newAccount=true"
+            );
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Новый аккаунт не назначен: " + exception.getMessage(), exception);
         }
@@ -358,6 +434,16 @@ public class ApiManagerReviewController {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId);
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review",
+                "botId=" + valueOrDash(botId)
+        );
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
@@ -370,9 +456,20 @@ public class ApiManagerReviewController {
     ) throws Exception {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
+        Review review = reviewService.getReviewById(reviewId);
         if (!orderService.changeStatusAndOrderCounter(reviewId)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным");
         }
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_PUBLISH,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "publish",
+                "botId=" + valueOrDash(review == null || review.getBot() == null ? null : review.getBot().getId()) + ";"
+        );
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
@@ -414,7 +511,18 @@ public class ApiManagerReviewController {
         }
         try {
             requireBadReviewTaskForOrder(orderId, taskId);
-            badReviewTaskService.updateTask(taskId, request.taskText(), request.scheduledDate());
+            LocalDate scheduledDate = allowedBadTaskScheduledDate(taskId, request.scheduledDate(), authentication);
+            badReviewTaskService.updateTask(taskId, request.taskText(), scheduledDate);
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.BAD_TASK_UPDATE,
+                    "bad_review_task",
+                    taskId,
+                    orderId,
+                    null,
+                    "bad",
+                    "scheduledDateChanged=" + !Objects.equals(scheduledDate, request.scheduledDate())
+            );
             return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
         } catch (ResponseStatusException exception) {
             throw exception;
@@ -434,6 +542,16 @@ public class ApiManagerReviewController {
         try {
             requireBadReviewTaskForOrder(orderId, taskId);
             badReviewTaskService.changeTaskBot(taskId);
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.BAD_TASK_BOT_CHANGE,
+                    "bad_review_task",
+                    taskId,
+                    orderId,
+                    null,
+                    "bad",
+                    null
+            );
             return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
         } catch (ResponseStatusException exception) {
             throw exception;
@@ -456,7 +574,17 @@ public class ApiManagerReviewController {
             if (!belongsToOrder) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Плохая задача не найдена в этом заказе");
             }
-            badReviewTaskService.completeTask(taskId);
+            var task = badReviewTaskService.completeTask(taskId);
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.BAD_TASK_COMPLETE,
+                    "bad_review_task",
+                    task.getId(),
+                    orderId,
+                    null,
+                    "bad",
+                    null
+            );
             return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
         } catch (ResponseStatusException exception) {
             throw exception;
@@ -734,7 +862,18 @@ public class ApiManagerReviewController {
         }
         requireRecoveryTaskForOrder(orderId, taskId);
 
-        reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.recoveryAnswer(), request.scheduledDate());
+        LocalDate scheduledDate = allowedRecoveryTaskScheduledDate(taskId, request.scheduledDate(), authentication);
+        reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.recoveryAnswer(), scheduledDate);
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.RECOVERY_TASK_UPDATE,
+                "recovery_task",
+                taskId,
+                orderId,
+                null,
+                "recovery",
+                "scheduledDateChanged=" + !Objects.equals(scheduledDate, request.scheduledDate())
+        );
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 
@@ -747,7 +886,17 @@ public class ApiManagerReviewController {
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireRecoveryTaskForOrder(orderId, taskId);
-        reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
+        var task = reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.RECOVERY_TASK_COMPLETE,
+                "recovery_task",
+                task.getId(),
+                orderId,
+                null,
+                "recovery",
+                null
+        );
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }
 
@@ -966,6 +1115,10 @@ public class ApiManagerReviewController {
         return value == null ? "" : value.trim();
     }
 
+    private String valueOrDash(Object value) {
+        return value == null ? "-" : String.valueOf(value);
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -1012,5 +1165,48 @@ public class ApiManagerReviewController {
         }
 
         return userService.findByUserName(authentication.getName()).orElse(null);
+    }
+
+    private LocalDate allowedBadTaskScheduledDate(Long taskId, LocalDate requestedDate, Authentication authentication) {
+        if (canEditTaskSchedule(authentication)) {
+            return requestedDate;
+        }
+
+        LocalDate currentDate = badReviewTaskService.getTask(taskId).getScheduledDate();
+        requireWorkerScheduleUnchanged(requestedDate, currentDate);
+        return currentDate;
+    }
+
+    private LocalDate allowedRecoveryTaskScheduledDate(Long taskId, LocalDate requestedDate, Authentication authentication) {
+        if (canEditTaskSchedule(authentication)) {
+            return requestedDate;
+        }
+
+        LocalDate currentDate = reviewRecoveryTaskService.getTask(taskId).getScheduledDate();
+        requireWorkerScheduleUnchanged(requestedDate, currentDate);
+        return requestedDate;
+    }
+
+    private void requireWorkerScheduleUnchanged(LocalDate requestedDate, LocalDate currentDate) {
+        if (requestedDate != null && !Objects.equals(requestedDate, currentDate)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Плановую дату задачи может менять только менеджер, владелец или администратор");
+        }
+    }
+
+    private boolean canEditTaskSchedule(Authentication authentication) {
+        return hasRole(authentication, "ADMIN")
+                || hasRole(authentication, "OWNER")
+                || hasRole(authentication, "MANAGER");
+    }
+
+    private boolean hasRole(Authentication authentication, String role) {
+        if (authentication == null) {
+            return false;
+        }
+
+        String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority::equals);
     }
 }

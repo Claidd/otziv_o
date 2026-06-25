@@ -212,7 +212,7 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             }
             return List.of();
         } catch (ResourceAccessException e) {
-            log.debug("WhatsApp-клиент {} недоступен при запросе групп: {}", clientId, e.getMessage());
+            log.warn("WhatsApp-клиент {} недоступен при запросе групп: {}", clientId, e.getMessage());
             return List.of();
         } catch (Exception e) {
             log.warn("Не удалось получить WhatsApp-группы клиента {}: {}", clientId, e.getMessage());
@@ -719,4 +719,3 @@ public class WhatsAppServiceImpl implements WhatsAppService {
 //            return Optional.empty();
 //        }
 //    }
-

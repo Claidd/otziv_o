@@ -2,9 +2,11 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
+import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCallbackService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
@@ -16,6 +18,7 @@ import javax.net.ssl.SSLException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.NoHttpResponseException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -48,6 +51,8 @@ public class TelegramService extends TelegramLongPollingBot {
     private final UserService userService;
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
+    private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
+    private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
 
     public TelegramService(
             DefaultBotOptions botOptions,
@@ -58,7 +63,37 @@ public class TelegramService extends TelegramLongPollingBot {
             ObjectProvider<PersonalService> personalServiceProvider,
             UserService userService,
             TelegramGroupLinkService telegramGroupLinkService,
-            PublicationProgressPreferenceService publicationProgressPreferenceService
+            PublicationProgressPreferenceService publicationProgressPreferenceService,
+            ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider
+    ) {
+        this(
+                botOptions,
+                botToken,
+                botUsername,
+                sendingEnabled,
+                adminChatIds,
+                personalServiceProvider,
+                userService,
+                telegramGroupLinkService,
+                publicationProgressPreferenceService,
+                workerRiskTelegramCallbackServiceProvider,
+                null
+        );
+    }
+
+    @Autowired
+    public TelegramService(
+            DefaultBotOptions botOptions,
+            @Value("${telegram.bot.token:}") String botToken,
+            @Value("${telegram.bot.username:}") String botUsername,
+            @Value("${telegram.bot.sending-enabled:true}") boolean sendingEnabled,
+            @Value("${telegram.admin.chat-ids:}") String adminChatIds,
+            ObjectProvider<PersonalService> personalServiceProvider,
+            UserService userService,
+            TelegramGroupLinkService telegramGroupLinkService,
+            PublicationProgressPreferenceService publicationProgressPreferenceService,
+            ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider,
+            ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider
     ) {
         super(botOptions, botToken);
         this.botUsername = botUsername;
@@ -68,6 +103,8 @@ public class TelegramService extends TelegramLongPollingBot {
         this.userService = userService;
         this.telegramGroupLinkService = telegramGroupLinkService;
         this.publicationProgressPreferenceService = publicationProgressPreferenceService;
+        this.workerRiskTelegramCallbackServiceProvider = workerRiskTelegramCallbackServiceProvider;
+        this.managerControlWorkerTaskTelegramCallbackServiceProvider = managerControlWorkerTaskTelegramCallbackServiceProvider;
     }
 
     @Override
@@ -120,6 +157,13 @@ public class TelegramService extends TelegramLongPollingBot {
             return;
         }
 
+        WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
+                workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
+        if (workerRiskTelegramCallbackService != null
+                && workerRiskTelegramCallbackService.handleWorkerTextMessage(chatId, user, messageText)) {
+            return;
+        }
+
         Long userId = user.getId();
         String role = user.getRoles().stream()
                 .map(Role::getName)
@@ -161,6 +205,35 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     private void handleCallbackQuery(CallbackQuery callbackQuery) {
+        log.info("Telegram callback received data='{}' from={} chat={}",
+                callbackQuery == null ? null : callbackQuery.getData(),
+                callbackQuery == null || callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId(),
+                callbackQuery == null || callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId());
+
+        WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
+                workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
+        if (workerRiskTelegramCallbackService != null) {
+            Optional<String> workerRiskAnswer = workerRiskTelegramCallbackService.handle(callbackQuery);
+            if (workerRiskAnswer.isPresent()) {
+                log.info("Worker risk Telegram callback handled answer='{}'", workerRiskAnswer.get());
+                answerCallback(callbackQuery.getId(), workerRiskAnswer.get());
+                return;
+            }
+        }
+
+        ManagerControlWorkerTaskTelegramCallbackService managerControlWorkerTaskTelegramCallbackService =
+                managerControlWorkerTaskTelegramCallbackServiceProvider == null
+                        ? null
+                        : managerControlWorkerTaskTelegramCallbackServiceProvider.getIfAvailable();
+        if (managerControlWorkerTaskTelegramCallbackService != null) {
+            Optional<String> managerControlAnswer = managerControlWorkerTaskTelegramCallbackService.handle(callbackQuery);
+            if (managerControlAnswer.isPresent()) {
+                log.info("Manager control worker task Telegram callback handled answer='{}'", managerControlAnswer.get());
+                answerCallback(callbackQuery.getId(), managerControlAnswer.get());
+                return;
+            }
+        }
+
         if (callbackQuery == null || publicationProgressPreferenceService == null) {
             return;
         }
@@ -275,6 +348,33 @@ public class TelegramService extends TelegramLongPollingBot {
         }
 
         return sendSingleMessage(chatId, text, null, inlineKeyboard(buttonText, callbackData));
+    }
+
+    public boolean sendMessageWithInlineKeyboard(
+            long chatId,
+            String text,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return false;
+        }
+        if (!hasText(text)) {
+            log.warn("Telegram-сообщение для {} не отправлено: текст пустой", chatId);
+            return false;
+        }
+
+        InlineKeyboardMarkup markup = null;
+        if (keyboard != null && !keyboard.isEmpty()) {
+            markup = new InlineKeyboardMarkup();
+            markup.setKeyboard(keyboard);
+        }
+        return sendSingleMessage(chatId, text, parseMode, markup);
     }
 
     public boolean sendMessage(long chatId, String text, String parseMode) {

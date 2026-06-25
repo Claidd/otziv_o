@@ -537,6 +537,14 @@ public class ScheduledClientMessageService {
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
             return;
         }
+        if (!reviewCheck && completePaymentMessageForCommonBillingLinkedOrder(
+                state,
+                order,
+                nowStorage,
+                "Заказ входит в общий счет; одиночное платежное напоминание не отправляется"
+        )) {
+            return;
+        }
 
         String status = statusTitle(order);
         if (!expectedStatuses.contains(status)) {
@@ -634,6 +642,14 @@ public class ScheduledClientMessageService {
             return;
         }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
+            return;
+        }
+        if (completePaymentMessageForCommonBillingLinkedOrder(
+                state,
+                order,
+                nowStorage,
+                "Заказ входит в общий счет; одиночный финальный счет не отправляется"
+        )) {
             return;
         }
 
@@ -830,6 +846,19 @@ public class ScheduledClientMessageService {
         }
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
         return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(order.getId());
+    }
+
+    private boolean completePaymentMessageForCommonBillingLinkedOrder(
+            ScheduledClientMessageState state,
+            Order order,
+            LocalDateTime nowStorage,
+            String message
+    ) {
+        if (!refreshCommonInvoiceForLinkedOrder(order)) {
+            return false;
+        }
+        markDone(state, nowStorage, "common_billing_linked", message);
+        return true;
     }
 
     private void autoBanAfterBadReviews(ScheduledClientMessageState state, LocalDateTime nowStorage) {
@@ -1321,6 +1350,9 @@ public class ScheduledClientMessageService {
         }
         state.setStatus(ScheduledMessageStateStatus.DONE);
         state.setLastAttemptAt(nowStorage);
+        state.setLastErrorCode(null);
+        state.setLastErrorMessage(null);
+        state.setConsecutiveFailures(0);
         state.setNextAttemptAt(null);
         state.setLockedUntil(null);
         stateRepository.save(state);

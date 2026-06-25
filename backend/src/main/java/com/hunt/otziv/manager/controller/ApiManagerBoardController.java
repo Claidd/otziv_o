@@ -32,6 +32,8 @@ public class ApiManagerBoardController {
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "desc") String sortDirection,
             @RequestParam(required = false) Long companyId,
+            @RequestParam(required = false) Long managerId,
+            @RequestParam(defaultValue = "") String control,
             Principal principal,
             Authentication authentication
     ) {
@@ -43,6 +45,8 @@ public class ApiManagerBoardController {
                 pageSize,
                 sortDirection,
                 companyId,
+                managerId,
+                control,
                 principal,
                 authentication
         ));

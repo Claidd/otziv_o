@@ -57,6 +57,7 @@ class OrderDtoMapperTest {
         assertEquals("В работе", dto.getStatus());
         assertEquals(new BigDecimal("300.00"), dto.getSum());
         assertEquals("https://chat.example", dto.getCompanyUrlChat());
+        assertEquals("group-1", dto.getGroupId());
         assertEquals("79000000000", dto.getCompanyTelephone());
         assertEquals("pay text", dto.getManagerPayText());
         assertEquals(2, dto.getAmount());
@@ -100,7 +101,8 @@ class OrderDtoMapperTest {
                 now.minusDays(4),
                 now.plusDays(1),
                 null,
-                true
+                true,
+                "group-row"
         };
 
         OrderDTOList dto = mapper.toBoardDTO(row);
@@ -114,6 +116,7 @@ class OrderDtoMapperTest {
         assertEquals("Иркутск", dto.getFilialCity());
         assertEquals("В работе", dto.getStatus());
         assertEquals(new BigDecimal("300.00"), dto.getSum());
+        assertEquals("group-row", dto.getGroupId());
         assertEquals(2, dto.getAmount());
         assertEquals(7, dto.getCounter());
         assertTrue(dto.isWaitingForClient());

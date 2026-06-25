@@ -985,22 +985,23 @@ import {
     .worker-section-backdrop {
       position: fixed;
       inset: 0;
-      z-index: 30;
+      z-index: 700;
       border: 0;
-      background: rgba(20, 24, 32, 0.48);
+      background: rgba(20, 24, 32, 0.42);
     }
 
     .worker-section-sheet {
       position: fixed;
       left: 50%;
       top: 50%;
-      z-index: 31;
+      z-index: 701;
       display: grid;
-      width: min(92vw, 23rem);
-      max-height: min(78vh, 38rem);
+      grid-template-rows: auto minmax(0, 1fr);
+      width: min(23rem, calc(100vw - 1.5rem));
+      max-height: min(38rem, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem));
       transform: translate(-50%, -50%);
       gap: 0.62rem;
-      overflow: auto;
+      overflow: hidden;
       border: 1px solid rgba(103, 116, 131, 0.16);
       border-radius: 1rem;
       padding: 0.72rem;
@@ -1032,7 +1033,16 @@ import {
     .worker-section-options,
     .worker-filter-options {
       display: grid;
+      min-height: 0;
       gap: 0.5rem;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+    }
+
+    .worker-section-options::-webkit-scrollbar,
+    .worker-filter-options::-webkit-scrollbar {
+      display: none;
     }
 
     .worker-section-options .metric-tile {
@@ -1189,8 +1199,8 @@ import {
     }
 
     .overdue-sheet {
-      width: min(92vw, 21.25rem);
-      max-height: min(76dvh, 34rem);
+      width: min(23rem, calc(100vw - 1.5rem));
+      max-height: min(34rem, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem));
       grid-template-rows: auto auto minmax(0, 1fr) auto;
       overflow: hidden;
     }

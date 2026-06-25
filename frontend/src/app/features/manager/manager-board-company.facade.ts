@@ -51,7 +51,7 @@ type ManagerBoardCompanyApi = Pick<
 
 type ManagerBoardCommonBillingApi = Pick<
   CommonBillingApi,
-  'accounts' | 'createAccount' | 'updateAccount' | 'addCompany' | 'removeCompany'
+  'accountsForCompany' | 'createAccount' | 'updateAccount' | 'addCompany' | 'removeCompany'
 >;
 
 type ManagerBoardCompanyToast = Pick<ToastService, 'success' | 'error'>;
@@ -337,14 +337,10 @@ export class ManagerBoardCompanyFacade {
       return;
     }
 
-    const reusableAccount = this.reusableBillingAccountForCompany(company, draft);
+    const reusableAccount = this.reusableBillingAccountForCompany(company);
     if (reusableAccount) {
       this.billingSelectedAccountId.set(reusableAccount.id);
       this.applyBillingDraft();
-      if (!this.billingAccountHasCompany(reusableAccount, company.id)) {
-        this.connectCurrentCompanyToBillingAccount(reusableAccount.id);
-        return;
-      }
       this.deps.toastService.success('Использую существующую связь общего счета', reusableAccount.name);
       return;
     }
@@ -528,7 +524,9 @@ export class ManagerBoardCompanyFacade {
 
   selectedBillingAccount(): CommonBillingAccountResponse | null {
     const id = this.billingSelectedAccountId();
-    return this.billingAccounts().find((account) => account.id === id) ?? null;
+    const companyId = this.editCompany()?.id;
+    const account = this.billingAccounts().find((item) => item.id === id) ?? null;
+    return account && companyId && this.billingAccountHasCompany(account, companyId) ? account : null;
   }
 
   currentCompanyBillingAccount(): CommonBillingAccountResponse | null {
@@ -565,7 +563,7 @@ export class ManagerBoardCompanyFacade {
 
     this.billingLoading.set(true);
     this.billingError.set(null);
-    api.accounts().subscribe({
+    api.accountsForCompany(companyId).subscribe({
       next: (accounts) => {
         this.billingAccounts.set(accounts ?? []);
         const currentAccount = this.billingAccounts().find((account) => this.billingAccountHasCompany(account, companyId));
@@ -633,24 +631,13 @@ export class ManagerBoardCompanyFacade {
     return (account.companies ?? []).some((company) => company.companyId === companyId && company.enabled);
   }
 
-  private reusableBillingAccountForCompany(
-    company: CompanyEditPayload,
-    draft: ManagerCompanyBillingDraft
-  ): CommonBillingAccountResponse | null {
-    const draftName = this.normalizedBillingName(draft.name);
+  private reusableBillingAccountForCompany(company: CompanyEditPayload): CommonBillingAccountResponse | null {
     return this.billingAccounts().find((account) => {
       if (!account.enabled) {
         return false;
       }
-      if (this.billingAccountHasCompany(account, company.id)) {
-        return true;
-      }
-      return !!draftName && this.normalizedBillingName(account.name) === draftName;
+      return this.billingAccountHasCompany(account, company.id);
     }) ?? null;
-  }
-
-  private normalizedBillingName(value: string | null | undefined): string {
-    return (value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru-RU');
   }
 
   private billingSearchQuery(query: string): ManagerBoardQuery {

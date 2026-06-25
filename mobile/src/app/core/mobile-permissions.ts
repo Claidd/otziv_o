@@ -35,7 +35,9 @@ export const MOBILE_SECTIONS = {
   leads: 'leads',
   companies: 'companies',
   orders: 'orders',
+  commonBilling: 'commonBilling',
   archive: 'archive',
+  workerRisk: 'workerRisk',
   worker: 'worker',
   operator: 'operator',
   tbank: 'tbank',
@@ -88,10 +90,21 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     delete: MOBILE_ROLES.ownerAdmin,
     manage: MOBILE_ROLES.manager
   },
+  commonBilling: {
+    view: MOBILE_ROLES.manager,
+    create: MOBILE_ROLES.manager,
+    edit: MOBILE_ROLES.manager,
+    delete: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.manager
+  },
   archive: {
     view: MOBILE_ROLES.manager,
     restore: MOBILE_ROLES.manager,
     manage: MOBILE_ROLES.ownerAdmin
+  },
+  workerRisk: {
+    view: MOBILE_ROLES.manager,
+    manage: MOBILE_ROLES.manager
   },
   worker: {
     view: MOBILE_ROLES.worker,

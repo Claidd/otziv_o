@@ -55,12 +55,12 @@ public class ManualPaymentAutoConfirmationService {
         boolean hasBankPaymentInProgress = paymentLinkRepository
                 .findByOrder_IdAndStatusIn(order.getId(), BLOCKING_BANK_STATUSES)
                 .stream()
-                .anyMatch(link -> BANK_PAYMENT_METHODS.contains(link.getPaymentMethod()));
+                .anyMatch(this::hasStartedBankPayment);
 
         if (hasBankPaymentInProgress) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "У заказа есть T-Bank/СБП платеж в процессе. Проверьте его в журнале перед ручным закрытием."
+                    "У заказа есть авторизованный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием."
             );
         }
     }
@@ -107,6 +107,13 @@ public class ManualPaymentAutoConfirmationService {
             paymentLinkRepository.saveAll(links);
         }
         return retired;
+    }
+
+    private boolean hasStartedBankPayment(PaymentLink link) {
+        return link != null
+                && BANK_PAYMENT_METHODS.contains(link.getPaymentMethod())
+                && link.getTbankPaymentId() != null
+                && !link.getTbankPaymentId().isBlank();
     }
 
     private void confirm(PaymentLink link) {

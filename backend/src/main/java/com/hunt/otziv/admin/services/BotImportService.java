@@ -83,10 +83,16 @@ public class BotImportService {
 
     @Transactional
     public BotImportResult importBots(MultipartFile file) {
+        return importBots(file, null);
+    }
+
+    @Transactional
+    public BotImportResult importBots(MultipartFile file, Long cityId) {
         if (file == null || file.isEmpty()) {
             throw badRequest("Файл не выбран");
         }
 
+        Long cityOverrideId = validCityOverrideId(cityId);
         List<List<String>> rows = readRows(file);
         if (rows.isEmpty()) {
             throw badRequest("Файл не содержит аккаунтов");
@@ -111,7 +117,7 @@ public class BotImportService {
 
             totalRows++;
             try {
-                ImportedBotRow importedRow = toImportedRow(row, hasHeader, headers, index + 1);
+                ImportedBotRow importedRow = toImportedRow(row, hasHeader, headers, index + 1, cityOverrideId);
                 if (!seenLogins.add(importedRow.login())) {
                     skippedDuplicates++;
                     continue;
@@ -287,7 +293,8 @@ public class BotImportService {
             List<String> row,
             boolean hasHeader,
             Map<String, Integer> headers,
-            int rowNumber
+            int rowNumber,
+            Long cityOverrideId
     ) {
         String login = requiredValue(cell(row, hasHeader, headers, "bot_login", 0), "bot_login", rowNumber);
         String password = requiredValue(cell(row, hasHeader, headers, "bot_password", 1), "bot_password", rowNumber);
@@ -296,13 +303,25 @@ public class BotImportService {
         boolean active = parseBooleanOrDefault(cell(row, hasHeader, headers, "bot_active", 4), DEFAULT_ACTIVE, "bot_active", rowNumber);
         long statusId = parseLongOrDefault(cell(row, hasHeader, headers, "bot_status", 5), DEFAULT_STATUS_ID, "bot_status", rowNumber);
         long workerId = parseLongOrDefault(cell(row, hasHeader, headers, "bot_worker", 6), DEFAULT_WORKER_ID, "bot_worker", rowNumber);
-        long cityId = parseLongOrDefault(cell(row, hasHeader, headers, "bot_city_id", 7), DEFAULT_CITY_ID, "bot_city_id", rowNumber);
+        long cityId = cityOverrideId != null
+                ? cityOverrideId
+                : parseLongOrDefault(cell(row, hasHeader, headers, "bot_city_id", 7), DEFAULT_CITY_ID, "bot_city_id", rowNumber);
 
         if (counter < 0) {
             throw rowError(rowNumber, "bot_counter не может быть меньше нуля");
         }
 
         return new ImportedBotRow(rowNumber, login, password, fio, counter, active, statusId, workerId, cityId);
+    }
+
+    private Long validCityOverrideId(Long cityId) {
+        if (cityId == null) {
+            return null;
+        }
+        if (cityId <= 0 || cityRepository.findById(cityId) == null) {
+            throw badRequest("Город не найден");
+        }
+        return cityId;
     }
 
     private Set<String> findExistingLogins(List<ImportedBotRow> rows) {

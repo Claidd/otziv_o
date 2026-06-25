@@ -434,7 +434,7 @@
 
 .company-billing-grid {
   display: grid;
-  grid-template-columns: minmax(7.2rem, 0.26fr) minmax(0, 1fr);
+  grid-template-columns: minmax(12rem, 0.36fr) minmax(0, 1fr);
   gap: 0.7rem;
   min-width: 0;
 }
@@ -449,6 +449,45 @@
   min-width: 0;
 }
 
+.company-billing-accounts {
+  align-content: start;
+  max-height: 17rem;
+  overflow: auto;
+  padding-right: 0.12rem;
+}
+
+.company-billing-list-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid rgba(103, 116, 131, 0.14);
+  border-radius: var(--otziv-small-radius, 0.55rem);
+  padding: 0.42rem 0.52rem;
+  background: rgba(108, 155, 207, 0.08);
+}
+
+.company-billing-list-head strong,
+.company-billing-list-head small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company-billing-list-head strong {
+  color: var(--otziv-dark, #1f2430);
+  font-size: 0.7rem;
+  font-weight: 950;
+}
+
+.company-billing-list-head small {
+  color: #637086;
+  font-size: 0.62rem;
+  font-weight: 880;
+}
+
 .company-billing-account,
 .company-billing-empty,
 .company-billing-results button {
@@ -458,6 +497,8 @@
   justify-content: start;
   gap: 0.42rem;
   min-height: 2.45rem;
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
   border: 1px solid #e8ecf1;
   border-left: 0.24rem solid transparent;
@@ -469,6 +510,12 @@
   box-shadow: 0 0.45rem 1.2rem rgba(34, 40, 52, 0.04);
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.company-billing-account > div,
+.company-billing-empty > div,
+.company-billing-results button > div {
+  min-width: 0;
 }
 
 .company-billing-account:hover:not(:disabled),

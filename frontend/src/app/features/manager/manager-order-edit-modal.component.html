@@ -148,7 +148,7 @@
 
           <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete || order.canCancelPayment">
             @if (order.canDelete || order.canCancelPayment) {
-              <div class="lead-edit-actions-group">
+              <div class="lead-edit-actions-group lead-edit-actions-group--danger">
                 @if (order.canCancelPayment) {
                   <button type="button" class="danger" (click)="paymentCanceled.emit()" [disabled]="saving || deleting || cancelingPayment">
                     {{ cancelingPayment ? 'Отменяю оплату...' : 'Отменить оплату' }}
@@ -156,7 +156,7 @@
                 }
 
                 @if (order.canDelete) {
-                  <button type="button" class="danger" (click)="deleted.emit()" [disabled]="saving || deleting || cancelingPayment">
+                  <button type="button" class="danger order-delete-action" (click)="deleted.emit()" [disabled]="saving || deleting || cancelingPayment">
                     {{ deleting ? 'Удаляю...' : 'Удалить' }}
                   </button>
                 }

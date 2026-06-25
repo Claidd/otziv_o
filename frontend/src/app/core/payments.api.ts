@@ -270,6 +270,16 @@ export interface CreateManualPaymentTaskRequest {
   comment?: string | null;
 }
 
+export interface UpdateManualPaymentTaskRequest {
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  targetAmountKopecks: number;
+  comment?: string | null;
+}
+
 export interface UpdateManualPaymentTaskStatusRequest {
   status: ManualPaymentTaskStatus;
 }
@@ -557,6 +567,16 @@ export class PaymentsApi {
     return this.http.put<ManualPaymentTaskResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks/${taskId}/status`,
       { status }
+    );
+  }
+
+  updateAdminManualPaymentTask(
+    taskId: number,
+    request: UpdateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks/${taskId}`,
+      request
     );
   }
 }

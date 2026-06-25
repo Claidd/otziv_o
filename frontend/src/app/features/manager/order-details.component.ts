@@ -292,8 +292,10 @@ export class OrderDetailsComponent {
       next: (details) => {
         this.details.set(details);
         this.restoreOrderDetailsSessionDraft(details);
-        this.activeReviewSlide.set(0);
-        this.syncReviewJumpValue(0);
+        if (!this.applyReviewDeepLink()) {
+          this.activeReviewSlide.set(0);
+          this.syncReviewJumpValue(0);
+        }
         this.loading.set(false);
         this.loadCompanyReportState(false);
       },
@@ -911,6 +913,21 @@ export class OrderDetailsComponent {
     if (scroll) {
       this.scrollReviewIntoView(reviews[nextIndex]?.id, Math.abs(nextIndex - previousIndex) <= 2);
     }
+  }
+
+  private applyReviewDeepLink(): boolean {
+    const reviewId = Number(this.route.snapshot.queryParamMap.get('reviewId'));
+    if (!Number.isFinite(reviewId) || reviewId <= 0) {
+      return false;
+    }
+
+    const index = this.reviews().findIndex((review) => review.id === reviewId);
+    if (index < 0) {
+      return false;
+    }
+
+    this.setActiveReviewIndex(index, true);
+    return true;
   }
 
   private scrollReviewIntoView(reviewId?: number, smooth = true): void {

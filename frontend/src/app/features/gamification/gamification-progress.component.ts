@@ -436,7 +436,8 @@ export class GamificationProgressComponent {
       REVIEW_PUBLISHED: 'Отзывы опубликованы',
       ORDER_PAID: 'Заказы оплачены',
       BAD_REVIEW_TASK_DONE: 'Плохие отзывы',
-      REVIEW_RECOVERY_TASK_DONE: 'Восстановления'
+      REVIEW_RECOVERY_TASK_DONE: 'Восстановления',
+      WORKER_RISK_PENALTY: 'Штрафы'
     }[eventType] ?? (eventType || 'Событие');
   }
 

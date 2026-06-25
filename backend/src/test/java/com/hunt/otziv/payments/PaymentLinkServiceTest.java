@@ -57,6 +57,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +67,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -120,6 +123,16 @@ class PaymentLinkServiceTest {
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Test
+    void createForOrderDoesNotMarkOuterClientMessageTransactionRollbackOnlyOnBusinessConflict() throws Exception {
+        Transactional transactional = PaymentLinkService.class
+                .getMethod("createForOrder", Long.class)
+                .getAnnotation(Transactional.class);
+
+        assertNotNull(transactional);
+        assertTrue(List.of(transactional.noRollbackFor()).contains(ResponseStatusException.class));
+    }
 
     @Test
     void createForOrderBuildsHiddenTokenizedLinkWithPayableAmount() {
@@ -225,11 +238,48 @@ class PaymentLinkServiceTest {
         assertEquals("Оплата заказа №12", link.getManualComment());
         assertEquals(PaymentReceiptStatus.PENDING, link.getReceiptStatus());
         assertEquals("MANUAL_MOBILE_BANK", response.paymentMethod());
-        assertTrue(response.instructionText().contains("Ссылка на оплату: +79990000000"));
+        assertTrue(response.instructionText().contains("Оплата по мобильному банку: +79990000000"));
         assertTrue(response.instructionText().contains("Получатель: Иван И."));
         assertTrue(response.instructionText().contains("Комментарий: Оплата заказа №12"));
         assertFalse(response.copyText().contains("https://example.ru/pay/"));
         assertTrue(response.copyText().contains("После оплаты отправьте чек в этот чат."));
+    }
+
+    @Test
+    void createForOrderLabelsLongManualNumberAsCardPayment() {
+        TbankPaymentProperties properties = properties();
+        PaymentLinkService service = service(properties);
+        PaymentProfile profile = profile(33L, "manual-card", "Ручной профиль", "manual-terminal");
+        profile.setPaymentPolicy(PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK);
+        profile.setManualPhone("2202201901120051");
+        profile.setManualRecipientName("Мария Олеговна Р.");
+        profile.setManualMonthlyHardLimitKopecks(100000L);
+        when(paymentProfileService.selectForManager(any())).thenReturn(profile);
+        when(paymentLinkRepository.sumManualReservedAndConfirmedForPeriod(
+                eq(33L),
+                anyCollection(),
+                anyCollection(),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                any(PaymentLinkStatus.class),
+                any()
+        )).thenReturn(0L);
+        Order order = order(33L, "ООО Карта", BigDecimal.valueOf(500));
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(33L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForMutation(33L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(33L)).thenReturn(null);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ManagerPaymentLinkResponse response = service.createForOrder(33L);
+
+        assertTrue(response.instructionText().contains("Оплата по номеру карты: 2202201901120051"));
+        assertTrue(response.instructionText().contains("Получатель: Мария Олеговна Р."));
     }
 
     @Test
@@ -457,6 +507,37 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void createForOrderBlocksInitiatedBankLinkWithPaymentIdWhenPayableAmountChanged() {
+        PaymentLinkService service = service(properties());
+        Order order = order(35L, "ООО Банк в процессе", BigDecimal.valueOf(1000));
+        PaymentLink existing = new PaymentLink();
+        existing.setId(35L);
+        existing.setOrder(order);
+        existing.setToken("old-bank-token");
+        existing.setAmountKopecks(100000L);
+        existing.setReservedAmountKopecks(100000L);
+        existing.setDescription("Оплата услуг");
+        existing.setStatus(PaymentLinkStatus.INITIATED);
+        existing.setPaymentMethod(PaymentMethod.BANK_FORM);
+        existing.setTbankPaymentId("8634010699");
+        existing.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(35L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.of(existing));
+        when(orderRepository.findByIdForMutation(35L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(35L))
+                .thenReturn(new BadReviewTaskSummary(1, 0, 1, 0, BigDecimal.valueOf(250), BigDecimal.ZERO));
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class, () -> service.createForOrder(35L));
+
+        assertEquals(PaymentLinkStatus.INITIATED, existing.getStatus());
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+    }
+
+    @Test
     void createForOrderBlocksAuthorizedLinkWhenPayableAmountChanged() {
         PaymentLinkService service = service(properties());
         Order order = order(19L, "ООО Авторизация", BigDecimal.valueOf(1000));
@@ -653,6 +734,33 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByTokenWithOrder("token")).thenReturn(Optional.of(link));
 
         assertEquals("client@example.ru", service.publicLink("token").payerEmail());
+    }
+
+    @Test
+    void createForOrderRemovesReceiptRequestFromTbankCopyText() {
+        TbankPaymentProperties properties = properties();
+        PaymentLinkService service = service(properties);
+        PaymentProfile profile = profile(6L, TbankPaymentProfile.PRIMARY_CODE, "Основной магазин", "primary-terminal");
+        when(paymentProfileService.selectForManager(any())).thenReturn(profile);
+        when(appSettingService.getString(
+                eq(AppSettingService.CLIENT_MESSAGES_PAYMENT_LINK_COPY_TEXT),
+                anyString()
+        )).thenReturn("{companyAndFilial}\n\n{paymentInstruction}\n\nПришлите чек, пожалуйста, как оплатите.");
+        Order order = order(34L, "ООО T-Bank", BigDecimal.valueOf(500));
+
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                eq(34L),
+                anyCollection(),
+                any(LocalDateTime.class)
+        )).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForMutation(34L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(34L)).thenReturn(null);
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ManagerPaymentLinkResponse response = service.createForOrder(34L);
+
+        assertTrue(response.copyText().contains("Ссылка на оплату: https://example.ru/pay/"));
+        assertFalse(response.copyText().toLowerCase(Locale.ROOT).contains("пришлите чек"));
     }
 
     @Test

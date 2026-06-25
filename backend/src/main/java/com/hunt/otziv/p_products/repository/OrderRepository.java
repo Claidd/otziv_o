@@ -1,6 +1,9 @@
 package com.hunt.otziv.p_products.repository;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.payments.model.PaymentProfile;
@@ -30,6 +33,9 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     boolean existsByIdAndManager_IdIn(Long id, Collection<Long> managerIds);
 
     boolean existsByIdAndWorker_Id(Long id, Long workerId);
+
+    @Query("SELECT c.id FROM Order o LEFT JOIN o.company c WHERE o.id = :orderId")
+    Optional<Long> findCompanyIdByOrderId(@Param("orderId") Long orderId);
 
     @Query("""
         SELECT DISTINCT o
@@ -197,10 +203,11 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                     SELECT MIN(companyOrder.id)
                     FROM Order companyOrder
                     WHERE companyOrder.company.id = c.id
-                 )
+                )
                 THEN true
                 ELSE false
-            END
+            END,
+            c.groupId
         FROM Order o
         LEFT JOIN o.details d
         LEFT JOIN o.status s
@@ -864,14 +871,17 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT CASE WHEN COUNT(o.id) > 0 THEN true ELSE false END
         FROM Order o
         LEFT JOIN o.status s
+        LEFT JOIN o.worker w
         WHERE o.company.id = :companyId
           AND ((:filialId IS NULL AND o.filial IS NULL) OR (:filialId IS NOT NULL AND o.filial.id = :filialId))
           AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND (:workerId IS NULL OR w.id = :workerId)
           AND o.complete = false
           AND COALESCE(s.title, '') NOT IN :inactiveStatuses
     """)
     boolean existsActiveOrderByCompanyIdAndFilialId(@Param("companyId") Long companyId,
                                                     @Param("filialId") Long filialId,
+                                                    @Param("workerId") Long workerId,
                                                     @Param("excludedOrderId") Long excludedOrderId,
                                                     @Param("inactiveStatuses") Set<String> inactiveStatuses);
 
@@ -879,16 +889,19 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT CASE WHEN COUNT(DISTINCT o.id) > 0 THEN true ELSE false END
         FROM Order o
         LEFT JOIN o.status s
+        LEFT JOIN o.worker w
         LEFT JOIN o.details d
         LEFT JOIN d.reviews r
         WHERE o.company.id = :companyId
           AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND (:workerId IS NULL OR w.id = :workerId)
           AND o.complete = false
           AND COALESCE(s.title, '') NOT IN :inactiveStatuses
           AND (o.filial.id IN :filialIds OR r.filial.id IN :filialIds)
     """)
     boolean existsActiveOrderByCompanyIdAndAnyFilialId(@Param("companyId") Long companyId,
                                                        @Param("filialIds") Collection<Long> filialIds,
+                                                       @Param("workerId") Long workerId,
                                                        @Param("excludedOrderId") Long excludedOrderId,
                                                        @Param("inactiveStatuses") Set<String> inactiveStatuses);
 
@@ -897,17 +910,20 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN FETCH o.status s
         LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.worker w
         LEFT JOIN FETCH o.filial f
         LEFT JOIN FETCH f.city
         WHERE o.company.id = :companyId
           AND ((:filialId IS NULL AND o.filial IS NULL) OR (:filialId IS NOT NULL AND o.filial.id = :filialId))
           AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND (:workerId IS NULL OR w.id = :workerId)
           AND o.complete = false
           AND COALESCE(s.title, '') NOT IN :inactiveStatuses
         ORDER BY o.id DESC
     """)
     List<Order> findActiveOrdersByCompanyIdAndFilialId(@Param("companyId") Long companyId,
                                                        @Param("filialId") Long filialId,
+                                                       @Param("workerId") Long workerId,
                                                        @Param("excludedOrderId") Long excludedOrderId,
                                                        @Param("inactiveStatuses") Set<String> inactiveStatuses,
                                                        Pageable pageable);
@@ -917,12 +933,14 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         FROM Order o
         LEFT JOIN FETCH o.status s
         LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.worker w
         LEFT JOIN FETCH o.filial f
         LEFT JOIN FETCH f.city
         LEFT JOIN o.details d
         LEFT JOIN d.reviews r
         WHERE o.company.id = :companyId
           AND (:excludedOrderId IS NULL OR o.id <> :excludedOrderId)
+          AND (:workerId IS NULL OR w.id = :workerId)
           AND o.complete = false
           AND COALESCE(s.title, '') NOT IN :inactiveStatuses
           AND (o.filial.id IN :filialIds OR r.filial.id IN :filialIds)
@@ -930,6 +948,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     """)
     List<Order> findActiveOrdersByCompanyIdAndAnyFilialId(@Param("companyId") Long companyId,
                                                           @Param("filialIds") Collection<Long> filialIds,
+                                                          @Param("workerId") Long workerId,
                                                           @Param("excludedOrderId") Long excludedOrderId,
                                                           @Param("inactiveStatuses") Set<String> inactiveStatuses,
                                                           Pageable pageable);
@@ -1047,6 +1066,583 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Object[]> summarizeOverdueOrdersByManager(@Param("manager") Manager manager,
                                                    @Param("cutoff") LocalDate cutoff,
                                                    @Param("excludedStatuses") Set<String> excludedStatuses);
+
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND o.manager = :manager
+          AND COALESCE(s.title, '') NOT IN :excludedStatuses
+          AND NOT EXISTS (
+              SELECT item.id
+              FROM CommonInvoiceOrder item
+              JOIN item.invoice invoice
+              WHERE item.order = o
+                AND invoice.status IN :commonInvoiceStatuses
+          )
+          AND (
+              COALESCE(s.title, '') NOT IN :paymentAutomationStatuses
+              OR (
+                  o.company.urlChat IS NOT NULL
+                  AND TRIM(o.company.urlChat) <> ''
+                  AND (
+                      (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                      AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                      AND o.company.telegramGroupChatId IS NULL
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                      AND o.company.maxGroupChatId IS NULL
+                  )
+              )
+              OR NOT EXISTS (
+                  SELECT state.id
+                  FROM ScheduledClientMessageState state
+                  WHERE state.orderId = o.id
+                    AND state.scenario IN :paymentScenarios
+                    AND state.consecutiveFailures = 0
+                    AND (
+                        state.lastErrorCode IS NULL
+                        OR TRIM(state.lastErrorCode) = ''
+                        OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                    )
+                    AND (
+                        state.sentCount > 0
+                        OR state.lastSuccessAt IS NOT NULL
+                      OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                  )
+              )
+          )
+          AND (
+              COALESCE(s.title, '') NOT IN :reviewCheckAutomationStatuses
+              OR (
+                  o.company.urlChat IS NOT NULL
+                  AND TRIM(o.company.urlChat) <> ''
+                  AND (
+                      (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                      AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                      AND o.company.telegramGroupChatId IS NULL
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                      AND o.company.maxGroupChatId IS NULL
+                  )
+              )
+              OR NOT EXISTS (
+                  SELECT state.id
+                  FROM ScheduledClientMessageState state
+                  WHERE state.orderId = o.id
+                    AND state.scenario IN :reviewCheckScenarios
+                    AND state.consecutiveFailures = 0
+                    AND (
+                        state.lastErrorCode IS NULL
+                        OR TRIM(state.lastErrorCode) = ''
+                        OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                    )
+                    AND (
+                        state.sentCount > 0
+                        OR state.lastSuccessAt IS NOT NULL
+                      OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                  )
+              )
+          )
+          AND (
+              COALESCE(s.title, '') NOT IN :deliveryRetryAutomationStatuses
+              OR (
+                  o.company.urlChat IS NOT NULL
+                  AND TRIM(o.company.urlChat) <> ''
+                  AND (
+                      (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                      AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                      AND o.company.telegramGroupChatId IS NULL
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                      AND o.company.maxGroupChatId IS NULL
+                  )
+              )
+              OR NOT EXISTS (
+                  SELECT state.id
+                  FROM ScheduledClientMessageState state
+                  WHERE state.orderId = o.id
+                    AND state.scenario IN :deliveryRetryScenarios
+                    AND state.consecutiveFailures = 0
+                    AND (
+                        state.lastErrorCode IS NULL
+                        OR TRIM(state.lastErrorCode) = ''
+                        OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                    )
+                    AND (
+                        state.sentCount > 0
+                        OR state.lastSuccessAt IS NOT NULL
+                        OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                    )
+              )
+          )
+          AND (
+              o.waitingForClient = false
+              OR COALESCE(s.title, '') NOT IN :clientTextAutomationStatuses
+              OR (
+                  o.company.urlChat IS NOT NULL
+                  AND TRIM(o.company.urlChat) <> ''
+                  AND (
+                      (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                      AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                      AND o.company.telegramGroupChatId IS NULL
+                      OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                      AND o.company.maxGroupChatId IS NULL
+                  )
+              )
+              OR NOT EXISTS (
+                  SELECT state.id
+                  FROM ScheduledClientMessageState state
+                  WHERE state.orderId = o.id
+                    AND state.scenario IN :clientTextScenarios
+                    AND state.consecutiveFailures = 0
+                    AND (
+                        state.lastErrorCode IS NULL
+                        OR TRIM(state.lastErrorCode) = ''
+                        OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                    )
+                    AND (
+                        state.sentCount > 0
+                        OR state.lastSuccessAt IS NOT NULL
+                        OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                    )
+              )
+          )
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> summarizeManagerControlOverdueOrdersByManager(
+            @Param("manager") Manager manager,
+            @Param("cutoff") LocalDate cutoff,
+            @Param("excludedStatuses") Set<String> excludedStatuses,
+            @Param("commonInvoiceStatuses") Set<CommonInvoiceStatus> commonInvoiceStatuses,
+            @Param("paymentAutomationStatuses") Set<String> paymentAutomationStatuses,
+            @Param("paymentScenarios") Set<ClientMessageScenario> paymentScenarios,
+            @Param("reviewCheckAutomationStatuses") Set<String> reviewCheckAutomationStatuses,
+            @Param("reviewCheckScenarios") Set<ClientMessageScenario> reviewCheckScenarios,
+            @Param("deliveryRetryAutomationStatuses") Set<String> deliveryRetryAutomationStatuses,
+            @Param("deliveryRetryScenarios") Set<ClientMessageScenario> deliveryRetryScenarios,
+            @Param("clientTextAutomationStatuses") Set<String> clientTextAutomationStatuses,
+            @Param("clientTextScenarios") Set<ClientMessageScenario> clientTextScenarios,
+            @Param("activeStatus") ScheduledMessageStateStatus activeStatus,
+            @Param("doneStatus") ScheduledMessageStateStatus doneStatus
+    );
+
+    @Query(
+            value = """
+                SELECT o.id
+                FROM Order o
+                LEFT JOIN o.status s
+                WHERE o.complete = false
+                  AND o.changed IS NOT NULL
+                  AND o.changed <= :cutoff
+                  AND o.manager = :manager
+                  AND COALESCE(s.title, '') NOT IN :excludedStatuses
+                  AND (:status = 'Все' OR COALESCE(s.title, '') = :status)
+                  AND NOT EXISTS (
+                      SELECT item.id
+                      FROM CommonInvoiceOrder item
+                      JOIN item.invoice invoice
+                      WHERE item.order = o
+                        AND invoice.status IN :commonInvoiceStatuses
+                  )
+                  AND (
+                      :keyword = ''
+                      OR LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                      OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                      OR STR(o.id) = :keyword
+                  )
+                  AND (
+                      COALESCE(s.title, '') NOT IN :paymentAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :paymentScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                          )
+                      )
+                  )
+                  AND (
+                      COALESCE(s.title, '') NOT IN :reviewCheckAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :reviewCheckScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                          )
+                      )
+                  )
+                  AND (
+                      COALESCE(s.title, '') NOT IN :deliveryRetryAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :deliveryRetryScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                            )
+                      )
+                  )
+                  AND (
+                      o.waitingForClient = false
+                      OR COALESCE(s.title, '') NOT IN :clientTextAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :clientTextScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                            )
+                      )
+                  )
+            """,
+            countQuery = """
+                SELECT COUNT(o.id)
+                FROM Order o
+                LEFT JOIN o.status s
+                WHERE o.complete = false
+                  AND o.changed IS NOT NULL
+                  AND o.changed <= :cutoff
+                  AND o.manager = :manager
+                  AND COALESCE(s.title, '') NOT IN :excludedStatuses
+                  AND (:status = 'Все' OR COALESCE(s.title, '') = :status)
+                  AND NOT EXISTS (
+                      SELECT item.id
+                      FROM CommonInvoiceOrder item
+                      JOIN item.invoice invoice
+                      WHERE item.order = o
+                        AND invoice.status IN :commonInvoiceStatuses
+                  )
+                  AND (
+                      :keyword = ''
+                      OR LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                      OR LOWER(o.company.telephone) LIKE LOWER(CONCAT('%', :keyword2, '%'))
+                      OR STR(o.id) = :keyword
+                  )
+                  AND (
+                      COALESCE(s.title, '') NOT IN :paymentAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :paymentScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                          )
+                      )
+                  )
+                  AND (
+                      COALESCE(s.title, '') NOT IN :reviewCheckAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :reviewCheckScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                              OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                          )
+                      )
+                  )
+                  AND (
+                      COALESCE(s.title, '') NOT IN :deliveryRetryAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :deliveryRetryScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                            )
+                      )
+                  )
+                  AND (
+                      o.waitingForClient = false
+                      OR COALESCE(s.title, '') NOT IN :clientTextAutomationStatuses
+                      OR (
+                          o.company.urlChat IS NOT NULL
+                          AND TRIM(o.company.urlChat) <> ''
+                          AND (
+                              (LOWER(TRIM(o.company.urlChat)) LIKE 'chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://chat.whatsapp.com/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://chat.whatsapp.com/%')
+                              AND (o.company.groupId IS NULL OR TRIM(o.company.groupId) = '')
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 't.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://t.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.me/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://telegram.dog/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'tg://resolve?%')
+                              AND o.company.telegramGroupChatId IS NULL
+                              OR (LOWER(TRIM(o.company.urlChat)) LIKE 'max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'https://web.max.ru/%' OR LOWER(TRIM(o.company.urlChat)) LIKE 'http://web.max.ru/%')
+                              AND o.company.maxGroupChatId IS NULL
+                          )
+                      )
+                      OR NOT EXISTS (
+                          SELECT state.id
+                          FROM ScheduledClientMessageState state
+                          WHERE state.orderId = o.id
+                            AND state.scenario IN :clientTextScenarios
+                            AND state.consecutiveFailures = 0
+                            AND (
+                                state.lastErrorCode IS NULL
+                                OR TRIM(state.lastErrorCode) = ''
+                                OR LOWER(state.lastErrorCode) LIKE '%dry_run%'
+                                OR LOWER(state.lastErrorCode) LIKE '%order_status_changed%'
+                                OR LOWER(state.lastErrorCode) LIKE '%status_change%'
+                        OR LOWER(state.lastErrorCode) LIKE '%order_closed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_received%'
+                        OR LOWER(state.lastErrorCode) LIKE '%client_text_cycle_changed%'
+                        OR LOWER(state.lastErrorCode) LIKE '%common_billing_linked%'
+                            )
+                            AND (
+                                state.sentCount > 0
+                                OR state.lastSuccessAt IS NOT NULL
+                                OR (state.status = :activeStatus AND state.nextAttemptAt IS NOT NULL)
+                        OR state.status = :doneStatus
+                            )
+                      )
+                  )
+            """
+    )
+    Page<Long> findPageIdForManagerControlOverdueByManager(
+            @Param("manager") Manager manager,
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            @Param("keyword2") String keyword2,
+            @Param("cutoff") LocalDate cutoff,
+            @Param("excludedStatuses") Set<String> excludedStatuses,
+            @Param("commonInvoiceStatuses") Set<CommonInvoiceStatus> commonInvoiceStatuses,
+            @Param("paymentAutomationStatuses") Set<String> paymentAutomationStatuses,
+            @Param("paymentScenarios") Set<ClientMessageScenario> paymentScenarios,
+            @Param("reviewCheckAutomationStatuses") Set<String> reviewCheckAutomationStatuses,
+            @Param("reviewCheckScenarios") Set<ClientMessageScenario> reviewCheckScenarios,
+            @Param("deliveryRetryAutomationStatuses") Set<String> deliveryRetryAutomationStatuses,
+            @Param("deliveryRetryScenarios") Set<ClientMessageScenario> deliveryRetryScenarios,
+            @Param("clientTextAutomationStatuses") Set<String> clientTextAutomationStatuses,
+            @Param("clientTextScenarios") Set<ClientMessageScenario> clientTextScenarios,
+            @Param("activeStatus") ScheduledMessageStateStatus activeStatus,
+            @Param("doneStatus") ScheduledMessageStateStatus doneStatus,
+            Pageable pageable
+    );
 
     @Query("""
         SELECT COALESCE(s.title, ''), COUNT(o.id), MIN(o.changed)

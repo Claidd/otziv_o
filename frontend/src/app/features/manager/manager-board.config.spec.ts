@@ -187,6 +187,8 @@ describe('manager-board config helpers', () => {
     expect(managerCompanyOrderUrl(company({ id: 9 })))
       .toBe('/orders?status=%D0%92%D1%81%D0%B5');
     expect(managerOrderDetailsUrl(order({ companyId: 9, id: 4 }))).toBe('/orders/9/4');
+    expect(managerOrderDetailsUrl(order({ commonInvoice: true, commonInvoiceId: 12, id: -12 })))
+      .toBe('/manager/common-billing?invoiceId=12');
     expect(managerOrderInfoUrl(order({ companyId: 9, id: 4 }))).toBe('/orders/9/4');
   });
 

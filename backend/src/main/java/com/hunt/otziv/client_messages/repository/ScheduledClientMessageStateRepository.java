@@ -19,6 +19,8 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     Optional<ScheduledClientMessageState> findByScenarioAndTargetKey(ClientMessageScenario scenario, String targetKey);
 
+    List<ScheduledClientMessageState> findByOrderIdIn(Collection<Long> orderIds);
+
     long countByStatus(ScheduledMessageStateStatus status);
 
     @Query("""

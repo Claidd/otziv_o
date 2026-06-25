@@ -524,7 +524,11 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     Optional<Company> findByTelegramGroupChatId(Long telegramGroupChatId);
 
+    List<Company> findAllByTelegramGroupChatIdOrderById(Long telegramGroupChatId);
+
     Optional<Company> findByMaxGroupChatId(Long maxGroupChatId);
+
+    List<Company> findAllByMaxGroupChatIdOrderById(Long maxGroupChatId);
 
     Optional<Company> findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(Long maxLinkUserId);
 

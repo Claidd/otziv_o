@@ -73,11 +73,19 @@
 
 .order-card header {
   grid-template-columns: minmax(0, 1fr);
-  justify-items: center;
-  text-align: center;
+  justify-items: stretch;
+  box-sizing: border-box;
+  min-height: 1.45rem;
+  padding: 0 2.35rem 0 0;
+  text-align: left;
 }
 
-.order-card header a {
+.order-card--has-communication header {
+  padding-left: 1.85rem;
+}
+
+.order-card header a,
+.order-card header .order-title-button {
   font-size: 1.08rem;
 }
 
@@ -134,7 +142,8 @@
   white-space: nowrap;
 }
 
-.manager-card header a {
+.manager-card header a,
+.manager-card header .order-title-button {
   display: block;
   width: 100%;
   color: var(--otziv-dark);
@@ -145,7 +154,64 @@
   text-decoration: none;
 }
 
+.manager-card header .order-title-button {
+  appearance: none;
+  border: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  display: block;
+  justify-content: flex-start;
+  text-align: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manager-card header .order-title-button:focus-visible {
+  outline: 2px solid rgba(108, 155, 207, 0.72);
+  outline-offset: 2px;
+  border-radius: 0.35rem;
+}
+
+.order-title-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.order-title-popover {
+  position: absolute;
+  top: calc(100% + 0.42rem);
+  left: 0;
+  z-index: 22;
+  display: grid;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  gap: 0.34rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.5rem;
+  padding: 0.68rem 0.75rem;
+  color: var(--otziv-dark);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 0.7rem 1.45rem rgba(54, 57, 73, 0.18);
+  font-family: var(--otziv-font-family);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+}
+
+.order-title-popover span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .manager-card header a.chat-bot-link-pending,
+.manager-card header .order-title-button.chat-bot-link-pending,
 .phone-row a.chat-bot-link-pending {
   color: var(--otziv-danger);
 }
@@ -275,6 +341,95 @@
   right: 0.48rem;
   z-index: 2;
   align-items: center;
+}
+
+.communication-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.order-card > .order-communication {
+  position: absolute;
+  top: 0.48rem;
+  left: 0.48rem;
+  z-index: 4;
+}
+
+.order-card .communication-indicator {
+  appearance: none;
+  display: grid;
+  width: 1.35rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  min-height: 1.35rem;
+  place-items: center;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: 50%;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0.35rem 0.8rem rgba(132, 139, 200, 0.16);
+  cursor: pointer;
+}
+
+.order-card .communication-indicator span {
+  display: block;
+  width: 0.68rem;
+  min-width: 0.68rem;
+  height: 0.68rem;
+  min-height: 0.68rem;
+  border-radius: 50%;
+  background: #6b7280;
+}
+
+.order-card .communication-indicator--success span {
+  background: #2f6f65;
+}
+
+.order-card .communication-indicator--wait span {
+  background: #d69f2b;
+}
+
+.order-card .communication-indicator--danger span {
+  background: var(--otziv-danger);
+}
+
+.order-card .communication-indicator:focus-visible {
+  outline: 2px solid rgba(108, 155, 207, 0.72);
+  outline-offset: 2px;
+}
+
+.communication-popover {
+  position: absolute;
+  top: calc(100% + 0.42rem);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  width: min(16.5rem, calc(100vw - 2rem));
+  gap: 0.32rem;
+  border: 1px solid rgba(103, 116, 131, 0.22);
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.72rem;
+  color: var(--otziv-dark);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 0.7rem 1.45rem rgba(54, 57, 73, 0.18);
+  font-family: var(--otziv-font-family);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.22;
+  text-align: left;
+  white-space: normal;
+}
+
+.communication-popover strong,
+.communication-popover span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.communication-popover strong {
+  font-size: 0.8rem;
+  font-weight: 900;
 }
 
 .phone-row a,

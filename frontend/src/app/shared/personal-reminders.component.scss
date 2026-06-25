@@ -76,18 +76,17 @@
 .reminder-alert__item,
 .personal-reminder {
   min-width: 0;
-  gap: 0.62rem;
-  border: 0;
+  gap: 0.55rem;
+  border: 1px solid rgba(103, 116, 131, 0.14);
   border-radius: 0.72rem;
-  padding: 0.68rem 0;
+  padding: 0.62rem;
   color: var(--otziv-dark);
-  background: transparent;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .reminder-alert__item + .reminder-alert__item,
 .personal-reminder + .personal-reminder {
   border-top: 1px solid rgba(103, 116, 131, 0.14);
-  border-radius: 0;
 }
 
 .reminder-alert__body,
@@ -181,7 +180,7 @@ button.reminder-icon-button.reminder-icon-button {
   height: 1.85rem;
   min-height: 1.85rem;
   place-items: center;
-  border: 0;
+  border: 1px solid rgba(108, 155, 207, 0.2);
   border-radius: 50%;
   padding: 0;
   color: var(--otziv-primary);
@@ -207,6 +206,7 @@ button.reminder-icon-button.add span {
 }
 
 button.reminder-icon-button.done {
+  border-color: rgba(27, 156, 133, 0.18);
   color: var(--otziv-success);
   background: rgba(27, 156, 133, 0.12);
 }
@@ -245,7 +245,7 @@ button.reminder-ban-button.reminder-ban-button {
   min-height: 1.85rem;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid rgba(27, 156, 133, 0.18);
   border-radius: 999px;
   padding: 0 0.58rem;
   color: var(--otziv-success);
@@ -377,14 +377,15 @@ button.reminder-action-button.reminder-action-button span {
 }
 
 .personal-reminder {
-  align-items: flex-start;
-  gap: 0.45rem;
+  display: grid;
+  grid-template-columns: 1.35rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.55rem;
 }
 
 .personal-reminder.due {
-  margin-inline: -0.35rem;
   border-radius: 0.74rem;
-  padding-inline: 0.35rem;
+  border-color: rgba(255, 0, 96, 0.14);
   background:
     linear-gradient(90deg, rgba(255, 0, 96, 0.07), transparent 48%),
     var(--otziv-white);
@@ -414,14 +415,16 @@ button.reminder-action-button.reminder-action-button span {
 }
 
 .personal-reminder__body {
-  flex: 1 1 auto;
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
 }
 
 .personal-reminder__actions {
-  flex: 0 0 auto;
+  align-self: center;
   flex-direction: row;
   gap: 0.28rem;
-  padding-top: 0.02rem;
+  padding-top: 0;
 }
 
 .personal-reminders__empty {

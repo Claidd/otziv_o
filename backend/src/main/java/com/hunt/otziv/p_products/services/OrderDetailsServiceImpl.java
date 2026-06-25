@@ -67,7 +67,7 @@ public class OrderDetailsServiceImpl implements OrderDetailsService {
 
     @Override
     public List<OrderDetails> findByOrderId(Long orderId) {
-        return orderDetailsRepository.findByOrderId(orderId);
+        return orderDetailsRepository.findAllByOrderIdForOrderDto(orderId);
     }
 
     @Transactional

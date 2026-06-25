@@ -1,0 +1,269 @@
+.transfer-workspace {
+  display: grid;
+  gap: 16px;
+  max-width: 1180px;
+}
+
+.transfer-panel {
+  background: var(--surface, #fff);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.panel-head p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.panel-head > span {
+  color: #2563eb;
+  font-size: 28px;
+}
+
+.transfer-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+select,
+textarea,
+input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #172033;
+  font: inherit;
+  padding: 9px 11px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+select:focus,
+textarea:focus,
+input:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.22);
+  border-color: #2563eb;
+}
+
+.swap-button,
+.actions button,
+.confirm-row button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.swap-button {
+  color: #334155;
+  background: #e2e8f0;
+}
+
+.comment-field {
+  margin-top: 14px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.primary {
+  color: #fff;
+  background: #2563eb;
+  padding: 0 18px;
+}
+
+.danger {
+  color: #fff;
+  background: #dc2626;
+  padding: 0 18px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.metric-grid article {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.metric-grid span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.metric-grid strong {
+  display: block;
+  margin-top: 6px;
+  color: #172033;
+  font-size: 24px;
+}
+
+.warning-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.warning-list p,
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.warning-list p {
+  color: #854d0e;
+  background: #fef3c7;
+}
+
+.error {
+  margin-bottom: 14px;
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.company-samples {
+  margin-top: 16px;
+}
+
+.company-samples h3 {
+  margin: 0 0 8px;
+  color: #172033;
+  font-size: 16px;
+}
+
+.company-row,
+.recent-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 0;
+}
+
+.company-row strong,
+.recent-list strong {
+  color: #172033;
+}
+
+.company-row span,
+.recent-list span,
+.recent-list p {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.confirm-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.recent-list {
+  display: grid;
+}
+
+.recent-list article p {
+  margin: 0;
+  align-self: center;
+}
+
+.empty {
+  margin: 0;
+  color: #64748b;
+}
+
+:host-context(.otziv-dark-theme) .transfer-panel {
+  background: #111827;
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+:host-context(.otziv-dark-theme) .panel-head h2,
+:host-context(.otziv-dark-theme) .metric-grid strong,
+:host-context(.otziv-dark-theme) .company-samples h3,
+:host-context(.otziv-dark-theme) .company-row strong,
+:host-context(.otziv-dark-theme) .recent-list strong {
+  color: #f8fafc;
+}
+
+:host-context(.otziv-dark-theme) select,
+:host-context(.otziv-dark-theme) textarea,
+:host-context(.otziv-dark-theme) input,
+:host-context(.otziv-dark-theme) .metric-grid article {
+  background: #0f172a;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+@media (max-width: 820px) {
+  .transfer-form,
+  .confirm-row,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .swap-button {
+    width: 44px;
+  }
+
+  .company-row,
+  .recent-list article {
+    display: grid;
+  }
+}

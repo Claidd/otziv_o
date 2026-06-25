@@ -6,7 +6,10 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
@@ -153,6 +156,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Manager manager, String keyword, int pageNumber, int pageSize, String sortDirection) {
+        return orderBoardQueryService.getAllOrderDTOAndKeywordByManagerAll(manager, keyword, pageNumber, pageSize, sortDirection);
+    }
+
+    @Override
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize) {
         return orderBoardQueryService.getAllOrderDTOAndKeywordByManager(principal, keyword, status, pageNumber, pageSize);
     }
@@ -160,6 +168,56 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection) {
         return orderBoardQueryService.getAllOrderDTOAndKeywordByManager(principal, keyword, status, pageNumber, pageSize, sortDirection);
+    }
+
+    @Override
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Manager manager, String keyword, String status, int pageNumber, int pageSize, String sortDirection) {
+        return orderBoardQueryService.getAllOrderDTOAndKeywordByManager(manager, keyword, status, pageNumber, pageSize, sortDirection);
+    }
+
+    @Override
+    public Page<OrderDTOList> getManagerControlOverdueOrdersByManager(
+            Manager manager,
+            String keyword,
+            String status,
+            LocalDate cutoff,
+            Set<String> excludedStatuses,
+            Set<CommonInvoiceStatus> commonInvoiceStatuses,
+            Set<String> paymentAutomationStatuses,
+            Set<ClientMessageScenario> paymentScenarios,
+            Set<String> reviewCheckAutomationStatuses,
+            Set<ClientMessageScenario> reviewCheckScenarios,
+            Set<String> deliveryRetryAutomationStatuses,
+            Set<ClientMessageScenario> deliveryRetryScenarios,
+            Set<String> clientTextAutomationStatuses,
+            Set<ClientMessageScenario> clientTextScenarios,
+            ScheduledMessageStateStatus activeStatus,
+            ScheduledMessageStateStatus doneStatus,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
+        return orderBoardQueryService.getManagerControlOverdueOrdersByManager(
+                manager,
+                keyword,
+                status,
+                cutoff,
+                excludedStatuses,
+                commonInvoiceStatuses,
+                paymentAutomationStatuses,
+                paymentScenarios,
+                reviewCheckAutomationStatuses,
+                reviewCheckScenarios,
+                deliveryRetryAutomationStatuses,
+                deliveryRetryScenarios,
+                clientTextAutomationStatuses,
+                clientTextScenarios,
+                activeStatus,
+                doneStatus,
+                pageNumber,
+                pageSize,
+                sortDirection
+        );
     }
 
     @Override

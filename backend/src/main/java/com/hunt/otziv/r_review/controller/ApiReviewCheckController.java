@@ -94,7 +94,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
 
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
         requireReviewInDetails(orderDetails, reviewId);
@@ -118,7 +118,7 @@ public class ApiReviewCheckController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Замечание к отзыву не указано");
         }
 
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
         Order order = requireOrder(orderDetails);
         requireReviewInDetails(orderDetails, reviewId);
@@ -624,7 +624,7 @@ public class ApiReviewCheckController {
                 base.canSeeInternalInfo(),
                 base.canSeeBot(),
                 base.canApprovePublication(),
-                false,
+                base.canSave(),
                 base.canSendCorrection(),
                 false,
                 false,

@@ -209,6 +209,9 @@ public class OrderStatusTransitionService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Сначала выполните все плохие задачи заказа");
         }
 
+        if (allowPendingBadTasks && summary != null && summary.pending() > 0) {
+            badReviewTaskService.deletePendingTasksForOrder(order);
+        }
         order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_BAN));
         orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_BAN);
         badReviewTaskService.deleteOrderReadyReminder(order);

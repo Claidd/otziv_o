@@ -173,7 +173,7 @@ export class PersonalRemindersComponent implements OnInit {
     }
 
     this.remindersService.complete(reminder.id).subscribe({
-      next: () => this.toastService.success('Дело закрыто', reminder.title),
+      next: () => undefined,
       error: (err) => this.toastService.error('Дело не закрыто', apiErrorMessage(err, 'Попробуйте еще раз'))
     });
   }
@@ -207,16 +207,9 @@ export class PersonalRemindersComponent implements OnInit {
     this.banningBadReviewReminderId.set(reminder.id);
     this.managerApi.updateOrderStatus(orderId, 'Бан').subscribe({
       next: () => {
-        this.remindersService.complete(reminder.id).subscribe({
-          next: () => {
-            this.banningBadReviewReminderId.set(null);
-            this.toastService.success('Заказ переведен в Бан', reminder.title);
-          },
-          error: (err) => {
-            this.banningBadReviewReminderId.set(null);
-            this.toastService.error('Напоминание не закрыто', apiErrorMessage(err, 'Обновите страницу'));
-          }
-        });
+        this.banningBadReviewReminderId.set(null);
+        this.remindersService.removeLocal(reminder.id);
+        this.toastService.success('Заказ переведен в Бан', reminder.title);
       },
       error: (err) => {
         this.banningBadReviewReminderId.set(null);

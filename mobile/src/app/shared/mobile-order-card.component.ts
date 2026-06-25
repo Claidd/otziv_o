@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { OrderItem } from '../core/api.service';
+import { ClientMessageStatus, OrderItem } from '../core/api.service';
 import { MobileNoteEditorComponent } from './mobile-note-editor.component';
 
 export type MobileOrderStatusAction = {
@@ -19,14 +19,58 @@ export type MobileOrderCopyKind = 'review' | 'payment';
     <article
       class="lead-card manager-card mobile-worker-order-card order-mobile-card mobile-order-card {{ toneClass }}"
       [class.order-mobile-card--company]="companyMode"
+      [class.order-mobile-card--common]="isCommonInvoice"
+      [class.order-mobile-card--has-communication]="hasCommunicationIndicator"
       [class.waiting-client]="order.waitingForClient"
     >
+      @if (communicationTone; as tone) {
+        <span class="communication-wrap order-communication">
+          <button
+            type="button"
+            class="communication-indicator"
+            [class.communication-indicator--success]="tone === 'success'"
+            [class.communication-indicator--wait]="tone === 'wait'"
+            [class.communication-indicator--danger]="tone === 'danger'"
+            [attr.aria-label]="communicationTitle"
+            [attr.aria-expanded]="communicationPopoverOpen"
+            (click)="toggleCommunicationPopover($event)"
+            (blur)="closeCommunicationPopover()"
+          >
+            <span aria-hidden="true"></span>
+          </button>
+          @if (communicationPopoverOpen) {
+            <div class="communication-popover">
+              <strong>{{ communicationTitle }}</strong>
+              @for (detail of communicationDetails; track detail) {
+                <span>{{ detail }}</span>
+              }
+            </div>
+          }
+        </span>
+      }
+
       <header class="lead-card-head order-card-head">
-        <a [href]="titleHref || '#'" target="_blank" rel="noopener" (click)="guardLink($event, titleHref)">
-          {{ title }}
-        </a>
+        <span class="order-title-wrap">
+          <button
+            type="button"
+            class="order-title-button"
+            [attr.aria-label]="orderFullTitle"
+            [attr.aria-expanded]="titlePopoverOpen"
+            (click)="toggleTitlePopover($event)"
+            (blur)="closeTitlePopover()"
+          >
+            {{ title }}
+          </button>
+          @if (titlePopoverOpen) {
+            <div class="order-title-popover">
+              @for (line of orderTitleDetails; track line) {
+                <span>{{ line }}</span>
+              }
+            </div>
+          }
+        </span>
         <span class="card-id-line">
-          <small>#{{ order.id }}</small>
+          <small>{{ isCommonInvoice ? 'ОС' : '#' }}{{ isCommonInvoice ? order.commonInvoiceId : order.id }}</small>
           @if (order.waitingForClient && showWaitingBadge) {
             <em aria-label="Ждет клиента">!</em>
           }
@@ -50,7 +94,11 @@ export type MobileOrderCopyKind = 'review' | 'payment';
         </div>
       }
 
-      @if (canSeePhoneAndPayment) {
+      @if (isCommonInvoice) {
+        <div class="lead-meta-row common-invoice-row meta-row">
+          <span>{{ commonInvoiceSummaryLabel }}</span>
+        </div>
+      } @else if (canSeePhoneAndPayment) {
         <div class="lead-phone-row order-phone-row phone-row">
           <a [href]="phoneHref || '#'" target="_blank" rel="noopener" (click)="guardLink($event, phoneHref)">
             {{ phoneLabel }}
@@ -59,18 +107,23 @@ export type MobileOrderCopyKind = 'review' | 'payment';
             {{ copiedKey === phoneCopyKey ? '✓' : 'T' }}
           </button>
         </div>
+      }
 
-        <div class="lead-card-actions card-actions order-link-actions">
-          <button type="button" (click)="copyText.emit('review')">
-            {{ copiedKey === reviewCopyKey ? '✓' : 'текст' }}
-          </button>
+      <div class="lead-card-actions card-actions order-link-actions">
+          @if (isCommonInvoice) {
+            <button type="button" (click)="details.emit()">состав</button>
+          } @else {
+            <button type="button" (click)="copyText.emit('review')">
+              {{ copiedKey === reviewCopyKey ? '✓' : 'текст' }}
+            </button>
+          }
           <a
             [href]="reviewHref || '#'"
             target="_blank"
             rel="noopener"
             [class.disabled]="!reviewHref"
             (click)="guardLink($event, reviewHref)"
-          >url</a>
+          >{{ isCommonInvoice ? 'ссылка' : 'url' }}</a>
           <button type="button" (click)="copyText.emit('payment')">
             {{ copiedKey === paymentCopyKey ? '✓' : 'счет' }}
           </button>
@@ -82,7 +135,6 @@ export type MobileOrderCopyKind = 'review' | 'payment';
             (click)="guardLink($event, filialHref)"
           >ссылка</a>
         </div>
-      }
 
       <div class="order-progress progress" aria-label="Прогресс заказа">
         <span class="progress-bar" [style.width.%]="progress">
@@ -119,16 +171,18 @@ export type MobileOrderCopyKind = 'review' | 'payment';
       }
 
       <div class="lead-meta-row order-category-row meta-row category-row">
-        <span>{{ order.categoryTitle || 'Категория' }}</span>
-        <span>{{ order.subCategoryTitle || 'Подкатегория' }}</span>
+        <span>{{ isCommonInvoice ? 'Общий счет' : (order.categoryTitle || 'Категория') }}</span>
+        <span>{{ isCommonInvoice ? commonInvoiceCompaniesLabel : (order.subCategoryTitle || 'Подкатегория') }}</span>
       </div>
 
-      <div class="order-city-row" [attr.aria-label]="cityLabel">
-        <span class="city-prefix" aria-hidden="true">город</span>
-        <span>{{ cityLabel }}</span>
-      </div>
+      @if (!isCommonInvoice) {
+        <div class="order-city-row" [attr.aria-label]="cityLabel">
+          <span class="city-prefix" aria-hidden="true">город</span>
+          <span>{{ cityLabel }}</span>
+        </div>
+      }
 
-      @if (showNoteEditor) {
+      @if (showNoteEditor && !isCommonInvoice) {
         <app-mobile-note-editor
           class="lead-comment-editor order-note-editor note-editor"
           [class.saved]="noteSaved"
@@ -183,7 +237,7 @@ export type MobileOrderCopyKind = 'review' | 'payment';
           @if (unchangedAlert) {
             <i aria-hidden="true">!</i>
           }
-          Без изменений: {{ unchangedDays }} дн.
+          {{ isCommonInvoice && order.commonInvoiceLastError ? 'Ошибка счета' : 'Без изменений: ' + unchangedDays + ' дн.' }}
         </button>
         <button type="button" (click)="workerClick.emit()" [attr.aria-label]="workerTitle">
           {{ workerLabel }}
@@ -197,6 +251,7 @@ export type MobileOrderCopyKind = 'review' | 'payment';
     }
 
     .mobile-order-card {
+      position: relative;
       display: flex;
       flex: 0 0 var(--otziv-board-card-width, min(15.4rem, 76vw));
       min-width: 0;
@@ -276,14 +331,26 @@ export type MobileOrderCopyKind = 'review' | 'payment';
       background: linear-gradient(180deg, #fff8d8 0%, var(--otziv-white) 42%, var(--otziv-white) 100%);
     }
 
+    .mobile-order-card.order-mobile-card--common {
+      border-style: dashed;
+      border-color: rgba(214, 159, 43, 0.55);
+      background: linear-gradient(180deg, #fffdf5 0%, var(--otziv-white) 48%, var(--otziv-white) 100%);
+    }
+
     header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) max-content;
       align-items: start;
       gap: 0.42rem;
+      padding-left: 0;
     }
 
-    header a {
+    .order-mobile-card--has-communication header {
+      padding-left: 1.55rem;
+    }
+
+    header a,
+    .order-title-button {
       display: -webkit-box;
       min-width: 0;
       overflow: hidden;
@@ -296,6 +363,118 @@ export type MobileOrderCopyKind = 'review' | 'payment';
       overflow-wrap: anywhere;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
+    }
+
+    .order-title-wrap {
+      position: relative;
+      min-width: 0;
+    }
+
+    .order-title-button {
+      appearance: none;
+      width: 100%;
+      min-height: 0;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .order-title-popover,
+    .communication-popover {
+      position: absolute;
+      z-index: 28;
+      display: grid;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      gap: 0.3rem;
+      border: 1px solid rgba(103, 116, 131, 0.22);
+      border-radius: 0.55rem;
+      padding: 0.62rem 0.68rem;
+      color: var(--otziv-dark);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 0.7rem 1.45rem rgba(54, 57, 73, 0.18);
+      font-family: var(--otziv-font-family);
+      font-size: 0.72rem;
+      font-weight: 800;
+      line-height: 1.25;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .order-title-popover {
+      top: calc(100% + 0.36rem);
+      left: 0;
+    }
+
+    .order-title-popover span,
+    .communication-popover strong,
+    .communication-popover span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .communication-wrap {
+      position: relative;
+      display: inline-flex;
+      flex: 0 0 auto;
+    }
+
+    .order-mobile-card > .order-communication {
+      position: absolute;
+      top: 0.58rem;
+      left: 0.58rem;
+      z-index: 24;
+    }
+
+    .communication-indicator {
+      appearance: none;
+      display: grid;
+      width: 1.18rem;
+      min-width: 1.18rem;
+      height: 1.18rem;
+      min-height: 1.18rem;
+      place-items: center;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 50%;
+      padding: 0;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 0.32rem 0.75rem rgba(132, 139, 200, 0.16);
+    }
+
+    .communication-indicator span {
+      display: block;
+      width: 0.58rem;
+      min-width: 0.58rem;
+      height: 0.58rem;
+      min-height: 0.58rem;
+      border-radius: 50%;
+      background: #6b7280;
+    }
+
+    .communication-indicator--success span {
+      background: #2f6f65;
+    }
+
+    .communication-indicator--wait span {
+      background: #d69f2b;
+    }
+
+    .communication-indicator--danger span {
+      background: var(--otziv-danger);
+    }
+
+    .communication-popover {
+      top: calc(100% + 0.36rem);
+      left: 0;
+      width: min(13.6rem, calc(100vw - 1.4rem));
+    }
+
+    .communication-popover strong {
+      font-size: 0.76rem;
+      font-weight: 1000;
     }
 
     .card-id-line {
@@ -405,7 +584,8 @@ export type MobileOrderCopyKind = 'review' | 'payment';
     }
 
     .status-waiting,
-    .bad-summary-row span {
+    .bad-summary-row span,
+    .common-invoice-row span {
       color: #8a6416 !important;
       border-color: rgba(214, 159, 43, 0.36) !important;
       background: rgba(255, 244, 214, 0.86) !important;
@@ -692,6 +872,275 @@ export class MobileOrderCardComponent {
   @Output() details = new EventEmitter<void>();
   @Output() workerClick = new EventEmitter<void>();
 
+  communicationPopoverOpen = false;
+  titlePopoverOpen = false;
+  private lastTitleTapAt = 0;
+
+  get isCommonInvoice(): boolean {
+    return Boolean(this.order.commonInvoice);
+  }
+
+  get hasCommunicationIndicator(): boolean {
+    return this.communicationTone !== null;
+  }
+
+  get communicationTone(): 'success' | 'wait' | 'danger' | null {
+    if (this.isCommonInvoice) {
+      return this.commonInvoiceCommunicationTone;
+    }
+
+    if (this.chatBindingWarning) {
+      return 'danger';
+    }
+
+    const status = this.clientMessageStatus;
+    if (!status || status.tone === 'muted') {
+      return null;
+    }
+
+    return status.tone;
+  }
+
+  get communicationTitle(): string {
+    if (this.isCommonInvoice) {
+      return this.commonInvoiceCommunicationTitle;
+    }
+
+    const warning = this.chatBindingWarning;
+    if (warning) {
+      return warning;
+    }
+
+    return this.clientMessageStatus?.label ?? 'Состояние связи';
+  }
+
+  get communicationDetails(): string[] {
+    if (this.isCommonInvoice) {
+      return this.commonInvoiceCommunicationDetails;
+    }
+
+    const details: string[] = [];
+    const warning = this.chatBindingWarning;
+    const status = this.clientMessageStatus;
+
+    if (warning) {
+      details.push(warning);
+    }
+    if (status) {
+      if (!warning || !status.label.toLowerCase().includes(warning.toLowerCase())) {
+        details.push(status.label);
+      }
+      if (status.scenario) {
+        details.push(`Сценарий: ${this.clientMessageScenarioLabel(status.scenario)}`);
+      }
+      if (status.errorCode) {
+        details.push(`Код: ${status.errorCode}`);
+      }
+      if (status.errorMessage) {
+        details.push(status.errorMessage);
+      }
+      if (status.lastSuccessAt) {
+        details.push(`Успех: ${status.lastSuccessAt}`);
+      }
+      if (status.lastAttemptAt) {
+        details.push(`Последняя попытка: ${status.lastAttemptAt}`);
+      }
+      if (status.nextAttemptAt) {
+        details.push(`Следующая попытка: ${status.nextAttemptAt}`);
+      }
+      if (status.consecutiveFailures) {
+        details.push(`Ошибок подряд: ${status.consecutiveFailures}`);
+      }
+    }
+
+    return details.length ? details : ['Ошибок связи не видно'];
+  }
+
+  get orderFullTitle(): string {
+    return this.orderTitleDetails.join('. ');
+  }
+
+  get orderTitleDetails(): string[] {
+    const details: string[] = [];
+    const company = this.cleanLabel(this.order.companyTitle) || 'Без компании';
+    const filial = this.cleanLabel(this.order.filialTitle) || 'Без филиала';
+    const city = this.cleanLabel(this.order.filialCity);
+
+    details.push(`Компания: ${company}`);
+    details.push(`Адрес филиала: ${filial}`);
+    if (city) {
+      details.push(`Город: ${city}`);
+    }
+
+    return details;
+  }
+
+  toggleCommunicationPopover(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.titlePopoverOpen = false;
+    this.communicationPopoverOpen = !this.communicationPopoverOpen;
+  }
+
+  closeCommunicationPopover(): void {
+    this.communicationPopoverOpen = false;
+  }
+
+  toggleTitlePopover(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const now = Date.now();
+    const isPointerDoubleClick = event.detail >= 2;
+    const isTouchDoubleTap = !isPointerDoubleClick && now - this.lastTitleTapAt <= 360;
+    this.lastTitleTapAt = now;
+
+    if (isPointerDoubleClick || isTouchDoubleTap) {
+      this.lastTitleTapAt = 0;
+      this.closeTitlePopover();
+      this.openFilialFromTitle();
+      return;
+    }
+
+    this.communicationPopoverOpen = false;
+    this.titlePopoverOpen = !this.titlePopoverOpen;
+  }
+
+  closeTitlePopover(): void {
+    this.titlePopoverOpen = false;
+  }
+
+  private get clientMessageStatus(): ClientMessageStatus | null {
+    return this.order.clientMessageStatus ?? null;
+  }
+
+  private get chatBindingWarning(): string {
+    if (this.isCommonInvoice) {
+      return this.order.commonInvoiceLastError || '';
+    }
+
+    return this.chatBindingWarningForValues(
+      this.order.companyUrlChat,
+      this.order.groupId,
+      this.order.telegramGroupChatId,
+      this.order.maxGroupChatId
+    );
+  }
+
+  private get commonInvoiceCommunicationTone(): 'success' | 'wait' | 'danger' | null {
+    const status = this.commonInvoiceStatusLabel.toLocaleLowerCase('ru-RU');
+    const sentAt = this.cleanLabel(this.order.commonInvoiceSentAt);
+
+    if (this.cleanLabel(this.order.commonInvoiceLastError)) {
+      return 'danger';
+    }
+    if (status.includes('требует внимания') || status === 'не оплачено' || status === 'бан') {
+      return 'danger';
+    }
+    if (!sentAt && this.commonInvoiceReadyToSend && status.includes('ожида')) {
+      return 'danger';
+    }
+    if (status === 'оплачено') {
+      return 'success';
+    }
+    if (sentAt && this.cleanLabel(this.order.commonInvoiceNextReminderAt)) {
+      return 'wait';
+    }
+    if (sentAt) {
+      return 'success';
+    }
+
+    return 'wait';
+  }
+
+  private get commonInvoiceCommunicationTitle(): string {
+    const status = this.commonInvoiceStatusLabel.toLocaleLowerCase('ru-RU');
+
+    if (this.cleanLabel(this.order.commonInvoiceLastError)) {
+      return 'Контроль: ошибка общего счета';
+    }
+    if (status.includes('требует внимания') || status === 'не оплачено' || status === 'бан') {
+      return 'Контроль: общий счет требует внимания';
+    }
+    if (!this.cleanLabel(this.order.commonInvoiceSentAt) && this.commonInvoiceReadyToSend && status.includes('ожида')) {
+      return 'Контроль: общий счет готов, но не отправлен';
+    }
+    if (status === 'оплачено') {
+      return 'Общий счет оплачен';
+    }
+    if (this.cleanLabel(this.order.commonInvoiceNextReminderAt)) {
+      return 'Общий счет: напоминание запланировано';
+    }
+    if (this.cleanLabel(this.order.commonInvoiceSentAt)) {
+      return 'Общий счет отправлен';
+    }
+
+    return 'Общий счет собирается';
+  }
+
+  private get commonInvoiceCommunicationDetails(): string[] {
+    const details: string[] = [];
+    const error = this.cleanLabel(this.order.commonInvoiceLastError);
+    const ready = this.order.commonInvoiceReadyOrders ?? this.order.counter ?? 0;
+    const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
+    const paid = this.order.commonInvoicePaidOrders ?? 0;
+
+    if (error) {
+      details.push(`Ошибка: ${error}`);
+    }
+    if (this.commonInvoiceStatusLabel) {
+      details.push(`Статус: ${this.commonInvoiceStatusLabel}`);
+    }
+    details.push(`Готово: ${ready}/${total}`);
+    details.push(`Оплачено: ${paid}/${total}`);
+    if (this.cleanLabel(this.order.commonInvoiceSentAt)) {
+      details.push(`Отправлен: ${this.order.commonInvoiceSentAt}`);
+    } else if (this.commonInvoiceReadyToSend) {
+      details.push('Счет готов к отправке, но отправка не зафиксирована');
+    } else {
+      details.push('Счет еще собирается, отправка пока не должна идти');
+    }
+    if (this.cleanLabel(this.order.commonInvoiceLastReminderAt)) {
+      details.push(`Последнее напоминание: ${this.order.commonInvoiceLastReminderAt}`);
+    }
+    if (this.cleanLabel(this.order.commonInvoiceNextReminderAt)) {
+      details.push(`Следующее напоминание: ${this.order.commonInvoiceNextReminderAt}`);
+    }
+    if (this.order.commonInvoiceRemaining != null) {
+      details.push(`Остаток: ${this.order.commonInvoiceRemaining} руб.`);
+    }
+
+    return details.length ? details : ['Общий счет еще не отправлен'];
+  }
+
+  private get commonInvoiceReadyToSend(): boolean {
+    const ready = this.order.commonInvoiceReadyOrders ?? this.order.counter ?? 0;
+    const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
+    return total > 0 && ready >= total;
+  }
+
+  private get commonInvoiceStatusLabel(): string {
+    return this.cleanLabel(this.order.commonInvoiceStatus) || this.cleanLabel(this.order.status);
+  }
+
+  get commonInvoiceSummaryLabel(): string {
+    const ready = this.order.commonInvoiceReadyOrders ?? this.order.counter ?? 0;
+    const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
+    const paid = this.order.commonInvoicePaidOrders ?? 0;
+    return `Готово ${ready}/${total}, оплачено ${paid}/${total}`;
+  }
+
+  get commonInvoiceCompaniesLabel(): string {
+    const count = this.order.amount ?? this.order.commonInvoiceTotalOrders ?? 0;
+    if (count === 1) {
+      return '1 компания';
+    }
+    if (count > 1 && count < 5) {
+      return `${count} компании`;
+    }
+    return `${count} компаний`;
+  }
+
   isStatusMutating(action: MobileOrderStatusAction): boolean {
     return this.mutationKey === `order-${this.order.id}-${action.status}`;
   }
@@ -704,5 +1153,84 @@ export class MobileOrderCardComponent {
     if (!href || href === '#') {
       event.preventDefault();
     }
+  }
+
+  private openFilialFromTitle(): void {
+    const url = (this.filialHref || this.titleHref || '').trim();
+    if (!url) {
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener');
+  }
+
+  private clientMessageScenarioLabel(scenario: string): string {
+    switch (scenario) {
+      case 'CLIENT_TEXT_REMINDER':
+        return 'Ожидание текста клиента';
+      case 'REVIEW_CHECK_REMINDER':
+        return 'Проверка отзывов';
+      case 'PAYMENT_REMINDER':
+        return 'Оплата';
+      case 'PAYMENT_INVOICE_RETRY':
+        return 'Повтор счета';
+      case 'PAYMENT_OVERDUE_ESCALATION':
+        return 'Просроченная оплата';
+      case 'REVIEW_CHECK_DELIVERY_RETRY':
+        return 'Повтор ссылки проверки';
+      default:
+        return scenario;
+    }
+  }
+
+  private chatBindingWarningForValues(
+    chatUrl?: string | null,
+    whatsappGroupId?: string | null,
+    telegramGroupChatId?: number | null,
+    maxGroupChatId?: number | null
+  ): string {
+    const platform = this.chatPlatformFromUrl(chatUrl);
+    if (platform === 'unknown') {
+      return (chatUrl ?? '').trim() ? 'Мессенджер по ссылке не распознан' : '';
+    }
+
+    if (platform === 'whatsapp' && !(whatsappGroupId ?? '').trim()) {
+      return 'WhatsApp-группа не привязана';
+    }
+    if (platform === 'telegram' && telegramGroupChatId == null) {
+      return 'Telegram-группа не привязана';
+    }
+    if (platform === 'max' && maxGroupChatId == null) {
+      return 'MAX-группа не привязана';
+    }
+
+    return '';
+  }
+
+  private chatPlatformFromUrl(chatUrl?: string | null): 'whatsapp' | 'telegram' | 'max' | 'unknown' {
+    const value = (chatUrl ?? '').trim().toLocaleLowerCase('en-US');
+    if (!value) {
+      return 'unknown';
+    }
+    if (value.includes('chat.whatsapp.com/')) {
+      return 'whatsapp';
+    }
+    if (
+      value.includes('t.me/')
+      || value.includes('telegram.me/')
+      || value.includes('telegram.dog/')
+      || value.startsWith('tg://')
+    ) {
+      return 'telegram';
+    }
+    if (value.includes('max.ru/') || value.includes('web.max.ru/')) {
+      return 'max';
+    }
+
+    return 'unknown';
+  }
+
+  private cleanLabel(value?: string | null): string {
+    return (value ?? '').trim();
   }
 }

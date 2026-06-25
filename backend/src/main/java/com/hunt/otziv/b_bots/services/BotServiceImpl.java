@@ -289,6 +289,43 @@ public class BotServiceImpl implements BotService {
         return Optional.of(savedBot);
     }
 
+    @Override
+    @Transactional
+    public Optional<Bot> claimNewAccountFromOwnCity(City targetCity, Collection<Long> excludedBotIds) {
+        if (targetCity == null || targetCity.getId() == null) {
+            log.warn("Не удалось назначить новый аккаунт из своего города: целевой город не указан");
+            return Optional.empty();
+        }
+
+        Set<Long> excludedIds = excludedBotIds == null
+                ? Set.of()
+                : excludedBotIds.stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+        List<Bot> candidates = new ArrayList<>(botsRepository.findBotsByFioAndCity(
+                NEW_ACCOUNT_NAME,
+                targetCity.getId()
+        ));
+        candidates.removeIf(bot -> bot.getId() == null
+                || !bot.isActive()
+                || excludedIds.contains(bot.getId())
+                || bot.getStatus() == null
+                || bot.getStatus().getBotStatusTitle() == null
+                || !READY_STATUS.equals(bot.getStatus().getBotStatusTitle().trim()));
+
+        if (candidates.isEmpty()) {
+            log.warn("Нет доступных аккаунтов '{}' со статусом '{}' в городе {} ({})",
+                    NEW_ACCOUNT_NAME, READY_STATUS, targetCity.getTitle(), targetCity.getId());
+            return Optional.empty();
+        }
+
+        Bot selectedBot = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        log.info("Новый аккаунт ID {} выбран из города {} ({}) без переноса города",
+                selectedBot.getId(), targetCity.getTitle(), targetCity.getId());
+        return Optional.of(selectedBot);
+    }
+
 
     @Override
     public Bot save(Bot bot) { // Сохранение ботов

@@ -177,7 +177,7 @@
                     [class.review-field-editor--text-expanded]="isReviewTextExpanded(review)"
                   >
                     <div class="review-text-box">
-                      @if (isReviewFieldEditing(review, 'text')) {
+                      @if (isReviewFieldEditing(review, 'text') && !isMobileReviewLayout()) {
                         <textarea
                           [name]="'text-' + review.id"
                           [ngModel]="reviewFieldValue(review, 'text')"
@@ -202,22 +202,33 @@
                         </div>
                       }
 
-                      @if (shouldShowReviewTextToggle(review)) {
-                        <span
-                          class="review-text-toggle"
-                          role="button"
-                          tabindex="0"
-                          [attr.aria-expanded]="isReviewTextExpanded(review)"
-                          (click)="toggleReviewText(review)"
-                          (keydown.enter)="toggleReviewText(review)"
-                          (keydown.space)="$event.preventDefault(); toggleReviewText(review)"
-                        >
-                          {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
-                        </span>
+                      @if (shouldShowReviewTextToggle(review) || (details.permissions.canSave && isMobileReviewLayout())) {
+                        <div class="review-text-actions">
+                          @if (shouldShowReviewTextToggle(review)) {
+                            <button
+                              type="button"
+                              class="review-text-action-button review-text-toggle"
+                              [attr.aria-expanded]="isReviewTextExpanded(review)"
+                              (click)="toggleReviewText(review)"
+                            >
+                              {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
+                            </button>
+                          }
+
+                          @if (details.permissions.canSave && isMobileReviewLayout()) {
+                            <button
+                              type="button"
+                              class="review-text-action-button review-text-edit-button"
+                              (click)="openReviewTextEditor(review)"
+                            >
+                              редактировать
+                            </button>
+                          }
+                        </div>
                       }
                     </div>
 
-                    @if (isReviewFieldEditing(review, 'text')) {
+                    @if (isReviewFieldEditing(review, 'text') && !isMobileReviewLayout()) {
                       <div class="review-field-edit-actions">
                         <span class="field-save-actions">
                           <button
@@ -246,7 +257,7 @@
                   </div>
 
                   <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
-                    @if (isReviewFieldEditing(review, 'answer')) {
+                    @if (isReviewFieldEditing(review, 'answer') && !isMobileReviewLayout()) {
                       <textarea
                         [name]="'answer-' + review.id"
                         [ngModel]="reviewFieldValue(review, 'answer')"
@@ -270,7 +281,7 @@
                       </div>
                     }
 
-                    @if (isReviewFieldEditing(review, 'answer')) {
+                    @if (isReviewFieldEditing(review, 'answer') && !isMobileReviewLayout()) {
                       <div class="review-field-edit-actions">
                         <button
                           type="button"
@@ -471,29 +482,94 @@
       }
 
       @if (activeReviewFieldEdit(); as edit) {
-        <section
-          class="mobile-review-save-bar"
-          [style.bottom]="mobileReviewActionBottom()"
-          role="group"
-          [attr.aria-label]="edit.title + ': действия редактирования'"
-        >
-          <button
-            type="button"
-            class="cancel"
+        @if (isMobileReviewLayout()) {
+          <section
+            class="mobile-review-field-backdrop"
+            role="presentation"
             (click)="cancelReviewFieldEdit(edit.review, edit.field)"
-            [disabled]="isMutating(edit.mutationKey)"
           >
-            Отменить
-          </button>
-          <button
-            type="button"
-            class="save"
-            (click)="saveReviewField(edit.review, edit.field)"
-            [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+            <article
+              class="mobile-review-field-sheet"
+              role="dialog"
+              aria-modal="true"
+              [attr.aria-label]="edit.title"
+              (click)="$event.stopPropagation()"
+            >
+              <header>
+                <div>
+                  <span>{{ edit.title }}</span>
+                  <strong>#{{ edit.review.id }}</strong>
+                </div>
+                <button
+                  type="button"
+                  class="mobile-review-field-close"
+                  (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+                  [disabled]="isMutating(edit.mutationKey)"
+                  aria-label="Закрыть"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </header>
+
+              <textarea
+                class="mobile-review-field-textarea"
+                [name]="'mobile-' + edit.field + '-' + edit.review.id"
+                [ngModel]="reviewFieldValue(edit.review, edit.field)"
+                (ngModelChange)="setReviewFieldDraft(edit.review, edit.field, $event)"
+                [attr.aria-label]="edit.title"
+                [placeholder]="edit.field === 'text' ? 'Текст отзыва' : 'Замечания к отзыву'"
+              ></textarea>
+
+              <section
+                class="mobile-review-save-bar"
+                [style.bottom]="mobileReviewActionBottom()"
+                role="group"
+                [attr.aria-label]="edit.title + ': действия редактирования'"
+              >
+                <button
+                  type="button"
+                  class="cancel"
+                  (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+                  [disabled]="isMutating(edit.mutationKey)"
+                >
+                  Отменить
+                </button>
+                <button
+                  type="button"
+                  class="save"
+                  (click)="saveReviewField(edit.review, edit.field)"
+                  [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+                >
+                  Сохранить
+                </button>
+              </section>
+            </article>
+          </section>
+        } @else {
+          <section
+            class="mobile-review-save-bar"
+            [style.bottom]="mobileReviewActionBottom()"
+            role="group"
+            [attr.aria-label]="edit.title + ': действия редактирования'"
           >
-            Сохранить
-          </button>
-        </section>
+            <button
+              type="button"
+              class="cancel"
+              (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+              [disabled]="isMutating(edit.mutationKey)"
+            >
+              Отменить
+            </button>
+            <button
+              type="button"
+              class="save"
+              (click)="saveReviewField(edit.review, edit.field)"
+              [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+            >
+              Сохранить
+            </button>
+          </section>
+        }
       }
 
       <section class="mobile-review-check-side" aria-label="Сводка проверки">

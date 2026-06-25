@@ -570,6 +570,10 @@ export interface BotsResponse {
   workers: DictionaryOption[];
   statuses: DictionaryOption[];
   cities: DictionaryOption[];
+  total: number;
+  page: number;
+  size: number;
+  totalPages: number;
 }
 
 export interface BotImportResponse {
@@ -740,9 +744,12 @@ export class AdminDictionariesApi {
     return this.http.delete<void>(`${this.baseUrl}/products/${id}`);
   }
 
-  getBots(keyword = ''): Observable<BotsResponse> {
+  getBots(keyword = '', page = 0, size = 50): Observable<BotsResponse> {
+    const params = this.keywordParams(keyword)
+      .set('page', String(page))
+      .set('size', String(size));
     return this.http.get<BotsResponse>(`${this.baseUrl}/bots`, {
-      params: this.keywordParams(keyword)
+      params
     });
   }
 
@@ -762,10 +769,11 @@ export class AdminDictionariesApi {
     return this.http.delete<void>(`${this.baseUrl}/bots/${id}`);
   }
 
-  importBots(file: File): Observable<BotImportResponse> {
+  importBots(file: File, cityId?: number | null): Observable<BotImportResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    return this.http.post<BotImportResponse>(`${this.baseUrl}/bots/import`, formData);
+    const params = cityId == null ? undefined : new HttpParams().set('cityId', String(cityId));
+    return this.http.post<BotImportResponse>(`${this.baseUrl}/bots/import`, formData, { params });
   }
 
   openBotBrowser(botId: number): Observable<BotBrowserOpenResponse> {

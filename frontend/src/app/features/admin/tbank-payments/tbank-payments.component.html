@@ -792,25 +792,87 @@
               @if (task.comment) {
                 <small class="profile-terminal">{{ task.comment }}</small>
               }
-              <footer>
-                @if (task.status === 'ACTIVE') {
-                  <button type="button" class="secondary-action tiny-action" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="mutatingTaskId() === task.id">
-                    <span class="material-icons-sharp" aria-hidden="true">pause</span>
-                    Пауза
+              @if (editingTaskId() === task.id) {
+                <div class="manual-task-edit-card">
+                  <div class="launch-segment route-segment">
+                    <button type="button" [class.active]="editTaskPaymentType() === 'MOBILE_BANK'" (click)="setEditTaskPaymentType('MOBILE_BANK')">
+                      <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+                      Телефон
+                    </button>
+                    <button type="button" [class.active]="editTaskPaymentType() === 'EXTERNAL_LINK'" (click)="setEditTaskPaymentType('EXTERNAL_LINK')">
+                      <span class="material-icons-sharp" aria-hidden="true">link</span>
+                      Ссылка
+                    </button>
+                  </div>
+                  @if (editTaskPaymentType() === 'EXTERNAL_LINK') {
+                    <label class="profile-field">
+                      <span>Ссылка оплаты</span>
+                      <input type="url" [ngModel]="editTaskPaymentUrl()" (ngModelChange)="setEditTaskPaymentUrl($event)" />
+                    </label>
+                    <label class="profile-field">
+                      <span>Текст кнопки</span>
+                      <input type="text" [ngModel]="editTaskPaymentButtonLabel()" (ngModelChange)="setEditTaskPaymentButtonLabel($event)" />
+                    </label>
+                    <label class="profile-field">
+                      <span>Получатель</span>
+                      <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
+                    </label>
+                  } @else {
+                    <label class="profile-field">
+                      <span>Телефон</span>
+                      <input type="tel" [ngModel]="editTaskPhone()" (ngModelChange)="setEditTaskPhone($event)" placeholder="+7..." />
+                    </label>
+                    <label class="profile-field">
+                      <span>Получатель</span>
+                      <input type="text" [ngModel]="editTaskRecipient()" (ngModelChange)="setEditTaskRecipient($event)" />
+                    </label>
+                  }
+                  <label class="profile-field limit-field">
+                    <span>Сумма, руб.</span>
+                    <input type="number" min="1" step="1" inputmode="numeric" [ngModel]="editTaskAmountRubles()" (ngModelChange)="setEditTaskAmountRubles($event)" />
+                  </label>
+                  <label class="profile-field">
+                    <span>Комментарий</span>
+                    <input type="text" [ngModel]="editTaskComment()" (ngModelChange)="setEditTaskComment($event)" />
+                  </label>
+                </div>
+                <footer>
+                  <button type="button" class="secondary-action tiny-action" (click)="saveManualTaskEdit(task)" [disabled]="!canSaveManualTaskEdit(task)">
+                    <span class="material-icons-sharp" aria-hidden="true">save</span>
+                    Сохранить
                   </button>
-                } @else if (task.status === 'PAUSED') {
-                  <button type="button" class="secondary-action tiny-action" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="mutatingTaskId() === task.id">
-                    <span class="material-icons-sharp" aria-hidden="true">play_arrow</span>
-                    Включить
-                  </button>
-                }
-                @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
-                  <button type="button" class="secondary-action tiny-action danger-action" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="mutatingTaskId() === task.id">
+                  <button type="button" class="secondary-action tiny-action danger-action" (click)="cancelManualTaskEdit()" [disabled]="mutatingTaskId() === task.id">
                     <span class="material-icons-sharp" aria-hidden="true">close</span>
-                    Отменить
+                    Закрыть
                   </button>
-                }
-              </footer>
+                </footer>
+              } @else {
+                <footer>
+                  @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                    <button type="button" class="secondary-action tiny-action" (click)="startManualTaskEdit(task)" [disabled]="mutatingTaskId() === task.id">
+                      <span class="material-icons-sharp" aria-hidden="true">edit</span>
+                      Ред.
+                    </button>
+                  }
+                  @if (task.status === 'ACTIVE') {
+                    <button type="button" class="secondary-action tiny-action" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="mutatingTaskId() === task.id">
+                      <span class="material-icons-sharp" aria-hidden="true">pause</span>
+                      Пауза
+                    </button>
+                  } @else if (task.status === 'PAUSED') {
+                    <button type="button" class="secondary-action tiny-action" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="mutatingTaskId() === task.id">
+                      <span class="material-icons-sharp" aria-hidden="true">play_arrow</span>
+                      Включить
+                    </button>
+                  }
+                  @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                    <button type="button" class="secondary-action tiny-action danger-action" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="mutatingTaskId() === task.id">
+                      <span class="material-icons-sharp" aria-hidden="true">close</span>
+                      Отменить
+                    </button>
+                  }
+                </footer>
+              }
             </article>
           } @empty {
             <div class="empty-state compact-empty">

@@ -1,0 +1,204 @@
+<section class="risk-workspace">
+  <header class="risk-toolbar">
+    <nav class="risk-tabs" aria-label="Статусы инцидентов">
+      @for (tab of tabs; track tab.key) {
+        <button type="button" [class.active]="status() === tab.key" (click)="setStatus(tab.key)">
+          <span class="material-icons-sharp">{{ tab.icon }}</span>
+          {{ tab.label }}
+        </button>
+      }
+    </nav>
+
+    <button type="button" class="refresh-button" (click)="refresh()" [disabled]="loading()">
+      <span class="material-icons-sharp">refresh</span>
+      {{ loading() ? 'Загрузка' : 'Обновить' }}
+    </button>
+  </header>
+
+  <section class="risk-summary">
+    <article>
+      <span>Всего</span>
+      <strong>{{ page().totalElements }}</strong>
+    </article>
+    <article>
+      <span>Высокий риск</span>
+      <strong>{{ highRiskCount() }}</strong>
+    </article>
+    <article>
+      <span>На проверку</span>
+      <strong>{{ managerReviewCount() }}</strong>
+    </article>
+  </section>
+
+  <section class="risk-guide" aria-label="Памятка проверки рисков">
+    <article>
+      <header>
+        <span class="material-icons-sharp">policy</span>
+        <strong>Что это</strong>
+      </header>
+      <p>Автоматические сигналы по действиям специалиста, которые выглядят необычно: слишком быстро, слишком массово или без понятной подготовки.</p>
+    </article>
+
+    <article>
+      <header>
+        <span class="material-icons-sharp">warning</span>
+        <strong>Какие бывают</strong>
+      </header>
+      <p>Массовое закрытие задач, частая публикация, быстрая публикация, деактивация аккаунта без копирования логина и пароля, поток правок текста или заметок.</p>
+    </article>
+
+    <article>
+      <header>
+        <span class="material-icons-sharp">fact_check</span>
+        <strong>Что проверить</strong>
+      </header>
+      <p>Откройте заказ или отзыв, сверьте действие с реальным результатом, посмотрите заметки, аккаунт, дату, ссылку публикации и при необходимости запросите подтверждение у специалиста.</p>
+    </article>
+
+    <article>
+      <header>
+        <span class="material-icons-sharp">task_alt</span>
+        <strong>После проверки</strong>
+      </header>
+      <p>Если работа реальная или вопрос разобран, нажмите «Проверено». Если сигнал ложный или ожидаемый, нажмите «Игнорировать». Если нужно объяснение, нажмите «Запросить разъяснение» - карточка останется открытой. Если нарушение подтвердилось, нажмите «Нарушение / штраф», затем при необходимости «Вернуть в работу».</p>
+    </article>
+  </section>
+
+  @if (error()) {
+    <app-load-error-card
+      title="Риски не загрузились"
+      [message]="error()!"
+      actionLabel="Повторить"
+      [loading]="loading()"
+      (retry)="refresh()"
+    />
+  }
+
+  <section class="risk-list">
+    @for (incident of incidents(); track trackIncident($index, incident)) {
+      <article class="risk-card" [class.high]="incident.level === 'HIGH_RISK'" [class.review]="incident.level === 'MANAGER_REVIEW'">
+        <div class="risk-card__content">
+          <header>
+            <div>
+              <strong>{{ incident.title }}</strong>
+            </div>
+            <div class="risk-card__badges">
+              <span>{{ incident.createdAt | date:'dd.MM.yyyy HH:mm' }}</span>
+              <b>{{ riskLabel(incident.level) }} · {{ incident.score }}</b>
+            </div>
+          </header>
+
+          <div class="risk-grid">
+            <div class="risk-field">
+              <span>Специалист</span>
+              <strong>{{ incident.workerName || incident.workerUsername }}</strong>
+            </div>
+
+            <div class="risk-field">
+              <span>Заказ</span>
+              @if (incident.orderId) {
+                <a [routerLink]="['/manager/orders', 0, incident.orderId]">#{{ incident.orderId }}</a>
+              } @else {
+                <strong>-</strong>
+              }
+            </div>
+
+            <div class="risk-field">
+              <span>Отзыв</span>
+              @if (incident.orderId && incident.reviewId) {
+                <a [routerLink]="['/manager/orders', 0, incident.orderId]" [queryParams]="{ reviewId: incident.reviewId }">#{{ incident.reviewId }}</a>
+              } @else {
+                <strong>{{ incident.reviewId ? '#' + incident.reviewId : '-' }}</strong>
+              }
+            </div>
+
+            @if (incident.resolutionAction) {
+              <div class="risk-field">
+                <span>Итог</span>
+                <strong>{{ resolutionLabel(incident.resolutionAction) }}</strong>
+              </div>
+            }
+
+            @if (incident.penaltyPoints > 0) {
+              <div class="risk-field">
+                <span>Штраф</span>
+                <strong>{{ incident.penaltyPoints }} б.</strong>
+              </div>
+            }
+
+            @if (incident.rollbackStatus) {
+              <div class="risk-field">
+                <span>Возврат</span>
+                <strong>{{ rollbackLabel(incident.rollbackStatus) }}</strong>
+              </div>
+            }
+          </div>
+
+          @if (incident.details || incident.message) {
+            <p>{{ incident.details || incident.message }}</p>
+          }
+
+          @if (incident.workerExplanation) {
+            <p class="worker-explanation">
+              <span>Пояснение специалиста</span>
+              {{ incident.workerExplanation }}
+              @if (incident.workerExplanationAt) {
+                <small>{{ incident.workerExplanationAt | date:'dd.MM.yyyy HH:mm' }}</small>
+              }
+            </p>
+          }
+
+          @if (incident.rollbackMessage) {
+            <p class="rollback-note">{{ incident.rollbackMessage }}</p>
+          }
+        </div>
+
+        @if (status() === 'OPEN') {
+          <footer>
+            <button type="button" class="secondary" (click)="ignore(incident)" [disabled]="mutatingId() === incident.id" title="Правило сработало лишний раз">
+              <span class="material-icons-sharp">visibility_off</span>
+              Игнорировать
+            </button>
+            @if (explanationRequested(incident)) {
+              <button type="button" class="secondary warning-action" disabled title="Запрос уже отправлен, карточка остается открытой">
+                <span class="material-icons-sharp">{{ incident.workerExplanation ? 'mark_chat_read' : 'hourglass_top' }}</span>
+                {{ incident.workerExplanation ? 'Ответ получен' : 'Ждем разъяснение' }}
+              </button>
+            } @else {
+              <button type="button" class="secondary warning-action" (click)="requestExplanation(incident)" [disabled]="mutatingId() === incident.id" title="Отправить специалисту запрос разъяснения">
+                <span class="material-icons-sharp">contact_support</span>
+                Запросить разъяснение
+              </button>
+            }
+            <button type="button" class="secondary danger-action" (click)="confirmViolation(incident)" [disabled]="mutatingId() === incident.id" title="Зафиксировать нарушение и штраф">
+              <span class="material-icons-sharp">gpp_bad</span>
+              Нарушение / штраф
+            </button>
+            <button type="button" (click)="resolve(incident)" [disabled]="mutatingId() === incident.id">
+              <span class="material-icons-sharp">task_alt</span>
+              Проверено
+            </button>
+          </footer>
+        } @else if (status() === 'VIOLATION') {
+          <footer>
+            @if (incident.canRollback) {
+              <button type="button" class="secondary danger-action" (click)="rollback(incident)" [disabled]="mutatingId() === incident.id" title="Вернуть поддерживаемую карточку в работу">
+                <span class="material-icons-sharp">undo</span>
+                Вернуть в работу
+              </button>
+            } @else if (!incident.rollbackStatus) {
+              <span class="manual-only">Автовозврат для этого действия пока не поддерживается</span>
+            }
+          </footer>
+        }
+      </article>
+    } @empty {
+      @if (!loading() && !error()) {
+        <section class="empty-state">
+          <span class="material-icons-sharp">verified_user</span>
+          <strong>Инцидентов нет</strong>
+        </section>
+      }
+    }
+  </section>
+</section>

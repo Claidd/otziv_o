@@ -170,7 +170,8 @@ export class ManagerCompanyEditModalComponent {
   }
 
   selectedBillingAccount(): CommonBillingAccountResponse | null {
-    return this.billingAccounts.find((account) => account.id === this.billingSelectedAccountId) ?? null;
+    const account = this.billingAccounts.find((item) => item.id === this.billingSelectedAccountId) ?? null;
+    return account && this.billingAccountHasCurrentCompany(account) ? account : null;
   }
 
   currentCompanyBillingAccount(): CommonBillingAccountResponse | null {
@@ -203,12 +204,18 @@ export class ManagerCompanyEditModalComponent {
     return (account.companies ?? []).filter((company) => company.enabled).length;
   }
 
+  billingAccountCompanyLabel(account: CommonBillingAccountResponse): string {
+    const count = this.billingAccountCompanyCount(account);
+    return `${count} ${this.pluralRu(count, 'компания', 'компании', 'компаний')}`;
+  }
+
   visibleBillingAccounts(): CommonBillingAccountResponse[] {
-    return this.billingAccounts.filter((account) =>
-      account.enabled
-      || this.billingAccountHasCurrentCompany(account)
-      || this.billingAccountCompanyCount(account) > 0
-    );
+    return this.billingAccounts.filter((account) => this.billingAccountHasCurrentCompany(account));
+  }
+
+  visibleBillingAccountsLabel(): string {
+    const count = this.visibleBillingAccounts().length;
+    return `${count} ${this.pluralRu(count, 'связь', 'связи', 'связей')}`;
   }
 
   billingSettingsChanged(account: CommonBillingAccountResponse): boolean {
@@ -255,9 +262,7 @@ export class ManagerCompanyEditModalComponent {
         ? 'Связь включена: заказы всех подключенных компаний собираются в один общий счет.'
         : 'Компания уже в связи, но общий счет выключен. Новые заказы не будут собираться, пока связь выключена.';
     }
-    return account.enabled
-      ? `${companyTitle} можно подключить к этой связи. После подключения ее заказы будут собираться вместе с другими компаниями связи.`
-      : 'Эта связь выключена. Сначала включите и сохраните общий счет, затем подключайте компании.';
+    return `В карточке компании показываются только связи, где участвует ${companyTitle}.`;
   }
 
   trackBillingAccount(_index: number, account: CommonBillingAccountResponse): number {
@@ -278,5 +283,17 @@ export class ManagerCompanyEditModalComponent {
 
   private billingAccountHasCompany(account: CommonBillingAccountResponse, companyId: number): boolean {
     return (account.companies ?? []).some((company) => company.companyId === companyId && company.enabled);
+  }
+
+  private pluralRu(value: number, one: string, few: string, many: string): string {
+    const mod10 = Math.abs(value) % 10;
+    const mod100 = Math.abs(value) % 100;
+    if (mod10 === 1 && mod100 !== 11) {
+      return one;
+    }
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+      return few;
+    }
+    return many;
   }
 }

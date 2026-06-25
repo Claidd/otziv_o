@@ -459,7 +459,6 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
     this.error.set(null);
     try {
       await firstValueFrom(this.api.updateManagerOrderStatus(orderId, 'Бан'));
-      await firstValueFrom(this.api.completePersonalReminder(reminder.id));
       this.reminders.update((reminders) => reminders.filter((item) => item.id !== reminder.id));
     } catch (error) {
       this.error.set(error instanceof Error ? error.message : 'Не удалось перевести заказ в Бан.');

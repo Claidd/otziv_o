@@ -4,14 +4,18 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
+import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +73,10 @@ public class OrderDeletionService {
     private final BadReviewTaskService badReviewTaskService;
     private final OrderDeletionPolicy orderDeletionPolicy;
     private final NextOrderRequestService nextOrderRequestService;
+    private final NextOrderRequestRepository nextOrderRequestRepository;
+    private final ReviewRecoveryTaskRepository reviewRecoveryTaskRepository;
+    private final ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
+    private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
@@ -95,6 +103,20 @@ public class OrderDeletionService {
                 log.info("Найдено {} деталей заказа для удаления", orderDetails.size());
 
                 int deletedBadReviewTasks = badReviewTaskService.deleteAllByOrderId(orderId);
+                int deletedReviewRecoveryTasks = reviewRecoveryTaskRepository.deleteByOrderId(orderId);
+                int deletedReviewRecoveryBatches = reviewRecoveryBatchRepository.deleteByOrderId(orderId);
+                int deletedNextOrderRequests = nextOrderRequestRepository.deleteBySourceOrderId(orderId);
+                int deletedCommonInvoiceOrders = commonInvoiceOrderRepository.deleteByOrderId(orderId);
+
+                log.info(
+                        "Удалены зависимые записи заказа ID {}: badReviewTasks={}, recoveryTasks={}, recoveryBatches={}, nextOrderRequests={}, commonInvoiceOrders={}",
+                        orderId,
+                        deletedBadReviewTasks,
+                        deletedReviewRecoveryTasks,
+                        deletedReviewRecoveryBatches,
+                        deletedNextOrderRequests,
+                        deletedCommonInvoiceOrders
+                );
 
                 int totalDeletedReviews = 0;
 

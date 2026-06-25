@@ -982,6 +982,32 @@ input[type='search']::placeholder {
   color: var(--otziv-danger);
 }
 
+.manual-task-edit-card {
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.5rem;
+  background: rgba(247, 250, 255, 0.72);
+}
+
+.manual-task-edit-card .route-segment {
+  margin: 0;
+}
+
+.manual-task-edit-card .profile-field {
+  margin: 0;
+}
+
+.manual-task-edit-card .profile-field input {
+  min-height: 2.05rem;
+  font-size: 0.68rem;
+}
+
+.manual-task-edit-card .profile-field span {
+  font-size: 0.58rem;
+}
+
 .manual-task-admin-card strong {
   overflow-wrap: anywhere;
   color: var(--otziv-dark);

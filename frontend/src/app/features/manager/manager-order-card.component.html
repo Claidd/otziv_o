@@ -9,18 +9,56 @@
   [class.card-tone--success]="isSuccessTone()"
   [class.card-tone--bad]="isBadTone()"
   [class.order-card--common]="isCommonInvoice()"
+  [class.order-card--has-communication]="hasCommunicationIndicator()"
 >
+  @if (communicationTone(); as tone) {
+    <span class="communication-wrap order-communication">
+      <button
+        type="button"
+        class="communication-indicator"
+        [class.communication-indicator--success]="tone === 'success'"
+        [class.communication-indicator--wait]="tone === 'wait'"
+        [class.communication-indicator--danger]="tone === 'danger'"
+        [title]="communicationTitle()"
+        [attr.aria-label]="communicationTitle()"
+        [attr.aria-expanded]="communicationPopoverOpen"
+        (click)="toggleCommunicationPopover($event)"
+        (blur)="closeCommunicationPopover()"
+      >
+        <span aria-hidden="true"></span>
+      </button>
+      @if (communicationPopoverOpen) {
+        <div class="communication-popover">
+          <strong>{{ communicationTitle() }}</strong>
+          @for (detail of communicationDetails(); track detail) {
+            <span>{{ detail }}</span>
+          }
+        </div>
+      }
+    </span>
+  }
+
   <header>
-    <a
-      [href]="orderHeaderUrl()"
-      [class.chat-bot-link-pending]="needsChatBot()"
-      [title]="chatLinkTitle()"
-      target="_blank"
-      rel="noopener"
-      (click)="handleChatLinkClick()"
-    >
-      {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
-    </a>
+    <span class="order-title-wrap">
+      <button
+        type="button"
+        class="order-title-button"
+        [class.chat-bot-link-pending]="needsChatBot()"
+        [attr.aria-label]="orderFullTitle()"
+        [attr.aria-expanded]="titlePopoverOpen"
+        (click)="toggleTitlePopover($event)"
+        (blur)="closeTitlePopover()"
+      >
+        {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
+      </button>
+      @if (titlePopoverOpen) {
+        <div class="order-title-popover">
+          @for (line of orderTitleDetails(); track line) {
+            <span>{{ line }}</span>
+          }
+        </div>
+      }
+    </span>
     <div class="card-id-line">
       @if (hasMeaningfulNote(order.companyComments) || (selectedCompany && hasMeaningfulNote(order.orderComments))) {
         <app-company-note-trigger
@@ -69,13 +107,6 @@
           {{ copied === 'телефон' ? '✓' : 'T' }}
         </button>
       }
-    </div>
-  }
-
-  @if (chatBindingWarning(); as warning) {
-    <div class="chat-link-warning" [title]="warning">
-      <span class="material-icons-sharp">warning</span>
-      <span>{{ warning }}</span>
     </div>
   }
 

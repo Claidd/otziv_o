@@ -201,6 +201,16 @@ export interface CreateManualPaymentTaskRequest {
   comment?: string | null;
 }
 
+export interface UpdateManualPaymentTaskRequest {
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  targetAmountKopecks: number;
+  comment?: string | null;
+}
+
 export interface ManagerPaymentLinkResponse {
   token: string;
   url: string;
@@ -534,6 +544,109 @@ export interface OrderItem {
   maxGroupChatId?: number | null;
   telegramBotInviteUrl?: string;
   maxBotInviteUrl?: string;
+  commonInvoice?: boolean;
+  commonInvoiceId?: number | null;
+  commonBillingAccountId?: number | null;
+  commonInvoiceStatus?: string | null;
+  commonInvoicePublicUrl?: string | null;
+  commonInvoiceTotalOrders?: number | null;
+  commonInvoiceReadyOrders?: number | null;
+  commonInvoicePaidOrders?: number | null;
+  commonInvoiceAmount?: number | null;
+  commonInvoicePaid?: number | null;
+  commonInvoiceRemaining?: number | null;
+  commonInvoiceSentAt?: string | null;
+  commonInvoiceLastReminderAt?: string | null;
+  commonInvoiceNextReminderAt?: string | null;
+  commonInvoiceLastError?: string | null;
+  clientMessageStatus?: ClientMessageStatus | null;
+}
+
+export interface ClientMessageStatus {
+  state: 'sent' | 'scheduled' | 'failed' | 'manual_control' | 'none';
+  label: string;
+  tone: 'success' | 'wait' | 'danger' | 'muted';
+  scenario?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  nextAttemptAt?: string | null;
+  consecutiveFailures: number;
+  sentCount: number;
+}
+
+export interface CommonBillingCompanyResponse {
+  companyId: number;
+  companyTitle: string;
+  enabled: boolean;
+}
+
+export interface CommonInvoiceSummaryResponse {
+  id: number;
+  accountId: number;
+  accountName: string;
+  title: string;
+  token: string;
+  publicUrl: string;
+  status: string;
+  totalOrders: number;
+  readyOrders: number;
+  paidOrders: number;
+  amount: number;
+  paid: number;
+  remaining: number;
+  amountKopecks: number;
+  paidKopecks: number;
+  remainingKopecks: number;
+  sentAt?: string | null;
+  lastReminderAt?: string | null;
+  nextReminderAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface CommonBillingAccountResponse {
+  id: number;
+  name: string;
+  enabled: boolean;
+  autoRepeatOrders: boolean;
+  managerId?: number | null;
+  managerName?: string | null;
+  invoiceCompanyId?: number | null;
+  invoiceCompanyTitle?: string | null;
+  companies: CommonBillingCompanyResponse[];
+  currentInvoice?: CommonInvoiceSummaryResponse | null;
+}
+
+export interface CommonBillingAccountRequest {
+  name: string;
+  enabled?: boolean;
+  autoRepeatOrders?: boolean;
+  managerId?: number | null;
+  invoiceCompanyId?: number | null;
+  companyIds?: number[];
+}
+
+export interface CommonInvoiceOrderResponse {
+  orderId: number;
+  companyId: number;
+  companyTitle: string;
+  filialTitle?: string | null;
+  orderStatus: string;
+  originalOrderStatus?: string | null;
+  amount: number;
+  amountKopecks: number;
+  ready: boolean;
+  paid: boolean;
+  unpaid: boolean;
+  detachable: boolean;
+  paidAt?: string | null;
+}
+
+export interface CommonInvoiceDetailsResponse {
+  summary: CommonInvoiceSummaryResponse;
+  orders: CommonInvoiceOrderResponse[];
+  orderCards: OrderItem[];
 }
 
 export interface OrderNotesResponse {
@@ -893,6 +1006,54 @@ export interface ManagerBoardQuery {
   pageNumber?: number;
   pageSize?: number;
   sortDirection?: 'desc' | 'asc';
+}
+
+export type WorkerRiskIncidentStatus = 'OPEN' | 'RESOLVED' | 'IGNORED' | 'VIOLATION';
+export type WorkerRiskIncidentLevel = 'WARNING' | 'MANAGER_REVIEW' | 'HIGH_RISK';
+export type WorkerRiskRollbackStatus = 'APPLIED' | 'NOT_APPLICABLE';
+export type WorkerRiskResolutionAction =
+  | 'VERIFIED'
+  | 'FALSE_POSITIVE'
+  | 'NORMAL_ACCOUNT_SELECTION'
+  | 'EXPLANATION_REQUESTED'
+  | 'VIOLATION_CONFIRMED'
+  | 'WORKER_WARNED';
+
+export interface WorkerRiskIncident {
+  id: number;
+  createdAt: string;
+  status: WorkerRiskIncidentStatus;
+  level: WorkerRiskIncidentLevel;
+  ruleCode: string;
+  score: number;
+  workerUserId: number;
+  workerUsername: string;
+  workerName: string;
+  activityEventId?: number | null;
+  action?: string | null;
+  entityType?: string | null;
+  entityId?: number | null;
+  orderId?: number | null;
+  reviewId?: number | null;
+  title: string;
+  message?: string | null;
+  details?: string | null;
+  explanationRequestedAt?: string | null;
+  explanationPromptedAt?: string | null;
+  workerExplanation?: string | null;
+  workerExplanationAt?: string | null;
+  workerExplanationByUserId?: number | null;
+  resolutionAction?: WorkerRiskResolutionAction | null;
+  resolvedAt?: string | null;
+  resolvedByUserId?: number | null;
+  resolvedByUsername?: string | null;
+  penaltyPoints: number;
+  rollbackStatus?: WorkerRiskRollbackStatus | null;
+  rolledBackAt?: string | null;
+  rolledBackByUserId?: number | null;
+  rolledBackByUsername?: string | null;
+  rollbackMessage?: string | null;
+  canRollback: boolean;
 }
 
 export interface ManagerArchiveOrdersQuery {
@@ -2226,6 +2387,16 @@ export class ApiService {
     );
   }
 
+  updateManagerManualPaymentTask(
+    taskId: number,
+    request: UpdateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      this.apiUrl(`/api/cabinet/manual-payment-tasks/${taskId}`),
+      request
+    );
+  }
+
   getDictionarySummary(includeAdminTabs: boolean): Observable<DictionarySummary> {
     const categories$ = this.http.get<unknown[]>(this.apiUrl('/api/admin/categories'));
 
@@ -2587,6 +2758,37 @@ export class ApiService {
     return this.http.get<ManagerBoard>(this.apiUrl('/api/manager/board'), { params });
   }
 
+  getManagerWorkerRiskIncidents(
+    status: WorkerRiskIncidentStatus = 'OPEN',
+    page = 0,
+    size = 50
+  ): Observable<Page<WorkerRiskIncident>> {
+    const params = new HttpParams()
+      .set('status', status)
+      .set('page', String(page))
+      .set('size', String(size));
+
+    return this.http.get<Page<WorkerRiskIncident>>(this.apiUrl('/api/manager/worker-risk/incidents'), { params });
+  }
+
+  setManagerWorkerRiskIncidentResolution(
+    incidentId: number,
+    action: WorkerRiskResolutionAction,
+    penaltyPoints?: number
+  ): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      this.apiUrl(`/api/manager/worker-risk/incidents/${incidentId}/resolution`),
+      { action, penaltyPoints }
+    );
+  }
+
+  rollbackManagerWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      this.apiUrl(`/api/manager/worker-risk/incidents/${incidentId}/rollback`),
+      {}
+    );
+  }
+
   getManagerArchiveOrders(query: ManagerArchiveOrdersQuery = {}): Observable<Page<ArchiveOrderListItem>> {
     const params = new HttpParams()
       .set('keyword', query.keyword?.trim() ?? '')
@@ -2813,6 +3015,143 @@ export class ApiService {
 
   updateManagerOrderCompanyNote(orderId: number, companyComments: string): Observable<OrderNotesResponse> {
     return this.http.put<OrderNotesResponse>(this.apiUrl(`/api/manager/orders/${orderId}/company-note`), { companyComments });
+  }
+
+  getCommonBillingAccounts(): Observable<CommonBillingAccountResponse[]> {
+    return this.http.get<CommonBillingAccountResponse[]>(this.apiUrl('/api/common-billing/accounts'));
+  }
+
+  getCommonBillingAccountsForCompany(companyId: number): Observable<CommonBillingAccountResponse[]> {
+    return this.http.get<CommonBillingAccountResponse[]>(
+      this.apiUrl(`/api/common-billing/accounts/by-company/${companyId}`)
+    );
+  }
+
+  createCommonBillingAccount(request: CommonBillingAccountRequest): Observable<CommonBillingAccountResponse> {
+    return this.http.post<CommonBillingAccountResponse>(this.apiUrl('/api/common-billing/accounts'), request);
+  }
+
+  updateCommonBillingAccount(
+    accountId: number,
+    request: CommonBillingAccountRequest
+  ): Observable<CommonBillingAccountResponse> {
+    return this.http.put<CommonBillingAccountResponse>(
+      this.apiUrl(`/api/common-billing/accounts/${accountId}`),
+      request
+    );
+  }
+
+  addCommonBillingCompany(accountId: number, companyId: number): Observable<CommonBillingAccountResponse> {
+    return this.http.post<CommonBillingAccountResponse>(
+      this.apiUrl(`/api/common-billing/accounts/${accountId}/companies/${companyId}`),
+      {}
+    );
+  }
+
+  removeCommonBillingCompany(
+    accountId: number,
+    companyId: number,
+    detachCurrent = false
+  ): Observable<CommonBillingAccountResponse> {
+    const params = new HttpParams().set('detachCurrent', String(detachCurrent));
+    return this.http.delete<CommonBillingAccountResponse>(
+      this.apiUrl(`/api/common-billing/accounts/${accountId}/companies/${companyId}`),
+      { params }
+    );
+  }
+
+  getCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.get<CommonInvoiceDetailsResponse>(this.apiUrl(`/api/common-billing/invoices/${invoiceId}`));
+  }
+
+  sendCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/send`),
+      {}
+    );
+  }
+
+  remindCommonInvoice(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/remind`),
+      {}
+    );
+  }
+
+  markCommonInvoicePaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/paid`),
+      {}
+    );
+  }
+
+  markCommonInvoiceUnpaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/unpaid`),
+      {}
+    );
+  }
+
+  markCommonInvoiceBan(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/ban`),
+      {}
+    );
+  }
+
+  retryCommonInvoiceAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/retry`),
+      {}
+    );
+  }
+
+  resolveCommonInvoiceAttention(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/resolve`),
+      {}
+    );
+  }
+
+  applyCommonInvoiceLatePayment(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/apply-late-payment`),
+      {}
+    );
+  }
+
+  confirmCommonInvoiceFinalPaymentCancelCheck(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/confirm-final-cancel-check`),
+      {}
+    );
+  }
+
+  confirmCommonInvoicePaymentInitCheck(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/attention/confirm-payment-init-check`),
+      {}
+    );
+  }
+
+  markCommonInvoiceOrderPaid(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/${orderId}/paid`),
+      {}
+    );
+  }
+
+  approveCommonInvoiceReviewOrders(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/approve-review`),
+      {}
+    );
+  }
+
+  detachCommonInvoiceOrder(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.delete<CommonInvoiceDetailsResponse>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}/orders/${orderId}`)
+    );
   }
 
   getReviewCheck(orderDetailId: string): Observable<ReviewCheckPayload> {
@@ -3290,6 +3629,16 @@ export class ApiService {
     return this.http.put<ManualPaymentTaskResponse>(
       this.apiUrl(`/api/admin/payments/manual-tasks/${taskId}/status`),
       { status }
+    );
+  }
+
+  updateAdminManualPaymentTask(
+    taskId: number,
+    request: UpdateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      this.apiUrl(`/api/admin/payments/manual-tasks/${taskId}`),
+      request
     );
   }
 

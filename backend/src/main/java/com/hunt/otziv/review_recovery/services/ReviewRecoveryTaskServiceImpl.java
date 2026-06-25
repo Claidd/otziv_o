@@ -9,6 +9,7 @@ import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -113,6 +114,12 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ReviewRecoveryTask getTask(Long taskId) {
+        return requireTask(taskId);
+    }
+
+    @Override
     @Transactional
     public ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate) {
         ReviewRecoveryTask task = requireTask(taskId);
@@ -155,6 +162,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         gamificationEventService.recordReviewRecoveryTaskDone(savedTask);
         completeBatchIfReady(savedTask.getBatch());
+        auditTaskCompleted(savedTask);
 
         log.info("Задача восстановления {} выполнена, отзыв {}, заказ {}",
                 savedTask.getId(), reviewId(savedTask), orderId(savedTask));
@@ -716,6 +724,23 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 oldActive,
                 newActive,
                 details
+        );
+    }
+
+    private void auditTaskCompleted(ReviewRecoveryTask task) {
+        if (task == null || task.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                WorkerTaskCompletionMonitorService.ACTION_TASK_COMPLETED,
+                "review_recovery_task",
+                task.getId(),
+                task.getOrder() == null ? null : task.getOrder().getId(),
+                task.getSourceReview() == null ? null : task.getSourceReview().getId(),
+                ReviewRecoveryTaskStatus.PLANNED,
+                ReviewRecoveryTaskStatus.DONE,
+                "Задача восстановления отмечена выполненной"
         );
     }
 }

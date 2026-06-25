@@ -1,0 +1,45 @@
+name: Dependency audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - frontend
+          - mobile
+          - whatsapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.project }}/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: ${{ matrix.project }}
+      - run: npm audit --omit=dev --audit-level=moderate
+        working-directory: ${{ matrix.project }}
+
+  maven-audit:
+    name: Maven dependency-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "26"
+          cache: maven
+      - run: ./mvnw -Psecurity-audit -DskipTests verify
+        working-directory: backend

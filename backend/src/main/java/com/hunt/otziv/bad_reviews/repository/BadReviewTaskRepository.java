@@ -26,6 +26,8 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
         LEFT JOIN FETCH t.order o
         LEFT JOIN FETCH o.status
         LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial ofi
+        LEFT JOIN FETCH ofi.city
         LEFT JOIN FETCH o.manager om
         LEFT JOIN FETCH om.user
         LEFT JOIN FETCH t.sourceReview r
@@ -56,6 +58,10 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     @Modifying
     @Query("DELETE FROM BadReviewTask t WHERE t.order.id = :orderId")
     int deleteAllByOrderId(@Param("orderId") Long orderId);
+
+    @Modifying
+    @Query("DELETE FROM BadReviewTask t WHERE t.order.id = :orderId AND t.status = :status")
+    int deleteAllByOrderIdAndStatus(@Param("orderId") Long orderId, @Param("status") BadReviewTaskStatus status);
 
     boolean existsByOrderIdAndSourceReviewIdAndStatusIn(
             Long orderId,
@@ -402,6 +408,18 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
             BadReviewTaskStatus status,
             LocalDate scheduledDate,
             Collection<Manager> managers
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE BadReviewTask t
+        SET t.scheduledDate = :newDate
+        WHERE t.status = :status
+          AND t.scheduledDate < :newDate
+    """)
+    int actualizeActiveTasksBefore(
+            @Param("status") BadReviewTaskStatus status,
+            @Param("newDate") LocalDate newDate
     );
 
     @Query("""

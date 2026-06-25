@@ -63,6 +63,7 @@ export class PersonalRemindersService implements OnDestroy {
     : (event: Event) => this.handleRecoveryClientNotified(event);
   private loaded = false;
   private lastDueToastKey = '';
+  private skipNextDueToast = false;
 
   readonly authenticated = this.auth.authenticated;
   readonly now = signal(Date.now());
@@ -158,7 +159,7 @@ export class PersonalRemindersService implements OnDestroy {
   complete(id: number): Observable<PersonalReminder> {
     return this.http.post<PersonalReminder>(`${this.endpoint}/${id}/complete`, {}).pipe(
       tap(() => {
-        this.reminders.update((reminders) => reminders.filter((reminder) => reminder.id !== id));
+        this.removeReminderSilently(id);
       })
     );
   }
@@ -166,9 +167,13 @@ export class PersonalRemindersService implements OnDestroy {
   remove(id: number): Observable<void> {
     return this.http.delete<void>(`${this.endpoint}/${id}`).pipe(
       tap(() => {
-        this.reminders.update((reminders) => reminders.filter((reminder) => reminder.id !== id));
+        this.removeReminderSilently(id);
       })
     );
+  }
+
+  removeLocal(id: number): void {
+    this.removeReminderSilently(id);
   }
 
   dispatchRecoveryClientNotified(detail: RecoveryClientNotifiedDetail): void {
@@ -188,6 +193,11 @@ export class PersonalRemindersService implements OnDestroy {
     }
 
     this.lastDueToastKey = key;
+    if (this.skipNextDueToast) {
+      this.skipNextDueToast = false;
+      return false;
+    }
+
     return true;
   }
 
@@ -302,7 +312,7 @@ export class PersonalRemindersService implements OnDestroy {
       return;
     }
 
-    this.reminders.update((reminders) => reminders.filter((reminder) => {
+    const nextReminders = this.reminders().filter((reminder) => {
       const sameBatch = reminder.sourceType === REVIEW_RECOVERY_BATCH_SOURCE
         && reminder.sourceId === detail.batchId;
       const legacySameOrder = reminder.sourceType !== REVIEW_RECOVERY_BATCH_SOURCE
@@ -310,6 +320,31 @@ export class PersonalRemindersService implements OnDestroy {
         && reminder.text.includes(`#${detail.orderId}`);
 
       return !sameBatch && !legacySameOrder;
-    }));
+    });
+    this.setRemindersAfterManualCompletion(nextReminders);
+  }
+
+  private removeReminderSilently(id: number): void {
+    const nextReminders = this.reminders().filter((reminder) => reminder.id !== id);
+    this.setRemindersAfterManualCompletion(nextReminders);
+  }
+
+  private setRemindersAfterManualCompletion(reminders: PersonalReminder[]): void {
+    this.skipNextDueToast = this.hasDueReminder(reminders);
+    this.reminders.set(reminders);
+  }
+
+  private hasDueReminder(reminders: PersonalReminder[]): boolean {
+    const now = this.now();
+    return reminders.some((reminder) => !reminder.completedAt && this.isDueAt(reminder, now));
+  }
+
+  private isDueAt(reminder: PersonalReminder, now: number): boolean {
+    if (!reminder.remindAt) {
+      return this.isImplicitlyDue(reminder);
+    }
+
+    const dueAt = Date.parse(reminder.remindAt);
+    return Number.isFinite(dueAt) && dueAt <= now;
   }
 }

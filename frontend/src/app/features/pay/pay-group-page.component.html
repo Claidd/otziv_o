@@ -1,0 +1,176 @@
+<app-admin-layout [title]="title()" [active]="'pay'" [rightPanelMode]="'custom'">
+  <section class="pay-shell">
+    @if (loading()) {
+      <section class="payment-state" aria-live="polite">
+        <span class="material-icons-sharp" aria-hidden="true">hourglass_top</span>
+        <strong>Открываем общий счет</strong>
+        <small>Проверяем состав и остаток оплаты</small>
+      </section>
+    } @else if (invoice()) {
+      @let item = invoice();
+      <section class="payment-widget" aria-label="Общий счет">
+        <header class="payment-head">
+          <div>
+            <span class="merchant-name">Компания О!</span>
+            <strong>{{ formatRubles(item?.remaining) }} ₽</strong>
+            <small>{{ item?.accountName || item?.title }}</small>
+          </div>
+          <span class="brand-mark" aria-hidden="true">О!</span>
+        </header>
+
+        @if (item?.status === 'PAID') {
+          <article class="payment-complete-card" aria-live="polite">
+            <span class="payment-complete-icon" aria-hidden="true">
+              <span class="material-icons-sharp">task_alt</span>
+            </span>
+            <div>
+              <h2>Общий счет оплачен</h2>
+              <p>Оплата по этой ссылке больше не требуется.</p>
+            </div>
+          </article>
+        } @else {
+          <article class="checkout-card">
+            <div class="method-title">
+              <div>
+                <h2>Оплата остатка</h2>
+                <p>{{ item?.title || 'Общий счет' }}</p>
+              </div>
+              <span>{{ statusLabel() }}</span>
+            </div>
+
+            <div class="order-summary" aria-label="Итоги общего счета">
+              <div>
+                <small>Всего</small>
+                <strong>{{ formatRubles(item?.amount) }} ₽</strong>
+              </div>
+              <div>
+                <small>Оплачено</small>
+                <strong>{{ formatRubles(item?.paid) }} ₽</strong>
+              </div>
+              <div>
+                <small>Остаток</small>
+                <strong>{{ formatRubles(item?.remaining) }} ₽</strong>
+              </div>
+              <div>
+                <small>Заказы</small>
+                <strong>{{ paidOrders() }}/{{ item?.orders?.length || 0 }} оплачено</strong>
+              </div>
+            </div>
+
+            <section class="group-orders" aria-label="Состав общего счета">
+              @for (order of item?.orders ?? []; track trackOrder($index, order)) {
+                <article [class.paid]="order.paid">
+                  <div>
+                    <strong>№{{ order.orderId }} · {{ order.companyTitle }}</strong>
+                    <small>{{ order.filialTitle || 'Филиал не указан' }} · {{ order.orderStatus }}</small>
+                  </div>
+                  <span>{{ order.paid ? 'оплачен' : formatRubles(order.amount) + ' ₽' }}</span>
+                </article>
+              }
+            </section>
+
+            <form class="pay-form" (ngSubmit)="submitPayment()" aria-label="Данные для оплаты">
+              <label class="email-field">
+                <span>E-mail для электронного чека</span>
+                <input
+                  type="email"
+                  name="email"
+                  autocomplete="email"
+                  [ngModel]="email()"
+                  (ngModelChange)="email.set($event)"
+                  placeholder="client@example.ru"
+                >
+              </label>
+
+              <div class="consent-stack">
+                <label class="consent">
+                  <input
+                    type="checkbox"
+                    name="offerConsent"
+                    [ngModel]="offerConsent()"
+                    (ngModelChange)="offerConsent.set($event)"
+                  >
+                  <span>Согласен с <a routerLink="/offer">публичной офертой</a>.</span>
+                </label>
+
+                <label class="consent">
+                  <input
+                    type="checkbox"
+                    name="privacyConsent"
+                    [ngModel]="privacyConsent()"
+                    (ngModelChange)="privacyConsent.set($event)"
+                  >
+                  <span>Согласен с <a routerLink="/privacy">политикой персональных данных</a>.</span>
+                </label>
+
+                <label class="consent">
+                  <input
+                    type="checkbox"
+                    name="receiptConsent"
+                    [ngModel]="receiptConsent()"
+                    (ngModelChange)="receiptConsent.set($event)"
+                  >
+                  <span>Согласен получить <a routerLink="/receipt-consent">электронный чек</a> на указанный e-mail.</span>
+                </label>
+              </div>
+
+              <button class="primary-pay-button" type="submit" [disabled]="!canSubmit()">
+                <span class="material-icons-sharp" aria-hidden="true">{{ submitting() ? 'hourglass_top' : 'payments' }}</span>
+                {{ submitting() ? 'Открываем форму банка' : 'Оплатить остаток' }}
+              </button>
+
+              <div class="payment-badges" aria-label="Способы оплаты">
+                <span>МИР</span>
+                <span>VISA</span>
+                <span>Mastercard</span>
+                <span>Без НДС</span>
+              </div>
+            </form>
+          </article>
+        }
+
+        @if (message()) {
+          <p class="pay-message">{{ message() }}</p>
+        }
+        @if (error()) {
+          <p class="pay-error">{{ error() }}</p>
+        }
+      </section>
+    } @else {
+      <section class="payment-state payment-state--error" aria-live="polite">
+        <span class="material-icons-sharp" aria-hidden="true">error</span>
+        <strong>{{ error() || 'Общий счет не найден.' }}</strong>
+        <small>Проверьте ссылку или запросите новую у менеджера</small>
+      </section>
+    }
+  </section>
+
+  <section admin-right-content class="pay-side">
+    <div class="pay-side-head">
+      <span class="brand-mark" aria-hidden="true">О!</span>
+      <div>
+        <h2>Компания О!</h2>
+        <p>Общий счет</p>
+      </div>
+    </div>
+    <div class="pay-side-card">
+      <span class="material-icons-sharp" aria-hidden="true">verified_user</span>
+      <strong>Платеж проходит на стороне банка</strong>
+      <small>Сумма формы банка создается на текущий остаток</small>
+    </div>
+    <nav aria-label="Публичные ссылки">
+      <a routerLink="/">
+        <span class="material-icons-sharp" aria-hidden="true">home</span>
+        <strong>Главная</strong>
+      </a>
+      <a routerLink="/payment">
+        <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
+        <strong>Оплата</strong>
+      </a>
+      <a routerLink="/contacts">
+        <span class="material-icons-sharp" aria-hidden="true">contacts</span>
+        <strong>Контакты</strong>
+      </a>
+    </nav>
+  </section>
+</app-admin-layout>

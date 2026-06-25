@@ -4,8 +4,8 @@ param(
     [string]$WebRepository = "otziv-web",
     [string]$Tag = (Get-Date -Format "yyyyMMdd-HHmmss"),
     [string]$VpsHost = "",
-    [string]$VpsUser = "root",
-    [int]$VpsPort = 22,
+    [string]$VpsUser = "hunt",
+    [int]$VpsPort = 22022,
     [string]$VpsPath = "/opt/otziv",
     [string]$SshKey = "",
     [string]$EnvFile = ".env.prod",
@@ -27,7 +27,7 @@ copies the tar directly to the VPS over SSH, loads images there, updates the
 remote env image tags, and starts docker compose without pulling from registry.
 
 Example:
-  .\infrastructure\scripts\prod\deploy-prod-ssh-images.ps1 -VpsHost 95.213.248.152 -VpsUser root -VpsPath /docker -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 -RemoteEnvFile .env -Tag 2.3 -SkipEnvUpload
+  .\infrastructure\scripts\prod\deploy-prod-ssh-images.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -VpsPath /docker -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 -RemoteEnvFile .env -Tag 2.3 -SkipEnvUpload
 '@ | Write-Host
 }
 
@@ -259,6 +259,32 @@ require_compose_service() {
   fi
 }
 
+wait_service_healthy() {
+  service_name="`$1"
+  timeout_seconds="`$2"
+  elapsed=0
+  interval=5
+
+  echo "Waiting for `$service_name to become healthy..."
+  while [ "`$elapsed" -lt "`$timeout_seconds" ]; do
+    container_id="`$(compose ps -q "`$service_name" 2>/dev/null | head -n 1 || true)"
+    if [ -n "`$container_id" ]; then
+      health_status="`$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "`$container_id" 2>/dev/null || true)"
+      if [ "`$health_status" = "healthy" ] || [ "`$health_status" = "running" ]; then
+        echo "`$service_name is ready (`$health_status)."
+        return 0
+      fi
+    fi
+
+    sleep "`$interval"
+    elapsed="`$((elapsed + interval))"
+  done
+
+  echo "`$service_name did not become healthy within `$timeout_seconds seconds." >&2
+  compose ps "`$service_name" >&2 || true
+  return 1
+}
+
 set_env() {
   key="`$1"
   value="`$2"
@@ -345,6 +371,7 @@ require_compose_service whatsapp_vika
 compose down --remove-orphans || true
 compose build whatsapp_lika whatsapp_vika
 compose up -d --remove-orphans
+wait_service_healthy keycloak 900
 infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
 compose ps
 "@

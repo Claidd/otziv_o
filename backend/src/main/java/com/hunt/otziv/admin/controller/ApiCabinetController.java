@@ -19,6 +19,7 @@ import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.UpdateManagerManualPaymentSettingsRequest;
+import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskStatusRequest;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
@@ -192,6 +193,22 @@ public class ApiCabinetController {
                 user.getId(),
                 taskId,
                 request == null ? null : request.status(),
+                principal.getName()
+        );
+    }
+
+    @PutMapping("/manual-payment-tasks/{taskId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManualPaymentTaskResponse updateManualPaymentTask(
+            Principal principal,
+            @PathVariable Long taskId,
+            @RequestBody UpdateManualPaymentTaskRequest request
+    ) {
+        User user = currentUser(principal);
+        return manualPaymentTaskService.updateManagerTask(
+                user.getId(),
+                taskId,
+                request,
                 principal.getName()
         );
     }

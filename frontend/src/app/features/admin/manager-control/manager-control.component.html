@@ -1,0 +1,546 @@
+<app-admin-layout title="Контроль менеджеров" active="manager-control" rightPanelMode="custom">
+  <section class="manager-control">
+    <header class="control-head">
+      <div>
+        <p class="eyebrow">ADMIN / OWNER</p>
+        <h2>Контроль дня</h2>
+      </div>
+      <div class="toolbar-actions">
+        <div class="date-pill">
+          <strong>{{ summaryDate() | date: 'dd.MM.yyyy' }}</strong>
+          <span>{{ generatedAt() | date: 'HH:mm' }}</span>
+        </div>
+        <button type="button" class="refresh" (click)="load()" [disabled]="loading()">
+          <span class="material-icons-sharp">refresh</span>
+          {{ loading() ? 'Обновляю' : 'Обновить' }}
+        </button>
+      </div>
+    </header>
+
+    @if (error()) {
+      <app-load-error-card
+        title="Контроль не загрузился"
+        [message]="error()!"
+        actionLabel="Повторить"
+        [loading]="loading()"
+        (retry)="load()"
+      />
+    }
+
+    <section class="control-section manager-section" aria-label="Менеджеры">
+      <div class="section-title">
+        <span class="material-icons-sharp">manage_accounts</span>
+        <h2>Менеджеры</h2>
+      </div>
+
+      <div class="manager-list">
+        @for (manager of managers(); track trackManager($index, manager)) {
+          <article
+            class="manager-row"
+            [class.red]="manager.status === 'RED'"
+            [class.yellow]="manager.status === 'YELLOW'"
+            [class.green]="manager.status === 'GREEN'"
+            [class.selected]="selectedManager()?.managerId === manager.managerId"
+            (mouseenter)="selectManager(manager)"
+            (focusin)="selectManager(manager)"
+          >
+            <header class="manager-card-head">
+              <div class="manager-main">
+                <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
+                <div>
+                  <h2>{{ manager.name }}</h2>
+                  <p>{{ manager.username || 'без логина' }}</p>
+                </div>
+              </div>
+
+              <div class="manager-status">
+                <span class="status-badge">{{ statusLabel(manager.status) }}</span>
+                <strong>{{ manager.totalAttentionCount }} к действию</strong>
+                <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
+              </div>
+
+              <button type="button" class="details-button" (click)="openDetails(manager)">
+                <span class="material-icons-sharp">list_alt</span>
+                Детали
+              </button>
+            </header>
+
+            <div class="manager-numbers">
+              <span class="metric urgent"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
+              <span class="metric urgent"><b>{{ manager.openRiskCount }}</b><small>риски</small></span>
+              <span class="metric"><b>{{ manager.criticalCount }}</b><small>критичные</small></span>
+            </div>
+
+            @if (hasActionRows(manager)) {
+              <section class="control-group action-group">
+                <div class="group-head">
+                  <span class="material-icons-sharp">priority_high</span>
+                  <strong>К действию</strong>
+                </div>
+                <div class="chip-list">
+                  @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
+                    <a [href]="problem.targetUrl" class="control-chip critical" [class]="itemActionClass(problem.actionType)" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                      <span class="material-icons-sharp">{{ problem.icon }}</span>
+                      <span>{{ problem.label }}</span>
+                      <strong>{{ problem.count }}</strong>
+                      @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
+                        <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
+                      }
+                    </a>
+                  }
+                  @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
+                    <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical" [class]="itemActionClass(overdue.actionType)" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
+                      <span>{{ overdue.status }}</span>
+                      <strong>{{ overdue.count }}</strong>
+                      <small>{{ overdue.maxDays }} дн.</small>
+                      @if (overdue.itemStatus && overdue.itemStatus !== 'OPEN') {
+                        <em>{{ itemStatusLabel(overdue.itemStatus) }}</em>
+                      }
+                    </a>
+                  }
+                  @for (section of actionSections(manager); track trackSection($index, section)) {
+                    <a [href]="section.targetUrl" class="control-chip critical" [class]="itemActionClass(section.actionType)" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
+                      <span>{{ section.label }}</span>
+                      <strong>{{ section.count }}</strong>
+                      @if (section.itemStatus && section.itemStatus !== 'OPEN') {
+                        <em>{{ itemStatusLabel(section.itemStatus) }}</em>
+                      }
+                    </a>
+                  }
+                </div>
+              </section>
+            } @else {
+              <div class="clean-state">
+                <span class="material-icons-sharp">done_all</span>
+                Нет открытых действий
+              </div>
+            }
+
+          </article>
+        } @empty {
+          <div class="empty-state">
+            <span class="material-icons-sharp">manage_accounts</span>
+            <h2>Менеджеров нет</h2>
+          </div>
+        }
+      </div>
+    </section>
+  </section>
+
+  <section admin-right-content class="control-side">
+    <section class="side-summary" aria-label="Сводка контроля">
+      <div class="side-title">
+        <span class="material-icons-sharp">fact_check</span>
+        <h2>Сводка</h2>
+      </div>
+
+      <div class="summary-grid">
+        <article class="summary-tile red">
+          <span class="material-icons-sharp">error</span>
+          <div>
+            <strong>{{ redCount() }}</strong>
+            <small>красных</small>
+          </div>
+        </article>
+        <article class="summary-tile yellow">
+          <span class="material-icons-sharp">report_problem</span>
+          <div>
+            <strong>{{ yellowCount() }}</strong>
+            <small>желтых</small>
+          </div>
+        </article>
+        <article class="summary-tile green">
+          <span class="material-icons-sharp">task_alt</span>
+          <div>
+            <strong>{{ greenCount() }}</strong>
+            <small>зеленых</small>
+          </div>
+        </article>
+        <article class="summary-tile neutral">
+          <span class="material-icons-sharp">radar</span>
+          <div>
+            <strong>{{ attentionTotal() }}</strong>
+            <small>к действию</small>
+          </div>
+        </article>
+        <article class="summary-tile neutral">
+          <span class="material-icons-sharp">priority_high</span>
+          <div>
+            <strong>{{ criticalTotal() }}</strong>
+            <small>критичных</small>
+          </div>
+        </article>
+        <article class="summary-tile neutral">
+          <span class="material-icons-sharp">inventory_2</span>
+          <div>
+            <strong>{{ workloadTotal() }}</strong>
+            <small>нагрузка</small>
+          </div>
+        </article>
+        <article class="summary-tile neutral">
+          <span class="material-icons-sharp">groups</span>
+          <div>
+            <strong>{{ managersTotal() }}</strong>
+            <small>менеджеров</small>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    @if (selectedManager(); as manager) {
+      <section class="side-load-card" aria-label="Нагрузка выбранного менеджера">
+        <div class="side-title">
+          <span class="material-icons-sharp">inventory_2</span>
+          <h2>Нагрузка менеджера</h2>
+        </div>
+        <div class="side-load-head">
+          <div>
+            <strong>{{ manager.name }}</strong>
+            <small>{{ manager.username || 'без логина' }}</small>
+          </div>
+          <span class="status-badge">{{ statusLabel(manager.status) }}</span>
+        </div>
+
+        <div class="load-metrics">
+          <span><b>{{ manager.workloadCount }}</b><small>всего в работе</small></span>
+          <span><b>{{ manager.orderAttentionCount }}</b><small>заказов</small></span>
+          <span><b>{{ manager.workerSectionCount }}</b><small>спец.</small></span>
+        </div>
+
+        @if (hasWorkloadRows(manager)) {
+          <div class="side-chip-list">
+            @for (problem of workloadProblems(manager); track trackProblem($index, problem)) {
+              <a [href]="problem.targetUrl" class="side-load-chip">
+                <span class="material-icons-sharp">{{ problem.icon }}</span>
+                <span>{{ problem.label }}</span>
+                <strong>{{ problem.count }}</strong>
+                @if (workloadProblemAlert(manager, problem); as alert) {
+                  <small>{{ alert }}</small>
+                }
+              </a>
+            }
+            @for (section of workloadSections(manager); track trackSection($index, section)) {
+              <a [href]="section.targetUrl" class="side-load-chip">
+                <span>{{ section.label }}</span>
+                <strong>{{ section.count }}</strong>
+              </a>
+            }
+          </div>
+        } @else {
+          <p class="side-empty">Рабочей нагрузки нет</p>
+        }
+      </section>
+    }
+
+    <h2>Тестовый режим</h2>
+    <div class="side-metric">
+      <span>Видимость</span>
+      <strong>{{ summary()?.managerVisible ? 'менеджеры' : 'админ / владелец' }}</strong>
+    </div>
+    <div class="side-metric">
+      <span>Состояние</span>
+      <strong>{{ summary()?.testMode ? 'наблюдение' : 'рабочий контур' }}</strong>
+    </div>
+    @for (manager of topManagers(); track trackManager($index, manager)) {
+      <article class="side-manager" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
+        <span class="material-icons-sharp">{{ statusIcon(manager.status) }}</span>
+        <div>
+          <strong>{{ manager.name }}</strong>
+          <small>{{ manager.totalAttentionCount }} к действию · {{ manager.workloadCount }} нагрузка</small>
+        </div>
+      </article>
+    }
+  </section>
+
+  @if (detail() || detailLoading() || detailError()) {
+    <div class="detail-backdrop" (click)="closeDetails()">
+      <section class="detail-modal" role="dialog" aria-modal="true" aria-label="Детализация контроля менеджера" (click)="$event.stopPropagation()">
+        <header class="detail-head">
+          <div class="detail-title">
+            <p class="eyebrow">Контроль дня</p>
+            <h2>{{ detail()?.name || 'Детализация менеджера' }}</h2>
+            @if (detail()) {
+              <small>{{ detail()!.controlDate | date: 'dd.MM.yyyy' }} · {{ visibleDetailOpenCount() }} открыто · {{ visibleDetailHandledCount() }} обработано</small>
+            }
+          </div>
+          @if (detail()) {
+            <section class="day-control-panel">
+              <div class="day-score" [class.risk]="detail()!.fastClickRisk || detail()!.riskScore >= 50">
+                <span class="material-icons-sharp">workspace_premium</span>
+                <div>
+                  <strong>{{ detail()!.qualityGrade || '-' }} · {{ detail()!.qualityScore }}</strong>
+                  <small>риск {{ detail()!.riskScore }}{{ detail()!.fastClickRisk ? ' · быстрые клики' : '' }}</small>
+                </div>
+              </div>
+              <div class="stage-actions">
+                <button type="button" [class.done]="stageDone('morningCompletedAt')" (click)="markStage('MORNING_DONE')" [disabled]="updatingControl()">
+                  <span class="material-icons-sharp">task_alt</span>
+                  Утро
+                </button>
+                <button type="button" [class.done]="stageDone('dayCheckedAt')" (click)="markStage('DAY_CHECK')" [disabled]="updatingControl()">
+                  <span class="material-icons-sharp">radar</span>
+                  День
+                </button>
+                <button type="button" [class.done]="stageDone('finalCheckedAt')" (click)="markStage('FINAL_CHECK')" [disabled]="updatingControl()">
+                  <span class="material-icons-sharp">fact_check</span>
+                  Финал
+                </button>
+                <button type="button" class="close-day-button" [class.ready]="detail()!.canCloseDay" (click)="closeDay()" [disabled]="updatingControl()">
+                  <span class="material-icons-sharp">lock</span>
+                  Закрыть день
+                </button>
+              </div>
+              @if (detail()!.closeBlockers.length) {
+                <div class="close-blockers" [title]="detail()!.closeBlockers.join('\n')">
+                  <span>
+                    <b>{{ detail()!.closeBlockers.length }}</b>
+                    блок.
+                  </span>
+                  <em>{{ detail()!.closeBlockers[0] }}</em>
+                </div>
+              }
+            </section>
+          }
+          <button type="button" class="detail-close" title="Закрыть" (click)="closeDetails()">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+
+        @if (detailLoading()) {
+          <div class="detail-state">
+            <span class="material-icons-sharp">hourglass_top</span>
+            <p>Загружаю пункты контроля</p>
+          </div>
+        } @else if (detailError()) {
+          <div class="detail-state error">
+            <span class="material-icons-sharp">error</span>
+            <p>{{ detailError() }}</p>
+          </div>
+        } @else if (detail()) {
+          <div class="detail-list">
+            @for (item of visibleDetailItems(); track trackDetailItem($index, item)) {
+              <article class="detail-item" [class.critical]="item.severity === 'CRITICAL'" [class.workload]="item.group === 'WORKLOAD'" [class.handled]="item.itemStatus !== 'OPEN'">
+                <div class="detail-item-main">
+                  <div>
+                    <h3>{{ item.label }}</h3>
+                    <p>{{ item.reasonLabel }}</p>
+                  </div>
+                  <div class="detail-badges">
+                    <span [class]="itemStatusClass(item.itemStatus)">{{ itemStatusLabel(item.itemStatus) }}</span>
+                    <span>{{ severityLabel(item.severity) }}</span>
+                    <span>{{ groupLabel(item.group) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-meta">
+                  <span><b>{{ item.count }}</b> пунктов</span>
+                  <span>{{ item.updatedAt | date: 'dd.MM HH:mm' }}</span>
+                  <a [href]="detailItemTargetUrl(item)">{{ detailItemTargetLabel(item) }}</a>
+                </div>
+
+                @if (item.examples.length) {
+                  <div class="detail-examples">
+                    @for (example of item.examples; track example.controlEntityId || example.type + '-' + example.entityId + '-' + $index) {
+                      <div class="detail-example" [class.handled]="example.itemStatus && example.itemStatus !== 'OPEN'">
+                        <span class="material-icons-sharp">{{ exampleIcon(example) }}</span>
+                        <div class="detail-example-body">
+                          <a class="detail-example-link" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
+                            <span class="detail-example-text">
+                              <strong>{{ example.title }}</strong>
+                              <small>
+                                @if (example.status) {
+                                  <b>{{ example.status }}</b>
+                                }
+                                @if (example.ageDays !== null && example.ageDays !== undefined) {
+                                  <span>{{ example.ageDays }} дн.</span>
+                                }
+                                @if (example.subtitle) {
+                                  <span>{{ example.subtitle }}</span>
+                                }
+                              </small>
+                              @if (example.reason) {
+                                <em>{{ example.reason }}</em>
+                              }
+                              @if (managerActionNote(example)) {
+                                <em class="manager-action-note">{{ managerActionNote(example) }}</em>
+                              }
+                            </span>
+                            <span class="detail-example-flags">
+                              <span class="detail-example-status" [class]="itemStatusClass(example.itemStatus)">
+                                {{ itemStatusLabel(example.itemStatus || 'OPEN') }}
+                              </span>
+                              @if (canRequestWorkerTask(example)) {
+                                <span
+                                  class="worker-notification-badge"
+                                  [class]="workerNotificationBadgeClass(example)"
+                                  [title]="workerNotificationTitle(example)"
+                                >
+                                  {{ workerNotificationBadgeLabel(example) }}
+                                </span>
+                              }
+                            </span>
+                          </a>
+
+                          @if (example.type === 'ORDER') {
+                            <div class="review-followup order-open-action">
+                              <a class="review-action primary" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
+                                <span class="material-icons-sharp">view_kanban</span>
+                                Заказ
+                              </a>
+                              @if (canContactOrder(example)) {
+                                <button type="button" class="review-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)">
+                                  <span class="material-icons-sharp">content_copy</span>
+                                  {{ isContactTextCopied(example) ? 'Текст готов' : 'Текст' }}
+                                </button>
+                                @if (chatUrl(example)) {
+                                  <a class="review-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                    <span class="material-icons-sharp">forum</span>
+                                    Чат
+                                  </a>
+                                }
+                                <button
+                                  type="button"
+                                  class="review-action primary"
+                                  (click)="markContactSent(example)"
+                                  [disabled]="!canMarkContactSent(example) || isConcreteUpdating(example.controlEntityId)"
+                                  [title]="contactSentDisabledTitle(example)"
+                                >
+                                  <span class="material-icons-sharp">send</span>
+                                  Отправлено
+                                </button>
+                                <small>{{ contactFollowUpHint(example) }}</small>
+                              }
+                            </div>
+                          }
+
+                          @if (canRequestWorkerTask(example)) {
+                            <div class="review-followup worker-request">
+                              @if (chatUrl(example)) {
+                                <a class="review-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                  <span class="material-icons-sharp">forum</span>
+                                  Чат
+                                </a>
+                              }
+                              <button type="button" class="review-action primary" (click)="requestWorkerTask(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
+                                <span class="material-icons-sharp">campaign</span>
+                                Запросить
+                              </button>
+                              @if (canMarkWorkerTaskSentManually(example)) {
+                                <button type="button" class="review-action" (click)="markWorkerTaskSentManually(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
+                                  <span class="material-icons-sharp">done_all</span>
+                                  Отправил вручную
+                                </button>
+                              }
+                              <small>{{ workerNotificationTitle(example) }}</small>
+                            </div>
+                          }
+
+                          @if (example.type === 'COMMON_INVOICE') {
+                            <div class="review-followup invoice-open-action">
+                              <a class="review-action" [href]="commonInvoiceOrdersUrl(example)">
+                                <span class="material-icons-sharp">view_kanban</span>
+                                В заказах
+                              </a>
+                              <a class="review-action primary" [href]="commonInvoiceDetailUrl(example, item.targetUrl)">
+                                <span class="material-icons-sharp">receipt_long</span>
+                                Счет
+                              </a>
+                              <small>сначала карточка в заказах, затем правая панель счета</small>
+                            </div>
+                          }
+
+                          <div class="detail-example-control">
+                            <textarea
+                              rows="1"
+                              [ngModel]="detailConcreteComment(example.controlEntityId)"
+                              (ngModelChange)="updateConcreteComment(example.controlEntityId, $event)"
+                              placeholder="Комментарий по карточке"
+                            ></textarea>
+                            <div class="detail-example-actions">
+                              <button
+                                type="button"
+                                [title]="concreteActionTitle(example, 'ACTION_TAKEN', 'Действие сделано')"
+                                (click)="markConcreteItem(example, 'ACTION_TAKEN')"
+                                [disabled]="isConcreteActionDisabled(example, 'ACTION_TAKEN')"
+                              >
+                                <span class="material-icons-sharp">task_alt</span>
+                              </button>
+                              <button type="button" title="Отложено" (click)="markConcreteItem(example, 'DEFERRED')" [disabled]="isConcreteActionDisabled(example, 'DEFERRED')">
+                                <span class="material-icons-sharp">schedule</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                    @if (item.hiddenExampleCount > 0) {
+                      <span class="detail-example-more">Еще {{ item.hiddenExampleCount }} в разделе</span>
+                    }
+                  </div>
+                }
+
+                <label class="detail-comment">
+                  <span>Комментарий</span>
+                  <textarea
+                    rows="2"
+                    [ngModel]="detailComment(item.itemId)"
+                    (ngModelChange)="updateDetailComment(item.itemId, $event)"
+                    placeholder="Что сделали или почему оставили в контроле"
+                  ></textarea>
+                </label>
+
+                @if (item.group === 'ACTION') {
+                  <footer class="detail-actions muted">
+                    <span>Обработайте конкретные карточки внутри пункта</span>
+                  </footer>
+                } @else {
+                  <footer class="detail-actions">
+                    <button type="button" (click)="markDetailItem(item, 'ACTION_TAKEN')" [disabled]="isItemUpdating(item.itemId)">
+                      <span class="material-icons-sharp">task_alt</span>
+                      Действие сделано
+                    </button>
+                    <button type="button" (click)="markDetailItem(item, 'DEFERRED')" [disabled]="isItemUpdating(item.itemId)">
+                      <span class="material-icons-sharp">schedule</span>
+                      Отложено
+                    </button>
+                  </footer>
+                }
+              </article>
+            } @empty {
+              <div class="detail-state">
+                <span class="material-icons-sharp">done_all</span>
+                <p>Открытых пунктов к действию нет</p>
+              </div>
+            }
+          </div>
+
+          <details class="event-log">
+            <summary>
+              <span>История дня</span>
+              <small>{{ detail()!.events.length }}</small>
+            </summary>
+            <div class="event-log-list">
+              @for (event of detail()!.events; track event.eventId) {
+                <article>
+                  <span class="material-icons-sharp">{{ eventIcon(event) }}</span>
+                  <div>
+                    <strong>{{ eventLabel(event) }}</strong>
+                    @if (event.itemLabel) {
+                      <small>{{ event.itemLabel }}</small>
+                    }
+                    @if (event.comment) {
+                      <p>{{ event.comment }}</p>
+                    }
+                  </div>
+                  <time>{{ event.createdAt | date: 'dd.MM HH:mm' }}</time>
+                </article>
+              } @empty {
+                <p class="event-empty">Событий пока нет</p>
+              }
+            </div>
+          </details>
+        }
+      </section>
+    </div>
+  }
+</app-admin-layout>

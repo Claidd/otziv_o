@@ -252,6 +252,8 @@ export class GamificationMeCardComponent {
         return 'Плохие отзывы';
       case 'REVIEW_RECOVERY_TASK_DONE':
         return 'Восстановления';
+      case 'WORKER_RISK_PENALTY':
+        return 'Штрафы';
       default:
         return eventType || 'Событие';
     }

@@ -11,6 +11,7 @@
     [switch]$SkipOpenAiProxyIpSync,
     [switch]$UseConfiguredOutboundProxy,
     [switch]$WithDbAdmin,
+    [switch]$NoDbAdmin,
     [switch]$WithObservability,
     [switch]$WithReputationAiSmoke,
     [int]$ReputationAiCompanyId = 1,
@@ -18,8 +19,8 @@
     [switch]$RestoreProdDb,
     [switch]$SkipProdDbRestore,
     [string]$VpsHost = "95.213.248.152",
-    [string]$VpsUser = "root",
-    [int]$VpsPort = 22,
+    [string]$VpsUser = "hunt",
+    [int]$VpsPort = 22022,
     [string]$SshKey = "C:\Users\Hunt\.ssh\otziv_vps_ed25519",
     [switch]$AllowLocalMessengerSending
 )
@@ -1306,8 +1307,17 @@ if (
 }
 
 $composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
-if ($WithDbAdmin) {
+if (-not $NoDbAdmin) {
     $composeArgs += @("--profile", "db-admin")
+    $phpMyAdminPort = Get-EnvValue -Path $envPath -Name "LOCAL_PHPMYADMIN_PORT"
+    if ([string]::IsNullOrWhiteSpace($phpMyAdminPort)) {
+        $phpMyAdminPort = "6572"
+    }
+    Write-Host "Local phpMyAdmin is enabled: http://localhost:$phpMyAdminPort"
+} elseif ($WithDbAdmin) {
+    Write-Host "Local phpMyAdmin is disabled by -NoDbAdmin; ignoring -WithDbAdmin."
+} else {
+    Write-Host "Local phpMyAdmin is disabled. Omit -NoDbAdmin to start it."
 }
 if ($WithObservability) {
     $composeArgs += @("--profile", "observability")

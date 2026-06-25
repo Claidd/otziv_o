@@ -79,7 +79,7 @@ public class TelegramBotConfig {
         options.setMaxThreads(1);
         options.setBaseUrl("https://api.telegram.org/bot");
         options.setGetUpdatesTimeout(normalizedLongPollingTimeoutSeconds);
-        options.setAllowedUpdates(List.of("message", "my_chat_member"));
+        options.setAllowedUpdates(List.of("message", "callback_query", "my_chat_member"));
 
         if (proxyEnabled && proxyHost != null && !proxyHost.isBlank()) {
             options.setProxyHost(proxyHost);

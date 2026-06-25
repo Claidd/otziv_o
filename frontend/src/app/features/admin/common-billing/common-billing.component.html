@@ -1,0 +1,488 @@
+<app-admin-layout class="common-billing-layout" [title]="pageTitle()" [active]="managerInvoiceDetailMode ? 'orders' : 'common-billing'" rightPanelMode="custom">
+  <section class="common-billing-shell">
+    <header class="common-billing-hero">
+      <div>
+        <span>Сводные счета</span>
+        <h2>Одна карточка оплаты вместо пачки заказов</h2>
+        <p>Связи можно включать, выключать и менять без удаления старых счетов.</p>
+      </div>
+      <button type="button" (click)="load()" [disabled]="loading()">
+        <span class="material-icons-sharp" aria-hidden="true">{{ loading() ? 'hourglass_top' : 'refresh' }}</span>
+      </button>
+    </header>
+
+    <section class="metric-grid" aria-label="Итоги общих счетов">
+      @for (metric of metrics(); track trackMetric($index, metric)) {
+        <article>
+          <span class="material-icons-sharp" aria-hidden="true">{{ metric.icon }}</span>
+          <div>
+            <strong>{{ metric.value }}</strong>
+            <small>{{ metric.label }}</small>
+          </div>
+        </article>
+      }
+    </section>
+
+    @if (error()) {
+      <app-load-error-card
+        title="Общие счета не загрузились"
+        [message]="error()"
+        actionLabel="Повторить"
+        [loading]="loading()"
+        [autoDismissMs]="0"
+        (retry)="load()"
+      />
+    }
+
+    <section class="billing-grid">
+      <section class="invoice-panel" aria-label="Текущий общий счет">
+        <div class="panel-head">
+          <div>
+            <h3>Текущий счет</h3>
+            <small>{{ selectedAccountName() }}</small>
+          </div>
+          @if (currentInvoice()) {
+            <span [class]="statusClass(currentInvoice()?.status)">{{ statusLabel(currentInvoice()?.status) }}</span>
+          }
+        </div>
+
+        @if (invoiceLoading()) {
+          <p class="empty-text">Загружаю состав счета...</p>
+        } @else if (currentInvoice()) {
+          <div class="invoice-detail-layout">
+            <section class="invoice-order-cards" aria-label="Заказы внутри общего счета">
+            @for (order of invoiceOrderCards(); track trackOrderCard($index, order)) {
+              @let invoiceOrder = invoiceOrderInfo(order);
+              <article
+                class="invoice-order-card-wrap"
+                [class.paid]="invoiceOrder?.paid"
+                [class.unpaid]="invoiceOrder?.unpaid"
+              >
+                <app-manager-order-card
+                  [order]="order"
+                  [actions]="orderCardActions(order)"
+                  [copied]="copied()"
+                  [mutationKey]="mutating()"
+                  (companyNoteSaved)="saveOrderCompanyNote(order, $event)"
+                  (orderNoteSaved)="saveOrderCardNote(order, $event)"
+                  (phoneCopied)="copyPhone($event)"
+                  (copyTextRequested)="copyOrderText(order, $event)"
+                  (statusUpdated)="updateOrderStatus(order, $event)"
+                  (editOpened)="openOrderEdit(order)"
+                />
+                <div class="invoice-order-card-toolbar">
+                  <button
+                    type="button"
+                    title="Отключить заказ от общего счета"
+                    (click)="invoiceOrder && detachOrder(invoiceOrder)"
+                    [disabled]="!!mutating() || invoiceNeedsAttention() || !invoiceOrder?.detachable"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">link_off</span>
+                  </button>
+                  <span>{{ formatKopecks(invoiceOrder?.amountKopecks) }}</span>
+                  <a
+                    class="order-details-link"
+                    [routerLink]="['/orders', order.companyId, order.id]"
+                    title="Открыть детали заказа"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                  </a>
+                  <button
+                    type="button"
+                    title="Отметить этот заказ оплаченным внутри общего счета"
+                    (click)="invoiceOrder && markOrderPaid(invoiceOrder)"
+                    [disabled]="!!mutating() || invoiceNeedsAttention() || !invoiceOrder || invoiceOrder.paid"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">{{ invoiceOrder?.paid ? 'check_circle' : 'done' }}</span>
+                  </button>
+                </div>
+              </article>
+            } @empty {
+              <p class="empty-text">В счете пока нет заказов.</p>
+            }
+            </section>
+          </div>
+        } @else {
+          <p class="empty-text">Текущий счет появится автоматически, когда первый заказ попадет в общую связку.</p>
+        }
+      </section>
+    </section>
+
+  </section>
+
+  <section admin-right-content class="common-billing-right-panel" aria-label="Настройки общего счета">
+    @if (currentInvoice()) {
+      @let invoice = currentInvoice();
+      <aside class="invoice-side" aria-label="Действия общего счета">
+        <div class="panel-head">
+          <div>
+            <h3>Общий счет #{{ invoice?.id }}</h3>
+            <small>{{ invoice?.title || selectedAccountName() }}</small>
+          </div>
+          <span [class]="statusClass(invoice?.status)">{{ statusLabel(invoice?.status) }}</span>
+        </div>
+
+        <section class="invoice-summary">
+          <div>
+            <small>Сумма</small>
+            <strong>{{ formatKopecks(invoice?.amountKopecks) }}</strong>
+          </div>
+          <div>
+            <small>Оплачено</small>
+            <strong>{{ formatKopecks(invoice?.paidKopecks) }}</strong>
+          </div>
+          <div>
+            <small>Остаток</small>
+            <strong>{{ formatKopecks(invoice?.remainingKopecks) }}</strong>
+          </div>
+          <div>
+            <small>Готово</small>
+            <strong>{{ invoice?.readyOrders }}/{{ invoice?.totalOrders }}</strong>
+          </div>
+        </section>
+
+        @if (invoiceProblem()) {
+          <section class="invoice-problem" aria-label="Проблема общего счета">
+            <span class="material-icons-sharp" aria-hidden="true">report_problem</span>
+            <div>
+              <strong>{{ invoiceProblemTitle() }}</strong>
+              <p>{{ invoiceProblem() }}</p>
+              @if (invoiceProblemSteps().length) {
+                <ol class="invoice-problem-steps" aria-label="Как исправить проблему">
+                  @for (step of invoiceProblemSteps(); track step) {
+                    <li>{{ step }}</li>
+                  }
+                </ol>
+              }
+              @if (invoiceProblemActionLabel()) {
+                <p class="invoice-problem-next">{{ invoiceProblemActionLabel() }}</p>
+              }
+              @if (invoicePaymentNotificationError()) {
+                <div class="invoice-problem-tools" aria-label="Быстрые действия по уведомлению">
+                  <button type="button" (click)="copyPaymentNotificationText()" [disabled]="!paymentNotificationCopyText()">
+                    <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'payment-notification-text' ? 'check' : 'content_copy' }}</span>
+                    Текст уведомления
+                  </button>
+                  @if (invoiceProblemChatUrl()) {
+                    <a [href]="invoiceProblemChatUrl()" target="_blank" rel="noopener">
+                      <span class="material-icons-sharp" aria-hidden="true">forum</span>
+                      Открыть чат
+                    </a>
+                  }
+                </div>
+              }
+              @if (invoiceProblemRaw()) {
+                <code>{{ invoiceProblemRaw() }}</code>
+              }
+              @if (invoicePaymentNotificationError()) {
+                <code>{{ invoicePaymentNotificationError() }}</code>
+              }
+            </div>
+          </section>
+        }
+
+        <div class="invoice-actions">
+          @if (invoiceNeedsAttention()) {
+            @if (attentionHasLatePayment()) {
+              <button type="button" class="success" (click)="applyLatePayment()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">account_balance_wallet</span>
+                Распределить
+              </button>
+            }
+            @if (attentionHasFinalCancelFailure()) {
+              <button type="button" class="success" (click)="confirmFinalPaymentCancelCheck()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">verified</span>
+                Проверено
+              </button>
+            }
+            @if (attentionHasPaymentInitCheck()) {
+              <button type="button" class="success" (click)="confirmPaymentInitCheck()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">fact_check</span>
+                Сверено
+              </button>
+            }
+            <button type="button" (click)="retryAttention()" [disabled]="!!mutating() || !attentionRetryEnabled()">
+              <span class="material-icons-sharp" aria-hidden="true">restart_alt</span>
+              Повторить
+            </button>
+            <button type="button" class="success" (click)="resolveAttention()" [disabled]="!!mutating() || !attentionResolveEnabled()">
+              <span class="material-icons-sharp" aria-hidden="true">rule</span>
+              Закрыть проверку
+            </button>
+          } @else if (canResolveTechnicalTail()) {
+            <button type="button" class="success" (click)="resolveTechnicalTail()" [disabled]="!!mutating()">
+              <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+              Закрыть хвост
+            </button>
+          } @else if (canResolvePaymentNotification()) {
+            <button type="button" class="success" (click)="resolvePaymentSuccessNotification()" [disabled]="!!mutating()">
+              <span class="material-icons-sharp" aria-hidden="true">mark_chat_read</span>
+              Уведомление обработано
+            </button>
+          } @else {
+            <button type="button" (click)="sendInvoice()" [disabled]="!!mutating() || !readyForSending()">
+              <span class="material-icons-sharp" aria-hidden="true">send</span>
+              Отправить
+            </button>
+          }
+          <button type="button" (click)="copyPublicUrl()" [disabled]="!invoice?.publicUrl">
+            <span class="material-icons-sharp" aria-hidden="true">{{ copied() === 'public-url' ? 'check' : 'content_copy' }}</span>
+            Ссылка
+          </button>
+          @if (!invoiceNeedsAttention()) {
+            <button type="button" (click)="approveReviewOrders()" [disabled]="!!mutating() || !canApproveReviewOrders()">
+              <span class="material-icons-sharp" aria-hidden="true">playlist_add_check</span>
+              Одобрить все
+            </button>
+            <button type="button" class="success" (click)="markInvoicePaid()" [disabled]="!!mutating() || !canMarkPaid()">
+              <span class="material-icons-sharp" aria-hidden="true">task_alt</span>
+              Оплачен
+            </button>
+            <button type="button" class="danger" (click)="markInvoiceUnpaid()" [disabled]="!!mutating() || !canMarkUnpaid()">
+              <span class="material-icons-sharp" aria-hidden="true">money_off</span>
+              Не оплачен
+            </button>
+            @if (canMarkBan()) {
+              <button type="button" class="danger" (click)="markInvoiceBan()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">block</span>
+                В Бан
+              </button>
+            }
+          }
+        </div>
+
+        @if (invoice?.sentAt || invoice?.lastReminderAt || invoice?.nextReminderAt || invoice?.lastError || invoice?.paymentSuccessNotificationError) {
+          <div class="invoice-timeline">
+            @if (invoice?.sentAt) {
+              <span>Отправлен {{ invoice?.sentAt | date:'dd.MM HH:mm' }}</span>
+            }
+            @if (invoice?.lastReminderAt) {
+              <span>Напоминание {{ invoice?.lastReminderAt | date:'dd.MM HH:mm' }}</span>
+            }
+            @if (invoice?.nextReminderAt) {
+              <span>Следующее {{ invoice?.nextReminderAt | date:'dd.MM HH:mm' }}</span>
+            }
+            @if (invoice?.lastError) {
+              <span class="error-line">{{ invoice?.lastError }}</span>
+            }
+            @if (invoice?.paymentSuccessNotificationError) {
+              <span class="error-line">Уведомление: {{ invoice?.paymentSuccessNotificationError }}</span>
+            }
+          </div>
+        }
+      </aside>
+    }
+
+    @if (!managerInvoiceDetailMode) {
+      <aside class="accounts-panel" aria-label="Список общих связей">
+        <div class="panel-head">
+          <div>
+            <h3>Все связи</h3>
+            <small>{{ accountsCountLabel() }} · выберите нужную</small>
+          </div>
+          <button type="button" class="icon-action" (click)="load()" [disabled]="loading()" title="Обновить">
+            <span class="material-icons-sharp" aria-hidden="true">{{ loading() ? 'hourglass_top' : 'refresh' }}</span>
+          </button>
+        </div>
+
+        <div class="account-list">
+          @for (account of accounts(); track trackAccount($index, account)) {
+            <button
+              type="button"
+              class="account-row"
+              [class.active]="selectedAccountId() === account.id"
+              (click)="selectAccount(account)"
+            >
+              <span class="material-icons-sharp" aria-hidden="true">{{ account.enabled ? 'account_tree' : 'pause_circle' }}</span>
+              <div>
+                <strong>{{ account.name }}</strong>
+                <small>{{ accountCompaniesLabel(account) }} · {{ statusLabel(account.currentInvoice?.status) }}</small>
+              </div>
+            </button>
+          } @empty {
+            <p class="empty-text">Пока нет общих плательщиков.</p>
+          }
+        </div>
+      </aside>
+
+      <section class="settings-panel" aria-label="Настройки общего плательщика">
+      <div class="panel-head">
+        <div>
+          <h3>{{ selectedAccount() ? 'Настройки связи' : 'Новый плательщик' }}</h3>
+          <small>Одна компания или несколько компаний в одном счете</small>
+        </div>
+        @if (selectedAccount()) {
+          <span [class]="selectedAccount()?.enabled ? 'state enabled' : 'state disabled'">
+            {{ selectedAccount()?.enabled ? 'связь включена' : 'связь выключена' }}
+          </span>
+        }
+      </div>
+
+      <form class="settings-form" (ngSubmit)="selectedAccount() ? saveAccount() : createAccount()">
+        <label>
+          <span>Название</span>
+          <input
+            name="name"
+            [ngModel]="draft().name"
+            (ngModelChange)="draft.update(value => ({ ...value, name: $event }))"
+            placeholder="Холдинг / Июнь / сеть филиалов"
+          >
+        </label>
+
+        <div class="toggle-grid">
+          <label class="toggle-line">
+            <input
+              type="checkbox"
+              name="enabled"
+              [ngModel]="draft().enabled"
+              (ngModelChange)="draft.update(value => ({ ...value, enabled: $event }))"
+            >
+            <span>Связь активна для новых заказов</span>
+          </label>
+          <label class="toggle-line">
+            <input
+              type="checkbox"
+              name="autoRepeatOrders"
+              [ngModel]="draft().autoRepeatOrders"
+              (ngModelChange)="draft.update(value => ({ ...value, autoRepeatOrders: $event }))"
+            >
+            <span>Создавать следующие заказы после полной оплаты счета</span>
+          </label>
+        </div>
+
+        <div class="field-grid">
+          <label>
+            <span>ID менеджера</span>
+            <input
+              name="managerId"
+              inputmode="numeric"
+              [ngModel]="draft().managerId"
+              (ngModelChange)="draft.update(value => ({ ...value, managerId: $event }))"
+              placeholder="необязательно"
+            >
+          </label>
+          <label>
+            <span>ID компании для счета</span>
+            <input
+              name="invoiceCompanyId"
+              inputmode="numeric"
+              [ngModel]="draft().invoiceCompanyId"
+              (ngModelChange)="draft.update(value => ({ ...value, invoiceCompanyId: $event }))"
+              placeholder="необязательно"
+            >
+          </label>
+        </div>
+
+        <button class="primary-action" type="submit" [disabled]="!!mutating() || !draft().name.trim()">
+          <span class="material-icons-sharp" aria-hidden="true">{{ mutating() ? 'hourglass_top' : 'save' }}</span>
+          {{ selectedAccount() ? 'Сохранить настройки' : 'Создать плательщика' }}
+        </button>
+      </form>
+
+      <section class="company-links" aria-label="Компании в общем счете">
+        <div class="section-title">
+          <h3>{{ selectedAccount() ? 'Компании в связи' : 'Компании для связи' }}</h3>
+          <small>{{ selectedAccount() ? 'При добавлении подтянутся текущие незавершенные заказы' : 'Найдите компании: текущие незавершенные заказы подтянутся после создания' }}</small>
+        </div>
+
+        <div class="company-search">
+          <label>
+            <span>Поиск компании</span>
+            <input
+              [ngModel]="companySearch()"
+              (ngModelChange)="onCompanySearchChange($event)"
+              placeholder="Название, город, телефон"
+              aria-label="Поиск компании"
+            >
+          </label>
+
+          @if (companySearchLoading()) {
+            <p class="search-state">Ищу компании...</p>
+          } @else if (companySearchError()) {
+            <p class="search-state error-line">{{ companySearchError() }}</p>
+          } @else if (companySearchResults().length) {
+            <div class="company-search-results">
+              @for (company of companySearchResults(); track trackCompanySearch($index, company)) {
+                <button
+                  type="button"
+                  [disabled]="!!mutating() || companyAlreadySelected(company.id)"
+                  (click)="selectCompany(company)"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">
+                    {{ companyAlreadySelected(company.id) ? 'check_circle' : 'add_business' }}
+                  </span>
+                  <div>
+                    <strong>{{ company.title }}</strong>
+                    <small>ID {{ company.id }} · {{ company.city || 'город не указан' }} · {{ company.status }}</small>
+                  </div>
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        @if (!selectedAccount()) {
+          <div class="linked-company-list draft-company-list">
+            @for (company of draftCompanies(); track trackDraftCompany($index, company)) {
+              <article>
+                <div>
+                  <strong>{{ company.title }}</strong>
+                  <small>ID {{ company.id }} · {{ company.city || 'город не указан' }} · {{ company.status || 'статус не указан' }}</small>
+                </div>
+                <button
+                  type="button"
+                  title="Убрать из создаваемой связи"
+                  (click)="removeDraftCompany(company.id)"
+                  [disabled]="!!mutating()"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">remove</span>
+                </button>
+              </article>
+            } @empty {
+              <p class="empty-text">Можно создать плательщика без компаний и добавить их позже.</p>
+            }
+          </div>
+        } @else {
+          <div class="linked-company-list">
+            @for (company of selectedAccount()?.companies ?? []; track trackCompany($index, company)) {
+              <article [class.disabled]="!company.enabled">
+                <div>
+                  <strong>{{ company.companyTitle || 'Компания ' + company.companyId }}</strong>
+                  <small>ID {{ company.companyId }} · {{ company.enabled ? 'участвует' : 'исключена' }}</small>
+                </div>
+                @if (company.enabled) {
+                  <button
+                    type="button"
+                    title="Исключить из будущих счетов"
+                    (click)="removeCompany(company.companyId)"
+                    [disabled]="!!mutating()"
+                  >
+                    <span class="material-icons-sharp" aria-hidden="true">remove</span>
+                  </button>
+                }
+              </article>
+            }
+          </div>
+        }
+      </section>
+      </section>
+    }
+  </section>
+
+  @if (orderLoading() || editOrder()) {
+    <app-manager-order-edit-modal
+      [loading]="orderLoading()"
+      [order]="editOrder()"
+      [draft]="orderDraft()"
+      [saving]="orderSaving()"
+      [deleting]="orderDeleting()"
+      [cancelingPayment]="orderCancelingPayment()"
+      [error]="orderError()"
+      (closed)="closeOrderEdit()"
+      (submitted)="saveOrderEdit()"
+      (deleted)="deleteOrderEdit()"
+      (paymentCanceled)="cancelOrderPayment()"
+      (draftChange)="handleOrderEditDraftChange($event)"
+    />
+  }
+</app-admin-layout>

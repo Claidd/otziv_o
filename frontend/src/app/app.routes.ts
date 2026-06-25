@@ -220,6 +220,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'manager/common-billing',
+    loadComponent: () => import('./features/admin/common-billing/common-billing.component')
+      .then((m) => m.CommonBillingComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER']
+    }
+  },
+  {
     path: 'manager/orders/:companyId/:orderId',
     loadComponent: () => import('./features/manager/order-details.component')
       .then((m) => m.OrderDetailsComponent),
@@ -227,6 +236,21 @@ export const routes: Routes = [
     data: {
       roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER']
     }
+  },
+  {
+    path: 'worker/risk',
+    loadComponent: () => import('./features/worker/worker-board.component')
+      .then((m) => m.WorkerBoardComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER'],
+      workerTab: 'risk'
+    }
+  },
+  {
+    path: 'manager/worker-risk',
+    redirectTo: 'worker/risk',
+    pathMatch: 'full'
   },
   {
     path: 'worker',
@@ -301,6 +325,24 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/manager-control',
+    loadComponent: () => import('./features/admin/manager-control/manager-control.component')
+      .then((m) => m.ManagerControlComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'manager/control',
+    redirectTo: 'admin/manager-control',
+    pathMatch: 'full',
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'admin/tbank-payments',
     loadComponent: () => import('./features/admin/tbank-payments/tbank-payments.component')
       .then((m) => m.TbankPaymentsComponent),
@@ -315,7 +357,7 @@ export const routes: Routes = [
       .then((m) => m.CommonBillingComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER']
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {

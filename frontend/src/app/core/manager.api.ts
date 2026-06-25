@@ -195,6 +195,20 @@ export interface CompanyCardItem {
   nextOrderRequestError?: string;
 }
 
+export interface ClientMessageStatus {
+  state: 'sent' | 'scheduled' | 'failed' | 'manual_control' | 'none';
+  label: string;
+  tone: 'success' | 'wait' | 'danger' | 'muted';
+  scenario?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  nextAttemptAt?: string | null;
+  consecutiveFailures: number;
+  sentCount: number;
+}
+
 export interface OrderCardItem {
   id: number;
   companyId: number;
@@ -245,7 +259,11 @@ export interface OrderCardItem {
   commonInvoiceAmount?: number | null;
   commonInvoicePaid?: number | null;
   commonInvoiceRemaining?: number | null;
+  commonInvoiceSentAt?: string | null;
+  commonInvoiceLastReminderAt?: string | null;
+  commonInvoiceNextReminderAt?: string | null;
   commonInvoiceLastError?: string | null;
+  clientMessageStatus?: ClientMessageStatus | null;
 }
 
 export interface ManagerMetric {
@@ -617,6 +635,8 @@ export interface ManagerBoardQuery {
   status?: string;
   keyword?: string;
   companyId?: number;
+  managerId?: number | null;
+  control?: string | null;
   pageNumber?: number;
   pageSize?: number;
   sortDirection?: 'desc' | 'asc';
@@ -628,6 +648,54 @@ export interface ManagerArchiveOrdersQuery {
   pageNumber?: number;
   pageSize?: number;
   sortDirection?: 'desc' | 'asc';
+}
+
+export type WorkerRiskIncidentStatus = 'OPEN' | 'RESOLVED' | 'IGNORED' | 'VIOLATION';
+export type WorkerRiskIncidentLevel = 'WARNING' | 'MANAGER_REVIEW' | 'HIGH_RISK';
+export type WorkerRiskRollbackStatus = 'APPLIED' | 'NOT_APPLICABLE';
+export type WorkerRiskResolutionAction =
+  | 'VERIFIED'
+  | 'FALSE_POSITIVE'
+  | 'NORMAL_ACCOUNT_SELECTION'
+  | 'EXPLANATION_REQUESTED'
+  | 'VIOLATION_CONFIRMED'
+  | 'WORKER_WARNED';
+
+export interface WorkerRiskIncident {
+  id: number;
+  createdAt: string;
+  status: WorkerRiskIncidentStatus;
+  level: WorkerRiskIncidentLevel;
+  ruleCode: string;
+  score: number;
+  workerUserId: number;
+  workerUsername: string;
+  workerName: string;
+  activityEventId?: number | null;
+  action?: string | null;
+  entityType?: string | null;
+  entityId?: number | null;
+  orderId?: number | null;
+  reviewId?: number | null;
+  title: string;
+  message?: string | null;
+  details?: string | null;
+  explanationRequestedAt?: string | null;
+  explanationPromptedAt?: string | null;
+  workerExplanation?: string | null;
+  workerExplanationAt?: string | null;
+  workerExplanationByUserId?: number | null;
+  resolutionAction?: WorkerRiskResolutionAction | null;
+  resolvedAt?: string | null;
+  resolvedByUserId?: number | null;
+  resolvedByUsername?: string | null;
+  penaltyPoints: number;
+  rollbackStatus?: WorkerRiskRollbackStatus | null;
+  rolledBackAt?: string | null;
+  rolledBackByUserId?: number | null;
+  rolledBackByUsername?: string | null;
+  rollbackMessage?: string | null;
+  canRollback: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -646,12 +714,66 @@ export class ManagerApi {
     if (query.companyId != null) {
       params = params.set('companyId', String(query.companyId));
     }
+    if (query.managerId != null) {
+      params = params.set('managerId', String(query.managerId));
+    }
+    if (query.control) {
+      params = params.set('control', query.control);
+    }
 
     return this.http.get<ManagerBoard>(`${appEnvironment.apiBaseUrl}/api/manager/board`, { params });
   }
 
   getOverdueOrders(): Observable<ManagerOverdueOrders> {
     return this.http.get<ManagerOverdueOrders>(`${appEnvironment.apiBaseUrl}/api/manager/overdue-orders`);
+  }
+
+  getWorkerRiskIncidents(
+    status: WorkerRiskIncidentStatus = 'OPEN',
+    page = 0,
+    size = 50
+  ): Observable<ManagerPage<WorkerRiskIncident>> {
+    const params = new HttpParams()
+      .set('status', status)
+      .set('page', String(page))
+      .set('size', String(size));
+
+    return this.http.get<ManagerPage<WorkerRiskIncident>>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents`,
+      { params }
+    );
+  }
+
+  resolveWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/resolve`,
+      {}
+    );
+  }
+
+  ignoreWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/ignore`,
+      {}
+    );
+  }
+
+  setWorkerRiskIncidentResolution(
+    incidentId: number,
+    action: WorkerRiskResolutionAction,
+    penaltyPoints?: number
+  ): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/resolution`,
+      { action, penaltyPoints }
+    );
+  }
+
+  rollbackWorkerRiskIncident(incidentId: number): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/rollback`,
+      {}
+    );
   }
 
   getArchiveOrders(query: ManagerArchiveOrdersQuery): Observable<ManagerPage<ArchiveOrderListItem>> {

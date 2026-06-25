@@ -48,4 +48,11 @@ public interface ReviewRecoveryBatchRepository extends JpaRepository<ReviewRecov
             @Param("cutoff") Instant cutoff,
             @Param("archivedAt") Instant archivedAt
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        DELETE FROM ReviewRecoveryBatch batch
+        WHERE batch.order.id = :orderId
+    """)
+    int deleteByOrderId(@Param("orderId") Long orderId);
 }

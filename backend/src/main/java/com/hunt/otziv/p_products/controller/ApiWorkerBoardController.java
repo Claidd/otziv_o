@@ -22,7 +22,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
+import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -34,6 +34,8 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_activity.WorkerActivityService;
+import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -90,14 +92,6 @@ public class ApiWorkerBoardController {
     private static final String ORDER_STATUS_CORRECT = "Коррекция";
     private static final String ORDER_STATUS_UNPAID = "Не оплачено";
     private static final String ORDER_STATUS_PAID = "Оплачено";
-    private static final int WORKER_FLOW_BLOCKING_UNCHANGED_DAYS = 1;
-    private static final Set<String> WORKER_FLOW_ORDER_STATUSES = Set.of(
-            ORDER_STATUS_NEW,
-            ORDER_STATUS_CORRECT
-    );
-    private static final String WORKER_FLOW_BLOCK_MESSAGE = "В разделах \"Новые\" или \"Коррекция\" есть заказы без изменений 1 день или больше. "
-            + "Публикация и раздел \"Все\" откроются, когда в \"Новых\" и \"Коррекции\" не останется активных заказов. "
-            + "Заказы, которые ждут клиента, переход не блокируют";
     private static final Set<String> CLIENT_WAITING_ORDER_STATUSES = Set.of(ORDER_STATUS_NEW, ORDER_STATUS_CORRECT);
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
@@ -134,7 +128,8 @@ public class ApiWorkerBoardController {
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final UserMetricSnapshotService metricSnapshotService;
     private final AppSettingService appSettingService;
-    private final WorkerFlowLockService workerFlowLockService;
+    private final WorkerPublicationGateService workerPublicationGateService;
+    private final WorkerActivityService workerActivityService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -315,6 +310,15 @@ public class ApiWorkerBoardController {
         Order order = orderService.getOrder(orderId);
         order.setZametka(request.orderComments());
         orderService.save(order);
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.ORDER_NOTE_UPDATE,
+                "order",
+                orderId,
+                orderId,
+                null,
+                "order_note",
+                null
+        );
     }
 
     @PutMapping("/orders/{orderId}/company-note")
@@ -336,14 +340,33 @@ public class ApiWorkerBoardController {
 
         company.setCommentsCompany(request.companyComments());
         companyService.save(company);
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.COMPANY_NOTE_UPDATE,
+                "company",
+                company.getId(),
+                orderId,
+                null,
+                "company_note",
+                null
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/change-bot")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotChangeResponse changeReviewBot(@PathVariable Long reviewId) {
-        Long oldBotId = botId(reviewService.getReviewById(reviewId));
+        Review review = reviewService.getReviewById(reviewId);
+        Long oldBotId = botId(review);
         reviewService.changeBot(reviewId);
         Long newBotId = botId(reviewService.getReviewById(reviewId));
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.REVIEW_BOT_CHANGE,
+                "review",
+                reviewId,
+                orderId(review),
+                reviewId,
+                "review",
+                botChangeDetails(oldBotId, newBotId)
+        );
         return new BotChangeResponse(oldBotId, newBotId);
     }
 
@@ -354,7 +377,17 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @PathVariable Long botId
     ) {
+        Review review = reviewService.getReviewById(reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId);
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
+                "review",
+                reviewId,
+                orderId(review),
+                reviewId,
+                "review",
+                "botId=" + valueOrDash(botId)
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/copy-click")
@@ -376,7 +409,7 @@ public class ApiWorkerBoardController {
         Bot bot = review.getBot();
 
         log.info(
-                "Выгул: специалист {} нажал кнопку \"{}\" для отзыва ID {}, заказа ID {}, компании \"{}\", бота ID {}",
+                "Специалист {} нажал кнопку \"{}\" для отзыва ID {}, заказа ID {}, компании \"{}\", бота ID {}",
                 principalName(principal),
                 copyFieldLabel(field),
                 review.getId(),
@@ -384,16 +417,45 @@ public class ApiWorkerBoardController {
                 company != null ? safe(company.getTitle()) : "",
                 bot != null ? bot.getId() : null
         );
+        workerActivityService.recordCurrentAuthenticationSafely(
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "review",
+                reviewId,
+                order != null ? order.getId() : null,
+                reviewId,
+                "copy",
+                credentialCopyDetails(field, bot)
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/publish")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void publishReview(@PathVariable Long reviewId) {
+    public void publishReview(
+            @PathVariable Long reviewId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        workerPublicationGateService.blockForPublication(principal, authentication)
+                .ifPresent(block -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, block.message());
+                });
+
         try {
+            Review review = reviewService.getReviewById(reviewId);
             if (!orderService.changeStatusAndOrderCounter(reviewId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным");
             }
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.REVIEW_PUBLISH,
+                    "review",
+                    reviewId,
+                    orderId(review),
+                    reviewId,
+                    SECTION_PUBLISH,
+                    botDetails(review == null ? null : review.getBot())
+            );
         } catch (ResponseStatusException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -404,9 +466,22 @@ public class ApiWorkerBoardController {
     @PostMapping("/bad-review-tasks/{taskId}/complete")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void completeBadReviewTask(@PathVariable Long taskId) {
+    public void completeBadReviewTask(
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
         try {
-            badReviewTaskService.completeTask(taskId);
+            BadReviewTask task = badReviewTaskService.completeTask(taskId);
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.BAD_TASK_COMPLETE,
+                    "bad_review_task",
+                    task.getId(),
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_BAD,
+                    "botId=" + valueOrDash(botId(task)) + ";"
+            );
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Плохая задача не выполнена", exception);
         }
@@ -417,14 +492,31 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public void updateBadReviewTask(
             @PathVariable Long taskId,
-            @RequestBody BadTaskUpdateRequest request
+            @RequestBody BadTaskUpdateRequest request,
+            Authentication authentication
     ) {
         if (request == null || request.taskText() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст плохой задачи не указан");
         }
 
         try {
-            badReviewTaskService.updateTask(taskId, request.taskText(), request.scheduledDate());
+            LocalDate scheduledDate = allowedBadTaskScheduledDate(taskId, request.scheduledDate(), authentication);
+            badReviewTaskService.updateTask(taskId, request.taskText(), scheduledDate);
+            if (workerActivityService.isPlainWorker(authentication)) {
+                BadReviewTask task = badReviewTaskService.getTask(taskId);
+                workerActivityService.recordSafely(
+                        authentication,
+                        WorkerActivityAction.BAD_TASK_UPDATE,
+                        "bad_review_task",
+                        taskId,
+                        orderId(task),
+                        reviewId(task),
+                        SECTION_BAD,
+                        "scheduledDateChanged=" + !Objects.equals(scheduledDate, request.scheduledDate())
+                );
+            }
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Плохая задача не сохранена", exception);
         }
@@ -435,14 +527,31 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public void updateRecoveryTask(
             @PathVariable Long taskId,
-            @RequestBody RecoveryTaskUpdateRequest request
+            @RequestBody RecoveryTaskUpdateRequest request,
+            Authentication authentication
     ) {
         if (request == null || request.recoveryText() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст восстановления не указан");
         }
 
         try {
-            reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.recoveryAnswer(), request.scheduledDate());
+            LocalDate scheduledDate = allowedRecoveryTaskScheduledDate(taskId, request.scheduledDate(), authentication);
+            reviewRecoveryTaskService.updateTask(taskId, request.recoveryText(), request.recoveryAnswer(), scheduledDate);
+            if (workerActivityService.isPlainWorker(authentication)) {
+                ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
+                workerActivityService.recordSafely(
+                        authentication,
+                        WorkerActivityAction.RECOVERY_TASK_UPDATE,
+                        "recovery_task",
+                        taskId,
+                        orderId(task),
+                        reviewId(task),
+                        SECTION_RECOVERY,
+                        "scheduledDateChanged=" + !Objects.equals(scheduledDate, request.scheduledDate())
+                );
+            }
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Задача восстановления не сохранена", exception);
         }
@@ -456,7 +565,17 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         try {
-            reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
+            ReviewRecoveryTask task = reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
+            workerActivityService.recordSafely(
+                    authentication,
+                    WorkerActivityAction.RECOVERY_TASK_COMPLETE,
+                    "recovery_task",
+                    task.getId(),
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_RECOVERY,
+                    "botId=" + valueOrDash(botId(task)) + ";"
+            );
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Задача восстановления не выполнена", exception);
         }
@@ -467,6 +586,15 @@ public class ApiWorkerBoardController {
     public BotChangeResponse changeRecoveryTaskBot(@PathVariable Long taskId) {
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.changeTaskBot(taskId);
+            workerActivityService.recordCurrentAuthenticationSafely(
+                    WorkerActivityAction.RECOVERY_TASK_BOT_CHANGE,
+                    "recovery_task",
+                    taskId,
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_RECOVERY,
+                    botChangeDetails(null, botId(task))
+            );
             return new BotChangeResponse(null, botId(task));
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт восстановления не заменен", exception);
@@ -481,7 +609,17 @@ public class ApiWorkerBoardController {
             @PathVariable Long botId
     ) {
         try {
+            ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
             reviewRecoveryTaskService.deactivateAndChangeTaskBot(taskId, botId);
+            workerActivityService.recordCurrentAuthenticationSafely(
+                    WorkerActivityAction.RECOVERY_TASK_BOT_DEACTIVATE,
+                    "recovery_task",
+                    taskId,
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_RECOVERY,
+                    "botId=" + valueOrDash(botId) + ";"
+            );
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт восстановления не заблокирован", exception);
         }
@@ -492,6 +630,15 @@ public class ApiWorkerBoardController {
     public BotChangeResponse changeBadReviewTaskBot(@PathVariable Long taskId) {
         try {
             BadReviewTask task = badReviewTaskService.changeTaskBot(taskId);
+            workerActivityService.recordCurrentAuthenticationSafely(
+                    WorkerActivityAction.BAD_TASK_BOT_CHANGE,
+                    "bad_review_task",
+                    taskId,
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_BAD,
+                    botChangeDetails(null, botId(task))
+            );
             return new BotChangeResponse(null, botId(task));
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заменен", exception);
@@ -506,7 +653,17 @@ public class ApiWorkerBoardController {
             @PathVariable Long botId
     ) {
         try {
+            BadReviewTask task = badReviewTaskService.getTask(taskId);
             badReviewTaskService.deactivateAndChangeTaskBot(taskId, botId);
+            workerActivityService.recordCurrentAuthenticationSafely(
+                    WorkerActivityAction.BAD_TASK_BOT_DEACTIVATE,
+                    "bad_review_task",
+                    taskId,
+                    orderId(task),
+                    reviewId(task),
+                    SECTION_BAD,
+                    "botId=" + valueOrDash(botId) + ";"
+            );
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заблокирован", exception);
         }
@@ -519,7 +676,17 @@ public class ApiWorkerBoardController {
             Principal principal
     ) {
         try {
+            Review review = reviewService.getReviewById(reviewId);
             reviewService.performNagulWithExceptions(reviewId, principal.getName());
+            workerActivityService.recordCurrentAuthenticationSafely(
+                    WorkerActivityAction.REVIEW_NAGUL,
+                    "review",
+                    reviewId,
+                    orderId(review),
+                    reviewId,
+                    SECTION_NAGUL,
+                    botDetails(review == null ? null : review.getBot())
+            );
             return new WorkerActionResponse(true, "Отзыв успешно выгулен");
         } catch (NagulTooFastException | BotTemplateNameException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage(), exception);
@@ -543,6 +710,15 @@ public class ApiWorkerBoardController {
         if (!reviewService.updateReviewText(orderId, reviewId, request.text())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.REVIEW_TEXT_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review_text",
+                null
+        );
     }
 
     @PutMapping("/reviews/{reviewId}/answer")
@@ -560,6 +736,15 @@ public class ApiWorkerBoardController {
         if (!reviewService.updateReviewAnswer(orderId, reviewId, request.answer())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.REVIEW_ANSWER_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review_answer",
+                null
+        );
     }
 
     @PutMapping("/reviews/{reviewId}/note")
@@ -577,6 +762,15 @@ public class ApiWorkerBoardController {
         if (!reviewService.updateReviewNote(orderId, reviewId, request.comment())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.REVIEW_NOTE_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "review_note",
+                null
+        );
     }
 
     @DeleteMapping("/bots/{botId}")
@@ -884,20 +1078,8 @@ public class ApiWorkerBoardController {
             Authentication authentication,
             Map<String, Integer> orderCounts
     ) {
-        if (!isWorkerFlowRestricted(authentication)) {
-            return;
-        }
-
-        Worker worker = resolveWorker(principal);
         int flowOrders = countStatus(orderCounts, ORDER_STATUS_NEW) + countStatus(orderCounts, ORDER_STATUS_CORRECT);
-        boolean hasFlowOrders = flowOrders > 0;
-
-        workerFlowLockService.syncPublicationLock(
-                workerFlowLockKey(worker, principal),
-                workerId(worker),
-                hasFlowOrders,
-                hasFlowOrders && hasStaleWorkerFlowOrders(worker)
-        );
+        workerPublicationGateService.syncFromMetrics(principal, authentication, flowOrders);
     }
 
     private int countBadReviewTasks(Principal principal, Authentication authentication) {
@@ -1030,7 +1212,7 @@ public class ApiWorkerBoardController {
         return new WorkerPermissionsResponse(
                 admin || owner,
                 admin || owner || manager,
-                admin || owner,
+                admin || owner || manager,
                 admin || owner,
                 admin || owner || worker,
                 admin || owner || manager,
@@ -1533,75 +1715,14 @@ public class ApiWorkerBoardController {
                 .orElse(0);
     }
 
-    private WorkerFlowRedirect workerFlowRedirect(Principal principal, Authentication authentication, String requestedSection) {
-        if (!isWorkerFlowRestricted(authentication)) {
-            return null;
-        }
-
-        if (!isPublishOrAll(requestedSection)) {
-            return null;
-        }
-
-        Worker worker = resolveWorker(principal);
-        Map<String, Integer> orderCounts = orderService.countActionableOrdersByStatusToWorker(worker);
-        int newOrders = countStatus(orderCounts, ORDER_STATUS_NEW);
-        int correctionOrders = countStatus(orderCounts, ORDER_STATUS_CORRECT);
-        String lockKey = workerFlowLockKey(worker, principal);
-        boolean hasFlowOrders = newOrders + correctionOrders > 0;
-
-        if (!hasFlowOrders) {
-            workerFlowLockService.syncPublicationLock(lockKey, workerId(worker), false, false);
-            return null;
-        }
-
-        if (!workerFlowLockService.syncPublicationLock(
-                lockKey,
-                workerId(worker),
-                true,
-                hasStaleWorkerFlowOrders(worker)
-        )) {
-            return null;
-        }
-
-        if (newOrders > 0) {
-            return new WorkerFlowRedirect(SECTION_NEW, WORKER_FLOW_BLOCK_MESSAGE);
-        }
-
-        return new WorkerFlowRedirect(SECTION_CORRECT, WORKER_FLOW_BLOCK_MESSAGE);
-    }
-
-    private boolean hasStaleWorkerFlowOrders(Worker worker) {
-        Map<String, Integer> staleCounts = orderService.countActionableOrdersByStatusToWorkerChangedOnOrBefore(
-                worker,
-                WORKER_FLOW_ORDER_STATUSES,
-                LocalDate.now().minusDays(WORKER_FLOW_BLOCKING_UNCHANGED_DAYS)
-        );
-
-        return countStatus(staleCounts, ORDER_STATUS_NEW) + countStatus(staleCounts, ORDER_STATUS_CORRECT) > 0;
-    }
-
     private Long workerId(Worker worker) {
         return worker == null ? null : worker.getId();
     }
 
-    private String workerFlowLockKey(Worker worker, Principal principal) {
-        if (worker != null && worker.getId() != null) {
-            return "worker:" + worker.getId();
-        }
-
-        return "principal:" + (principal == null ? "" : principal.getName());
-    }
-
-    private boolean isWorkerFlowRestricted(Authentication authentication) {
-        return hasRole(authentication, "WORKER")
-                && !hasRole(authentication, "ADMIN")
-                && !hasRole(authentication, "OWNER")
-                && !hasRole(authentication, "MANAGER");
-    }
-
-    private boolean isPublishOrAll(String section) {
-        return SECTION_PUBLISH.equals(section)
-                || SECTION_ALL.equals(section);
+    private WorkerFlowRedirect workerFlowRedirect(Principal principal, Authentication authentication, String requestedSection) {
+        return workerPublicationGateService.redirectFor(principal, authentication, requestedSection)
+                .map(block -> new WorkerFlowRedirect(block.section(), block.message()))
+                .orElse(null);
     }
 
     private boolean matchesReviewKeyword(ReviewDTOOne review, String keyword) {
@@ -1732,6 +1853,40 @@ public class ApiWorkerBoardController {
                 .anyMatch(authority::equals);
     }
 
+    private LocalDate allowedBadTaskScheduledDate(Long taskId, LocalDate requestedDate, Authentication authentication) {
+        if (canEditTaskSchedule(authentication)) {
+            return requestedDate;
+        }
+
+        BadReviewTask task = badReviewTaskService.getTask(taskId);
+        LocalDate currentDate = task == null ? null : task.getScheduledDate();
+        requireWorkerScheduleUnchanged(requestedDate, currentDate);
+        return currentDate;
+    }
+
+    private LocalDate allowedRecoveryTaskScheduledDate(Long taskId, LocalDate requestedDate, Authentication authentication) {
+        if (canEditTaskSchedule(authentication)) {
+            return requestedDate;
+        }
+
+        ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
+        LocalDate currentDate = task == null ? null : task.getScheduledDate();
+        requireWorkerScheduleUnchanged(requestedDate, currentDate);
+        return requestedDate;
+    }
+
+    private void requireWorkerScheduleUnchanged(LocalDate requestedDate, LocalDate currentDate) {
+        if (requestedDate != null && !Objects.equals(requestedDate, currentDate)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Плановую дату задачи может менять только менеджер, владелец или администратор");
+        }
+    }
+
+    private boolean canEditTaskSchedule(Authentication authentication) {
+        return hasRole(authentication, "ADMIN")
+                || hasRole(authentication, "OWNER")
+                || hasRole(authentication, "MANAGER");
+    }
+
     private String primaryBoardRole(Authentication authentication) {
         if (hasRole(authentication, "ADMIN")) {
             return "ADMIN";
@@ -1771,6 +1926,21 @@ public class ApiWorkerBoardController {
 
     private String copyFieldLabel(String field) {
         return "password".equals(field) ? "пароль" : "логин";
+    }
+
+    private String credentialCopyDetails(String field, Bot bot) {
+        return "field=" + valueOrDash(field) + ";botId=" + valueOrDash(bot == null ? null : bot.getId()) + ";";
+    }
+
+    private String botChangeDetails(Long oldBotId, Long newBotId) {
+        return "oldBotId=" + valueOrDash(oldBotId)
+                + ";newBotId=" + valueOrDash(newBotId)
+                + ";botId=" + valueOrDash(newBotId)
+                + ";";
+    }
+
+    private String botDetails(Bot bot) {
+        return "botId=" + valueOrDash(bot == null ? null : bot.getId()) + ";";
     }
 
     private String principalName(Principal principal) {
@@ -1872,6 +2042,37 @@ public class ApiWorkerBoardController {
     private Long botId(ReviewRecoveryTask task) {
         Bot bot = task != null ? task.getBot() : null;
         return bot != null ? bot.getId() : null;
+    }
+
+    private Long orderId(Review review) {
+        Order order = review != null && review.getOrderDetails() != null
+                ? review.getOrderDetails().getOrder()
+                : null;
+        return order != null ? order.getId() : null;
+    }
+
+    private Long orderId(BadReviewTask task) {
+        Order order = task != null ? task.getOrder() : null;
+        return order != null ? order.getId() : null;
+    }
+
+    private Long orderId(ReviewRecoveryTask task) {
+        Order order = task != null ? task.getOrder() : null;
+        return order != null ? order.getId() : null;
+    }
+
+    private Long reviewId(BadReviewTask task) {
+        Review review = task != null ? task.getSourceReview() : null;
+        return review != null ? review.getId() : null;
+    }
+
+    private Long reviewId(ReviewRecoveryTask task) {
+        Review review = task != null ? task.getSourceReview() : null;
+        return review != null ? review.getId() : null;
+    }
+
+    private String valueOrDash(Object value) {
+        return value == null ? "-" : String.valueOf(value);
     }
 
     public record WorkerBoardResponse(

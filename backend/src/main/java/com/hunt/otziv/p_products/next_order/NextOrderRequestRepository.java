@@ -1,6 +1,7 @@
 package com.hunt.otziv.p_products.next_order;
 
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -33,13 +34,24 @@ public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequ
     @Query("""
         SELECT r
         FROM NextOrderRequest r
+        JOIN r.sourceOrder sourceOrder
+        LEFT JOIN sourceOrder.worker sourceWorker
         WHERE r.company.id = :companyId
           AND ((:filialId IS NULL AND r.filial IS NULL) OR (:filialId IS NOT NULL AND r.filial.id = :filialId))
+          AND (:workerId IS NULL OR sourceWorker.id = :workerId)
           AND r.status IN :statuses
         ORDER BY r.updatedAt DESC, r.id DESC
     """)
     List<NextOrderRequest> findOpenByCompanyIdAndFilialId(@Param("companyId") Long companyId,
                                                           @Param("filialId") Long filialId,
+                                                          @Param("workerId") Long workerId,
                                                           @Param("statuses") Collection<NextOrderRequestStatus> statuses,
                                                           Pageable pageable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        DELETE FROM NextOrderRequest request
+        WHERE request.sourceOrder.id = :orderId
+    """)
+    int deleteBySourceOrderId(@Param("orderId") Long orderId);
 }

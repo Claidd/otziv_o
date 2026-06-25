@@ -339,25 +339,66 @@
                 @if (task.comment) {
                   <p>{{ task.comment }}</p>
                 }
-                <footer>
-                  @if (task.status === 'ACTIVE') {
-                    <button type="button" class="secondary" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="manualTaskMutatingId() === task.id">
-                      <span class="material-icons-sharp">pause</span>
-                      Пауза
+                @if (manualTaskEditingId() === task.id) {
+                  <div class="manual-task-edit-form">
+                    <div class="manual-mode-toggle" aria-label="Способ задания">
+                      <button type="button" [class.active]="manualTaskEditPaymentType() === 'MOBILE_BANK'" (click)="setManualTaskEditPaymentType('MOBILE_BANK')">
+                        <span class="material-icons-sharp" aria-hidden="true">phone_iphone</span>
+                        Телефон
+                      </button>
+                      <button type="button" [class.active]="manualTaskEditPaymentType() === 'EXTERNAL_LINK'" (click)="setManualTaskEditPaymentType('EXTERNAL_LINK')">
+                        <span class="material-icons-sharp" aria-hidden="true">link</span>
+                        Ссылка
+                      </button>
+                    </div>
+                    @if (manualTaskEditPaymentType() === 'EXTERNAL_LINK') {
+                      <label><span>Ссылка оплаты</span><input type="url" [ngModel]="manualTaskEditPaymentUrl()" (ngModelChange)="setManualTaskEditPaymentUrl($event)"></label>
+                      <label><span>Текст кнопки</span><input [ngModel]="manualTaskEditPaymentButtonLabel()" (ngModelChange)="setManualTaskEditPaymentButtonLabel($event)"></label>
+                      <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                    } @else {
+                      <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskEditPhone()" (ngModelChange)="setManualTaskEditPhone($event)" placeholder="+7..."></label>
+                      <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                    }
+                    <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskEditAmountRubles()" (ngModelChange)="setManualTaskEditAmount($event)"></label>
+                    <label><span>Комментарий</span><input [ngModel]="manualTaskEditComment()" (ngModelChange)="setManualTaskEditComment($event)"></label>
+                  </div>
+                  <footer>
+                    <button type="button" class="secondary" (click)="saveManualTaskEdit(task)" [disabled]="!canSaveManualTaskEdit(task)">
+                      <span class="material-icons-sharp">save</span>
+                      Сохранить
                     </button>
-                  } @else if (task.status === 'PAUSED') {
-                    <button type="button" class="secondary" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="manualTaskMutatingId() === task.id">
-                      <span class="material-icons-sharp">play_arrow</span>
-                      Включить
-                    </button>
-                  }
-                  @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
-                    <button type="button" class="secondary danger" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="manualTaskMutatingId() === task.id">
+                    <button type="button" class="secondary danger" (click)="cancelManualTaskEdit()" [disabled]="manualTaskMutatingId() === task.id">
                       <span class="material-icons-sharp">close</span>
-                      Отменить
+                      Закрыть
                     </button>
-                  }
-                </footer>
+                  </footer>
+                } @else {
+                  <footer>
+                    @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                      <button type="button" class="secondary" (click)="startManualTaskEdit(task)" [disabled]="manualTaskMutatingId() === task.id">
+                        <span class="material-icons-sharp">edit</span>
+                        Ред.
+                      </button>
+                    }
+                    @if (task.status === 'ACTIVE') {
+                      <button type="button" class="secondary" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="manualTaskMutatingId() === task.id">
+                        <span class="material-icons-sharp">pause</span>
+                        Пауза
+                      </button>
+                    } @else if (task.status === 'PAUSED') {
+                      <button type="button" class="secondary" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="manualTaskMutatingId() === task.id">
+                        <span class="material-icons-sharp">play_arrow</span>
+                        Включить
+                      </button>
+                    }
+                    @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                      <button type="button" class="secondary danger" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="manualTaskMutatingId() === task.id">
+                        <span class="material-icons-sharp">close</span>
+                        Отменить
+                      </button>
+                    }
+                  </footer>
+                }
               </article>
             } @empty {
               <div class="manual-task-empty">

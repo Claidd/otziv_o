@@ -21,7 +21,11 @@ public interface BadReviewTaskService {
 
     void cancelPendingTasksForOrder(Order order);
 
+    int deletePendingTasksForOrder(Order order);
+
     BadReviewTask completeTask(Long taskId);
+
+    BadReviewTask getTask(Long taskId);
 
     BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate);
 

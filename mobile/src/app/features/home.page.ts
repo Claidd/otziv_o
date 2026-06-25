@@ -272,20 +272,53 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                               </div>
                               <b>{{ manualTaskStatusLabel(task.status) }}</b>
                             </header>
-                            <div class="manual-task-progress">
-                              <span [style.width.%]="manualTaskProgressPercent(task)"></span>
-                            </div>
-                            <footer>
-                              <small>{{ formatKopecks(task.reservedAmountKopecks) }} из {{ formatKopecks(task.targetAmountKopecks) }}</small>
-                              @if (task.status === 'ACTIVE') {
-                                <button type="button" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="manualTaskMutatingId() === task.id">пауза</button>
-                              } @else if (task.status === 'PAUSED') {
-                                <button type="button" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="manualTaskMutatingId() === task.id">вкл</button>
-                              }
-                              @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
-                                <button type="button" class="danger" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="manualTaskMutatingId() === task.id">отмена</button>
-                              }
-                            </footer>
+                            @if (manualTaskEditingId() === task.id) {
+                              <div class="manual-task-edit-form">
+                                <div class="manual-mode-toggle" aria-label="Способ задания">
+                                  <button type="button" [class.active]="manualTaskEditPaymentType() === 'MOBILE_BANK'" (click)="setManualTaskEditPaymentType('MOBILE_BANK')">
+                                    <span class="material-icons-sharp">phone_iphone</span>
+                                    телефон
+                                  </button>
+                                  <button type="button" [class.active]="manualTaskEditPaymentType() === 'EXTERNAL_LINK'" (click)="setManualTaskEditPaymentType('EXTERNAL_LINK')">
+                                    <span class="material-icons-sharp">link</span>
+                                    ссылка
+                                  </button>
+                                </div>
+                                @if (manualTaskEditPaymentType() === 'EXTERNAL_LINK') {
+                                  <label><span>Ссылка оплаты</span><input type="url" [ngModel]="manualTaskEditPaymentUrl()" (ngModelChange)="setManualTaskEditPaymentUrl($event)"></label>
+                                  <label><span>Текст кнопки</span><input [ngModel]="manualTaskEditPaymentButtonLabel()" (ngModelChange)="setManualTaskEditPaymentButtonLabel($event)"></label>
+                                  <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                                } @else {
+                                  <label><span>Телефон</span><input autocomplete="tel" [ngModel]="manualTaskEditPhone()" (ngModelChange)="setManualTaskEditPhone($event)" placeholder="+7..."></label>
+                                  <label><span>Получатель</span><input [ngModel]="manualTaskEditRecipient()" (ngModelChange)="setManualTaskEditRecipient($event)"></label>
+                                }
+                                <label><span>Цель, руб.</span><input type="number" min="1" step="100" [ngModel]="manualTaskEditAmountRubles()" (ngModelChange)="setManualTaskEditAmount($event)"></label>
+                                <label><span>Комментарий</span><input [ngModel]="manualTaskEditComment()" (ngModelChange)="setManualTaskEditComment($event)"></label>
+                              </div>
+                              <footer>
+                                <small>занято {{ formatKopecks(task.reservedAmountKopecks) }}</small>
+                                <button type="button" (click)="saveManualTaskEdit(task)" [disabled]="!canSaveManualTaskEdit(task)">сохранить</button>
+                                <button type="button" class="danger" (click)="cancelManualTaskEdit()" [disabled]="manualTaskMutatingId() === task.id">закрыть</button>
+                              </footer>
+                            } @else {
+                              <div class="manual-task-progress">
+                                <span [style.width.%]="manualTaskProgressPercent(task)"></span>
+                              </div>
+                              <footer>
+                                <small>{{ formatKopecks(task.reservedAmountKopecks) }} из {{ formatKopecks(task.targetAmountKopecks) }}</small>
+                                @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                                  <button type="button" (click)="startManualTaskEdit(task)" [disabled]="manualTaskMutatingId() === task.id">ред.</button>
+                                }
+                                @if (task.status === 'ACTIVE') {
+                                  <button type="button" (click)="updateManualTaskStatus(task, 'PAUSED')" [disabled]="manualTaskMutatingId() === task.id">пауза</button>
+                                } @else if (task.status === 'PAUSED') {
+                                  <button type="button" (click)="updateManualTaskStatus(task, 'ACTIVE')" [disabled]="manualTaskMutatingId() === task.id">вкл</button>
+                                }
+                                @if (task.status !== 'COMPLETED' && task.status !== 'CANCELED') {
+                                  <button type="button" class="danger" (click)="updateManualTaskStatus(task, 'CANCELED')" [disabled]="manualTaskMutatingId() === task.id">отмена</button>
+                                }
+                              </footer>
+                            }
                           </section>
                         } @empty {
                           <div class="manual-task-empty">
@@ -1193,6 +1226,36 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       background: var(--otziv-success);
     }
 
+    .manual-task-edit-form {
+      display: grid;
+      gap: 0.42rem;
+    }
+
+    .manual-task-edit-form label {
+      display: grid;
+      gap: 0.22rem;
+    }
+
+    .manual-task-edit-form label span {
+      color: var(--otziv-info);
+      font-size: 0.6rem;
+      font-weight: 900;
+    }
+
+    .manual-task-edit-form input {
+      width: 100%;
+      min-width: 0;
+      min-height: 2rem;
+      border: 1px solid rgba(103, 116, 131, 0.18);
+      border-radius: 0.7rem;
+      padding: 0 0.6rem;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      font-size: 0.72rem;
+      font-weight: 900;
+      box-sizing: border-box;
+    }
+
     .manual-task-item footer {
       flex-wrap: wrap;
     }
@@ -1856,6 +1919,7 @@ export class HomePage implements OnInit, OnDestroy {
   readonly manualTaskLoading = signal(false);
   readonly manualTaskSaving = signal(false);
   readonly manualTaskMutatingId = signal<number | null>(null);
+  readonly manualTaskEditingId = signal<number | null>(null);
   readonly manualTaskPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
   readonly manualTaskPhone = signal('');
   readonly manualTaskRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
@@ -1863,6 +1927,13 @@ export class HomePage implements OnInit, OnDestroy {
   readonly manualTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualTaskAmountRubles = signal('');
   readonly manualTaskComment = signal('');
+  readonly manualTaskEditPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
+  readonly manualTaskEditPhone = signal('');
+  readonly manualTaskEditRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly manualTaskEditPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
+  readonly manualTaskEditPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+  readonly manualTaskEditAmountRubles = signal('');
+  readonly manualTaskEditComment = signal('');
   readonly manualTaskMessage = signal<string | null>(null);
 
   readonly teamSections = TEAM_SECTIONS;
@@ -2233,6 +2304,78 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskComment.set(value ?? '');
   }
 
+  setManualTaskEditPaymentType(value: ManualPaymentType): void {
+    this.manualTaskEditPaymentType.set(value);
+    if (value === 'EXTERNAL_LINK' && !this.manualTaskEditPaymentUrl().trim()) {
+      this.manualTaskEditPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
+    }
+    if (!this.manualTaskEditRecipient().trim()) {
+      this.manualTaskEditRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
+    }
+    this.manualTaskMessage.set(null);
+  }
+
+  setManualTaskEditPhone(value: string): void {
+    this.manualTaskEditPhone.set(value ?? '');
+    this.manualTaskMessage.set(null);
+  }
+
+  setManualTaskEditRecipient(value: string): void {
+    this.manualTaskEditRecipient.set(value ?? '');
+    this.manualTaskMessage.set(null);
+  }
+
+  setManualTaskEditPaymentUrl(value: string): void {
+    this.manualTaskEditPaymentUrl.set(value ?? '');
+    this.manualTaskMessage.set(null);
+  }
+
+  setManualTaskEditPaymentButtonLabel(value: string): void {
+    this.manualTaskEditPaymentButtonLabel.set(value ?? '');
+    this.manualTaskMessage.set(null);
+  }
+
+  setManualTaskEditAmount(value: string | number | null): void {
+    this.manualTaskEditAmountRubles.set(value == null ? '' : String(value));
+    this.manualTaskMessage.set(null);
+  }
+
+  setManualTaskEditComment(value: string): void {
+    this.manualTaskEditComment.set(value ?? '');
+  }
+
+  startManualTaskEdit(task: ManualPaymentTaskResponse): void {
+    if (!task?.id || task.status === 'COMPLETED' || task.status === 'CANCELED') {
+      return;
+    }
+    this.manualTaskEditingId.set(task.id);
+    this.manualTaskEditPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
+    this.manualTaskEditPhone.set(task.manualPhone ?? '');
+    this.manualTaskEditRecipient.set(this.manualRecipientOrDefault(task.manualRecipientName));
+    this.manualTaskEditPaymentUrl.set(this.manualPaymentUrlOrDefault(task.manualPaymentUrl));
+    this.manualTaskEditPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(task.manualPaymentButtonLabel));
+    this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
+    this.manualTaskEditComment.set(task.comment ?? '');
+    this.manualTaskMessage.set(null);
+  }
+
+  cancelManualTaskEdit(): void {
+    this.manualTaskEditingId.set(null);
+    this.manualTaskMessage.set(null);
+  }
+
+  canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
+    const hasTarget = this.manualTaskEditPaymentType() === 'MOBILE_BANK'
+      ? Boolean(this.manualTaskEditPhone().trim()) && Boolean(this.manualTaskEditRecipient().trim())
+      : Boolean(this.manualTaskEditPaymentUrl().trim()) && Boolean(this.manualTaskEditRecipient().trim());
+    return this.manualTaskEditingId() === task.id
+      && this.manualTaskMutatingId() !== task.id
+      && task.status !== 'COMPLETED'
+      && task.status !== 'CANCELED'
+      && hasTarget
+      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
+  }
+
   async createManualPaymentTask(): Promise<void> {
     if (!this.canCreateManualTask()) {
       return;
@@ -2277,6 +2420,34 @@ export class HomePage implements OnInit, OnDestroy {
     try {
       const updated = await firstValueFrom(this.api.updateManagerManualPaymentTaskStatus(task.id, status));
       this.manualPaymentTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.manualTaskMessage.set(message);
+      this.error.set(message);
+    } finally {
+      this.manualTaskMutatingId.set(null);
+    }
+  }
+
+  async saveManualTaskEdit(task: ManualPaymentTaskResponse): Promise<void> {
+    if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+      return;
+    }
+    this.manualTaskMutatingId.set(task.id);
+    this.manualTaskMessage.set(null);
+    try {
+      const updated = await firstValueFrom(this.api.updateManagerManualPaymentTask(task.id, {
+        manualPaymentType: this.manualTaskEditPaymentType(),
+        manualPhone: this.manualTaskEditPhone().trim(),
+        manualRecipientName: this.manualTaskEditRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
+        manualPaymentUrl: this.manualTaskEditPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentButtonLabel: this.manualTaskEditPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+        targetAmountKopecks: this.manualTaskEditTargetKopecks(),
+        comment: this.manualTaskEditComment().trim() || null
+      }));
+      this.manualPaymentTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+      this.manualTaskEditingId.set(null);
+      this.manualTaskMessage.set('Задание сохранено.');
     } catch (error) {
       const message = this.errorMessage(error);
       this.manualTaskMessage.set(message);
@@ -2603,6 +2774,11 @@ export class HomePage implements OnInit, OnDestroy {
 
   private manualTaskTargetKopecks(): number {
     const value = Number(this.manualTaskAmountRubles());
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
+  private manualTaskEditTargetKopecks(): number {
+    const value = Number(this.manualTaskEditAmountRubles());
     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
   }
 

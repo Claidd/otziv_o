@@ -5,8 +5,8 @@ param(
     [string]$WebRepository = "otziv-web",
     [string]$Tag = (Get-Date -Format "yyyyMMdd-HHmmss"),
     [string]$VpsHost = "",
-    [string]$VpsUser = "root",
-    [int]$VpsPort = 22,
+    [string]$VpsUser = "hunt",
+    [int]$VpsPort = 22022,
     [string]$VpsPath = "/opt/otziv",
     [string]$SshKey = "",
     [string]$EnvFile = ".env.prod",
@@ -25,7 +25,7 @@ function Show-Help {
 Deploy Otziv production stack from this local computer.
 
 Example:
-  .\infrastructure\scripts\prod\deploy-prod.ps1 -VpsHost 95.213.248.152 -VpsUser root -VpsPath /docker -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 -RemoteEnvFile .env -SkipEnvUpload
+  .\infrastructure\scripts\prod\deploy-prod.ps1 -VpsHost 95.213.248.152 -VpsUser hunt -VpsPort 22022 -VpsPath /docker -SshKey C:\Users\Hunt\.ssh\otziv_vps_ed25519 -RemoteEnvFile .env -SkipEnvUpload
 
 Useful options:
   -DockerHubNamespace claid38     Docker Hub namespace or username.
@@ -422,6 +422,66 @@ wait_service_healthy() {
   done
 }
 
+remove_service_containers() {
+  service_name="`$1"
+  project_name="`$(awk '/^name:[[:space:]]*/ { print `$2; exit }' docker-compose.yaml 2>/dev/null || true)"
+  if [ -z "`$project_name" ]; then
+    project_name="otziv-prod"
+  fi
+  name_filter="`$service_name"
+  if [ "`$service_name" = "nginx" ]; then
+    name_filter="frontend"
+  elif [ "`$service_name" = "app" ]; then
+    name_filter="`$project_name-app-1"
+  fi
+
+  container_ids="`$({
+    docker ps -aq \
+      --filter "label=com.docker.compose.project=`$project_name" \
+      --filter "label=com.docker.compose.service=`$service_name" || true
+    docker ps -aq --filter "name=^/`$name_filter`$" || true
+    docker ps -aq --filter "name=_`$name_filter`$" || true
+  } | sort -u)"
+
+  if [ -n "`$container_ids" ]; then
+    echo "Removing stale `$service_name containers before recreate..."
+    docker rm -f `$container_ids >/dev/null 2>&1 || true
+  fi
+}
+
+recreate_service_with_retry() {
+  service_name="`$1"
+  attempts=4
+  attempt=1
+  output_file="`$(mktemp)"
+
+  while [ "`$attempt" -le "`$attempts" ]; do
+    if compose up -d --no-deps --force-recreate "`$service_name" >"`$output_file" 2>&1; then
+      cat "`$output_file"
+      rm -f "`$output_file"
+      return 0
+    fi
+
+    status="`$?"
+    cat "`$output_file" >&2
+
+    if grep -qi 'removal .* already in progress\|already in progress\|No such container\|already in use' "`$output_file"; then
+      echo "Docker is still removing an old `$service_name container; retrying recreate (`$attempt/`$attempts)..." >&2
+      sleep "`$((attempt * 5))"
+      remove_service_containers "`$service_name"
+      attempt="`$((attempt + 1))"
+      continue
+    fi
+
+    rm -f "`$output_file"
+    return "`$status"
+  done
+
+  rm -f "`$output_file"
+  echo "Failed to recreate `$service_name after `$attempts attempts." >&2
+  return 1
+}
+
 ensure_nginx_certs() {
   mkdir -p data/nginx/certs data/nginx/www data/nginx/logs
 
@@ -508,15 +568,44 @@ else
   echo "MySQL container is not running yet; skipping pre-deploy Flyway validation."
 fi
 compose build whatsapp_lika whatsapp_vika
-compose up -d --remove-orphans mysql keycloak-postgres keycloak loki tempo prometheus grafana
+compose up -d --remove-orphans --no-deps mysql keycloak-postgres loki tempo
 wait_service_healthy mysql 600
+wait_service_healthy keycloak-postgres 600
+compose up -d --no-deps keycloak
 wait_service_healthy keycloak 900
-wait_service_healthy grafana 600
-compose up -d --no-deps --force-recreate app
+remove_service_containers app
+recreate_service_with_retry app
 wait_service_healthy app 1200
-compose up -d --no-deps --force-recreate nginx whatsapp_lika whatsapp_vika
+compose up -d --no-deps prometheus
+wait_service_healthy loki 600
+wait_service_healthy tempo 600
+wait_service_healthy prometheus 600
+compose up -d --no-deps grafana
+wait_service_healthy grafana 600
+remove_service_containers nginx
+recreate_service_with_retry nginx
+remove_service_containers whatsapp_lika
+recreate_service_with_retry whatsapp_lika
+remove_service_containers whatsapp_vika
+recreate_service_with_retry whatsapp_vika
 compose up -d --remove-orphans phpmyadmin dozzle alloy
-sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"
+keycloak_settings_applied=0
+for attempt in 1 2 3; do
+  wait_service_healthy keycloak 300
+
+  if sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"; then
+    keycloak_settings_applied=1
+    break
+  fi
+
+  echo "Keycloak production settings failed on attempt `$attempt; retrying in 10 seconds..." >&2
+  sleep 10
+done
+
+if [ "`$keycloak_settings_applied" != "1" ]; then
+  echo "Failed to apply Keycloak production settings after retries." >&2
+  exit 1
+fi
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"

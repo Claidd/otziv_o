@@ -692,6 +692,20 @@ ion-button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.sheet-actions.edit-actions .order-delete-action {
+  justify-self: start;
+  width: auto;
+  min-width: 4.7rem;
+  min-height: 1.72rem;
+  padding: 0 0.58rem;
+  border-color: rgba(255, 0, 96, 0.32);
+  border-radius: 0.7rem;
+  color: #a6003f;
+  background: rgba(255, 0, 96, 0.05);
+  box-shadow: none;
+  font-size: 0.62rem;
+}
+
 .sheet-utility-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2218,31 +2232,33 @@ app-leads .lead-section-backdrop,
 app-manager .manager-status-backdrop,
 app-worker .worker-section-backdrop {
   position: fixed;
-  z-index: 70;
+  z-index: 700;
   inset: 0;
   border: 0;
-  background: rgba(24, 26, 30, 0.2);
+  background: rgba(24, 26, 30, 0.42);
 }
 
 app-leads .lead-section-sheet,
 app-manager .manager-status-sheet,
 app-worker .worker-section-sheet {
   position: fixed;
-  z-index: 71;
-  bottom: calc(4.45rem + env(safe-area-inset-bottom));
+  z-index: 701;
+  top: 50%;
   left: 50%;
   display: grid;
-  width: min(16rem, calc(100vw - 1rem));
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(23rem, calc(100vw - 1.5rem));
+  max-height: min(38rem, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 2rem));
   gap: 0.75rem;
   margin: 0 auto;
   border: 1px solid rgba(103, 116, 131, 0.18);
   border-radius: 1.1rem;
   padding: var(--otziv-card-padding, 0.78rem);
   background: linear-gradient(155deg, var(--otziv-white) 0%, var(--otziv-tone-walk-surface) 100%);
-  box-shadow: 0 -1rem 2.5rem rgba(54, 57, 73, 0.18);
-  transform: translateX(-50%);
-  transform-origin: bottom center;
-  animation: bottom-status-rise 160ms ease-out;
+  box-shadow: 0 1.3rem 3rem rgba(15, 23, 42, 0.24);
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
 }
 
 app-leads .lead-section-sheet header,
@@ -2278,10 +2294,11 @@ app-leads .lead-section-options,
 app-manager .manager-status-options,
 app-worker .worker-section-options {
   display: flex;
-  max-height: min(74vh, 36rem);
+  min-height: 0;
   flex-direction: column;
   gap: 0.45rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 0.05rem;
   scrollbar-width: none;
 }

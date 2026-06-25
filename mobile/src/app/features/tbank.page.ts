@@ -73,13 +73,13 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       <app-mobile-header title="Т Банк" />
 
       <ion-content fullscreen [scrollY]="false">
-        <ion-refresher slot="fixed" (ionRefresh)="refresh($event)">
+        <ion-refresher slot="fixed" [disabled]="refreshDisabled()" (ionRefresh)="refresh($event)">
           <ion-refresher-content />
         </ion-refresher>
 
         <app-mobile-reminders #reminders />
 
-        <main class="tbank-page">
+        <main class="tbank-page" (focusin)="setFormFieldFocused(true)" (focusout)="setFormFieldFocused(false)">
           <app-mobile-status-slider
             [items]="modeItems()"
             [activeKey]="mode()"
@@ -1925,6 +1925,9 @@ export class TbankPage implements OnInit {
   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
   readonly profileAssignments = signal<Record<number, number | null>>({});
   readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
+  readonly profileAssignmentsDirty = signal(false);
+  readonly profilePoliciesDirty = signal(false);
+  readonly formFieldFocused = signal(false);
   readonly runtimeSettings = signal<TbankRuntimeSettings | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -2073,6 +2076,9 @@ export class TbankPage implements OnInit {
       && status?.hasCredentials);
   });
 
+  readonly hasUnsavedTbankChanges = computed(() => this.profileAssignmentsDirty() || this.profilePoliciesDirty());
+  readonly refreshDisabled = computed(() => this.hasUnsavedTbankChanges() || this.formFieldFocused());
+
   readonly activeRuntimeMode = computed<TbankRuntimeMode>(() => {
     return this.runtimeSettings()?.runtimeMode ?? this.status()?.runtimeMode ?? (this.status()?.testMode ? 'TEST' : 'LIVE');
   });
@@ -2163,6 +2169,10 @@ export class TbankPage implements OnInit {
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
+    if (this.refreshDisabled()) {
+      event.target.complete();
+      return;
+    }
     await this.load();
     event.target.complete();
   }
@@ -2401,6 +2411,11 @@ export class TbankPage implements OnInit {
       ...assignments,
       [managerId]: Number.isFinite(profileId) && profileId > 0 ? profileId : null
     }));
+    this.profileAssignmentsDirty.set(true);
+  }
+
+  setFormFieldFocused(focused: boolean): void {
+    this.formFieldFocused.set(focused);
   }
 
   selectedProfileId(manager: ManagerPaymentProfileResponse): number | null {
@@ -2928,6 +2943,8 @@ export class TbankPage implements OnInit {
     this.profilePolicies.set(Object.fromEntries(
       (profiles ?? []).map((profile) => [profile.id, this.profileToPolicyDraft(profile)])
     ));
+    this.profileAssignmentsDirty.set(false);
+    this.profilePoliciesDirty.set(false);
   }
 
   private async loadPaymentLinks(): Promise<void> {
@@ -3095,6 +3112,7 @@ export class TbankPage implements OnInit {
         ...patch
       }
     }));
+    this.profilePoliciesDirty.set(true);
   }
 
   private policyDraft(profileId: number): ProfilePolicyDraft {

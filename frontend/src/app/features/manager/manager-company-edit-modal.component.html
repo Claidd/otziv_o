@@ -363,6 +363,10 @@
               } @else if (billingDraft; as billingDraft) {
                 <div class="company-billing-grid">
                   <aside class="company-billing-accounts" aria-label="Связи общих счетов">
+                    <div class="company-billing-list-head">
+                      <strong>Связи компании</strong>
+                      <small>{{ visibleBillingAccountsLabel() }}</small>
+                    </div>
                     @for (account of visibleBillingAccounts(); track trackBillingAccount($index, account)) {
                       <button
                         type="button"
@@ -377,8 +381,7 @@
                         <div>
                           <strong>{{ account.name }}</strong>
                           <small>
-                            {{ billingAccountCompanyCount(account) }} комп. ·
-                            {{ billingAccountHasCurrentCompany(account) ? 'участвует' : 'другая связь' }}
+                            {{ billingAccountCompanyLabel(account) }} · участвует
                           </small>
                         </div>
                       </button>
@@ -386,7 +389,7 @@
                       <div class="company-billing-empty">
                         <span class="material-icons-sharp" aria-hidden="true">add_card</span>
                         <div>
-                          <strong>Связей пока нет</strong>
+                          <strong>Нет связи</strong>
                           <small>Включите общий счет справа</small>
                         </div>
                       </div>
@@ -460,18 +463,6 @@
                             <span>
                               <strong>Исключить компанию</strong>
                               <small>Убрать из будущих общих счетов</small>
-                            </span>
-                          </button>
-                        } @else {
-                          <button
-                            type="button"
-                            (click)="billingCurrentCompanyConnected.emit(billingAccount.id)"
-                            [disabled]="!!billingMutating || !billingAccountCanChangeCompanies(billingAccount)"
-                          >
-                            <span class="material-icons-sharp" aria-hidden="true">add_link</span>
-                            <span>
-                              <strong>Подключить компанию</strong>
-                              <small>{{ billingCompanyActionHint(billingAccount, 'Новые заказы пойдут в эту связь') }}</small>
                             </span>
                           </button>
                         }

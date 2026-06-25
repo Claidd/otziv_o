@@ -90,6 +90,14 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
   readonly mutatingTaskId = signal<number | null>(null);
+  readonly editingTaskId = signal<number | null>(null);
+  readonly editTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
+  readonly editTaskPhone = signal('');
+  readonly editTaskRecipient = signal(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly editTaskPaymentUrl = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+  readonly editTaskPaymentButtonLabel = signal(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+  readonly editTaskAmountRubles = signal('');
+  readonly editTaskComment = signal('');
   readonly savingManualTask = signal(false);
   readonly savingProfiles = signal(false);
   readonly savingProfilePolicies = signal(false);
@@ -808,6 +816,98 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
+  startManualTaskEdit(task: ManualPaymentTaskResponse): void {
+    if (!task?.id || task.status === 'COMPLETED' || task.status === 'CANCELED') {
+      return;
+    }
+    this.editingTaskId.set(task.id);
+    this.editTaskPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
+    this.editTaskPhone.set(task.manualPhone ?? '');
+    this.editTaskRecipient.set(task.manualRecipientName || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+    this.editTaskPaymentUrl.set(task.manualPaymentUrl || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+    this.editTaskPaymentButtonLabel.set(task.manualPaymentButtonLabel || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+    this.editTaskAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
+    this.editTaskComment.set(task.comment ?? '');
+  }
+
+  cancelManualTaskEdit(): void {
+    this.editingTaskId.set(null);
+  }
+
+  setEditTaskPaymentType(value: ManualPaymentType): void {
+    this.editTaskPaymentType.set(value);
+    if (value === 'EXTERNAL_LINK' && !this.editTaskPaymentUrl().trim()) {
+      this.editTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+    }
+    if (!this.editTaskRecipient().trim()) {
+      this.editTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
+    }
+  }
+
+  setEditTaskPhone(value: string | null): void {
+    this.editTaskPhone.set(value ?? '');
+  }
+
+  setEditTaskRecipient(value: string | null): void {
+    this.editTaskRecipient.set(value ?? '');
+  }
+
+  setEditTaskPaymentUrl(value: string | null): void {
+    this.editTaskPaymentUrl.set(value ?? '');
+  }
+
+  setEditTaskPaymentButtonLabel(value: string | null): void {
+    this.editTaskPaymentButtonLabel.set(value ?? '');
+  }
+
+  setEditTaskAmountRubles(value: string | number | null): void {
+    this.editTaskAmountRubles.set(value == null ? '' : String(value));
+  }
+
+  setEditTaskComment(value: string | null): void {
+    this.editTaskComment.set(value ?? '');
+  }
+
+  canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
+    const hasTarget = this.editTaskPaymentType() === 'MOBILE_BANK'
+      ? Boolean(this.editTaskPhone().trim()) && Boolean(this.editTaskRecipient().trim())
+      : Boolean(this.editTaskPaymentUrl().trim()) && Boolean(this.editTaskRecipient().trim());
+    return this.editingTaskId() === task.id
+      && this.mutatingTaskId() !== task.id
+      && task.status !== 'COMPLETED'
+      && task.status !== 'CANCELED'
+      && hasTarget
+      && this.editTaskTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
+  }
+
+  saveManualTaskEdit(task: ManualPaymentTaskResponse): void {
+    if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+      return;
+    }
+    this.mutatingTaskId.set(task.id);
+    this.paymentsApi.updateAdminManualPaymentTask(task.id, {
+      manualPaymentType: this.editTaskPaymentType(),
+      manualPhone: this.editTaskPhone().trim(),
+      manualRecipientName: this.editTaskRecipient().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: this.editTaskPaymentUrl().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: this.editTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      targetAmountKopecks: this.editTaskTargetKopecks(),
+      comment: this.editTaskComment().trim() || null
+    }).subscribe({
+      next: (updated) => {
+        this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
+        this.editingTaskId.set(null);
+        this.mutatingTaskId.set(null);
+        this.toastService.success('Задание сохранено');
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось обновить ручное задание');
+        this.mutatingTaskId.set(null);
+        this.toastService.error('Задание не сохранено', message);
+      }
+    });
+  }
+
   setAdminTaskManagerId(value: number | string | null): void {
     const id = value == null || value === '' ? NaN : Number(value);
     this.adminTaskManagerId.set(Number.isFinite(id) && id > 0 ? id : null);
@@ -1034,7 +1134,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   isExternalManualTask(task: ManualPaymentTaskResponse): boolean {
-    return task.manualPaymentType === 'EXTERNAL_LINK';
+    return this.normalizeManualPaymentType(task.manualPaymentType) === 'EXTERNAL_LINK';
   }
 
   canConfirmManual(link: AdminPaymentLinkResponse): boolean {
@@ -1194,6 +1294,15 @@ export class TbankPaymentsComponent implements OnDestroy {
   private adminTaskTargetKopecks(): number {
     const value = Number(this.adminTaskAmountRubles());
     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
+  private editTaskTargetKopecks(): number {
+    const value = Number(this.editTaskAmountRubles());
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
+  private normalizeManualPaymentType(value?: string | null): ManualPaymentType {
+    return value === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : 'MOBILE_BANK';
   }
 
   private matchesSearch(link: AdminPaymentLinkResponse, search: string): boolean {

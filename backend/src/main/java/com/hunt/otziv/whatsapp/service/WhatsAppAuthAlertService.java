@@ -1,13 +1,20 @@
 package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.repository.UserRepository;
 import java.time.format.DateTimeParseException;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.zip.CRC32;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,9 +27,13 @@ public class WhatsAppAuthAlertService {
     private static final String STATE_DOWN = "DOWN";
     private static final String STATE_UP = "UP";
     private static final int DEFAULT_ALERT_COOLDOWN_HOURS = 12;
+    private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String SOURCE_WHATSAPP_AUTH_ALERT = "WHATSAPP_AUTH_ALERT";
 
     private final TelegramService telegramService;
     private final AppSettingService appSettingService;
+    private final UserRepository userRepository;
+    private final PersonalReminderService personalReminderService;
 
     public void notifyAuthIssue(
             String clientId,
@@ -47,9 +58,10 @@ public class WhatsAppAuthAlertService {
         String text = authIssueText(safeClientId, companyTitle, source, code, readable, retryAtIrkutsk);
         boolean sentToManagers = sendToManagers(managers, text);
         if (!sentToManagers) {
-            telegramService.sendAlertToAdmins(markdownSafe(text + "\n\nМенеджерский Telegram не найден или не принял сообщение."));
             log.warn("WhatsApp auth alert sent to admins by fallback clientId={}", safeClientId);
         }
+        sendToAdmins(text, sentToManagers);
+        createSiteReminders(safeClientId, text, managers);
 
         appSettingService.setString(alertKey(safeClientId), alertNow.toString());
     }
@@ -79,9 +91,10 @@ public class WhatsAppAuthAlertService {
 
         boolean sentToManagers = sendToManagers(managers, text);
         if (!sentToManagers) {
-            telegramService.sendAlertToAdmins(markdownSafe(text + "\n\nМенеджерский Telegram не найден или не принял сообщение."));
             log.warn("WhatsApp auth recovery alert sent to admins by fallback clientId={}", safeClientId);
         }
+        sendToAdmins(text, sentToManagers);
+        deleteSiteReminders(safeClientId, managers);
 
         appSettingService.setString(stateKey, STATE_UP);
         appSettingService.setString(alertKey(safeClientId), "");
@@ -111,6 +124,70 @@ public class WhatsAppAuthAlertService {
             }
         }
         return sentAny;
+    }
+
+    private void sendToAdmins(String text, boolean sentToManagers) {
+        String adminText = sentToManagers
+                ? text
+                : text + "\n\nМенеджерский Telegram не найден или не принял сообщение.";
+        telegramService.sendAlertToAdmins(markdownSafe(adminText));
+    }
+
+    private void createSiteReminders(String clientId, String text, Collection<Manager> managers) {
+        Long sourceId = sourceId(clientId);
+        for (User recipient : siteReminderRecipients(managers)) {
+            try {
+                personalReminderService.deleteSystemReminderBySource(recipient, SOURCE_WHATSAPP_AUTH_ALERT, sourceId);
+                personalReminderService.createSystemReminderDueNow(
+                        recipient,
+                        "WhatsApp не авторизован: " + clientId,
+                        limit(text, 1000),
+                        SOURCE_WHATSAPP_AUTH_ALERT,
+                        sourceId,
+                        null
+                );
+            } catch (Exception e) {
+                log.warn("WhatsApp auth site reminder failed userId={} clientId={}",
+                        recipient == null ? null : recipient.getId(), clientId, e);
+            }
+        }
+    }
+
+    private void deleteSiteReminders(String clientId, Collection<Manager> managers) {
+        Long sourceId = sourceId(clientId);
+        for (User recipient : siteReminderRecipients(managers)) {
+            try {
+                personalReminderService.deleteSystemReminderBySource(recipient, SOURCE_WHATSAPP_AUTH_ALERT, sourceId);
+            } catch (Exception e) {
+                log.warn("WhatsApp auth site reminder delete failed userId={} clientId={}",
+                        recipient == null ? null : recipient.getId(), clientId, e);
+            }
+        }
+    }
+
+    private List<User> siteReminderRecipients(Collection<Manager> managers) {
+        Map<Long, User> recipients = new LinkedHashMap<>();
+        for (User admin : userRepository.findAllOwners(ROLE_ADMIN)) {
+            addRecipient(recipients, admin);
+        }
+        if (managers != null) {
+            for (Manager manager : managers) {
+                addRecipient(recipients, manager == null ? null : manager.getUser());
+            }
+        }
+        return List.copyOf(recipients.values());
+    }
+
+    private void addRecipient(Map<Long, User> recipients, User user) {
+        if (user != null && user.getId() != null) {
+            recipients.putIfAbsent(user.getId(), user);
+        }
+    }
+
+    private Long sourceId(String clientId) {
+        CRC32 crc32 = new CRC32();
+        crc32.update(displayClientId(clientId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        return crc32.getValue();
     }
 
     private String authIssueText(

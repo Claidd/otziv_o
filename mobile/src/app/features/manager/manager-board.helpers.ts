@@ -21,8 +21,10 @@ export const DEFAULT_ORDER_STATUSES = [
   'Коррекция',
   'Публикация',
   'Опубликовано',
+  'Ожидает общего счета',
   'Выставлен счет',
   'Напоминание',
+  'Требует внимания',
   'Не оплачено',
   'Бан',
   'Архив'
@@ -48,6 +50,14 @@ export const ORDER_ACTIONS = [
   { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
 ] as const;
 
+export const COMMON_INVOICE_ACTIONS = [
+  { label: 'счет', status: 'Выставлен счет', icon: 'receipt_long' },
+  { label: 'напомин.', status: 'Напоминание', icon: 'notifications_active' },
+  { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
+  { label: 'в бан', status: 'Бан', icon: 'block' },
+  { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
+] as const;
+
 export type CompanyStatusAction = (typeof COMPANY_ACTIONS)[number];
 export type OrderStatusAction = (typeof ORDER_ACTIONS)[number];
 export type ManagerNoteSaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -56,6 +66,7 @@ export type ManagerOrderActionSource = {
   status?: string | null;
   badReviewTasksTotal?: number | null;
   badReviewTasksPending?: number | null;
+  commonInvoice?: boolean | null;
 };
 
 export function normalizedManagerStatus(status: string): string {
@@ -79,6 +90,29 @@ export function managerOrderActionsFor(
   showAllActions = false,
   canForceBan = false
 ): readonly OrderStatusAction[] {
+  if (order.commonInvoice) {
+    const status = order.status ?? '';
+    if (status === 'Требует внимания') {
+      return [];
+    }
+
+    if (status === 'Опубликовано') {
+      return [COMMON_INVOICE_ACTIONS[0]];
+    }
+
+    if (status === 'Выставлен счет' || status === 'Напоминание') {
+      return [COMMON_INVOICE_ACTIONS[1], COMMON_INVOICE_ACTIONS[2], COMMON_INVOICE_ACTIONS[4]];
+    }
+
+    if (status === 'Не оплачено') {
+      return canShowBanAction(order, canForceBan)
+        ? [COMMON_INVOICE_ACTIONS[4], COMMON_INVOICE_ACTIONS[3]]
+        : [COMMON_INVOICE_ACTIONS[4]];
+    }
+
+    return [];
+  }
+
   if (showAllActions) {
     return canShowBanAction(order, canForceBan)
       ? ORDER_ACTIONS

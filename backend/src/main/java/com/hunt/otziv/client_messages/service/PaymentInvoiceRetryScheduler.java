@@ -88,6 +88,20 @@ public class PaymentInvoiceRetryScheduler {
     }
 
     @Transactional
+    public void cancelBadReviewInvoiceRetry(Order order, String reason) {
+        if (!canSchedule(order)) {
+            return;
+        }
+        cancelActiveState(
+                order,
+                ClientMessageScenario.BAD_REVIEW_INVOICE,
+                badReviewInvoiceTargetKey(order),
+                "bad_review_invoice_canceled",
+                reason == null || reason.isBlank() ? "Счет после плохих отменен" : reason
+        );
+    }
+
+    @Transactional
     public void scheduleBadReviewAutoBan(Order order) {
         if (!canSchedule(order)
                 || !appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_ENABLED, true)) {
@@ -107,18 +121,34 @@ public class PaymentInvoiceRetryScheduler {
         if (!canSchedule(order)) {
             return;
         }
-        stateRepository.findByScenarioAndTargetKey(
+        cancelActiveState(
+                order,
                 ClientMessageScenario.BAD_REVIEW_AUTO_BAN,
-                badReviewAutoBanTargetKey(order)
-        ).ifPresent(state -> {
+                badReviewAutoBanTargetKey(order),
+                "bad_review_auto_ban_canceled",
+                reason == null || reason.isBlank() ? "Автобан после плохих отменен" : reason
+        );
+    }
+
+    private void cancelActiveState(
+            Order order,
+            ClientMessageScenario scenario,
+            String targetKey,
+            String errorCode,
+            String errorMessage
+    ) {
+        if (!canSchedule(order)) {
+            return;
+        }
+        stateRepository.findByScenarioAndTargetKey(scenario, targetKey).ifPresent(state -> {
             if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
                 return;
             }
             state.setStatus(ScheduledMessageStateStatus.DONE);
             state.setNextAttemptAt(null);
             state.setLockedUntil(null);
-            state.setLastErrorCode("bad_review_auto_ban_canceled");
-            state.setLastErrorMessage(reason == null || reason.isBlank() ? "Автобан после плохих отменен" : reason);
+            state.setLastErrorCode(errorCode);
+            state.setLastErrorMessage(errorMessage);
             stateRepository.save(state);
         });
     }

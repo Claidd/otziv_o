@@ -171,6 +171,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/ai/reputation/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
         auth.requestMatchers("/api/admin/categories", "/api/admin/categories/**", "/api/admin/subcategories", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.GET, "/api/admin/bots/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers("/api/admin/manager-control/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/operator/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR");
         auth.requestMatchers("/api/companies/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");

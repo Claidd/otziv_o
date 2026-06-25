@@ -199,4 +199,42 @@ describe('ReviewCheckComponent', () => {
     expect(toggle()?.textContent?.trim()).toBe('развернуть');
     expect(field()?.classList.contains('review-field-editor--text-expanded')).toBe(false);
   });
+
+  it('opens the mobile text editor immediately when the client taps review text', () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    const payload = details({
+      status: 'На проверке',
+      approved: false,
+      permissions: {
+        ...details().permissions,
+        canSave: true
+      },
+      reviews: [review({ id: 101, text: 'Текст для проверки' })]
+    });
+    component.details.set(payload);
+    component.draft.set({
+      comment: '',
+      reviews: payload.reviews.map((item) => ({
+        id: item.id,
+        text: item.text,
+        answer: item.answer
+      }))
+    });
+    component.mobileReviewLayout.set(true);
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    element.querySelector<HTMLElement>('.review-display-field--text')?.click();
+    fixture.detectChanges();
+
+    expect(component.isReviewFieldEditing(payload.reviews[0], 'text')).toBe(true);
+    expect(component.activeReviewFieldEdit()).toEqual({
+      review: payload.reviews[0],
+      field: 'text',
+      title: 'Текст отзыва',
+      mutationKey: 'save-text-101'
+    });
+  });
 });

@@ -63,6 +63,18 @@ export const routes: Routes = [
         data: { roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) }
       },
       {
+        path: 'common-billing',
+        loadComponent: () => import('./features/common-billing-admin.page').then((m) => m.CommonBillingAdminPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.commonBilling, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'common-billing/:invoiceId',
+        loadComponent: () => import('./features/common-billing.page').then((m) => m.CommonBillingPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.commonBilling, MOBILE_ACTIONS.view) }
+      },
+      {
         path: 'review-check/:orderDetailId',
         loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage),
         canActivate: [roleGuard],
@@ -78,6 +90,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/worker.page').then((m) => m.WorkerPage),
         canActivate: [roleGuard],
         data: { roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'worker-risk',
+        loadComponent: () => import('./features/worker-risk.page').then((m) => m.WorkerRiskPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.workerRisk, MOBILE_ACTIONS.view) }
       },
       {
         path: 'leads',

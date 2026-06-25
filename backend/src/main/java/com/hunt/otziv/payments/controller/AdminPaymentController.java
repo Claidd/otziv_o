@@ -9,6 +9,7 @@ import com.hunt.otziv.payments.dto.TbankClientPaymentModeResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfilesResponse;
 import com.hunt.otziv.payments.dto.TbankRuntimeSettingsResponse;
 import com.hunt.otziv.payments.dto.UpdateManagerPaymentProfilesRequest;
+import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskStatusRequest;
 import com.hunt.otziv.payments.dto.UpdatePaymentProfilePoliciesRequest;
 import com.hunt.otziv.payments.dto.UpdateTbankClientPaymentModeRequest;
@@ -163,6 +164,20 @@ public class AdminPaymentController {
         return manualPaymentTaskService.updateManagementTaskStatus(
                 taskId,
                 request == null ? null : request.status(),
+                actor(authentication)
+        );
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PutMapping("/api/admin/payments/manual-tasks/{taskId}")
+    public ManualPaymentTaskResponse updateManualPaymentTask(
+            @PathVariable Long taskId,
+            @RequestBody UpdateManualPaymentTaskRequest request,
+            Authentication authentication
+    ) {
+        return manualPaymentTaskService.updateManagementTask(
+                taskId,
+                request,
                 actor(authentication)
         );
     }

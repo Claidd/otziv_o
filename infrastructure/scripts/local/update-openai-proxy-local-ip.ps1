@@ -1,6 +1,9 @@
 param(
     [string]$EnvFile = ".env.prod-local",
     [string]$ProxySshTarget = $env:OPENAI_PROXY_SSH_TARGET,
+    [string]$ProxySshUser = $env:OPENAI_PROXY_SSH_USER,
+    [int]$ProxySshPort = $(if ([string]::IsNullOrWhiteSpace($env:OPENAI_PROXY_SSH_PORT)) { 22022 } else { [int]$env:OPENAI_PROXY_SSH_PORT }),
+    [string]$ProxySshKey = $(if ([string]::IsNullOrWhiteSpace($env:OPENAI_PROXY_SSH_KEY)) { "$env:USERPROFILE\.ssh\otziv_vps_ed25519" } else { $env:OPENAI_PROXY_SSH_KEY }),
     [string]$PublicIpLookupUrl = "https://api.ipify.org",
     [string]$RuleComment = "otziv-local-dev",
     [switch]$SkipProxyRouteIpDetection,
@@ -83,18 +86,20 @@ function Get-ProxyRouteIp {
     param(
         [Parameter(Mandatory = $true)][string]$ProxyHost,
         [Parameter(Mandatory = $true)][string]$ProxyPort,
-        [Parameter(Mandatory = $true)][string]$ProxySshTarget
+        [Parameter(Mandatory = $true)][string]$ProxySshTarget,
+        [string[]]$SshArgs = @()
     )
 
     $captureCommand = "timeout 12 tcpdump -l -n -c 1 -i any 'tcp dst port $ProxyPort and tcp[tcpflags] & tcp-syn != 0' 2>/dev/null"
     $captureJob = Start-Job -ScriptBlock {
         param(
             [Parameter(Mandatory = $true)][string]$Target,
-            [Parameter(Mandatory = $true)][string]$Command
+            [Parameter(Mandatory = $true)][string]$Command,
+            [string[]]$ArgsForSsh = @()
         )
 
-        & ssh $Target $Command 2>$null
-    } -ArgumentList $ProxySshTarget, $captureCommand
+        & ssh @ArgsForSsh $Target $Command 2>$null
+    } -ArgumentList $ProxySshTarget, $captureCommand, $SshArgs
 
     try {
         Start-Sleep -Seconds 3
@@ -171,7 +176,34 @@ if ([string]::IsNullOrWhiteSpace($proxyHost)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($ProxySshTarget)) {
-    $ProxySshTarget = "root@$proxyHost"
+    if ([string]::IsNullOrWhiteSpace($ProxySshUser)) {
+        $ProxySshUser = "hunt"
+    }
+    $ProxySshTarget = "${ProxySshUser}@$proxyHost"
+}
+
+$sshArgs = @(
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "ServerAliveInterval=20",
+    "-o", "ServerAliveCountMax=6"
+)
+$scpArgs = @(
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "ServerAliveInterval=20",
+    "-o", "ServerAliveCountMax=6"
+)
+
+if ($ProxySshPort -gt 0) {
+    $sshArgs += @("-p", "$ProxySshPort")
+    $scpArgs += @("-P", "$ProxySshPort")
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ProxySshKey)) {
+    if (-not (Test-Path -LiteralPath $ProxySshKey)) {
+        throw "Proxy SSH key not found: $ProxySshKey"
+    }
+    $sshArgs += @("-i", $ProxySshKey)
+    $scpArgs += @("-i", $ProxySshKey)
 }
 
 $currentIp = (Invoke-RestMethod -Uri $PublicIpLookupUrl -TimeoutSec 20).ToString().Trim()
@@ -183,7 +215,7 @@ $rules = [System.Collections.Generic.List[object]]::new()
 $rules.Add([pscustomobject]@{ Ip = $currentIp; Comment = $RuleComment })
 
 if (-not $SkipProxyRouteIpDetection) {
-    $routeIp = Get-ProxyRouteIp -ProxyHost $proxyHost -ProxyPort $proxyPort -ProxySshTarget $ProxySshTarget
+    $routeIp = Get-ProxyRouteIp -ProxyHost $proxyHost -ProxyPort $proxyPort -ProxySshTarget $ProxySshTarget -SshArgs $sshArgs
     if (-not [string]::IsNullOrWhiteSpace($routeIp) -and $routeIp -ne $currentIp) {
         Write-Host "Route-specific public IP for ${proxyHost}:$proxyPort is $routeIp"
         $rules.Add([pscustomobject]@{ Ip = $routeIp; Comment = "$RuleComment-route" })
@@ -256,14 +288,14 @@ try {
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($localScriptPath, $remoteScript, $utf8NoBom)
 
-    & scp $localScriptPath "${ProxySshTarget}:$remoteScriptPath" | Out-Host
+    & scp @scpArgs $localScriptPath "${ProxySshTarget}:$remoteScriptPath" | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to copy UFW update script to $ProxySshTarget"
     }
 
     foreach ($rule in $rules) {
         Write-Host "Updating UFW rule '$($rule.Comment)' on $ProxySshTarget for proxy port $proxyPort..."
-        & ssh $ProxySshTarget "bash" $remoteScriptPath $rule.Ip $proxyPort $rule.Comment | Out-Host
+        & ssh @sshArgs $ProxySshTarget "bash" $remoteScriptPath $rule.Ip $proxyPort $rule.Comment | Out-Host
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to update UFW rule '$($rule.Comment)' on $ProxySshTarget"
         }
@@ -273,7 +305,7 @@ try {
         Remove-Item -LiteralPath $localScriptPath -Force
     }
 
-    & ssh $ProxySshTarget "rm" "-f" $remoteScriptPath 2>$null | Out-Null
+    & ssh @sshArgs $ProxySshTarget "rm" "-f" $remoteScriptPath 2>$null | Out-Null
 }
 
 if (-not $NoProxyTest) {

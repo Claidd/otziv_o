@@ -1,0 +1,180 @@
+<section class="transfer-workspace">
+    <section class="transfer-panel">
+      <header class="panel-head">
+        <div>
+          <h2>Передача текущей работы</h2>
+          <p>Компании, текущие заказы, неопубликованные отзывы и открытые плохие отзывы</p>
+        </div>
+        <span class="material-icons-sharp">sync_alt</span>
+      </header>
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <div class="transfer-form">
+        <label>
+          <span>От специалиста</span>
+          <select [ngModel]="fromWorkerId()" (ngModelChange)="setFromWorkerId($event)" [disabled]="optionsLoading()">
+            <option [ngValue]="null">Выберите специалиста</option>
+            @for (worker of sortedWorkers(); track trackWorker($index, worker)) {
+              <option [ngValue]="worker.id">{{ workerLabel(worker) }}</option>
+            }
+          </select>
+        </label>
+
+        <button class="swap-button" type="button" (click)="swapWorkers()" [disabled]="applyLoading() || previewLoading()">
+          <span class="material-icons-sharp">swap_horiz</span>
+        </button>
+
+        <label>
+          <span>К специалисту</span>
+          <select [ngModel]="toWorkerId()" (ngModelChange)="setToWorkerId($event)" [disabled]="optionsLoading()">
+            <option [ngValue]="null">Выберите специалиста</option>
+            @for (worker of sortedWorkers(); track trackWorker($index, worker)) {
+              <option [ngValue]="worker.id">{{ workerLabel(worker) }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <label class="comment-field">
+        <span>Комментарий</span>
+        <textarea rows="3" [ngModel]="comment()" (ngModelChange)="setComment($event)"></textarea>
+      </label>
+
+      <div class="actions">
+        <button type="button" class="primary" (click)="previewTransfer()" [disabled]="!canPreview()">
+          <span class="material-icons-sharp">fact_check</span>
+          {{ previewLoading() ? 'Проверяю' : 'Проверить' }}
+        </button>
+      </div>
+    </section>
+
+    @if (preview(); as previewData) {
+      <section class="transfer-panel preview-panel">
+        <header class="panel-head">
+          <div>
+            <h2>{{ previewData.fromWorker.label }} -> {{ previewData.toWorker.label }}</h2>
+            <p>Предпросмотр операции</p>
+          </div>
+          <span class="material-icons-sharp">assignment_ind</span>
+        </header>
+
+        <div class="metric-grid">
+          <article>
+            <span>Компании</span>
+            <strong>{{ previewData.companyCount }}</strong>
+          </article>
+          <article>
+            <span>Текущие заказы</span>
+            <strong>{{ previewData.activeOrderCount }}</strong>
+          </article>
+          <article>
+            <span>Отзывы</span>
+            <strong>{{ previewData.unpublishedReviewCount }}</strong>
+          </article>
+          <article>
+            <span>Плохие отзывы</span>
+            <strong>{{ previewData.badReviewTaskCount }}</strong>
+          </article>
+          <article>
+            <span>Уже привязан</span>
+            <strong>{{ previewData.targetAlreadyAssignedCompanyCount }}</strong>
+          </article>
+        </div>
+
+        @if (previewData.warnings.length) {
+          <div class="warning-list">
+            @for (warning of previewData.warnings; track trackWarning($index, warning)) {
+              <p>
+                <span class="material-icons-sharp">warning</span>
+                {{ warning.message }}
+              </p>
+            }
+          </div>
+        }
+
+        @if (previewData.sampleCompanies.length) {
+          <div class="company-samples">
+            <h3>Компании</h3>
+            @for (company of previewData.sampleCompanies; track trackCompany($index, company)) {
+              <div class="company-row">
+                <strong>{{ company.title || ('Компания #' + company.id) }}</strong>
+                <span>{{ company.city || '-' }} · {{ company.statusTitle || '-' }} · {{ company.telephone || '-' }}</span>
+              </div>
+            }
+          </div>
+        }
+
+        <div class="confirm-row">
+          <label>
+            <span>Подтверждение</span>
+            <input [ngModel]="confirmation()" (ngModelChange)="setConfirmation($event)" placeholder="ПЕРЕНЕСТИ">
+          </label>
+          <button type="button" class="danger" (click)="applyTransfer()" [disabled]="!canApply()">
+            <span class="material-icons-sharp">done_all</span>
+            {{ applyLoading() ? 'Переношу' : 'Перенести' }}
+          </button>
+        </div>
+      </section>
+    }
+
+    @if (result(); as resultData) {
+      <section class="transfer-panel result-panel">
+        <header class="panel-head">
+          <div>
+            <h2>Перенос выполнен</h2>
+            <p>Операция #{{ resultData.auditId || '-' }}</p>
+          </div>
+          <span class="material-icons-sharp">verified</span>
+        </header>
+        <div class="metric-grid">
+          <article>
+            <span>Компании</span>
+            <strong>{{ resultData.companyCount }}</strong>
+          </article>
+          <article>
+            <span>Связи добавлены</span>
+            <strong>{{ resultData.companyLinksAdded }}</strong>
+          </article>
+          <article>
+            <span>Заказы</span>
+            <strong>{{ resultData.activeOrderCount }}</strong>
+          </article>
+          <article>
+            <span>Отзывы</span>
+            <strong>{{ resultData.unpublishedReviewCount }}</strong>
+          </article>
+          <article>
+            <span>Плохие отзывы</span>
+            <strong>{{ resultData.badReviewTaskCount }}</strong>
+          </article>
+        </div>
+      </section>
+    }
+
+    <section class="transfer-panel recent-panel">
+      <header class="panel-head">
+        <div>
+          <h2>Последние операции</h2>
+          <p>{{ recentLoading() ? 'Загрузка' : recentTransfers().length + ' записей' }}</p>
+        </div>
+        <span class="material-icons-sharp">history</span>
+      </header>
+
+      <div class="recent-list">
+        @for (transfer of recentTransfers(); track trackTransfer($index, transfer)) {
+          <article>
+            <div>
+              <strong>{{ transferTitle(transfer) }}</strong>
+              <span>{{ transfer.createdAt | date:'dd.MM.yyyy HH:mm' }} · {{ transfer.actorName }}</span>
+            </div>
+            <p>{{ transfer.companyCount }} компаний · {{ transfer.orderCount }} заказов · {{ transfer.reviewCount }} отзывов · {{ transfer.badReviewTaskCount }} плохих</p>
+          </article>
+        } @empty {
+          <p class="empty">Операций пока нет</p>
+        }
+      </div>
+    </section>
+  </section>

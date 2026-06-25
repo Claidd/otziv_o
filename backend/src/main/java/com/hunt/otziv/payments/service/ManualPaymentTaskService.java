@@ -2,6 +2,7 @@ package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
+import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
 import com.hunt.otziv.payments.model.ManualPaymentTaskStatus;
 import com.hunt.otziv.payments.model.ManualPaymentType;
@@ -99,6 +100,27 @@ public class ManualPaymentTaskService {
         return toResponse(manualPaymentTaskRepository.save(task));
     }
 
+    @Transactional
+    public ManualPaymentTaskResponse updateManagerTask(
+            Long userId,
+            Long taskId,
+            UpdateManualPaymentTaskRequest request,
+            String actor
+    ) {
+        ManualPaymentTask task = taskById(taskId);
+        assertTaskOwner(userId, task);
+        return updateTask(task, request, actor);
+    }
+
+    @Transactional
+    public ManualPaymentTaskResponse updateManagementTask(
+            Long taskId,
+            UpdateManualPaymentTaskRequest request,
+            String actor
+    ) {
+        return updateTask(taskById(taskId), request, actor);
+    }
+
     @Transactional(readOnly = true)
     public List<ManualPaymentTaskResponse> managementTasks() {
         return manualPaymentTaskRepository.findAllForManagement().stream()
@@ -114,11 +136,7 @@ public class ManualPaymentTaskService {
             String actor
     ) {
         ManualPaymentTask task = taskById(taskId);
-        Manager manager = task.getManager();
-        Long ownerUserId = manager == null || manager.getUser() == null ? null : manager.getUser().getId();
-        if (userId == null || !userId.equals(ownerUserId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Можно менять только свои платежные задания");
-        }
+        assertTaskOwner(userId, task);
         return updateStatus(task, status, actor);
     }
 
@@ -167,6 +185,38 @@ public class ManualPaymentTaskService {
         manualPaymentTaskRepository.save(task);
     }
 
+    private ManualPaymentTaskResponse updateTask(
+            ManualPaymentTask task,
+            UpdateManualPaymentTaskRequest request,
+            String actor
+    ) {
+        if (task.getStatus() == ManualPaymentTaskStatus.COMPLETED
+                || task.getStatus() == ManualPaymentTaskStatus.CANCELED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Закрытое платежное задание нельзя редактировать");
+        }
+
+        ManualPaymentType type = parseManualPaymentType(request == null ? null : request.manualPaymentType());
+        long targetAmountKopecks = requiredPositive(request == null ? null : request.targetAmountKopecks());
+        long reserved = taskAmount(task.getId(), RESERVED_STATUSES);
+        if (targetAmountKopecks < reserved) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сумма задания меньше уже занятой суммы: " + moneyRubles(reserved)
+            );
+        }
+
+        task.setManualPaymentType(type);
+        task.setManualPhone(limit(request == null ? null : request.manualPhone(), 32));
+        task.setManualRecipientName(recipientOrDefault(request == null ? null : request.manualRecipientName()));
+        task.setManualPaymentUrl(paymentUrlOrDefault(request == null ? null : request.manualPaymentUrl()));
+        task.setManualPaymentButtonLabel(buttonLabelOrDefault(request == null ? null : request.manualPaymentButtonLabel()));
+        validatePaymentTarget(task);
+        task.setTargetAmountKopecks(targetAmountKopecks);
+        task.setComment(limit(request == null ? null : request.comment(), 255));
+        task.setUpdatedBy(limit(actor, 160));
+        return toResponse(manualPaymentTaskRepository.save(task));
+    }
+
     private ManualPaymentTaskResponse updateStatus(ManualPaymentTask task, String status, String actor) {
         ManualPaymentTaskStatus newStatus = parseStatus(status);
         task.setStatus(newStatus);
@@ -177,6 +227,14 @@ public class ManualPaymentTaskService {
             task.setCompletedAt(null);
         }
         return toResponse(manualPaymentTaskRepository.save(task));
+    }
+
+    private void assertTaskOwner(Long userId, ManualPaymentTask task) {
+        Manager manager = task.getManager();
+        Long ownerUserId = manager == null || manager.getUser() == null ? null : manager.getUser().getId();
+        if (userId == null || !userId.equals(ownerUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Можно менять только свои платежные задания");
+        }
     }
 
     private ManualPaymentTask taskById(Long taskId) {
@@ -323,6 +381,10 @@ public class ManualPaymentTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите сумму задания");
         }
         return value;
+    }
+
+    private String moneyRubles(long kopecks) {
+        return String.format(Locale.ROOT, "%.2f руб.", kopecks / 100.0);
     }
 
     private ManualPaymentType parseManualPaymentType(String value) {

@@ -55,7 +55,7 @@ class PublicationProgressPreferenceServiceTest {
         PublicationProgressPreferenceService service = new PublicationProgressPreferenceService(companyRepository);
         Company company = company(11L);
         company.setPublicationProgressReportsEnabled(false);
-        when(companyRepository.findByTelegramGroupChatId(-100L)).thenReturn(Optional.of(company));
+        when(companyRepository.findAllByTelegramGroupChatIdOrderById(-100L)).thenReturn(List.of(company));
 
         Optional<PublicationProgressPreferenceService.PreferenceUpdate> result =
                 service.handleTelegramCommand(-100L, "включить уведомления");
@@ -64,6 +64,45 @@ class PublicationProgressPreferenceServiceTest {
         assertTrue(company.isPublicationProgressReportsEnabled());
         assertTrue(result.get().enabled());
         verify(companyRepository).save(company);
+    }
+
+    @Test
+    void telegramPoliteDisableCommandTurnsOffAllCompaniesInSameChat() {
+        PublicationProgressPreferenceService service = new PublicationProgressPreferenceService(companyRepository);
+        Company first = company(16L);
+        Company second = company(17L);
+        when(companyRepository.findAllByTelegramGroupChatIdOrderById(-200L)).thenReturn(List.of(first, second));
+
+        Optional<PublicationProgressPreferenceService.PreferenceUpdate> result =
+                service.handleTelegramCommand(-200L, "Отключите их");
+
+        assertTrue(result.isPresent());
+        assertFalse(result.get().enabled());
+        assertFalse(first.isPublicationProgressReportsEnabled());
+        assertFalse(second.isPublicationProgressReportsEnabled());
+        verify(companyRepository).save(first);
+        verify(companyRepository).save(second);
+    }
+
+    @Test
+    void callbackDisableTurnsOffAllCompaniesInSameTelegramChat() {
+        PublicationProgressPreferenceService service = new PublicationProgressPreferenceService(companyRepository);
+        Company first = company(18L);
+        Company second = company(19L);
+        first.setTelegramGroupChatId(-300L);
+        second.setTelegramGroupChatId(-300L);
+        when(companyRepository.findById(18L)).thenReturn(Optional.of(first));
+        when(companyRepository.findAllByTelegramGroupChatIdOrderById(-300L)).thenReturn(List.of(first, second));
+
+        Optional<PublicationProgressPreferenceService.PreferenceUpdate> result =
+                service.handleCallback(service.disableCallbackData(18L));
+
+        assertTrue(result.isPresent());
+        assertFalse(result.get().enabled());
+        assertFalse(first.isPublicationProgressReportsEnabled());
+        assertFalse(second.isPublicationProgressReportsEnabled());
+        verify(companyRepository).save(first);
+        verify(companyRepository).save(second);
     }
 
     @Test

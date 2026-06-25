@@ -47,7 +47,7 @@ import { MobileConfirmService } from './mobile-confirm.service';
     .confirm-backdrop {
       position: fixed;
       inset: 0;
-      z-index: 10000;
+      z-index: 120000;
       display: grid;
       align-items: end;
       padding: 1rem max(0.5rem, env(safe-area-inset-right)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));

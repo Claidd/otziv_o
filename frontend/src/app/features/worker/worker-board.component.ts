@@ -1,5 +1,6 @@
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
 import {
   ManagerApi,
@@ -36,6 +37,7 @@ import {
   SectionTab,
   SideNoteField,
   StatusAction,
+  WorkerBoardTabKey,
   WORKER_ORDER_STATUS_ACTIONS,
   WORKER_PAGE_SIZE_OPTIONS,
   WORKER_SECTIONS,
@@ -53,6 +55,7 @@ import {
   workerReviewCopyLabel,
   workerSectionLabel
 } from './worker-board.config';
+import { WorkerRiskComponent } from '../manager/worker-risk.component';
 import { WorkerBoardActionFacade } from './worker-board-action.facade';
 import { WorkerBoardEditFacade } from './worker-board-edit.facade';
 import { WorkerBoardNoteFacade } from './worker-board-note.facade';
@@ -74,7 +77,8 @@ import { WorkerReviewCardComponent } from './worker-review-card.component';
     WorkerOrderCardComponent,
     WorkerOrderEditModalComponent,
     WorkerReviewCardComponent,
-    WorkerReviewEditModalComponent
+    WorkerReviewEditModalComponent,
+    WorkerRiskComponent
   ],
   templateUrl: './worker-board.component.html',
   styleUrl: './worker-board.component.scss'
@@ -85,6 +89,7 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly metricSnapshotApi = inject(MetricSnapshotApi);
   private readonly toastService = inject(ToastService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
   private readonly searchDelayMs = 500;
@@ -94,7 +99,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly pageSizeOptions = WORKER_PAGE_SIZE_OPTIONS;
 
   readonly board = signal<WorkerBoard | null>(null);
-  readonly activeSection = signal<WorkerSection>('new');
+  readonly activeSection = signal<WorkerBoardTabKey>('new');
   readonly keyword = signal('');
   readonly pageNumber = signal(0);
   readonly pageSize = signal(10);
@@ -225,7 +230,7 @@ export class WorkerBoardComponent implements OnDestroy {
     this.closeReviewEdit();
   }
 
-  loadBoard(section: WorkerBoardSectionQuery = this.activeSection()): void {
+  loadBoard(section: WorkerBoardSectionQuery = this.boardSectionForLoad()): void {
     this.loading.set(true);
     this.error.set(null);
     this.hideBoardNotice();
@@ -243,7 +248,7 @@ export class WorkerBoardComponent implements OnDestroy {
         this.selectedWorkerId.set(board.selectedWorkerId ?? null);
         this.loading.set(false);
 
-        if (board.section !== this.activeSection()) {
+        if (!this.isRiskSection() && board.section !== this.activeSection()) {
           this.activeSection.set(board.section);
           this.pageNumber.set(board.reviews.number || board.orders.number || 0);
         }
@@ -264,16 +269,20 @@ export class WorkerBoardComponent implements OnDestroy {
     });
   }
 
-  setSection(section: WorkerSection): void {
+  setSection(section: WorkerBoardTabKey): void {
     const metric = this.findMetric(section);
     this.activeSection.set(section);
     this.storeActiveSection(section);
     this.pageNumber.set(0);
     this.mobileMenuOpen.set(false);
+    if (this.isRiskSection(section)) {
+      this.loadBoard('all');
+      return;
+    }
     this.loadBoardAfterMetricSeen(metric);
   }
 
-  handleSectionMenu(section: WorkerSection | ''): void {
+  handleSectionMenu(section: WorkerBoardTabKey | ''): void {
     if (!section) {
       return;
     }
@@ -564,7 +573,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
-    this.logNagulCredentialCopyClick(review, kind);
+    this.logReviewCredentialCopyClick(review, kind);
 
     const value = {
       url: review.filialUrl,
@@ -578,8 +587,8 @@ export class WorkerBoardComponent implements OnDestroy {
     await this.copyText(value, `${kind}-${review.id}`, `${workerReviewCopyLabel(kind)} скопирован`);
   }
 
-  private logNagulCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): void {
-    if (this.activeSection() !== 'nagul' || (kind !== 'login' && kind !== 'password')) {
+  private logReviewCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): void {
+    if (kind !== 'login' && kind !== 'password') {
       return;
     }
 
@@ -634,6 +643,14 @@ export class WorkerBoardComponent implements OnDestroy {
     return this.noteFacade.orderNoteMutationKey(order);
   }
 
+  isRiskSection(section = this.activeSection()): boolean {
+    return section === 'risk';
+  }
+
+  activeWorkerSection(): WorkerSection {
+    return this.isRiskSection() ? 'all' : this.activeSection() as WorkerSection;
+  }
+
   isOrderSection(section = this.activeSection()): boolean {
     return section === 'new' || section === 'correct' || section === 'all';
   }
@@ -671,11 +688,15 @@ export class WorkerBoardComponent implements OnDestroy {
     return `/admin/dictionaries?botId=${bot.id}`;
   }
 
-  trackSection(_index: number, section: SectionTab): WorkerSection {
+  trackSection(_index: number, section: SectionTab): WorkerBoardTabKey {
     return trackWorkerSection(_index, section);
   }
 
   sectionOptionLabel(section: SectionTab): string {
+    if (section.key === 'risk') {
+      return section.label;
+    }
+
     const metric = this.findMetric(section.key);
     const label = metric ? `${section.label}: ${metric.value}` : section.label;
     return (metric?.delta ?? 0) > 0 ? `${label} +${metric?.delta}` : label;
@@ -713,11 +734,19 @@ export class WorkerBoardComponent implements OnDestroy {
     return summary.statuses.reduce((max, status) => Math.max(max, status.maxDays), 0);
   }
 
-  private findMetric(section: WorkerSection): WorkerMetric | undefined {
+  private findMetric(section: WorkerBoardTabKey): WorkerMetric | undefined {
+    if (section === 'risk') {
+      return undefined;
+    }
+
     return this.board()?.metrics.find((item) => item.section === section);
   }
 
-  private shouldShowWorkerSection(section: WorkerSection, metricValue = this.findMetric(section)?.value ?? 0): boolean {
+  private shouldShowWorkerSection(section: WorkerBoardTabKey, metricValue = this.findMetric(section)?.value ?? 0): boolean {
+    if (section === 'risk') {
+      return this.canSeeRiskTab();
+    }
+
     if (section !== 'recovery' && section !== 'bad') {
       return true;
     }
@@ -726,14 +755,32 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   private loadInitialBoard(): void {
+    if (this.route.snapshot.data['workerTab'] === 'risk' && this.canSeeRiskTab()) {
+      this.activeSection.set('risk');
+      this.loadBoard('all');
+      return;
+    }
+
     if (consumeWorkerCurrentSectionOpenRequest()) {
       this.openCurrentWorkSection();
       return;
     }
 
+    const querySection = this.normalizeStoredSection(this.route.snapshot.queryParamMap.get('section'));
+    if (querySection === 'risk' && this.canSeeRiskTab()) {
+      this.activeSection.set('risk');
+      this.loadBoard('all');
+      return;
+    }
+    if (querySection !== 'new' || this.route.snapshot.queryParamMap.has('section')) {
+      this.activeSection.set(querySection);
+      this.loadBoard(this.boardSectionForLoad());
+      return;
+    }
+
     const storedSection = this.readStoredActiveSection();
     this.activeSection.set(storedSection);
-    this.loadBoard(storedSection);
+    this.loadBoard(this.boardSectionForLoad());
   }
 
   private openCurrentWorkSection(): void {
@@ -848,16 +895,31 @@ export class WorkerBoardComponent implements OnDestroy {
     return `${this.activeSectionStorageKeyPrefix}:${userKey}`;
   }
 
-  private readStoredActiveSection(): WorkerSection {
+  private readStoredActiveSection(): WorkerBoardTabKey {
     return this.normalizeStoredSection(this.readSessionValue(this.activeSectionStorageKey()));
   }
 
-  private storeActiveSection(section: WorkerSection): void {
+  private storeActiveSection(section: WorkerBoardTabKey): void {
     this.writeSessionValue(this.activeSectionStorageKey(), section);
   }
 
-  private normalizeStoredSection(section: string | null): WorkerSection {
-    return this.sections.some((item) => item.key === section) ? section as WorkerSection : 'new';
+  private normalizeStoredSection(section: string | null): WorkerBoardTabKey {
+    if (section === 'risk') {
+      return this.canSeeRiskTab() ? 'risk' : 'new';
+    }
+
+    return this.sections.some((item) => item.key === section && item.key !== 'risk')
+      ? section as WorkerSection
+      : 'new';
+  }
+
+  private boardSectionForLoad(): WorkerBoardSectionQuery {
+    return this.isRiskSection() ? 'all' : this.activeSection() as WorkerSection;
+  }
+
+  private canSeeRiskTab(): boolean {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   }
 
   private localDateKey(date = new Date()): string {

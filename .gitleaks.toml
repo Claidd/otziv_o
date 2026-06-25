@@ -1,0 +1,107 @@
+title = "otziv gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "otziv-sensitive-env-assignment"
+description = "Sensitive environment/config variable assignment"
+path = '''(?i)(^|/)([^/]*\.env(\..*)?|.*\.(properties|ya?ml|toml|json|conf|ini|ps1|sh|bash|cmd|bat))$'''
+regex = '''(?i)(?:^|[\s"'`])([A-Z0-9_]*(?:PASSWORD|PASS|SECRET|TOKEN|API_KEY|ACCESS_KEY|PRIVATE_KEY|CLIENT_SECRET|WEBHOOK_SECRET|TERMINAL_KEY)[A-Z0-9_]*)[ \t]*[:=][ \t]*['"]?([^\s'"$][^\s'"]{7,})'''
+secretGroup = 2
+entropy = 2.0
+keywords = [
+  "password",
+  "secret",
+  "token",
+  "api_key",
+  "access_key",
+  "private_key",
+  "client_secret",
+  "webhook_secret",
+  "terminal_key",
+]
+
+[[rules.allowlists]]
+paths = [
+  '''(^|/)\.env(\..*)?\.example$''',
+  '''(^|/)backend/\.env\.local\.example$''',
+]
+
+[[rules]]
+id = "otziv-hardcoded-secret-literal"
+description = "Hardcoded sensitive string literal"
+regex = '''(?i)(password|secret|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|webhook[_-]?secret)[A-Za-z0-9_]*[ \t]*[:=][ \t]*["']([^"'${}\s]{12,})["']'''
+secretGroup = 2
+entropy = 2.5
+keywords = [
+  "password",
+  "secret",
+  "api_key",
+  "access_key",
+  "private_key",
+  "client_secret",
+  "webhook_secret",
+]
+
+[[rules.allowlists]]
+paths = [
+  '''(^|/)backend/src/test/''',
+  '''(^|/)frontend/src/.*\.spec\.ts$''',
+  '''(^|/)mobile/src/.*\.spec\.ts$''',
+]
+
+[[rules]]
+id = "otziv-env-file-with-sensitive-values"
+description = "Real env file with sensitive keys"
+path = '''(^|/)\.env(\..*)?$'''
+regex = '''(?i)^\s*[A-Z0-9_]*(PASSWORD|PASS|SECRET|TOKEN|KEY|ACCESS|PRIVATE|CLIENT|WEBHOOK|S3|OPENAI|YANDEX|TELEGRAM|WHATSAPP|MAX|TBANK|TINKOFF|KEYCLOAK|GRAFANA)[A-Z0-9_]*\s*=\s*(.+)$'''
+secretGroup = 2
+entropy = 0.0
+keywords = [
+  "password",
+  "secret",
+  "token",
+  "key",
+  "webhook",
+  "openai",
+  "yandex",
+  "telegram",
+  "whatsapp",
+  "tbank",
+  "keycloak",
+]
+
+[[rules.allowlists]]
+paths = [
+  '''(^|/)\.env(\..*)?\.example$''',
+  '''(^|/)backend/\.env\.local\.example$''',
+]
+
+[[allowlists]]
+description = "generated and local-only directories"
+paths = [
+  '''(^|/)\.git/''',
+  '''(^|/)\.idea/''',
+  '''(^|/)\.m2/''',
+  '''(^|/)target/''',
+  '''(^|/)backend/target/''',
+  '''(^|/)frontend/node_modules/''',
+  '''(^|/)frontend/\.angular/''',
+  '''(^|/)frontend/dist/''',
+  '''(^|/)mobile/node_modules/''',
+  '''(^|/)mobile/\.angular/''',
+  '''(^|/)mobile/dist/''',
+  '''(^|/)mobile/android/app/build/''',
+  '''(^|/)mobile/android/app/src/main/assets/public/''',
+  '''(^|/)mobile/ios/App/App/public/''',
+  '''(^|/)whatsapp/node_modules/''',
+  '''(^|/)data/''',
+  '''(^|/)logs/''',
+  '''(^|/)mobile/builds/''',
+  '''(^|/)mobile/android/app/google-services\.json$''',
+]
+regexes = [
+  '''keycloak-postgres:5432/keycloak''',
+  '''5432/keycloak''',
+]

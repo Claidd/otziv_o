@@ -7,6 +7,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Worker;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class WorkerOrderController {
     private final ReviewService reviewService;
     private final BotService botService;
     private final AppSettingService appSettingService;
+    private final WorkerPublicationGateService workerPublicationGateService;
 
 
     int pageSize = 10; // желаемый размер страницы
@@ -250,6 +252,18 @@ public class WorkerOrderController {
         if ("ROLE_WORKER".equals(userRole)){
             log.info("Зашли список всех отзывов к публикации для Работника: - {}", principal != null ? principal.getName() : "Гость");
 
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            var publicationBlock = workerPublicationGateService.blockForPublication(principal, authentication);
+            if (publicationBlock.isPresent()) {
+                rm.addFlashAttribute("saveSuccess", "false");
+                rm.addFlashAttribute("errorMessage", publicationBlock.get().message());
+                log.warn("Работник {} пытался зайти в публикацию, но публикация заблокирована: {}",
+                        principal != null ? principal.getName() : "Гость",
+                        publicationBlock.get().message());
+                checkTimeMethod("Время выполнения WorkerOrderController/worker/publish для Работника (доступ запрещен): ", startTime, principal);
+                return legacyWorkerRedirect(publicationBlock.get().section());
+            }
+
             if(reviewService.hasActiveNagulReviews(principal)){
                 rm.addFlashAttribute("saveSuccess", "false");
                 rm.addFlashAttribute("errorMessage", "Есть не выгулянные аккаунты. Публикация запрещена");
@@ -274,6 +288,14 @@ public class WorkerOrderController {
         }
         else return "redirect:/";
     } // Все заказы - Публикация
+
+    private String legacyWorkerRedirect(String section) {
+        return switch (section) {
+            case WorkerPublicationGateService.SECTION_CORRECT -> "redirect:/worker/correct";
+            case WorkerPublicationGateService.SECTION_NEW -> "redirect:/worker/new_orders";
+            default -> "redirect:/worker/new_orders";
+        };
+    }
 
 
 

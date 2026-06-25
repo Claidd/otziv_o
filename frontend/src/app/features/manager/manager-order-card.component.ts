@@ -1,7 +1,7 @@
 import { DecimalPipe } from '@angular/common';
 import { Component, EventEmitter, Input, OnDestroy, Output } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { OrderCardItem } from '../../core/manager.api';
+import type { ClientMessageStatus, OrderCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
@@ -40,6 +40,9 @@ export class ManagerOrderCardComponent implements OnDestroy {
   @Input() paymentCopyDisabled = false;
   activeCategoryPopover: CategoryPopover | null = null;
   unchangedCityOpen = false;
+  communicationPopoverOpen = false;
+  titlePopoverOpen = false;
+  private lastTitleTapAt = 0;
   private unchangedCityTimer: ReturnType<typeof setTimeout> | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
@@ -91,6 +94,264 @@ export class ManagerOrderCardComponent implements OnDestroy {
 
   chatBindingWarning(): string {
     return managerOrderChatBindingWarning(this.order);
+  }
+
+  hasCommunicationIndicator(): boolean {
+    return this.communicationTone() !== null;
+  }
+
+  communicationTone(): 'success' | 'wait' | 'danger' | null {
+    if (this.isCommonInvoice()) {
+      return this.commonInvoiceCommunicationTone();
+    }
+
+    if (this.chatBindingWarning()) {
+      return 'danger';
+    }
+
+    const status = this.clientMessageStatus();
+    if (!status || status.tone === 'muted') {
+      return null;
+    }
+
+    return status.tone;
+  }
+
+  communicationTitle(): string {
+    if (this.isCommonInvoice()) {
+      return this.commonInvoiceCommunicationTitle();
+    }
+
+    const warning = this.chatBindingWarning();
+    if (warning) {
+      return warning;
+    }
+
+    return this.clientMessageStatus()?.label ?? 'Состояние связи';
+  }
+
+  communicationDetails(): string[] {
+    if (this.isCommonInvoice()) {
+      return this.commonInvoiceCommunicationDetails();
+    }
+
+    const details: string[] = [];
+    const warning = this.chatBindingWarning();
+    const status = this.clientMessageStatus();
+
+    if (warning) {
+      details.push(warning);
+    }
+    if (status) {
+      if (!warning || !status.label.toLowerCase().includes(warning.toLowerCase())) {
+        details.push(status.label);
+      }
+      if (status.scenario) {
+        details.push(`Сценарий: ${this.clientMessageScenarioLabel(status.scenario)}`);
+      }
+      if (status.errorCode) {
+        details.push(`Код: ${status.errorCode}`);
+      }
+      if (status.errorMessage) {
+        details.push(status.errorMessage);
+      }
+      if (status.lastSuccessAt) {
+        details.push(`Успех: ${status.lastSuccessAt}`);
+      }
+      if (status.lastAttemptAt) {
+        details.push(`Последняя попытка: ${status.lastAttemptAt}`);
+      }
+      if (status.nextAttemptAt) {
+        details.push(`Следующая попытка: ${status.nextAttemptAt}`);
+      }
+      if (status.consecutiveFailures) {
+        details.push(`Ошибок подряд: ${status.consecutiveFailures}`);
+      }
+    }
+
+    return details.length ? details : ['Ошибок связи не видно'];
+  }
+
+  private commonInvoiceCommunicationTone(): 'success' | 'wait' | 'danger' | null {
+    const status = this.commonInvoiceStatusLabel().toLocaleLowerCase('ru-RU');
+    const sentAt = this.cleanLabel(this.order.commonInvoiceSentAt);
+
+    if (this.cleanLabel(this.order.commonInvoiceLastError)) {
+      return 'danger';
+    }
+    if (status.includes('требует внимания') || status === 'не оплачено' || status === 'бан') {
+      return 'danger';
+    }
+    if (!sentAt && this.commonInvoiceReadyToSend() && status.includes('ожида')) {
+      return 'danger';
+    }
+    if (status === 'оплачено') {
+      return 'success';
+    }
+    if (sentAt && this.cleanLabel(this.order.commonInvoiceNextReminderAt)) {
+      return 'wait';
+    }
+    if (sentAt) {
+      return 'success';
+    }
+
+    return 'wait';
+  }
+
+  private commonInvoiceCommunicationTitle(): string {
+    const status = this.commonInvoiceStatusLabel().toLocaleLowerCase('ru-RU');
+
+    if (this.cleanLabel(this.order.commonInvoiceLastError)) {
+      return 'Контроль: ошибка общего счета';
+    }
+    if (status.includes('требует внимания') || status === 'не оплачено' || status === 'бан') {
+      return 'Контроль: общий счет требует внимания';
+    }
+    if (!this.cleanLabel(this.order.commonInvoiceSentAt) && this.commonInvoiceReadyToSend() && status.includes('ожида')) {
+      return 'Контроль: общий счет готов, но не отправлен';
+    }
+    if (status === 'оплачено') {
+      return 'Общий счет оплачен';
+    }
+    if (this.cleanLabel(this.order.commonInvoiceNextReminderAt)) {
+      return 'Общий счет: напоминание запланировано';
+    }
+    if (this.cleanLabel(this.order.commonInvoiceSentAt)) {
+      return 'Общий счет отправлен';
+    }
+
+    return 'Общий счет собирается';
+  }
+
+  private commonInvoiceCommunicationDetails(): string[] {
+    const details: string[] = [];
+    const error = this.cleanLabel(this.order.commonInvoiceLastError);
+    const ready = this.order.commonInvoiceReadyOrders ?? this.order.counter ?? 0;
+    const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
+    const paid = this.order.commonInvoicePaidOrders ?? 0;
+
+    if (error) {
+      details.push(`Ошибка: ${error}`);
+    }
+    if (this.commonInvoiceStatusLabel()) {
+      details.push(`Статус: ${this.commonInvoiceStatusLabel()}`);
+    }
+    details.push(`Готово: ${ready}/${total}`);
+    details.push(`Оплачено: ${paid}/${total}`);
+    if (this.cleanLabel(this.order.commonInvoiceSentAt)) {
+      details.push(`Отправлен: ${this.order.commonInvoiceSentAt}`);
+    } else if (this.commonInvoiceReadyToSend()) {
+      details.push('Счет готов к отправке, но отправка не зафиксирована');
+    } else {
+      details.push('Счет еще собирается, отправка пока не должна идти');
+    }
+    if (this.cleanLabel(this.order.commonInvoiceLastReminderAt)) {
+      details.push(`Последнее напоминание: ${this.order.commonInvoiceLastReminderAt}`);
+    }
+    if (this.cleanLabel(this.order.commonInvoiceNextReminderAt)) {
+      details.push(`Следующее напоминание: ${this.order.commonInvoiceNextReminderAt}`);
+    }
+    if (this.order.commonInvoiceRemaining != null) {
+      details.push(`Остаток: ${this.order.commonInvoiceRemaining} руб.`);
+    }
+
+    return details.length ? details : ['Общий счет еще не отправлен'];
+  }
+
+  private commonInvoiceReadyToSend(): boolean {
+    const ready = this.order.commonInvoiceReadyOrders ?? this.order.counter ?? 0;
+    const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
+    return total > 0 && ready >= total;
+  }
+
+  private commonInvoiceStatusLabel(): string {
+    return this.cleanLabel(this.order.commonInvoiceStatus) || this.cleanLabel(this.order.status);
+  }
+
+  toggleCommunicationPopover(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.titlePopoverOpen = false;
+    this.communicationPopoverOpen = !this.communicationPopoverOpen;
+  }
+
+  closeCommunicationPopover(): void {
+    this.communicationPopoverOpen = false;
+  }
+
+  orderFullTitle(): string {
+    return this.orderTitleDetails().join('. ');
+  }
+
+  orderTitleDetails(): string[] {
+    const details: string[] = [];
+    const company = this.cleanLabel(this.order.companyTitle) || 'Без компании';
+    const filial = this.cleanLabel(this.order.filialTitle) || 'Без филиала';
+    const city = this.cleanLabel(this.order.filialCity);
+
+    details.push(`Компания: ${company}`);
+    details.push(`Адрес филиала: ${filial}`);
+    if (city) {
+      details.push(`Город: ${city}`);
+    }
+
+    return details;
+  }
+
+  toggleTitlePopover(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const now = Date.now();
+    const isPointerDoubleClick = event.detail >= 2;
+    const isTouchDoubleTap = !isPointerDoubleClick && now - this.lastTitleTapAt <= 360;
+    this.lastTitleTapAt = now;
+
+    if (isPointerDoubleClick || isTouchDoubleTap) {
+      this.lastTitleTapAt = 0;
+      this.closeTitlePopover();
+      this.openFilialFromTitle();
+      return;
+    }
+
+    this.communicationPopoverOpen = false;
+    this.titlePopoverOpen = !this.titlePopoverOpen;
+  }
+
+  closeTitlePopover(): void {
+    this.titlePopoverOpen = false;
+  }
+
+  private openFilialFromTitle(): void {
+    const url = this.orderFilialUrl();
+    if (!url) {
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener');
+  }
+
+  clientMessageStatus(): ClientMessageStatus | null {
+    return this.order.clientMessageStatus ?? null;
+  }
+
+  private clientMessageScenarioLabel(scenario: string): string {
+    switch (scenario) {
+      case 'CLIENT_TEXT_REMINDER':
+        return 'Ожидание текста клиента';
+      case 'REVIEW_CHECK_REMINDER':
+        return 'Проверка отзывов';
+      case 'PAYMENT_REMINDER':
+        return 'Оплата';
+      case 'PAYMENT_INVOICE_RETRY':
+        return 'Повтор счета';
+      case 'PAYMENT_OVERDUE_ESCALATION':
+        return 'Просроченная оплата';
+      case 'REVIEW_CHECK_DELIVERY_RETRY':
+        return 'Повтор ссылки проверки';
+      default:
+        return scenario;
+    }
   }
 
   handleChatLinkClick(): void {

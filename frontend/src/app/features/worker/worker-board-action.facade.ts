@@ -5,10 +5,9 @@ import type {
   WorkerBotItem,
   WorkerBoard,
   WorkerReviewItem,
-  WorkerSection
 } from '../../core/worker.api';
 import type { ToastService } from '../../shared/toast.service';
-import type { StatusAction } from './worker-board.config';
+import type { StatusAction, WorkerBoardTabKey } from './worker-board.config';
 import { workerBotChangeMessage } from './worker-board.config';
 
 type WorkerBoardActionApi = Pick<
@@ -33,7 +32,7 @@ type WorkerBoardActionToast = Pick<ToastService, 'success' | 'error'>;
 export type WorkerBoardActionFacadeDeps = {
   workerApi: WorkerBoardActionApi;
   toastService: WorkerBoardActionToast;
-  activeSection: Signal<WorkerSection>;
+  activeSection: Signal<WorkerBoardTabKey>;
   mutationKey: WritableSignal<string | null>;
   loadBoard: () => void;
   patchBoard?: (updater: (board: WorkerBoard) => WorkerBoard) => void;

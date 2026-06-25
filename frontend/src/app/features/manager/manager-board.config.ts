@@ -54,6 +54,8 @@ export type ManagerHistoryView = {
   pageSize: number;
   sortDirection: 'desc' | 'asc';
   selectedCompany: SelectedCompany | null;
+  managerId: number | null;
+  control: string | null;
 };
 
 export const MANAGER_HISTORY_STATE_KEY = 'otzivManagerView';
@@ -395,7 +397,7 @@ export function managerCompanyOrderUrl(_company: CompanyCardItem): string {
 export function managerOrderDetailsUrl(order: OrderCardItem): string {
   if (order.commonInvoice) {
     const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
-    return `/admin/common-billing?invoiceId=${invoiceId}`;
+    return `/manager/common-billing?invoiceId=${invoiceId}`;
   }
 
   return `/orders/${order.companyId}/${order.id}`;

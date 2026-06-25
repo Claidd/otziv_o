@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -122,6 +123,7 @@ class ManualPaymentAutoConfirmationServiceTest {
         PaymentLink link = new PaymentLink();
         link.setStatus(PaymentLinkStatus.AUTHORIZED);
         link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setTbankPaymentId("8634010699");
 
         when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(45L), any(Collection.class)))
                 .thenReturn(List.of(link));
@@ -133,9 +135,28 @@ class ManualPaymentAutoConfirmationServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "У заказа есть T-Bank/СБП платеж в процессе. Проверьте его в журнале перед ручным закрытием.",
+                "У заказа есть авторизованный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.",
                 exception.getReason()
         );
+    }
+
+    @Test
+    void allowsManualCloseWhenBankPaymentWasOnlyInitiatedInTbank() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(47L);
+        PaymentLink link = new PaymentLink();
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankPaymentId("8634010700");
+
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(47L), any(Collection.class)))
+                .thenAnswer(invocation -> {
+                    Collection<PaymentLinkStatus> statuses = invocation.getArgument(1);
+                    return statuses.contains(link.getStatus()) ? List.of(link) : List.of();
+                });
+
+        assertDoesNotThrow(() -> service.ensureCanCloseOrderManually(order));
     }
 
     private ManualPaymentAutoConfirmationService service() {

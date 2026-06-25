@@ -17,6 +17,9 @@ public class AppSettingService {
     public static final String NAGUL_LOOKAHEAD_DAYS = "nagul.lookahead.days";
     public static final String REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD = "review.account.walked-counter-threshold";
     public static final String REVIEW_ACCOUNT_WALK_DELAY_DAYS = "review.account.walk-delay-days";
+    public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED = "worker.publication.special-task-gate.enabled";
+    public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ROLLOUT_STARTED_ON = "worker.publication.special-task-gate.rollout-started-on";
+    public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ACTIVATE_ON = "worker.publication.special-task-gate.activate-on";
     public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
     public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
     public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";
@@ -106,9 +109,6 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAUSE_REASON = "client.messages.pause-reason";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS = "client.messages.whatsapp-auth.retry-hours";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = "client.messages.whatsapp-auth.alert-cooldown-hours";
-    public static final String PUBLICATION_HEALTH_MONITOR_ENABLED = "publication.health-monitor.enabled";
-    public static final String PUBLICATION_HEALTH_MONITOR_ZONE = "publication.health-monitor.zone";
-    public static final String PUBLICATION_HEALTH_MONITOR_LAST_RUN_KEY = "publication.health-monitor.last-run-key";
     public static final String PAYMENTS_TBANK_RUNTIME_MODE = "payments.tbank.runtime-mode";
     public static final String PAYMENTS_TBANK_ENABLED = "payments.tbank.enabled";
     public static final String PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED = "payments.tbank.payment-links-enabled";

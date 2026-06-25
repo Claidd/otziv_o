@@ -216,21 +216,30 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
-    void assignNewAccountRejectsExcludedFilialCities() {
+    void assignNewAccountUsesOwnCityCleanAccountsForSpecialCities() {
         ReviewBotChangeService service = service();
 
         for (Long cityId : List.of(320L, 326L)) {
             City city = city(cityId, "Город " + cityId);
             Filial filial = filial(12L + cityId, city);
+            filial.setCompany(company(90L + cityId));
+            Bot currentBot = bot(5L + cityId, "Старый Бот", 0);
+            Bot selectedBot = bot(800L + cityId, "Впиши Имя Фамилию", 0);
             Review review = new Review();
-            review.setFilial(filial);
             Long reviewId = 45L + cityId;
+            review.setId(reviewId);
+            review.setFilial(filial);
+            review.setBot(currentBot);
 
             when(reviewRepository.findByIdForBotChange(reviewId)).thenReturn(Optional.of(review));
+            when(reviewRepository.findUsedBotIdsByCompanyId(90L + cityId)).thenReturn(Set.of(77L + cityId));
+            when(botService.claimNewAccountFromOwnCity(same(city), eq(Set.of(77L + cityId, 5L + cityId))))
+                    .thenReturn(Optional.of(selectedBot));
 
-            RuntimeException exception = assertThrows(RuntimeException.class, () -> service.assignNewAccount(reviewId));
+            service.assignNewAccount(reviewId);
 
-            assertEquals("Новый аккаунт недоступен для филиалов с городом 320 или 326", exception.getMessage());
+            assertSame(selectedBot, review.getBot());
+            verify(reviewRepository).save(review);
         }
         verify(botService, never()).claimNewAccountForCity(any(), anyCollection());
     }

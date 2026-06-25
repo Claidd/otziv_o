@@ -140,7 +140,7 @@ class OrderStatusTransitionServiceTest {
         Order order = order(90L, "Выставлен счет");
         ResponseStatusException conflict = new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "У заказа есть T-Bank/СБП платеж в процессе. Проверьте его в журнале перед ручным закрытием."
+                "У заказа есть авторизованный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием."
         );
 
         when(orderRepository.findByIdForMutation(90L)).thenReturn(Optional.of(order));
@@ -284,6 +284,26 @@ class OrderStatusTransitionServiceTest {
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals("Сначала выполните все плохие задачи заказа", exception.getReason());
         verify(orderRepository, never()).save(order);
+        verify(badReviewTaskService, never()).deletePendingTasksForOrder(order);
+    }
+
+    @Test
+    void privilegedBanDeletesPendingBadTasksAndSavesOrder() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = order(36L, "Не оплачено");
+        OrderStatus ban = status("Бан");
+
+        when(orderRepository.findByIdForMutation(36L)).thenReturn(Optional.of(order));
+        when(badReviewTaskService.getSummaryForOrder(36L))
+                .thenReturn(new BadReviewTaskSummary(10, 10, 0, 0, BigDecimal.ZERO, BigDecimal.valueOf(2000)));
+        when(orderStatusService.getOrderStatusByTitle("Бан")).thenReturn(ban);
+
+        assertTrue(service.changeStatusForPrivilegedOrder(36L, "Бан"));
+
+        assertSame(ban, order.getStatus());
+        verify(badReviewTaskService).deletePendingTasksForOrder(order);
+        verify(orderCompanyStatusService).autoManageCompanyStatus(order, "Бан");
+        verify(orderRepository).save(order);
     }
 
     @Test

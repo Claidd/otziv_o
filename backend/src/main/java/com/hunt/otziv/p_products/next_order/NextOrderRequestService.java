@@ -4,10 +4,12 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.u_users.model.Worker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -45,6 +47,7 @@ public class NextOrderRequestService {
     private final CompanyStatusService companyStatusService;
     private final ApplicationEventPublisher eventPublisher;
     private final NextOrderFailureNotifier nextOrderFailureNotifier;
+    private final CommonBillingNextOrderFailureMarker commonBillingNextOrderFailureMarker;
 
     @Transactional
     public Optional<NextOrderRequest> openForPaidOrder(Order sourceOrder) {
@@ -61,12 +64,14 @@ public class NextOrderRequestService {
 
         Long filialId = filialId(sourceOrder.getFilial());
         Set<Long> filialIds = orderFilialIds(sourceOrder);
-        if (hasActiveOrderForFilials(company.getId(), filialIds, filialId, sourceOrder.getId())) {
+        Long workerId = workerId(sourceOrder.getWorker());
+        if (hasActiveOrderForFilials(company.getId(), filialIds, filialId, workerId, sourceOrder.getId())) {
             log.info(
-                    "Следующая заявка для заказа {} не нужна: у компании {} и филиалов {} уже есть активный заказ",
+                    "Следующая заявка для заказа {} не нужна: у компании {}, филиалов {} и исполнителя {} уже есть активный заказ",
                     sourceOrder.getId(),
                     company.getId(),
-                    filialIds.isEmpty() ? String.valueOf(filialId) : filialIds
+                    filialIds.isEmpty() ? String.valueOf(filialId) : filialIds,
+                    workerId
             );
             refreshCompanyStatusForOpenRequests(company.getId());
             return Optional.empty();
@@ -87,12 +92,13 @@ public class NextOrderRequestService {
             return Optional.of(request);
         }
 
-        Optional<NextOrderRequest> existingOpen = findOpenRequest(company.getId(), filialId);
+        Optional<NextOrderRequest> existingOpen = findOpenRequest(company.getId(), filialId, workerId);
         if (existingOpen.isPresent()) {
             log.info(
-                    "Для компании {} и филиала {} уже есть открытая заявка на следующий заказ: {}",
+                    "Для компании {}, филиала {} и исполнителя {} уже есть открытая заявка на следующий заказ: {}",
                     company.getId(),
                     filialId,
+                    workerId,
                     existingOpen.get().getId()
             );
             refreshCompanyStatusForOpenRequests(company.getId());
@@ -127,17 +133,19 @@ public class NextOrderRequestService {
 
         Long companyId = createdOrder.getCompany().getId();
         Long filialId = filialId(createdOrder.getFilial());
-        findOpenRequest(companyId, filialId).ifPresent(request -> {
+        Long workerId = workerId(createdOrder.getWorker());
+        findOpenRequest(companyId, filialId, workerId).ifPresent(request -> {
             request.setStatus(NextOrderRequestStatus.CREATED);
             request.setCreatedOrder(createdOrder);
             request.setErrorMessage(null);
             requestRepository.save(request);
             log.info(
-                    "Заявка {} на следующий заказ закрыта созданным заказом {} для компании {}, филиала {}",
+                    "Заявка {} на следующий заказ закрыта созданным заказом {} для компании {}, филиала {}, исполнителя {}",
                     request.getId(),
                     createdOrder.getId(),
                     companyId,
-                    filialId
+                    filialId,
+                    workerId
             );
         });
     }
@@ -201,6 +209,7 @@ public class NextOrderRequestService {
             request.setErrorMessage(truncate(errorMessage(cause)));
             requestRepository.save(request);
             refreshCompanyStatusForOpenRequests(request.getCompany().getId());
+            commonBillingNextOrderFailureMarker.markAttentionForSourceOrder(request.getSourceOrder(), requestId, cause);
             log.error("Автоматический следующий заказ по заявке {} не создан", requestId, cause);
             nextOrderFailureNotifier.notifyManager(
                     request.getSourceOrder(),
@@ -257,50 +266,54 @@ public class NextOrderRequestService {
         return result;
     }
 
-    public boolean hasActiveOrderForFilial(Long companyId, Long filialId, Long excludedOrderId) {
+    public boolean hasActiveOrderForFilial(Long companyId, Long filialId, Long workerId, Long excludedOrderId) {
         return orderRepository.existsActiveOrderByCompanyIdAndFilialId(
                 companyId,
                 filialId,
+                workerId,
                 excludedOrderId,
                 INACTIVE_ORDER_STATUSES
         );
     }
 
-    public boolean hasActiveOrderForFilials(Long companyId, Set<Long> filialIds, Long fallbackFilialId, Long excludedOrderId) {
+    public boolean hasActiveOrderForFilials(Long companyId, Set<Long> filialIds, Long fallbackFilialId, Long workerId, Long excludedOrderId) {
         if (filialIds == null || filialIds.isEmpty()) {
-            return hasActiveOrderForFilial(companyId, fallbackFilialId, excludedOrderId);
+            return hasActiveOrderForFilial(companyId, fallbackFilialId, workerId, excludedOrderId);
         }
         if (filialIds.size() == 1) {
-            return hasActiveOrderForFilial(companyId, filialIds.iterator().next(), excludedOrderId);
+            return hasActiveOrderForFilial(companyId, filialIds.iterator().next(), workerId, excludedOrderId);
         }
         return orderRepository.existsActiveOrderByCompanyIdAndAnyFilialId(
                 companyId,
                 filialIds,
+                workerId,
                 excludedOrderId,
                 INACTIVE_ORDER_STATUSES
         );
     }
 
-    public List<Order> findActiveOrdersForFilial(Long companyId, Long filialId) {
+    public List<Order> findActiveOrdersForFilial(Long companyId, Long filialId, Long workerId) {
         return orderRepository.findActiveOrdersByCompanyIdAndFilialId(
                 companyId,
                 filialId,
+                workerId,
                 null,
                 INACTIVE_ORDER_STATUSES,
                 PageRequest.of(0, 1)
         );
     }
 
-    public List<Order> findActiveOrdersForFilials(Long companyId, Set<Long> filialIds, Long fallbackFilialId) {
+    public List<Order> findActiveOrdersForFilials(Long companyId, Set<Long> filialIds, Long fallbackFilialId, Long workerId) {
         if (filialIds == null || filialIds.isEmpty()) {
-            return findActiveOrdersForFilial(companyId, fallbackFilialId);
+            return findActiveOrdersForFilial(companyId, fallbackFilialId, workerId);
         }
         if (filialIds.size() == 1) {
-            return findActiveOrdersForFilial(companyId, filialIds.iterator().next());
+            return findActiveOrdersForFilial(companyId, filialIds.iterator().next(), workerId);
         }
         return orderRepository.findActiveOrdersByCompanyIdAndAnyFilialId(
                 companyId,
                 filialIds,
+                workerId,
                 null,
                 INACTIVE_ORDER_STATUSES,
                 PageRequest.of(0, 1)
@@ -333,10 +346,11 @@ public class NextOrderRequestService {
         return filialIds;
     }
 
-    private Optional<NextOrderRequest> findOpenRequest(Long companyId, Long filialId) {
+    private Optional<NextOrderRequest> findOpenRequest(Long companyId, Long filialId, Long workerId) {
         return requestRepository.findOpenByCompanyIdAndFilialId(
                 companyId,
                 filialId,
+                workerId,
                 OPEN_REQUEST_STATUSES,
                 PageRequest.of(0, 1)
         ).stream().findFirst();
@@ -365,6 +379,10 @@ public class NextOrderRequestService {
 
     private Long filialId(Filial filial) {
         return filial == null ? null : filial.getId();
+    }
+
+    private Long workerId(Worker worker) {
+        return worker == null ? null : worker.getId();
     }
 
     private String errorMessage(Throwable cause) {

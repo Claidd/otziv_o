@@ -51,6 +51,8 @@ import java.util.stream.StreamSupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -287,14 +289,31 @@ public class ApiAdminDictionaryController {
 
     @GetMapping("/bots")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public BotsResponse getBots(String keyword) {
-        List<BotResponse> bots = botsRepository.findAllAdminRows().stream()
-                .filter(bot -> matchesBot(keyword, bot))
-                .sorted(Comparator.comparing(BotsRepository.AdminBotRow::getFio, Comparator.nullsLast(String::compareToIgnoreCase)))
+    public BotsResponse getBots(
+            String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        int pageIndex = Math.max(page, 0);
+        int pageSize = Math.max(10, Math.min(size, 200));
+        Page<BotsRepository.AdminBotRow> botPage = botsRepository.findAdminRows(
+                normalizedKeyword(keyword),
+                PageRequest.of(pageIndex, pageSize)
+        );
+        List<BotResponse> bots = botPage.getContent().stream()
                 .map(this::toBotResponse)
                 .toList();
 
-        return new BotsResponse(bots, workerOptions(), botStatusOptions(), cityOptions());
+        return new BotsResponse(
+                bots,
+                workerOptions(),
+                botStatusOptions(),
+                cityOptions(),
+                botPage.getTotalElements(),
+                botPage.getNumber(),
+                botPage.getSize(),
+                botPage.getTotalPages()
+        );
     }
 
     @GetMapping("/bots/{id}")
@@ -307,8 +326,11 @@ public class ApiAdminDictionaryController {
 
     @PostMapping("/bots/import")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public BotImportResult importBots(@RequestParam("file") MultipartFile file) {
-        return botImportService.importBots(file);
+    public BotImportResult importBots(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "cityId", required = false) Long cityId
+    ) {
+        return botImportService.importBots(file, cityId);
     }
 
     @PostMapping("/bots")
@@ -1298,6 +1320,11 @@ public class ApiAdminDictionaryController {
                 || matches(keyword, bot.getCityTitle());
     }
 
+    private String normalizedKeyword(String keyword) {
+        String result = safe(keyword).trim();
+        return result.isBlank() ? null : result;
+    }
+
     private String workerTitle(Worker worker) {
         if (worker == null) {
             return "";
@@ -1494,7 +1521,11 @@ public class ApiAdminDictionaryController {
             List<BotResponse> bots,
             List<OptionResponse> workers,
             List<OptionResponse> statuses,
-            List<OptionResponse> cities
+            List<OptionResponse> cities,
+            long total,
+            int page,
+            int size,
+            int totalPages
     ) {
     }
 

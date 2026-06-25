@@ -192,13 +192,13 @@ WhatsApp group sync finished source=scheduled clients=2 groups=18 linked=3
 phpMyAdmin не поднимается вместе с основным стеком и не публикуется наружу. Когда нужно проверить БД, запусти его на VPS отдельным профилем:
 
 ```sh
-docker compose -f docker-compose.yaml --env-file .env.prod --profile db-admin up -d phpmyadmin
+docker compose -f docker-compose.yaml --env-file .env --profile db-admin up -d phpmyadmin
 ```
 
 С локального компьютера открой туннель:
 
 ```powershell
-ssh -i "$env:USERPROFILE\.ssh\otziv_vps_ed25519" -L 6571:127.0.0.1:6571 root@95.213.248.152
+ssh -i "$env:USERPROFILE\.ssh\otziv_vps_ed25519" -p 22022 -L 6571:127.0.0.1:6571 hunt@95.213.248.152
 ```
 
 После этого phpMyAdmin будет доступен локально на `http://127.0.0.1:6571`. Логин и пароль вводятся руками, из `.env.prod` они больше не передаются в контейнер phpMyAdmin для автологина.
@@ -206,7 +206,7 @@ ssh -i "$env:USERPROFILE\.ssh\otziv_vps_ed25519" -L 6571:127.0.0.1:6571 root@95.
 После проверки выключи сервис:
 
 ```sh
-docker compose -f docker-compose.yaml --env-file .env.prod --profile db-admin stop phpmyadmin
+docker compose -f docker-compose.yaml --env-file .env --profile db-admin stop phpmyadmin
 ```
 
 ## Сборка образов локально
@@ -256,7 +256,8 @@ docker compose -f docker-compose.build.yaml push
 ```powershell
 .\infrastructure\scripts\prod\deploy-prod.ps1 `
   -VpsHost 203.0.113.10 `
-  -VpsUser root `
+  -VpsUser hunt `
+  -VpsPort 22022 `
   -VpsPath /opt/otziv `
   -SshKey C:\Users\Hunt\.ssh\id_rsa `
   -RemoteEnvFile .env
@@ -280,7 +281,8 @@ docker compose -f docker-compose.build.yaml push
 ```powershell
 .\infrastructure\scripts\prod\deploy-prod.ps1 `
   -VpsHost 203.0.113.10 `
-  -VpsUser root `
+  -VpsUser hunt `
+  -VpsPort 22022 `
   -VpsPath /opt/otziv `
   -SshKey C:\Users\Hunt\.ssh\id_rsa `
   -RemoteEnvFile .env `

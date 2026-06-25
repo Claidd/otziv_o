@@ -1,6 +1,9 @@
 package com.hunt.otziv.p_products.services.service;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
@@ -32,8 +35,31 @@ public interface OrderService {
     Page<OrderDTOList> getAllOrderDTOAndKeywordAndStatus(String keyword, String status, int pageNumber, int pageSize, String sortDirection);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection);
+    Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Manager manager, String keyword, int pageNumber, int pageSize, String sortDirection);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection);
+    Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Manager manager, String keyword, String status, int pageNumber, int pageSize, String sortDirection);
+    Page<OrderDTOList> getManagerControlOverdueOrdersByManager(
+            Manager manager,
+            String keyword,
+            String status,
+            LocalDate cutoff,
+            Set<String> excludedStatuses,
+            Set<CommonInvoiceStatus> commonInvoiceStatuses,
+            Set<String> paymentAutomationStatuses,
+            Set<ClientMessageScenario> paymentScenarios,
+            Set<String> reviewCheckAutomationStatuses,
+            Set<ClientMessageScenario> reviewCheckScenarios,
+            Set<String> deliveryRetryAutomationStatuses,
+            Set<ClientMessageScenario> deliveryRetryScenarios,
+            Set<String> clientTextAutomationStatuses,
+            Set<ClientMessageScenario> clientTextScenarios,
+            ScheduledMessageStateStatus activeStatus,
+            ScheduledMessageStateStatus doneStatus,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    );
     Page<OrderDTOList> getAllOrderDTOAndKeywordByWorkerAll(Principal principal, String keyword, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByWorker(Principal principal, String keyword, String status, int pageNumber, int pageSize);
     Page<OrderDTOList> getAllOrderDTOAndKeywordByOwnerAll(Principal principal, String keyword, int pageNumber, int pageSize);

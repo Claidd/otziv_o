@@ -2125,7 +2125,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadTbankStatus();
-    this.routeSubscription = this.route.paramMap.subscribe((params) => {
+    this.routeSubscription = new Subscription();
+    this.routeSubscription.add(this.route.paramMap.subscribe((params) => {
       const companyId = Number(params.get('companyId'));
       const orderId = Number(params.get('orderId'));
       this.companyId.set(Number.isFinite(companyId) && companyId > 0 ? companyId : null);
@@ -2136,7 +2137,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
       this.orderId.set(orderId);
       this.loadDetails();
-    });
+    }));
+    this.routeSubscription.add(this.route.queryParamMap.subscribe(() => this.selectRequestedReview()));
   }
 
   ngOnDestroy(): void {
@@ -2161,7 +2163,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.api.getManagerOrderDetails(orderId).subscribe({
       next: (details) => {
         this.details.set(details);
-        this.activeReviewIndex.set(0);
+        this.selectRequestedReview(details);
         this.reviewFieldDrafts.set({});
         this.reviewNoteDrafts.set({});
         this.reviewSideNoteDrafts.set({});
@@ -2193,6 +2195,22 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   nextReview(): void {
     const max = Math.max(0, this.totalDetailCards() - 1);
     this.goToReviewIndex(Math.min(max, this.activeReviewIndex() + 1));
+  }
+
+  private selectRequestedReview(details: OrderDetailsPayload | null = this.details()): void {
+    const reviewId = Number(this.route.snapshot.queryParamMap.get('reviewId'));
+    if (!details || !Number.isFinite(reviewId) || reviewId <= 0) {
+      this.activeReviewIndex.set(0);
+      return;
+    }
+
+    const index = details.reviews.findIndex((review) => review.id === reviewId);
+    if (index < 0) {
+      this.activeReviewIndex.set(0);
+      return;
+    }
+
+    window.setTimeout(() => this.goToReviewIndex(index), 60);
   }
 
   goToReviewIndex(index: number): void {

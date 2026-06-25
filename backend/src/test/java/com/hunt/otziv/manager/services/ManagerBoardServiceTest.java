@@ -3,6 +3,7 @@ package com.hunt.otziv.manager.services;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -78,6 +79,9 @@ class ManagerBoardServiceTest {
     @Mock
     private CommonBillingService commonBillingService;
 
+    @Mock
+    private ClientMessageOrderStatusService clientMessageOrderStatusService;
+
     @Spy
     private ManagerPermissionService managerPermissionService = new ManagerPermissionService();
 
@@ -114,6 +118,8 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of("Новая", 2, "В работе", 3));
         when(orderService.countOrdersByStatus())
                 .thenReturn(Map.of("Новый", 4, "Оплачено", 1));
+        when(commonBillingService.countManagerBoardCards(null))
+                .thenReturn(Map.of("Требует внимания", 1));
         when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
                 .thenReturn(Map.of());
         when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
@@ -139,13 +145,19 @@ class ManagerBoardServiceTest {
         assertEquals(List.of(order), response.orders().content());
         assertEquals(1, response.orders().totalElements());
         assertEquals(List.of("promo"), response.promoTexts());
-        assertEquals(20, response.metrics().size());
+        assertEquals(21, response.metrics().size());
+        assertEquals(1, response.metrics().stream()
+                .filter(metric -> "orders".equals(metric.section()) && "Требует внимания".equals(metric.status()))
+                .findFirst()
+                .orElseThrow()
+                .value());
         assertEquals("Все", response.metrics().stream()
                 .filter(metric -> "orders".equals(metric.section()) && "Все".equals(metric.status()))
                 .findFirst()
                 .orElseThrow()
                 .label());
         verify(badReviewTaskService).enrichOrderList(List.of(order));
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of(order));
     }
 
     @Test
@@ -198,6 +210,7 @@ class ManagerBoardServiceTest {
         assertEquals(List.of(firstCommon, secondCommon), response.orders().content());
         assertEquals(5, response.orders().totalElements());
         verify(badReviewTaskService).enrichOrderList(List.of(firstCommon, secondCommon));
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of(firstCommon, secondCommon));
     }
 
     @Test
@@ -238,6 +251,7 @@ class ManagerBoardServiceTest {
         assertEquals(11, response.companies().totalElements());
         assertEquals(List.of(), response.orders().content());
         verify(badReviewTaskService).enrichOrderList(List.of());
+        verify(clientMessageOrderStatusService).enrichOrderList(List.of());
     }
 
     @Test

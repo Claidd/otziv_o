@@ -18,6 +18,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
+import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -30,6 +31,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_activity.WorkerActivityService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -119,6 +121,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private WorkerFlowLockService workerFlowLockService;
 
+    @Mock
+    private WorkerActivityService workerActivityService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -155,7 +160,16 @@ class ApiWorkerBoardControllerTest {
                 reviewRecoveryTaskService,
                 metricSnapshotService,
                 appSettingService,
-                workerFlowLockService
+                new WorkerPublicationGateService(
+                        orderService,
+                        badReviewTaskService,
+                        reviewRecoveryTaskService,
+                        userService,
+                        workerService,
+                        workerFlowLockService,
+                        appSettingService
+                ),
+                workerActivityService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
@@ -494,6 +508,188 @@ class ApiWorkerBoardControllerTest {
         assertTrue(response.message().contains("Коррекции"));
         verify(orderBoardQueryService).getAllOrderDTOAndKeywordByWorker(worker, "", "Коррекция", 0, 10, "desc");
         verify(reviewService, never()).hasActiveNagulReviews(principal);
+    }
+
+    @Test
+    void workerPublishRedirectsToRecoveryWhenRecoveryTaskIsOverdueMoreThanTwoDays() {
+        when(appSettingService.getBoolean(AppSettingService.WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED, false))
+                .thenReturn(true);
+        when(reviewRecoveryTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now())))
+                .thenReturn(1);
+        when(reviewRecoveryTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now().minusDays(3))))
+                .thenReturn(1);
+        when(workerFlowLockService.syncPublicationLock("worker:88", 88L, false, false))
+                .thenReturn(false);
+        when(workerFlowLockService.syncPublicationLock("worker:88:special-tasks", 88L, true, true))
+                .thenReturn(true);
+
+        ApiWorkerBoardController.WorkerBoardResponse response = getBoard("publish");
+
+        assertEquals("recovery", response.section());
+        assertTrue(response.warning());
+        assertTrue(response.message().contains("Восстановление"));
+        assertTrue(response.message().contains("больше 2 дней"));
+        verify(reviewRecoveryTaskService).getDueTasksToWorker(eq(worker), any(LocalDate.class), eq(""), any(Pageable.class));
+        verify(reviewService, never()).getAllReviewDTOByWorkerByPublish(
+                any(LocalDate.class),
+                eq(principal),
+                eq(0),
+                eq(10),
+                eq("desc"),
+                eq("")
+        );
+    }
+
+    @Test
+    void workerPublishRedirectsToBadWhenBadTaskIsOverdueMoreThanTwoDays() {
+        when(appSettingService.getBoolean(AppSettingService.WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED, false))
+                .thenReturn(true);
+        when(badReviewTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now())))
+                .thenReturn(1);
+        when(badReviewTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now().minusDays(3))))
+                .thenReturn(1);
+        when(workerFlowLockService.syncPublicationLock("worker:88", 88L, false, false))
+                .thenReturn(false);
+        when(workerFlowLockService.syncPublicationLock("worker:88:special-tasks", 88L, true, true))
+                .thenReturn(true);
+
+        ApiWorkerBoardController.WorkerBoardResponse response = getBoard("publish");
+
+        assertEquals("bad", response.section());
+        assertTrue(response.warning());
+        assertTrue(response.message().contains("Плохие"));
+        assertTrue(response.message().contains("больше 2 дней"));
+        verify(badReviewTaskService).getDueTasksToWorker(eq(worker), any(LocalDate.class), eq(""), any(Pageable.class));
+        verify(reviewService, never()).getAllReviewDTOByWorkerByPublish(
+                any(LocalDate.class),
+                eq(principal),
+                eq(0),
+                eq(10),
+                eq("desc"),
+                eq("")
+        );
+    }
+
+    @Test
+    void workerPublishActionIsRejectedWhenBadTaskIsOverdueMoreThanTwoDays() throws Exception {
+        when(appSettingService.getBoolean(AppSettingService.WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED, false))
+                .thenReturn(true);
+        when(badReviewTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now())))
+                .thenReturn(1);
+        when(badReviewTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now().minusDays(3))))
+                .thenReturn(1);
+        when(workerFlowLockService.syncPublicationLock("worker:88", 88L, false, false))
+                .thenReturn(false);
+        when(workerFlowLockService.syncPublicationLock("worker:88:special-tasks", 88L, true, true))
+                .thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.publishReview(15L, principal, workerAuth)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("Плохие"));
+        verify(orderService, never()).changeStatusAndOrderCounter(15L);
+    }
+
+    @Test
+    void workerPublishActionAllowsTasksOverdueExactlyTwoDays() throws Exception {
+        when(appSettingService.getBoolean(AppSettingService.WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED, false))
+                .thenReturn(true);
+        when(badReviewTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now())))
+                .thenReturn(1);
+        when(badReviewTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now().minusDays(3))))
+                .thenReturn(0);
+        when(reviewRecoveryTaskService.countDueTasksToWorker(eq(worker), eq(LocalDate.now().minusDays(3))))
+                .thenReturn(0);
+        when(workerFlowLockService.syncPublicationLock("worker:88", 88L, false, false))
+                .thenReturn(false);
+        when(workerFlowLockService.syncPublicationLock("worker:88:special-tasks", 88L, true, false))
+                .thenReturn(false);
+        when(orderService.changeStatusAndOrderCounter(15L)).thenReturn(true);
+
+        controller.publishReview(15L, principal, workerAuth);
+
+        verify(orderService).changeStatusAndOrderCounter(15L);
+    }
+
+    @Test
+    void workerCannotChangeBadTaskScheduledDate() {
+        LocalDate currentDate = LocalDate.now();
+        BadReviewTask task = BadReviewTask.builder()
+                .scheduledDate(currentDate)
+                .build();
+        when(badReviewTaskService.getTask(15L)).thenReturn(task);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.updateBadReviewTask(
+                        15L,
+                        new ApiWorkerBoardController.BadTaskUpdateRequest("text", currentDate.plusDays(1)),
+                        workerAuth
+                )
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verify(badReviewTaskService, never()).updateTask(eq(15L), anyString(), any());
+    }
+
+    @Test
+    void workerCanSaveBadTaskWithCurrentScheduledDate() {
+        LocalDate currentDate = LocalDate.now();
+        BadReviewTask task = BadReviewTask.builder()
+                .scheduledDate(currentDate)
+                .build();
+        when(badReviewTaskService.getTask(15L)).thenReturn(task);
+
+        controller.updateBadReviewTask(
+                15L,
+                new ApiWorkerBoardController.BadTaskUpdateRequest("text", currentDate),
+                workerAuth
+        );
+
+        verify(badReviewTaskService).updateTask(15L, "text", currentDate);
+    }
+
+    @Test
+    void managerCanChangeBadTaskScheduledDate() {
+        Authentication managerAuth = new UsernamePasswordAuthenticationToken(
+                "manager",
+                "password",
+                List.of(new SimpleGrantedAuthority("ROLE_MANAGER"))
+        );
+        LocalDate newDate = LocalDate.now().plusDays(1);
+
+        controller.updateBadReviewTask(
+                15L,
+                new ApiWorkerBoardController.BadTaskUpdateRequest("text", newDate),
+                managerAuth
+        );
+
+        verify(badReviewTaskService, never()).getTask(15L);
+        verify(badReviewTaskService).updateTask(15L, "text", newDate);
+    }
+
+    @Test
+    void workerCannotChangeRecoveryTaskScheduledDate() {
+        LocalDate currentDate = LocalDate.now();
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .scheduledDate(currentDate)
+                .build();
+        when(reviewRecoveryTaskService.getTask(15L)).thenReturn(task);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.updateRecoveryTask(
+                        15L,
+                        new ApiWorkerBoardController.RecoveryTaskUpdateRequest("text", "answer", currentDate.plusDays(1)),
+                        workerAuth
+                )
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verify(reviewRecoveryTaskService, never()).updateTask(eq(15L), anyString(), anyString(), any());
     }
 
     @Test

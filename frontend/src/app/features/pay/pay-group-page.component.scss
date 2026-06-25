@@ -1,0 +1,87 @@
+@use './pay-page.component.scss';
+
+.group-orders {
+  display: grid;
+  gap: 0.42rem;
+  max-height: 14rem;
+  overflow: auto;
+  padding-right: 0.1rem;
+}
+
+.group-orders article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  border: 1px solid #eceef0;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.62rem;
+  background: #fbfbfc;
+}
+
+.group-orders article.paid {
+  border-color: rgba(49, 189, 111, 0.26);
+  background: #f2fff7;
+}
+
+.group-orders div {
+  min-width: 0;
+}
+
+.group-orders strong,
+.group-orders small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-orders strong {
+  color: #2a303b;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.group-orders small {
+  margin-top: 0.16rem;
+  color: #8a909b;
+  font-size: 0.66rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.group-orders span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  border-radius: 999px;
+  padding: 0 0.48rem;
+  color: #176d4d;
+  background: rgba(49, 189, 111, 0.12);
+  font-size: 0.64rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .group-orders {
+    max-height: 11rem;
+    gap: 0.28rem;
+  }
+
+  .group-orders article {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 0.28rem;
+    padding: 0.42rem 0.48rem;
+  }
+
+  .group-orders span {
+    width: max-content;
+    max-width: 100%;
+  }
+}

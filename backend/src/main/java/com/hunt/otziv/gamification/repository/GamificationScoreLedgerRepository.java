@@ -67,7 +67,8 @@ public interface GamificationScoreLedgerRepository extends JpaRepository<Gamific
     List<Object[]> balanceRowsForActor(Long actorUserId, LocalDateTime fromInclusive, LocalDateTime toExclusive);
 
     @Query("""
-            SELECT FUNCTION('date', l.sourceEventCreatedAt), COUNT(l),
+            SELECT FUNCTION('date', l.sourceEventCreatedAt),
+                   COALESCE(SUM(CASE WHEN l.points > 0 THEN 1 ELSE 0 END), 0),
                    COALESCE(SUM(CASE WHEN COALESCE(l.delayDays, 0) > 0 THEN 1 ELSE 0 END), 0)
             FROM GamificationScoreLedger l
             WHERE l.actorUserId = :actorUserId

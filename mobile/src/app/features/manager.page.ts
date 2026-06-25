@@ -12,6 +12,7 @@ import {
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
+  CommonBillingAccountResponse,
   CompanyEditPayload,
   CompanyFilialEditItem,
   CompanyFilialUpdateRequest,
@@ -86,6 +87,12 @@ type CompanyCreateDraft = {
   filialCityId: number | null;
   filialTitle: string;
   filialUrl: string;
+};
+
+type CompanyBillingDraft = {
+  name: string;
+  enabled: boolean;
+  autoRepeatOrders: boolean;
 };
 
 type CompanyPreservedFields = Pick<
@@ -520,6 +527,84 @@ type CompanyPreservedFields = Pick<
                         [disabled]="companyEditSaving()"
                       ></textarea>
                     </label>
+
+                    <section class="company-edit-mobile-section company-billing-section">
+                      <div class="company-billing-head">
+                        <div>
+                          <strong>Общие счета</strong>
+                          <small>{{ companyBillingStatusLabel() }}</small>
+                        </div>
+                        @if (companyBillingLoading()) {
+                          <span>...</span>
+                        }
+                      </div>
+
+                      @if (companyBillingDraft(); as billingDraft) {
+                        <label class="sheet-field">
+                          <span>Название связи</span>
+                          <input
+                            name="commonBillingName"
+                            type="text"
+                            [ngModel]="billingDraft.name"
+                            (ngModelChange)="setCompanyBillingDraftField('name', $event)"
+                            [disabled]="!!companyBillingMutating()"
+                          >
+                        </label>
+
+                        <div class="company-billing-toggles">
+                          <label>
+                            <input
+                              name="commonBillingEnabled"
+                              type="checkbox"
+                              [ngModel]="billingDraft.enabled"
+                              (ngModelChange)="setCompanyBillingDraftField('enabled', $event)"
+                              [disabled]="!!companyBillingMutating()"
+                            >
+                            <span>Общий счет включен</span>
+                          </label>
+                          <label>
+                            <input
+                              name="commonBillingAutoRepeat"
+                              type="checkbox"
+                              [ngModel]="billingDraft.autoRepeatOrders"
+                              (ngModelChange)="setCompanyBillingDraftField('autoRepeatOrders', $event)"
+                              [disabled]="!!companyBillingMutating()"
+                            >
+                            <span>Новые заказы после полной оплаты</span>
+                          </label>
+                        </div>
+
+                        @if (selectedCompanyBillingAccount(); as account) {
+                          <div class="company-billing-actions">
+                            <button type="button" (click)="saveCompanyBillingAccount()" [disabled]="!!companyBillingMutating() || !canSaveCompanyBillingAccount()">
+                              {{ companyBillingMutating() === 'save' ? 'Сохраняю' : 'Сохранить счет' }}
+                            </button>
+                            @if (account.currentInvoice; as invoice) {
+                              <button type="button" (click)="openCommonInvoice(invoice.id)">
+                                Открыть счет
+                              </button>
+                            }
+                          </div>
+
+                          <div class="company-billing-linked">
+                            @for (linkedCompany of account.companies; track linkedCompany.companyId) {
+                              <div>
+                                <span>{{ linkedCompany.companyTitle }}</span>
+                                <button type="button" (click)="removeCompanyFromBillingAccount(linkedCompany.companyId)" [disabled]="!!companyBillingMutating()">
+                                  {{ linkedCompany.companyId === company.id ? 'Исключить' : '-' }}
+                                </button>
+                              </div>
+                            }
+                          </div>
+                        } @else {
+                          <button class="company-billing-create" type="button" (click)="createCompanyBillingAccount()" [disabled]="!!companyBillingMutating() || !billingDraft.name.trim()">
+                            {{ companyBillingMutating() === 'create' ? 'Создаю' : 'Создать общий счет' }}
+                          </button>
+                        }
+                      } @else {
+                        <small>Настройки общего счета не загружены.</small>
+                      }
+                    </section>
 
                     <section class="company-edit-mobile-section">
                       <strong>Специалисты</strong>
@@ -1160,7 +1245,13 @@ type CompanyPreservedFields = Pick<
 
               <div class="sheet-actions" [class.edit-actions]="!!orderEdit()?.canDelete">
                 @if (orderEdit()?.canDelete) {
-                  <button class="danger" type="button" (click)="deleteOrderEdit()" [disabled]="orderEditLoading() || orderEditSaving() || orderEditDeleting()">
+                  <button
+                    class="danger order-delete-action"
+                    type="button"
+                    (pointerdown)="$event.stopPropagation()"
+                    (click)="deleteOrderEdit($event)"
+                    [disabled]="orderEditLoading() || orderEditSaving() || orderEditDeleting()"
+                  >
                     {{ orderEditDeleting() ? 'Удаляю' : 'Удалить' }}
                   </button>
                 }
@@ -1702,6 +1793,78 @@ type CompanyPreservedFields = Pick<
       font-weight: 900;
     }
 
+    .company-billing-section {
+      border-color: rgba(214, 159, 43, 0.28);
+      background: linear-gradient(155deg, #fffdf5 0%, var(--otziv-tone-walk-surface) 100%);
+    }
+
+    .company-billing-head,
+    .company-billing-linked div {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .company-billing-head div {
+      display: grid;
+      gap: 0.16rem;
+    }
+
+    .company-billing-toggles,
+    .company-billing-linked {
+      display: grid;
+      gap: 0.42rem;
+    }
+
+    .company-billing-toggles label {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 2.2rem;
+      border: 1px solid rgba(103, 116, 131, 0.14);
+      border-radius: 0.8rem;
+      padding: 0.48rem 0.62rem;
+      color: var(--otziv-dark);
+      background: rgba(255, 255, 255, 0.78);
+      font-size: 0.72rem;
+      font-weight: 900;
+      line-height: 1.15;
+    }
+
+    .company-billing-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.46rem;
+    }
+
+    .company-billing-actions button,
+    .company-billing-create,
+    .company-billing-linked button {
+      min-height: 2.05rem;
+      border: 1px solid rgba(108, 155, 207, 0.22);
+      border-radius: 999px;
+      color: var(--otziv-primary);
+      background: var(--otziv-white);
+      font: 900 0.68rem/1 var(--otziv-card-title-font);
+    }
+
+    .company-billing-linked div {
+      border-top: 1px solid rgba(103, 116, 131, 0.12);
+      padding-top: 0.42rem;
+    }
+
+    .company-billing-linked span {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--otziv-dark);
+      font-size: 0.74rem;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .manager-bottom-controls {
       flex: 0 0 auto;
     }
@@ -1836,6 +1999,11 @@ export class ManagerPage implements OnInit, OnDestroy {
   readonly companyEditError = signal<string | null>(null);
   readonly companyEditDeleteKey = signal<string | null>(null);
   readonly companyFilialDraft = signal<CompanyFilialEditDraft | null>(null);
+  readonly companyBillingAccounts = signal<CommonBillingAccountResponse[]>([]);
+  readonly companyBillingSelectedId = signal<number | null>(null);
+  readonly companyBillingDraft = signal<CompanyBillingDraft | null>(null);
+  readonly companyBillingLoading = signal(false);
+  readonly companyBillingMutating = signal<string | null>(null);
   readonly orderEditOpen = signal(false);
   readonly orderEdit = signal<OrderEditPayload | null>(null);
   readonly orderEditDraft = signal<OrderUpdateRequest | null>(null);
@@ -1887,6 +2055,10 @@ export class ManagerPage implements OnInit, OnDestroy {
     return payload?.products.find((product) => product.id === draft?.productId) ?? null;
   });
   readonly orderCreateTotal = computed(() => (this.selectedOrderCreateProduct()?.price ?? 0) * (this.orderCreateDraft()?.amount ?? 0));
+  readonly selectedCompanyBillingAccount = computed(() => {
+    const selectedId = this.companyBillingSelectedId();
+    return this.companyBillingAccounts().find((account) => account.id === selectedId) ?? null;
+  });
 
   constructor(
     private readonly api: ApiService,
@@ -2151,6 +2323,10 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyEdit.set(null);
     this.companyEditDraft.set(null);
     this.companyFilialDraft.set(null);
+    this.companyBillingAccounts.set([]);
+    this.companyBillingSelectedId.set(null);
+    this.companyBillingDraft.set(null);
+    this.companyBillingMutating.set(null);
     this.companyEditError.set(null);
     void this.loadCompanyEdit(company.id);
   }
@@ -2164,6 +2340,11 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyEdit.set(null);
     this.companyEditDraft.set(null);
     this.companyFilialDraft.set(null);
+    this.companyBillingAccounts.set([]);
+    this.companyBillingSelectedId.set(null);
+    this.companyBillingDraft.set(null);
+    this.companyBillingLoading.set(false);
+    this.companyBillingMutating.set(null);
     this.companyEditError.set(null);
     this.companyEditLoading.set(false);
   }
@@ -2226,6 +2407,11 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   openOrderEdit(order: OrderItem): void {
+    if (order.commonInvoice) {
+      this.openOrderDetails(order);
+      return;
+    }
+
     if (this.orderEditSaving() || this.orderEditDeleting()) {
       return;
     }
@@ -2292,7 +2478,10 @@ export class ManagerPage implements OnInit, OnDestroy {
     }
   }
 
-  async deleteOrderEdit(): Promise<void> {
+  async deleteOrderEdit(event?: Event): Promise<void> {
+    event?.preventDefault();
+    event?.stopPropagation();
+
     const order = this.orderEdit();
     if (!order || !order.canDelete) {
       return;
@@ -2325,6 +2514,142 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   setCompanyEditField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
     this.companyEditDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+  }
+
+  setCompanyBillingDraftField<K extends keyof CompanyBillingDraft>(field: K, value: CompanyBillingDraft[K]): void {
+    this.companyBillingDraft.update((draft) => draft ? { ...draft, [field]: value } : draft);
+  }
+
+  companyBillingStatusLabel(): string {
+    const account = this.selectedCompanyBillingAccount();
+    if (!account) {
+      return 'Создайте связь, чтобы новые заказы попадали в общий счет';
+    }
+    return account.enabled ? 'Подключено' : 'Связь выключена';
+  }
+
+  canSaveCompanyBillingAccount(): boolean {
+    const account = this.selectedCompanyBillingAccount();
+    const draft = this.companyBillingDraft();
+    return Boolean(
+      account
+      && draft
+      && draft.name.trim()
+      && (
+        draft.name.trim() !== account.name
+        || draft.enabled !== account.enabled
+        || draft.autoRepeatOrders !== account.autoRepeatOrders
+      )
+    );
+  }
+
+  async createCompanyBillingAccount(): Promise<void> {
+    const company = this.companyEdit();
+    const draft = this.companyBillingDraft();
+    if (!company || !draft || this.companyBillingMutating() || !draft.name.trim()) {
+      return;
+    }
+
+    this.companyBillingMutating.set('create');
+    this.companyEditError.set(null);
+    try {
+      const account = await firstValueFrom(this.api.createCommonBillingAccount({
+        name: draft.name.trim(),
+        enabled: draft.enabled,
+        autoRepeatOrders: draft.autoRepeatOrders,
+        managerId: company.manager?.id ?? null,
+        invoiceCompanyId: company.id,
+        companyIds: [company.id]
+      }));
+      this.upsertCompanyBillingAccount(account);
+      this.companyBillingSelectedId.set(account.id);
+      this.companyBillingDraft.set(this.companyBillingDraftFromAccount(account, company));
+      await this.load();
+    } catch (error) {
+      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось создать общий счет.'));
+    } finally {
+      this.companyBillingMutating.set(null);
+    }
+  }
+
+  async saveCompanyBillingAccount(): Promise<void> {
+    const company = this.companyEdit();
+    const account = this.selectedCompanyBillingAccount();
+    const draft = this.companyBillingDraft();
+    if (!company || !account || !draft || this.companyBillingMutating() || !draft.name.trim()) {
+      return;
+    }
+
+    this.companyBillingMutating.set('save');
+    this.companyEditError.set(null);
+    try {
+      const accountCompanyIds = account.companies
+        .filter((item) => item.enabled || item.companyId === company.id)
+        .map((item) => item.companyId);
+      const companyIds = Array.from(new Set([...accountCompanyIds, company.id]));
+      const updated = await firstValueFrom(this.api.updateCommonBillingAccount(account.id, {
+        name: draft.name.trim(),
+        enabled: draft.enabled,
+        autoRepeatOrders: draft.autoRepeatOrders,
+        managerId: account.managerId ?? company.manager?.id ?? null,
+        invoiceCompanyId: account.invoiceCompanyId ?? company.id,
+        companyIds
+      }));
+      this.upsertCompanyBillingAccount(updated);
+      this.companyBillingDraft.set(this.companyBillingDraftFromAccount(updated, company));
+      await this.load();
+    } catch (error) {
+      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось сохранить общий счет.'));
+    } finally {
+      this.companyBillingMutating.set(null);
+    }
+  }
+
+  async removeCompanyFromBillingAccount(companyId: number): Promise<void> {
+    const account = this.selectedCompanyBillingAccount();
+    if (!account || this.companyBillingMutating()) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      title: 'Исключить компанию',
+      message: 'Исключить компанию из будущих общих счетов?',
+      confirmText: 'Исключить',
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    const detachCurrent = await this.confirm.confirm({
+      title: 'Текущий счет',
+      message: 'Отключить неоплаченные заказы этой компании из текущего общего счета?',
+      confirmText: 'Отключить',
+      cancelText: 'Оставить'
+    });
+
+    this.companyBillingMutating.set(`remove-${companyId}`);
+    this.companyEditError.set(null);
+    try {
+      const updated = await firstValueFrom(this.api.removeCommonBillingCompany(account.id, companyId, detachCurrent));
+      this.upsertCompanyBillingAccount(updated);
+      const currentCompanyId = this.companyEdit()?.id;
+      if (currentCompanyId === companyId && !updated.companies.some((item) => item.companyId === companyId && item.enabled)) {
+        this.companyBillingSelectedId.set(null);
+        this.companyBillingDraft.set(this.companyBillingDraftFromCompany(this.companyEdit()));
+      } else {
+        this.companyBillingDraft.set(this.companyBillingDraftFromAccount(updated, this.companyEdit()));
+      }
+      await this.load();
+    } catch (error) {
+      this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось исключить компанию из общего счета.'));
+    } finally {
+      this.companyBillingMutating.set(null);
+    }
+  }
+
+  openCommonInvoice(invoiceId: number): void {
+    void this.router.navigate(['/tabs/common-billing', invoiceId]);
   }
 
   changeCompanyEditCategory(categoryId: number | null): void {
@@ -2625,12 +2950,16 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.mutationKey.set(key);
 
     try {
-      await firstValueFrom(this.api.updateManagerOrderStatus(order.id, action.status));
-      this.patchOrder(order.id, { status: action.status, waitingForClient: false });
+      if (order.commonInvoice) {
+        await this.applyCommonInvoiceStatus(order, action.status);
+      } else {
+        await firstValueFrom(this.api.updateManagerOrderStatus(order.id, action.status));
+        this.patchOrder(order.id, { status: action.status, waitingForClient: false });
+      }
       await this.load();
       this.error.set(null);
     } catch (error) {
-      this.error.set(this.apiErrorMessage(error, 'Не удалось изменить статус заказа.'));
+      this.error.set(this.apiErrorMessage(error, order.commonInvoice ? 'Не удалось изменить общий счет.' : 'Не удалось изменить статус заказа.'));
     } finally {
       this.mutationKey.set(null);
     }
@@ -2649,7 +2978,37 @@ export class ManagerPage implements OnInit, OnDestroy {
     await this.updateOrderStatus(order, matchedAction);
   }
 
+  private async applyCommonInvoiceStatus(order: OrderItem, status: string): Promise<void> {
+    const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
+    if (!invoiceId) {
+      throw new Error('Не найден ID общего счета');
+    }
+
+    switch (status) {
+      case 'Выставлен счет':
+        await firstValueFrom(this.api.sendCommonInvoice(invoiceId));
+        return;
+      case 'Напоминание':
+        await firstValueFrom(this.api.remindCommonInvoice(invoiceId));
+        return;
+      case 'Не оплачено':
+        await firstValueFrom(this.api.markCommonInvoiceUnpaid(invoiceId));
+        return;
+      case 'Бан':
+        await firstValueFrom(this.api.markCommonInvoiceBan(invoiceId));
+        return;
+      case 'Оплачено':
+        await firstValueFrom(this.api.markCommonInvoicePaid(invoiceId));
+        return;
+      default:
+        throw new Error('Для общего счета нет такого действия');
+    }
+  }
+
   canManageOrderClientWaiting(order: OrderItem): boolean {
+    if (order.commonInvoice) {
+      return false;
+    }
     return order.status === 'Новый' || order.status === 'Коррекция' || Boolean(order.waitingForClient);
   }
 
@@ -2908,6 +3267,11 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   async copyOrderReviewText(order: OrderItem): Promise<void> {
+    if (order.commonInvoice) {
+      await this.copyText(order.commonInvoicePublicUrl ?? '', `order-review-${order.id}`, 'Не удалось скопировать ссылку общего счета.');
+      return;
+    }
+
     const reviewUrl = this.orderReviewUrl(order);
     const text = [
       this.orderTitle(order),
@@ -2921,6 +3285,18 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   async copyOrderPaymentText(order: OrderItem): Promise<void> {
+    if (order.commonInvoice) {
+      const text = [
+        this.orderTitle(order),
+        order.commonInvoicePublicUrl ? `Ссылка на общий счет: ${order.commonInvoicePublicUrl}` : '',
+        `К оплате: ${this.orderMoney(this.orderPayableSum(order))}`,
+        `Готово: ${order.commonInvoiceReadyOrders ?? order.counter ?? 0}/${order.commonInvoiceTotalOrders ?? order.amount ?? 0}`,
+        `Оплачено: ${order.commonInvoicePaidOrders ?? 0}/${order.commonInvoiceTotalOrders ?? order.amount ?? 0}`
+      ].filter(Boolean).join('\n\n');
+      await this.copyText(text, `order-payment-${order.id}`, 'Не удалось скопировать общий счет.');
+      return;
+    }
+
     const text = [
       this.orderTitle(order),
       (order.managerPayText ?? '').trim(),
@@ -2940,6 +3316,12 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   openOrderDetails(order: OrderItem): void {
+    if (order.commonInvoice) {
+      const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
+      void this.router.navigate(['/tabs/common-billing', invoiceId]);
+      return;
+    }
+
     const companyId = order.companyId;
     if (!companyId) {
       this.error.set('Для заказа не указан ID компании.');
@@ -2961,12 +3343,20 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderTitle(order: OrderItem): string {
+    if (order.commonInvoice) {
+      return order.companyTitle || order.commonInvoicePublicUrl || 'Общий счет';
+    }
+
     return [order.companyTitle || 'Без компании', order.filialTitle || 'Без филиала']
       .filter(Boolean)
       .join(' - ');
   }
 
   orderPayableSum(order: OrderItem): number {
+    if (order.commonInvoice) {
+      return order.commonInvoiceRemaining ?? order.sum ?? 0;
+    }
+
     return order.totalSumWithBadReviews ?? order.sum ?? 0;
   }
 
@@ -2975,10 +3365,18 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderPhone(order: OrderItem): string {
+    if (order.commonInvoice) {
+      return 'Общий счет';
+    }
+
     return displayPhone(order.companyTelephone);
   }
 
   orderChatUrl(order: OrderItem): string {
+    if (order.commonInvoice) {
+      return order.commonInvoicePublicUrl || '';
+    }
+
     const digits = normalizePhoneDigits(order.companyTelephone);
     return (order.telegramBotInviteUrl ?? '').trim()
       || (order.maxBotInviteUrl ?? '').trim()
@@ -2987,6 +3385,10 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderReviewUrl(order: OrderItem): string {
+    if (order.commonInvoice) {
+      return order.commonInvoicePublicUrl || '';
+    }
+
     const detailsId = (order.orderDetailsId ?? '').trim();
     if (!detailsId) {
       return '';
@@ -2999,6 +3401,11 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderFilialUrl(order: OrderItem): string {
+    if (order.commonInvoice) {
+      const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
+      return `/tabs/common-billing/${invoiceId}`;
+    }
+
     return (order.filialUrl ?? '').trim();
   }
 
@@ -3007,6 +3414,10 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   showBadReviewSummary(order: OrderItem): boolean {
+    if (order.commonInvoice) {
+      return false;
+    }
+
     return order.status !== 'Оплачено' && (order.badReviewTasksTotal ?? 0) > 0;
   }
 
@@ -3015,6 +3426,15 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderProgress(order: OrderItem): number {
+    if (order.commonInvoice) {
+      const total = order.commonInvoiceTotalOrders ?? order.amount ?? 0;
+      const ready = order.commonInvoiceReadyOrders ?? order.counter ?? 0;
+      if (!total || !ready) {
+        return 0;
+      }
+      return Math.max(0, Math.min(100, Math.round((ready / total) * 100)));
+    }
+
     if (!order.amount || !order.counter) {
       return 0;
     }
@@ -3027,10 +3447,18 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   isOrderUnchangedAlert(order: OrderItem): boolean {
+    if (order.commonInvoice) {
+      return Boolean((order.commonInvoiceLastError ?? '').trim());
+    }
+
     return this.orderUnchangedDays(order) >= 2;
   }
 
   workerLabel(order: OrderItem): string {
+    if (order.commonInvoice) {
+      return 'Общий счет';
+    }
+
     const fio = (order.workerUserFio ?? '').trim();
     if (!fio) {
       return '-';
@@ -3041,6 +3469,23 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   orderTone(order: OrderItem): string {
+    if (order.commonInvoice) {
+      switch (order.status) {
+        case 'Ожидает общего счета':
+        case 'Выставлен счет':
+        case 'Напоминание':
+          return 'tone-walk';
+        case 'Требует внимания':
+        case 'Не оплачено':
+        case 'Бан':
+          return 'tone-bad';
+        case 'Оплачено':
+          return 'tone-success';
+        default:
+          return 'tone-recovery';
+      }
+    }
+
     if (order.waitingForClient) {
       return 'lead-card--new';
     }
@@ -3252,6 +3697,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     try {
       const payload = await firstValueFrom(this.api.getManagerCompanyEdit(companyId));
       this.applyCompanyEditPayload(payload);
+      await this.loadCompanyBilling(payload);
     } catch (error) {
       this.companyEditError.set(this.apiErrorMessage(error, 'Не удалось загрузить редактор компании.'));
     } finally {
@@ -3375,6 +3821,59 @@ export class ManagerPage implements OnInit, OnDestroy {
   private applyCompanyEditPayload(payload: CompanyEditPayload): void {
     this.companyEdit.set(payload);
     this.companyEditDraft.set(this.companyEditDraftFromPayload(payload));
+  }
+
+  private async loadCompanyBilling(company: CompanyEditPayload): Promise<void> {
+    this.companyBillingLoading.set(true);
+    try {
+      const accounts = await firstValueFrom(this.api.getCommonBillingAccountsForCompany(company.id));
+      this.companyBillingAccounts.set(accounts);
+      const selected = accounts.find((account) =>
+        account.companies.some((item) => item.companyId === company.id && item.enabled)
+      ) ?? accounts[0] ?? null;
+      this.companyBillingSelectedId.set(selected?.id ?? null);
+      this.companyBillingDraft.set(selected
+        ? this.companyBillingDraftFromAccount(selected, company)
+        : this.companyBillingDraftFromCompany(company)
+      );
+    } catch (error) {
+      this.companyBillingAccounts.set([]);
+      this.companyBillingSelectedId.set(null);
+      this.companyBillingDraft.set(this.companyBillingDraftFromCompany(company));
+      this.companyEditError.set(this.apiErrorMessage(error, 'Настройки общего счета не загрузились.'));
+    } finally {
+      this.companyBillingLoading.set(false);
+    }
+  }
+
+  private companyBillingDraftFromAccount(
+    account: CommonBillingAccountResponse,
+    company?: CompanyEditPayload | null
+  ): CompanyBillingDraft {
+    return {
+      name: account.name || this.defaultCompanyBillingName(company),
+      enabled: account.enabled,
+      autoRepeatOrders: account.autoRepeatOrders
+    };
+  }
+
+  private companyBillingDraftFromCompany(company?: CompanyEditPayload | null): CompanyBillingDraft {
+    return {
+      name: this.defaultCompanyBillingName(company),
+      enabled: true,
+      autoRepeatOrders: true
+    };
+  }
+
+  private defaultCompanyBillingName(company?: CompanyEditPayload | null): string {
+    return company?.title ? `${company.title} - общий счет` : 'Новый общий счет';
+  }
+
+  private upsertCompanyBillingAccount(account: CommonBillingAccountResponse): void {
+    this.companyBillingAccounts.update((accounts) => [
+      account,
+      ...accounts.filter((item) => item.id !== account.id)
+    ]);
   }
 
   private companyEditDraftFromPayload(payload: CompanyEditPayload): CompanyUpdateRequest {

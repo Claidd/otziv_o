@@ -5,15 +5,19 @@ import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.next_order.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.next_order.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
+import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +65,18 @@ class OrderDeletionServiceTest {
     private NextOrderRequestService nextOrderRequestService;
 
     @Mock
+    private NextOrderRequestRepository nextOrderRequestRepository;
+
+    @Mock
+    private ReviewRecoveryTaskRepository reviewRecoveryTaskRepository;
+
+    @Mock
+    private ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
+
+    @Mock
+    private CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+
+    @Mock
     private PaymentLinkArchiveService paymentLinkArchiveService;
 
     @Mock
@@ -93,8 +109,23 @@ class OrderDeletionServiceTest {
         boolean result = service.deleteOrder(10L, principal);
 
         assertTrue(result);
-        InOrder inOrder = inOrder(badReviewTaskService, reviewService, orderDetailsService, paymentLinkArchiveService, entityManager, orderRepository);
+        InOrder inOrder = inOrder(
+                badReviewTaskService,
+                reviewRecoveryTaskRepository,
+                reviewRecoveryBatchRepository,
+                nextOrderRequestRepository,
+                commonInvoiceOrderRepository,
+                reviewService,
+                orderDetailsService,
+                paymentLinkArchiveService,
+                entityManager,
+                orderRepository
+        );
         inOrder.verify(badReviewTaskService).deleteAllByOrderId(10L);
+        inOrder.verify(reviewRecoveryTaskRepository).deleteByOrderId(10L);
+        inOrder.verify(reviewRecoveryBatchRepository).deleteByOrderId(10L);
+        inOrder.verify(nextOrderRequestRepository).deleteBySourceOrderId(10L);
+        inOrder.verify(commonInvoiceOrderRepository).deleteByOrderId(10L);
         inOrder.verify(reviewService).deleteAllByIdIn(List.of(1L, 2L));
         inOrder.verify(orderDetailsService).deleteAllByOrderId(10L);
         inOrder.verify(paymentLinkArchiveService).archiveForDeletedOrder(10L);
@@ -123,22 +154,20 @@ class OrderDeletionServiceTest {
     }
 
     @Test
-    void managerCanDeleteCorrectionOrder() {
+    void managerCannotDeleteCorrectionOrder() {
         OrderDeletionService service = service();
         Order order = order(11L, "Коррекция");
 
         authenticateWithRole("ROLE_manager");
         when(orderRepository.findById(11L)).thenReturn(Optional.of(order));
-        when(orderDetailsService.findByOrderId(11L)).thenReturn(List.of());
 
         boolean result = service.deleteOrder(11L, () -> "manager");
 
-        assertTrue(result);
-        verify(orderDetailsService).deleteAllByOrderId(11L);
+        assertFalse(result);
+        verify(orderDetailsService, never()).findByOrderId(11L);
         verifyNoInteractions(reviewService);
-        verify(entityManager).flush();
-        verify(entityManager).clear();
-        verify(orderRepository).deleteById(11L);
+        verifyNoInteractions(entityManager);
+        verify(orderRepository, never()).deleteById(11L);
     }
 
     @Test
@@ -237,6 +266,10 @@ class OrderDeletionServiceTest {
                 badReviewTaskService,
                 new OrderDeletionPolicy(),
                 nextOrderRequestService,
+                nextOrderRequestRepository,
+                reviewRecoveryTaskRepository,
+                reviewRecoveryBatchRepository,
+                commonInvoiceOrderRepository,
                 paymentLinkArchiveService,
                 companyService,
                 companyStatusService,

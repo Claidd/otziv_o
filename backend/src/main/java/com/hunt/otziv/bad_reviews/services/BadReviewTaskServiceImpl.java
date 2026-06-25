@@ -23,6 +23,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -144,6 +145,20 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     @Override
     @Transactional
+    public int deletePendingTasksForOrder(Order order) {
+        Long orderId = order == null ? null : order.getId();
+        if (orderId == null) {
+            return 0;
+        }
+        int deleted = badReviewTaskRepository.deleteAllByOrderIdAndStatus(orderId, BadReviewTaskStatus.NEW);
+        if (deleted > 0) {
+            log.info("Удалено ожидающих плохих задач заказа {}: {}", orderId, deleted);
+        }
+        return deleted;
+    }
+
+    @Override
+    @Transactional
     public BadReviewTask completeTask(Long taskId) {
         BadReviewTask task = requireTask(taskId);
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
@@ -155,11 +170,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         gamificationEventService.recordBadReviewTaskDone(savedTask);
         runCompletionSideEffects(savedTask);
+        auditTaskCompleted(savedTask);
         log.info("Плохая задача {} выполнена, заказ {}, доплата {}",
                 savedTask.getId(),
                 savedTask.getOrder() != null ? savedTask.getOrder().getId() : null,
                 savedTask.getPrice());
         return savedTask;
+    }
+
+    @Override
+    public BadReviewTask getTask(Long taskId) {
+        return requireTask(taskId);
     }
 
     private void runCompletionSideEffects(BadReviewTask savedTask) {
@@ -190,20 +211,20 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (refreshCommonInvoiceForLinkedOrder(order)) {
             log.info("Счет после плохого отзыва не отправлен отдельно: заказ {} входит в общий счет", order.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "common_billing_linked",
-                    "Заказ входит в общий счет; сумма общего счета пересчитана", badReviewInvoicePreview(order, summary), 0);
+                    "Заказ входит в общий счет; сумма общего счета пересчитана", safeBadReviewInvoicePreview(order, summary), 0);
             return;
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)) {
             log.info("Счет после плохого отзыва пропущен настройкой, orderId={}, taskId={}", order.getId(), task.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "bad_review_invoice_disabled",
-                    "Отправка счета после плохого отзыва выключена настройкой", badReviewInvoicePreview(order, summary), 0);
+                    "Отправка счета после плохого отзыва выключена настройкой", safeBadReviewInvoicePreview(order, summary), 0);
             return;
         }
         if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)) {
             log.info("Счет после плохого отзыва пропущен: моментальные клиентские сообщения выключены, orderId={}, taskId={}",
                     order.getId(), task.getId());
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.SKIPPED, null, "immediate_messages_disabled",
-                    "Моментальные клиентские сообщения выключены", badReviewInvoicePreview(order, summary), 0);
+                    "Моментальные клиентские сообщения выключены", safeBadReviewInvoicePreview(order, summary), 0);
             return;
         }
 
@@ -246,7 +267,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             log.warn("Счет после плохого отзыва не отправлен: orderId={}, taskId={}, reason={}",
                     order.getId(), task.getId(), reason, e);
             recordBadReviewInvoiceAttempt(task, order, ScheduledMessageAttemptStatus.FAILED, null,
-                    "bad_review_invoice_exception", reason, message == null ? badReviewInvoicePreview(order, summary) : message,
+                    "bad_review_invoice_exception", reason, message == null ? safeBadReviewInvoicePreview(order, summary) : message,
                     System.currentTimeMillis() - startedAt);
             paymentInvoiceRetryScheduler.scheduleBadReviewInvoiceRetry(order);
         }
@@ -335,6 +356,16 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return (orderHeading(order) + " " + managerPayText(order) + " К оплате: " + money(payableSum(order, summary)) + " руб.")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
+
+    private String safeBadReviewInvoicePreview(Order order, BadReviewTaskSummary summary) {
+        try {
+            return badReviewInvoicePreview(order, summary);
+        } catch (RuntimeException e) {
+            log.warn("Превью счета после плохого отзыва не собрано: orderId={}, reason={}",
+                    order == null ? null : order.getId(), readableException(e));
+            return null;
+        }
     }
 
     private String paymentInstruction(Order order) {
@@ -433,7 +464,6 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return task;
         }
 
-        boolean wasDone = task.getStatus() == BadReviewTaskStatus.DONE;
         task.setStatus(BadReviewTaskStatus.CANCELED);
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         Order order = savedTask.getOrder();
@@ -450,9 +480,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (orderId != null) {
             BadReviewTaskSummary summary = getSummaryForOrder(orderId);
             expireStalePaymentLinks(order);
-            if (wasDone) {
-                sendBadReviewInvoiceIfEnabled(savedTask, summary);
-            }
+            paymentInvoiceRetryScheduler.cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+            paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
+            refreshCommonInvoiceForLinkedOrder(order);
             if (summary.pending() == 0 && summary.done() > 0) {
                 createOrderReadyReminderIfNeeded(order, summary);
             } else {
@@ -968,6 +998,23 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 oldActive,
                 newActive,
                 details
+        );
+    }
+
+    private void auditTaskCompleted(BadReviewTask task) {
+        if (task == null || task.getId() == null) {
+            return;
+        }
+
+        businessAuditService.recordSafely(
+                WorkerTaskCompletionMonitorService.ACTION_TASK_COMPLETED,
+                "bad_review_task",
+                task.getId(),
+                task.getOrder() == null ? null : task.getOrder().getId(),
+                task.getSourceReview() == null ? null : task.getSourceReview().getId(),
+                BadReviewTaskStatus.NEW,
+                BadReviewTaskStatus.DONE,
+                "Плохая задача отмечена выполненной"
         );
     }
 

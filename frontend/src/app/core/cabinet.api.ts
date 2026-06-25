@@ -8,14 +8,16 @@ import type {
   CreateManualPaymentTaskRequest,
   ManualPaymentTaskResponse,
   ManualPaymentType,
-  ManualPaymentTaskStatus
+  ManualPaymentTaskStatus,
+  UpdateManualPaymentTaskRequest
 } from './payments.api';
 
 export type {
   CreateManualPaymentTaskRequest,
   ManualPaymentTaskResponse,
   ManualPaymentType,
-  ManualPaymentTaskStatus
+  ManualPaymentTaskStatus,
+  UpdateManualPaymentTaskRequest
 } from './payments.api';
 
 export interface UserLk {
@@ -340,6 +342,16 @@ export class CabinetApi {
     return this.http.put<ManualPaymentTaskResponse>(
       `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks/${taskId}/status`,
       { status }
+    );
+  }
+
+  updateManagerManualPaymentTask(
+    taskId: number,
+    request: UpdateManualPaymentTaskRequest
+  ): Observable<ManualPaymentTaskResponse> {
+    return this.http.put<ManualPaymentTaskResponse>(
+      `${appEnvironment.apiBaseUrl}/api/cabinet/manual-payment-tasks/${taskId}`,
+      request
     );
   }
 

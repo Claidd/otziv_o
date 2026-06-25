@@ -43,8 +43,9 @@ public class NextOrderAutomationService {
 
         Long companyId = sourceOrder.getCompany() != null ? sourceOrder.getCompany().getId() : null;
         Long filialId = sourceOrder.getFilial() != null ? sourceOrder.getFilial().getId() : null;
+        Long workerId = sourceOrder.getWorker() != null ? sourceOrder.getWorker().getId() : null;
         Set<Long> filialIds = requestService.orderFilialIds(sourceOrder);
-        List<Order> existingActiveOrders = requestService.findActiveOrdersForFilials(companyId, filialIds, filialId);
+        List<Order> existingActiveOrders = requestService.findActiveOrdersForFilials(companyId, filialIds, filialId, workerId);
         if (!existingActiveOrders.isEmpty()) {
             Order activeOrder = existingActiveOrders.getFirst();
             request.setCreatedOrder(activeOrder);
@@ -52,10 +53,11 @@ public class NextOrderAutomationService {
             requestRepository.save(request);
             requestService.markCreatedIfOpen(requestId);
             log.info(
-                    "Заявка {} закрыта: для компании {}, филиала {} уже есть активный заказ {}",
+                    "Заявка {} закрыта: для компании {}, филиала {} и исполнителя {} уже есть активный заказ {}",
                     requestId,
                     companyId,
                     filialId,
+                    workerId,
                     activeOrder.getId()
             );
             return;

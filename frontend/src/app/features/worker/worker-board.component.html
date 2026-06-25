@@ -31,6 +31,7 @@
           </div>
         </nav>
 
+        @if (!isRiskSection()) {
         <div class="search-line toolbar-search" [class.has-clear]="keyword()">
           <label>
             <span class="material-icons-sharp">search</span>
@@ -59,6 +60,7 @@
             </button>
           }
         </div>
+        }
       </header>
     </div>
 
@@ -78,6 +80,10 @@
 
     <h2 class="workspace-title">{{ title() }}</h2>
 
+    @if (isRiskSection()) {
+      <app-worker-risk />
+    }
+
     @if (isOrderSection()) {
       <section class="worker-cards order-cards">
         @for (order of currentOrders(); track trackOrder($index, order)) {
@@ -85,7 +91,7 @@
             [order]="order"
             [permissions]="permissions()"
             [actions]="orderStatusActions"
-            [activeSection]="activeSection()"
+            [activeSection]="activeWorkerSection()"
             [copied]="copied()"
             [mutationKey]="mutationKey()"
             [noteDraft]="orderNoteDraft(order)"
@@ -120,7 +126,7 @@
         @for (review of currentReviews(); track trackReview($index, review)) {
           <app-worker-review-card
             [review]="review"
-            [activeSection]="activeSection()"
+            [activeSection]="activeWorkerSection()"
             [copied]="copied()"
             [mutationKey]="mutationKey()"
             [canOpenEditModal]="canOpenReviewEditModal()"
@@ -164,6 +170,7 @@
       </section>
     }
 
+    @if (!isRiskSection()) {
     <footer class="pager">
       <button type="button" class="icon-button sort-toggle" (click)="toggleSortDirection()" [disabled]="loading()" title="Сортировка">
         <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
@@ -176,6 +183,7 @@
         <span class="material-icons-sharp">chevron_right</span>
       </button>
     </footer>
+    }
 
     <section class="mobile-lead-stats mobile-worker-stats" aria-label="Статистика специалиста">
       @if (workerFilterAvailable()) {

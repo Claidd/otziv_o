@@ -110,6 +110,7 @@ type GamificationDictionaryResponse = {
 };
 
 type GamificationProgressDays = 1 | 7 | 30;
+type BotImportMode = 'file' | 'city';
 
 const PROMO_TEXT_LABELS: Record<number, string> = {
   1: 'предложение',
@@ -228,6 +229,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly importResult = signal<BotImportResponse | null>(null);
   readonly importModalOpen = signal(false);
   readonly importFile = signal<File | null>(null);
+  readonly importMode = signal<BotImportMode>('file');
+  readonly importCitySearch = signal('');
+  readonly importCityId = signal<number | null>(null);
   readonly selectedId = signal<number | null>(null);
   readonly activeCategoryId = signal<number | null>(null);
   readonly editingCategoryId = signal<number | null>(null);
@@ -295,6 +299,10 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
   readonly botCities = signal<DictionaryOption[]>([]);
+  readonly botPage = signal(0);
+  readonly botPageSize = signal(50);
+  readonly botsTotal = signal(0);
+  readonly botPageSizeOptions = [50, 100, 200];
   readonly canManageAllDictionaries = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
@@ -468,6 +476,14 @@ export class AdminDictionariesComponent implements OnDestroy {
   });
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
+  readonly searchPlaceholder = computed(() =>
+    this.activeTab() === 'accounts' ? 'Логин, ID, ФИО' : 'Найти'
+  );
+  readonly searchTooltip = computed(() =>
+    this.activeTab() === 'accounts'
+      ? 'Поиск аккаунтов работает по логину, ID, ФИО аккаунта, владельцу, статусу и городу. Нажмите Enter или кнопку поиска.'
+      : 'Поиск работает по текущему справочнику. Нажмите Enter или кнопку поиска, чтобы обновить список.'
+  );
   readonly activeGuide = computed(() => DICTIONARY_GUIDES[this.activeTab()]);
   readonly activeTabIcon = computed(() =>
     this.tabs().find((tab) => tab.key === this.activeTab())?.icon ?? 'help'
@@ -499,6 +515,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly phoneDeviceTokenTotal = computed(() =>
     this.phones().reduce((total, phone) => total + this.deviceTokenCount(phone), 0)
   );
+  readonly botTotalPages = computed(() => Math.max(1, Math.ceil(this.botsTotal() / this.botPageSize())));
+  readonly botPageStart = computed(() => this.botsTotal() === 0 ? 0 : this.botPage() * this.botPageSize() + 1);
+  readonly botPageEnd = computed(() => Math.min(this.botsTotal(), (this.botPage() + 1) * this.botPageSize()));
   readonly activeItemsTotal = computed(() => {
     switch (this.activeTab()) {
       case 'categories':
@@ -512,7 +531,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'phones':
         return this.phones().length;
       case 'accounts':
-        return this.bots().length;
+        return this.botsTotal();
       case 'promo':
         return this.promoTexts().length;
       case 'managerTexts':
@@ -545,7 +564,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
       { label: 'Телефоны', value: this.phones().length, icon: 'phone_iphone', tone: 'teal' },
       { label: 'Токены', value: this.phoneDeviceTokenTotal(), icon: 'devices', tone: 'yellow' },
-      { label: 'Аккаунты', value: this.bots().length, icon: 'manage_accounts', tone: 'pink' },
+      { label: 'Аккаунты', value: this.botsTotal(), icon: 'manage_accounts', tone: 'pink' },
       { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
       { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
       { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
@@ -575,6 +594,26 @@ export class AdminDictionariesComponent implements OnDestroy {
       { label: 'Отключено задач', value: monitor?.disabledStates ?? 0, icon: 'block', tone: monitor?.disabledStates ? 'pink' : 'blue' }
     ];
   });
+  readonly selectedImportCity = computed(() => {
+    const cityId = this.importCityId();
+    return cityId == null ? null : this.botCities().find((city) => city.id === cityId) ?? null;
+  });
+  readonly filteredImportCities = computed(() => {
+    const search = this.importCitySearch().trim().toLowerCase();
+    const cities = this.botCities();
+    if (!search) {
+      return cities.slice(0, 12);
+    }
+
+    return cities
+      .filter((city) => city.title.toLowerCase().includes(search) || String(city.id).includes(search))
+      .slice(0, 12);
+  });
+  readonly canUploadBotImport = computed(() =>
+    !!this.importFile()
+    && !this.importing()
+    && (this.importMode() !== 'city' || this.importCityId() != null)
+  );
 
   readonly filteredMonitorQueue = computed(() => {
     const monitor = this.clientMessageMonitor();
@@ -738,6 +777,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.phoneOperators.set([]);
         this.selectedPhone.set(null);
         this.bots.set([]);
+        this.botsTotal.set(0);
+        this.botPage.set(0);
         this.promoTexts.set([]);
         this.managerTexts.set([]);
         this.promoManagers.set([]);
@@ -764,11 +805,17 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   searchActive(): void {
+    if (this.activeTab() === 'accounts') {
+      this.botPage.set(0);
+    }
     this.loadActive();
   }
 
   clearSearch(): void {
     this.search.set('');
+    if (this.activeTab() === 'accounts') {
+      this.botPage.set(0);
+    }
     this.loadActive();
   }
 
@@ -1720,7 +1767,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       cities: this.cities().length,
       products: this.products().length,
       phones: this.phones().length,
-      accounts: this.bots().length,
+      accounts: this.botsTotal(),
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
       specialistTransfer: 0,
@@ -2141,11 +2188,14 @@ export class AdminDictionariesComponent implements OnDestroy {
     return `/admin/dictionaries/accounts/${bot.id}/browser`;
   }
 
-  openBotImport(): void {
+  openBotImport(mode: BotImportMode = 'file'): void {
+    this.importMode.set(mode);
     this.importModalOpen.set(true);
     this.importFile.set(null);
     this.importResult.set(null);
     this.importError.set(null);
+    this.importCitySearch.set('');
+    this.importCityId.set(mode === 'city' ? null : this.defaultBotCityId());
   }
 
   closeBotImport(): void {
@@ -2156,11 +2206,20 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.importModalOpen.set(false);
     this.importFile.set(null);
     this.importError.set(null);
+    this.importCitySearch.set('');
+    this.importCityId.set(null);
   }
 
   selectBotImportFile(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.importFile.set(input.files?.[0] ?? null);
+    this.importResult.set(null);
+    this.importError.set(null);
+  }
+
+  selectBotImportCity(city: DictionaryOption): void {
+    this.importCityId.set(city.id);
+    this.importCitySearch.set(city.title);
     this.importResult.set(null);
     this.importError.set(null);
   }
@@ -2172,11 +2231,17 @@ export class AdminDictionariesComponent implements OnDestroy {
       return;
     }
 
+    const cityId = this.importMode() === 'city' ? this.importCityId() : null;
+    if (this.importMode() === 'city' && cityId == null) {
+      this.importError.set('Выберите город для привязки аккаунтов.');
+      return;
+    }
+
     this.importing.set(true);
     this.importError.set(null);
     this.importResult.set(null);
 
-    this.dictionariesApi.importBots(file).subscribe({
+    this.dictionariesApi.importBots(file, cityId).subscribe({
       next: (result) => {
         this.importing.set(false);
         this.importResult.set(result);
@@ -2255,6 +2320,27 @@ export class AdminDictionariesComponent implements OnDestroy {
     return metric.label;
   }
 
+  goToBotPage(page: number): void {
+    const nextPage = Math.max(0, Math.min(page, this.botTotalPages() - 1));
+    if (nextPage === this.botPage() || this.loading()) {
+      return;
+    }
+
+    this.botPage.set(nextPage);
+    this.loadActive();
+  }
+
+  changeBotPageSize(event: Event): void {
+    const value = Number((event.target as HTMLSelectElement).value);
+    if (!Number.isFinite(value) || value === this.botPageSize()) {
+      return;
+    }
+
+    this.botPageSize.set(value);
+    this.botPage.set(0);
+    this.loadActive();
+  }
+
   private loadActive(): void {
     if (this.activeTab() === 'specialistTransfer') {
       return;
@@ -2283,7 +2369,7 @@ export class AdminDictionariesComponent implements OnDestroy {
         request = this.phonesApi.getPhones(keyword);
         break;
       case 'accounts':
-        request = this.dictionariesApi.getBots(keyword);
+        request = this.dictionariesApi.getBots(keyword, this.botPage(), this.botPageSize());
         break;
       case 'promo':
         request = this.dictionariesApi.getPromoTextManagement(keyword);
@@ -2959,6 +3045,9 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.botWorkers.set(response.workers);
     this.botStatuses.set(response.statuses);
     this.botCities.set(response.cities);
+    this.botsTotal.set(response.total);
+    this.botPage.set(response.page);
+    this.botPageSize.set(response.size);
   }
 
   private applyPromoManagement(response: PromoTextManagementResponse): void {

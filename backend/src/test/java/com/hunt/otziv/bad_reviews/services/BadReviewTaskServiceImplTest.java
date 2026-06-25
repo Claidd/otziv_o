@@ -32,6 +32,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.hibernate.LazyInitializationException;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
@@ -437,6 +438,16 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
+    void deletePendingTasksForOrderDeletesOnlyNewTasks() {
+        Order order = order(21L);
+
+        when(badReviewTaskRepository.deleteAllByOrderIdAndStatus(21L, BadReviewTaskStatus.NEW)).thenReturn(3);
+
+        assertEquals(3, service.deletePendingTasksForOrder(order));
+        verify(badReviewTaskRepository).deleteAllByOrderIdAndStatus(21L, BadReviewTaskStatus.NEW);
+    }
+
+    @Test
     void cancelDoneTaskRefreshesOrderReadyReminderWhenOtherDoneTasksRemain() {
         Order order = order(13L);
         BadReviewTask task = BadReviewTask.builder()
@@ -472,7 +483,7 @@ class BadReviewTaskServiceImplTest {
     }
 
     @Test
-    void cancelDoneTaskSendsUpdatedClientInvoiceWhenLiveEnabled() {
+    void cancelDoneTaskDoesNotSendUpdatedClientInvoiceAutomatically() {
         Order order = order(16L);
         order.getManager().setClientId("client-16");
         order.getManager().setPayText("Оплатите по ссылке Альфа.");
@@ -491,25 +502,48 @@ class BadReviewTaskServiceImplTest {
                 new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
                 new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
         ));
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_ENABLED, true)).thenReturn(true);
-        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true)).thenReturn(true);
-        when(orderStatusNotificationService.sendInformationalMessageToClientChat(
-                eq(order),
-                eq("client-16"),
-                eq("group-16"),
-                eq("Компания 16\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб."),
-                eq("счет после плохого отзыва")
-        )).thenReturn(true);
 
         service.cancelTask(46L);
 
-        verify(orderStatusNotificationService).sendInformationalMessageToClientChat(
-                order,
-                "client-16",
-                "group-16",
-                "Компания 16\n\nОплатите по ссылке Альфа.\n\nК оплате: 1300 руб.",
-                "счет после плохого отзыва"
-        );
+        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
+    }
+
+    @Test
+    void cancelDoneTaskDoesNotTouchLazyFilialProxyForClientInvoice() {
+        Order order = order(19L);
+        order.getManager().setClientId("client-19");
+        order.getCompany().setGroupId("group-19");
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        order.setFilial(new Filial() {
+            @Override
+            public String getTitle() {
+                throw new LazyInitializationException("Could not initialize proxy [com.hunt.otziv.c_companies.model.Filial#1385] - no session");
+            }
+        });
+        BadReviewTask task = BadReviewTask.builder()
+                .id(49L)
+                .order(order)
+                .status(BadReviewTaskStatus.DONE)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findById(49L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(19L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)},
+                new Object[]{BadReviewTaskStatus.CANCELED, 1L, BigDecimal.ZERO}
+        ));
+
+        BadReviewTask canceled = service.cancelTask(49L);
+
+        assertEquals(BadReviewTaskStatus.CANCELED, canceled.getStatus());
+        verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewInvoiceRetry(order);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewInvoiceRetry(order, "Плохая задача убрана из счета вручную");
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Плохая задача убрана из счета вручную");
+        verify(orderStatusNotificationService, never()).sendInformationalMessageToClientChat(any(), any(), any(), any(), any());
     }
 
     private Order order(Long id) {

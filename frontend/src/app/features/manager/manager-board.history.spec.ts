@@ -17,6 +17,8 @@ function view(overrides: Partial<ManagerHistoryView> = {}): ManagerHistoryView {
     pageSize: 10,
     sortDirection: 'desc',
     selectedCompany: null,
+    managerId: null,
+    control: null,
     ...overrides
   };
 }

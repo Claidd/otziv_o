@@ -666,10 +666,44 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         WHERE r.worker.id IN :workerIds
           AND r.publishedDate <= :localDate
           AND r.publish = false
+          AND r.text IS NOT NULL
+          AND TRIM(r.text) <> ''
+          AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подсавить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подставить текст%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'
         GROUP BY r.worker.id
     """)
     List<Object[]> countByWorkerIdsAndStatusPublish(@Param("workerIds") Collection<Long> workerIds,
                                                     @Param("localDate") LocalDate localDate);
+
+    @Query("""
+        SELECT r
+        FROM Review r
+        LEFT JOIN FETCH r.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH r.orderDetails d
+        LEFT JOIN FETCH d.order o
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH r.filial
+        WHERE r.worker.id IN :workerIds
+          AND r.publishedDate <= :localDate
+          AND r.publish = false
+          AND r.text IS NOT NULL
+          AND TRIM(r.text) <> ''
+          AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подсавить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подставить текст%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'
+        ORDER BY r.publishedDate ASC, r.id ASC
+    """)
+    List<Review> findManagerControlPublishReviewsByWorkerIds(@Param("workerIds") Collection<Long> workerIds,
+                                                             @Param("localDate") LocalDate localDate,
+                                                             Pageable pageable);
 
     @Query("""
         SELECT r.worker.id, COUNT(r.id)
@@ -786,6 +820,13 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         WHERE r.worker.id IN :workerIds
           AND r.publishedDate <= :localDate
           AND r.publish = false
+          AND r.text IS NOT NULL
+          AND TRIM(r.text) <> ''
+          AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подсавить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подставить текст%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'
         GROUP BY r.worker.id
     """)
     List<Object[]> countByWorkerIdsAndStatusPublish(@Param("workerIds") List<Long> workerIds,

@@ -40,6 +40,13 @@ export function managerViewQueryParams(view: ManagerHistoryView): Record<string,
     params['companyTitle'] = view.selectedCompany.title.trim() || `Компания #${view.selectedCompany.id}`;
   }
 
+  if (view.activeSection === 'orders' && view.managerId) {
+    params['managerId'] = view.managerId;
+  }
+  if (view.activeSection === 'orders' && view.control) {
+    params['control'] = view.control;
+  }
+
   return params;
 }
 
@@ -68,7 +75,9 @@ export function managerReadHistoryView(
     pageNumber: typeof raw.pageNumber === 'number' ? Math.max(raw.pageNumber, 0) : 0,
     pageSize: typeof raw.pageSize === 'number' ? raw.pageSize : 10,
     sortDirection: raw.sortDirection === 'asc' ? 'asc' : 'desc',
-    selectedCompany: activeSection === 'orders' ? selectedCompany : null
+    selectedCompany: activeSection === 'orders' ? selectedCompany : null,
+    managerId: activeSection === 'orders' && typeof raw.managerId === 'number' ? raw.managerId : null,
+    control: activeSection === 'orders' && typeof raw.control === 'string' ? raw.control : null
   };
 }
 
@@ -91,7 +100,9 @@ export function managerReadQueryView(
       pageNumber: managerPageNumber(params.get('pageNumber')),
       pageSize: managerPageSize(params.get('pageSize')),
       sortDirection: params.get('sortDirection') === 'asc' ? 'asc' : 'desc',
-      selectedCompany: null
+      selectedCompany: null,
+      managerId: null,
+      control: null
     };
   }
 
@@ -111,7 +122,9 @@ export function managerReadQueryView(
     pageNumber: managerPageNumber(params.get('pageNumber')),
     pageSize: managerPageSize(params.get('pageSize')),
     sortDirection: params.get('sortDirection') === 'asc' ? 'asc' : 'desc',
-    selectedCompany
+    selectedCompany,
+    managerId: managerOptionalPositiveNumber(params.get('managerId')),
+    control: managerControlParam(params.get('control'))
   };
 }
 
@@ -139,4 +152,14 @@ function managerPageNumber(value: string | null): number {
 
 function managerPageSize(value: string | null): number {
   return Number(value) || 10;
+}
+
+function managerOptionalPositiveNumber(value: string | null): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function managerControlParam(value: string | null): string | null {
+  const normalized = value?.trim() ?? '';
+  return normalized === 'manager-overdue' ? normalized : null;
 }

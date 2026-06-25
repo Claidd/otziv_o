@@ -2,6 +2,7 @@ package com.hunt.otziv.client_messages.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -65,8 +66,11 @@ public class PublicationProgressPreferenceService {
         if (chatId == null || !isPreferenceCommand(messageText)) {
             return Optional.empty();
         }
-        return companyRepository.findByTelegramGroupChatId(chatId)
-                .flatMap(company -> setCompanyPreference(company, isEnableCommand(normalizeCommand(messageText))));
+        return setCompaniesPreference(
+                companyRepository.findAllByTelegramGroupChatIdOrderById(chatId),
+                isEnableCommand(normalizeCommand(messageText)),
+                "Telegram chatId=" + chatId
+        );
     }
 
     @Transactional
@@ -83,9 +87,7 @@ public class PublicationProgressPreferenceService {
                     companies.size(), groupId);
         }
         boolean enabled = isEnableCommand(normalizeCommand(messageText));
-        companies.forEach(company -> setCompanyPreference(company, enabled));
-        Company first = companies.getFirst();
-        return Optional.of(new PreferenceUpdate(first.getId(), enabled, responseText(enabled)));
+        return setCompaniesPreference(companies, enabled, "WhatsApp groupId=" + groupId);
     }
 
     @Transactional
@@ -93,8 +95,11 @@ public class PublicationProgressPreferenceService {
         if (chatId == null || !isPreferenceCommand(messageText)) {
             return Optional.empty();
         }
-        return companyRepository.findByMaxGroupChatId(chatId)
-                .flatMap(company -> setCompanyPreference(company, isEnableCommand(normalizeCommand(messageText))));
+        return setCompaniesPreference(
+                companyRepository.findAllByMaxGroupChatIdOrderById(chatId),
+                isEnableCommand(normalizeCommand(messageText)),
+                "MAX chatId=" + chatId
+        );
     }
 
     public boolean isPreferenceCommand(String messageText) {
@@ -116,6 +121,10 @@ public class PublicationProgressPreferenceService {
                 || normalized.equals("отключить уведомления о публикациях")
                 || normalized.equals("отключить уведомления о публикации")
                 || normalized.equals("отключить уведомления о каждой публикации")
+                || normalized.equals("отключите уведомления")
+                || normalized.equals("отключите уведомления о публикациях")
+                || normalized.equals("отключите уведомления о публикации")
+                || normalized.equals("отключите уведомления о каждой публикации")
                 || normalized.equals("отключить оповещения")
                 || normalized.equals("отключить оповещение")
                 || normalized.equals("отключить оповещения о публикациях")
@@ -124,6 +133,16 @@ public class PublicationProgressPreferenceService {
                 || normalized.equals("отключить оповещение о публикациях")
                 || normalized.equals("отключить оповещение о публикации")
                 || normalized.equals("отключить оповещение о каждой публикации")
+                || normalized.equals("отключите оповещения")
+                || normalized.equals("отключите оповещение")
+                || normalized.equals("отключите оповещения о публикациях")
+                || normalized.equals("отключите оповещения о публикации")
+                || normalized.equals("отключите оповещения о каждой публикации")
+                || normalized.equals("отключите оповещение о публикациях")
+                || normalized.equals("отключите оповещение о публикации")
+                || normalized.equals("отключите оповещение о каждой публикации")
+                || normalized.equals("отключить их")
+                || normalized.equals("отключите их")
                 || normalized.equals("стоп уведомления")
                 || normalized.equals("стоп оповещения")
                 || normalized.equals("стоп оповещение")
@@ -144,11 +163,63 @@ public class PublicationProgressPreferenceService {
         if (company == null) {
             return Optional.empty();
         }
-        company.setPublicationProgressReportsEnabled(enabled);
-        companyRepository.save(company);
-        log.info("Publication progress reports {} for company id={} title='{}'",
-                enabled ? "enabled" : "disabled", company.getId(), company.getTitle());
-        return Optional.of(new PreferenceUpdate(company.getId(), enabled, responseText(enabled)));
+        return setCompaniesPreference(preferenceScope(company), enabled, "company id=" + company.getId());
+    }
+
+    private Optional<PreferenceUpdate> setCompaniesPreference(List<Company> companies, boolean enabled, String source) {
+        if (companies == null || companies.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (companies.size() > 1) {
+            log.info("Publication progress preference applies to {} companies from {}", companies.size(), source);
+        }
+
+        companies.forEach(company -> {
+            company.setPublicationProgressReportsEnabled(enabled);
+            companyRepository.save(company);
+            log.info("Publication progress reports {} for company id={} title='{}'",
+                    enabled ? "enabled" : "disabled", company.getId(), company.getTitle());
+        });
+        Company first = companies.getFirst();
+        return Optional.of(new PreferenceUpdate(first.getId(), enabled, responseText(enabled)));
+    }
+
+    private List<Company> preferenceScope(Company company) {
+        List<Company> companies = new ArrayList<>();
+        addCompany(companies, company);
+
+        if (hasText(company.getGroupId())) {
+            addCompanies(companies, companyRepository.findAllByGroupId(company.getGroupId()));
+        }
+        if (company.getTelegramGroupChatId() != null) {
+            addCompanies(companies, companyRepository.findAllByTelegramGroupChatIdOrderById(company.getTelegramGroupChatId()));
+        }
+        if (company.getMaxGroupChatId() != null) {
+            addCompanies(companies, companyRepository.findAllByMaxGroupChatIdOrderById(company.getMaxGroupChatId()));
+        }
+
+        return companies;
+    }
+
+    private void addCompanies(List<Company> target, List<Company> source) {
+        if (source == null || source.isEmpty()) {
+            return;
+        }
+        source.forEach(company -> addCompany(target, company));
+    }
+
+    private void addCompany(List<Company> companies, Company company) {
+        if (company == null) {
+            return;
+        }
+        Long companyId = company.getId();
+        boolean alreadyAdded = companies.stream()
+                .anyMatch(existing -> existing == company
+                        || (companyId != null && companyId.equals(existing.getId())));
+        if (!alreadyAdded) {
+            companies.add(company);
+        }
     }
 
     private String responseText(boolean enabled) {

@@ -15,8 +15,10 @@ import type {
   WorkerSection
 } from '../../core/worker.api';
 
+export type WorkerBoardTabKey = WorkerSection | 'risk';
+
 export type SectionTab = {
-  key: WorkerSection;
+  key: WorkerBoardTabKey;
   label: string;
   icon: string;
 };
@@ -40,7 +42,8 @@ export const WORKER_SECTIONS: SectionTab[] = [
   { key: 'recovery', label: 'Восстановление', icon: 'restore' },
   { key: 'publish', label: 'Публикация', icon: 'published_with_changes' },
   { key: 'bad', label: 'Плохие', icon: 'money_off' },
-  { key: 'all', label: 'Все', icon: 'dashboard' }
+  { key: 'all', label: 'Все', icon: 'dashboard' },
+  { key: 'risk', label: 'Риски', icon: 'warning' }
 ];
 
 export const WORKER_ORDER_STATUS_ACTIONS: StatusAction[] = [
@@ -88,7 +91,7 @@ export const DEFAULT_WORKER_PERMISSIONS: WorkerPermissions = {
   canEditNotes: false
 };
 
-export function workerSectionLabel(section: WorkerSection): string {
+export function workerSectionLabel(section: WorkerBoardTabKey): string {
   return WORKER_SECTIONS.find((item) => item.key === section)?.label ?? 'Новые';
 }
 
@@ -145,7 +148,7 @@ export function workerErrorMessage(err: unknown, fallback: string): string {
   return apiErrorMessage(err, fallback);
 }
 
-export function trackWorkerSection(_index: number, section: SectionTab): WorkerSection {
+export function trackWorkerSection(_index: number, section: SectionTab): WorkerBoardTabKey {
   return section.key;
 }
 

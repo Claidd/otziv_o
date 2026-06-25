@@ -8,6 +8,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -420,6 +421,20 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             Collection<Manager> managers
     );
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE ReviewRecoveryTask t
+        SET t.scheduledDate = :newDate
+        WHERE t.status = :status
+          AND t.batch.status = :batchStatus
+          AND t.scheduledDate < :newDate
+    """)
+    int actualizeActiveTasksBefore(
+            @Param("status") ReviewRecoveryTaskStatus status,
+            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus,
+            @Param("newDate") LocalDate newDate
+    );
+
     @Query("""
         SELECT DISTINCT t
         FROM ReviewRecoveryTask t
@@ -441,4 +456,11 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     List<ReviewRecoveryTask> findDoneForGamificationBackfill(@Param("status") ReviewRecoveryTaskStatus status,
                                                              @Param("from") LocalDate from,
                                                              @Param("to") LocalDate to);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        DELETE FROM ReviewRecoveryTask task
+        WHERE task.order.id = :orderId
+    """)
+    int deleteByOrderId(@Param("orderId") Long orderId);
 }

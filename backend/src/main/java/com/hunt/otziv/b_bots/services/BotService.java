@@ -47,4 +47,6 @@ public interface BotService {
     Optional<Bot> claimReserveBotForCity(City targetCity, Collection<Long> excludedBotIds);
 
     Optional<Bot> claimNewAccountForCity(City targetCity, Collection<Long> excludedBotIds);
+
+    Optional<Bot> claimNewAccountFromOwnCity(City targetCity, Collection<Long> excludedBotIds);
 }

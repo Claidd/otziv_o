@@ -106,6 +106,7 @@ export class HomeComponent {
   readonly manualTaskLoading = signal(false);
   readonly manualTaskSaving = signal(false);
   readonly manualTaskMutatingId = signal<number | null>(null);
+  readonly manualTaskEditingId = signal<number | null>(null);
   readonly manualTaskPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
   readonly manualTaskPhone = signal('');
   readonly manualTaskRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
@@ -113,6 +114,13 @@ export class HomeComponent {
   readonly manualTaskPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
   readonly manualTaskAmountRubles = signal('');
   readonly manualTaskComment = signal('');
+  readonly manualTaskEditPaymentType = signal<ManualPaymentType>(DEFAULT_MANUAL_PAYMENT_TYPE);
+  readonly manualTaskEditPhone = signal('');
+  readonly manualTaskEditRecipient = signal(DEFAULT_MANUAL_RECIPIENT_NAME);
+  readonly manualTaskEditPaymentUrl = signal(DEFAULT_MANUAL_PAYMENT_URL);
+  readonly manualTaskEditPaymentButtonLabel = signal(DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
+  readonly manualTaskEditAmountRubles = signal('');
+  readonly manualTaskEditComment = signal('');
   readonly error = signal<DashboardWarning | null>(null);
   readonly healthError = signal<DashboardWarning | null>(null);
   readonly cabinetError = signal<DashboardWarning | null>(null);
@@ -613,6 +621,70 @@ export class HomeComponent {
     this.manualTaskComment.set(value ?? '');
   }
 
+  setManualTaskEditPaymentType(value: ManualPaymentType): void {
+    this.manualTaskEditPaymentType.set(value);
+    if (value === 'EXTERNAL_LINK' && !this.manualTaskEditPaymentUrl().trim()) {
+      this.manualTaskEditPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
+    }
+    if (!this.manualTaskEditRecipient().trim()) {
+      this.manualTaskEditRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
+    }
+  }
+
+  setManualTaskEditPhone(value: string): void {
+    this.manualTaskEditPhone.set(value ?? '');
+  }
+
+  setManualTaskEditRecipient(value: string): void {
+    this.manualTaskEditRecipient.set(value ?? '');
+  }
+
+  setManualTaskEditPaymentUrl(value: string): void {
+    this.manualTaskEditPaymentUrl.set(value ?? '');
+  }
+
+  setManualTaskEditPaymentButtonLabel(value: string): void {
+    this.manualTaskEditPaymentButtonLabel.set(value ?? '');
+  }
+
+  setManualTaskEditAmount(value: string | number | null): void {
+    this.manualTaskEditAmountRubles.set(value == null ? '' : String(value));
+  }
+
+  setManualTaskEditComment(value: string): void {
+    this.manualTaskEditComment.set(value ?? '');
+  }
+
+  startManualTaskEdit(task: ManualPaymentTaskResponse): void {
+    if (!task?.id || task.status === 'COMPLETED' || task.status === 'CANCELED') {
+      return;
+    }
+    this.manualTaskEditingId.set(task.id);
+    this.manualTaskEditPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
+    this.manualTaskEditPhone.set(task.manualPhone ?? '');
+    this.manualTaskEditRecipient.set(this.manualRecipientOrDefault(task.manualRecipientName));
+    this.manualTaskEditPaymentUrl.set(this.manualPaymentUrlOrDefault(task.manualPaymentUrl));
+    this.manualTaskEditPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(task.manualPaymentButtonLabel));
+    this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
+    this.manualTaskEditComment.set(task.comment ?? '');
+  }
+
+  cancelManualTaskEdit(): void {
+    this.manualTaskEditingId.set(null);
+  }
+
+  canSaveManualTaskEdit(task: ManualPaymentTaskResponse): boolean {
+    const hasTarget = this.manualTaskEditPaymentType() === 'MOBILE_BANK'
+      ? Boolean(this.manualTaskEditPhone().trim()) && Boolean(this.manualTaskEditRecipient().trim())
+      : Boolean(this.manualTaskEditPaymentUrl().trim()) && Boolean(this.manualTaskEditRecipient().trim());
+    return this.manualTaskEditingId() === task.id
+      && this.manualTaskMutatingId() !== task.id
+      && task.status !== 'COMPLETED'
+      && task.status !== 'CANCELED'
+      && hasTarget
+      && this.manualTaskEditTargetKopecks() >= Math.max(1, task.reservedAmountKopecks ?? 0);
+  }
+
   createManualPaymentTask(): void {
     if (!this.canCreateManualTask()) {
       return;
@@ -668,6 +740,33 @@ export class HomeComponent {
       error: (err) => {
         this.manualTaskMutatingId.set(null);
         this.toastService.error('Статус не сохранен', apiErrorDetail(err, 'Не удалось обновить платежное задание'));
+      }
+    });
+  }
+
+  saveManualTaskEdit(task: ManualPaymentTaskResponse): void {
+    if (!task?.id || !this.canSaveManualTaskEdit(task)) {
+      return;
+    }
+    this.manualTaskMutatingId.set(task.id);
+    this.cabinetApi.updateManagerManualPaymentTask(task.id, {
+      manualPaymentType: this.manualTaskEditPaymentType(),
+      manualPhone: this.manualTaskEditPhone().trim(),
+      manualRecipientName: this.manualTaskEditRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
+      manualPaymentUrl: this.manualTaskEditPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentButtonLabel: this.manualTaskEditPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
+      targetAmountKopecks: this.manualTaskEditTargetKopecks(),
+      comment: this.manualTaskEditComment().trim() || null
+    }).subscribe({
+      next: (updated) => {
+        this.replaceManualTask(updated);
+        this.manualTaskEditingId.set(null);
+        this.manualTaskMutatingId.set(null);
+        this.toastService.success('Задание сохранено');
+      },
+      error: (err) => {
+        this.manualTaskMutatingId.set(null);
+        this.toastService.error('Задание не сохранено', apiErrorDetail(err, 'Не удалось обновить платежное задание'));
       }
     });
   }
@@ -745,6 +844,11 @@ export class HomeComponent {
 
   private manualTaskTargetKopecks(): number {
     const value = Number(this.manualTaskAmountRubles());
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
+  }
+
+  private manualTaskEditTargetKopecks(): number {
+    const value = Number(this.manualTaskEditAmountRubles());
     return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0;
   }
 

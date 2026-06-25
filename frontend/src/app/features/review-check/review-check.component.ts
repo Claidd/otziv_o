@@ -274,6 +274,9 @@ export class ReviewCheckComponent {
 
   shouldShowReviewTextToggle(review: ReviewCheckReview): boolean {
     const value = this.reviewText(review);
+    if (this.isMobileReviewLayout()) {
+      return value.length > 110 || value.split(/\r?\n/).length > 3;
+    }
     return value.length > 190 || value.split(/\r?\n/).length > 5;
   }
 
@@ -340,12 +343,11 @@ export class ReviewCheckComponent {
 
   onReviewTextDisplayClick(review: ReviewCheckReview): void {
     if (this.isMobileReviewLayout()) {
-      if (!this.isMobileReviewTextPreview(review)) {
+      if (this.details()?.permissions.canSave) {
+        this.startReviewFieldEdit(review, 'text');
+      } else if (!this.isMobileReviewTextPreview(review)) {
         this.activateMobileReviewTextPreview(review);
-        return;
       }
-
-      this.startReviewFieldEdit(review, 'text');
       return;
     }
 
@@ -355,6 +357,10 @@ export class ReviewCheckComponent {
     }
 
     this.toggleReviewText(review);
+  }
+
+  openReviewTextEditor(review: ReviewCheckReview): void {
+    this.startReviewFieldEdit(review, 'text');
   }
 
   onReviewAnswerDisplayClick(review: ReviewCheckReview): void {
@@ -400,8 +406,12 @@ export class ReviewCheckComponent {
     }
 
     window.requestAnimationFrame(() => {
+      const selector = this.isMobileReviewLayout()
+        ? `.mobile-review-field-sheet textarea[name="mobile-${field}-${review.id}"]`
+        : `.review-card[data-review-id="${review.id}"] textarea[name="${field}-${review.id}"]`;
+
       document
-        .querySelector<HTMLTextAreaElement>(`.review-card[data-review-id="${review.id}"] textarea[name="${field}-${review.id}"]`)
+        .querySelector<HTMLTextAreaElement>(selector)
         ?.focus({ preventScroll: true });
     });
   }

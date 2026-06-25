@@ -17,11 +17,11 @@
 
       <div class="dictionary-actions">
         @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
-          <label class="dictionary-search" appTooltip="Поиск работает по текущему справочнику. Нажмите Enter или кнопку поиска, чтобы обновить список.">
+          <label class="dictionary-search" [appTooltip]="searchTooltip()">
             <span class="material-icons-sharp">search</span>
             <input
               type="text"
-              placeholder="Найти"
+              [placeholder]="searchPlaceholder()"
               [value]="search()"
               (input)="search.set($any($event.target).value)"
               (keyup.enter)="searchActive()"
@@ -974,6 +974,38 @@
                   }
                 </tbody>
               </table>
+
+              <div class="dictionary-pagination" aria-label="Навигация по аккаунтам">
+                <div>
+                  <strong>{{ botPageStart() }}-{{ botPageEnd() }}</strong>
+                  <span>из {{ botsTotal() }}</span>
+                </div>
+
+                <label>
+                  <span>На странице</span>
+                  <select [value]="botPageSize()" (change)="changeBotPageSize($event)" [disabled]="loading()">
+                    @for (size of botPageSizeOptions; track size) {
+                      <option [value]="size">{{ size }}</option>
+                    }
+                  </select>
+                </label>
+
+                <div class="pagination-actions">
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(0)" [disabled]="loading() || botPage() === 0" title="Первая страница">
+                    <span class="material-icons-sharp">first_page</span>
+                  </button>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() - 1)" [disabled]="loading() || botPage() === 0" title="Предыдущая страница">
+                    <span class="material-icons-sharp">chevron_left</span>
+                  </button>
+                  <span class="pagination-page">{{ botPage() + 1 }} / {{ botTotalPages() }}</span>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botPage() + 1)" [disabled]="loading() || botPage() + 1 >= botTotalPages()" title="Следующая страница">
+                    <span class="material-icons-sharp">chevron_right</span>
+                  </button>
+                  <button type="button" class="row-icon-button" (click)="goToBotPage(botTotalPages() - 1)" [disabled]="loading() || botPage() + 1 >= botTotalPages()" title="Последняя страница">
+                    <span class="material-icons-sharp">last_page</span>
+                  </button>
+                </div>
+              </div>
             }
 
             @case ('promo') {
@@ -3031,6 +3063,10 @@
         <span class="material-icons-sharp">upload_file</span>
         Добавить аккаунты
       </button>
+      <button type="button" class="import-accounts-button city-import" (click)="openBotImport('city')">
+        <span class="material-icons-sharp">add_location_alt</span>
+        Добавить из файла по городу
+      </button>
     }
   </section>
 
@@ -3112,12 +3148,50 @@
         <header>
           <div>
             <p class="eyebrow">Импорт</p>
-            <h2>Добавить аккаунты</h2>
+            <h2>{{ importMode() === 'city' ? 'Добавить аккаунты в город' : 'Добавить аккаунты' }}</h2>
           </div>
           <button type="button" class="row-icon-button" (click)="closeBotImport()" [disabled]="importing()" title="Закрыть">
             <span class="material-icons-sharp">close</span>
           </button>
         </header>
+
+        @if (importMode() === 'city') {
+          <section class="city-import-picker" aria-label="Город для аккаунтов">
+            <label>
+              <span>Город</span>
+              <input
+                type="search"
+                placeholder="Найти город"
+                [value]="importCitySearch()"
+                (input)="importCitySearch.set($any($event.target).value); importCityId.set(null); importError.set(null)"
+              >
+            </label>
+
+            <div class="city-import-list" role="listbox" aria-label="Результаты поиска городов">
+              @for (city of filteredImportCities(); track trackOption($index, city)) {
+                <button
+                  type="button"
+                  role="option"
+                  [attr.aria-selected]="importCityId() === city.id"
+                  [class.selected]="importCityId() === city.id"
+                  (click)="selectBotImportCity(city)"
+                >
+                  <span class="material-icons-sharp">location_city</span>
+                  <strong>{{ city.title }}</strong>
+                </button>
+              } @empty {
+                <p class="no-results">Город не найден.</p>
+              }
+            </div>
+
+            @if (selectedImportCity(); as city) {
+              <p class="city-import-selected">
+                <span class="material-icons-sharp">task_alt</span>
+                {{ city.title }}
+              </p>
+            }
+          </section>
+        }
 
         <label class="file-picker" [class.has-file]="importFile()">
           <input type="file" accept=".csv,.tsv,.xls,.xlsx" (change)="selectBotImportFile($event)">
@@ -3147,7 +3221,7 @@
 
         <div class="actions">
           <button type="button" class="secondary" (click)="closeBotImport()" [disabled]="importing()">Закрыть</button>
-          <button type="button" (click)="uploadBotImport()" [disabled]="!importFile() || importing()">
+          <button type="button" (click)="uploadBotImport()" [disabled]="!canUploadBotImport()">
             {{ importing() ? 'Загружаю' : 'Загрузить' }}
           </button>
         </div>

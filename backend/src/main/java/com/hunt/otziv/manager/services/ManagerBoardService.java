@@ -2,6 +2,10 @@ package com.hunt.otziv.manager.services;
 
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -48,11 +52,46 @@ public class ManagerBoardService {
     private static final String SECTION_ORDERS = "orders";
     private static final int MAX_PAGE_SIZE = 50;
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
+    private static final String CONTROL_MANAGER_OVERDUE = "manager-overdue";
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
             "Архив",
             "Публикация",
+            "Не оплачено",
             "Бан"
+    );
+    private static final Set<String> PAYMENT_AUTOMATION_STATUSES = Set.of(
+            "Опубликовано",
+            "Выставлен счет",
+            "Напоминание",
+            "Не оплачено"
+    );
+    private static final Set<ClientMessageScenario> PAYMENT_AUTOMATION_SCENARIOS = Set.of(
+            ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+            ClientMessageScenario.PAYMENT_REMINDER,
+            ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
+    );
+    private static final Set<String> REVIEW_CHECK_AUTOMATION_STATUSES = Set.of("На проверке");
+    private static final Set<ClientMessageScenario> REVIEW_CHECK_SCENARIOS = Set.of(
+            ClientMessageScenario.REVIEW_CHECK_REMINDER
+    );
+    private static final Set<String> DELIVERY_RETRY_AUTOMATION_STATUSES = Set.of("В проверку");
+    private static final Set<ClientMessageScenario> DELIVERY_RETRY_SCENARIOS = Set.of(
+            ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY
+    );
+    private static final Set<String> CLIENT_TEXT_AUTOMATION_STATUSES = Set.of("Новый");
+    private static final Set<ClientMessageScenario> CLIENT_TEXT_SCENARIOS = Set.of(
+            ClientMessageScenario.CLIENT_TEXT_REMINDER
+    );
+    private static final Set<CommonInvoiceStatus> COMMON_INVOICE_CONTROL_STATUSES = Set.of(
+            CommonInvoiceStatus.COLLECTING,
+            CommonInvoiceStatus.READY,
+            CommonInvoiceStatus.INVOICED,
+            CommonInvoiceStatus.REMINDER,
+            CommonInvoiceStatus.PARTIALLY_PAID,
+            CommonInvoiceStatus.NEEDS_ATTENTION,
+            CommonInvoiceStatus.UNPAID,
+            CommonInvoiceStatus.BAN
     );
 
     private final CompanyService companyService;
@@ -67,6 +106,7 @@ public class ManagerBoardService {
     private final ManagerAccessService managerAccessService;
     private final UserMetricSnapshotService metricSnapshotService;
     private final CommonBillingService commonBillingService;
+    private final ClientMessageOrderStatusService clientMessageOrderStatusService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -79,21 +119,52 @@ public class ManagerBoardService {
             Principal principal,
             Authentication authentication
     ) {
+        return getBoard(
+                section,
+                status,
+                keyword,
+                pageNumber,
+                pageSize,
+                sortDirection,
+                companyId,
+                null,
+                "",
+                principal,
+                authentication
+        );
+    }
+
+    public ManagerBoardResponse getBoard(
+            String section,
+            String status,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            Long companyId,
+            Long managerId,
+            String control,
+            Principal principal,
+            Authentication authentication
+    ) {
         String normalizedSection = normalizeSection(section);
         String normalizedStatus = normalizeStatus(status);
         String normalizedSortDirection = normalizeSortDirection(sortDirection);
         int safePageNumber = Math.max(pageNumber, 0);
         int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
         String trimmedKeyword = keyword == null ? "" : keyword.trim();
+        Manager managerFilter = resolveManagerFilter(managerId, principal, authentication);
+        boolean managerControlOverdue = CONTROL_MANAGER_OVERDUE.equalsIgnoreCase(control == null ? "" : control.trim());
 
         Page<CompanyListDTO> companies = SECTION_COMPANIES.equals(normalizedSection)
                 ? loadCompanies(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, normalizedSortDirection)
                 : emptyCompanyPage(safePageNumber, safePageSize);
 
         Page<OrderDTOList> orders = SECTION_ORDERS.equals(normalizedSection)
-                ? loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, normalizedSortDirection)
+                ? loadOrders(principal, authentication, trimmedKeyword, normalizedStatus, safePageNumber, safePageSize, companyId, managerFilter, managerControlOverdue, normalizedSortDirection)
                 : emptyOrderPage(safePageNumber, safePageSize);
         badReviewTaskService.enrichOrderList(orders.getContent());
+        clientMessageOrderStatusService.enrichOrderList(orders.getContent());
 
         return new ManagerBoardResponse(
                 normalizedSection,
@@ -102,7 +173,7 @@ public class ManagerBoardService {
                 toPageResponse(orders),
                 ManagerBoardStatusCatalog.companyStatuses(),
                 ManagerBoardStatusCatalog.orderStatuses(),
-                buildMetrics(principal, authentication),
+                buildMetrics(principal, authentication, managerFilter, managerControlOverdue),
                 promoTextService.getPromoTextsForManager(
                         resolvePromoManagerId(principal, authentication),
                         promoSectionCode(normalizedSection)
@@ -179,12 +250,28 @@ public class ManagerBoardService {
             int pageNumber,
             int pageSize,
             Long companyId,
+            Manager managerFilter,
+            boolean managerControlOverdue,
             String sortDirection
     ) {
         if (companyId != null) {
             managerAccessService.requireCompanyAccess(companyId, authentication);
         }
-        Set<Long> visibleManagerIds = visibleManagerIds(principal, authentication);
+        if (managerControlOverdue && managerFilter != null) {
+            return loadRawOrders(
+                    principal,
+                    authentication,
+                    keyword,
+                    status,
+                    pageNumber,
+                    pageSize,
+                    companyId,
+                    managerFilter,
+                    true,
+                    sortDirection
+            );
+        }
+        Set<Long> visibleManagerIds = filteredVisibleManagerIds(principal, authentication, managerFilter);
         List<OrderDTOList> commonCards = commonBillingService.managerBoardCards(
                 status,
                 keyword,
@@ -211,6 +298,8 @@ public class ManagerBoardService {
                 ordinaryPageNumber,
                 pageSize,
                 companyId,
+                managerFilter,
+                false,
                 sortDirection
         );
 
@@ -224,6 +313,8 @@ public class ManagerBoardService {
                 keyword,
                 status,
                 companyId,
+                managerFilter,
+                false,
                 sortDirection
         ));
 
@@ -240,11 +331,39 @@ public class ManagerBoardService {
             int pageNumber,
             int pageSize,
             Long companyId,
+            Manager managerFilter,
+            boolean managerControlOverdue,
             String sortDirection
     ) {
         if (companyId != null) {
             managerAccessService.requireCompanyAccess(companyId, authentication);
             return orderService.getAllOrderDTOCompanyIdAndKeyword(companyId, keyword, pageNumber, pageSize, sortDirection);
+        } else if (managerControlOverdue && managerFilter != null) {
+            return orderService.getManagerControlOverdueOrdersByManager(
+                    managerFilter,
+                    keyword,
+                    status,
+                    LocalDate.now().minusDays(OVERDUE_NOTIFICATION_DAYS + 1L),
+                    OVERDUE_IGNORED_STATUSES,
+                    COMMON_INVOICE_CONTROL_STATUSES,
+                    PAYMENT_AUTOMATION_STATUSES,
+                    PAYMENT_AUTOMATION_SCENARIOS,
+                    REVIEW_CHECK_AUTOMATION_STATUSES,
+                    REVIEW_CHECK_SCENARIOS,
+                    DELIVERY_RETRY_AUTOMATION_STATUSES,
+                    DELIVERY_RETRY_SCENARIOS,
+                    CLIENT_TEXT_AUTOMATION_STATUSES,
+                    CLIENT_TEXT_SCENARIOS,
+                    ScheduledMessageStateStatus.ACTIVE,
+                    ScheduledMessageStateStatus.DONE,
+                    pageNumber,
+                    pageSize,
+                    sortDirection
+            );
+        } else if (managerFilter != null) {
+            return "Все".equals(status)
+                    ? orderService.getAllOrderDTOAndKeywordByManagerAll(managerFilter, keyword, pageNumber, pageSize, sortDirection)
+                    : orderService.getAllOrderDTOAndKeywordByManager(managerFilter, keyword, status, pageNumber, pageSize, sortDirection);
         } else if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             return "Все".equals(status)
                     ? orderService.getAllOrderDTOAndKeyword(keyword, pageNumber, pageSize, sortDirection)
@@ -260,10 +379,17 @@ public class ManagerBoardService {
                 : orderService.getAllOrderDTOAndKeywordByManager(principal, keyword, status, pageNumber, pageSize, sortDirection);
     }
 
-    private List<ManagerMetricResponse> buildMetrics(Principal principal, Authentication authentication) {
+    private List<ManagerMetricResponse> buildMetrics(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter,
+            boolean managerControlOverdue
+    ) {
         List<ManagerMetricResponse> metrics = new ArrayList<>();
         Map<String, Integer> companyCounts = countCompanyMetrics(principal, authentication);
-        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication);
+        Map<String, Integer> orderCounts = managerControlOverdue && managerFilter != null
+                ? countManagerControlOverdueMetrics(managerFilter)
+                : countOrderMetrics(principal, authentication, managerFilter);
 
         metrics.add(companyMetric(companyCounts, "Новые", "Новая", "fiber_new", "yellow"));
         metrics.add(companyMetric(companyCounts, "В работе", "В работе", "badge", "green"));
@@ -282,9 +408,10 @@ public class ManagerBoardService {
         metrics.add(orderMetric(orderCounts, "Опубликовано", "Опубликовано", "task_alt", "green"));
         metrics.add(orderMetric(orderCounts, "Выставлен счет", "Выставлен счет", "receipt_long", "blue"));
         metrics.add(orderMetric(orderCounts, "Напоминание", "Напоминание", "notifications_active", "pink"));
+        metrics.add(orderMetric(orderCounts, "Требует внимания", "Требует внимания", "error", "yellow"));
         metrics.add(orderMetric(orderCounts, "Не оплачено", "Не оплачено", "money_off", "gray"));
         metrics.add(orderMetric(orderCounts, "Бан", "Бан", "block", "gray"));
-        metrics.add(recoveryReadyMetric(principal, authentication));
+        metrics.add(recoveryReadyMetric(principal, authentication, managerFilter));
         metrics.add(orderMetric(orderCounts, "Все", "Все", "dashboard", "blue"));
 
         Map<String, Integer> deltas = metricSnapshotService.deltas(
@@ -341,9 +468,11 @@ public class ManagerBoardService {
         );
     }
 
-    private ManagerMetricResponse recoveryReadyMetric(Principal principal, Authentication authentication) {
+    private ManagerMetricResponse recoveryReadyMetric(Principal principal, Authentication authentication, Manager managerFilter) {
         int count;
-        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+        if (managerFilter != null) {
+            count = reviewRecoveryTaskService.countCompletedBatchesToManager(managerFilter);
+        } else if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             count = reviewRecoveryTaskService.countCompletedBatchesToAdmin();
         } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
             count = reviewRecoveryTaskService.countCompletedBatchesToOwner(resolveOwnerManagers(principal));
@@ -371,9 +500,11 @@ public class ManagerBoardService {
         return companyService.countCompaniesByStatusToManager(resolveManager(principal));
     }
 
-    private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication) {
+    private Map<String, Integer> countOrderMetrics(Principal principal, Authentication authentication, Manager managerFilter) {
         Map<String, Integer> counts;
-        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+        if (managerFilter != null) {
+            counts = orderService.countOrdersByStatusToManager(managerFilter);
+        } else if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             counts = orderService.countOrdersByStatus();
         } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
             counts = orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
@@ -381,13 +512,36 @@ public class ManagerBoardService {
             counts = orderService.countOrdersByStatusToManager(resolveManager(principal));
         }
 
-        Set<Long> visibleManagerIds = visibleManagerIds(principal, authentication);
+        Set<Long> visibleManagerIds = filteredVisibleManagerIds(principal, authentication, managerFilter);
         Map<String, Integer> merged = new java.util.HashMap<>(counts == null ? Map.of() : counts);
         commonBillingService.countLinkedManagerBoardOrders(visibleManagerIds)
                 .forEach((status, count) -> merged.computeIfPresent(status, (_status, value) -> Math.max(0, value - count)));
         commonBillingService.countManagerBoardCards(visibleManagerIds)
                 .forEach((status, count) -> merged.merge(status, count, Integer::sum));
         return merged;
+    }
+
+    private Map<String, Integer> countManagerControlOverdueMetrics(Manager manager) {
+        Map<String, Integer> counts = new java.util.HashMap<>();
+        LocalDate cutoff = LocalDate.now().minusDays(OVERDUE_NOTIFICATION_DAYS + 1L);
+        orderRepository.summarizeManagerControlOverdueOrdersByManager(
+                        manager,
+                        cutoff,
+                        OVERDUE_IGNORED_STATUSES,
+                        COMMON_INVOICE_CONTROL_STATUSES,
+                        PAYMENT_AUTOMATION_STATUSES,
+                        PAYMENT_AUTOMATION_SCENARIOS,
+                        REVIEW_CHECK_AUTOMATION_STATUSES,
+                        REVIEW_CHECK_SCENARIOS,
+                        DELIVERY_RETRY_AUTOMATION_STATUSES,
+                        DELIVERY_RETRY_SCENARIOS,
+                        CLIENT_TEXT_AUTOMATION_STATUSES,
+                        CLIENT_TEXT_SCENARIOS,
+                        ScheduledMessageStateStatus.ACTIVE,
+                        ScheduledMessageStateStatus.DONE
+                )
+                .forEach(row -> counts.put(rowString(row, 0, "Без статуса"), safeInt(rowLong(row, 1))));
+        return counts;
     }
 
     private int countStatus(Map<String, Integer> counts, String status) {
@@ -401,6 +555,10 @@ public class ManagerBoardService {
             return total > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) total;
         }
         return counts.getOrDefault(status, 0);
+    }
+
+    private int safeInt(long value) {
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(0L, value);
     }
 
     private Manager resolveManager(Principal principal) {
@@ -440,6 +598,8 @@ public class ManagerBoardService {
             String keyword,
             String status,
             Long companyId,
+            Manager managerFilter,
+            boolean managerControlOverdue,
             String sortDirection
     ) {
         if (limit <= 0) {
@@ -471,6 +631,8 @@ public class ManagerBoardService {
                     page.getNumber() + 1,
                     page.getSize(),
                     companyId,
+                    managerFilter,
+                    managerControlOverdue,
                     sortDirection
             );
             skip = 0;
@@ -489,6 +651,43 @@ public class ManagerBoardService {
         }
         Manager manager = resolveManager(principal);
         return manager == null || manager.getId() == null ? Set.of() : Set.of(manager.getId());
+    }
+
+    private Set<Long> filteredVisibleManagerIds(Principal principal, Authentication authentication, Manager managerFilter) {
+        if (managerFilter == null) {
+            return visibleManagerIds(principal, authentication);
+        }
+        return Set.of(managerFilter.getId());
+    }
+
+    private Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {
+        if (managerId == null) {
+            return null;
+        }
+        if (managerId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный менеджер");
+        }
+
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            Manager manager = managerService.getManagerById(managerId);
+            if (manager == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер не найден");
+            }
+            return manager;
+        }
+
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            return resolveOwnerManagers(principal).stream()
+                    .filter(manager -> managerId.equals(manager.getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен"));
+        }
+
+        Manager ownManager = resolveManager(principal);
+        if (ownManager == null || !managerId.equals(ownManager.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен");
+        }
+        return ownManager;
     }
 
     private String normalizeStatus(String status) {

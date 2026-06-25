@@ -179,7 +179,7 @@ public class PaymentLinkService {
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public ManagerPaymentLinkResponse createForOrder(Long orderId) {
         if (!runtimeSettingsService.isPaymentLinksEnabled()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежные ссылки выключены в настройках");
@@ -314,7 +314,15 @@ public class PaymentLinkService {
     }
 
     private boolean canRetireStaleLink(PaymentLink link) {
-        return link != null && RECREATABLE_STALE_STATUSES.contains(link.getStatus());
+        return link != null
+                && RECREATABLE_STALE_STATUSES.contains(link.getStatus())
+                && !hasStartedBankPayment(link);
+    }
+
+    private boolean hasStartedBankPayment(PaymentLink link) {
+        return link != null
+                && (link.getPaymentMethod() == PaymentMethod.BANK_FORM || link.getPaymentMethod() == PaymentMethod.SBP_QR)
+                && !normalize(link.getTbankPaymentId()).isBlank();
     }
 
     private boolean sameId(PaymentProfile left, PaymentProfile right) {
@@ -1861,7 +1869,7 @@ public class PaymentLinkService {
             template = ScheduledClientMessageService.DEFAULT_PAYMENT_LINK_COPY_TEXT;
         }
         String afterword = paymentAfterword(link);
-        return renderPaymentTemplate(template, Map.ofEntries(
+        String text = renderPaymentTemplate(template, Map.ofEntries(
                 Map.entry("company", companyTitle(link.getOrder())),
                 Map.entry("filial", filialTitle(link.getOrder())),
                 Map.entry("companyAndFilial", heading(link.getOrder())),
@@ -1874,6 +1882,7 @@ public class PaymentLinkService {
                 Map.entry("paymentAfterword", afterword),
                 Map.entry("afterword", afterword)
         ));
+        return isManualPayment(link) ? text : removeReceiptRequest(text);
     }
 
     private String paymentInstructionText(PaymentLink link, String url) {
@@ -1889,10 +1898,23 @@ public class PaymentLinkService {
             );
         }
         return manualPaymentInstruction(
-                "Ссылка на оплату: " + normalize(link.getManualPhone()),
+                mobileBankPaymentLine(link),
                 manualRecipientName(link),
                 comment
         );
+    }
+
+    private String mobileBankPaymentLine(PaymentLink link) {
+        String value = normalize(link.getManualPhone());
+        String label = looksLikeCardNumber(value)
+                ? "Оплата по номеру карты: "
+                : "Оплата по мобильному банку: ";
+        return label + value;
+    }
+
+    private boolean looksLikeCardNumber(String value) {
+        String digits = normalize(value).replaceAll("\\D", "");
+        return digits.length() >= 13 && digits.length() <= 19;
     }
 
     private String manualPaymentInstruction(String paymentLine, String recipient, String comment) {
@@ -1917,6 +1939,12 @@ public class PaymentLinkService {
         return "После оплаты отправьте чек в этот чат.";
     }
 
+    private String removeReceiptRequest(String text) {
+        return normalizeText(text
+                .replaceAll("(?iu)\\n?\\s*После оплаты отправьте чек в этот чат\\.?", "")
+                .replaceAll("(?iu)\\n?\\s*Пришлите чек,? пожалуйста,? как оплатите\\.?", ""));
+    }
+
     private String paymentLinkValue(PaymentLink link, String url) {
         if (!isManualPayment(link)) {
             return url;
@@ -1933,6 +1961,14 @@ public class PaymentLinkService {
             result = result.replace("{" + entry.getKey() + "}", entry.getValue() == null ? "" : entry.getValue());
         }
         return result
+                .replace("\r\n", "\n")
+                .replaceAll("[ \\t]+\\n", "\n")
+                .replaceAll("\\n{3,}", "\n\n")
+                .trim();
+    }
+
+    private String normalizeText(String result) {
+        return (result == null ? "" : result)
                 .replace("\r\n", "\n")
                 .replaceAll("[ \\t]+\\n", "\n")
                 .replaceAll("\\n{3,}", "\n\n")

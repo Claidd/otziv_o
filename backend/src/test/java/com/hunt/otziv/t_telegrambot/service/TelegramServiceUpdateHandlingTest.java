@@ -3,6 +3,7 @@ package com.hunt.otziv.t_telegrambot.service;
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -11,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -22,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,6 +45,12 @@ class TelegramServiceUpdateHandlingTest {
 
     @Mock
     private PublicationProgressPreferenceService publicationProgressPreferenceService;
+
+    @Mock
+    private ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
+
+    @Mock
+    private WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService;
 
     @Test
     void groupTextMessageDoesNotStartUserLoginFlow() {
@@ -105,12 +115,30 @@ class TelegramServiceUpdateHandlingTest {
         verifyNoInteractions(userService);
     }
 
+    @Test
+    void workerRiskCallbackIsRoutedToWorkerRiskHandlerAndAnswered() {
+        CapturingTelegramService service = service();
+        when(workerRiskTelegramCallbackServiceProvider.getIfAvailable())
+                .thenReturn(workerRiskTelegramCallbackService);
+        when(workerRiskTelegramCallbackService.handle(any(CallbackQuery.class)))
+                .thenReturn(Optional.of("Инцидент проверен"));
+
+        service.onUpdateReceived(callbackUpdate(777L, 123L, "worker-risk:44:v", "callback-1"));
+
+        verify(workerRiskTelegramCallbackService).handle(any(CallbackQuery.class));
+        verifyNoInteractions(userService);
+        assertEquals(1, service.answerCallbacks.size());
+        assertEquals("callback-1", service.answerCallbacks.getFirst().getCallbackQueryId());
+        assertEquals("Инцидент проверен", service.answerCallbacks.getFirst().getText());
+    }
+
     private CapturingTelegramService service() {
         return new CapturingTelegramService(
                 personalServiceProvider,
                 userService,
                 telegramGroupLinkService,
-                publicationProgressPreferenceService
+                publicationProgressPreferenceService,
+                workerRiskTelegramCallbackServiceProvider
         );
     }
 
@@ -128,14 +156,38 @@ class TelegramServiceUpdateHandlingTest {
         return update;
     }
 
+    private static Update callbackUpdate(long chatId, long actorTelegramId, String data, String callbackId) {
+        Chat chat = new Chat();
+        chat.setId(chatId);
+        chat.setType("private");
+
+        Message message = new Message();
+        message.setChat(chat);
+
+        org.telegram.telegrambots.meta.api.objects.User from = new org.telegram.telegrambots.meta.api.objects.User();
+        from.setId(actorTelegramId);
+
+        CallbackQuery callbackQuery = new CallbackQuery();
+        callbackQuery.setId(callbackId);
+        callbackQuery.setMessage(message);
+        callbackQuery.setFrom(from);
+        callbackQuery.setData(data);
+
+        Update update = new Update();
+        update.setCallbackQuery(callbackQuery);
+        return update;
+    }
+
     private static final class CapturingTelegramService extends TelegramService {
         private final List<SendMessage> sentMessages = new ArrayList<>();
+        private final List<AnswerCallbackQuery> answerCallbacks = new ArrayList<>();
 
         private CapturingTelegramService(
                 ObjectProvider<PersonalService> personalServiceProvider,
                 UserService userService,
                 TelegramGroupLinkService telegramGroupLinkService,
-                PublicationProgressPreferenceService publicationProgressPreferenceService
+                PublicationProgressPreferenceService publicationProgressPreferenceService,
+                ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider
         ) {
             super(new DefaultBotOptions(),
                     "123456:abcdefghijklmnopqrstuvwxyz",
@@ -145,12 +197,18 @@ class TelegramServiceUpdateHandlingTest {
                     personalServiceProvider,
                     userService,
                     telegramGroupLinkService,
-                    publicationProgressPreferenceService);
+                    publicationProgressPreferenceService,
+                    workerRiskTelegramCallbackServiceProvider);
         }
 
         @Override
         void executeTelegramMessage(SendMessage message) throws TelegramApiException {
             sentMessages.add(message);
+        }
+
+        @Override
+        void executeAnswerCallback(AnswerCallbackQuery answer) throws TelegramApiException {
+            answerCallbacks.add(answer);
         }
     }
 }

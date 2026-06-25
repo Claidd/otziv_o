@@ -2,6 +2,7 @@ package com.hunt.otziv.p_products.dto;
 
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import lombok.AllArgsConstructor;
@@ -11,6 +12,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -119,7 +121,15 @@ public class OrderDTOList {
 
     private BigDecimal commonInvoiceRemaining;
 
+    private LocalDateTime commonInvoiceSentAt;
+
+    private LocalDateTime commonInvoiceLastReminderAt;
+
+    private LocalDateTime commonInvoiceNextReminderAt;
+
     private String commonInvoiceLastError;
+
+    private ClientMessageOrderStatusResponse clientMessageStatus;
 
 
 //    private Integer amount;

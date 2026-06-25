@@ -1,6 +1,9 @@
 package com.hunt.otziv.p_products.board;
 
 import com.hunt.otziv.common.BoardLiveSlice;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -19,6 +22,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.security.Principal;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -26,6 +30,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -103,7 +108,17 @@ public class OrderBoardQueryService {
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
         return getAllOrderDTOAndKeywordByManagerAll(
-                principal,
+                resolveManagerFromPrincipal(principal),
+                keyword,
+                pageNumber,
+                pageSize,
+                sortDirection
+        );
+    }
+
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(Manager manager, String keyword, int pageNumber, int pageSize, String sortDirection) {
+        return getAllOrderDTOAndKeywordByManagerAll(
+                manager,
                 keyword,
                 pageNumber,
                 pageSize,
@@ -114,7 +129,7 @@ public class OrderBoardQueryService {
 
     public Page<OrderDTOList> getWorkerBoardOrderDTOAndKeywordByManagerAll(Principal principal, String keyword, int pageNumber, int pageSize, String sortDirection) {
         return getAllOrderDTOAndKeywordByManagerAll(
-                principal,
+                resolveManagerFromPrincipal(principal),
                 keyword,
                 pageNumber,
                 pageSize,
@@ -124,14 +139,13 @@ public class OrderBoardQueryService {
     }
 
     private Page<OrderDTOList> getAllOrderDTOAndKeywordByManagerAll(
-            Principal principal,
+            Manager manager,
             String keyword,
             int pageNumber,
             int pageSize,
             String sortDirection,
             Collection<String> liveStatuses
     ) {
-        Manager manager = resolveManagerFromPrincipal(principal);
         if (manager == null) {
             return emptyOrderPage(pageNumber, pageSize);
         }
@@ -163,7 +177,17 @@ public class OrderBoardQueryService {
     }
 
     public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Principal principal, String keyword, String status, int pageNumber, int pageSize, String sortDirection) {
-        Manager manager = resolveManagerFromPrincipal(principal);
+        return getAllOrderDTOAndKeywordByManager(
+                resolveManagerFromPrincipal(principal),
+                keyword,
+                status,
+                pageNumber,
+                pageSize,
+                sortDirection
+        );
+    }
+
+    public Page<OrderDTOList> getAllOrderDTOAndKeywordByManager(Manager manager, String keyword, String status, int pageNumber, int pageSize, String sortDirection) {
         if (manager == null) {
             return emptyOrderPage(pageNumber, pageSize);
         }
@@ -177,6 +201,55 @@ public class OrderBoardQueryService {
             orderIds = orderRepository.findPageIdByManagerAndStatus(manager, status, pageable);
         }
 
+        return getOrderDTOPage(orderIds);
+    }
+
+    public Page<OrderDTOList> getManagerControlOverdueOrdersByManager(
+            Manager manager,
+            String keyword,
+            String status,
+            LocalDate cutoff,
+            Collection<String> excludedStatuses,
+            Collection<CommonInvoiceStatus> commonInvoiceStatuses,
+            Collection<String> paymentAutomationStatuses,
+            Collection<ClientMessageScenario> paymentScenarios,
+            Collection<String> reviewCheckAutomationStatuses,
+            Collection<ClientMessageScenario> reviewCheckScenarios,
+            Collection<String> deliveryRetryAutomationStatuses,
+            Collection<ClientMessageScenario> deliveryRetryScenarios,
+            Collection<String> clientTextAutomationStatuses,
+            Collection<ClientMessageScenario> clientTextScenarios,
+            ScheduledMessageStateStatus activeStatus,
+            ScheduledMessageStateStatus doneStatus,
+            int pageNumber,
+            int pageSize,
+            String sortDirection
+    ) {
+        if (manager == null) {
+            return emptyOrderPage(pageNumber, pageSize);
+        }
+
+        String safeKeyword = keyword == null ? "" : keyword.trim();
+        Page<Long> orderIds = orderRepository.findPageIdForManagerControlOverdueByManager(
+                manager,
+                status == null || status.isBlank() ? "Все" : status.trim(),
+                safeKeyword,
+                safeKeyword,
+                cutoff,
+                Set.copyOf(excludedStatuses),
+                Set.copyOf(commonInvoiceStatuses),
+                Set.copyOf(paymentAutomationStatuses),
+                Set.copyOf(paymentScenarios),
+                Set.copyOf(reviewCheckAutomationStatuses),
+                Set.copyOf(reviewCheckScenarios),
+                Set.copyOf(deliveryRetryAutomationStatuses),
+                Set.copyOf(deliveryRetryScenarios),
+                Set.copyOf(clientTextAutomationStatuses),
+                Set.copyOf(clientTextScenarios),
+                activeStatus,
+                doneStatus,
+                orderPageable(pageNumber, pageSize, sortDirection)
+        );
         return getOrderDTOPage(orderIds);
     }
 
