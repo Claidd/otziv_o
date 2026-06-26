@@ -85,7 +85,8 @@ public class ScheduledClientMessageService {
     public static final String DEFAULT_ARCHIVE_OFFER_TEXT = "{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.";
 
     public static final int DEFAULT_REMINDER_INTERVAL_DAYS = 2;
-    public static final int DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS = 3;
+    public static final int DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS = 2;
+    public static final int DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS = 7;
     public static final int DEFAULT_REVIEW_CHECK_AUTO_ARCHIVE_DAYS = 30;
     public static final int DEFAULT_REVIEW_CHECK_RETRY_DELAY_HOURS = 2;
     public static final int DEFAULT_PAYMENT_INVOICE_RETRY_DELAY_HOURS = 2;
@@ -202,6 +203,123 @@ public class ScheduledClientMessageService {
             processed++;
         }
         logTickSummary(nowStorage, nowIrkutsk, windowsSpec, true, reconcileSummary, dueStates.size(), processed);
+    }
+
+    @Transactional
+    public void reconcileCandidatesNow() {
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        reconcileCandidates(nowStorage);
+        lastReconcileAt = nowStorage;
+    }
+
+    @Transactional
+    public boolean ensureClientTextReminderForOrder(Order order) {
+        if (order == null || !order.isWaitingForClient()) {
+            return false;
+        }
+        String status = statusTitle(order);
+        if (!listSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, DEFAULT_CLIENT_TEXT_REMINDER_STATUSES)
+                .contains(status)) {
+            return false;
+        }
+
+        LocalDateTime waitingChangedAt = clientTextWaitingChangedAt(order);
+        String targetKey = clientTextWaitingTargetKey(order.getId(), waitingChangedAt);
+        LocalDateTime nextAttemptAt = scheduleAtStorage(LocalDateTime.now(clock));
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(
+                ClientMessageScenario.CLIENT_TEXT_REMINDER,
+                targetKey
+        );
+        if (existing.isPresent()) {
+            ScheduledClientMessageState state = existing.get();
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
+            state.setTargetType(ClientMessageTargetType.ORDER);
+            state.setCompanyId(order.getCompany() == null ? null : order.getCompany().getId());
+            state.setOrderId(order.getId());
+            state.setArchiveOrderId(null);
+            state.setNextAttemptAt(nextAttemptAt);
+            state.setLockedUntil(null);
+            state.setLastErrorCode(null);
+            state.setLastErrorMessage(null);
+            state.setConsecutiveFailures(0);
+            stateRepository.save(state);
+            return false;
+        }
+
+        stateRepository.save(ScheduledClientMessageState.builder()
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey(targetKey)
+                .companyId(order.getCompany() == null ? null : order.getCompany().getId())
+                .orderId(order.getId())
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(nextAttemptAt)
+                .build());
+        return true;
+    }
+
+    @Transactional
+    public Optional<ClientMessageScenario> ensureOrderAutomationForOrder(Order order) {
+        Optional<ClientMessageScenario> scenario = orderAutomationScenario(order);
+        if (scenario.isEmpty()) {
+            return Optional.empty();
+        }
+        ensureOrderStateNow(scenario.get(), order);
+        return scenario;
+    }
+
+    public Optional<ClientMessageScenario> orderAutomationScenario(Order order) {
+        if (order == null || order.getId() == null) {
+            return Optional.empty();
+        }
+        String status = statusTitle(order);
+        if (STATUS_PUBLIC.equals(status)) {
+            return Optional.of(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+        }
+        if (STATUS_TO_CHECK.equals(status)) {
+            return Optional.of(ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY);
+        }
+        if (listSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, DEFAULT_REVIEW_CHECK_STATUSES)
+                .contains(status)) {
+            return Optional.of(ClientMessageScenario.REVIEW_CHECK_REMINDER);
+        }
+        if (listSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, DEFAULT_PAYMENT_REMINDER_STATUSES)
+                .contains(status)) {
+            return Optional.of(ClientMessageScenario.PAYMENT_REMINDER);
+        }
+        return Optional.empty();
+    }
+
+    private void ensureOrderStateNow(ClientMessageScenario scenario, Order order) {
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        String targetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
+        LocalDateTime nextAttemptAt = scheduleAtStorage(nowStorage);
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(scenario, targetKey);
+        if (existing.isPresent()) {
+            ScheduledClientMessageState state = existing.get();
+            state.setStatus(ScheduledMessageStateStatus.ACTIVE);
+            state.setTargetType(ClientMessageTargetType.ORDER);
+            state.setCompanyId(order.getCompany() == null ? null : order.getCompany().getId());
+            state.setOrderId(order.getId());
+            state.setArchiveOrderId(null);
+            state.setNextAttemptAt(nextAttemptAt);
+            state.setLockedUntil(null);
+            state.setLastErrorCode(null);
+            state.setLastErrorMessage(null);
+            state.setConsecutiveFailures(0);
+            stateRepository.save(state);
+            return;
+        }
+
+        stateRepository.save(ScheduledClientMessageState.builder()
+                .scenario(scenario)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey(targetKey)
+                .companyId(order.getCompany() == null ? null : order.getCompany().getId())
+                .orderId(order.getId())
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(nextAttemptAt)
+                .build());
     }
 
     private ClientMessageReconcileSummary reconcileCandidates(LocalDateTime nowStorage) {
@@ -500,6 +618,15 @@ public class ScheduledClientMessageService {
 
         if (!order.isWaitingForClient()) {
             markDone(state, nowStorage, "client_text_received", "Заказ уже не ждет текст клиента");
+            return;
+        }
+        if (shouldAutoClearClientTextWaiting(order, nowStorage)) {
+            order.setWaitingForClient(false);
+            order.setWaitingForClientChangedAt(null);
+            orderRepository.save(order);
+            markDone(state, nowStorage, "client_text_waiting_expired", "Ожидание текста клиента снято автоматически: заказ без изменений 7 дней");
+            log.info("Client text waiting auto-cleared orderId={} stateId={} after {} days",
+                    order.getId(), state.getId(), DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS);
             return;
         }
         if (postponeForReviewRecoveryIfNeeded(state, order, nowStorage)) {
@@ -1420,7 +1547,7 @@ public class ScheduledClientMessageService {
                 .orElse(null);
     }
 
-    private String clientTextReminderText(Order order) {
+    public String clientTextReminderText(Order order) {
         return renderOrderTemplate(
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_TEXT,
@@ -1901,6 +2028,14 @@ public class ScheduledClientMessageService {
 
     private boolean isCurrentClientTextWaitingCycle(ScheduledClientMessageState state, Order order) {
         return clientTextWaitingTargetKey(order.getId(), clientTextWaitingChangedAt(order)).equals(state.getTargetKey());
+    }
+
+    private boolean shouldAutoClearClientTextWaiting(Order order, LocalDateTime nowStorage) {
+        LocalDate changed = order.getChanged();
+        if (changed != null) {
+            return !changed.plusDays(DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS).isAfter(nowStorage.toLocalDate());
+        }
+        return !clientTextWaitingChangedAt(order).plusDays(DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS).isAfter(nowStorage);
     }
 
     private LocalDateTime clientTextWaitingChangedAt(Order order) {

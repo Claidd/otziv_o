@@ -298,7 +298,9 @@ public class BotImportService {
     ) {
         String login = requiredValue(cell(row, hasHeader, headers, "bot_login", 0), "bot_login", rowNumber);
         String password = requiredValue(cell(row, hasHeader, headers, "bot_password", 1), "bot_password", rowNumber);
-        String fio = valueOrDefault(cell(row, hasHeader, headers, "bot_fio", 2), DEFAULT_FIO);
+        String fio = cityOverrideId != null
+                ? DEFAULT_FIO
+                : valueOrDefault(cell(row, hasHeader, headers, "bot_fio", 2), DEFAULT_FIO);
         int counter = parseIntOrDefault(cell(row, hasHeader, headers, "bot_counter", 3), DEFAULT_COUNTER, "bot_counter", rowNumber);
         boolean active = parseBooleanOrDefault(cell(row, hasHeader, headers, "bot_active", 4), DEFAULT_ACTIVE, "bot_active", rowNumber);
         long statusId = parseLongOrDefault(cell(row, hasHeader, headers, "bot_status", 5), DEFAULT_STATUS_ID, "bot_status", rowNumber);

@@ -19,6 +19,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -36,7 +37,7 @@ class OrderDtoMapperTest {
 
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final OrderDtoMapper mapper = new OrderDtoMapper(
-            new TelegramGroupLinkService(companyRepository),
+            new TelegramGroupLinkService(companyRepository, mock(UserRepository.class)),
             new MaxGroupLinkService(companyRepository, mock(MaxBotClient.class))
     );
 

@@ -61,6 +61,8 @@ export class WorkerReviewCardComponent {
   @Input() editingSideNoteKey: string | null = null;
   @Input() sideNoteDrafts: Record<string, string> = {};
   @Input() savedSideNoteKey: string | null = null;
+  @Input() requireCredentialCopyBeforeAccountAction = false;
+  @Input() accountActionCredentialsCopied = false;
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   @Output() readonly reviewFieldEditStarted = new EventEmitter<ReviewEditableField>();
@@ -328,6 +330,16 @@ export class WorkerReviewCardComponent {
       botFio !== 'добавьте аккаунты и нажмите сменить' &&
       !this.isTemplateBotName(botFio)
     );
+  }
+
+  accountActionLocked(): boolean {
+    return this.requireCredentialCopyBeforeAccountAction && !this.accountActionCredentialsCopied;
+  }
+
+  accountActionTitle(): string {
+    return this.accountActionLocked()
+      ? 'Сначала скопируйте логин и пароль аккаунта'
+      : 'Действие с аккаунтом';
   }
 
   private isTemplateBotName(botFio: string): boolean {

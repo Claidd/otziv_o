@@ -337,10 +337,18 @@
               <button type="button" (click)="copyReviewField(review, 'filialUrl')">
                 {{ copied() === review.id + '-filialUrl' ? 'готово' : 'ссылка' }}
               </button>
-              <button type="button" (click)="copyReviewField(review, 'botLogin')">
+              <button
+                type="button"
+                class="review-credential-action"
+                (click)="copyReviewField(review, 'botLogin')"
+              >
                 {{ copied() === review.id + '-botLogin' ? 'готово' : 'логин' }}
               </button>
-              <button type="button" (click)="copyReviewField(review, 'botPassword')">
+              <button
+                type="button"
+                class="review-credential-action"
+                (click)="copyReviewField(review, 'botPassword')"
+              >
                 {{ copied() === review.id + '-botPassword' ? 'готово' : 'пароль' }}
               </button>
               @if (showReviewHelpAction(details)) {
@@ -371,10 +379,20 @@
               <button type="button" (click)="copyReviewField(review, 'answer')">
                 {{ copied() === review.id + '-answer' ? 'готово' : 'ответ' }}
               </button>
-              <button type="button" (click)="changeBot(review)" [disabled]="isMutating('bot-' + review.id)">
+              <button
+                type="button"
+                (click)="changeBot(review)"
+                [disabled]="reviewAccountActionLocked(review) || isMutating('bot-' + review.id)"
+                [title]="reviewAccountActionTitle(review)"
+              >
                 {{ isMutating('bot-' + review.id) ? '...' : 'смена' }}
               </button>
-              <button type="button" (click)="deactivateBot(review)" [disabled]="!review.botId || isMutating('block-' + review.id)">
+              <button
+                type="button"
+                (click)="deactivateBot(review)"
+                [disabled]="reviewAccountActionLocked(review) || !review.botId || isMutating('block-' + review.id)"
+                [title]="reviewAccountActionTitle(review)"
+              >
                 {{ isMutating('block-' + review.id) ? '...' : 'блок' }}
               </button>
             </div>
@@ -1333,15 +1351,17 @@
                 >
               </label>
 
-              <label class="lead-edit-field">
-                <span>Пароль бота</span>
-                <input
-                  name="reviewBotPassword"
-                  type="text"
-                  [ngModel]="draft.botPassword"
-                  (ngModelChange)="setReviewEditField('botPassword', $event)"
-                >
-              </label>
+              @if (!hideReviewBotPasswordField()) {
+                <label class="lead-edit-field">
+                  <span>Пароль бота</span>
+                  <input
+                    name="reviewBotPassword"
+                    type="text"
+                    [ngModel]="draft.botPassword"
+                    (ngModelChange)="setReviewEditField('botPassword', $event)"
+                  >
+                </label>
+              }
 
               @if (canEditReviewPublish()) {
                 <label class="review-edit-check">

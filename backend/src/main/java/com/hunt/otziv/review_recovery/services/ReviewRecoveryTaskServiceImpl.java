@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -64,6 +65,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final ReviewRecoveryHoldService recoveryHoldService;
     private final GamificationEventService gamificationEventService;
     private final BusinessAuditService businessAuditService;
+    private final ReviewBotCooldownService botCooldownService;
 
     @Override
     @Transactional(readOnly = true)
@@ -197,11 +199,13 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Аккаунт можно менять только у активной задачи восстановления");
         }
 
+        Bot oldBot = task.getBot();
         Bot nextBot = pickReplacementBot(task);
         if (nextBot == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Нет доступных аккаунтов для восстановления");
         }
 
+        markReleasedIfChanged(oldBot, nextBot, "review recovery task bot changed");
         task.setBot(nextBot);
         task.setBotLoginSnapshot(botLogin(nextBot));
         task.setBotPasswordSnapshot(botPassword(nextBot));
@@ -673,6 +677,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         Long currentBotId = task.getBot() != null ? task.getBot().getId() : null;
         List<Bot> candidates = botService.getFindAllByFilialCityId(city.getId()).stream()
                 .filter(bot -> bot != null && bot.isActive() && bot.getId() != null)
+                .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !Objects.equals(bot.getId(), currentBotId))
                 .toList();
 
@@ -690,8 +695,17 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             return;
         }
 
+        markReleasedIfChanged(review.getBot(), bot, "review recovery source review bot changed");
         review.setBot(bot);
         reviewRepository.save(review);
+    }
+
+    private void markReleasedIfChanged(Bot oldBot, Bot newBot, String reason) {
+        Long oldBotId = oldBot != null ? oldBot.getId() : null;
+        Long newBotId = newBot != null ? newBot.getId() : null;
+        if (oldBotId != null && !Objects.equals(oldBotId, newBotId)) {
+            botCooldownService.markReleased(oldBot, reason);
+        }
     }
 
     private LocalDate safeDate(LocalDate date) {

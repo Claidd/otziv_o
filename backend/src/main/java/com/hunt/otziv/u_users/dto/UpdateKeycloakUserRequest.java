@@ -11,6 +11,8 @@ import java.util.Set;
 @Data
 public class UpdateKeycloakUserRequest {
 
+    private String username;
+
     @Email
     private String email;
 
@@ -19,6 +21,8 @@ public class UpdateKeycloakUserRequest {
     private String phoneNumber;
 
     private BigDecimal coefficient;
+
+    private String workerChatUrl;
 
     private boolean enabled = true;
 

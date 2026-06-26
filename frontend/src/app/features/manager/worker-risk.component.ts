@@ -11,6 +11,7 @@ import {
 } from '../../core/manager.api';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { PersonalRemindersService } from '../../shared/personal-reminders.service';
 import { ToastService } from '../../shared/toast.service';
 
 type RiskStatusTab = {
@@ -37,6 +38,7 @@ const EMPTY_PAGE: ManagerPage<WorkerRiskIncident> = {
 })
 export class WorkerRiskComponent {
   private readonly managerApi = inject(ManagerApi);
+  private readonly remindersService = inject(PersonalRemindersService);
   private readonly toast = inject(ToastService);
 
   readonly tabs: RiskStatusTab[] = [
@@ -204,6 +206,7 @@ export class WorkerRiskComponent {
       next: () => {
         this.toast.success(this.toastTitle(action));
         this.mutatingId.set(null);
+        this.remindersService.load(true);
         this.load();
       },
       error: (error) => {

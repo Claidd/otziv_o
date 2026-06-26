@@ -2,6 +2,7 @@ import type { Signal, WritableSignal } from '@angular/core';
 import type { OrderCardItem } from '../../core/manager.api';
 import type {
   WorkerApi,
+  WorkerActivitySource,
   WorkerBotItem,
   WorkerBoard,
   WorkerReviewItem,
@@ -37,6 +38,7 @@ export type WorkerBoardActionFacadeDeps = {
   loadBoard: () => void;
   patchBoard?: (updater: (board: WorkerBoard) => WorkerBoard) => void;
   errorMessage: (err: unknown, fallback: string) => string;
+  reviewActionSource?: () => WorkerActivitySource;
 };
 
 export class WorkerBoardActionFacade {
@@ -94,7 +96,7 @@ export class WorkerBoardActionFacade {
       ? this.deps.workerApi.changeRecoveryTaskBot(review.recoveryTaskId)
       : this.isBadTask(review) && review.badTaskId
       ? this.deps.workerApi.changeBadReviewTaskBot(review.badTaskId)
-      : this.deps.workerApi.changeReviewBot(review.id);
+      : this.deps.workerApi.changeReviewBot(review.id, this.deps.reviewActionSource?.());
 
     request.subscribe({
       next: (response) => {
@@ -129,7 +131,7 @@ export class WorkerBoardActionFacade {
       ? this.deps.workerApi.deactivateRecoveryTaskBot(review.recoveryTaskId, review.botId)
       : this.isBadTask(review) && review.badTaskId
       ? this.deps.workerApi.deactivateBadReviewTaskBot(review.badTaskId, review.botId)
-      : this.deps.workerApi.deactivateReviewBot(review.id, review.botId);
+      : this.deps.workerApi.deactivateReviewBot(review.id, review.botId, this.deps.reviewActionSource?.());
 
     request.subscribe({
       next: () => {

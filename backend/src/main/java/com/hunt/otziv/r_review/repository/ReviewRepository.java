@@ -719,6 +719,57 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                                                   @Param("localDate") LocalDate localDate);
 
     @Query("""
+        SELECT r.worker.id, COUNT(r.id)
+        FROM Review r
+        LEFT JOIN r.bot b
+        WHERE r.worker.id IN :workerIds
+          AND r.publishedDate <= :localDate
+          AND r.publish = false
+          AND r.vigul = false
+          AND (b IS NULL OR b.counter <= 2)
+          AND r.text IS NOT NULL
+          AND TRIM(r.text) <> ''
+          AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подсавить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подставить текст%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'
+        GROUP BY r.worker.id
+    """)
+    List<Object[]> countManagerControlNagulReviewsByWorkerIds(@Param("workerIds") Collection<Long> workerIds,
+                                                              @Param("localDate") LocalDate localDate);
+
+    @Query("""
+        SELECT r
+        FROM Review r
+        LEFT JOIN FETCH r.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH r.orderDetails d
+        LEFT JOIN FETCH d.order o
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH r.filial
+        LEFT JOIN FETCH r.bot b
+        WHERE r.worker.id IN :workerIds
+          AND r.publishedDate <= :localDate
+          AND r.publish = false
+          AND r.vigul = false
+          AND (b IS NULL OR b.counter <= 2)
+          AND r.text IS NOT NULL
+          AND TRIM(r.text) <> ''
+          AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'нужно подсавить%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подставить текст%'
+          AND LOWER(TRIM(r.text)) NOT LIKE 'подсавить текст%'
+        ORDER BY r.publishedDate ASC, r.id ASC
+    """)
+    List<Review> findManagerControlNagulReviewsByWorkerIds(@Param("workerIds") Collection<Long> workerIds,
+                                                           @Param("localDate") LocalDate localDate,
+                                                           Pageable pageable);
+
+    @Query("""
         SELECT CASE WHEN COUNT(r) > 0 THEN TRUE ELSE FALSE END
         FROM Review r
         WHERE r.worker = :worker

@@ -5,6 +5,7 @@ import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class BotServiceImplTest {
     @Mock
     private BusinessAuditService businessAuditService;
 
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
+
     @Test
     void claimNewAccountFromOwnCityUsesOnlyReadyActiveAccountInTargetCity() {
         BotServiceImpl service = service();
@@ -51,6 +55,8 @@ class BotServiceImplTest {
 
         when(botsRepository.findBotsByFioAndCity("Впиши Имя Фамилию", 320L))
                 .thenReturn(List.of(excluded, inactive, wrongStatus, selected));
+        when(botCooldownService.isAvailableForAssignment(wrongStatus)).thenReturn(true);
+        when(botCooldownService.isAvailableForAssignment(selected)).thenReturn(true);
 
         Optional<Bot> result = service.claimNewAccountFromOwnCity(city, Set.of(10L));
 
@@ -66,7 +72,8 @@ class BotServiceImplTest {
                 statusBotService,
                 botsRepository,
                 workerService,
-                businessAuditService
+                businessAuditService,
+                botCooldownService
         );
     }
 

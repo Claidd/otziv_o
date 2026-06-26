@@ -23,4 +23,6 @@ public interface PersonalReminderRepository extends JpaRepository<PersonalRemind
     );
 
     void deleteByUserIdAndSourceTypeAndSourceIdAndCompletedAtIsNull(Long userId, String sourceType, Long sourceId);
+
+    void deleteBySourceTypeAndSourceIdAndCompletedAtIsNull(String sourceType, Long sourceId);
 }

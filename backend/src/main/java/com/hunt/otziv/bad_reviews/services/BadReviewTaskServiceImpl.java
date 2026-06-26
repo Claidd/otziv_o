@@ -27,6 +27,7 @@ import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -76,6 +77,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ScheduledClientMessageAttemptRepository clientMessageAttemptRepository;
     private final GamificationEventService gamificationEventService;
     private final BusinessAuditService businessAuditService;
+    private final ReviewBotCooldownService botCooldownService;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -523,11 +525,13 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Transactional
     public BadReviewTask changeTaskBot(Long taskId) {
         BadReviewTask task = requireTask(taskId);
+        Bot oldBot = task.getBot();
         Bot nextBot = pickReplacementBot(task);
         if (nextBot == null) {
             throw new IllegalStateException("Нет доступных аккаунтов для плохой задачи");
         }
 
+        markReleasedIfChanged(oldBot, nextBot, "bad review task bot changed");
         task.setBot(nextBot);
         task.setBotLoginSnapshot(botLogin(nextBot));
         task.setBotPasswordSnapshot(botPassword(nextBot));
@@ -791,6 +795,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 .filter(Objects::nonNull)
                 .filter(Bot::isActive)
                 .filter(bot -> bot.getId() != null)
+                .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !Objects.equals(bot.getId(), currentBotId))
                 .toList();
 
@@ -819,8 +824,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return;
         }
 
+        markReleasedIfChanged(review.getBot(), bot, "bad review source review bot changed");
         review.setBot(bot);
         reviewRepository.save(review);
+    }
+
+    private void markReleasedIfChanged(Bot oldBot, Bot newBot, String reason) {
+        Long oldBotId = oldBot != null ? oldBot.getId() : null;
+        Long newBotId = newBot != null ? newBot.getId() : null;
+        if (oldBotId != null && !Objects.equals(oldBotId, newBotId)) {
+            botCooldownService.markReleased(oldBot, reason);
+        }
     }
 
     private BadReviewTaskSummary summaryFromRows(List<Object[]> rows) {

@@ -322,52 +322,52 @@ p {
   display: inline-flex;
   min-height: 1.65rem;
   align-items: center;
+  justify-content: center;
   border-radius: 999px;
   padding: 0.18rem 0.6rem;
   color: var(--otziv-primary);
   background: rgba(121, 151, 191, 0.12);
   font-size: 0.74rem;
   font-weight: 900;
+  line-height: 1;
 }
 
 .manager-row.red .status-badge {
-  color: var(--otziv-danger);
+  color: var(--otziv-dark);
   background: rgba(239, 49, 100, 0.1);
 }
 
 .manager-row.yellow .status-badge {
-  color: #8a6200;
+  color: var(--otziv-dark);
   background: rgba(247, 208, 96, 0.18);
 }
 
 .manager-row.green .status-badge {
-  color: var(--otziv-success);
+  color: var(--otziv-dark);
   background: rgba(76, 157, 135, 0.12);
 }
 
-.details-button {
-  display: inline-flex;
-  min-height: 2.35rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border: 1px solid rgba(121, 151, 191, 0.32);
-  border-radius: var(--otziv-small-radius);
-  padding: 0 0.9rem;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
-  font: inherit;
-  font-size: 0.78rem;
+.manager-card-head .manager-details-chip.manager-details-chip {
+  width: auto;
+  min-height: 2.05rem;
+  border: 1px solid rgba(121, 151, 191, 0.26);
+  border-radius: 999px;
+  padding: 0.36rem 0.65rem;
+  color: var(--otziv-dark);
+  background: rgba(121, 151, 191, 0.075);
+  box-shadow: none;
+  font-size: 0.76rem;
   font-weight: 900;
-  cursor: pointer;
 }
 
-.details-button:hover {
-  filter: brightness(0.96);
+.manager-card-head .manager-details-chip.manager-details-chip:hover:not(:disabled) {
+  border-color: rgba(121, 151, 191, 0.45);
+  background: rgba(121, 151, 191, 0.11);
+  box-shadow: 0 0.35rem 0.9rem rgba(38, 51, 77, 0.08);
 }
 
-.details-button .material-icons-sharp {
-  font-size: 1rem;
+.manager-details-chip .material-icons-sharp {
+  font-size: 1.05rem;
 }
 
 .manager-numbers {
@@ -411,7 +411,7 @@ p {
   overflow: hidden;
   color: var(--otziv-info);
   text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.18;
 }
 
 .control-group {
@@ -464,6 +464,7 @@ p {
   min-height: 2.05rem;
   max-width: 100%;
   align-items: center;
+  justify-content: center;
   gap: 0.42rem;
   overflow: hidden;
   border: 1px solid rgba(103, 116, 131, 0.18);
@@ -473,7 +474,16 @@ p {
   background: var(--otziv-white);
   font-size: 0.76rem;
   font-weight: 900;
+  line-height: 1;
   text-decoration: none;
+}
+
+.control-chip .material-icons-sharp,
+.clean-state .material-icons-sharp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .control-chip:hover {
@@ -491,44 +501,44 @@ p {
 
 .control-chip.critical {
   border-color: rgba(239, 49, 100, 0.2);
-  color: #9f173c;
+  color: var(--otziv-dark);
   background: rgba(239, 49, 100, 0.06);
 }
 
 .control-chip.workload {
   border-color: rgba(121, 151, 191, 0.26);
-  color: var(--otziv-primary);
+  color: var(--otziv-dark);
   background: rgba(121, 151, 191, 0.075);
 }
 
 .control-chip.handled {
   border-color: rgba(103, 116, 131, 0.12);
-  color: var(--otziv-info);
+  color: var(--otziv-dark);
   background: rgba(103, 116, 131, 0.055);
   opacity: 0.72;
 }
 
 .control-chip.action-acknowledged {
   border-color: rgba(76, 157, 135, 0.28);
-  color: #217b69;
+  color: var(--otziv-dark);
   background: rgba(76, 157, 135, 0.09);
 }
 
 .control-chip.action-action-taken {
   border-color: rgba(121, 151, 191, 0.36);
-  color: #426fa8;
+  color: var(--otziv-dark);
   background: rgba(121, 151, 191, 0.11);
 }
 
 .control-chip.action-deferred {
   border-color: rgba(247, 208, 96, 0.42);
-  color: #8a6200;
+  color: var(--otziv-dark);
   background: rgba(247, 208, 96, 0.16);
 }
 
 .control-chip.action-resolved {
   border-color: rgba(103, 116, 131, 0.2);
-  color: var(--otziv-info);
+  color: var(--otziv-dark);
   background: rgba(103, 116, 131, 0.08);
 }
 
@@ -543,7 +553,7 @@ p {
   align-items: center;
   border-radius: 999px;
   padding: 0.08rem 0.42rem;
-  color: #9f173c;
+  color: var(--otziv-dark);
   background: rgba(239, 49, 100, 0.1);
   font-size: 0.68rem;
   font-weight: 900;
@@ -855,7 +865,7 @@ p {
   max-height: calc(100vh - 1.4rem);
   min-width: 0;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   border-radius: var(--otziv-card-radius);
   background: var(--otziv-white);
   box-shadow: 0 1.4rem 4rem rgba(15, 23, 42, 0.24);
@@ -903,10 +913,7 @@ p {
 
 .detail-list {
   display: grid;
-  flex: 1 1 auto;
   gap: 0.8rem;
-  min-height: 0;
-  overflow-y: auto;
   padding: 0.85rem 1.2rem 0.95rem;
 }
 
@@ -1014,17 +1021,17 @@ p {
 
 .detail-examples {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.55rem;
 }
 
 .detail-example {
   display: grid;
   grid-template-columns: 2rem minmax(0, 1fr);
   align-items: start;
-  gap: 0.55rem;
+  gap: 0.65rem;
   border: 1px solid rgba(103, 116, 131, 0.14);
   border-radius: var(--otziv-small-radius);
-  padding: 0.6rem 0.7rem;
+  padding: 0.7rem 0.75rem;
   color: inherit;
   background: var(--otziv-white);
 }
@@ -1036,6 +1043,11 @@ p {
 
 .detail-example.handled {
   opacity: 0.72;
+}
+
+.detail-example.waiting-client {
+  border-color: rgba(247, 184, 49, 0.48);
+  background: linear-gradient(90deg, rgba(255, 248, 229, 0.88), var(--otziv-white) 42%);
 }
 
 .detail-example > .material-icons-sharp {
@@ -1052,14 +1064,14 @@ p {
 .detail-example-body {
   display: grid;
   min-width: 0;
-  gap: 0.55rem;
+  gap: 1.05rem;
 }
 
 .detail-example-link {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
-  gap: 0.7rem;
+  gap: 0.9rem;
   min-width: 0;
   color: inherit;
   text-decoration: none;
@@ -1067,8 +1079,11 @@ p {
 
 .detail-example-text {
   display: grid;
-  min-width: 0;
-  gap: 0.2rem;
+  gap: 0.42rem;
+  border: 1px solid #cfd8e6;
+  border-radius: 1rem;
+  padding: 0.68rem 0.78rem;
+  background: #fff;
 }
 
 .detail-example-text strong {
@@ -1092,6 +1107,23 @@ p {
 .detail-example-text small b,
 .detail-example-text small span {
   min-width: 0;
+}
+
+.waiting-client-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  border: 1px solid rgba(214, 152, 29, 0.38);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  color: #8a6200;
+  background: rgba(255, 239, 196, 0.9);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.waiting-client-badge .material-icons-sharp {
+  font-size: 0.82rem;
 }
 
 .detail-example-text em {
@@ -1183,7 +1215,7 @@ p {
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.78rem;
   border: 0;
   border-radius: 0;
   padding: 0;
@@ -1203,11 +1235,12 @@ p {
   border: 1px solid rgba(121, 151, 191, 0.26);
   border-radius: 999px;
   padding: 0.36rem 0.65rem;
-  color: var(--otziv-primary);
+  color: var(--otziv-dark);
   background: rgba(121, 151, 191, 0.075);
   font: inherit;
   font-size: 0.76rem;
   font-weight: 900;
+  line-height: 1;
   text-decoration: none;
   cursor: pointer;
 }
@@ -1215,21 +1248,21 @@ p {
 .detail-modal .review-followup .review-action.primary,
 .detail-modal .review-followup button.review-action.primary.review-action {
   border-color: rgba(239, 49, 100, 0.2);
-  color: #9f173c;
+  color: var(--otziv-dark);
   background: rgba(239, 49, 100, 0.06);
 }
 
 .detail-modal .review-followup .review-action.done,
 .detail-modal .review-followup button.review-action.done.review-action {
   border-color: rgba(76, 157, 135, 0.28);
-  color: #217b69;
+  color: var(--otziv-dark);
   background: rgba(76, 157, 135, 0.09);
 }
 
 .detail-modal .worker-request .review-action.primary,
 .detail-modal .worker-request button.review-action.primary.review-action {
   border-color: rgba(76, 157, 135, 0.28);
-  color: #217b69;
+  color: var(--otziv-dark);
   background: rgba(76, 157, 135, 0.09);
 }
 
@@ -1244,7 +1277,11 @@ p {
 }
 
 .detail-modal .review-followup .review-action .material-icons-sharp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1rem;
+  line-height: 1;
 }
 
 .review-followup small {
@@ -1268,16 +1305,17 @@ p {
 .detail-example-control {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.45rem;
+  gap: 0.95rem;
 }
 
 .detail-example-control textarea {
   width: 100%;
   min-width: 0;
+  min-height: 2.75rem;
   resize: vertical;
   border: 1px solid rgba(103, 116, 131, 0.16);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.48rem 0.6rem;
+  border-radius: 999px;
+  padding: 0.72rem 0.92rem;
   color: var(--otziv-dark);
   background: rgba(255, 255, 255, 0.86);
   font: inherit;
@@ -1287,24 +1325,36 @@ p {
 .detail-example-actions {
   display: flex;
   align-items: flex-start;
-  gap: 0.3rem;
+  gap: 0.76rem;
 }
 
 .detail-modal .detail-example-control .detail-example-actions button {
   display: inline-flex;
-  width: 2.05rem;
-  height: 2.05rem;
+  width: 2.75rem;
+  height: 2.75rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(239, 49, 100, 0.2);
+  border: 1px solid rgba(103, 116, 131, 0.18);
   border-radius: 999px;
-  color: #9f173c;
-  background: rgba(239, 49, 100, 0.06);
+  color: var(--otziv-info);
+  background: rgba(103, 116, 131, 0.055);
   cursor: pointer;
 }
 
+.detail-modal .detail-example-control .detail-example-actions button.action-defer {
+  border-color: rgba(247, 184, 49, 0.34);
+  color: #8a6200;
+  background: rgba(255, 239, 196, 0.55);
+}
+
+.detail-modal .detail-example-control .detail-example-actions button.action-done {
+  border-color: rgba(76, 157, 135, 0.34);
+  color: #217b69;
+  background: rgba(76, 157, 135, 0.1);
+}
+
 .detail-modal .detail-example-control .detail-example-actions button:hover:not(:disabled) {
-  border-color: rgba(239, 49, 100, 0.34);
+  border-color: rgba(121, 151, 191, 0.45);
   box-shadow: 0 0.35rem 0.9rem rgba(38, 51, 77, 0.08);
 }
 
@@ -1314,7 +1364,7 @@ p {
 }
 
 .detail-example-actions .material-icons-sharp {
-  font-size: 1rem;
+  font-size: 1.08rem;
 }
 
 .detail-example-more {
@@ -1329,7 +1379,7 @@ p {
 
 .detail-comment {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.55rem;
 }
 
 .detail-comment span {
@@ -1341,10 +1391,11 @@ p {
 .detail-comment textarea {
   width: 100%;
   min-width: 0;
+  min-height: 4.35rem;
   resize: vertical;
   border: 1px solid rgba(103, 116, 131, 0.18);
-  border-radius: var(--otziv-small-radius);
-  padding: 0.65rem 0.75rem;
+  border-radius: 1.1rem;
+  padding: 0.78rem 0.92rem;
   color: var(--otziv-dark);
   background: var(--otziv-white);
   font: inherit;
@@ -1725,8 +1776,9 @@ p {
     grid-row: auto;
   }
 
-  .details-button {
-    width: 100%;
+  .manager-details-chip {
+    justify-self: start;
+    width: auto;
   }
 
   .manager-numbers,
@@ -1764,55 +1816,169 @@ p {
 
   .day-control-panel {
     flex-wrap: wrap;
-    align-items: flex-start;
+  }
+
+  .stage-actions,
+  .close-blockers {
+    flex: 1 1 100%;
+    justify-content: center;
   }
 
   .stage-actions {
-    flex: 1 1 auto;
     flex-wrap: wrap;
-  }
-
-  .close-blockers {
-    flex: 1 1 100%;
-    max-width: 100%;
   }
 
   .detail-item-main {
     flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .detail-item-main > div,
+  .detail-item-main h3,
+  .detail-item-main p {
+    width: 100%;
+    text-align: center;
   }
 
   .detail-badges {
-    justify-content: flex-start;
+    justify-content: center;
+    width: 100%;
   }
 
   .detail-item {
     gap: 0.65rem;
     padding: 0.75rem;
+    justify-items: center;
+  }
+
+  .detail-meta,
+  .detail-actions {
+    justify-content: center;
+  }
+
+  .detail-meta span,
+  .detail-meta a,
+  .detail-actions span {
+    justify-content: center;
+    text-align: center;
   }
 
   .detail-example {
-    grid-template-columns: 1.75rem minmax(0, 1fr);
-    gap: 0.45rem;
-    padding: 0.55rem;
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 0.72rem;
+    padding: 0.86rem 0.72rem;
+    text-align: center;
   }
 
   .detail-example > .material-icons-sharp {
-    width: 1.75rem;
-    height: 1.75rem;
+    position: absolute;
+    top: 0.78rem;
+    left: 0.78rem;
+    width: 1.85rem;
+    height: 1.85rem;
+    font-size: 0.92rem;
+  }
+
+  .detail-example-body {
+    width: 100%;
+    gap: 1.12rem;
+    justify-items: center;
+    padding-top: 2.15rem;
   }
 
   .detail-example-link,
   .detail-example-control {
     grid-template-columns: 1fr;
+    justify-items: center;
+    width: 100%;
   }
 
-  .detail-example-flags,
+  .detail-example-link {
+    position: relative;
+    gap: 0.82rem;
+  }
+
+  .detail-example-text {
+    width: 100%;
+    gap: 0.5rem;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .detail-example-text strong {
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .detail-example-text small {
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.32rem;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  .detail-example-text em {
+    width: 100%;
+    line-height: 1.35;
+  }
+
   .detail-example-actions {
-    justify-content: flex-start;
+    justify-content: center;
+  }
+
+  .detail-example-flags {
+    position: absolute;
+    top: -2.15rem;
+    right: 0;
+    width: auto;
+    max-width: calc(100% - 2.6rem);
+    justify-content: flex-end;
+    padding-left: 0;
+  }
+
+  .review-followup {
+    width: 100%;
+    justify-content: center;
+    gap: 0.78rem;
+  }
+
+  .review-followup small {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .detail-modal .review-followup .review-action,
+  .detail-modal .review-followup button.review-action.review-action,
+  .detail-modal .review-followup a.review-action.review-action {
+    min-height: 2.75rem;
+    padding-inline: 0.7rem;
+  }
+
+  .worker-request small {
+    flex-basis: 100%;
   }
 
   .detail-example-control textarea {
-    min-height: 2.25rem;
+    min-height: 3rem;
+    text-align: center;
+  }
+
+  .detail-example-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 1.25rem;
+    padding-top: 0.18rem;
+  }
+
+  .detail-modal .detail-example-control .detail-example-actions button {
+    width: 2.9rem;
+    height: 2.9rem;
   }
 
   .event-log {
@@ -1838,10 +2004,6 @@ p {
     min-height: 6.2rem;
   }
 
-  .manager-numbers {
-    grid-template-columns: 1fr;
-  }
-
   .detail-backdrop {
     padding: 0.45rem;
   }
@@ -1856,7 +2018,26 @@ p {
     font-size: 1.05rem;
   }
 
-  .detail-example-text strong {
-    white-space: normal;
+  .detail-example {
+    padding: 0.68rem;
   }
+
+  .detail-example > .material-icons-sharp {
+    top: 0.68rem;
+    left: 0.68rem;
+  }
+
+  .detail-example-flags {
+    gap: 0.28rem;
+  }
+
+  .detail-modal .worker-request .review-action {
+    flex: 1 1 33%;
+    min-width: 0;
+    gap: 0.22rem;
+    padding: 0.34rem 0.24rem;
+    font-size: clamp(0.56rem, 2.65vw, 0.66rem);
+    line-height: 1.05;
+  }
+
 }

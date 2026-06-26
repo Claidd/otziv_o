@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import java.time.LocalDate;
 
 @Entity
 @Data
@@ -43,6 +44,9 @@ public class Bot {
     //    счетчик количеста опубликованных с бота отзывов
     @Column(name = "bot_counter")
     private int counter;
+
+    @Column(name = "bot_cooldown_until")
+    private LocalDate cooldownUntil;
 
     //    указатель статуса бота: заблокирован или готов к работе
     @OneToOne(fetch = FetchType.LAZY)

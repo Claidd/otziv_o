@@ -6,6 +6,7 @@ import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -44,13 +45,15 @@ public class BotServiceImpl implements BotService {
     private final BotsRepository botsRepository;
     private final WorkerService workerService;
     private final BusinessAuditService businessAuditService;
+    private final ReviewBotCooldownService botCooldownService;
 
-    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService, BusinessAuditService businessAuditService) {
+    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService, BusinessAuditService businessAuditService, ReviewBotCooldownService botCooldownService) {
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botsRepository = botsRepository;
         this.workerService = workerService;
         this.businessAuditService = businessAuditService;
+        this.botCooldownService = botCooldownService;
     }
 
     @Override
@@ -234,6 +237,7 @@ public class BotServiceImpl implements BotService {
         Bot reserveBot = botsRepository.findReserveBots(RESERVE_BOT_NAMES, RESERVE_BOT_CITY_IDS, READY_STATUS).stream()
                 .filter(bot -> bot.getId() != null)
                 .filter(bot -> !excludedIds.contains(bot.getId()))
+                .filter(botCooldownService::isAvailableForAssignment)
                 .findFirst()
                 .orElse(null);
 
@@ -271,6 +275,7 @@ public class BotServiceImpl implements BotService {
                 NEW_ACCOUNT_SOURCE_CITY_ID
         ));
         candidates.removeIf(bot -> bot.getId() == null || !bot.isActive() || excludedIds.contains(bot.getId()));
+        candidates.removeIf(bot -> !botCooldownService.isAvailableForAssignment(bot));
 
         if (candidates.isEmpty()) {
             log.warn("Нет доступных аккаунтов '{}' в городе {}", NEW_ACCOUNT_NAME, NEW_ACCOUNT_SOURCE_CITY_ID);
@@ -310,6 +315,7 @@ public class BotServiceImpl implements BotService {
         candidates.removeIf(bot -> bot.getId() == null
                 || !bot.isActive()
                 || excludedIds.contains(bot.getId())
+                || !botCooldownService.isAvailableForAssignment(bot)
                 || bot.getStatus() == null
                 || bot.getStatus().getBotStatusTitle() == null
                 || !READY_STATUS.equals(bot.getStatus().getBotStatusTitle().trim()));

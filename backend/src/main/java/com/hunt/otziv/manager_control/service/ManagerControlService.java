@@ -2,9 +2,15 @@ package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
@@ -58,6 +64,7 @@ import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
@@ -81,18 +88,21 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ManagerControlService {
 
     private static final int DETAIL_EXAMPLE_LIMIT = 5;
     private static final int MANUAL_FOLLOW_UP_DAYS = 2;
     private static final int WORKER_TASK_FOLLOW_UP_HOURS = 3;
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
+    private static final int WORKER_ORDER_UNCHANGED_DAYS = 2;
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
     private static final LocalTime MORNING_STAGE_START = LocalTime.of(5, 0);
     private static final LocalTime DAY_STAGE_START = LocalTime.of(14, 0);
@@ -100,6 +110,9 @@ public class ManagerControlService {
     private static final String SOURCE_CONTROL_OWNER = "MANAGER_CONTROL_OWNER";
     private static final String SOURCE_WORKER_TASK_REQUEST = "MANAGER_CONTROL_WORKER_TASK_REQUEST";
     private static final String ENTITY_PUBLISH_REVIEW = "PUBLISH_REVIEW";
+    private static final String ENTITY_NAGUL_REVIEW = "NAGUL_REVIEW";
+    private static final String ENTITY_WORKER_ORDER_NEW = "WORKER_ORDER_NEW";
+    private static final String ENTITY_WORKER_ORDER_CORRECT = "WORKER_ORDER_CORRECT";
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
             "Архив",
@@ -128,8 +141,8 @@ public class ManagerControlService {
             "Ожидает общего счета",
             "Выставлен счет",
             "Напоминание",
-            "Не оплачено",
             "Требует внимания",
+            "Не оплачено",
             "Бан"
     );
     private static final Set<String> PAYMENT_AUTOMATION_STATUSES = Set.of(
@@ -139,6 +152,7 @@ public class ManagerControlService {
             "Не оплачено"
     );
     private static final Set<String> MANUAL_CONTACT_ORDER_STATUSES = Set.of(
+            "Новый",
             "На проверке",
             "Опубликовано",
             "Выставлен счет",
@@ -193,6 +207,9 @@ public class ManagerControlService {
     private final TelegramService telegramService;
     private final OrderService orderService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
+    private final ScheduledClientMessageService scheduledClientMessageService;
+    private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
+    private final ClientChatMessageSender clientChatMessageSender;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ReviewService reviewService;
@@ -207,6 +224,7 @@ public class ManagerControlService {
 
     @Transactional
     public ManagerControlSummaryResponse today(Principal principal, Authentication authentication) {
+        reconcileClientMessagesForControl();
         LocalDate today = LocalDate.now();
         List<ManagerControlManagerResponse> managers = visibleManagers(principal, authentication).stream()
                 .map(manager -> managerControl(manager, today))
@@ -239,6 +257,17 @@ public class ManagerControlService {
                 attention,
                 managers
         );
+    }
+
+    private void reconcileClientMessagesForControl() {
+        if (scheduledClientMessageService == null) {
+            return;
+        }
+        try {
+            scheduledClientMessageService.reconcileCandidatesNow();
+        } catch (Exception e) {
+            log.warn("Не удалось досоздать очередь клиентских сообщений перед контролем менеджеров", e);
+        }
     }
 
     @Scheduled(fixedDelay = 600_000L, initialDelay = 120_000L)
@@ -388,14 +417,29 @@ public class ManagerControlService {
         ManagerDailyControlItemStatus status = itemStatusForAction(actionType);
         String comment = limit(request == null ? null : request.comment(), 1000);
         boolean manualWorkerNotification = Boolean.TRUE.equals(request == null ? null : request.manualWorkerNotification());
-        if (manualWorkerNotification && isWorkerTaskConcrete(concreteItem) && !safe(comment).toLowerCase(Locale.ROOT).contains("вручн")) {
+        boolean specialistActionConcrete = isSpecialistActionConcrete(concreteItem);
+        if (manualWorkerNotification && specialistActionConcrete && safe(comment).isBlank()) {
             comment = manualWorkerNotificationComment(concreteItem);
         }
         requireCommentIfNeeded(concreteItem.getParentItem(), actionType, comment);
         LocalDateTime now = LocalDateTime.now();
+        concreteItem.setComment(comment);
+        if (specialistActionConcrete
+                && status != ManagerDailyControlItemStatus.RESOLVED
+                && actionType == ManagerDailyControlActionType.ACTION_TAKEN
+                && !notifyWorkerAboutTaskRequest(concreteItem, control)) {
+            concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
+            concreteItem.setActionType(null);
+            concreteItem.setResolvedAt(null);
+            concreteItem.setFollowUpAt(null);
+            concreteItem.setLastManualTouchAt(now);
+            ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
+            control.setLastActivityAt(now);
+            dailyControlRepository.save(control);
+            return concreteItemResponse(savedConcreteItem);
+        }
         concreteItem.setStatus(status);
         concreteItem.setActionType(actionType);
-        concreteItem.setComment(comment);
         concreteItem.setResolvedAt(status == ManagerDailyControlItemStatus.RESOLVED ? now : null);
         boolean movedToReminder = false;
         if ("ORDER".equals(concreteItem.getEntityType()) && status != ManagerDailyControlItemStatus.RESOLVED) {
@@ -404,21 +448,11 @@ public class ManagerControlService {
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
                 movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem);
             }
-        } else if (isPublishReviewConcrete(concreteItem) && status != ManagerDailyControlItemStatus.RESOLVED) {
-            concreteItem.setLastManualTouchAt(now);
-            concreteItem.setFollowUpAt(workerTaskFollowUpAt(now));
-        } else if (isWorkerTaskConcrete(concreteItem)
+        } else if (specialistActionConcrete
                 && status != ManagerDailyControlItemStatus.RESOLVED
                 && actionType != ManagerDailyControlActionType.ACKNOWLEDGED) {
             concreteItem.setLastManualTouchAt(now);
             concreteItem.setFollowUpAt(workerTaskFollowUpAt(now));
-            if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
-                if (manualWorkerNotification) {
-                    clearWorkerTelegramState(concreteItem);
-                } else {
-                    notifyWorkerAboutTaskRequest(concreteItem, control);
-                }
-            }
         } else if (status == ManagerDailyControlItemStatus.RESOLVED) {
             concreteItem.setFollowUpAt(null);
             concreteItem.setLastManualTouchAt(now);
@@ -453,6 +487,218 @@ public class ManagerControlService {
         return concreteItemResponse(savedConcreteItem);
     }
 
+    @Transactional
+    public ManagerControlConcreteItemResponse sendClientMessage(Long concreteItemId, Principal principal, Authentication authentication) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControl control = concreteItem.getControl();
+        requireControlAccess(control, principal, authentication);
+        String entityType = safe(concreteItem.getEntityType());
+        if (!"ORDER".equals(entityType) && !ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автоотправка клиенту доступна только для заказов");
+        }
+        Order order = orderRepository.findById(concreteItem.getEntityId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
+        String message = clientControlMessage(concreteItem, order);
+        if (message.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для карточки не удалось собрать текст клиенту");
+        }
+
+        long startedAt = System.currentTimeMillis();
+        ClientMessageSendResult result;
+        try {
+            result = clientChatMessageSender.send(
+                    order.getCompany(),
+                    order.getManager() == null ? null : order.getManager().getClientId(),
+                    order.getCompany() == null ? null : order.getCompany().getGroupId(),
+                    message
+            );
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Сообщение клиенту не отправлено: " + readableException(e), e);
+        }
+        if (!result.sent()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сообщение клиенту не отправлено: " + clientMessageError(result)
+            );
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        concreteItem.setLastManualTouchAt(now);
+        concreteItem.setFollowUpAt(now.plusDays(MANUAL_FOLLOW_UP_DAYS));
+        concreteItem.setResolvedAt(null);
+        String statusNote = applyOrderStatusAfterClientSend(concreteItem, order);
+        concreteItem.setComment(limit("Сообщение клиенту отправлено через " + safe(result.channel()) + statusNote, 1000));
+        ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
+
+        updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
+
+        if (control.getStartedAt() == null) {
+            control.setStartedAt(now);
+        }
+        control.setLastActivityAt(now);
+        control.setStatus(recalculateControlStatus(control));
+        dailyControlRepository.save(control);
+
+        saveEvent(
+                control,
+                savedConcreteItem.getParentItem(),
+                actorUserId(principal),
+                ManagerDailyControlEventType.ITEM_ACTION,
+                ManagerDailyControlActionType.ACTION_TAKEN,
+                "Клиенту отправлено сообщение по карточке: " + concreteItem.getTitle()
+                        + " через " + safe(result.channel())
+                        + " за " + (System.currentTimeMillis() - startedAt) + " мс"
+                        + statusNote
+        );
+
+        return concreteItemResponse(savedConcreteItem, message);
+    }
+
+    @Transactional
+    public ManagerControlConcreteItemResponse repairConcreteItem(Long concreteItemId, Principal principal, Authentication authentication) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControl control = concreteItem.getControl();
+        requireControlAccess(control, principal, authentication);
+        String entityType = safe(concreteItem.getEntityType());
+        if (!ENTITY_WORKER_ORDER_NEW.equals(entityType) && !"ORDER".equals(entityType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автопочинка доступна только для заказов с клиентской автоматизацией");
+        }
+        Order order = orderRepository.findById(concreteItem.getEntityId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
+        if (!order.isWaitingForClient() && ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Заказ уже не отмечен как «ждет клиента»",
+                    principal,
+                    "Статус ожидания клиента уже снят"
+            );
+        }
+
+        if (!ENTITY_WORKER_ORDER_NEW.equals(entityType) || !order.isWaitingForClient()) {
+            return repairOrderAutomationConcreteItem(concreteItem, control, order, principal);
+        }
+
+        LocalDate today = LocalDate.now();
+        long waitingDays = daysSince(clientTextWaitingControlDate(order), today);
+        if (waitingDays > ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS) {
+            order.setWaitingForClient(false);
+            order.setWaitingForClientChangedAt(null);
+            orderRepository.save(order);
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Снят зависший статус «ждет клиента» после " + waitingDays + " дн.",
+                    principal,
+                    "Снят зависший статус ожидания клиента"
+            );
+        }
+
+        scheduledClientMessageService.ensureClientTextReminderForOrder(order);
+        WorkerClientTextDecision decision = workerOrderClientTextDecision(
+                order,
+                "Новый",
+                today,
+                scheduledStatesByOrderId(List.of(order))
+        );
+        if (decision.include()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автоответчик не удалось починить: " + safe(decision.reason())
+            );
+        }
+
+        return resolveRepairedConcreteItem(
+                concreteItem,
+                control,
+                "Очередь CLIENT_TEXT_REMINDER восстановлена, автоответчик продолжит напоминания",
+                principal,
+                "Восстановлена очередь CLIENT_TEXT_REMINDER"
+        );
+    }
+
+    private ManagerControlConcreteItemResponse repairOrderAutomationConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Order order,
+            Principal principal
+    ) {
+        Optional<ClientMessageScenario> scenario = scheduledClientMessageService.ensureOrderAutomationForOrder(order);
+        if (scenario.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Для текущего статуса заказа нет автоматической очереди, которую можно восстановить"
+            );
+        }
+
+        ScheduledClientMessageState state = currentOrderAutomationState(
+                order,
+                scenario.get(),
+                scheduledStatesByOrderId(List.of(order))
+        );
+        if (!clientTextReminderIsHealthy(state)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автоответчик не удалось починить: " + clientTextReminderProblem(state)
+            );
+        }
+
+        return resolveRepairedConcreteItem(
+                concreteItem,
+                control,
+                "Очередь " + scenario.get().name() + " восстановлена, автоответчик продолжит работу",
+                principal,
+                "Восстановлена очередь " + scenario.get().name()
+        );
+    }
+
+    private ManagerControlConcreteItemResponse resolveRepairedConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            String comment,
+            Principal principal,
+            String eventComment
+    ) {
+        LocalDateTime now = LocalDateTime.now();
+        concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
+        concreteItem.setComment(limit(comment, 1000));
+        concreteItem.setResolvedAt(now);
+        concreteItem.setFollowUpAt(null);
+        concreteItem.setLastManualTouchAt(now);
+        ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
+
+        updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
+
+        if (control.getStartedAt() == null) {
+            control.setStartedAt(now);
+        }
+        control.setLastActivityAt(now);
+        control.setStatus(recalculateControlStatus(control));
+        dailyControlRepository.save(control);
+
+        saveEvent(
+                control,
+                savedConcreteItem.getParentItem(),
+                actorUserId(principal),
+                ManagerDailyControlEventType.ITEM_RESOLVED,
+                ManagerDailyControlActionType.RESOLVED,
+                eventComment + ": " + savedConcreteItem.getTitle()
+        );
+
+        return concreteItemResponse(savedConcreteItem);
+    }
+
     private boolean movePaymentOrderToReminderAfterManualSend(ManagerDailyControlConcreteItem concreteItem) {
         Long orderId = concreteItem.getEntityId();
         if (orderId == null) {
@@ -482,6 +728,128 @@ public class ManagerControlService {
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось перевести заказ в Напоминание", e);
         }
+    }
+
+    private String clientControlMessage(ManagerDailyControlConcreteItem concreteItem, Order order) {
+        String status = orderStatusTitle(order);
+        if (!MANUAL_CONTACT_ORDER_STATUSES.contains(status)) {
+            return "";
+        }
+        if ("Новый".equals(status) && order != null && order.isWaitingForClient()) {
+            return clientTextContactText(order);
+        }
+        if ("На проверке".equals(status)) {
+            String detailsId = orderDetailsId(concreteItem, order);
+            if (detailsId.isBlank()) {
+                return "";
+            }
+            return List.of(
+                    orderHeading(order),
+                    "Здравствуйте, напоминаем, пожалуйста, проверьте шаблоны отзывов и внесите правки, если они нужны.",
+                    "Ссылка на проверку отзывов: " + absoluteAppUrl("/" + detailsId)
+            ).stream().filter(value -> !safe(value).isBlank()).collect(Collectors.joining("\n\n"));
+        }
+        return paymentContactText(order, status);
+    }
+
+    private String paymentContactText(Order order, String status) {
+        String payText = safe(order == null || order.getManager() == null ? null : order.getManager().getPayText());
+        if (payText.isBlank()) {
+            payText = switch (status) {
+                case "Опубликовано" -> "Здравствуйте, ваш заказ выполнен, просьба оплатить.";
+                case "Не оплачено" -> "Здравствуйте, напоминаем, пожалуйста, по оплате заказа. Пришлите чек, пожалуйста, как оплатите.";
+                default -> "Здравствуйте, напоминаем, пожалуйста, об оплате заказа. Пришлите чек, пожалуйста, как оплатите.";
+            };
+        }
+        String amount = money(order == null ? null : order.getSum());
+        String body = amount.isBlank() ? payText : payText + " К оплате: " + amount + " руб.";
+        return List.of(orderHeading(order), body).stream()
+                .filter(value -> !safe(value).isBlank())
+                .collect(Collectors.joining("\n\n"));
+    }
+
+    private String clientTextContactText(Order order) {
+        if (scheduledClientMessageService != null) {
+            try {
+                return scheduledClientMessageService.clientTextReminderText(order);
+            } catch (Exception e) {
+                log.warn("Не удалось собрать текст автонапоминания клиенту для заказа {}", order == null ? null : order.getId(), e);
+            }
+        }
+        return List.of(
+                orderHeading(order),
+                "Здравствуйте! Напоминаем, пожалуйста, пришлите текст или пожелания для отзывов по заказу №"
+                        + (order == null || order.getId() == null ? "" : order.getId())
+                        + ", чтобы мы могли продолжить работу."
+        ).stream().filter(value -> !safe(value).isBlank()).collect(Collectors.joining("\n\n"));
+    }
+
+    private String applyOrderStatusAfterClientSend(ManagerDailyControlConcreteItem concreteItem, Order order) {
+        String currentStatus = orderStatusTitle(order);
+        String targetStatus = switch (currentStatus) {
+            case "Опубликовано" -> ORDER_STATUS_TO_PAY;
+            case ORDER_STATUS_TO_PAY -> ORDER_STATUS_REMINDER;
+            default -> "";
+        };
+        if (targetStatus.isBlank() || targetStatus.equals(currentStatus)) {
+            return "";
+        }
+        try {
+            boolean changed = orderService.changeStatusForOrder(order.getId(), targetStatus);
+            if (changed) {
+                concreteItem.setStatusLabel(targetStatus);
+                return ". Статус заказа переведен в " + targetStatus;
+            }
+            return ". Сообщение отправлено, но статус заказа не изменился";
+        } catch (Exception e) {
+            return ". Сообщение отправлено, но статус заказа не изменился: " + readableException(e);
+        }
+    }
+
+    private String orderDetailsId(ManagerDailyControlConcreteItem concreteItem, Order order) {
+        String detailsId = safe(concreteItem == null ? null : concreteItem.getOrderDetailsId());
+        if (!detailsId.isBlank()) {
+            return detailsId;
+        }
+        if (order == null || order.getDetails() == null || order.getDetails().isEmpty() || order.getDetails().getFirst().getId() == null) {
+            return "";
+        }
+        return order.getDetails().getFirst().getId().toString();
+    }
+
+    private String orderHeading(Order order) {
+        if (order == null) {
+            return "";
+        }
+        String company = order.getCompany() == null ? "" : safe(order.getCompany().getTitle());
+        String filial = order.getFilial() == null ? "" : safe(order.getFilial().getTitle());
+        return List.of(company, filial).stream()
+                .filter(value -> !safe(value).isBlank())
+                .collect(Collectors.joining(" - "));
+    }
+
+    private String orderStatusTitle(Order order) {
+        return order == null || order.getStatus() == null ? "" : safe(order.getStatus().getTitle());
+    }
+
+    private String clientMessageError(ClientMessageSendResult result) {
+        if (result == null) {
+            return "нет ответа от сервиса отправки";
+        }
+        String message = safe(result.errorMessage());
+        if (!message.isBlank()) {
+            return message;
+        }
+        String code = safe(result.errorCode());
+        return code.isBlank() ? "сервис отправки не подтвердил доставку" : code;
+    }
+
+    private String readableException(Exception e) {
+        if (e == null) {
+            return "неизвестная ошибка";
+        }
+        String message = e.getMessage();
+        return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
     }
 
     @Transactional
@@ -556,6 +924,7 @@ public class ManagerControlService {
 
     @Transactional
     public ManagerControlManagerDetailResponse managerDetails(Long managerId, Principal principal, Authentication authentication) {
+        reconcileClientMessagesForControl();
         if (managerId == null || managerId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный менеджер");
         }
@@ -758,8 +1127,16 @@ public class ManagerControlService {
     }
 
     private boolean isActiveControlItem(ManagerDailyControlItem item) {
-        return item == null
-                || item.getItemType() != ManagerDailyControlItemType.WORKER_SECTION
+        if (item == null) {
+            return false;
+        }
+        if (item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+            return false;
+        }
+        if (item.getGroup() == ManagerDailyControlGroup.WORKLOAD) {
+            return false;
+        }
+        return item.getItemType() != ManagerDailyControlItemType.WORKER_SECTION
                 || !"risk".equals(item.getSectionCode());
     }
 
@@ -842,7 +1219,7 @@ public class ManagerControlService {
 
         List<ManagerControlProblemResponse> problems = new ArrayList<>();
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
-        addProblem(problems, "OPEN_RISKS", "Открытые риски специалистов", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
+        addProblem(problems, "OPEN_RISKS", "Риски", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
@@ -1039,6 +1416,9 @@ public class ManagerControlService {
             if (problem.count() <= 0) {
                 continue;
             }
+            if (parseGroup(problem.group()) == ManagerDailyControlGroup.WORKLOAD) {
+                continue;
+            }
             inputs.add(new ControlItemInput(
                     problemKey(problem.code()),
                     ManagerDailyControlItemType.PROBLEM,
@@ -1055,6 +1435,9 @@ public class ManagerControlService {
         }
         for (ManagerControlSectionResponse section : sections) {
             if (section.count() <= 0) {
+                continue;
+            }
+            if (parseGroup(section.group()) == ManagerDailyControlGroup.WORKLOAD) {
                 continue;
             }
             inputs.add(new ControlItemInput(
@@ -1211,6 +1594,15 @@ public class ManagerControlService {
         }
         if ("WORKER_ACTIONS".equals(item.getReasonCode())) {
             return workerActionExamples(manager, today, limit);
+        }
+        if ("new_overdue".equals(item.getSectionCode())) {
+            return workerStaleOrderExamples(manager, "Новый", today, limit);
+        }
+        if ("correct_overdue".equals(item.getSectionCode())) {
+            return workerStaleOrderExamples(manager, "Коррекция", today, limit);
+        }
+        if ("nagul_overdue".equals(item.getSectionCode())) {
+            return nagulReviewExamples(manager, today, limit);
         }
         if ("recovery".equals(item.getSectionCode())) {
             return recoveryTaskExamples(manager, today, limit);
@@ -1433,10 +1825,10 @@ public class ManagerControlService {
                     + ". " + controlReason + " Скопируйте текст, откройте чат, отправьте ссылку на проверку и нажмите «Отправлено».";
             case "Опубликовано" -> "Заказ опубликован " + age
                     + ", нужна ручная проверка оплаты/счета. " + controlReason + " Отправьте клиенту сообщение или закройте причину.";
-            case "Выставлен счет" -> "Счет выставлен " + age
-                    + ", оплаты нет. " + controlReason + " Отправьте напоминание клиенту; после отправки заказ уйдет в «Напоминание».";
-            case "Напоминание" -> "Заказ в напоминании " + age
-                    + ", клиент не оплатил. " + controlReason + " Повторите напоминание или укажите, почему откладываем.";
+            case "Выставлен счет" -> "Оплаты нет. " + controlReason
+                    + " Отправьте напоминание клиенту; после отправки заказ уйдет в «Напоминание».";
+            case "Напоминание" -> "Клиент не оплатил после напоминания. " + controlReason
+                    + " Повторите напоминание или укажите, почему откладываем.";
             case "Не оплачено" -> "Заказ отмечен как неоплаченный " + age
                     + ". " + controlReason + " Проверьте историю общения и решите: повторить контакт, оставить в работе или архивировать.";
             case "В проверку" -> "Доставка/ссылка на проверку зависла " + age
@@ -1538,8 +1930,25 @@ public class ManagerControlService {
         return ENTITY_PUBLISH_REVIEW.equals(safe(item == null ? null : item.getEntityType()));
     }
 
+    private boolean isNagulReviewConcrete(ManagerDailyControlConcreteItem item) {
+        return ENTITY_NAGUL_REVIEW.equals(safe(item == null ? null : item.getEntityType()));
+    }
+
+    private boolean isWorkerFlowOrderConcrete(ManagerDailyControlConcreteItem item) {
+        String type = safe(item == null ? null : item.getEntityType());
+        return ENTITY_WORKER_ORDER_NEW.equals(type) || ENTITY_WORKER_ORDER_CORRECT.equals(type);
+    }
+
+    private boolean isWorkerRiskConcrete(ManagerDailyControlConcreteItem item) {
+        return "RISK".equals(safe(item == null ? null : item.getEntityType()));
+    }
+
     private boolean isSpecialistActionConcrete(ManagerDailyControlConcreteItem item) {
-        return isWorkerTaskConcrete(item) || isPublishReviewConcrete(item);
+        return isWorkerTaskConcrete(item)
+                || isPublishReviewConcrete(item)
+                || isNagulReviewConcrete(item)
+                || isWorkerFlowOrderConcrete(item)
+                || isWorkerRiskConcrete(item);
     }
 
     private LocalDateTime workerTaskFollowUpAt(LocalDateTime now) {
@@ -1548,11 +1957,21 @@ public class ManagerControlService {
     }
 
     private String manualWorkerNotificationComment(ManagerDailyControlConcreteItem concreteItem) {
-        String type = "RECOVERY_TASK".equals(safe(concreteItem == null ? null : concreteItem.getEntityType()))
-                ? "восстановлению"
-                : "плохому отзыву";
-        return "Специалисту отправлен запрос вручную выполнить задачу по " + type + ". Повторный контроль через "
+        return "Специалисту отправлен запрос в группу: " + specialistProblemLabel(concreteItem) + ". Повторный контроль через "
                 + WORKER_TASK_FOLLOW_UP_HOURS + " ч.";
+    }
+
+    private String specialistProblemLabel(ManagerDailyControlConcreteItem concreteItem) {
+        return switch (safe(concreteItem == null ? null : concreteItem.getEntityType())) {
+            case "RECOVERY_TASK" -> "проверьте восстановление";
+            case "BAD_REVIEW_TASK" -> "проверьте плохой отзыв";
+            case ENTITY_PUBLISH_REVIEW -> "проверьте публикацию";
+            case ENTITY_NAGUL_REVIEW -> "проверьте выгул";
+            case ENTITY_WORKER_ORDER_NEW -> "подготовьте текст нового заказа";
+            case ENTITY_WORKER_ORDER_CORRECT -> "проверьте коррекцию";
+            case "RISK" -> "проверьте открытый риск";
+            default -> "проверьте проблему";
+        };
     }
 
     private void clearWorkerTelegramState(ManagerDailyControlConcreteItem concreteItem) {
@@ -1563,10 +1982,11 @@ public class ManagerControlService {
         concreteItem.setWorkerNotificationFailureReason(null);
     }
 
-    private void notifyWorkerAboutTaskRequest(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control) {
+    private boolean notifyWorkerAboutTaskRequest(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control) {
         User workerUser = workerUserForTask(concreteItem);
         if (workerUser == null || workerUser.getId() == null || concreteItem.getId() == null) {
-            return;
+            concreteItem.setWorkerNotificationFailureReason("Специалист карточки не найден");
+            return false;
         }
         LocalDateTime now = LocalDateTime.now();
         concreteItem.setWorkerNotificationAttemptedAt(now);
@@ -1575,9 +1995,9 @@ public class ManagerControlService {
         concreteItem.setWorkerNotificationAcceptedByUserId(null);
         concreteItem.setWorkerNotificationFailureReason(null);
         String managerName = control == null ? "" : managerName(control.getManager());
-        String title = "Проверьте задачу";
+        String title = workerTaskRequestTitle(concreteItem);
         String text = List.of(
-                        "Менеджер запросил выполнение задачи.",
+                        "Менеджер запросил действие: " + specialistProblemLabel(concreteItem) + ".",
                         "Менеджер: " + managerName,
                         "Карточка: " + safe(concreteItem.getTitle()),
                         safe(concreteItem.getSubtitle()),
@@ -1596,21 +2016,30 @@ public class ManagerControlService {
                     orderIdForTask(concreteItem)
             );
         }
-        if (workerUser.getTelegramChatId() == null) {
-            concreteItem.setWorkerNotificationFailureReason("Telegram работника не привязан");
-            return;
+        if (workerUser.getWorkerTelegramGroupChatId() == null) {
+            concreteItem.setWorkerNotificationFailureReason("Telegram-группа специалиста не привязана");
+            return false;
         }
         boolean sent = telegramService.sendMessageWithInlineKeyboard(
-                workerUser.getTelegramChatId(),
+                workerUser.getWorkerTelegramGroupChatId(),
                 text,
                 null,
                 List.of(List.of(ManagerControlWorkerTaskTelegramCallbackService.acceptButton(concreteItem.getId())))
         );
         if (sent) {
             concreteItem.setWorkerNotificationSentAt(now);
+            return true;
         } else {
             concreteItem.setWorkerNotificationFailureReason("Telegram не отправил сообщение");
+            return false;
         }
+    }
+
+    private String workerTaskRequestTitle(ManagerDailyControlConcreteItem concreteItem) {
+        if (ENTITY_WORKER_ORDER_NEW.equals(safe(concreteItem == null ? null : concreteItem.getEntityType()))) {
+            return "Подготовьте текст нового заказа";
+        }
+        return "Проверьте проблему";
     }
 
     private User workerUserForTask(ManagerDailyControlConcreteItem concreteItem) {
@@ -1626,6 +2055,34 @@ public class ManagerControlService {
                 case "RECOVERY_TASK" -> {
                     ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(concreteItem.getEntityId());
                     yield task == null || task.getWorker() == null ? null : task.getWorker().getUser();
+                }
+                case ENTITY_PUBLISH_REVIEW -> {
+                    Review review = reviewRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    Worker worker = review == null ? null : review.getWorker();
+                    if (worker == null) {
+                        Order order = reviewOrder(review);
+                        worker = order == null ? null : order.getWorker();
+                    }
+                    yield worker == null ? null : worker.getUser();
+                }
+                case ENTITY_NAGUL_REVIEW -> {
+                    Review review = reviewRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    Worker worker = review == null ? null : review.getWorker();
+                    if (worker == null) {
+                        Order order = reviewOrder(review);
+                        worker = order == null ? null : order.getWorker();
+                    }
+                    yield worker == null ? null : worker.getUser();
+                }
+                case ENTITY_WORKER_ORDER_NEW, ENTITY_WORKER_ORDER_CORRECT -> {
+                    Order order = orderRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    yield order == null || order.getWorker() == null ? null : order.getWorker().getUser();
+                }
+                case "RISK" -> {
+                    WorkerRiskIncident incident = riskIncidentRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    yield incident == null || incident.getWorkerUserId() == null
+                            ? null
+                            : userRepository.findById(incident.getWorkerUserId()).orElse(null);
                 }
                 default -> null;
             };
@@ -1648,6 +2105,21 @@ public class ManagerControlService {
                     ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(concreteItem.getEntityId());
                     yield task == null || task.getOrder() == null ? null : task.getOrder().getId();
                 }
+                case ENTITY_PUBLISH_REVIEW -> {
+                    Review review = reviewRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    Order order = reviewOrder(review);
+                    yield order == null ? null : order.getId();
+                }
+                case ENTITY_NAGUL_REVIEW -> {
+                    Review review = reviewRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    Order order = reviewOrder(review);
+                    yield order == null ? null : order.getId();
+                }
+                case ENTITY_WORKER_ORDER_NEW, ENTITY_WORKER_ORDER_CORRECT -> concreteItem.getEntityId();
+                case "RISK" -> {
+                    WorkerRiskIncident incident = riskIncidentRepository.findById(concreteItem.getEntityId()).orElse(null);
+                    yield incident == null ? null : incident.getOrderId();
+                }
                 default -> null;
             };
         } catch (RuntimeException ignored) {
@@ -1659,6 +2131,12 @@ public class ManagerControlService {
         String status = safe(order.getStatus());
         if (!MANUAL_CONTACT_ORDER_STATUSES.contains(status)) {
             return null;
+        }
+        if ("Новый".equals(status) && order.isWaitingForClient() && order.getId() != null) {
+            return orderRepository.findById(order.getId())
+                    .map(this::clientTextContactText)
+                    .filter(text -> !safe(text).isBlank())
+                    .orElse(null);
         }
         if ("На проверке".equals(status)) {
             if (order.getOrderDetailsId() == null) {
@@ -1763,6 +2241,9 @@ public class ManagerControlService {
 
     private List<ManagerControlConcreteItemResponse> workerActionExamples(Manager manager, LocalDate today, int limit) {
         List<ManagerControlConcreteItemResponse> examples = new ArrayList<>();
+        examples.addAll(workerStaleOrderExamples(manager, "Новый", today, limit));
+        examples.addAll(workerStaleOrderExamples(manager, "Коррекция", today, limit));
+        examples.addAll(nagulReviewExamples(manager, today, limit));
         examples.addAll(recoveryTaskExamples(manager, today, limit));
         examples.addAll(publishReviewExamples(manager, today, limit));
         examples.addAll(badReviewTaskExamples(manager, today, limit));
@@ -1772,6 +2253,348 @@ public class ManagerControlService {
                         .thenComparing(ManagerControlConcreteItemResponse::title, String.CASE_INSENSITIVE_ORDER))
                 .limit(limit)
                 .toList();
+    }
+
+    private List<ManagerControlConcreteItemResponse> workerStaleOrderExamples(Manager manager, String status, LocalDate today, int limit) {
+        List<Long> workerIds = workerIds(manager);
+        if (workerIds.isEmpty()) {
+            return List.of();
+        }
+        return workerStaleOrderEntriesForControl(workerIds, status, today).stream()
+                .map(entry -> workerStaleOrderExample(entry.order(), status, today, entry.clientTextDecision()))
+                .limit(limit)
+                .toList();
+    }
+
+    private ManagerControlConcreteItemResponse workerStaleOrderExample(
+            Order order,
+            String status,
+            LocalDate today,
+            WorkerClientTextDecision clientTextDecision
+    ) {
+        String entityType = "Коррекция".equals(status) ? ENTITY_WORKER_ORDER_CORRECT : ENTITY_WORKER_ORDER_NEW;
+        String contactText = ENTITY_WORKER_ORDER_NEW.equals(entityType) && order != null && order.isWaitingForClient()
+                ? clientTextContactText(order)
+                : null;
+        String reason = clientTextDecision == null || safe(clientTextDecision.reason()).isBlank()
+                ? workerOrderReason(order, status, today)
+                : clientTextDecision.reason();
+        return new ManagerControlConcreteItemResponse(
+                null,
+                entityType,
+                order.getId(),
+                orderTitle(order, "Заказ #" + order.getId()),
+                workerOrderSubtitle(order, today),
+                status,
+                daysSince(order.getChanged(), today),
+                reason,
+                orderTargetUrl(order),
+                null,
+                orderChatUrl(order),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                contactText
+        );
+    }
+
+    private List<Order> workerStaleOrdersForControl(List<Long> workerIds, String status, LocalDate today) {
+        return workerStaleOrderEntriesForControl(workerIds, status, today).stream()
+                .map(WorkerOrderControlEntry::order)
+                .toList();
+    }
+
+    private List<WorkerOrderControlEntry> workerStaleOrderEntriesForControl(List<Long> workerIds, String status, LocalDate today) {
+        if (workerIds.isEmpty()) {
+            return List.of();
+        }
+        LocalDate cutoff = managerControlWorkerOrderOverdueDate(today);
+        List<Order> orders = "Новый".equals(status)
+                ? orderRepository.findManagerControlWorkerNewOrdersForControl(workerIds, cutoff)
+                : orderRepository.findManagerControlWorkerStaleOrders(workerIds, status, cutoff);
+        Map<Long, List<ScheduledClientMessageState>> statesByOrderId = scheduledStatesByOrderId(orders);
+        return orders.stream()
+                .map(order -> new WorkerOrderControlEntry(
+                        order,
+                        workerOrderClientTextDecision(order, status, today, statesByOrderId)
+                ))
+                .filter(entry -> entry.clientTextDecision().include())
+                .toList();
+    }
+
+    private String workerOrderSubtitle(Order order, LocalDate today) {
+        List<String> parts = new ArrayList<>();
+        String workerName = workerName(order == null ? null : order.getWorker());
+        if (!workerName.isBlank()) {
+            parts.add(workerName);
+        }
+        if (order != null && order.getChanged() != null) {
+            parts.add("без изменений " + daysSince(order.getChanged(), today) + " дн.");
+        }
+        if (order != null && order.isWaitingForClient()) {
+            parts.add("ждет клиента");
+        }
+        if (order != null && order.getAmount() > 0) {
+            parts.add(order.getAmount() + " шт.");
+        }
+        if (order != null && order.getSum() != null) {
+            parts.add(order.getSum() + " руб.");
+        }
+        return String.join(" · ", parts);
+    }
+
+    private String workerOrderReason(Order order, String status, LocalDate today) {
+        long days = daysSince(order == null ? null : order.getChanged(), today);
+        return "Заказ специалиста в статусе \"" + status + "\" без изменений " + days
+                + " дн. Проверьте работу специалиста и устраните просрочку.";
+    }
+
+    private WorkerClientTextDecision workerOrderClientTextDecision(
+            Order order,
+            String status,
+            LocalDate today,
+            Map<Long, List<ScheduledClientMessageState>> statesByOrderId
+    ) {
+        if (order == null
+                || !"Новый".equals(status)
+                || !order.isWaitingForClient()) {
+            return WorkerClientTextDecision.includeDefault();
+        }
+
+        long days = daysSince(clientTextWaitingControlDate(order), today);
+        if (days > ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS) {
+            return new WorkerClientTextDecision(
+                    true,
+                    "Клиент не прислал текст больше "
+                            + ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS
+                            + " дн., но заказ все еще отмечен как «ждет клиента». Решение: снимите статус \"ждет клиента\"."
+            );
+        }
+
+        String bindingProblem = clientTextChatBindingProblem(order.getCompany());
+        if (!bindingProblem.isBlank()) {
+            return new WorkerClientTextDecision(
+                    true,
+                    "Заказ ждет текст клиента, но автоответчик не отправляет напоминания: "
+                            + bindingProblem + ". Проверьте привязку чата или отправьте запрос вручную."
+            );
+        }
+
+        ScheduledClientMessageState state = currentClientTextReminderState(order, statesByOrderId);
+        if (state == null) {
+            return new WorkerClientTextDecision(
+                    true,
+                    "Заказ ждет текст клиента, но автоответчик не отправляет напоминания: нет записи в очереди CLIENT_TEXT_REMINDER."
+            );
+        }
+        if (!clientTextReminderIsHealthy(state)) {
+            return new WorkerClientTextDecision(
+                    true,
+                    "Заказ ждет текст клиента, но автоответчик не отправляет напоминания: "
+                            + clientTextReminderProblem(state) + "."
+            );
+        }
+
+        return WorkerClientTextDecision.suppress();
+    }
+
+    private LocalDate clientTextWaitingControlDate(Order order) {
+        if (order == null) {
+            return LocalDate.now();
+        }
+        if (order.getChanged() != null) {
+            return order.getChanged();
+        }
+        if (order.getWaitingForClientChangedAt() != null) {
+            return order.getWaitingForClientChangedAt().toLocalDate();
+        }
+        return LocalDate.now();
+    }
+
+    private Map<Long, List<ScheduledClientMessageState>> scheduledStatesByOrderId(List<Order> orders) {
+        List<Long> orderIds = orders == null
+                ? List.of()
+                : orders.stream()
+                .filter(order -> order != null && order.getId() != null)
+                .map(Order::getId)
+                .distinct()
+                .toList();
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        return scheduledClientMessageStateRepository.findByOrderIdIn(orderIds).stream()
+                .filter(state -> state.getOrderId() != null)
+                .collect(Collectors.groupingBy(ScheduledClientMessageState::getOrderId));
+    }
+
+    private ScheduledClientMessageState currentClientTextReminderState(
+            Order order,
+            Map<Long, List<ScheduledClientMessageState>> statesByOrderId
+    ) {
+        if (order == null || order.getId() == null) {
+            return null;
+        }
+        String targetKey = clientTextWaitingTargetKey(order);
+        return statesByOrderId.getOrDefault(order.getId(), List.of()).stream()
+                .filter(state -> state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .filter(state -> Objects.equals(targetKey, state.getTargetKey()))
+                .max(Comparator
+                        .comparingInt(this::clientTextReminderStatePriority)
+                        .thenComparing(this::clientTextReminderStateActivity, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(state -> state.getId() == null ? 0L : state.getId()))
+                .orElse(null);
+    }
+
+    private ScheduledClientMessageState currentOrderAutomationState(
+            Order order,
+            ClientMessageScenario scenario,
+            Map<Long, List<ScheduledClientMessageState>> statesByOrderId
+    ) {
+        if (order == null || order.getId() == null || scenario == null) {
+            return null;
+        }
+        String targetKey = orderTargetKey(order);
+        return statesByOrderId.getOrDefault(order.getId(), List.of()).stream()
+                .filter(state -> state.getScenario() == scenario)
+                .filter(state -> Objects.equals(targetKey, state.getTargetKey()))
+                .max(Comparator
+                        .comparingInt(this::clientTextReminderStatePriority)
+                        .thenComparing(this::clientTextReminderStateActivity, Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(state -> state.getId() == null ? 0L : state.getId()))
+                .orElse(null);
+    }
+
+    private int clientTextReminderStatePriority(ScheduledClientMessageState state) {
+        if (state == null) {
+            return 0;
+        }
+        if (!safe(state.getLastErrorCode()).isBlank() && state.getConsecutiveFailures() > 0) {
+            return 40;
+        }
+        if (state.getLastSuccessAt() != null || state.getSentCount() > 0) {
+            return 30;
+        }
+        if (state.getStatus() == ScheduledMessageStateStatus.ACTIVE && state.getNextAttemptAt() != null) {
+            return 20;
+        }
+        return 10;
+    }
+
+    private LocalDateTime clientTextReminderStateActivity(ScheduledClientMessageState state) {
+        if (state == null) {
+            return null;
+        }
+        if (state.getUpdatedAt() != null) {
+            return state.getUpdatedAt();
+        }
+        if (state.getLastAttemptAt() != null) {
+            return state.getLastAttemptAt();
+        }
+        if (state.getLastSuccessAt() != null) {
+            return state.getLastSuccessAt();
+        }
+        return state.getNextAttemptAt();
+    }
+
+    private boolean clientTextReminderIsHealthy(ScheduledClientMessageState state) {
+        if (state == null) {
+            return false;
+        }
+        if (state.getStatus() == ScheduledMessageStateStatus.DISABLED || state.getStatus() == ScheduledMessageStateStatus.PAUSED) {
+            return false;
+        }
+        String errorCode = safe(state.getLastErrorCode()).toLowerCase(Locale.ROOT);
+        if (!errorCode.isBlank()
+                && !errorCode.contains("dry_run")
+                && !errorCode.contains("client_text_received")
+                && !errorCode.contains("client_text_cycle_changed")
+                && !errorCode.contains("order_status_changed")
+                && !errorCode.contains("status_change")) {
+            return false;
+        }
+        return state.getSentCount() > 0
+                || state.getLastSuccessAt() != null
+                || (state.getStatus() == ScheduledMessageStateStatus.ACTIVE && state.getNextAttemptAt() != null);
+    }
+
+    private String clientTextReminderProblem(ScheduledClientMessageState state) {
+        if (state == null) {
+            return "нет записи в очереди CLIENT_TEXT_REMINDER";
+        }
+        if (!safe(state.getLastErrorMessage()).isBlank()) {
+            return state.getLastErrorMessage();
+        }
+        if (!safe(state.getLastErrorCode()).isBlank()) {
+            return "ошибка " + state.getLastErrorCode();
+        }
+        if (state.getStatus() == ScheduledMessageStateStatus.DISABLED) {
+            return "очередь автоответчика отключена";
+        }
+        if (state.getStatus() == ScheduledMessageStateStatus.PAUSED) {
+            return "очередь автоответчика на паузе";
+        }
+        return "нет активной успешной или запланированной отправки";
+    }
+
+    private String clientTextWaitingTargetKey(Order order) {
+        return "client-text:" + order.getId() + ":" + clientTextWaitingChangedAt(order).withNano(0);
+    }
+
+    private String orderTargetKey(Order order) {
+        return "order:" + order.getId() + ":" + orderStatusChangedAt(order).withNano(0);
+    }
+
+    private LocalDateTime clientTextWaitingChangedAt(Order order) {
+        if (order.getWaitingForClientChangedAt() != null) {
+            return order.getWaitingForClientChangedAt();
+        }
+        if (order.getStatusChangedAt() != null) {
+            return order.getStatusChangedAt();
+        }
+        if (order.getChanged() != null) {
+            return order.getChanged().atStartOfDay();
+        }
+        return LocalDateTime.now().withNano(0);
+    }
+
+    private LocalDateTime orderStatusChangedAt(Order order) {
+        if (order.getStatusChangedAt() != null) {
+            return order.getStatusChangedAt();
+        }
+        if (order.getChanged() != null) {
+            return order.getChanged().atStartOfDay();
+        }
+        if (order.getCreated() != null) {
+            return order.getCreated().atStartOfDay();
+        }
+        return LocalDateTime.now().withNano(0);
+    }
+
+    private String clientTextChatBindingProblem(Company company) {
+        if (company == null) {
+            return "компания не найдена";
+        }
+        String chat = safe(company.getUrlChat()).toLowerCase(Locale.ROOT);
+        if (chat.isBlank()) {
+            return "у компании не указан чат";
+        }
+        if (isWhatsAppChat(chat) && safe(company.getGroupId()).isBlank()) {
+            return "WhatsApp-группа не привязана к боту";
+        }
+        if (isTelegramChat(chat) && company.getTelegramGroupChatId() == null) {
+            return "Telegram-группа не привязана к боту";
+        }
+        if (isMaxChat(chat) && company.getMaxGroupChatId() == null) {
+            return "MAX-группа не привязана к боту";
+        }
+        if (!isWhatsAppChat(chat) && !isTelegramChat(chat) && !isMaxChat(chat)) {
+            return "чат компании не распознан";
+        }
+        return "";
     }
 
     private List<ManagerControlConcreteItemResponse> recoveryTaskExamples(Manager manager, LocalDate today, int limit) {
@@ -1810,6 +2633,52 @@ public class ManagerControlService {
         );
     }
 
+    private List<ManagerControlConcreteItemResponse> nagulReviewExamples(Manager manager, LocalDate today, int limit) {
+        List<Long> workerIds = workerIds(manager);
+        if (workerIds.isEmpty()) {
+            return List.of();
+        }
+        return reviewRepository.findManagerControlNagulReviewsByWorkerIds(
+                        workerIds,
+                        managerControlPublicationOverdueDate(today),
+                        PageRequest.of(0, Math.max(1, limit))
+                ).stream()
+                .map(review -> nagulReviewExample(review, today))
+                .toList();
+    }
+
+    private ManagerControlConcreteItemResponse nagulReviewExample(Review review, LocalDate today) {
+        Order order = reviewOrder(review);
+        return new ManagerControlConcreteItemResponse(
+                null,
+                ENTITY_NAGUL_REVIEW,
+                review.getId(),
+                orderTitle(order, "Отзыв #" + review.getId()),
+                taskSubtitle("Выгул", review.getWorker(), review.getPublishedDate(), today),
+                "Выгул",
+                daysSince(review.getPublishedDate(), today),
+                nagulReviewReason(review, today),
+                orderTargetUrl(order),
+                review.getOrderDetails() == null || review.getOrderDetails().getId() == null
+                        ? null
+                        : review.getOrderDetails().getId().toString(),
+                orderChatUrl(order),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private String nagulReviewReason(Review review, LocalDate today) {
+        long days = daysSince(review == null ? null : review.getPublishedDate(), today);
+        return "Выгул просрочен " + days + " дн. Проверьте карточку отзыва и специалиста.";
+    }
+
     private List<ManagerControlConcreteItemResponse> publishReviewExamples(Manager manager, LocalDate today, int limit) {
         List<Long> workerIds = workerIds(manager);
         if (workerIds.isEmpty()) {
@@ -1817,7 +2686,7 @@ public class ManagerControlService {
         }
         return reviewRepository.findManagerControlPublishReviewsByWorkerIds(
                         workerIds,
-                        today == null ? LocalDate.now() : today,
+                        managerControlPublicationOverdueDate(today),
                         PageRequest.of(0, Math.max(1, limit))
                 ).stream()
                 .map(review -> publishReviewExample(review, today))
@@ -2149,20 +3018,78 @@ public class ManagerControlService {
     }
 
     private int detailItemRank(ManagerDailyControlItem item) {
-        if (isOpenCriticalActionItem(item)) {
+        return detailWorkflowRank(item) * 10 + detailStateRank(item);
+    }
+
+    private int detailWorkflowRank(ManagerDailyControlItem item) {
+        if (item == null) {
+            return 999;
+        }
+        String reason = safe(item.getReasonCode());
+        String section = safe(item.getSectionCode());
+        if ("new_overdue".equals(section)) {
+            return 10;
+        }
+        if (item.getItemType() == ManagerDailyControlItemType.ORDER_STATUS) {
+            return 10 + orderStatusDisplayRank(reason) * 10;
+        }
+        if ("REQUIRES_ATTENTION".equals(reason)) {
+            return 10 + orderStatusDisplayRank("Требует внимания") * 10;
+        }
+        if ("correct_overdue".equals(section)) {
+            return 10 + orderStatusDisplayRank("Коррекция") * 10;
+        }
+        if ("nagul_overdue".equals(section)) {
+            return 45;
+        }
+        if ("recovery".equals(section)) {
+            return 48;
+        }
+        if ("publish".equals(section)) {
+            return 50;
+        }
+        if ("bad".equals(section)) {
+            return 55;
+        }
+        if ("COMMON_INVOICES".equals(reason)) {
+            return 75;
+        }
+        if ("OPEN_RISKS".equals(reason) || "risk".equals(section)) {
+            return 150;
+        }
+        if ("WORKER_ACTIONS".equals(reason)) {
+            return 160;
+        }
+        if ("OVERDUE_ORDERS".equals(reason)) {
+            return 170;
+        }
+        if ("ORDERS_WORKLOAD".equals(reason) || "WORKER_WORKLOAD".equals(reason)) {
+            return 900;
+        }
+        if (item.getGroup() == ManagerDailyControlGroup.WORKLOAD) {
+            return 910 + workloadSectionRank(section);
+        }
+        return item.getGroup() == ManagerDailyControlGroup.ACTION ? 800 : 950;
+    }
+
+    private int workloadSectionRank(String section) {
+        return switch (safe(section)) {
+            case "new" -> 0;
+            case "correct" -> 1;
+            case "nagul" -> 2;
+            default -> 20;
+        };
+    }
+
+    private int detailStateRank(ManagerDailyControlItem item) {
+        if (isOpenActionItem(item)) {
             return 0;
         }
-        if (isOpenActionItem(item)) {
+        if (isHandledActionItem(item)) {
             return 1;
         }
-        if (isHandledCriticalActionItem(item)) {
+        if (item != null && item.getGroup() == ManagerDailyControlGroup.ACTION) {
             return 2;
-        }
-        if (isHandledActionItem(item)) {
-            return 3;
-        }
-        if (item.getGroup() == ManagerDailyControlGroup.ACTION) {
-            return 4;
         }
         return 5;
     }
@@ -2349,16 +3276,41 @@ public class ManagerControlService {
         List<Long> workerIds = workerIds(manager);
         Map<Long, Integer> publishByWorker = workerIds.isEmpty()
                 ? Map.of()
-                : safeMapLong(reviewService.countOrdersByWorkerIdsAndStatusPublish(workerIds, today));
+                : safeMapLong(reviewService.countOrdersByWorkerIdsAndStatusPublish(
+                        workerIds,
+                        managerControlPublicationOverdueDate(today)
+                ));
         Map<Long, Integer> nagulByWorker = workerIds.isEmpty()
                 ? Map.of()
                 : safeMapLong(reviewService.countOrdersByWorkerIdsAndStatusVigul(workerIds, today.plusDays(60)));
+        Map<String, Long> staleOrderCounts = workerIds.isEmpty()
+                ? Map.of()
+                : safeStatusCountMap(orderRepository.countManagerControlWorkerStaleOrdersByStatus(
+                        workerIds,
+                        Set.of("Новый", "Коррекция"),
+                        managerControlWorkerOrderOverdueDate(today)
+                ));
+        long nagulOverdueTotal = workerIds.isEmpty()
+                ? 0L
+                : sumRowCounts(reviewRepository.countManagerControlNagulReviewsByWorkerIds(
+                        workerIds,
+                        managerControlPublicationOverdueDate(today)
+                ));
 
         long newCount = workerOrderCount(workerIds, "Новый");
         long correctCount = workerOrderCount(workerIds, "Коррекция");
         long nagulCount = sumValues(nagulByWorker);
         Map<String, Long> snoozedWorkerTasks = snoozedWorkerTaskCountsByType(manager, today);
         LocalDate workerTaskOverdueDate = managerControlWorkerTaskOverdueDate(today);
+        long newOverdueBaseCount = workerIds.isEmpty()
+                ? 0L
+                : workerStaleOrdersForControl(workerIds, "Новый", today).size();
+        long newOverdueCount = Math.max(0L, newOverdueBaseCount
+                - snoozedWorkerTasks.getOrDefault(ENTITY_WORKER_ORDER_NEW, 0L));
+        long correctOverdueCount = Math.max(0L, staleOrderCounts.getOrDefault("Коррекция", 0L)
+                - snoozedWorkerTasks.getOrDefault(ENTITY_WORKER_ORDER_CORRECT, 0L));
+        long nagulOverdueCount = Math.max(0L, nagulOverdueTotal
+                - snoozedWorkerTasks.getOrDefault(ENTITY_NAGUL_REVIEW, 0L));
         long recoveryCount = Math.max(0L,
                 reviewRecoveryTaskService.countDueTasksToManager(manager, workerTaskOverdueDate)
                         - snoozedWorkerTasks.getOrDefault("RECOVERY_TASK", 0L));
@@ -2368,6 +3320,9 @@ public class ManagerControlService {
                 badReviewTaskService.countDueTasksToManager(manager, workerTaskOverdueDate)
                         - snoozedWorkerTasks.getOrDefault("BAD_REVIEW_TASK", 0L));
         List<ManagerControlSectionResponse> sections = List.of(
+                section("new_overdue", "Новые без изменений", newOverdueCount, "CRITICAL", "ACTION", workerUrl("new")),
+                section("correct_overdue", "Коррекция без изменений", correctOverdueCount, "CRITICAL", "ACTION", workerUrl("correct")),
+                section("nagul_overdue", "Просроченный выгул", nagulOverdueCount, "CRITICAL", "ACTION", workerUrl("nagul")),
                 section("new", "Новые", newCount, "INFO", "WORKLOAD", workerUrl("new")),
                 section("correct", "Коррекция", correctCount, "INFO", "WORKLOAD", workerUrl("correct")),
                 section("nagul", "Выгул", nagulCount, "INFO", "WORKLOAD", workerUrl("nagul")),
@@ -2379,12 +3334,20 @@ public class ManagerControlService {
         return new WorkerSectionCounts(
                 sections,
                 sections.stream().mapToLong(ManagerControlSectionResponse::count).sum(),
-                recoveryCount + publishCount + badCount,
+                newOverdueCount + correctOverdueCount + nagulOverdueCount + recoveryCount + publishCount + badCount,
                 newCount + correctCount + nagulCount
         );
     }
 
     private LocalDate managerControlWorkerTaskOverdueDate(LocalDate today) {
+        return (today == null ? LocalDate.now() : today).minusDays(1);
+    }
+
+    private LocalDate managerControlWorkerOrderOverdueDate(LocalDate today) {
+        return (today == null ? LocalDate.now() : today).minusDays(WORKER_ORDER_UNCHANGED_DAYS);
+    }
+
+    private LocalDate managerControlPublicationOverdueDate(LocalDate today) {
         return (today == null ? LocalDate.now() : today).minusDays(1);
     }
 
@@ -2549,6 +3512,26 @@ public class ManagerControlService {
         return source == null ? Map.of() : source;
     }
 
+    private Map<String, Long> safeStatusCountMap(List<Object[]> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        return rows.stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(
+                        row -> rowString(row, 0, "Без статуса"),
+                        row -> rowLong(row, 1),
+                        Long::sum
+                ));
+    }
+
+    private long sumRowCounts(List<Object[]> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return 0;
+        }
+        return rows.stream().mapToLong(row -> rowLong(row, 1)).sum();
+    }
+
     private long rowLong(Object[] row, int index) {
         if (row == null || index < 0 || index >= row.length) {
             return 0;
@@ -2617,6 +3600,9 @@ public class ManagerControlService {
     }
 
     private String managerName(Manager manager) {
+        if (manager == null) {
+            return "Менеджер";
+        }
         User user = manager.getUser();
         String fio = safe(user == null ? null : user.getFio());
         if (!fio.isBlank()) {
@@ -2643,6 +3629,25 @@ public class ManagerControlService {
             long total,
             long actionTotal,
             long workloadTotal
+    ) {
+    }
+
+    private record WorkerClientTextDecision(
+            boolean include,
+            String reason
+    ) {
+        private static WorkerClientTextDecision includeDefault() {
+            return new WorkerClientTextDecision(true, null);
+        }
+
+        private static WorkerClientTextDecision suppress() {
+            return new WorkerClientTextDecision(false, null);
+        }
+    }
+
+    private record WorkerOrderControlEntry(
+            Order order,
+            WorkerClientTextDecision clientTextDecision
     ) {
     }
 

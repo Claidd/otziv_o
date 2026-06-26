@@ -599,6 +599,12 @@ export interface OrderDetailsPayload {
   canDeleteReviews: boolean;
 }
 
+export interface ReviewActivitySource {
+  sourcePage?: string;
+  sourceEntry?: string;
+  sourceSection?: string;
+}
+
 export interface CompanyDeepReportState {
   companyId: number;
   companyName: string;
@@ -937,10 +943,10 @@ export class ManagerApi {
     );
   }
 
-  changeOrderReviewBot(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+  changeOrderReviewBot(orderId: number, reviewId: number, source?: ReviewActivitySource): Observable<OrderReviewItem> {
     return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/change-bot`,
-      {}
+      source ?? {}
     );
   }
 
@@ -951,10 +957,21 @@ export class ManagerApi {
     );
   }
 
-  deactivateOrderReviewBot(orderId: number, reviewId: number, botId: number): Observable<OrderReviewItem> {
+  deactivateOrderReviewBot(orderId: number, reviewId: number, botId: number, source?: ReviewActivitySource): Observable<OrderReviewItem> {
     return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/bots/${botId}/deactivate`,
-      {}
+      source ?? {}
+    );
+  }
+
+  logOrderReviewCopyClick(
+    reviewId: number,
+    field: 'login' | 'password',
+    source?: ReviewActivitySource
+  ): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/copy-click`,
+      { field, ...source }
     );
   }
 

@@ -1,5 +1,6 @@
 package com.hunt.otziv.u_users.services;
 
+import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.u_users.dto.AdminUserResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionResponse;
 import com.hunt.otziv.u_users.dto.AssignmentOptionsResponse;
@@ -27,7 +28,10 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,6 +79,8 @@ public class KeycloakUserProvisioningService {
     private final WorkerService workerService;
     private final MarketologService marketologService;
     private final ImageService imageService;
+    private final TelegramGroupLinkService telegramGroupLinkService;
+    private final CacheManager cacheManager;
 
     @Transactional
     public CreatedKeycloakUserResponse createUser(CreateKeycloakUserRequest request) {
@@ -104,6 +110,7 @@ public class KeycloakUserProvisioningService {
             User saved = userRepository.saveAndFlush(user);
             createRoleAssignments(saved, localRoles);
             userRepository.flush();
+            clearCabinetCaches();
 
             return toResponse(saved, keycloakRoles);
         } catch (RuntimeException e) {
@@ -148,16 +155,11 @@ public class KeycloakUserProvisioningService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
 
-        if (!hasText(user.getKeycloakId())) {
-            throw new ResponseStatusException(
-                    BAD_REQUEST,
-                    "User is not linked to Keycloak yet. Run legacy migration first."
-            );
-        }
-
         Set<String> oldKeycloakRoles = toKeycloakRoles(user.getRoles());
         Set<String> newKeycloakRoles = normalizeKeycloakRoles(request.getRoles());
         List<Role> newLocalRoles = findLocalRoles(newKeycloakRoles);
+        String newUsername = normalizedUpdateUsername(user, request);
+        ensureUsernameAvailable(user, newUsername);
 
         if (hasLocalRole(user, ADMIN_ROLE)) {
             if (!request.isEnabled()) {
@@ -169,7 +171,9 @@ public class KeycloakUserProvisioningService {
             }
         }
 
-        String keycloakId = updateKeycloakUserAndRepairIdIfNeeded(user, request);
+        String keycloakId = hasText(user.getKeycloakId())
+                ? updateKeycloakUserAndRepairIdIfNeeded(user, newUsername, request)
+                : null;
         if (hasText(keycloakId)) {
             replaceKeycloakRealmRoles(keycloakId, oldKeycloakRoles, newKeycloakRoles);
         }
@@ -178,16 +182,25 @@ public class KeycloakUserProvisioningService {
                 .map(Role::getName)
                 .collect(Collectors.toSet());
 
+        String oldWorkerChatUrl = trimToNull(user.getWorkerChatUrl());
+        String newWorkerChatUrl = trimToNull(request.getWorkerChatUrl());
+
+        user.setUsername(newUsername);
         user.setEmail(trimToNull(request.getEmail()));
         user.setFio(trimToNull(request.getFio()));
         user.setPhoneNumber(trimToNull(request.getPhoneNumber()));
         user.setCoefficient(request.getCoefficient() == null ? DEFAULT_COEFFICIENT : request.getCoefficient());
+        user.setWorkerChatUrl(newWorkerChatUrl);
+        if (!Objects.equals(oldWorkerChatUrl, newWorkerChatUrl)) {
+            user.setWorkerTelegramGroupChatId(null);
+        }
         user.setActive(request.isEnabled());
         replaceLocalRoles(user, newLocalRoles);
         user.setAuthProvider(hasText(user.getKeycloakId()) ? KEYCLOAK_AUTH_PROVIDER : LOCAL_AUTH_PROVIDER);
 
         updateRoleAssignments(user, oldLocalRoleNames, newLocalRoles);
         userRepository.flush();
+        clearCabinetCaches();
 
         return toAdminResponse(user);
     }
@@ -205,6 +218,7 @@ public class KeycloakUserProvisioningService {
         deleteRoleAssignments(user);
         userRepository.delete(user);
         userRepository.flush();
+        clearCabinetCaches();
 
         keycloakAdminClient.deleteUserStrict(keycloakId);
     }
@@ -222,6 +236,7 @@ public class KeycloakUserProvisioningService {
         Image newImage = imageService.saveCompressedProfileImage(photo);
         user.setImage(newImage);
         userRepository.flush();
+        clearCabinetCaches();
 
         if (oldImage != null) {
             imageRepository.delete(oldImage);
@@ -293,6 +308,7 @@ public class KeycloakUserProvisioningService {
         }
 
         userRepository.flush();
+        clearCabinetCaches();
         return toAssignmentsResponse(user);
     }
 
@@ -683,6 +699,9 @@ public class KeycloakUserProvisioningService {
                 .fio(user.getFio())
                 .phoneNumber(user.getPhoneNumber())
                 .coefficient(user.getCoefficient())
+                .workerChatUrl(user.getWorkerChatUrl())
+                .workerTelegramGroupChatId(user.getWorkerTelegramGroupChatId())
+                .workerTelegramBotInviteUrl(telegramGroupLinkService.buildWorkerInviteUrl(user))
                 .imageId(user.getImage() == null ? null : user.getImage().getId())
                 .active(user.isActive())
                 .createTime(user.getCreateTime())
@@ -732,9 +751,32 @@ public class KeycloakUserProvisioningService {
         keycloakAdminClient.assignRealmRoles(keycloakUserId, rolesToAdd);
     }
 
-    private String updateKeycloakUserAndRepairIdIfNeeded(User user, UpdateKeycloakUserRequest request) {
+    private String normalizedUpdateUsername(User user, UpdateKeycloakUserRequest request) {
+        String username = trimToNull(request.getUsername());
+        if (username == null) {
+            username = trimToNull(user.getUsername());
+        }
+        if (!hasText(username)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Username is required");
+        }
+        return username;
+    }
+
+    private void ensureUsernameAvailable(User user, String username) {
+        if (hasText(user.getUsername()) && username.equalsIgnoreCase(user.getUsername())) {
+            return;
+        }
+
+        userRepository.findByUsername(username)
+                .filter(existing -> !Objects.equals(existing.getId(), user.getId()))
+                .ifPresent(existing -> {
+                    throw new ResponseStatusException(CONFLICT, "Username already exists");
+                });
+    }
+
+    private String updateKeycloakUserAndRepairIdIfNeeded(User user, String username, UpdateKeycloakUserRequest request) {
         try {
-            keycloakAdminClient.updateUser(user.getKeycloakId(), user.getUsername(), request);
+            keycloakAdminClient.updateUser(user.getKeycloakId(), username, request);
             return user.getKeycloakId();
         } catch (ResponseStatusException e) {
             if (!isKeycloakUserNotFound(e)) {
@@ -749,7 +791,7 @@ public class KeycloakUserProvisioningService {
                 return null;
             }
             user.setKeycloakId(repairedKeycloakId);
-            keycloakAdminClient.updateUser(repairedKeycloakId, user.getUsername(), request);
+            keycloakAdminClient.updateUser(repairedKeycloakId, username, request);
             return repairedKeycloakId;
         }
     }
@@ -775,6 +817,23 @@ public class KeycloakUserProvisioningService {
         }
 
         return roles;
+    }
+
+    private void clearCabinetCaches() {
+        List.of(
+                CacheConfig.CABINET_PROFILE,
+                CacheConfig.CABINET_USER_INFO,
+                CacheConfig.CABINET_TEAM,
+                CacheConfig.CABINET_SCORE,
+                CacheConfig.CABINET_ANALYTICS
+        ).forEach(this::clearCache);
+    }
+
+    private void clearCache(String cacheName) {
+        Cache cache = cacheManager.getCache(cacheName);
+        if (cache != null) {
+            cache.clear();
+        }
     }
 
     private ResponseStatusException invalidLegacyCredentials() {

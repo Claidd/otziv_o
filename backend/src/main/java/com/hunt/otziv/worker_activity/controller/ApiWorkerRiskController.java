@@ -5,6 +5,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.WorkerRiskEvaluationService;
 import com.hunt.otziv.gamification.model.GamificationScoreLedger;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse;
@@ -164,7 +165,9 @@ public class ApiWorkerRiskController {
             notifyWorkerViolation(incident);
         }
 
-        return WorkerRiskIncidentResponse.from(incidentRepository.save(incident));
+        WorkerRiskIncident savedIncident = incidentRepository.save(incident);
+        deleteResolvedRiskReminders(savedIncident);
+        return WorkerRiskIncidentResponse.from(savedIncident);
     }
 
     private WorkerRiskIncidentStatus statusFor(WorkerRiskResolutionAction action) {
@@ -174,6 +177,17 @@ public class ApiWorkerRiskController {
             case VIOLATION_CONFIRMED -> WorkerRiskIncidentStatus.VIOLATION;
             case VERIFIED -> WorkerRiskIncidentStatus.RESOLVED;
         };
+    }
+
+    private void deleteResolvedRiskReminders(WorkerRiskIncident incident) {
+        if (incident == null || incident.getStatus() == WorkerRiskIncidentStatus.OPEN) {
+            return;
+        }
+
+        personalReminderService.deleteSystemRemindersBySource(
+                WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
+                incident.getId()
+        );
     }
 
     private WorkerRiskResolutionAction parseResolutionAction(String action) {

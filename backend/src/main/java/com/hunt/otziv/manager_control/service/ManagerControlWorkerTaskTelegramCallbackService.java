@@ -4,11 +4,18 @@ import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
+import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Optional;
@@ -30,6 +37,9 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
     private final PersonalReminderService personalReminderService;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
+    private final ReviewRepository reviewRepository;
+    private final WorkerRiskIncidentRepository riskIncidentRepository;
+    private final UserRepository userRepository;
 
     public static InlineKeyboardButton acceptButton(Long concreteItemId) {
         InlineKeyboardButton button = new InlineKeyboardButton();
@@ -100,6 +110,21 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                 case "RECOVERY_TASK" -> {
                     ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(item.getEntityId());
                     yield task == null || task.getWorker() == null ? null : task.getWorker().getUser();
+                }
+                case "PUBLISH_REVIEW" -> {
+                    Review review = reviewRepository.findById(item.getEntityId()).orElse(null);
+                    Worker worker = review == null ? null : review.getWorker();
+                    if (worker == null) {
+                        Order order = review == null || review.getOrderDetails() == null ? null : review.getOrderDetails().getOrder();
+                        worker = order == null ? null : order.getWorker();
+                    }
+                    yield worker == null ? null : worker.getUser();
+                }
+                case "RISK" -> {
+                    WorkerRiskIncident incident = riskIncidentRepository.findById(item.getEntityId()).orElse(null);
+                    yield incident == null || incident.getWorkerUserId() == null
+                            ? null
+                            : userRepository.findById(incident.getWorkerUserId()).orElse(null);
                 }
                 default -> null;
             };

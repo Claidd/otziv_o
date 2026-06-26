@@ -146,6 +146,21 @@ describe('WorkerOrderCardComponent', () => {
     expect(render(2).querySelector('.unchanged-age--alert')?.textContent).toContain('!');
   });
 
+  it('marks details links opened from the all section by a worker', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    const component = fixture.componentInstance;
+    component.order = order();
+
+    component.activeSection = 'all';
+    expect(component.orderDetailsQueryParams()).toBeNull();
+
+    component.isOnlyWorkerRole = true;
+    expect(component.orderDetailsQueryParams()).toEqual({ from: 'worker-all' });
+
+    component.activeSection = 'new';
+    expect(component.orderDetailsQueryParams()).toBeNull();
+  });
+
   it('keeps full category names available from compact category chips', () => {
     const fixture = TestBed.createComponent(WorkerOrderCardComponent);
     fixture.componentInstance.order = order({

@@ -1315,20 +1315,95 @@ app-worker-board .bot-line--empty span {
 }
 
 :is(app-order-details, app-worker-board) .review-edit-modal {
+  position: relative;
   width: min(56rem, 100%);
 }
 
-app-order-details .review-edit-modal .review-delete-action {
+app-worker-board app-admin-layout .admin-layout .review-edit-modal > button.review-delete-action {
+  position: absolute;
+  top: 0.82rem;
+  left: 0.82rem;
+  z-index: 2;
+  width: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 1px solid rgba(255, 0, 96, 0.18);
+  border-radius: 999px;
+  color: rgba(166, 0, 63, 0.68);
+  background: rgba(255, 0, 96, 0.035);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+app-worker-board .review-edit-modal.review-edit-modal--deletable .lead-edit-head > div {
+  min-width: 0;
+  padding-left: 2.5rem;
+}
+
+app-worker-board app-admin-layout .admin-layout .review-edit-modal > button.review-delete-action:not(:disabled):hover,
+app-worker-board app-admin-layout .admin-layout .review-edit-modal > button.review-delete-action:not(:disabled):focus-visible {
+  border-color: rgba(255, 0, 96, 0.34);
+  color: #a6003f;
+  background: rgba(255, 0, 96, 0.08);
+  opacity: 1;
+}
+
+app-worker-board .review-edit-modal > .review-delete-action .material-icons-sharp {
+  font-size: 1rem;
+}
+
+app-worker-board .review-edit-modal .review-delete-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+app-order-details app-admin-layout .admin-layout .review-edit-modal .lead-edit-actions button.review-delete-action {
   flex: 0 0 auto;
-  min-width: 6.8rem;
-  min-height: 2.05rem;
-  padding: 0 0.75rem;
-  border-radius: 0.65rem;
-  font-size: 0.74rem;
+  justify-self: start;
+  width: auto;
+  min-width: 0;
+  min-height: 1.78rem;
+  padding: 0 0.58rem;
+  border: 1px solid rgba(255, 0, 96, 0.18);
+  border-radius: 0.55rem;
+  color: rgba(166, 0, 63, 0.72);
+  background: rgba(255, 0, 96, 0.035);
+  box-shadow: none;
+  font-size: 0.68rem;
+  opacity: 0.74;
+}
+
+app-order-details app-admin-layout .admin-layout .review-edit-modal .lead-edit-actions button.review-delete-action:not(:disabled):hover,
+app-order-details app-admin-layout .admin-layout .review-edit-modal .lead-edit-actions button.review-delete-action:not(:disabled):focus-visible {
+  border-color: rgba(255, 0, 96, 0.34);
+  color: #a6003f;
+  background: rgba(255, 0, 96, 0.08);
+  opacity: 1;
+}
+
+app-worker-board .review-edit-modal .lead-edit-actions {
+  display: block;
+}
+
+app-worker-board .review-edit-modal .lead-edit-actions-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  width: 100%;
 }
 
 app-order-details .review-edit-modal .lead-edit-actions-group {
   flex: 1 1 auto;
+}
+
+app-worker-board .review-edit-modal .review-save-action {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 app-order-details .review-edit-modal .review-save-action {
@@ -2107,12 +2182,12 @@ app-order-details .review-edit-modal .review-save-action {
     gap: 0.65rem;
   }
 
-  app-order-details .review-edit-modal .review-delete-action {
+  app-order-details app-admin-layout .admin-layout .review-edit-modal .lead-edit-actions button.review-delete-action {
     justify-self: start;
     width: auto;
     min-width: 0;
-    min-height: 2.05rem;
-    padding: 0 0.72rem;
+    min-height: 1.72rem;
+    padding: 0 0.54rem;
   }
 
   app-order-details .review-edit-modal .lead-edit-actions-group {
@@ -2121,7 +2196,18 @@ app-order-details .review-edit-modal .review-save-action {
     gap: 0.75rem;
   }
 
-  app-order-details .review-edit-modal .review-save-action {
+  app-worker-board .review-edit-modal .lead-edit-actions {
+    display: block;
+  }
+
+  app-worker-board .review-edit-modal .lead-edit-actions-group {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal .review-save-action {
     grid-column: 1 / -1;
     width: 100%;
   }

@@ -133,6 +133,12 @@ export interface BotChangeResponse {
   newBotId?: number | null;
 }
 
+export interface WorkerActivitySource {
+  sourcePage?: string;
+  sourceEntry?: string;
+  sourceSection?: string;
+}
+
 export interface WorkerBoardQuery {
   section: WorkerBoardSectionQuery;
   keyword?: string;
@@ -182,12 +188,12 @@ export class WorkerApi {
     return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/orders/${orderId}/company-note`, { companyComments });
   }
 
-  changeReviewBot(reviewId: number): Observable<BotChangeResponse> {
-    return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/change-bot`, {});
+  changeReviewBot(reviewId: number, source?: WorkerActivitySource): Observable<BotChangeResponse> {
+    return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/change-bot`, source ?? {});
   }
 
-  deactivateReviewBot(reviewId: number, botId: number): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`, {});
+  deactivateReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`, source ?? {});
   }
 
   publishReview(reviewId: number): Observable<void> {
@@ -236,8 +242,15 @@ export class WorkerApi {
     return this.http.post<WorkerActionResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/nagul`, {});
   }
 
-  logReviewCopyClick(reviewId: number, field: 'login' | 'password'): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/copy-click`, { field });
+  logReviewCopyClick(
+    reviewId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/copy-click`, {
+      field,
+      ...source
+    });
   }
 
   deleteBot(botId: number): Observable<void> {

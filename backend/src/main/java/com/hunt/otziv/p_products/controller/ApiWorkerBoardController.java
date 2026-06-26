@@ -353,7 +353,10 @@ public class ApiWorkerBoardController {
 
     @PostMapping("/reviews/{reviewId}/change-bot")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public BotChangeResponse changeReviewBot(@PathVariable Long reviewId) {
+    public BotChangeResponse changeReviewBot(
+            @PathVariable Long reviewId,
+            @RequestBody(required = false) WorkerActivitySourceRequest source
+    ) {
         Review review = reviewService.getReviewById(reviewId);
         Long oldBotId = botId(review);
         reviewService.changeBot(reviewId);
@@ -365,7 +368,7 @@ public class ApiWorkerBoardController {
                 orderId(review),
                 reviewId,
                 "review",
-                botChangeDetails(oldBotId, newBotId)
+                withSource(botChangeDetails(oldBotId, newBotId), source)
         );
         return new BotChangeResponse(oldBotId, newBotId);
     }
@@ -375,7 +378,8 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public void deactivateReviewBot(
             @PathVariable Long reviewId,
-            @PathVariable Long botId
+            @PathVariable Long botId,
+            @RequestBody(required = false) WorkerActivitySourceRequest source
     ) {
         Review review = reviewService.getReviewById(reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId);
@@ -386,7 +390,7 @@ public class ApiWorkerBoardController {
                 orderId(review),
                 reviewId,
                 "review",
-                "botId=" + valueOrDash(botId)
+                withSource("botId=" + valueOrDash(botId) + ";", source)
         );
     }
 
@@ -424,7 +428,7 @@ public class ApiWorkerBoardController {
                 order != null ? order.getId() : null,
                 reviewId,
                 "copy",
-                credentialCopyDetails(field, bot)
+                withSource(credentialCopyDetails(field, bot), request)
         );
     }
 
@@ -1932,6 +1936,40 @@ public class ApiWorkerBoardController {
         return "field=" + valueOrDash(field) + ";botId=" + valueOrDash(bot == null ? null : bot.getId()) + ";";
     }
 
+    private String withSource(String details, WorkerActivitySourceRequest source) {
+        return withSource(
+                details,
+                source == null ? null : source.sourcePage(),
+                source == null ? null : source.sourceEntry(),
+                source == null ? null : source.sourceSection()
+        );
+    }
+
+    private String withSource(String details, ReviewCopyClickRequest source) {
+        return withSource(
+                details,
+                source == null ? null : source.sourcePage(),
+                source == null ? null : source.sourceEntry(),
+                source == null ? null : source.sourceSection()
+        );
+    }
+
+    private String withSource(String details, String sourcePage, String sourceEntry, String sourceSection) {
+        StringBuilder result = new StringBuilder(details == null ? "" : details);
+        appendDetail(result, "sourcePage", sourcePage);
+        appendDetail(result, "sourceEntry", sourceEntry);
+        appendDetail(result, "sourceSection", sourceSection);
+        return result.toString();
+    }
+
+    private void appendDetail(StringBuilder result, String key, String value) {
+        String cleanValue = safe(value).trim();
+        if (cleanValue.isEmpty()) {
+            return;
+        }
+        result.append(key).append("=").append(cleanValue).append(";");
+    }
+
     private String botChangeDetails(Long oldBotId, Long newBotId) {
         return "oldBotId=" + valueOrDash(oldBotId)
                 + ";newBotId=" + valueOrDash(newBotId)
@@ -2229,7 +2267,13 @@ public class ApiWorkerBoardController {
     public record ClientWaitingRequest(Boolean waitingForClient) {
     }
 
-    public record ReviewCopyClickRequest(String field) {
+    public record WorkerActivitySourceRequest(String sourcePage, String sourceEntry, String sourceSection) {
+    }
+
+    public record ReviewCopyClickRequest(String field, String sourcePage, String sourceEntry, String sourceSection) {
+        public ReviewCopyClickRequest(String field) {
+            this(field, null, null, null);
+        }
     }
 
     public record OrderNoteUpdateRequest(String orderComments) {

@@ -214,6 +214,18 @@ public class PersonalReminderService {
         );
     }
 
+    @Transactional
+    public void deleteSystemRemindersBySource(String sourceType, Long sourceId) {
+        if (sourceId == null || sourceId <= 0) {
+            return;
+        }
+
+        reminderRepository.deleteBySourceTypeAndSourceIdAndCompletedAtIsNull(
+                trimOrDefault(sourceType, ""),
+                sourceId
+        );
+    }
+
     private void applyRequest(PersonalReminder reminder, PersonalReminderRequest request, Instant now) {
         String mode = normalizeMode(request.reminderMode());
         Instant remindAt = null;

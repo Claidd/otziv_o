@@ -234,6 +234,78 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     List<Object[]> countByWorkerIdsAndStatus(@Param("workerIds") List<Long> workerIds,
                                              @Param("status") String status);
 
+    @Query("""
+        SELECT COALESCE(s.title, ''), COUNT(o.id)
+        FROM Order o
+        LEFT JOIN o.status s
+        WHERE o.worker.id IN :workerIds
+          AND o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND s.title IN :statuses
+        GROUP BY s.id, s.title
+    """)
+    List<Object[]> countManagerControlWorkerStaleOrdersByStatus(@Param("workerIds") Collection<Long> workerIds,
+                                                                @Param("statuses") Collection<String> statuses,
+                                                                @Param("cutoff") LocalDate cutoff);
+
+    @Query("""
+        SELECT o
+        FROM Order o
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        WHERE o.worker.id IN :workerIds
+          AND o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND o.status.title = :status
+        ORDER BY o.changed ASC, o.id ASC
+    """)
+    List<Order> findManagerControlWorkerStaleOrders(@Param("workerIds") Collection<Long> workerIds,
+                                                    @Param("status") String status,
+                                                    @Param("cutoff") LocalDate cutoff,
+                                                    Pageable pageable);
+
+    @Query("""
+        SELECT o
+        FROM Order o
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        WHERE o.worker.id IN :workerIds
+          AND o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.changed <= :cutoff
+          AND o.status.title = :status
+        ORDER BY o.changed ASC, o.id ASC
+    """)
+    List<Order> findManagerControlWorkerStaleOrders(@Param("workerIds") Collection<Long> workerIds,
+                                                    @Param("status") String status,
+                                                    @Param("cutoff") LocalDate cutoff);
+
+    @Query("""
+        SELECT o
+        FROM Order o
+        LEFT JOIN FETCH o.status
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        WHERE o.worker.id IN :workerIds
+          AND o.complete = false
+          AND o.changed IS NOT NULL
+          AND o.status.title = 'Новый'
+          AND (o.changed <= :cutoff OR o.waitingForClient = true)
+        ORDER BY o.changed ASC, o.id ASC
+    """)
+    List<Order> findManagerControlWorkerNewOrdersForControl(@Param("workerIds") Collection<Long> workerIds,
+                                                            @Param("cutoff") LocalDate cutoff);
+
     @Query("SELECT o.id FROM Order o ORDER BY o.changed, o.id")
     List<Long> findAllIdToAdmin();
 

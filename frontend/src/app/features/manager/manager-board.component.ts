@@ -1142,7 +1142,11 @@ export class ManagerBoardComponent implements OnDestroy {
 
     this.toastService.info(
       'Жду привязку Telegram',
-      `После выбора группы карточка "${title}" обновится сама, текущая страница останется на месте.`
+      `После выбора группы карточка "${title}" обновится сама, текущая страница останется на месте.`,
+      [{
+        label: 'Скопировать ссылку',
+        callback: () => void this.copyText(inviteUrl, 'telegram-link', 'Ссылка Telegram скопирована')
+      }]
     );
   }
 

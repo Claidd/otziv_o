@@ -161,6 +161,7 @@ fi
 kc_retry update "realms/$REALM" \
   -s sslRequired=external \
   -s loginTheme=otziv \
+  -s editUsernameAllowed=true \
   -s accessTokenLifespan=600 \
   -s ssoSessionIdleTimeout=28800 \
   -s ssoSessionMaxLifespan=86400 \

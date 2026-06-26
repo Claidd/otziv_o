@@ -602,7 +602,7 @@ public class WorkerRiskEvaluationService {
         incident.setReviewId(event.getReviewId());
         incident.setTitle(limit(finding.title(), 180));
         incident.setMessage(limit(message(event, finding), DETAILS_LIMIT));
-        incident.setDetails(limit(finding.details(), DETAILS_LIMIT));
+        incident.setDetails(limit(finding.details() + sourceContextText(event), DETAILS_LIMIT));
         WorkerRiskIncident savedIncident = incidentRepository.save(incident);
 
         notifySafely(() -> notifyManagers(workerUser, savedIncident), workerUser.getId(), savedIncident.getId());
@@ -841,7 +841,89 @@ public class WorkerRiskEvaluationService {
                 + "\nЗаказ: #" + valueOrDash(event.getOrderId())
                 + "\nОтзыв: #" + valueOrDash(event.getReviewId())
                 + "\nОбъект: " + clean(event.getEntityType()) + " #" + valueOrDash(event.getEntityId())
-                + "\n" + finding.details();
+                + "\n" + finding.details()
+                + sourceContextText(event);
+    }
+
+    private String sourceContextText(WorkerActivityEvent event) {
+        String page = detailValue(event == null ? null : event.getDetails(), "sourcePage");
+        String entry = detailValue(event == null ? null : event.getDetails(), "sourceEntry");
+        String section = firstNonBlank(
+                detailValue(event == null ? null : event.getDetails(), "sourceSection"),
+                event == null ? null : event.getSection()
+        );
+
+        String place = sourcePageLabel(page);
+        String entryLabel = sourceEntryLabel(entry);
+        String sectionLabel = sourceSectionLabel(section);
+
+        if (place.isBlank() && entryLabel.isBlank() && sectionLabel.isBlank()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder("\nМесто: ");
+        result.append(place.isBlank() ? "Не указано" : place);
+        if (!entryLabel.isBlank()) {
+            result.append(", вход: ").append(entryLabel);
+        }
+        if (!sectionLabel.isBlank()) {
+            result.append(", раздел: ").append(sectionLabel);
+        }
+        return result.toString();
+    }
+
+    private String detailValue(String details, String key) {
+        if (details == null || key == null || key.isBlank()) {
+            return "";
+        }
+        String prefix = key + "=";
+        for (String part : details.split(";")) {
+            String cleanPart = part.trim();
+            if (cleanPart.startsWith(prefix)) {
+                return clean(cleanPart.substring(prefix.length()));
+            }
+        }
+        return "";
+    }
+
+    private String sourcePageLabel(String page) {
+        return switch (clean(page)) {
+            case "order-details" -> "Детали заказа";
+            case "worker-board" -> "Специалист";
+            default -> clean(page);
+        };
+    }
+
+    private String sourceEntryLabel(String entry) {
+        return switch (clean(entry)) {
+            case "worker-all" -> "Специалист -> Все";
+            default -> clean(entry);
+        };
+    }
+
+    private String sourceSectionLabel(String section) {
+        return switch (clean(section)) {
+            case "all" -> "Все";
+            case "publish" -> "Публикация";
+            case "nagul" -> "Выгул";
+            case "recovery" -> "Восстановление";
+            case "bad" -> "Плохие";
+            case "new" -> "Новые";
+            case "correct" -> "Коррекция";
+            default -> clean(section);
+        };
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (!clean(value).isBlank()) {
+                return clean(value);
+            }
+        }
+        return "";
     }
 
     private String workerName(User user) {

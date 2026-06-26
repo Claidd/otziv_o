@@ -38,6 +38,9 @@ export interface AdminUser {
   fio?: string;
   phoneNumber?: string;
   coefficient?: number;
+  workerChatUrl?: string;
+  workerTelegramGroupChatId?: number | null;
+  workerTelegramBotInviteUrl?: string;
   imageId?: number | null;
   active: boolean;
   createTime?: string;
@@ -46,10 +49,12 @@ export interface AdminUser {
 }
 
 export interface UpdateKeycloakUserRequest {
+  username?: string;
   email?: string;
   fio?: string;
   phoneNumber?: string;
   coefficient?: number;
+  workerChatUrl?: string;
   enabled: boolean;
   roles: string[];
 }

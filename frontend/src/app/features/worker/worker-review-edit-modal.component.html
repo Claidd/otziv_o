@@ -1,11 +1,26 @@
 <div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
   <section
     class="lead-edit-modal review-edit-modal"
+    [class.review-edit-modal--deletable]="canDelete"
     role="dialog"
     aria-modal="true"
     aria-labelledby="review-edit-title"
     (click)="$event.stopPropagation()"
   >
+    @if (canDelete) {
+      <button
+        type="button"
+        class="danger review-delete-action"
+        (click)="deleted.emit()"
+        [disabled]="busy"
+        [title]="deleting ? 'Удаляю...' : 'Удалить'"
+        [attr.aria-label]="deleting ? 'Удаляю отзыв' : 'Удалить отзыв'"
+      >
+        <span class="material-icons-sharp">delete</span>
+        <span class="review-delete-label">{{ deleting ? 'Удаляю...' : 'Удалить' }}</span>
+      </button>
+    }
+
     <header class="lead-edit-head">
       <div>
         <small>Отзыв #{{ review?.id }}</small>
@@ -116,15 +131,17 @@
               >
             </label>
 
-            <label class="lead-edit-field">
-              <span>Пароль бота</span>
-              <input
-                name="reviewBotPassword"
-                type="text"
-                [ngModel]="draft.botPassword"
-                (ngModelChange)="setField('botPassword', $event)"
-              >
-            </label>
+            @if (!hideBotPassword) {
+              <label class="lead-edit-field">
+                <span>Пароль бота</span>
+                <input
+                  name="reviewBotPassword"
+                  type="text"
+                  [ngModel]="draft.botPassword"
+                  (ngModelChange)="setField('botPassword', $event)"
+                >
+              </label>
+            }
 
             @if (canEditPublish) {
               <label class="review-edit-check">
@@ -176,13 +193,7 @@
             }
           </div>
 
-          <div class="lead-edit-actions" [class.lead-edit-actions--split]="canDelete">
-            @if (canDelete) {
-              <button type="button" class="danger" (click)="deleted.emit()" [disabled]="busy">
-                {{ deleting ? 'Удаляю...' : 'Удалить' }}
-              </button>
-            }
-
+          <div class="lead-edit-actions">
             <div class="lead-edit-actions-group">
               <button
                 type="button"
@@ -202,6 +213,7 @@
               </button>
               <button
                 type="submit"
+                class="review-save-action"
                 [disabled]="busy || reviewEditForm.invalid"
               >
                 {{ saving ? 'Сохраняю...' : 'Сохранить' }}

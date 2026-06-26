@@ -757,6 +757,14 @@
   opacity: 1;
 }
 
+.review-actions button.review-credential-action--muted:disabled {
+  border-color: rgba(132, 143, 158, 0.18);
+  color: rgba(103, 116, 131, 0.48);
+  background: #f3f5f8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+  cursor: not-allowed;
+}
+
 .review-actions button.recovery-action {
   color: #675000;
   background: #fff8d8;

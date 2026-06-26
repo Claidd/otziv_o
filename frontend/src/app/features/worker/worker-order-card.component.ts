@@ -40,6 +40,7 @@ export class WorkerOrderCardComponent {
   @Input() noteChanged = false;
   @Input() noteExpanded = false;
   @Input() canOpenEditModal = true;
+  @Input() isOnlyWorkerRole = false;
   activeCategoryPopover: CategoryPopover | null = null;
 
   @Output() readonly companyNoteSaved = new EventEmitter<string>();
@@ -116,6 +117,10 @@ export class WorkerOrderCardComponent {
 
   orderEditUrl(): string {
     return workerOrderDetailsPath(this.order);
+  }
+
+  orderDetailsQueryParams(): { from: 'worker-all' } | null {
+    return this.activeSection === 'all' && this.isOnlyWorkerRole ? { from: 'worker-all' } : null;
   }
 
   progress(): number {

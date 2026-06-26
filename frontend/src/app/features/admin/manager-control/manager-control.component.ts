@@ -143,6 +143,10 @@ export class ManagerControlComponent {
     return this.summary()?.criticalTotal ?? 0;
   }
 
+  otherCriticalCount(manager: ManagerControlManager): number {
+    return Math.max(0, manager.criticalCount - manager.overdueOrderCount - manager.openRiskCount);
+  }
+
   workloadTotal(): number {
     return this.summary()?.workloadTotal ?? 0;
   }
@@ -397,12 +401,70 @@ export class ManagerControlComponent {
     }
   }
 
-  markContactSent(example: ManagerControlConcreteItem): void {
-    if (!this.canMarkContactSent(example)) {
-      this.toast.error('Сначала подготовьте сообщение', 'Нажмите «Текст», отправьте его клиенту, затем отметьте «Отправлено»');
+  sendClientMessage(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) {
       return;
     }
-    this.markConcreteItem(example, 'ACTION_TAKEN');
+    if (!this.canSendClientMessage(example)) {
+      this.toast.error('Сообщение не собрано', 'Для этой карточки нет готового текста клиенту');
+      return;
+    }
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.api.sendClientMessage(itemId).subscribe({
+      next: (updated) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        const merged = this.patchDetailConcreteItem(example, updated);
+        this.toast.success('Сообщение отправлено', 'Карточка уйдет из контроля до повторной проверки');
+        if (this.shouldHideConcreteItemAfterAction(merged)) {
+          this.removeConcreteItemFromDetail(merged);
+        }
+        this.load();
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Сообщение не отправлено', apiErrorMessage(err, 'Не удалось отправить сообщение клиенту'));
+      }
+    });
+  }
+
+  repairConcreteItem(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.api.repairConcreteItem(itemId).subscribe({
+      next: (updated) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        const merged = this.patchDetailConcreteItem(example, updated);
+        this.toast.success('Карточка починена', merged.comment || 'Проблема устранена автоматически');
+        if (this.shouldHideConcreteItemAfterAction(merged)) {
+          this.removeConcreteItemFromDetail(merged);
+        }
+        this.load();
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Не удалось починить', apiErrorMessage(err, 'Автоматическая починка не сработала'));
+      }
+    });
   }
 
   requestWorkerTask(example: ManagerControlConcreteItem): void {
@@ -411,14 +473,6 @@ export class ManagerControlComponent {
       this.updateConcreteComment(itemId, this.workerTaskRequestComment(example));
     }
     this.markConcreteItem(example, 'ACTION_TAKEN');
-  }
-
-  markWorkerTaskSentManually(example: ManagerControlConcreteItem): void {
-    const itemId = example.controlEntityId;
-    if (itemId) {
-      this.updateConcreteComment(itemId, this.workerTaskManualComment(example));
-    }
-    this.markConcreteItem(example, 'ACTION_TAKEN', { manualWorkerNotification: true });
   }
 
   contactText(example: ManagerControlConcreteItem): string {
@@ -433,13 +487,35 @@ export class ManagerControlComponent {
     return example.type === 'ORDER' && !!this.contactText(example);
   }
 
+  canSendClientMessage(example: ManagerControlConcreteItem): boolean {
+    return (example.type === 'ORDER' || example.type === 'WORKER_ORDER_NEW') && !!this.contactText(example);
+  }
+
+  canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
+    const reason = (example.reason ?? '').toLowerCase();
+    const repairableWaitingClient = example.type === 'WORKER_ORDER_NEW'
+      && this.isWaitingForClientExample(example)
+      && (
+        reason.includes('client_text_reminder')
+        || reason.includes('снимите статус')
+        || reason.includes('автоответчик не отправляет')
+      );
+    const repairableOrderQueue = example.type === 'ORDER'
+      && !reason.includes('не может отправить сообщение')
+      && !reason.includes('не привязан')
+      && (
+        reason.includes('записи в очереди')
+        || reason.includes('нет активного')
+        || reason.includes('нет активной')
+        || reason.includes('автоответчик не обработал')
+        || reason.includes('автоответчик не закрыл')
+      );
+    return repairableWaitingClient || repairableOrderQueue;
+  }
+
   isContactTextCopied(example: ManagerControlConcreteItem): boolean {
     const itemId = example.controlEntityId;
     return !!itemId && this.preparedContactItemIds().has(itemId);
-  }
-
-  canMarkContactSent(example: ManagerControlConcreteItem): boolean {
-    return this.canContactOrder(example) && this.isContactTextCopied(example);
   }
 
   requiresPreparedContact(example: ManagerControlConcreteItem, actionType: ManagerControlActionType): boolean {
@@ -472,20 +548,7 @@ export class ManagerControlComponent {
     return fallback;
   }
 
-  contactSentDisabledTitle(example: ManagerControlConcreteItem): string {
-    if (this.isConcreteUpdating(example.controlEntityId)) {
-      return 'Сохраняю действие';
-    }
-    if (!this.canMarkContactSent(example)) {
-      return 'Сначала нажмите «Текст» и отправьте сообщение клиенту';
-    }
-    return 'Отметить ручную отправку';
-  }
-
   contactFollowUpHint(example: ManagerControlConcreteItem): string {
-    if (!this.canMarkContactSent(example)) {
-      return 'сначала скопируйте текст';
-    }
     if (example.followUpAt) {
       return `скроется до ${new Date(example.followUpAt).toLocaleString('ru-RU', {
         day: '2-digit',
@@ -494,28 +557,48 @@ export class ManagerControlComponent {
         minute: '2-digit'
       })}`;
     }
-    return 'скроется до повтора через 2 дня';
+    return 'отправит и скроет до повторной проверки';
   }
 
   canRequestWorkerTask(example: ManagerControlConcreteItem): boolean {
-    return example.type === 'BAD_REVIEW_TASK' || example.type === 'RECOVERY_TASK';
+    return example.type === 'BAD_REVIEW_TASK'
+      || example.type === 'RECOVERY_TASK'
+      || example.type === 'PUBLISH_REVIEW'
+      || example.type === 'NAGUL_REVIEW'
+      || example.type === 'WORKER_ORDER_NEW'
+      || example.type === 'WORKER_ORDER_CORRECT'
+      || example.type === 'RISK';
   }
 
-  canMarkWorkerTaskSentManually(example: ManagerControlConcreteItem): boolean {
+  canOpenOrderFromWorkerTask(example: ManagerControlConcreteItem): boolean {
     return this.canRequestWorkerTask(example)
-      && !example.workerNotificationSentAt
-      && !example.workerNotificationAcceptedAt
-      && !this.isManualWorkerRequest(example);
+      && example.type !== 'RISK'
+      && this.detailExamplePrimaryUrl(example, null) !== '#';
   }
 
   workerTaskRequestComment(example: ManagerControlConcreteItem): string {
-    const type = example.type === 'RECOVERY_TASK' ? 'восстановлению' : 'плохому отзыву';
-    return `Специалисту отправлен запрос выполнить задачу по ${type}. Повторный контроль завтра.`;
+    return `Специалисту отправлен запрос: ${this.workerProblemLabel(example)}. Повторный контроль через 3 ч.`;
   }
 
-  workerTaskManualComment(example: ManagerControlConcreteItem): string {
-    const type = example.type === 'RECOVERY_TASK' ? 'восстановлению' : 'плохому отзыву';
-    return `Специалисту отправлен запрос вручную выполнить задачу по ${type}. Повторный контроль завтра.`;
+  workerProblemLabel(example: ManagerControlConcreteItem): string {
+    switch (example.type) {
+      case 'RECOVERY_TASK':
+        return 'проверьте восстановление';
+      case 'BAD_REVIEW_TASK':
+        return 'проверьте плохой отзыв';
+      case 'PUBLISH_REVIEW':
+        return 'проверьте публикацию';
+      case 'NAGUL_REVIEW':
+        return 'проверьте выгул';
+      case 'WORKER_ORDER_NEW':
+        return 'подготовьте текст нового заказа';
+      case 'WORKER_ORDER_CORRECT':
+        return 'проверьте коррекцию';
+      case 'RISK':
+        return 'проверьте открытый риск';
+      default:
+        return 'проверьте проблему';
+    }
   }
 
   managerActionNote(example: ManagerControlConcreteItem): string {
@@ -540,18 +623,15 @@ export class ManagerControlComponent {
     if (!this.canRequestWorkerTask(example)) {
       return '';
     }
-    if (this.isManualWorkerRequest(example)) {
-      return `запрос отправлен вручную${example.followUpAt ? `, повтор ${this.shortDateTime(example.followUpAt)}` : ''}`;
-    }
     if (example.workerNotificationAcceptedAt) {
       return `работник принял ${this.shortDateTime(example.workerNotificationAcceptedAt)}`;
     }
     if (example.workerNotificationSentAt) {
-      return `Telegram отправлен ${this.shortDateTime(example.workerNotificationSentAt)}, ждем принятия`;
+      return `запрос отправлен в группу ${this.shortDateTime(example.workerNotificationSentAt)}, ждем принятия`;
     }
     if (example.workerNotificationAttemptedAt) {
       const reason = (example.workerNotificationFailureReason ?? '').trim();
-      return reason ? `Telegram не доставлен: ${reason}` : 'Telegram не доставлен';
+      return reason ? `запрос не доставлен: ${reason}` : 'запрос не доставлен';
     }
     return '';
   }
@@ -560,26 +640,20 @@ export class ManagerControlComponent {
     if (!this.canRequestWorkerTask(example)) {
       return '';
     }
-    if (this.isManualWorkerRequest(example)) {
-      return 'Вручную';
-    }
     if (example.workerNotificationAcceptedAt) {
       return 'Принял';
     }
     if (example.workerNotificationSentAt) {
-      return 'TG отправлен';
+      return 'В группу';
     }
     if (example.workerNotificationAttemptedAt) {
       const reason = (example.workerNotificationFailureReason ?? '').trim();
-      return reason.includes('не привязан') ? 'TG не привязан' : 'Не доставлено';
+      return reason.includes('не привязан') ? 'Группа не привязана' : 'Не доставлено';
     }
-    return 'TG не отправлен';
+    return 'Не отправлен';
   }
 
   workerNotificationBadgeClass(example: ManagerControlConcreteItem): string {
-    if (this.isManualWorkerRequest(example)) {
-      return 'sent';
-    }
     if (example.workerNotificationAcceptedAt) {
       return 'accepted';
     }
@@ -593,7 +667,7 @@ export class ManagerControlComponent {
   }
 
   workerNotificationTitle(example: ManagerControlConcreteItem): string {
-    return this.workerNotificationNote(example) || 'Telegram еще не отправлялся';
+    return this.workerNotificationNote(example) || 'Запрос в группу еще не отправлялся';
   }
 
   isManualWorkerRequest(example: ManagerControlConcreteItem): boolean {
@@ -656,6 +730,11 @@ export class ManagerControlComponent {
     });
   }
 
+  isWaitingForClientExample(example: ManagerControlConcreteItem): boolean {
+    const text = `${example.subtitle ?? ''} ${example.reason ?? ''}`.toLowerCase();
+    return text.includes('ждет клиента') || text.includes('ждёт клиента');
+  }
+
   exampleIcon(example: ManagerControlConcreteItem): string {
     switch (example.type) {
       case 'RISK':
@@ -668,6 +747,12 @@ export class ManagerControlComponent {
         return 'restore';
       case 'PUBLISH_REVIEW':
         return 'rate_review';
+      case 'NAGUL_REVIEW':
+        return 'directions_walk';
+      case 'WORKER_ORDER_NEW':
+        return 'fiber_new';
+      case 'WORKER_ORDER_CORRECT':
+        return 'edit_note';
       default:
         return 'inventory_2';
     }
@@ -739,9 +824,9 @@ export class ManagerControlComponent {
   }
 
   private shouldHideConcreteItemAfterAction(example: ManagerControlConcreteItem): boolean {
-    return !!example.followUpAt
-      && !!example.itemStatus
-      && example.itemStatus !== 'OPEN';
+    return !!example.itemStatus
+      && example.itemStatus !== 'OPEN'
+      && (!!example.followUpAt || example.itemStatus === 'RESOLVED');
   }
 
   private removeConcreteItemFromDetail(example: ManagerControlConcreteItem): void {
@@ -777,17 +862,13 @@ export class ManagerControlComponent {
     options: { manualWorkerNotification?: boolean } = {}
   ): void {
     if (actionType === 'ACTION_TAKEN' && this.canRequestWorkerTask(example)) {
-      if (options.manualWorkerNotification || this.isManualWorkerRequest(example)) {
-        this.toast.success('Ручная отправка отмечена', 'Карточка уйдет из контроля до повторной проверки');
-        return;
-      }
       if (example.workerNotificationSentAt) {
-        this.toast.success('Запрос отправлен', 'Telegram отправлен работнику, ждем кнопку «Принял»');
+        this.toast.success('Запрос отправлен', 'Сообщение ушло в группу специалиста, ждем кнопку «Принял»');
         return;
       }
       if (example.workerNotificationAttemptedAt) {
-        const reason = example.workerNotificationFailureReason?.trim() || 'Telegram не принял сообщение';
-        this.toast.error('Telegram не доставлен', reason);
+        const reason = example.workerNotificationFailureReason?.trim() || 'Telegram не принял сообщение в группу';
+        this.toast.error('Запрос не доставлен', reason);
         return;
       }
     }

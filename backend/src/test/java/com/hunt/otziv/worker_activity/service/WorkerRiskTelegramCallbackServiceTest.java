@@ -7,6 +7,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
@@ -140,6 +141,24 @@ class WorkerRiskTelegramCallbackServiceTest {
         );
         verify(telegramService).sendMessage(eq(888L), any());
         verify(telegramService).sendMessage(eq(999L), any());
+    }
+
+    @Test
+    void verifiedCallbackDeletesOpenRiskReminder() {
+        WorkerRiskIncident incident = incident();
+        User admin = user(1L, "admin", 777L, "ROLE_ADMIN");
+
+        when(userService.findByChatId(777L)).thenReturn(Optional.of(admin));
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 777L, "worker-risk:77:v"));
+
+        assertEquals(Optional.of("Инцидент проверен"), answer);
+        verify(personalReminderService).deleteSystemRemindersBySource(
+                WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
+                77L
+        );
     }
 
     private CallbackQuery callbackFromGroup(long groupChatId, long actorTelegramId, String data) {

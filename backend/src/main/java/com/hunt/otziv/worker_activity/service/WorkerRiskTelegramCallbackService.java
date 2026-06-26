@@ -7,6 +7,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_activity.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
@@ -253,7 +254,8 @@ public class WorkerRiskTelegramCallbackService {
             notifyWorkerViolation(incident);
         }
 
-        incidentRepository.save(incident);
+        WorkerRiskIncident savedIncident = incidentRepository.save(incident);
+        deleteResolvedRiskReminders(savedIncident);
     }
 
     private WorkerRiskIncidentStatus statusFor(WorkerRiskResolutionAction action) {
@@ -263,6 +265,17 @@ public class WorkerRiskTelegramCallbackService {
             case VIOLATION_CONFIRMED -> WorkerRiskIncidentStatus.VIOLATION;
             case VERIFIED -> WorkerRiskIncidentStatus.RESOLVED;
         };
+    }
+
+    private void deleteResolvedRiskReminders(WorkerRiskIncident incident) {
+        if (incident == null || incident.getStatus() == WorkerRiskIncidentStatus.OPEN) {
+            return;
+        }
+
+        personalReminderService.deleteSystemRemindersBySource(
+                WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
+                incident.getId()
+        );
     }
 
     private void requestWorkerExplanation(WorkerRiskIncident incident) {

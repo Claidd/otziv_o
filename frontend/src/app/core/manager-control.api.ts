@@ -234,6 +234,20 @@ export class ManagerControlApi {
     );
   }
 
+  sendClientMessage(concreteItemId: number): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/send-client-message`,
+      {}
+    );
+  }
+
+  repairConcreteItem(concreteItemId: number): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/repair`,
+      {}
+    );
+  }
+
   managerDetails(managerId: number): Observable<ManagerControlManagerDetail> {
     return this.http.get<ManagerControlManagerDetail>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/managers/${managerId}/today`

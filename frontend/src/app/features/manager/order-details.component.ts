@@ -125,6 +125,7 @@ export class OrderDetailsComponent {
   readonly mobilePreviewReviewTextId = signal<number | null>(null);
   readonly editingReviewNoteId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
+  readonly copiedReviewCredentials = signal<Record<number, { botId?: number | null; botLogin?: boolean; botPassword?: boolean }>>({});
   readonly savedReviewNoteId = signal<number | null>(null);
   readonly openReviewNotePopoverId = signal<number | null>(null);
   readonly editingSideNoteField = signal<SideNoteField | null>(null);
@@ -149,6 +150,7 @@ export class OrderDetailsComponent {
   readonly companyReportVisible = signal(false);
   readonly companyReportLoading = signal(false);
   readonly companyReportError = signal<string | null>(null);
+  readonly openedFromWorkerAll = signal(false);
   readonly tbankStatus = signal<TbankPaymentStatus | null>(null);
   readonly paymentLink = signal<ManagerPaymentLinkResponse | null>(null);
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
@@ -231,6 +233,11 @@ export class OrderDetailsComponent {
       const job = this.deepReportMonitor.currentJob();
       queueMicrotask(() => this.applyMonitoredCompanyReportJob(job));
     });
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        this.openedFromWorkerAll.set(params.get('from') === 'worker-all');
+      });
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
@@ -318,7 +325,30 @@ export class OrderDetailsComponent {
     };
 
     const item = map[kind];
-    await this.copyText(item.value, `${review.id}-${kind}`, item.label);
+    const copied = await this.copyText(item.value, `${review.id}-${kind}`, item.label);
+    if (copied) {
+      this.markReviewCredentialCopied(review, kind);
+      this.logReviewCredentialCopyClick(review, kind);
+    }
+  }
+
+  reviewAccountActionLocked(review: OrderReviewItem): boolean {
+    if (!this.openedFromWorkerAll() || !this.isOnlyWorkerRole()) {
+      return false;
+    }
+
+    const copied = this.copiedReviewCredentials()[review.id];
+    return !(copied?.botLogin && copied.botPassword && copied.botId === (review.botId ?? null));
+  }
+
+  reviewAccountActionTitle(review: OrderReviewItem): string {
+    return this.reviewAccountActionLocked(review)
+      ? 'Сначала скопируйте логин и пароль аккаунта'
+      : 'Действие с аккаунтом';
+  }
+
+  hideReviewBotPasswordField(): boolean {
+    return this.isOnlyWorkerRole();
   }
 
   startReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
@@ -1266,13 +1296,18 @@ export class OrderDetailsComponent {
   }
 
   changeBot(review: OrderReviewItem): void {
+    if (this.reviewAccountActionLocked(review)) {
+      this.toastService.info('Сначала данные аккаунта', 'Скопируйте логин и пароль перед сменой аккаунта');
+      return;
+    }
+
     const key = `bot-${review.id}`;
     const oldBotId = review.botId ?? null;
 
     this.mutationKey.set(key);
     this.error.set(null);
 
-    this.managerApi.changeOrderReviewBot(review.orderId, review.id).subscribe({
+    this.managerApi.changeOrderReviewBot(review.orderId, review.id, this.orderDetailsActivitySource()).subscribe({
       next: (updatedReview) => {
         this.applyUpdatedOrderReview(updatedReview);
         this.mutationKey.set(null);
@@ -1331,6 +1366,11 @@ export class OrderDetailsComponent {
   }
 
   deactivateBot(review: OrderReviewItem): void {
+    if (this.reviewAccountActionLocked(review)) {
+      this.toastService.info('Сначала данные аккаунта', 'Скопируйте логин и пароль перед блокировкой аккаунта');
+      return;
+    }
+
     if (!review.botId) {
       this.toastService.error('Аккаунт не заблокирован', 'У отзыва нет активного аккаунта');
       return;
@@ -1343,7 +1383,7 @@ export class OrderDetailsComponent {
 
     this.runReviewMutation(
       `block-${review.id}`,
-      this.managerApi.deactivateOrderReviewBot(review.orderId, review.id, review.botId),
+      this.managerApi.deactivateOrderReviewBot(review.orderId, review.id, review.botId, this.orderDetailsActivitySource()),
       'Аккаунт заблокирован',
       'Назначен новый доступный аккаунт'
     );
@@ -2475,6 +2515,46 @@ export class OrderDetailsComponent {
 
     this.toastService.error('Не скопировано', failureToast);
     return false;
+  }
+
+  private markReviewCredentialCopied(review: OrderReviewItem, kind: ReviewCopyKind): void {
+    if (kind !== 'botLogin' && kind !== 'botPassword') {
+      return;
+    }
+
+    this.copiedReviewCredentials.update((current) => {
+      const existing = current[review.id];
+      const botId = review.botId ?? null;
+      const base = existing?.botId === botId ? existing : { botId };
+      return {
+        ...current,
+        [review.id]: {
+          ...base,
+          [kind]: true
+        }
+      };
+    });
+  }
+
+  private logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): void {
+    if (kind !== 'botLogin' && kind !== 'botPassword') {
+      return;
+    }
+
+    const field = kind === 'botLogin' ? 'login' : 'password';
+    this.managerApi.logOrderReviewCopyClick(review.id, field, this.orderDetailsActivitySource()).subscribe({
+      error: () => {
+        // Копирование не блокируем: лог нужен для проверки рисков, но не должен мешать работе.
+      }
+    });
+  }
+
+  private orderDetailsActivitySource(): { sourcePage: string; sourceEntry?: string; sourceSection?: string } {
+    return {
+      sourcePage: 'order-details',
+      sourceEntry: this.openedFromWorkerAll() ? 'worker-all' : undefined,
+      sourceSection: this.openedFromWorkerAll() ? 'all' : undefined
+    };
   }
 
   private applyUpdatedOrderReview(updatedReview: OrderReviewItem): void {

@@ -28,6 +28,7 @@ import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -85,6 +86,7 @@ public class OrderServiceImpl implements OrderService {
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
     private final GamificationEventService gamificationEventService;
+    private final ReviewBotCooldownService botCooldownService;
     private final PlatformTransactionManager transactionManager;
 
     public static final String ADMIN = "ROLE_ADMIN";
@@ -526,6 +528,7 @@ public class OrderServiceImpl implements OrderService {
 
             if (review.getBot() != null) {
                 orderBotLifecycleService.updateBotCounterAndStatus(review.getBot());
+                botCooldownService.markReleased(review.getBot(), "review published");
                 log.info("Увеличили кол-во публикаций у бота");
             } else {
                 log.warn("У отзыва id={} нет бота, счетчик бота не обновлялся", reviewId);

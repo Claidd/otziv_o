@@ -186,7 +186,7 @@
     }
   </div>
 
-  <a class="details-button" [routerLink]="['/orders', order.companyId, order.id]">Подробнее</a>
+  <a class="details-button" [routerLink]="['/orders', order.companyId, order.id]" [queryParams]="orderDetailsQueryParams()">Подробнее</a>
 
   <footer>
     <span
@@ -204,7 +204,7 @@
         {{ workerLabel() }}
       </a>
     } @else {
-      <a [routerLink]="['/orders', order.companyId, order.id]" [title]="order.workerUserFio || 'Специалист не назначен'">
+      <a [routerLink]="['/orders', order.companyId, order.id]" [queryParams]="orderDetailsQueryParams()" [title]="order.workerUserFio || 'Специалист не назначен'">
         {{ workerLabel() }}
       </a>
     }

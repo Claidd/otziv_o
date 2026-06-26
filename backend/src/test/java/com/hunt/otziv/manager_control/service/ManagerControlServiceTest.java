@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
@@ -28,10 +29,13 @@ import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -40,7 +44,9 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -90,6 +96,8 @@ class ManagerControlServiceTest {
     @Mock
     private ReviewService reviewService;
     @Mock
+    private ReviewRepository reviewRepository;
+    @Mock
     private OrderRepository orderRepository;
     @Mock
     private CommonInvoiceRepository commonInvoiceRepository;
@@ -108,13 +116,20 @@ class ManagerControlServiceTest {
     private ManagerControlService service;
 
     @Test
-    void manualWorkerActionSnoozesForThreeHoursAndDoesNotRequireTelegramDelivery() {
+    void manualWorkerActionSendsTelegramAndSnoozesForThreeHoursWhenDelivered() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
         ManagerDailyControlConcreteItem concrete = concrete(control, parent, "BAD_REVIEW_TASK");
-        concrete.setWorkerNotificationAttemptedAt(LocalDateTime.now().minusMinutes(5));
-        concrete.setWorkerNotificationFailureReason("Telegram работника не привязан");
         stubSuccessfulConcreteAction(concrete, parent);
+        BadReviewTask task = new BadReviewTask();
+        Worker worker = new Worker();
+        User workerUser = new User();
+        workerUser.setId(501L);
+        workerUser.setWorkerTelegramGroupChatId(-100123L);
+        worker.setUser(workerUser);
+        task.setWorker(worker);
+        when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
+        when(telegramService.sendMessageWithInlineKeyboard(eq(-100123L), any(), any(), any())).thenReturn(true);
 
         LocalDateTime before = LocalDateTime.now();
         ManagerControlConcreteItemResponse response = service.actionConcreteItem(
@@ -131,11 +146,45 @@ class ManagerControlServiceTest {
         assertNotNull(concrete.getFollowUpAt());
         assertFalse(concrete.getFollowUpAt().isBefore(before.plusHours(3)));
         assertFalse(concrete.getFollowUpAt().isAfter(after.plusHours(3)));
-        assertNull(concrete.getWorkerNotificationAttemptedAt());
-        assertNull(concrete.getWorkerNotificationSentAt());
+        assertNotNull(concrete.getWorkerNotificationAttemptedAt());
+        assertNotNull(concrete.getWorkerNotificationSentAt());
         assertNull(concrete.getWorkerNotificationFailureReason());
         assertTrue(concrete.getComment().contains("Повторный контроль через 3 ч."));
         assertEquals("ACTION_TAKEN", response.itemStatus());
+        verify(telegramService).sendMessageWithInlineKeyboard(eq(-100123L), any(), any(), any());
+    }
+
+    @Test
+    void manualWorkerActionKeepsCardOpenWhenTelegramIsNotDelivered() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "BAD_REVIEW_TASK");
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        BadReviewTask task = new BadReviewTask();
+        Worker worker = new Worker();
+        User workerUser = new User();
+        workerUser.setId(501L);
+        worker.setUser(workerUser);
+        task.setWorker(worker);
+        when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
+
+        ManagerControlConcreteItemResponse response = service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest("ACTION_TAKEN", null, true),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.OPEN, concrete.getStatus());
+        assertNull(concrete.getActionType());
+        assertNull(concrete.getFollowUpAt());
+        assertNotNull(concrete.getWorkerNotificationAttemptedAt());
+        assertNull(concrete.getWorkerNotificationSentAt());
+        assertEquals("Telegram-группа специалиста не привязана", concrete.getWorkerNotificationFailureReason());
+        assertEquals("OPEN", response.itemStatus());
         verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
     }
 
@@ -361,6 +410,60 @@ class ManagerControlServiceTest {
         assertNull(control.getClosedAt());
     }
 
+    @Test
+    void managerDetailsLoadsPublicationRemarksOnlyBeforeToday() {
+        LocalDate today = LocalDate.now();
+        LocalDate overdueDate = today.minusDays(1);
+        Manager manager = managerWithWorker(11L, 21L);
+        ManagerDailyControl control = control();
+        control.setControlDate(today);
+        control.setManager(manager);
+        ManagerDailyControlItem publish = actionParent(control);
+        publish.setItemKey("worker:publish");
+        publish.setItemType(ManagerDailyControlItemType.WORKER_SECTION);
+        publish.setSectionCode("publish");
+        publish.setReasonCode("publish");
+        publish.setLabel("Публикация");
+        publish.setTargetUrl("/worker?section=publish");
+
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
+        when(dailyControlRepository.findByControlDateAndManager(today, manager)).thenReturn(Optional.of(control));
+        when(dailyControlItemRepository.findByControl(control)).thenReturn(List.of(publish));
+        when(dailyControlItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlConcreteItemRepository.findByControlAndFollowUpAtAfter(eq(control), any())).thenReturn(List.of());
+        when(orderRepository.summarizeManagerControlOverdueOrdersByManager(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        )).thenReturn(List.of());
+        when(reviewService.countOrdersByWorkerIdsAndStatusPublish(List.of(21L), overdueDate))
+                .thenReturn(Map.of(21L, 1));
+        when(reviewService.countOrdersByWorkerIdsAndStatusVigul(eq(List.of(21L)), any())).thenReturn(Map.of());
+        when(reviewRepository.findManagerControlPublishReviewsByWorkerIds(eq(List.of(21L)), eq(overdueDate), any()))
+                .thenReturn(List.of());
+
+        service.managerDetails(11L, principal(), adminAuth());
+
+        verify(reviewService).countOrdersByWorkerIdsAndStatusPublish(List.of(21L), overdueDate);
+        verify(reviewService, never()).countOrdersByWorkerIdsAndStatusPublish(List.of(21L), today);
+        verify(reviewRepository).findManagerControlPublishReviewsByWorkerIds(eq(List.of(21L)), eq(overdueDate), any());
+        verify(reviewRepository, never()).findManagerControlPublishReviewsByWorkerIds(eq(List.of(21L)), eq(today), any());
+    }
+
     private void stubSuccessfulConcreteAction(
             ManagerDailyControlConcreteItem concrete,
             ManagerDailyControlItem parent
@@ -434,6 +537,22 @@ class ManagerControlServiceTest {
         user.setId(1L);
         user.setUsername("admin");
         return user;
+    }
+
+    private Manager managerWithWorker(Long managerId, Long workerId) {
+        User user = user();
+        user.setFio("Менеджер");
+        Worker worker = new Worker();
+        worker.setId(workerId);
+        User workerUser = new User();
+        workerUser.setId(workerId + 1000);
+        workerUser.setUsername("worker" + workerId);
+        worker.setUser(workerUser);
+        user.setWorkers(Set.of(worker));
+        Manager manager = new Manager();
+        manager.setId(managerId);
+        manager.setUser(user);
+        return manager;
     }
 
     private Principal principal() {

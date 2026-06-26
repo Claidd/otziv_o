@@ -361,14 +361,16 @@
     <button
       type="button"
       (click)="botChangeRequested.emit()"
-      [disabled]="isMutating('review-' + review.id + '-change-bot')"
+      [disabled]="accountActionLocked() || isMutating('review-' + review.id + '-change-bot')"
+      [title]="accountActionTitle()"
     >
       {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
     </button>
     <button
       type="button"
       (click)="botDeactivateRequested.emit()"
-      [disabled]="!review.botId || isMutating('review-' + review.id + '-block-bot')"
+      [disabled]="accountActionLocked() || !review.botId || isMutating('review-' + review.id + '-block-bot')"
+      [title]="accountActionTitle()"
     >
       {{ isMutating('review-' + review.id + '-block-bot') ? '...' : 'блок' }}
     </button>

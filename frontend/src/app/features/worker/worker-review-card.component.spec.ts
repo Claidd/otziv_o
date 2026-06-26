@@ -302,6 +302,28 @@ describe('WorkerReviewCardComponent', () => {
     expect(editOpened).toBe(true);
   });
 
+  it('locks account actions in publication until credentials are copied', () => {
+    const render = (credentialsCopied: boolean): NodeListOf<HTMLButtonElement> => {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      const component = fixture.componentInstance;
+      component.review = review();
+      component.activeSection = 'publish';
+      component.requireCredentialCopyBeforeAccountAction = true;
+      component.accountActionCredentialsCopied = credentialsCopied;
+      fixture.detectChanges();
+      return (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.review-actions button');
+    };
+
+    let buttons = render(false);
+    expect(buttons[5]?.disabled).toBe(true);
+    expect(buttons[6]?.disabled).toBe(true);
+    expect(buttons[5]?.title).toBe('Сначала скопируйте логин и пароль аккаунта');
+
+    buttons = render(true);
+    expect(buttons[5]?.disabled).toBe(false);
+    expect(buttons[6]?.disabled).toBe(false);
+  });
+
   it('emits field and note editing events', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;

@@ -586,6 +586,42 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
+    void clientTextReminderAutoClearsWaitingFlagAfterSevenUnchangedDays() {
+        LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 27, 10, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(80L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("client-text:17:2026-05-20T10:00")
+                .companyId(27L)
+                .orderId(17L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Company company = new Company();
+        company.setId(27L);
+        company.setGroupId("group-17");
+        Order order = new Order();
+        order.setId(17L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(waitingChangedAt);
+        order.setChanged(now.toLocalDate().minusDays(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_WAITING_AUTO_CLEAR_DAYS));
+
+        when(orderRepository.findByIdForMutation(17L)).thenReturn(java.util.Optional.of(order));
+
+        ReflectionTestUtils.invokeMethod(service, "sendClientTextReminder", state, company, now);
+
+        assertEquals(false, order.isWaitingForClient());
+        assertNull(order.getWaitingForClientChangedAt());
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertNull(state.getNextAttemptAt());
+        verify(orderRepository).save(order);
+        verify(messageSender, never()).send(any(), any(), any(), anyString());
+    }
+
+    @Test
     void liveDisabledClearsLegacyPauseCreatedByDryRunFailures() {
         LocalDateTime pausedUntil = LocalDateTime.of(2026, 5, 25, 1, 2);
         String reason = "За 10 мин. накоплено 20 ошибок. Последняя: client_messages_live_disabled - Авторассылка выключена настройкой";

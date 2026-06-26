@@ -271,6 +271,10 @@ export class CabinetApi {
     );
   }
 
+  clearTeamCache(): void {
+    this.teamCache.clear();
+  }
+
   getScore(date?: string, options: CacheOptions = {}): Observable<ScoreResponse> {
     const cacheKey = this.cacheKey('score', date ?? 'current');
 

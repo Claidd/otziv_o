@@ -43,6 +43,7 @@ public class ReviewBotChangeService {
     private final BotAssignmentService botAssignmentService;
     private final FilialService filialService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final ReviewBotCooldownService botCooldownService;
     private final BusinessAuditService businessAuditService;
 
     @Transactional
@@ -98,6 +99,7 @@ public class ReviewBotChangeService {
                 excludedBotIds.add(botId);
             }
             assignBotUsingSharedRules(review, excludedBotIds);
+            markReleasedIfChanged(currentBot, review.getBot(), "review bot blocked and changed");
             accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
             addAssignedBotToExcluded(review, excludedBotIds);
 
@@ -133,7 +135,9 @@ public class ReviewBotChangeService {
 
         Bot selectedBot = claimNewAccount(city, cityId, excludedBotIds);
 
+        Bot oldBot = review.getBot();
         review.setBot(selectedBot);
+        markReleasedIfChanged(oldBot, selectedBot, "new account assigned to review");
         accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
         reviewRepository.save(review);
 
@@ -227,7 +231,9 @@ public class ReviewBotChangeService {
         boolean wasVigul = review.isVigul();
         boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
 
+        Bot oldBot = review.getBot();
         assignBotUsingSharedRules(review, Set.of());
+        markReleasedIfChanged(oldBot, review.getBot(), "review bot changed");
         accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
 
         log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
@@ -284,7 +290,9 @@ public class ReviewBotChangeService {
             }
 
             boolean oldWalked = accountWalkScheduleService.isWalkedAccount(affectedReview.getBot());
+            Bot oldBot = affectedReview.getBot();
             assignBotUsingSharedRules(affectedReview, excludedBotIds);
+            markReleasedIfChanged(oldBot, affectedReview.getBot(), "blocked bot reassigned in unpublished review");
             accountWalkScheduleService.synchronizeAfterAccountChange(affectedReview, oldWalked);
             addAssignedBotToExcluded(affectedReview, excludedBotIds);
             reassigned++;
@@ -506,6 +514,14 @@ public class ReviewBotChangeService {
 
     private boolean isTemplateBotName(Bot bot) {
         return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
+    }
+
+    private void markReleasedIfChanged(Bot oldBot, Bot newBot, String reason) {
+        Long oldBotId = oldBot != null ? oldBot.getId() : null;
+        Long newBotId = newBot != null ? newBot.getId() : null;
+        if (oldBotId != null && !Objects.equals(oldBotId, newBotId)) {
+            botCooldownService.markReleased(oldBot, reason);
+        }
     }
 
     private void auditActiveChange(Bot bot, boolean oldActive, boolean newActive, String details) {

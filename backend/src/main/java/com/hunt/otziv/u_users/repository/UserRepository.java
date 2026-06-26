@@ -62,7 +62,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         SELECT DISTINCT m
         FROM User u
         JOIN u.managers m
-        LEFT JOIN FETCH m.user mu
+        JOIN FETCH m.user mu
+        JOIN mu.roles mr
         LEFT JOIN FETCH mu.image
         LEFT JOIN FETCH mu.workers w
         LEFT JOIN FETCH w.user
@@ -71,6 +72,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         LEFT JOIN FETCH mu.marketologs mk
         LEFT JOIN FETCH mk.user
         WHERE u.username = :username
+          AND mu.active = true
+          AND mr.name = 'ROLE_MANAGER'
     """)
     Set<Manager> findManagersWithTeamByUsername(@Param("username") String username);
 
@@ -113,6 +116,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
         WHERE u.telegramChatId = :telegramId
     """)
     Optional<User> findByTelegramChatId(@Param("telegramId") long telegramId);
+
+    List<User> findTop3ByWorkerTelegramGroupChatIdIsNullAndWorkerChatUrlContainingIgnoreCase(String value);
 
     @Query("""
         SELECT u.fio, u.telegramChatId

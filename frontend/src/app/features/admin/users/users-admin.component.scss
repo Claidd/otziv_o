@@ -370,6 +370,47 @@ tr.unlinked td {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.worker-chat-block {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid rgba(108, 155, 207, 0.18);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.75rem;
+  background: rgba(108, 155, 207, 0.055);
+}
+
+.worker-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.worker-chat-actions a,
+.worker-chat-actions button {
+  display: inline-flex;
+  min-height: 1.9rem;
+  align-items: center;
+  gap: 0.28rem;
+  border: 1px solid rgba(108, 155, 207, 0.28);
+  border-radius: 999px;
+  padding: 0 0.62rem;
+  color: var(--otziv-primary);
+  background: var(--otziv-white);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.worker-chat-actions button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.worker-chat-actions .material-icons-sharp {
+  font-size: 1rem;
+}
+
 .profile-photo-editor {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -87,8 +87,23 @@ describe('WorkerReviewEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('#review-edit-title')?.textContent?.trim()).toBe('Редактирование отзыва');
     expect(element.querySelector<HTMLTextAreaElement>('textarea[name="reviewText"]')?.value).toBe('Review text');
+    expect(element.querySelector<HTMLInputElement>('input[name="reviewBotPassword"]')?.value).toBe('bot-password');
     expect(element.textContent).toContain('Удалить');
     expect(element.querySelector<HTMLInputElement>('input[type="file"]')).not.toBeNull();
+  });
+
+  it('hides bot password when requested for a worker', async () => {
+    const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
+    fixture.componentInstance.review = review();
+    fixture.componentInstance.draft = draft();
+    fixture.componentInstance.hideBotPassword = true;
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector<HTMLInputElement>('input[name="reviewBotPassword"]')).toBeNull();
+    expect(element.textContent).not.toContain('Пароль бота');
   });
 
   it('emits form actions', async () => {

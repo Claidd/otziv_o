@@ -59,6 +59,12 @@ public class User {
     @Column(name = "telegram_chat_id", unique = true)
     private Long telegramChatId;
 
+    @Column(name = "worker_chat_url", length = 500)
+    private String workerChatUrl;
+
+    @Column(name = "worker_telegram_group_chat_id")
+    private Long workerTelegramGroupChatId;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "users_roles",

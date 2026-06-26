@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final FilialService filialService;
     private final ReviewRepository reviewRepository;
     private final TelegramService telegramService;
+    private final ReviewBotCooldownService botCooldownService;
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
@@ -287,6 +289,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 .filter(Objects::nonNull)
                 .filter(bot -> bot.getId() != null)
                 .filter(Bot::isActive)
+                .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .filter(bot -> !usedBotIdsGlobally.contains(bot.getId()))
                 .filter(bot -> {
@@ -310,6 +313,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                     .filter(Objects::nonNull)
                     .filter(bot -> bot.getId() != null)
                     .filter(Bot::isActive)
+                    .filter(botCooldownService::isAvailableForAssignment)
                     .filter(bot -> !excludedBotIds.contains(bot.getId()))
                     .filter(bot -> {
                         if (bot.getStatus() == null) return false;

@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +50,9 @@ class BotAssignmentServiceImplTest {
     @Mock
     private TelegramService telegramService;
 
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
+
     @Test
     void getAvailableBotsByRulesExcludesBotsAlreadyUsedInCompany() {
         BotAssignmentServiceImpl service = service();
@@ -59,6 +64,7 @@ class BotAssignmentServiceImplTest {
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(usedInCompany, free));
         when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(101L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
 
         List<Bot> available = service.getAvailableBotsByRules(filial, false, 1);
 
@@ -79,6 +85,26 @@ class BotAssignmentServiceImplTest {
         when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
         when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(102L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+
+        List<Bot> available = service.getAvailableBotsByRules(filial, false, 1);
+
+        assertEquals(List.of(free), available);
+    }
+
+    @Test
+    void getAvailableBotsByRulesExcludesCoolingDownBots() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot coolingDown = bot(101L, "Впишите Имя Фамилию", 0);
+        Bot free = bot(102L, "Впишите Имя Фамилию", 0);
+
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(coolingDown, free));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+        when(botCooldownService.isAvailableForAssignment(coolingDown)).thenReturn(false);
 
         List<Bot> available = service.getAvailableBotsByRules(filial, false, 1);
 
@@ -142,6 +168,7 @@ class BotAssignmentServiceImplTest {
         when(botService.getFindAllByFilialCityId(6L)).thenReturn(List.of(botB));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filialA));
         when(filialService.findByCityId(6L)).thenReturn(List.of(filialB));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
 
         List<Review> reviews = service.assignBotsToNewReviews(orderDTO, details);
 
@@ -153,7 +180,7 @@ class BotAssignmentServiceImplTest {
     }
 
     private BotAssignmentServiceImpl service() {
-        return new BotAssignmentServiceImpl(botService, filialService, reviewRepository, telegramService);
+        return new BotAssignmentServiceImpl(botService, filialService, reviewRepository, telegramService, botCooldownService);
     }
 
     private Bot bot(Long id, String fio, int counter) {

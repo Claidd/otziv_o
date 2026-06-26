@@ -68,7 +68,21 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
 """)
     Optional<Manager> findByIdWithPaymentProfile(@Param("managerId") Long managerId);
 
-    @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH m.companies c LEFT JOIN FETCH m.leads l LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers WHERE m IN :managers")
+    @Query("""
+    SELECT DISTINCT m
+    FROM Manager m
+    JOIN FETCH m.user u
+    JOIN u.roles r
+    LEFT JOIN FETCH m.companies c
+    LEFT JOIN FETCH m.leads l
+    LEFT JOIN FETCH u.operators
+    LEFT JOIN FETCH u.marketologs
+    LEFT JOIN FETCH u.workers
+    LEFT JOIN FETCH u.managers
+    WHERE m IN :managers
+      AND u.active = true
+      AND r.name = 'ROLE_MANAGER'
+""")
     List<Manager> findAllManagersToOwner(List<Manager> managers);
 
 //    @Query("SELECT DISTINCT m FROM Manager m LEFT JOIN FETCH m.user u LEFT JOIN FETCH u.operators LEFT JOIN FETCH u.marketologs LEFT JOIN FETCH u.workers LEFT JOIN FETCH u.managers WHERE m IN :managers")
@@ -85,7 +99,10 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     LEFT JOIN FETCH o.user
     LEFT JOIN FETCH u.marketologs mk
     LEFT JOIN FETCH mk.user
+    JOIN u.roles r
     WHERE m IN :managers
+      AND u.active = true
+      AND r.name = 'ROLE_MANAGER'
 """)
     List<Manager> findAllManagersWorkers(List<Manager> managers);
 
@@ -93,7 +110,10 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     SELECT m
     FROM Manager m
     JOIN FETCH m.user u
+    JOIN u.roles r
     LEFT JOIN FETCH u.image
+    WHERE u.active = true
+      AND r.name = 'ROLE_MANAGER'
 """)
     List<Manager> findAllWithUserAndImage();
 

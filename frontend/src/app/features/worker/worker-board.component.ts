@@ -113,6 +113,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
   readonly overdueModalOpen = signal(false);
   readonly selectedWorkerId = signal<number | null>(null);
+  readonly copiedReviewCredentials = signal<Record<number, { botId?: number | null; login?: boolean; password?: boolean }>>({});
   private boardNoticeTimer: number | null = null;
   private searchTimer: number | null = null;
 
@@ -147,8 +148,7 @@ export class WorkerBoardComponent implements OnDestroy {
   });
   readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
   readonly showReviewFooterCity = computed(() => {
-    this.auth.tokenParsed();
-    return this.auth.hasRealmRole('WORKER') && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+    return this.isOnlyWorkerRole();
   });
   private readonly noteFacade = new WorkerBoardNoteFacade({
     workerApi: this.workerApi,
@@ -180,7 +180,8 @@ export class WorkerBoardComponent implements OnDestroy {
     mutationKey: this.mutationKey,
     loadBoard: () => this.loadBoard(),
     patchBoard: (updater) => this.patchBoard(updater),
-    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback),
+    reviewActionSource: () => this.workerActivitySource()
   });
   readonly editOrder = this.editFacade.editOrder;
   readonly orderDraft = this.editFacade.orderDraft;
@@ -573,8 +574,6 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
-    this.logReviewCredentialCopyClick(review, kind);
-
     const value = {
       url: review.filialUrl,
       login: review.botLogin,
@@ -584,7 +583,11 @@ export class WorkerBoardComponent implements OnDestroy {
       vk: 'https://vk.com/'
     }[kind] ?? '';
 
-    await this.copyText(value, `${kind}-${review.id}`, `${workerReviewCopyLabel(kind)} скопирован`);
+    const copied = await this.copyText(value, `${kind}-${review.id}`, `${workerReviewCopyLabel(kind)} скопирован`);
+    if (copied) {
+      this.markReviewCredentialCopied(review, kind);
+      this.logReviewCredentialCopyClick(review, kind);
+    }
   }
 
   private logReviewCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): void {
@@ -592,10 +595,42 @@ export class WorkerBoardComponent implements OnDestroy {
       return;
     }
 
-    this.workerApi.logReviewCopyClick(review.id, kind).subscribe({
+    this.workerApi.logReviewCopyClick(review.id, kind, this.workerActivitySource()).subscribe({
       error: () => {
         // Копирование не блокируем: лог клика полезен, но не должен мешать работе специалиста.
       }
+    });
+  }
+
+  requiresReviewCredentialGate(): boolean {
+    return this.isOnlyWorkerRole() && this.activeWorkerSection() === 'publish';
+  }
+
+  reviewAccountActionCredentialsCopied(review: WorkerReviewItem): boolean {
+    if (!this.requiresReviewCredentialGate()) {
+      return true;
+    }
+
+    const copied = this.copiedReviewCredentials()[review.id];
+    return !!copied?.login && !!copied.password && copied.botId === (review.botId ?? null);
+  }
+
+  private markReviewCredentialCopied(review: WorkerReviewItem, kind: ReviewCopyKind): void {
+    if (kind !== 'login' && kind !== 'password') {
+      return;
+    }
+
+    this.copiedReviewCredentials.update((current) => {
+      const existing = current[review.id];
+      const botId = review.botId ?? null;
+      const base = existing?.botId === botId ? existing : { botId };
+      return {
+        ...current,
+        [review.id]: {
+          ...base,
+          [kind]: true
+        }
+      };
     });
   }
 
@@ -670,6 +705,11 @@ export class WorkerBoardComponent implements OnDestroy {
   canOpenReviewTitleLink(): boolean {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
+  isOnlyWorkerRole(): boolean {
+    this.auth.tokenParsed();
+    return this.auth.hasRealmRole('WORKER') && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   }
 
   canOnlyUnsetReviewVigul(): boolean {
@@ -831,11 +871,11 @@ export class WorkerBoardComponent implements OnDestroy {
     this.board.update((board) => board ? updater(board) : board);
   }
 
-  private async copyText(text: string, copiedKey: string, toast: string): Promise<void> {
+  private async copyText(text: string, copiedKey: string, toast: string): Promise<boolean> {
     const value = text.trim();
 
     if (!value) {
-      return;
+      return false;
     }
 
     if (await copyTextToClipboard(value)) {
@@ -846,10 +886,18 @@ export class WorkerBoardComponent implements OnDestroy {
           this.copied.set(null);
         }
       }, 1200);
-      return;
+      return true;
     }
 
     this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
+    return false;
+  }
+
+  private workerActivitySource(): { sourcePage: string; sourceSection: string } {
+    return {
+      sourcePage: 'worker-board',
+      sourceSection: this.activeWorkerSection()
+    };
   }
 
   private errorMessage(err: unknown, fallback: string): string {

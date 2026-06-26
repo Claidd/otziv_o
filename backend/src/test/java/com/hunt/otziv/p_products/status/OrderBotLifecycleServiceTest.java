@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class OrderBotLifecycleServiceTest {
 
     @Mock
     private BusinessAuditService businessAuditService;
+
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
 
     @Test
     void assignBotsIfNeededAssignsOnlyWhenReviewsHaveMissingBots() {
@@ -80,7 +84,8 @@ class OrderBotLifecycleServiceTest {
     @Test
     void detachBotsClearsBotsAndSavesEveryReview() {
         OrderBotLifecycleService service = service();
-        Review first = review(1L, bot(10L, 1));
+        Bot firstBot = bot(10L, 1);
+        Review first = review(1L, firstBot);
         Review second = review(2L, null);
         Order order = order(11L, new Filial(), List.of(first, second));
 
@@ -88,6 +93,7 @@ class OrderBotLifecycleServiceTest {
 
         assertNull(first.getBot());
         assertNull(second.getBot());
+        verify(botCooldownService).markReleased(firstBot, "order bot detached");
         verify(reviewService).save(first);
         verify(reviewService).save(second);
         verifyNoInteractions(botAssignmentService, botService);
@@ -136,7 +142,7 @@ class OrderBotLifecycleServiceTest {
     }
 
     private OrderBotLifecycleService service() {
-        return new OrderBotLifecycleService(botAssignmentService, botService, reviewService, businessAuditService);
+        return new OrderBotLifecycleService(botAssignmentService, botService, reviewService, businessAuditService, botCooldownService);
     }
 
     private Order order(Long id, Filial filial, List<Review> reviews) {

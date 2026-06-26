@@ -58,6 +58,9 @@ class ReviewBotChangeServiceTest {
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @Mock
+    private ReviewBotCooldownService botCooldownService;
+
+    @Mock
     private BusinessAuditService businessAuditService;
 
     @Test
@@ -252,6 +255,7 @@ class ReviewBotChangeServiceTest {
                 botAssignmentService,
                 filialService,
                 accountWalkScheduleService,
+                botCooldownService,
                 businessAuditService
         );
     }

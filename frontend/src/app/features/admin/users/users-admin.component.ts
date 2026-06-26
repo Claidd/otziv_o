@@ -1,6 +1,7 @@
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import {
   AdminUser,
   AdminUsersApi,
@@ -11,8 +12,10 @@ import {
   UserAssignments
 } from '../../../core/admin-users.api';
 import { appEnvironment } from '../../../core/app-environment';
+import { CabinetApi } from '../../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../../shared/api-error-message';
+import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 
@@ -40,6 +43,7 @@ type UserMetric = {
 export class UsersAdminComponent implements OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly adminUsersApi = inject(AdminUsersApi);
+  private readonly cabinetApi = inject(CabinetApi);
   private readonly toastService = inject(ToastService);
 
   readonly availableRoles = ['ADMIN', 'OWNER', 'MANAGER', 'OPERATOR', 'WORKER', 'MARKETOLOG', 'CLIENT'];
@@ -76,6 +80,9 @@ export class UsersAdminComponent implements OnDestroy {
   readonly savedPhotoFor = signal<string | null>(null);
   readonly profilePhotoFile = signal<File | null>(null);
   readonly profilePhotoPreviewUrl = signal<string | null>(null);
+  readonly hasUnsavedUserChanges = signal(false);
+  private readonly subscriptions = new Subscription();
+  private formBaseline = '';
   readonly assignmentOptions = signal<AssignmentOptions>({
     managers: [],
     workers: [],
@@ -159,10 +166,12 @@ export class UsersAdminComponent implements OnDestroy {
   });
 
   readonly form = this.fb.nonNullable.group({
+    username: ['', [Validators.required]],
     email: ['', [Validators.email]],
     fio: [''],
     phoneNumber: [''],
     coefficient: ['0.05'],
+    workerChatUrl: [''],
     enabled: [true],
     roles: this.fb.nonNullable.control<string[]>([], [Validators.required])
   });
@@ -179,11 +188,17 @@ export class UsersAdminComponent implements OnDestroy {
   });
 
   constructor() {
+    this.subscriptions.add(
+      this.form.valueChanges.subscribe(() => {
+        this.hasUnsavedUserChanges.set(this.currentFormSnapshot() !== this.formBaseline);
+      })
+    );
     this.loadUsers();
     this.loadAssignmentOptions();
   }
 
   ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
     this.revokeProfilePhotoPreview();
   }
 
@@ -261,6 +276,36 @@ export class UsersAdminComponent implements OnDestroy {
     return role === 'ADMIN' && this.isAdminUser(this.selectedUser());
   }
 
+  isWorkerProfile(): boolean {
+    return this.isRoleSelected('WORKER');
+  }
+
+  workerChatStatus(user: AdminUser | null | undefined): string {
+    const currentUrl = this.form.controls.workerChatUrl.value.trim();
+    const savedUrl = (user?.workerChatUrl ?? '').trim();
+    if (!currentUrl) {
+      return 'Не указана';
+    }
+    if (currentUrl !== savedUrl) {
+      return 'Сохраните ссылку';
+    }
+    return user?.workerTelegramGroupChatId ? 'Telegram привязан' : 'Telegram не привязан';
+  }
+
+  async copyWorkerTelegramInviteUrl(user: AdminUser | null | undefined): Promise<void> {
+    const inviteUrl = (user?.workerTelegramBotInviteUrl ?? '').trim();
+    if (!inviteUrl) {
+      return;
+    }
+
+    if (await copyTextToClipboard(inviteUrl)) {
+      this.toastService.success('Ссылка скопирована', 'Ее можно отправить человеку, который добавит бота в группу.');
+      return;
+    }
+
+    this.toastService.error('Не удалось скопировать', 'Скопируйте ссылку вручную из кнопки привязки.');
+  }
+
   save(): void {
     const user = this.selectedUser();
     if (!user) {
@@ -289,12 +334,18 @@ export class UsersAdminComponent implements OnDestroy {
       }
     }
 
-    const coefficient = raw.coefficient.trim();
+    const coefficient = this.parseCoefficient(raw.coefficient);
+    if (coefficient === null) {
+      this.error.set('Коэффициент должен быть числом от 0 до 1. Можно вводить через точку или запятую.');
+      return;
+    }
     const request: UpdateKeycloakUserRequest = {
+      username: raw.username.trim(),
       email: raw.email.trim() || undefined,
       fio: raw.fio.trim() || undefined,
       phoneNumber: raw.phoneNumber.trim() || undefined,
-      coefficient: coefficient ? Number(coefficient) : undefined,
+      coefficient,
+      workerChatUrl: raw.workerChatUrl.trim() || undefined,
       enabled: raw.enabled,
       roles: raw.roles
     };
@@ -306,6 +357,7 @@ export class UsersAdminComponent implements OnDestroy {
         this.selectedUser.set(updatedUser);
         this.users.update((users) => users.map((item) => item.id === updatedUser.id ? updatedUser : item));
         this.patchForm(updatedUser);
+        this.cabinetApi.clearTeamCache();
         this.saving.set(false);
         this.toastService.success('Пользователь сохранен', updatedUser.username);
       },
@@ -342,6 +394,7 @@ export class UsersAdminComponent implements OnDestroy {
       next: () => {
         this.users.update((users) => users.filter((item) => item.id !== user.id));
         this.selectedUser.set(null);
+        this.cabinetApi.clearTeamCache();
         this.deleteSaving.set(false);
         this.toastService.success('Пользователь удален', user.username);
         this.loadAssignmentOptions();
@@ -520,6 +573,7 @@ export class UsersAdminComponent implements OnDestroy {
       next: (assignments) => {
         this.savedAssignments.set(assignments);
         this.patchAssignmentForm(assignments);
+        this.cabinetApi.clearTeamCache();
         this.assignmentsSaving.set(false);
         this.toastService.success('Связи сохранены', user.username);
       },
@@ -621,12 +675,49 @@ export class UsersAdminComponent implements OnDestroy {
 
   private patchForm(user: AdminUser): void {
     this.form.reset({
+      username: user.username ?? '',
       email: user.email ?? '',
       fio: user.fio ?? '',
       phoneNumber: user.phoneNumber ?? '',
-      coefficient: String(user.coefficient ?? '0.05'),
+      coefficient: this.formatCoefficient(user.coefficient),
+      workerChatUrl: user.workerChatUrl ?? '',
       enabled: user.active,
       roles: user.roles ?? []
+    });
+    this.formBaseline = this.currentFormSnapshot();
+    this.hasUnsavedUserChanges.set(false);
+  }
+
+  private parseCoefficient(value: string): number | undefined | null {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) {
+      return undefined;
+    }
+
+    const coefficient = Number(normalized);
+    if (!Number.isFinite(coefficient) || coefficient < 0 || coefficient > 1) {
+      return null;
+    }
+
+    return coefficient;
+  }
+
+  private formatCoefficient(value: number | undefined): string {
+    return String(value ?? '0.05').replace('.', ',');
+  }
+
+  private currentFormSnapshot(): string {
+    const raw = this.form.getRawValue();
+    const coefficient = this.parseCoefficient(raw.coefficient);
+    return JSON.stringify({
+      username: raw.username.trim(),
+      email: raw.email.trim(),
+      fio: raw.fio.trim(),
+      phoneNumber: raw.phoneNumber.trim(),
+      coefficient: coefficient === null ? `invalid:${raw.coefficient.trim()}` : coefficient ?? '',
+      workerChatUrl: raw.workerChatUrl.trim(),
+      enabled: raw.enabled,
+      roles: [...raw.roles].sort()
     });
   }
 

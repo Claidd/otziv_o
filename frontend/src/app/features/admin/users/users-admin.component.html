@@ -226,6 +226,11 @@
 
           <div class="editor-grid">
             <label>
+              <span>Логин</span>
+              <input type="text" formControlName="username">
+            </label>
+
+            <label>
               <span>Email</span>
               <input type="email" formControlName="email">
             </label>
@@ -242,9 +247,39 @@
 
             <label>
               <span>Коэффициент</span>
-              <input type="number" min="0" max="1" step="0.01" formControlName="coefficient">
+              <input type="text" inputmode="decimal" formControlName="coefficient">
             </label>
           </div>
+
+          @if (isWorkerProfile()) {
+            <section class="worker-chat-block">
+              <label>
+                <span>Группа специалиста</span>
+                <input type="url" formControlName="workerChatUrl" placeholder="https://t.me/...">
+              </label>
+              <div class="worker-chat-actions">
+                <span class="status-pill" [class.warn]="selectedUser()?.workerChatUrl && !selectedUser()?.workerTelegramGroupChatId">
+                  {{ workerChatStatus(selectedUser()) }}
+                </span>
+                @if (selectedUser()?.workerChatUrl) {
+                  <a [href]="selectedUser()?.workerChatUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp">forum</span>
+                    Открыть
+                  </a>
+                }
+                @if (selectedUser()?.workerTelegramBotInviteUrl) {
+                  <a [href]="selectedUser()?.workerTelegramBotInviteUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp">hub</span>
+                    Привязать Telegram
+                  </a>
+                  <button type="button" (click)="copyWorkerTelegramInviteUrl(selectedUser())" title="Скопировать ссылку привязки">
+                    <span class="material-icons-sharp">content_copy</span>
+                    Скопировать ссылку
+                  </button>
+                }
+              </div>
+            </section>
+          }
 
           <label class="checkbox wide">
             <input
@@ -277,7 +312,7 @@
           </section>
 
           @if (form.invalid && form.touched) {
-            <p class="error compact">Проверь email и выбери хотя бы одну роль.</p>
+            <p class="error compact">Проверь логин, email и выбери хотя бы одну роль.</p>
           }
 
           <div class="actions editor-actions">
@@ -290,7 +325,7 @@
               <span class="material-icons-sharp">delete</span>
               {{ deleteSaving() ? 'Удаляю' : 'Удалить' }}
             </button>
-            <button type="button" (click)="save()" [disabled]="saving() || !selectedUser()?.keycloakLinked">
+            <button type="button" (click)="save()" [disabled]="saving() || form.invalid || !hasUnsavedUserChanges()">
               <span class="material-icons-sharp">save</span>
               {{ saving() ? 'Сохраняю' : 'Сохранить' }}
             </button>

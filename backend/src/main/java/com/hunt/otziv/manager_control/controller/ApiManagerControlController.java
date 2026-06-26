@@ -72,6 +72,32 @@ public class ApiManagerControlController {
         );
     }
 
+    @PostMapping("/concrete-items/{concreteItemId}/send-client-message")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ManagerControlConcreteItemResponse sendClientMessage(
+            @PathVariable Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-send-client-message",
+                () -> managerControlService.sendClientMessage(concreteItemId, principal, authentication)
+        );
+    }
+
+    @PostMapping("/concrete-items/{concreteItemId}/repair")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ManagerControlConcreteItemResponse repairConcreteItem(
+            @PathVariable Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-repair",
+                () -> managerControlService.repairConcreteItem(concreteItemId, principal, authentication)
+        );
+    }
+
     @GetMapping("/managers/{managerId}/today")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     public ManagerControlManagerDetailResponse managerDetails(

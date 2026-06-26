@@ -376,7 +376,8 @@ public class ApiManagerReviewController {
     public ReviewDetailsResponse changeOrderReviewBot(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
-            Authentication authentication
+            Authentication authentication,
+            @RequestBody(required = false) ReviewActivitySourceRequest source
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
@@ -389,7 +390,7 @@ public class ApiManagerReviewController {
                 orderId,
                 reviewId,
                 "review",
-                null
+                sourceDetails(source)
         );
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
@@ -429,7 +430,8 @@ public class ApiManagerReviewController {
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
             @PathVariable Long botId,
-            Authentication authentication
+            Authentication authentication,
+            @RequestBody(required = false) ReviewActivitySourceRequest source
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
@@ -442,7 +444,7 @@ public class ApiManagerReviewController {
                 orderId,
                 reviewId,
                 "review",
-                "botId=" + valueOrDash(botId)
+                withSource("botId=" + valueOrDash(botId) + ";", source)
         );
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
@@ -1119,6 +1121,26 @@ public class ApiManagerReviewController {
         return value == null ? "-" : String.valueOf(value);
     }
 
+    private String sourceDetails(ReviewActivitySourceRequest source) {
+        return withSource("", source);
+    }
+
+    private String withSource(String details, ReviewActivitySourceRequest source) {
+        StringBuilder result = new StringBuilder(details == null ? "" : details);
+        appendDetail(result, "sourcePage", source == null ? null : source.sourcePage());
+        appendDetail(result, "sourceEntry", source == null ? null : source.sourceEntry());
+        appendDetail(result, "sourceSection", source == null ? null : source.sourceSection());
+        return result.toString();
+    }
+
+    private void appendDetail(StringBuilder result, String key, String value) {
+        String cleanValue = normalize(value);
+        if (cleanValue.isEmpty()) {
+            return;
+        }
+        result.append(key).append("=").append(cleanValue).append(";");
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -1208,5 +1230,8 @@ public class ApiManagerReviewController {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority::equals);
+    }
+
+    public record ReviewActivitySourceRequest(String sourcePage, String sourceEntry, String sourceSection) {
     }
 }

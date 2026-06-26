@@ -8,6 +8,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskResolutionRequest;
+import com.hunt.otziv.worker_activity.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
@@ -127,6 +128,30 @@ class ApiWorkerRiskControllerTest {
         assertEquals(-3, ledger.getPoints());
         assertEquals("worker-risk-penalty:77", ledger.getUniqueScoreKey());
         assertNotNull(ledger.getSourceEventCreatedAt());
+        verify(personalReminderService).deleteSystemRemindersBySource(
+                WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
+                77L
+        );
+    }
+
+    @Test
+    void verifiedDeletesOpenRiskReminder() {
+        WorkerRiskIncident incident = incident();
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
+
+        WorkerRiskIncidentResponse response = controller.resolution(
+                77L,
+                new WorkerRiskResolutionRequest("VERIFIED", null),
+                adminAuth()
+        );
+
+        assertEquals(WorkerRiskIncidentStatus.RESOLVED, response.status());
+        verify(personalReminderService).deleteSystemRemindersBySource(
+                WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
+                77L
+        );
     }
 
     private WorkerRiskIncident incident() {

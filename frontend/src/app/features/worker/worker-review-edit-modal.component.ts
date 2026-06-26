@@ -45,6 +45,7 @@ export class WorkerReviewEditModalComponent {
   @Input() canEditVigul = false;
   @Input() canOnlyUnsetVigul = false;
   @Input() canDelete = false;
+  @Input() hideBotPassword = false;
   readonly reviewPublicationDateMax = localDateInputValue(REVIEW_PUBLICATION_MAX_FUTURE_DAYS);
 
   @Output() readonly closed = new EventEmitter<void>();

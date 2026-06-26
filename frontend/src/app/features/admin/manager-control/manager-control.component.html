@@ -59,7 +59,7 @@
                 <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
               </div>
 
-              <button type="button" class="details-button" (click)="openDetails(manager)">
+              <button type="button" class="manager-details-chip control-chip workload" (click)="openDetails(manager)">
                 <span class="material-icons-sharp">list_alt</span>
                 Детали
               </button>
@@ -68,7 +68,11 @@
             <div class="manager-numbers">
               <span class="metric urgent"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
               <span class="metric urgent"><b>{{ manager.openRiskCount }}</b><small>риски</small></span>
-              <span class="metric"><b>{{ manager.criticalCount }}</b><small>критичные</small></span>
+              <span class="metric">
+                <b>{{ manager.criticalCount }}</b>
+                <small>всего к действию</small>
+                <small>{{ manager.overdueOrderCount }} проср. + {{ manager.openRiskCount }} риски + {{ otherCriticalCount(manager) }} прочее</small>
+              </span>
             </div>
 
             @if (hasActionRows(manager)) {
@@ -88,15 +92,18 @@
                       }
                     </a>
                   }
-                  @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
-                    <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical" [class]="itemActionClass(overdue.actionType)" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
-                      <span>{{ overdue.status }}</span>
-                      <strong>{{ overdue.count }}</strong>
-                      <small>{{ overdue.maxDays }} дн.</small>
-                      @if (overdue.itemStatus && overdue.itemStatus !== 'OPEN') {
-                        <em>{{ itemStatusLabel(overdue.itemStatus) }}</em>
-                      }
-                    </a>
+                  @if (manager.overdueStatuses.length > 0) {
+                    <span class="control-chip workload">состав просрочек</span>
+                    @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
+                      <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical" [class]="itemActionClass(overdue.actionType)" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
+                        <span>{{ overdue.status }}</span>
+                        <strong>{{ overdue.count }}</strong>
+                        <small>{{ overdue.maxDays }} дн.</small>
+                        @if (overdue.itemStatus && overdue.itemStatus !== 'OPEN') {
+                          <em>{{ itemStatusLabel(overdue.itemStatus) }}</em>
+                        }
+                      </a>
+                    }
                   }
                   @for (section of actionSections(manager); track trackSection($index, section)) {
                     <a [href]="section.targetUrl" class="control-chip critical" [class]="itemActionClass(section.actionType)" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
@@ -167,7 +174,7 @@
           <span class="material-icons-sharp">priority_high</span>
           <div>
             <strong>{{ criticalTotal() }}</strong>
-            <small>критичных</small>
+            <small>крит. действий</small>
           </div>
         </article>
         <article class="summary-tile neutral">
@@ -341,7 +348,11 @@
                 @if (item.examples.length) {
                   <div class="detail-examples">
                     @for (example of item.examples; track example.controlEntityId || example.type + '-' + example.entityId + '-' + $index) {
-                      <div class="detail-example" [class.handled]="example.itemStatus && example.itemStatus !== 'OPEN'">
+                      <div
+                        class="detail-example"
+                        [class.handled]="example.itemStatus && example.itemStatus !== 'OPEN'"
+                        [class.waiting-client]="isWaitingForClientExample(example)"
+                      >
                         <span class="material-icons-sharp">{{ exampleIcon(example) }}</span>
                         <div class="detail-example-body">
                           <a class="detail-example-link" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
@@ -353,6 +364,12 @@
                                 }
                                 @if (example.ageDays !== null && example.ageDays !== undefined) {
                                   <span>{{ example.ageDays }} дн.</span>
+                                }
+                                @if (isWaitingForClientExample(example)) {
+                                  <span class="waiting-client-badge">
+                                    <span class="material-icons-sharp">hourglass_top</span>
+                                    Ждет клиента
+                                  </span>
                                 }
                                 @if (example.subtitle) {
                                   <span>{{ example.subtitle }}</span>
@@ -395,18 +412,18 @@
                                 @if (chatUrl(example)) {
                                   <a class="review-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                     <span class="material-icons-sharp">forum</span>
-                                    Чат
+                                    Клиент
                                   </a>
                                 }
                                 <button
                                   type="button"
                                   class="review-action primary"
-                                  (click)="markContactSent(example)"
-                                  [disabled]="!canMarkContactSent(example) || isConcreteUpdating(example.controlEntityId)"
-                                  [title]="contactSentDisabledTitle(example)"
+                                  (click)="sendClientMessage(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Отправить сообщение клиенту автоматически"
                                 >
                                   <span class="material-icons-sharp">send</span>
-                                  Отправлено
+                                  Отправить
                                 </button>
                                 <small>{{ contactFollowUpHint(example) }}</small>
                               }
@@ -415,22 +432,46 @@
 
                           @if (canRequestWorkerTask(example)) {
                             <div class="review-followup worker-request">
+                              @if (canOpenOrderFromWorkerTask(example)) {
+                                <a class="review-action" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
+                                  <span class="material-icons-sharp">view_kanban</span>
+                                  Заказ
+                                </a>
+                              }
                               @if (chatUrl(example)) {
                                 <a class="review-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                   <span class="material-icons-sharp">forum</span>
-                                  Чат
+                                  Клиент
                                 </a>
+                              }
+                              @if (canSendClientMessage(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action primary"
+                                  (click)="sendClientMessage(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Попросить клиента прислать тексты"
+                                >
+                                  <span class="material-icons-sharp">send</span>
+                                  Отправить
+                                </button>
+                              }
+                              @if (canRepairAutomationIssue(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action"
+                                  (click)="repairConcreteItem(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Починить очередь автоответчика"
+                                >
+                                  <span class="material-icons-sharp">build</span>
+                                  Починить
+                                </button>
                               }
                               <button type="button" class="review-action primary" (click)="requestWorkerTask(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
                                 <span class="material-icons-sharp">campaign</span>
                                 Запросить
                               </button>
-                              @if (canMarkWorkerTaskSentManually(example)) {
-                                <button type="button" class="review-action" (click)="markWorkerTaskSentManually(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
-                                  <span class="material-icons-sharp">done_all</span>
-                                  Отправил вручную
-                                </button>
-                              }
                               <small>{{ workerNotificationTitle(example) }}</small>
                             </div>
                           }
@@ -459,14 +500,23 @@
                             <div class="detail-example-actions">
                               <button
                                 type="button"
+                                class="action-defer"
+                                title="Отложено"
+                                aria-label="Отложить карточку"
+                                (click)="markConcreteItem(example, 'DEFERRED')"
+                                [disabled]="isConcreteActionDisabled(example, 'DEFERRED')"
+                              >
+                                <span class="material-icons-sharp">schedule</span>
+                              </button>
+                              <button
+                                type="button"
+                                class="action-done"
                                 [title]="concreteActionTitle(example, 'ACTION_TAKEN', 'Действие сделано')"
+                                aria-label="Действие сделано"
                                 (click)="markConcreteItem(example, 'ACTION_TAKEN')"
                                 [disabled]="isConcreteActionDisabled(example, 'ACTION_TAKEN')"
                               >
                                 <span class="material-icons-sharp">task_alt</span>
-                              </button>
-                              <button type="button" title="Отложено" (click)="markConcreteItem(example, 'DEFERRED')" [disabled]="isConcreteActionDisabled(example, 'DEFERRED')">
-                                <span class="material-icons-sharp">schedule</span>
                               </button>
                             </div>
                           </div>
@@ -479,15 +529,17 @@
                   </div>
                 }
 
-                <label class="detail-comment">
-                  <span>Комментарий</span>
-                  <textarea
-                    rows="2"
-                    [ngModel]="detailComment(item.itemId)"
-                    (ngModelChange)="updateDetailComment(item.itemId, $event)"
-                    placeholder="Что сделали или почему оставили в контроле"
-                  ></textarea>
-                </label>
+                @if (item.group !== 'ACTION') {
+                  <label class="detail-comment">
+                    <span>Комментарий</span>
+                    <textarea
+                      rows="2"
+                      [ngModel]="detailComment(item.itemId)"
+                      (ngModelChange)="updateDetailComment(item.itemId, $event)"
+                      placeholder="Что сделали или почему оставили в контроле"
+                    ></textarea>
+                  </label>
+                }
 
                 @if (item.group === 'ACTION') {
                   <footer class="detail-actions muted">
