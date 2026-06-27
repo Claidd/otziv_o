@@ -102,6 +102,36 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
+    void fallsBackToFullCompanyListWhenInviteLookupMissesCompanyWithSameLink() {
+        Company armana = new Company();
+        armana.setId(958L);
+        armana.setTitle("Armana");
+        armana.setUrlChat("https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d?s=cl&p=i&mlu=2");
+
+        Company tochnoKuhni = new Company();
+        tochnoKuhni.setId(2831L);
+        tochnoKuhni.setTitle("Точно Кухни");
+        tochnoKuhni.setUrlChat("https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d?mode=hqrt2/");
+        tochnoKuhni.setGroupId("120363164752269032@g.us");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo(
+                        "120363164752269032@g.us",
+                        "НС Armana, Точно Кухни 2 гис",
+                        "https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d"
+                )
+        ));
+        when(companyRepository.findByUrlChatContainingIgnoreCase("jz4j8feiiakfhdjlgzbu8d"))
+                .thenReturn(List.of(tochnoKuhni));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(armana, tochnoKuhni));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363164752269032@g.us", armana.getGroupId());
+        verify(companyRepository).save(armana);
+    }
+
+    @Test
     void ignoresGatewayGroupWithoutInviteLinkAndWithoutNameMatch() {
         when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
                 new WhatsAppGroupInfo("120363123@g.us", "Св-Моторс. Отзывы", "")

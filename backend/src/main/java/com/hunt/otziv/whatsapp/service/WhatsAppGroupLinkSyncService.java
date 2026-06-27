@@ -170,7 +170,10 @@ public class WhatsAppGroupLinkSyncService {
                 if (companiesWithChatUrl == null) {
                     companiesWithChatUrl = groupCompanyLinker.companiesWithChatUrl();
                 }
-                groupLinked = groupCompanyLinker.linkByGroupName(group.groupId(), group.name(), companiesWithChatUrl);
+                groupLinked = groupCompanyLinker.linkByInvite(group.groupId(), group.inviteLink(), companiesWithChatUrl);
+                if (groupLinked == 0) {
+                    groupLinked = groupCompanyLinker.linkByGroupName(group.groupId(), group.name(), companiesWithChatUrl);
+                }
             }
             linked += groupLinked;
         }

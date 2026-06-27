@@ -282,15 +282,11 @@
               <div class="stage-actions">
                 <button type="button" [class.done]="stageDone('morningCompletedAt')" (click)="markStage('MORNING_DONE')" [disabled]="updatingControl()">
                   <span class="material-icons-sharp">task_alt</span>
-                  Утро
-                </button>
-                <button type="button" [class.done]="stageDone('dayCheckedAt')" (click)="markStage('DAY_CHECK')" [disabled]="updatingControl()">
-                  <span class="material-icons-sharp">radar</span>
-                  День
+                  Начало дня
                 </button>
                 <button type="button" [class.done]="stageDone('finalCheckedAt')" (click)="markStage('FINAL_CHECK')" [disabled]="updatingControl()">
                   <span class="material-icons-sharp">fact_check</span>
-                  Финал
+                  Конец дня
                 </button>
                 <button type="button" class="close-day-button" [class.ready]="detail()!.canCloseDay" (click)="closeDay()" [disabled]="updatingControl()">
                   <span class="material-icons-sharp">lock</span>
@@ -340,7 +336,7 @@
                 </div>
 
                 <div class="detail-meta">
-                  <span><b>{{ item.count }}</b> пунктов</span>
+                  <span><b>{{ detailItemVisibleCount(item) }}</b> пунктов</span>
                   <span>{{ item.updatedAt | date: 'dd.MM HH:mm' }}</span>
                   <a [href]="detailItemTargetUrl(item)">{{ detailItemTargetLabel(item) }}</a>
                 </div>
@@ -434,6 +430,20 @@
                                   <span class="material-icons-sharp">send</span>
                                   Отправить
                                 </button>
+                              }
+                              @if (canRepairAutomationIssue(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action repair-action"
+                                  (click)="repairConcreteItem(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Починить очередь автоответчика"
+                                >
+                                  <span class="material-icons-sharp">build</span>
+                                  Починить
+                                </button>
+                              }
+                              @if (canContactOrder(example)) {
                                 <small>{{ contactFollowUpHint(example) }}</small>
                               }
                             </div>
@@ -495,7 +505,7 @@
                             </div>
                           } @else if (canRequestWorkerTask(example)) {
                             <div class="review-followup worker-request">
-                              @if (chatUrl(example)) {
+                              @if (canShowWorkerClientAction(example)) {
                                 <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                   <span class="material-icons-sharp">forum</span>
                                   Клиент

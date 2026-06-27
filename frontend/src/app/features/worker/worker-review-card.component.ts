@@ -63,6 +63,8 @@ export class WorkerReviewCardComponent {
   @Input() savedSideNoteKey: string | null = null;
   @Input() requireCredentialCopyBeforeAccountAction = false;
   @Input() accountActionCredentialsCopied = false;
+  @Input() publishLockedByCredentialWait = false;
+  @Input() publishCredentialWaitTitle = 'Действие с отзывом';
   isReviewTitleExpanded = false;
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
@@ -444,6 +446,14 @@ export class WorkerReviewCardComponent {
       !this.review.publish &&
       !this.canPublishWithCurrentBot()
     );
+  }
+
+  publishActionTitle(): string {
+    if (this.publishLockedByCredentialWait) {
+      return this.publishCredentialWaitTitle;
+    }
+
+    return 'Действие с отзывом';
   }
 
   isMutating(key: string): boolean {

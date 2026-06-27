@@ -61,6 +61,23 @@ class SharedChatLinkSyncServiceTest {
     }
 
     @Test
+    void copiesWhatsAppGroupIdBetweenCompaniesWithSameInviteAndDifferentQueryParams() {
+        Company armana = company(958L, "Armana", "https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d?s=cl&p=i&mlu=2");
+        Company tochnoKuhni = company(2831L, "Точно Кухни", "https://chat.whatsapp.com/JZ4J8FeiIAkFhDjlgzBU8d?mode=hqrt2/");
+        tochnoKuhni.setGroupId("120363164752269032@g.us");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(armana, tochnoKuhni));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertEquals("120363164752269032@g.us", armana.getGroupId());
+        assertEquals(1, response.updatedCompanies());
+        assertEquals(1, response.whatsappLinked());
+        assertEquals(0, response.conflictGroups());
+        verify(companyRepository).saveAll(any());
+    }
+
+    @Test
     void copiesOnlyChatIdMatchingMessengerInCurrentChatLink() {
         Company source = company(1L, "Source", "https://t.me/shared_owner");
         source.setGroupId("120363123@g.us");

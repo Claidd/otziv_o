@@ -84,11 +84,11 @@ public class WorkerRiskEvaluationService {
     @Value("${worker.risk.publish-prep-window-minutes:60}")
     private int publishPrepWindowMinutes = 60;
 
-    @Value("${worker.risk.publish-too-fast-seconds:180}")
-    private int publishTooFastSeconds = 180;
+    @Value("${worker.risk.publish-too-fast-seconds:150}")
+    private int publishTooFastSeconds = 150;
 
-    @Value("${worker.risk.close-after-account-copy-too-fast-seconds:180}")
-    private int closeAfterAccountCopyTooFastSeconds = 180;
+    @Value("${worker.risk.close-after-account-copy-too-fast-seconds:150}")
+    private int closeAfterAccountCopyTooFastSeconds = 150;
 
     @Value("${worker.risk.close-after-account-copy-too-fast.window-minutes:30}")
     private int closeAfterAccountCopyTooFastWindowMinutes = 30;

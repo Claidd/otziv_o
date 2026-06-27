@@ -176,6 +176,14 @@
   background: #c461dc;
 }
 
+.review-actions button:disabled {
+  border-color: rgba(103, 116, 131, 0.12);
+  color: rgba(103, 116, 131, 0.42);
+  background: rgba(226, 232, 240, 0.58);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .review-card {
   grid-template-rows: auto auto auto 2.2rem auto 2.2rem auto;
   min-height: 0;

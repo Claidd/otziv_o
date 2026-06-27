@@ -393,9 +393,11 @@
     [disabled]="
       isPublishedPublishAction() ||
       cannotPublishBecauseBotUnavailable() ||
+      publishLockedByCredentialWait ||
       isMutating('review-' + review.id + '-publish') ||
       isMutating('review-' + review.id + '-nagul')
     "
+    [title]="publishActionTitle()"
   >
     {{ doneLabel() }}
   </button>

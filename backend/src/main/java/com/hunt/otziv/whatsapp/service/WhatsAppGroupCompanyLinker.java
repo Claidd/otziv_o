@@ -47,6 +47,10 @@ public class WhatsAppGroupCompanyLinker {
     }
 
     public int linkByInvite(String groupId, String inviteLink) {
+        return linkByInvite(groupId, inviteLink, null);
+    }
+
+    int linkByInvite(String groupId, String inviteLink, List<Company> companiesWithChatUrl) {
         if (!hasText(groupId)) {
             return 0;
         }
@@ -57,7 +61,9 @@ public class WhatsAppGroupCompanyLinker {
         }
 
         String code = inviteCode.get();
-        List<Company> candidates = companyRepository.findByUrlChatContainingIgnoreCase(code);
+        List<Company> candidates = companiesWithChatUrl == null
+                ? companyRepository.findByUrlChatContainingIgnoreCase(code)
+                : companiesWithSameInviteCode(code, companiesWithChatUrl);
         int updated = 0;
         for (Company candidate : candidates) {
             if (!code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))
@@ -78,6 +84,20 @@ public class WhatsAppGroupCompanyLinker {
             }
         }
         return updated;
+    }
+
+    private List<Company> companiesWithSameInviteCode(String code, List<Company> companies) {
+        if (!hasText(code) || companies == null || companies.isEmpty()) {
+            return List.of();
+        }
+
+        List<Company> result = new ArrayList<>();
+        for (Company company : companies) {
+            if (company != null && code.equals(whatsAppInviteCode(company.getUrlChat()).orElse(null))) {
+                result.add(company);
+            }
+        }
+        return result;
     }
 
     public int linkByGroupName(String groupId, String groupName) {

@@ -108,7 +108,7 @@ public class ManagerControlService {
     private static final int WORKER_ORDER_UNCHANGED_DAYS = 2;
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
     private static final LocalTime MORNING_STAGE_START = LocalTime.of(5, 0);
-    private static final LocalTime DAY_STAGE_START = LocalTime.of(14, 0);
+    private static final LocalTime START_DAY_DEADLINE = LocalTime.of(14, 0);
     private static final LocalTime FINAL_STAGE_START = LocalTime.of(20, 0);
     private static final String SOURCE_CONTROL_OWNER = "MANAGER_CONTROL_OWNER";
     private static final String SOURCE_WORKER_TASK_REQUEST = "MANAGER_CONTROL_WORKER_TASK_REQUEST";
@@ -303,31 +303,22 @@ public class ManagerControlService {
         List<ManagerDailyControlItem> items = activeControlItems(dailyControlItemRepository.findByControl(control));
         long openAction = items.stream().filter(this::isOpenActionItem).count();
         if (!previousDayOnly
-                && !now.toLocalTime().isBefore(DAY_STAGE_START)
+                && !now.toLocalTime().isBefore(START_DAY_DEADLINE)
                 && control.getMorningCompletedAt() == null
                 && control.getMorningNotificationSentAt() == null) {
             control.setMorningNotificationSentAt(now);
-            String text = overdueStageText(control, "утренний обход", "14:00", openAction);
+            String text = overdueStageText(control, "начало дня", "14:00", openAction);
             saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
-            notifyOwners(control, "Просрочен утренний контроль", text);
-        }
-        if (!previousDayOnly
-                && !now.toLocalTime().isBefore(FINAL_STAGE_START)
-                && control.getDayCheckedAt() == null
-                && control.getDayNotificationSentAt() == null) {
-            control.setDayNotificationSentAt(now);
-            String text = overdueStageText(control, "дневной контроль", "20:00", openAction);
-            saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
-            notifyOwners(control, "Просрочен дневной контроль", text);
+            notifyOwners(control, "Просрочено начало дня", text);
         }
         if ((previousDayOnly || control.getControlDate().isBefore(now.toLocalDate()))
                 && !now.toLocalTime().isBefore(MORNING_STAGE_START)
                 && control.getFinalCheckedAt() == null
                 && control.getEveningNotificationSentAt() == null) {
             control.setEveningNotificationSentAt(now);
-            String text = overdueStageText(control, "финальная проверка", "05:00", openAction);
+            String text = overdueStageText(control, "конец дня", "05:00", openAction);
             saveEvent(control, null, null, ManagerDailyControlEventType.TEST_NOTIFICATION, null, text);
-            notifyOwners(control, "Просрочена финальная проверка", text);
+            notifyOwners(control, "Просрочен конец дня", text);
         }
         dailyControlRepository.save(control);
     }
@@ -578,7 +569,9 @@ public class ManagerControlService {
         if ("COMMON_INVOICE".equals(entityType)) {
             return repairCommonInvoiceConcreteItem(concreteItem, control, principal);
         }
-        if (!ENTITY_WORKER_ORDER_NEW.equals(entityType) && !"ORDER".equals(entityType)) {
+        if (!ENTITY_WORKER_ORDER_NEW.equals(entityType)
+                && !ENTITY_WORKER_ORDER_CORRECT.equals(entityType)
+                && !"ORDER".equals(entityType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автопочинка доступна только для заказов с клиентской автоматизацией");
         }
         Order order = orderRepository.findById(concreteItem.getEntityId())
@@ -909,8 +902,8 @@ public class ManagerControlService {
         switch (stage) {
             case "MORNING_START" -> control.setMorningStartedAt(now);
             case "MORNING_DONE" -> {
-                rejectStageCompletionIfProblemsOpen(control, "Утренний обход");
-                rejectIfOutsideStageWindow("Утренний обход", now.toLocalTime());
+                rejectStageCompletionIfProblemsOpen(control, "Начало дня");
+                rejectIfOutsideStageWindow("Начало дня", now.toLocalTime());
                 if (control.getMorningStartedAt() == null) {
                     control.setMorningStartedAt(now);
                 }
@@ -918,14 +911,14 @@ public class ManagerControlService {
             }
             case "DAY_CHECK" -> {
                 rejectStageCompletionIfProblemsOpen(control, "Дневной контроль");
-                rejectIfPreviousStageMissing(control.getMorningCompletedAt(), "Сначала закройте утренний обход");
+                rejectIfPreviousStageMissing(control.getMorningCompletedAt(), "Сначала отметьте начало дня");
                 rejectIfOutsideStageWindow("Дневной контроль", now.toLocalTime());
                 control.setDayCheckedAt(now);
             }
             case "FINAL_CHECK" -> {
-                rejectStageCompletionIfProblemsOpen(control, "Финальная проверка");
-                rejectIfPreviousStageMissing(control.getDayCheckedAt(), "Сначала отметьте дневной контроль");
-                rejectIfOutsideStageWindow("Финальная проверка", now.toLocalTime());
+                rejectStageCompletionIfProblemsOpen(control, "Конец дня");
+                rejectIfPreviousStageMissing(control.getMorningCompletedAt(), "Сначала отметьте начало дня");
+                rejectIfOutsideStageWindow("Конец дня", now.toLocalTime());
                 control.setFinalCheckedAt(now);
             }
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный этап контроля");
@@ -1058,17 +1051,11 @@ public class ManagerControlService {
 
     private List<String> closeBlockers(ManagerDailyControl control, List<ManagerDailyControlItem> items) {
         List<String> blockers = new ArrayList<>();
-        if (control.getMorningStartedAt() == null) {
-            blockers.add("Не отмечен утренний обход");
-        }
         if (control.getMorningCompletedAt() == null) {
-            blockers.add("Не закрыт утренний обход");
-        }
-        if (control.getDayCheckedAt() == null) {
-            blockers.add("Не отмечен дневной контроль");
+            blockers.add("Не отмечено начало дня");
         }
         if (control.getFinalCheckedAt() == null) {
-            blockers.add("Не отмечена финальная проверка");
+            blockers.add("Не отмечен конец дня");
         }
         blockers.addAll(problemBlockers(items));
         return blockers;
@@ -1092,15 +1079,15 @@ public class ManagerControlService {
 
     private void rejectIfOutsideStageWindow(String stageLabel, LocalTime time) {
         boolean allowed = switch (stageLabel) {
-            case "Утренний обход" -> !time.isBefore(MORNING_STAGE_START) && time.isBefore(DAY_STAGE_START);
-            case "Дневной контроль" -> !time.isBefore(DAY_STAGE_START) && time.isBefore(FINAL_STAGE_START);
-            case "Финальная проверка" -> !time.isBefore(FINAL_STAGE_START) || time.isBefore(MORNING_STAGE_START);
+            case "Начало дня" -> !time.isBefore(MORNING_STAGE_START) && time.isBefore(FINAL_STAGE_START);
+            case "Дневной контроль" -> !time.isBefore(START_DAY_DEADLINE) && time.isBefore(FINAL_STAGE_START);
+            case "Конец дня" -> !time.isBefore(FINAL_STAGE_START) || time.isBefore(MORNING_STAGE_START);
             default -> true;
         };
         if (!allowed) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    stageLabel + " можно завершить только в свое окно: утро 05:00-14:00, день 14:00-20:00, финал 20:00-04:59"
+                    stageLabel + " можно завершить только в свое окно: начало дня 05:00-20:00, конец дня 20:00-04:59"
             );
         }
     }
@@ -1211,7 +1198,6 @@ public class ManagerControlService {
         }
         int stageScore = 0;
         stageScore += control.getMorningCompletedAt() == null ? 10 : 0;
-        stageScore += control.getDayCheckedAt() == null ? 8 : 0;
         stageScore += control.getFinalCheckedAt() == null ? 12 : 0;
         int quality = Math.max(0, 100 - riskScore - stageScore);
         control.setRiskScore(riskScore);
@@ -1894,7 +1880,7 @@ public class ManagerControlService {
             String label = safe(order.getClientMessageStatus().label());
             String error = safe(order.getClientMessageStatus().errorMessage());
             if (!error.isBlank()) {
-                return "Почему в контроле: автоответчик не обработал заказ — " + error + ".";
+                return clientMessageControlErrorReason(error);
             }
             if (!label.isBlank()) {
                 return "Почему в контроле: автоответчик не закрыл задачу — " + label + ".";
@@ -1920,6 +1906,16 @@ public class ManagerControlService {
             return "Почему в контроле: клиентский текст ожидается, но нет активного или успешного автозапроса.";
         }
         return "Почему в контроле: заказ просрочен, автоматическое действие не найдено или не применимо.";
+    }
+
+    private String clientMessageControlErrorReason(String error) {
+        String cleaned = safe(error);
+        String lower = cleaned.toLowerCase(Locale.ROOT);
+        if (lower.contains("чат") && lower.contains("не привязан")) {
+            return "Почему в контроле: автоответчик не может отправить сообщение — чат компании не привязан к боту. "
+                    + "Автопочинка недоступна: привяжите чат компании к боту или отправьте сообщение вручную.";
+        }
+        return "Почему в контроле: автоответчик не обработал заказ — " + cleaned + ".";
     }
 
     private String chatBindingControlReason(OrderDTOList order) {
@@ -2958,7 +2954,7 @@ public class ManagerControlService {
                 safe(incident.getWorkerName()).isBlank() ? incident.getWorkerUsername() : incident.getWorkerName(),
                 incident.getLevel() == null ? null : incident.getLevel().name(),
                 incident.getCreatedAt() == null ? null : Math.max(0, ChronoUnit.DAYS.between(incident.getCreatedAt().toLocalDate(), LocalDate.now())),
-                limit(safe(incident.getMessage()), 180),
+                limit(safe(incident.getMessage()), 500),
                 targetId == null ? "/worker/risk" : "/worker/risk?targetId=" + targetId,
                 null,
                 null,

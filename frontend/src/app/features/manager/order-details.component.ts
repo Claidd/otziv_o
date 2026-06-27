@@ -3,7 +3,7 @@ import { Component, DestroyRef, HostListener, computed, effect, inject, signal }
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { Observable } from 'rxjs';
+import { firstValueFrom, Observable } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ReputationDeepReportMonitorService } from '../../core/reputation-deep-report-monitor.service';
 import type { DeepCompanyResearchJob, ReputationSingleReviewDraftResult } from '../../core/reputation-ai.api';
@@ -52,6 +52,7 @@ type ReviewEditableField = 'text' | 'answer';
 type SideNoteField = 'order' | 'company';
 type ReviewQuickFilter = 'all' | 'unpublished' | 'missing-photo' | 'with-note';
 type ReviewEditDraft = ReviewUpdateRequest;
+type ReviewCredentialCopyState = { botId?: number | null; botLoginAt?: number; botPasswordAt?: number };
 type RecoveryTaskDraft = {
   recoveryText: string;
   scheduledDate: string | null;
@@ -109,8 +110,10 @@ export class OrderDetailsComponent {
   private readonly deepReportMonitor = inject(ReputationDeepReportMonitorService);
   private readonly toastService = inject(ToastService);
   private readonly remindersService = inject(PersonalRemindersService);
+  private readonly publishCredentialWaitMs = 150_000;
   private readonly reviewFieldDraftToastIds = new Map<string, number>();
   private restoredReviewFieldsToastId: number | null = null;
+  private publishCredentialWaitTimer: number | null = null;
 
   readonly orderId = signal<number | null>(null);
   readonly details = signal<OrderDetailsPayload | null>(null);
@@ -125,7 +128,8 @@ export class OrderDetailsComponent {
   readonly mobilePreviewReviewTextId = signal<number | null>(null);
   readonly editingReviewNoteId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
-  readonly copiedReviewCredentials = signal<Record<number, { botId?: number | null; botLogin?: boolean; botPassword?: boolean }>>({});
+  readonly copiedReviewCredentials = signal<Record<number, ReviewCredentialCopyState>>({});
+  readonly reviewPublishWaitNow = signal(Date.now());
   readonly savedReviewNoteId = signal<number | null>(null);
   readonly openReviewNotePopoverId = signal<number | null>(null);
   readonly editingSideNoteField = signal<SideNoteField | null>(null);
@@ -229,6 +233,7 @@ export class OrderDetailsComponent {
   constructor() {
     this.updateMobileReviewLayout();
     this.loadTbankStatus();
+    this.destroyRef.onDestroy(() => this.clearReviewPublishWaitTimer());
     effect(() => {
       const job = this.deepReportMonitor.currentJob();
       queueMicrotask(() => this.applyMonitoredCompanyReportJob(job));
@@ -325,26 +330,68 @@ export class OrderDetailsComponent {
     };
 
     const item = map[kind];
-    const copied = await this.copyText(item.value, `${review.id}-${kind}`, item.label);
-    if (copied) {
+    if (!(await this.copyText(item.value, `${review.id}-${kind}`, item.label))) {
+      return;
+    }
+
+    if (kind === 'botLogin' || kind === 'botPassword') {
+      if (!(await this.logReviewCredentialCopyClick(review, kind))) {
+        return;
+      }
       this.markReviewCredentialCopied(review, kind);
-      this.logReviewCredentialCopyClick(review, kind);
     }
   }
 
   reviewAccountActionLocked(review: OrderReviewItem): boolean {
-    if (!this.openedFromWorkerAll() || !this.isOnlyWorkerRole()) {
+    if (!this.openedFromWorkerAll()) {
       return false;
     }
 
     const copied = this.copiedReviewCredentials()[review.id];
-    return !(copied?.botLogin && copied.botPassword && copied.botId === (review.botId ?? null));
+    return !(copied?.botLoginAt && copied.botPasswordAt && copied.botId === (review.botId ?? null));
   }
 
   reviewAccountActionTitle(review: OrderReviewItem): string {
     return this.reviewAccountActionLocked(review)
       ? 'Сначала скопируйте логин и пароль аккаунта'
       : 'Действие с аккаунтом';
+  }
+
+  reviewPublishActionLocked(review: OrderReviewItem): boolean {
+    if (!this.openedFromWorkerAll() || review.publish) {
+      return false;
+    }
+
+    const copied = this.copiedReviewCredentials()[review.id];
+    if (!copied?.botLoginAt || !copied.botPasswordAt || copied.botId !== (review.botId ?? null)) {
+      return true;
+    }
+
+    return this.reviewPublishWaitLeftSeconds(review) > 0;
+  }
+
+  reviewPublishActionTitle(review: OrderReviewItem): string {
+    if (!this.openedFromWorkerAll() || review.publish) {
+      return 'Действие с отзывом';
+    }
+
+    const copied = this.copiedReviewCredentials()[review.id];
+    if (!copied || copied.botId !== (review.botId ?? null)) {
+      return 'Сначала скопируйте логин и пароль аккаунта.';
+    }
+
+    if (!copied.botLoginAt || !copied.botPasswordAt) {
+      const missing = [
+        !copied.botLoginAt ? 'логин' : '',
+        !copied.botPasswordAt ? 'пароль' : ''
+      ].filter(Boolean).join(', ');
+      return `Скопируйте ${missing}.`;
+    }
+
+    const left = this.reviewPublishWaitLeftSeconds(review);
+    return left > 0
+      ? `После копирования логина и пароля подождите еще ${left} сек.`
+      : 'Действие с отзывом';
   }
 
   hideReviewBotPasswordField(): boolean {
@@ -1395,9 +1442,14 @@ export class OrderDetailsComponent {
       return;
     }
 
+    if (this.reviewPublishActionLocked(review)) {
+      this.toastService.info('Публикация подождет', this.reviewPublishActionTitle(review));
+      return;
+    }
+
     this.runDetailsMutation(
       `publish-${review.id}`,
-      this.managerApi.publishOrderReview(review.orderId, review.id),
+      this.managerApi.publishOrderReview(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Отзыв опубликован',
       `Отзыв #${review.id} учтен в заказе`
     );
@@ -2527,26 +2579,81 @@ export class OrderDetailsComponent {
       const botId = review.botId ?? null;
       const base = existing?.botId === botId ? existing : { botId };
       return {
-        ...current,
         [review.id]: {
           ...base,
-          [kind]: true
+          [kind === 'botLogin' ? 'botLoginAt' : 'botPasswordAt']: Date.now()
         }
       };
     });
+    this.refreshReviewPublishWaitTimer();
   }
 
-  private logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): void {
-    if (kind !== 'botLogin' && kind !== 'botPassword') {
+  private reviewPublishWaitLeftSeconds(review: OrderReviewItem): number {
+    if (!this.openedFromWorkerAll() || review.publish) {
+      return 0;
+    }
+
+    const copied = this.copiedReviewCredentials()[review.id];
+    if (!copied?.botLoginAt || !copied.botPasswordAt || copied.botId !== (review.botId ?? null)) {
+      return 0;
+    }
+
+    const readyAt = Math.max(copied.botLoginAt, copied.botPasswordAt) + this.publishCredentialWaitMs;
+    return Math.max(0, Math.ceil((readyAt - this.reviewPublishWaitNow()) / 1000));
+  }
+
+  private refreshReviewPublishWaitTimer(): void {
+    this.reviewPublishWaitNow.set(Date.now());
+    if (!this.hasActiveReviewPublishWait()) {
+      this.clearReviewPublishWaitTimer();
       return;
     }
 
-    const field = kind === 'botLogin' ? 'login' : 'password';
-    this.managerApi.logOrderReviewCopyClick(review.id, field, this.orderDetailsActivitySource()).subscribe({
-      error: () => {
-        // Копирование не блокируем: лог нужен для проверки рисков, но не должен мешать работе.
+    if (this.publishCredentialWaitTimer !== null) {
+      return;
+    }
+
+    this.publishCredentialWaitTimer = window.setInterval(() => {
+      this.reviewPublishWaitNow.set(Date.now());
+      if (!this.hasActiveReviewPublishWait()) {
+        this.clearReviewPublishWaitTimer();
       }
-    });
+    }, 1000);
+  }
+
+  private hasActiveReviewPublishWait(): boolean {
+    if (!this.openedFromWorkerAll()) {
+      return false;
+    }
+
+    return this.reviews().some((review) => this.reviewPublishWaitLeftSeconds(review) > 0);
+  }
+
+  private clearReviewPublishWaitTimer(): void {
+    if (this.publishCredentialWaitTimer === null) {
+      return;
+    }
+
+    window.clearInterval(this.publishCredentialWaitTimer);
+    this.publishCredentialWaitTimer = null;
+  }
+
+  private async logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): Promise<boolean> {
+    if (kind !== 'botLogin' && kind !== 'botPassword') {
+      return true;
+    }
+
+    const field = kind === 'botLogin' ? 'login' : 'password';
+    try {
+      await firstValueFrom(this.managerApi.logOrderReviewCopyClick(review.id, field, this.orderDetailsActivitySource()));
+      return true;
+    } catch {
+      this.toastService.error(
+        'Копирование не записано',
+        'Данные попали в буфер, но сервер не подтвердил действие. Нажмите кнопку еще раз.'
+      );
+      return false;
+    }
   }
 
   private orderDetailsActivitySource(): { sourcePage: string; sourceEntry?: string; sourceSection?: string } {

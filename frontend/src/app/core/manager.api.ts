@@ -975,10 +975,10 @@ export class ManagerApi {
     );
   }
 
-  publishOrderReview(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
+  publishOrderReview(orderId: number, reviewId: number, source?: ReviewActivitySource): Observable<OrderDetailsPayload> {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/publish`,
-      {}
+      source ?? {}
     );
   }
 

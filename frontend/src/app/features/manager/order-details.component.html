@@ -403,7 +403,8 @@
                 class="publish-button"
                 [class.publish-button--published]="review.publish"
                 (click)="publishReview(review)"
-                [disabled]="review.publish || isMutating('publish-' + review.id)"
+                [disabled]="review.publish || reviewPublishActionLocked(review) || isMutating('publish-' + review.id)"
+                [title]="reviewPublishActionTitle(review)"
               >
                 {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
               </button>

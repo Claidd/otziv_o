@@ -454,7 +454,8 @@ public class ApiManagerReviewController {
     public OrderDetailsResponse publishOrderReview(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
-            Authentication authentication
+            Authentication authentication,
+            @RequestBody(required = false) ReviewActivitySourceRequest source
     ) throws Exception {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
@@ -470,7 +471,10 @@ public class ApiManagerReviewController {
                 orderId,
                 reviewId,
                 "publish",
-                "botId=" + valueOrDash(review == null || review.getBot() == null ? null : review.getBot().getId()) + ";"
+                withSource(
+                        "botId=" + valueOrDash(review == null || review.getBot() == null ? null : review.getBot().getId()) + ";",
+                        source
+                )
         );
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);

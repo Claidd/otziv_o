@@ -273,7 +273,7 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("PUBLISH_TOO_FAST_AFTER_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(true, captor.getValue().getDetails().contains("3 сек"));
-        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 180 сек"));
+        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 150 сек"));
     }
 
     @Test
@@ -314,7 +314,7 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(true, captor.getValue().getDetails().contains("10 сек"));
-        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 180 сек"));
+        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 150 сек"));
     }
 
     @Test
@@ -384,7 +384,7 @@ class WorkerRiskEvaluationServiceTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals(true, seriesIncident.getDetails().contains("найдено 3"));
-        assertEquals(true, seriesIncident.getDetails().contains("180 сек"));
+        assertEquals(true, seriesIncident.getDetails().contains("150 сек"));
     }
 
     @Test

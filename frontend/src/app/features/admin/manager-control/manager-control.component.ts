@@ -226,15 +226,16 @@ export class ManagerControlComponent {
     if (item.reasonCode === 'WORKER_ACTIONS') {
       return false;
     }
-    if (item.itemType === 'WORKER_SECTION' && item.count > 0) {
-      return true;
-    }
     if (item.group === 'ACTION') {
-      return true;
+      return item.examples.length > 0 || item.itemStatus !== 'OPEN' || !!item.comment;
     }
     return item.itemStatus !== 'OPEN' || !!item.comment || item.examples.some((example) =>
       !!example.comment || !!example.actionType || (!!example.itemStatus && example.itemStatus !== 'OPEN')
     );
+  }
+
+  detailItemVisibleCount(item: ManagerControlItemDetail): number {
+    return item.group === 'ACTION' ? item.examples.length : item.count;
   }
 
   selectManager(manager: ManagerControlManager): void {
@@ -292,7 +293,7 @@ export class ManagerControlComponent {
     this.updatingControl.set(false);
   }
 
-  markStage(stage: 'MORNING_START' | 'MORNING_DONE' | 'DAY_CHECK' | 'FINAL_CHECK'): void {
+  markStage(stage: 'MORNING_DONE' | 'FINAL_CHECK'): void {
     const detail = this.detail();
     if (!detail || this.updatingControl()) {
       return;
@@ -570,7 +571,7 @@ export class ManagerControlComponent {
         || reason.includes('снимите статус')
         || reason.includes('автоответчик не отправляет')
       );
-    const repairableOrderQueue = example.type === 'ORDER'
+    const repairableOrderQueue = (example.type === 'ORDER' || example.type === 'WORKER_ORDER_CORRECT')
       && !reason.includes('не может отправить сообщение')
       && !reason.includes('не привязан')
       && (
@@ -643,6 +644,12 @@ export class ManagerControlComponent {
     return this.canRequestWorkerTask(example)
       && example.type !== 'RISK'
       && this.detailExamplePrimaryUrl(example, null) !== '#';
+  }
+
+  canShowWorkerClientAction(example: ManagerControlConcreteItem): boolean {
+    return example.type !== 'NAGUL_REVIEW'
+      && example.type !== 'PUBLISH_REVIEW'
+      && !!this.chatUrl(example);
   }
 
   workerTaskRequestComment(example: ManagerControlConcreteItem): string {
@@ -1175,16 +1182,12 @@ export class ManagerControlComponent {
     return group === 'ACTION' ? 'К действию' : 'Нагрузка';
   }
 
-  stageLabel(stage: 'MORNING_START' | 'MORNING_DONE' | 'DAY_CHECK' | 'FINAL_CHECK'): string {
+  stageLabel(stage: 'MORNING_DONE' | 'FINAL_CHECK'): string {
     switch (stage) {
-      case 'MORNING_START':
-        return 'Утренний обход начат';
       case 'MORNING_DONE':
-        return 'Утренний обход закрыт';
-      case 'DAY_CHECK':
-        return 'Дневной контроль';
+        return 'Начало дня отмечено';
       default:
-        return 'Финальная проверка';
+        return 'Конец дня отмечен';
     }
   }
 

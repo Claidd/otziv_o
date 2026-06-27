@@ -751,9 +751,11 @@
 }
 
 .review-actions button:disabled {
-  border-color: rgba(103, 116, 131, 0.24);
-  color: var(--otziv-dark);
-  background: var(--otziv-white);
+  border-color: rgba(103, 116, 131, 0.12);
+  color: rgba(103, 116, 131, 0.42);
+  background: rgba(226, 232, 240, 0.58);
+  box-shadow: none;
+  cursor: not-allowed;
   opacity: 1;
 }
 

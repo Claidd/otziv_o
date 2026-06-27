@@ -241,6 +241,21 @@ describe('WorkerReviewCardComponent', () => {
     expect(publishButton?.disabled).toBe(true);
   });
 
+  it('blocks publication while credential wait timer is active', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    fixture.componentInstance.review = review();
+    fixture.componentInstance.activeSection = 'publish';
+    fixture.componentInstance.publishLockedByCredentialWait = true;
+    fixture.componentInstance.publishCredentialWaitTitle = 'После копирования логина и пароля подождите еще 150 сек.';
+
+    fixture.detectChanges();
+
+    const publishButton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.publish-button');
+    expect(publishButton?.textContent?.trim()).toBe('ОПУБЛИКОВАЛ');
+    expect(publishButton?.disabled).toBe(true);
+    expect(publishButton?.title).toBe('После копирования логина и пароля подождите еще 150 сек.');
+  });
+
   it('allows template accounts in walk section but blocks them in publication section', () => {
     const render = (activeSection: WorkerReviewCardComponent['activeSection']): HTMLElement => {
       const fixture = TestBed.createComponent(WorkerReviewCardComponent);

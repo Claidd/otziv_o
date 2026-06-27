@@ -16,7 +16,7 @@ export interface ManagerControlActionPayload {
 }
 
 export interface ManagerControlStagePayload {
-  stage: 'MORNING_START' | 'MORNING_DONE' | 'DAY_CHECK' | 'FINAL_CHECK';
+  stage: 'MORNING_DONE' | 'FINAL_CHECK';
   comment?: string | null;
 }
 
