@@ -149,10 +149,10 @@ describe('WorkerReviewCardComponent', () => {
       };
     };
 
-    expect(renderTitle('nagul')).toEqual({ text: 'Company - Filial', tagName: 'SPAN', href: null });
+    expect(renderTitle('nagul')).toEqual({ text: 'Company - Filial', tagName: 'BUTTON', href: null });
     expect(renderTitle('publish')).toEqual({
       text: 'Company - Filial',
-      tagName: 'SPAN',
+      tagName: 'BUTTON',
       href: null,
     });
     expect(renderTitle('bad')).toEqual({
@@ -171,6 +171,32 @@ describe('WorkerReviewCardComponent', () => {
 
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('footer a')?.textContent?.trim()).toBe('City');
+  });
+
+  it('expands and emits full review title for worker role view', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    let copiedTitle = '';
+    component.review = review();
+    component.activeSection = 'publish';
+    component.showFilialCityInFooter = true;
+    component.titleCopyRequested.subscribe((title) => {
+      copiedTitle = title;
+    });
+
+    fixture.detectChanges();
+
+    const title = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.review-title');
+    expect(title?.textContent?.trim()).toBe('Company - Filial');
+
+    title?.click();
+    fixture.detectChanges();
+
+    expect(title?.textContent?.trim()).toBe('Company - Filial - City');
+
+    title?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
+
+    expect(copiedTitle).toBe('Company - Filial - City');
   });
 
   it('does not fall back to the creation date when publication date is empty', () => {

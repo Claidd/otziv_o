@@ -2289,7 +2289,7 @@ public class ManagerControlService {
                 daysSince(order.getChanged(), today),
                 reason,
                 orderTargetUrl(order),
-                null,
+                orderDetailsId(null, order),
                 orderChatUrl(order),
                 null,
                 null,

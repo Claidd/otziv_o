@@ -10,7 +10,7 @@
   [class.review-card--fluid]="isReviewTextOpen() || isReviewFieldEditing('answer')"
 >
   <header>
-    @if (isReviewTitleLinkEnabled()) {
+    @if (!usesInteractiveTitle() && isReviewTitleLinkEnabled()) {
       <a
         class="review-title"
         [href]="review.filialUrl || reviewEditUrl()"
@@ -21,7 +21,16 @@
         {{ reviewTitle() }}
       </a>
     } @else {
-      <span class="review-title" [title]="reviewTitle()">{{ reviewTitle() }}</span>
+      <button
+        type="button"
+        class="review-title review-title-button"
+        [class.review-title--expanded]="isReviewTitleExpanded"
+        [title]="fullReviewTitle()"
+        (click)="handleReviewTitleClick($event)"
+        (dblclick)="handleReviewTitleDoubleClick($event)"
+      >
+        {{ displayedReviewTitle() }}
+      </button>
     }
     <div class="review-id-line">
       @if (needsReviewPhoto()) {

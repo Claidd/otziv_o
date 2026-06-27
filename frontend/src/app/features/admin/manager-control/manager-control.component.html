@@ -1,5 +1,5 @@
 <app-admin-layout title="Контроль менеджеров" active="manager-control" rightPanelMode="custom">
-  <section class="manager-control">
+  <section class="manager-control" [class.detail-mode]="isDetailPage()">
     <header class="control-head">
       <div>
         <p class="eyebrow">ADMIN / OWNER</p>
@@ -259,9 +259,9 @@
     }
   </section>
 
-  @if (detail() || detailLoading() || detailError()) {
-    <div class="detail-backdrop" (click)="closeDetails()">
-      <section class="detail-modal" role="dialog" aria-modal="true" aria-label="Детализация контроля менеджера" (click)="$event.stopPropagation()">
+  @if (isDetailPage()) {
+    <section class="detail-page" aria-label="Детализация контроля менеджера">
+      <section class="detail-modal detail-page-card">
         <header class="detail-head">
           <div class="detail-title">
             <p class="eyebrow">Контроль дня</p>
@@ -308,8 +308,8 @@
               }
             </section>
           }
-          <button type="button" class="detail-close" title="Закрыть" (click)="closeDetails()">
-            <span class="material-icons-sharp">close</span>
+          <button type="button" class="detail-close" title="К списку менеджеров" (click)="closeDetails()">
+            <span class="material-icons-sharp">arrow_back</span>
           </button>
         </header>
 
@@ -356,25 +356,34 @@
                         <span class="material-icons-sharp">{{ exampleIcon(example) }}</span>
                         <div class="detail-example-body">
                           <a class="detail-example-link" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
-                            <span class="detail-example-text">
+                            <header class="detail-example-head">
                               <strong>{{ example.title }}</strong>
-                              <small>
-                                @if (example.status) {
-                                  <b>{{ example.status }}</b>
+                              <span class="detail-example-badges">
+                                <span>{{ (example.updatedAt || item.updatedAt) | date: 'dd.MM.yyyy HH:mm' }}</span>
+                                <b>{{ example.status || severityLabel(item.severity) }}</b>
+                              </span>
+                            </header>
+
+                            <span class="detail-example-grid">
+                              <span class="detail-example-field">
+                                <small>Специалист</small>
+                                <strong>{{ controlCardSpecialist(example) }}</strong>
+                              </span>
+                              <span class="detail-example-field">
+                                <small>Заказ</small>
+                                <strong>{{ controlCardOrder(example) }}</strong>
+                              </span>
+                              <span class="detail-example-field">
+                                <small>Отзыв</small>
+                                @if (controlCardReviewUrl(example); as reviewUrl) {
+                                  <a [href]="reviewUrl">{{ controlCardReview(example) }}</a>
+                                } @else {
+                                  <strong>{{ controlCardReview(example) }}</strong>
                                 }
-                                @if (example.ageDays !== null && example.ageDays !== undefined) {
-                                  <span>{{ example.ageDays }} дн.</span>
-                                }
-                                @if (isWaitingForClientExample(example)) {
-                                  <span class="waiting-client-badge">
-                                    <span class="material-icons-sharp">hourglass_top</span>
-                                    Ждет клиента
-                                  </span>
-                                }
-                                @if (example.subtitle) {
-                                  <span>{{ example.subtitle }}</span>
-                                }
-                              </small>
+                              </span>
+                            </span>
+
+                            <span class="detail-example-text">
                               @if (example.reason) {
                                 <em>{{ example.reason }}</em>
                               }
@@ -400,24 +409,24 @@
 
                           @if (example.type === 'ORDER') {
                             <div class="review-followup order-open-action">
-                              <a class="review-action primary" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
+                              <a class="review-action order-action" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
                                 <span class="material-icons-sharp">view_kanban</span>
                                 Заказ
                               </a>
                               @if (canContactOrder(example)) {
-                                <button type="button" class="review-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)">
+                                <button type="button" class="review-action text-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)">
                                   <span class="material-icons-sharp">content_copy</span>
                                   {{ isContactTextCopied(example) ? 'Текст готов' : 'Текст' }}
                                 </button>
                                 @if (chatUrl(example)) {
-                                  <a class="review-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                  <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                     <span class="material-icons-sharp">forum</span>
                                     Клиент
                                   </a>
                                 }
                                 <button
                                   type="button"
-                                  class="review-action primary"
+                                  class="review-action send-action"
                                   (click)="sendClientMessage(example)"
                                   [disabled]="isConcreteUpdating(example.controlEntityId)"
                                   title="Отправить сообщение клиенту автоматически"
@@ -433,13 +442,13 @@
                           @if (canRequestWorkerTask(example)) {
                             <div class="review-followup worker-request">
                               @if (canOpenOrderFromWorkerTask(example)) {
-                                <a class="review-action" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
+                                <a class="review-action order-action" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
                                   <span class="material-icons-sharp">view_kanban</span>
                                   Заказ
                                 </a>
                               }
                               @if (chatUrl(example)) {
-                                <a class="review-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                   <span class="material-icons-sharp">forum</span>
                                   Клиент
                                 </a>
@@ -447,7 +456,7 @@
                               @if (canSendClientMessage(example)) {
                                 <button
                                   type="button"
-                                  class="review-action primary"
+                                  class="review-action send-action"
                                   (click)="sendClientMessage(example)"
                                   [disabled]="isConcreteUpdating(example.controlEntityId)"
                                   title="Попросить клиента прислать тексты"
@@ -459,7 +468,7 @@
                               @if (canRepairAutomationIssue(example)) {
                                 <button
                                   type="button"
-                                  class="review-action"
+                                  class="review-action repair-action"
                                   (click)="repairConcreteItem(example)"
                                   [disabled]="isConcreteUpdating(example.controlEntityId)"
                                   title="Починить очередь автоответчика"
@@ -468,21 +477,20 @@
                                   Починить
                                 </button>
                               }
-                              <button type="button" class="review-action primary" (click)="requestWorkerTask(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
+                              <button type="button" class="review-action request-action" (click)="requestWorkerTask(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
                                 <span class="material-icons-sharp">campaign</span>
                                 Запросить
                               </button>
-                              <small>{{ workerNotificationTitle(example) }}</small>
                             </div>
                           }
 
                           @if (example.type === 'COMMON_INVOICE') {
                             <div class="review-followup invoice-open-action">
-                              <a class="review-action" [href]="commonInvoiceOrdersUrl(example)">
+                              <a class="review-action order-action" [href]="commonInvoiceOrdersUrl(example)">
                                 <span class="material-icons-sharp">view_kanban</span>
                                 В заказах
                               </a>
-                              <a class="review-action primary" [href]="commonInvoiceDetailUrl(example, item.targetUrl)">
+                              <a class="review-action client-action" [href]="commonInvoiceDetailUrl(example, item.targetUrl)">
                                 <span class="material-icons-sharp">receipt_long</span>
                                 Счет
                               </a>
@@ -593,6 +601,6 @@
           </details>
         }
       </section>
-    </div>
+    </section>
   }
 </app-admin-layout>

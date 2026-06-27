@@ -1,6 +1,8 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   ManagerControlApi,
   ManagerControlActionType,
@@ -31,6 +33,8 @@ import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 export class ManagerControlComponent {
   private readonly api = inject(ManagerControlApi);
   private readonly toast = inject(ToastService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   readonly summary = signal<ManagerControlSummary | null>(null);
   readonly loading = signal(false);
@@ -45,6 +49,8 @@ export class ManagerControlComponent {
   readonly preparedContactItemIds = signal<Set<number>>(new Set());
   readonly updatingControl = signal(false);
   readonly selectedManagerId = signal<number | null>(null);
+  readonly detailPageManagerId = signal<number | null>(null);
+  readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
 
   readonly managers = computed(() => {
     return this.summary()?.managers ?? [];
@@ -69,6 +75,18 @@ export class ManagerControlComponent {
   });
 
   constructor() {
+    this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      const rawManagerId = params.get('managerId');
+      const managerId = rawManagerId ? Number(rawManagerId) : null;
+      if (managerId && Number.isFinite(managerId)) {
+        this.detailPageManagerId.set(managerId);
+        this.selectedManagerId.set(managerId);
+        this.loadDetails(managerId);
+        return;
+      }
+      this.detailPageManagerId.set(null);
+      this.clearDetails();
+    });
     this.load();
   }
 
@@ -78,8 +96,10 @@ export class ManagerControlComponent {
     this.api.today().subscribe({
       next: (summary) => {
         this.summary.set(summary);
-        const selectedId = this.selectedManagerId();
-        if (!selectedId || !summary.managers.some((manager) => manager.managerId === selectedId)) {
+        const selectedId = this.detailPageManagerId() ?? this.selectedManagerId();
+        if (this.detailPageManagerId()) {
+          this.selectedManagerId.set(this.detailPageManagerId());
+        } else if (!selectedId || !summary.managers.some((manager) => manager.managerId === selectedId)) {
           this.selectedManagerId.set(summary.managers[0]?.managerId ?? null);
         }
         this.loading.set(false);
@@ -217,11 +237,15 @@ export class ManagerControlComponent {
 
   openDetails(manager: ManagerControlManager): void {
     this.selectManager(manager);
+    void this.router.navigate(['/admin/manager-control', manager.managerId]);
+  }
+
+  private loadDetails(managerId: number): void {
     this.detail.set(null);
     this.detailError.set(null);
     this.detailLoading.set(true);
     this.preparedContactItemIds.set(new Set());
-    this.api.managerDetails(manager.managerId).subscribe({
+    this.api.managerDetails(managerId).subscribe({
       next: (detail) => {
         this.detail.set(detail);
         this.detailComments.set(Object.fromEntries(
@@ -245,6 +269,14 @@ export class ManagerControlComponent {
   }
 
   closeDetails(): void {
+    if (this.isDetailPage()) {
+      void this.router.navigate(['/admin/manager-control']);
+      return;
+    }
+    this.clearDetails();
+  }
+
+  private clearDetails(): void {
     this.detail.set(null);
     this.detailError.set(null);
     this.detailLoading.set(false);
@@ -322,10 +354,7 @@ export class ManagerControlComponent {
         this.toast.success('Контроль обновлен', this.actionToast(actionType));
         const currentDetail = this.detail();
         if (currentDetail) {
-          const manager = this.managers().find((item) => item.managerId === currentDetail.managerId);
-          if (manager) {
-            this.openDetails(manager);
-          }
+          this.loadDetails(currentDetail.managerId);
         }
         this.load();
       },
@@ -475,6 +504,22 @@ export class ManagerControlComponent {
     this.markConcreteItem(example, 'ACTION_TAKEN');
   }
 
+  requestControlCardExplanation(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (itemId && !this.detailConcreteComment(itemId)) {
+      this.updateConcreteComment(itemId, this.workerTaskRequestComment(example));
+    }
+    this.markConcreteItem(example, 'ACTION_TAKEN');
+  }
+
+  markControlCardViolation(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (itemId && !this.detailConcreteComment(itemId)) {
+      this.updateConcreteComment(itemId, 'Нарушение / штраф. Требуется фиксация результата менеджером.');
+    }
+    this.markConcreteItem(example, 'ACTION_TAKEN');
+  }
+
   contactText(example: ManagerControlConcreteItem): string {
     return (example.contactText ?? '').trim();
   }
@@ -601,6 +646,41 @@ export class ManagerControlComponent {
     }
   }
 
+  controlCardSpecialist(example: ManagerControlConcreteItem): string {
+    const subtitle = (example.subtitle ?? '').replace(/\s+/g, ' ').trim();
+    const subtitleName = this.specialistNameFromText(subtitle, '·');
+    if (subtitleName) {
+      return subtitleName;
+    }
+    const reasonName = this.specialistNameFromText(example.reason ?? '', '-')
+      || this.specialistNameFromText(example.reason ?? '', '–')
+      || this.specialistNameFromText(example.reason ?? '', '—');
+    return reasonName || '-';
+  }
+
+  controlCardOrder(example: ManagerControlConcreteItem): string {
+    if (example.entityId !== null && example.entityId !== undefined) {
+      return `#${example.entityId}`;
+    }
+    return '-';
+  }
+
+  controlCardReview(example: ManagerControlConcreteItem): string {
+    const orderDetailsId = String(example.orderDetailsId ?? '').trim();
+    if (orderDetailsId) {
+      return 'отзыв';
+    }
+    if (example.type === 'RISK') {
+      return 'риск';
+    }
+    return '-';
+  }
+
+  controlCardReviewUrl(example: ManagerControlConcreteItem): string {
+    const url = this.detailExamplePrimaryUrl(example, null);
+    return url === '#' ? '' : url;
+  }
+
   managerActionNote(example: ManagerControlConcreteItem): string {
     const parts: string[] = [];
     if (example.actionType) {
@@ -713,6 +793,18 @@ export class ManagerControlComponent {
     return `/orders?${params.toString()}`;
   }
 
+  private specialistNameFromText(value: string | null | undefined, separator: string): string {
+    const text = (value ?? '').replace(/\s+/g, ' ').trim();
+    if (!text.includes(separator)) {
+      return '';
+    }
+    const candidate = text.split(separator)[0]?.trim() ?? '';
+    if (!candidate || /^(Новый|На проверке|PLANNED|Коррекция|Выгул|Публикация|Восстановление)$/i.test(candidate)) {
+      return '';
+    }
+    return candidate;
+  }
+
   commonInvoiceDetailUrl(example: ManagerControlConcreteItem, fallbackUrl?: string | null): string {
     const invoiceId = example.entityId ?? this.commonInvoiceIdFromUrl(example.targetUrl) ?? this.commonInvoiceIdFromUrl(fallbackUrl);
     if (invoiceId) {
@@ -785,10 +877,7 @@ export class ManagerControlComponent {
     if (!currentDetail) {
       return;
     }
-    const manager = this.managers().find((item) => item.managerId === currentDetail.managerId);
-    if (manager) {
-      this.openDetails(manager);
-    }
+    this.loadDetails(currentDetail.managerId);
   }
 
   private patchDetailConcreteItem(previous: ManagerControlConcreteItem, updated: ManagerControlConcreteItem): ManagerControlConcreteItem {

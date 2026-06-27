@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -272,6 +273,48 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("PUBLISH_TOO_FAST_AFTER_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(true, captor.getValue().getDetails().contains("3 сек"));
+        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 180 сек"));
+    }
+
+    @Test
+    void nagulTooFastAfterCredentialCopyCreatesIncident() {
+        WorkerRiskEvaluationService service = service();
+        WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_NAGUL);
+        event.setCreatedAt(LocalDateTime.of(2026, 6, 22, 12, 0));
+        User worker = user(1L, "worker", "Иван Работник", 101L);
+
+        when(eventRepository.existsByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetween(
+                eq(1L),
+                any(),
+                eq(501L),
+                any(LocalDateTime.class),
+                eq(event.getCreatedAt())
+        )).thenReturn(true);
+        WorkerActivityEvent copyEvent = event(WorkerActivityAction.REVIEW_COPY_PASSWORD);
+        copyEvent.setCreatedAt(event.getCreatedAt().minusSeconds(10));
+        when(eventRepository.findTopByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                eq(1L),
+                any(),
+                eq(501L),
+                any(LocalDateTime.class),
+                eq(event.getCreatedAt())
+        )).thenReturn(Optional.of(copyEvent));
+        when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
+                eq(1L),
+                eq("NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY"),
+                eq(WorkerRiskIncidentStatus.OPEN),
+                eq(501L),
+                any(LocalDateTime.class)
+        )).thenReturn(false);
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.evaluateSafely(event, worker);
+
+        ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
+        verify(incidentRepository).save(captor.capture());
+        assertEquals("NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY", captor.getValue().getRuleCode());
+        assertEquals(true, captor.getValue().getDetails().contains("10 сек"));
+        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 180 сек"));
     }
 
     @Test
@@ -325,7 +368,7 @@ class WorkerRiskEvaluationServiceTest {
         )).thenReturn(List.of(firstClose, secondClose, thirdClose));
         when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
                 eq(1L),
-                eq("ACCOUNT_CLOSE_TOO_FAST_AFTER_CREDENTIAL_COPY_SERIES"),
+                anyString(),
                 eq(WorkerRiskIncidentStatus.OPEN),
                 eq(501L),
                 any(LocalDateTime.class)
@@ -335,9 +378,13 @@ class WorkerRiskEvaluationServiceTest {
         service.evaluateSafely(event, worker);
 
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
-        verify(incidentRepository).save(captor.capture());
-        assertEquals("ACCOUNT_CLOSE_TOO_FAST_AFTER_CREDENTIAL_COPY_SERIES", captor.getValue().getRuleCode());
-        assertEquals(true, captor.getValue().getDetails().contains("найдено 3"));
+        verify(incidentRepository, atLeastOnce()).save(captor.capture());
+        WorkerRiskIncident seriesIncident = captor.getAllValues().stream()
+                .filter(incident -> "ACCOUNT_CLOSE_TOO_FAST_AFTER_CREDENTIAL_COPY_SERIES".equals(incident.getRuleCode()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(true, seriesIncident.getDetails().contains("найдено 3"));
+        assertEquals(true, seriesIncident.getDetails().contains("180 сек"));
     }
 
     @Test
@@ -356,7 +403,7 @@ class WorkerRiskEvaluationServiceTest {
     void botDeactivationWithoutCredentialCopyCreatesIncident() {
         WorkerRiskEvaluationService service = service();
         WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_BOT_DEACTIVATE);
-        event.setDetails("botId=10");
+        event.setDetails("botId=10;sourcePage=order-details;sourceEntry=worker-all;sourceSection=all;");
         User worker = user(1L, "worker", "Иван Работник", 101L);
 
         when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
@@ -378,6 +425,7 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("ACCOUNT_DEACTIVATION_WITHOUT_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(35, captor.getValue().getScore());
+        assertEquals(true, captor.getValue().getDetails().contains("Место: Детали заказа, вход: Специалист -> Все, раздел: Все"));
     }
 
     @Test

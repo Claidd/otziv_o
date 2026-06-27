@@ -84,11 +84,11 @@ public class WorkerRiskEvaluationService {
     @Value("${worker.risk.publish-prep-window-minutes:60}")
     private int publishPrepWindowMinutes = 60;
 
-    @Value("${worker.risk.publish-too-fast-seconds:15}")
-    private int publishTooFastSeconds = 15;
+    @Value("${worker.risk.publish-too-fast-seconds:180}")
+    private int publishTooFastSeconds = 180;
 
-    @Value("${worker.risk.close-after-account-copy-too-fast-seconds:10}")
-    private int closeAfterAccountCopyTooFastSeconds = 10;
+    @Value("${worker.risk.close-after-account-copy-too-fast-seconds:180}")
+    private int closeAfterAccountCopyTooFastSeconds = 180;
 
     @Value("${worker.risk.close-after-account-copy-too-fast.window-minutes:30}")
     private int closeAfterAccountCopyTooFastWindowMinutes = 30;
@@ -200,6 +200,7 @@ public class WorkerRiskEvaluationService {
                     "Много действий выгула за час");
             addFrequencyFinding(result, event, "NAGUL_DAY", NAGUL_ACTIONS, now.toLocalDate().atStartOfDay(), nagulDayLimit, 50,
                     "Много действий выгула за день");
+            addNagulTooFastAfterCredentialCopyFinding(result, event, now);
         }
 
         if (TEXT_FREQUENCY_ACTIONS.contains(event.getAction())) {
@@ -339,6 +340,32 @@ public class WorkerRiskEvaluationService {
                             + " сек. Порог: " + Math.max(1, closeAfterAccountCopyTooFastLimit) + "."
             ));
         }
+    }
+
+    private void addNagulTooFastAfterCredentialCopyFinding(List<RiskFinding> result, WorkerActivityEvent event, LocalDateTime now) {
+        if (event.getReviewId() == null) {
+            return;
+        }
+
+        LocalDateTime since = now.minusMinutes(Math.max(1, publishPrepWindowMinutes));
+        String botToken = botToken(event);
+        boolean copiedLogin = copiedCredentialBetween(event, WorkerActivityAction.REVIEW_COPY_LOGIN, since, event.getCreatedAt(), botToken);
+        boolean copiedPassword = copiedCredentialBetween(event, WorkerActivityAction.REVIEW_COPY_PASSWORD, since, event.getCreatedAt(), botToken);
+        if (!copiedLogin || !copiedPassword) {
+            return;
+        }
+
+        findLastCredentialCopyBetween(event, botToken, since, event.getCreatedAt())
+                .filter(copyEvent -> copyEvent.getCreatedAt() != null && event.getCreatedAt() != null)
+                .filter(copyEvent -> secondsBetween(copyEvent, event) <= Math.max(1, closeAfterAccountCopyTooFastSeconds))
+                .ifPresent(copyEvent -> result.add(new RiskFinding(
+                        "NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY",
+                        30,
+                        "Выгул слишком быстро после копирования данных",
+                        "После последнего копирования логина/пароля до выгула прошло "
+                                + secondsBetween(copyEvent, event)
+                                + " сек. Минимум: " + Math.max(1, closeAfterAccountCopyTooFastSeconds) + " сек."
+                )));
     }
 
     private boolean isFastCloseAfterAccountCopy(WorkerActivityEvent closeEvent) {
@@ -870,20 +897,6 @@ public class WorkerRiskEvaluationService {
             result.append(", раздел: ").append(sectionLabel);
         }
         return result.toString();
-    }
-
-    private String detailValue(String details, String key) {
-        if (details == null || key == null || key.isBlank()) {
-            return "";
-        }
-        String prefix = key + "=";
-        for (String part : details.split(";")) {
-            String cleanPart = part.trim();
-            if (cleanPart.startsWith(prefix)) {
-                return clean(cleanPart.substring(prefix.length()));
-            }
-        }
-        return "";
     }
 
     private String sourcePageLabel(String page) {

@@ -63,6 +63,7 @@ export class WorkerReviewCardComponent {
   @Input() savedSideNoteKey: string | null = null;
   @Input() requireCredentialCopyBeforeAccountAction = false;
   @Input() accountActionCredentialsCopied = false;
+  isReviewTitleExpanded = false;
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   @Output() readonly reviewFieldEditStarted = new EventEmitter<ReviewEditableField>();
@@ -79,6 +80,7 @@ export class WorkerReviewCardComponent {
   @Output() readonly sideNoteEditCanceled = new EventEmitter<SideNoteField>();
   @Output() readonly sideNoteSaveRequested = new EventEmitter<SideNoteField>();
   @Output() readonly copyRequested = new EventEmitter<ReviewCopyKind>();
+  @Output() readonly titleCopyRequested = new EventEmitter<string>();
   @Output() readonly botChangeRequested = new EventEmitter<void>();
   @Output() readonly botDeactivateRequested = new EventEmitter<void>();
   @Output() readonly doneRequested = new EventEmitter<void>();
@@ -138,6 +140,42 @@ export class WorkerReviewCardComponent {
 
     const filialTitle = this.review.filialTitle?.trim();
     return filialTitle ? `${companyTitle} - ${filialTitle}` : companyTitle;
+  }
+
+  fullReviewTitle(): string {
+    const parts = [
+      this.review.companyTitle?.trim() || 'Компания',
+      this.review.filialTitle?.trim(),
+      this.review.filialCity?.trim()
+    ].filter((part): part is string => Boolean(part));
+    return parts.join(' - ');
+  }
+
+  displayedReviewTitle(): string {
+    return this.isReviewTitleExpanded ? this.fullReviewTitle() : this.reviewTitle();
+  }
+
+  usesInteractiveTitle(): boolean {
+    return this.showFilialCityInFooter;
+  }
+
+  handleReviewTitleClick(event: MouseEvent): void {
+    if (!this.usesInteractiveTitle()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.isReviewTitleExpanded = true;
+  }
+
+  handleReviewTitleDoubleClick(event: MouseEvent): void {
+    if (!this.usesInteractiveTitle()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.isReviewTitleExpanded = true;
+    this.titleCopyRequested.emit(this.fullReviewTitle());
   }
 
   footerLabel(): string {

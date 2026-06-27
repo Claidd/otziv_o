@@ -590,6 +590,10 @@ export class WorkerBoardComponent implements OnDestroy {
     }
   }
 
+  async copyReviewTitle(review: WorkerReviewItem, title: string): Promise<void> {
+    await this.copyText(title, `title-${review.id}`, 'Название скопировано');
+  }
+
   private logReviewCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): void {
     if (kind !== 'login' && kind !== 'password') {
       return;

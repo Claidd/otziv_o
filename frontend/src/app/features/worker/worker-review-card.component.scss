@@ -71,6 +71,25 @@
   cursor: pointer;
 }
 
+.worker-card header button.review-title {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.worker-card header .review-title-button {
+  appearance: none;
+}
+
+.worker-card header .review-title--expanded {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .worker-card.card-tone--walk header .review-title,
 .worker-card.card-tone--recovery header .review-title,
 .worker-card.card-tone--publication header .review-title {
