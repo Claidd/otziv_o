@@ -389,6 +389,7 @@
     type="button"
     class="publish-button"
     [class.publish-button--published]="isPublishedPublishAction()"
+    [class.publish-button--credential-locked]="publishLockedByCredentialWait"
     (click)="doneRequested.emit()"
     [disabled]="
       isPublishedPublishAction() ||

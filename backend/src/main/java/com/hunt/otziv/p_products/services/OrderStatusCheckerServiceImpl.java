@@ -9,6 +9,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final OrderStatusService orderStatusService;
     private final AppSettingService appSettingService;
     private final CommonBillingService commonBillingService;
+    private final ReviewRecoveryGateService recoveryGateService;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -73,9 +75,14 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
 
     @Override
     public void checkAndMarkOrderCompleted(Order order) throws Exception {
-        if (order.getAmount() <= order.getCounter()) {
+        if (order == null || order.getId() == null) {
+            return;
+        }
+        if (order.getAmount() <= order.getCounter() && !recoveryGateService.hasActiveRecoveryTasks(order.getId())) {
             String newStatus = handlePublicStatus(order);
             log.info("Счётчик достиг лимита. Статус заказа {} изменён на {}", order.getId(), newStatus);
+        } else if (order.getAmount() <= order.getCounter()) {
+            log.info("Счётчик заказа {} достиг лимита, но есть активные восстановления. Статус не изменён", order.getId());
         } else {
             log.info("Счётчик заказа {} не достиг лимита. Статус не изменён", order.getId());
         }

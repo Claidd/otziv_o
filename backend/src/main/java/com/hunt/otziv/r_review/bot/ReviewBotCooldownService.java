@@ -15,6 +15,7 @@ public class ReviewBotCooldownService {
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int DEFAULT_COOLDOWN_DAYS = 2;
+    private static final LocalDate RESERVED_UNTIL_TASK_COMPLETION = LocalDate.of(9999, 12, 31);
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
 
     private final AppSettingService appSettingService;
@@ -29,6 +30,10 @@ public class ReviewBotCooldownService {
     }
 
     public void markReleased(Bot bot, String reason) {
+        markReleasedFrom(bot, today(), reason);
+    }
+
+    public void markReleasedFrom(Bot bot, LocalDate baseDate, String reason) {
         if (!canCoolDown(bot)) {
             return;
         }
@@ -38,11 +43,22 @@ public class ReviewBotCooldownService {
             return;
         }
 
-        LocalDate cooldownUntil = today().plusDays(cooldownDays);
-        if (bot.getCooldownUntil() == null || bot.getCooldownUntil().isBefore(cooldownUntil)) {
+        LocalDate cooldownUntil = (baseDate != null ? baseDate : today()).plusDays(cooldownDays);
+        if (bot.getCooldownUntil() == null
+                || RESERVED_UNTIL_TASK_COMPLETION.equals(bot.getCooldownUntil())
+                || bot.getCooldownUntil().isBefore(cooldownUntil)) {
             bot.setCooldownUntil(cooldownUntil);
             log.info("Bot {} cooled down until {} after release: {}", bot.getId(), cooldownUntil, reason);
         }
+    }
+
+    public void markReservedUntilTaskCompletion(Bot bot, String reason) {
+        if (!canCoolDown(bot)) {
+            return;
+        }
+
+        bot.setCooldownUntil(RESERVED_UNTIL_TASK_COMPLETION);
+        log.info("Bot {} reserved until bad review task completion: {}", bot.getId(), reason);
     }
 
     private boolean canCoolDown(Bot bot) {

@@ -215,6 +215,14 @@ public class BotServiceImpl implements BotService {
     } // Взять всех ботов по id работнику и активности
 
     @Override
+    public List<Bot> getActiveBotsOutsideCityWithCounterAtLeast(Long cityId, int minCounter) {
+        if (cityId == null) {
+            return List.of();
+        }
+        return botsRepository.findActiveBotsOutsideCityWithCounterAtLeast(cityId, minCounter);
+    }
+
+    @Override
     @Transactional
     public Optional<Bot> claimReserveBotForCity(City targetCity, Collection<Long> excludedBotIds) {
         if (targetCity == null || targetCity.getId() == null) {

@@ -1144,6 +1144,11 @@ export interface WorkerOption {
 
 export type WorkerBoardSection = 'new' | 'correct' | 'nagul' | 'recovery' | 'publish' | 'bad' | 'all';
 export type WorkerBoardSectionQuery = WorkerBoardSection | 'current';
+export type WorkerActivitySource = {
+  sourcePage?: string;
+  sourceEntry?: string;
+  sourceSection?: string;
+};
 
 export interface WorkerBoard {
   section?: WorkerBoardSection;
@@ -2901,8 +2906,8 @@ export class ApiService {
     return this.http.delete<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}`));
   }
 
-  publishManagerOrderReview(orderId: number, reviewId: number): Observable<OrderDetailsPayload> {
-    return this.http.post<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/publish`), {});
+  publishManagerOrderReview(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderDetailsPayload> {
+    return this.http.post<OrderDetailsPayload>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/publish`), source ?? {});
   }
 
   changeManagerOrderReviewText(orderId: number, reviewId: number): Observable<OrderReviewItem> {
@@ -3337,8 +3342,8 @@ export class ApiService {
     return this.http.delete<void>(this.apiUrl(`/api/worker/bots/${botId}`));
   }
 
-  logWorkerReviewCopyClick(reviewId: number, field: 'login' | 'password'): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`), { field });
+  logWorkerReviewCopyClick(reviewId: number, field: 'login' | 'password', source?: WorkerActivitySource): Observable<void> {
+    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`), { field, ...source });
   }
 
   updateWorkerReviewText(reviewId: number, orderId: number, text: string): Observable<void> {

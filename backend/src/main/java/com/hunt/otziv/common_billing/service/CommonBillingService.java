@@ -51,6 +51,7 @@ import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -268,6 +269,7 @@ public class CommonBillingService {
     private final TbankPaymentProperties properties;
     private final TbankClient tbankClient;
     private final TbankTokenSigner tokenSigner;
+    private final ReviewRecoveryGateService recoveryGateService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -1946,7 +1948,8 @@ public class CommonBillingService {
         return items != null
                 && !items.isEmpty()
                 && items.stream().allMatch(CommonInvoiceOrder::isReady)
-                && items.stream().map(CommonInvoiceOrder::getOrder).noneMatch(order -> ACTIVE_WORK_STATUSES.contains(statusTitle(order)));
+                && items.stream().map(CommonInvoiceOrder::getOrder).noneMatch(order -> ACTIVE_WORK_STATUSES.contains(statusTitle(order)))
+                && !hasActiveRecovery(items);
     }
 
     private PreparedCommonInvoiceMessage preparePaymentMessage(
@@ -1971,6 +1974,16 @@ public class CommonBillingService {
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         refreshInvoiceAmounts(invoice, items);
         ensureCommonInvoiceNotNeedsAttention(invoice);
+        if (hasActiveRecovery(items)) {
+            if (dueOnly) {
+                postponeInvoiceForRecovery(invoice);
+                return null;
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Общий счет ждет завершения задач восстановления отзывов"
+            );
+        }
         if (reminder) {
             ensureCommonInvoiceReadyForReminder(invoice, items);
         } else {
@@ -2646,6 +2659,9 @@ public class CommonBillingService {
         if (order == null || order.getId() == null) {
             return false;
         }
+        if (recoveryGateService.hasActiveRecoveryTasks(order.getId())) {
+            return false;
+        }
         String status = statusTitle(order);
         if (READY_ON_ATTACH_STATUSES.contains(status)) {
             return true;
@@ -3145,7 +3161,26 @@ public class CommonBillingService {
     private boolean allOrdersReady(List<CommonInvoiceOrder> items) {
         return items != null
                 && !items.isEmpty()
-                && items.stream().allMatch(CommonInvoiceOrder::isReady);
+                && items.stream().allMatch(CommonInvoiceOrder::isReady)
+                && !hasActiveRecovery(items);
+    }
+
+    private boolean hasActiveRecovery(List<CommonInvoiceOrder> items) {
+        return items != null && items.stream().anyMatch(this::hasActiveRecovery);
+    }
+
+    private boolean hasActiveRecovery(CommonInvoiceOrder item) {
+        Order order = item == null ? null : item.getOrder();
+        return order != null && order.getId() != null && recoveryGateService.hasActiveRecoveryTasks(order.getId());
+    }
+
+    private void postponeInvoiceForRecovery(CommonInvoice invoice) {
+        if (invoice == null) {
+            return;
+        }
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(1));
+        invoice.setLastError("review_recovery_active: есть активные задачи восстановления отзывов");
+        invoiceRepository.save(invoice);
     }
 
     private String boardStatus(CommonInvoice invoice, List<CommonInvoiceOrder> items) {

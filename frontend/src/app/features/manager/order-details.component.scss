@@ -801,6 +801,17 @@
   opacity: 1;
 }
 
+.publish-button--credential-locked,
+.publish-button--credential-locked:disabled,
+.publish-button--credential-locked:hover,
+.publish-button--credential-locked:disabled:hover {
+  border-color: rgba(103, 116, 131, 0.16) !important;
+  color: rgba(103, 116, 131, 0.58) !important;
+  background: #eef1f5 !important;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .publish-button--published {
   border-color: rgba(255, 0, 96, 0.18) !important;
   color: #c44d72 !important;

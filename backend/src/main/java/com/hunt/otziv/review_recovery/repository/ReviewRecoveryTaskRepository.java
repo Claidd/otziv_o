@@ -42,6 +42,30 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             @Param("excludedStatus") ReviewRecoveryTaskStatus excludedStatus
     );
 
+    @Query("""
+        SELECT MAX(t.scheduledDate)
+        FROM ReviewRecoveryTask t
+        WHERE t.order.id = :orderId
+          AND t.status <> :excludedStatus
+    """)
+    LocalDate maxScheduledDateByOrderId(
+            @Param("orderId") Long orderId,
+            @Param("excludedStatus") ReviewRecoveryTaskStatus excludedStatus
+    );
+
+    @Query("""
+        SELECT COUNT(t.id)
+        FROM ReviewRecoveryTask t
+        WHERE t.order.id = :orderId
+          AND t.status = :taskStatus
+          AND t.batch.status = :batchStatus
+    """)
+    long countByOrderIdAndStatusAndBatchStatus(
+            @Param("orderId") Long orderId,
+            @Param("taskStatus") ReviewRecoveryTaskStatus taskStatus,
+            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus
+    );
+
     long countByBatchIdAndStatus(Long batchId, ReviewRecoveryTaskStatus status);
 
     @Query("""

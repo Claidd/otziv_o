@@ -85,6 +85,9 @@ public class BadReviewTask {
     @Column(name = "bad_review_task_completed_date")
     private LocalDate completedDate;
 
+    @Column(name = "bad_review_task_cross_city_bot")
+    private boolean crossCityBot;
+
     @CreationTimestamp
     @Column(name = "bad_review_task_created")
     private LocalDate created;

@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, Long> {
@@ -67,6 +68,20 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
             Long orderId,
             Long sourceReviewId,
             Collection<BadReviewTaskStatus> statuses
+    );
+
+    @Query("""
+        SELECT DISTINCT t.bot.id
+        FROM BadReviewTask t
+        WHERE t.status = :status
+          AND t.bot IS NOT NULL
+          AND t.bot.id IS NOT NULL
+          AND t.bot.id <> 1
+          AND (:excludedTaskId IS NULL OR t.id <> :excludedTaskId)
+    """)
+    Set<Long> findBotIdsByStatus(
+            @Param("status") BadReviewTaskStatus status,
+            @Param("excludedTaskId") Long excludedTaskId
     );
 
     @Query("""

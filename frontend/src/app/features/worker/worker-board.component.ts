@@ -74,6 +74,13 @@ type PublishCredentialPreparation = {
   passwordAt?: number;
   invalidated: Record<number, { botId?: number | null }>;
 };
+type StoredPublishCredentialPreparation = {
+  reviewId: number;
+  botId?: number | null;
+  loginAt?: number;
+  passwordAt?: number;
+  updatedAt: number;
+};
 
 @Component({
   selector: 'app-worker-board',
@@ -101,6 +108,8 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
+  private readonly publishCredentialPreparationStorageKey = 'otziv-worker-publish-prep:v1';
+  private readonly publishCredentialPreparationMaxAgeMs = 60 * 60 * 1000;
   private readonly searchDelayMs = 500;
   private readonly publishCredentialWaitMs = 150_000;
 
@@ -196,7 +205,8 @@ export class WorkerBoardComponent implements OnDestroy {
     loadBoard: () => this.loadBoard(),
     patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
-    reviewActionSource: () => this.workerActivitySource()
+    reviewActionSource: () => this.workerActivitySource(),
+    onReviewPublished: (reviewId) => this.clearStoredPublishCredentialPreparation(reviewId)
   });
   readonly editOrder = this.editFacade.editOrder;
   readonly orderDraft = this.editFacade.orderDraft;
@@ -231,6 +241,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly savedSideNoteKey = this.noteFacade.savedSideNoteKey;
 
   constructor() {
+    this.restoreStoredPublishCredentialPreparation();
     this.loadInitialBoard();
     this.loadDailyOverdueReminder();
   }
@@ -270,6 +281,7 @@ export class WorkerBoardComponent implements OnDestroy {
           this.pageNumber.set(board.reviews.number || board.orders.number || 0);
         }
         this.storeActiveSection(this.activeSection());
+        this.refreshPublishCredentialWaitTimer();
 
         if (board.message) {
           this.showBoardNotice();
@@ -667,6 +679,7 @@ export class WorkerBoardComponent implements OnDestroy {
       };
     });
     this.refreshPublishCredentialWaitTimer();
+    this.storePublishCredentialPreparation();
   }
 
   publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {
@@ -773,6 +786,117 @@ export class WorkerBoardComponent implements OnDestroy {
 
     window.clearInterval(this.publishCredentialWaitTimer);
     this.publishCredentialWaitTimer = null;
+  }
+
+  private restoreStoredPublishCredentialPreparation(): void {
+    const stored = this.readStoredPublishCredentialPreparation();
+    if (!stored) {
+      return;
+    }
+
+    this.publishCredentialPreparation.set({
+      reviewId: stored.reviewId,
+      botId: stored.botId ?? null,
+      loginAt: stored.loginAt,
+      passwordAt: stored.passwordAt,
+      invalidated: {}
+    });
+    this.refreshPublishCredentialWaitTimer();
+  }
+
+  private storePublishCredentialPreparation(): void {
+    const preparation = this.publishCredentialPreparation();
+    if (preparation.reviewId === null) {
+      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+      return;
+    }
+
+    this.setSessionStorageItem(this.publishCredentialPreparationStorageKey, JSON.stringify({
+      reviewId: preparation.reviewId,
+      botId: preparation.botId ?? null,
+      loginAt: preparation.loginAt,
+      passwordAt: preparation.passwordAt,
+      updatedAt: Date.now()
+    } satisfies StoredPublishCredentialPreparation));
+  }
+
+  private clearStoredPublishCredentialPreparation(reviewId?: number): void {
+    const current = this.publishCredentialPreparation();
+    if (reviewId === undefined || current.reviewId === reviewId) {
+      this.publishCredentialPreparation.set({ reviewId: null, invalidated: {} });
+      this.clearPublishCredentialWaitTimer();
+    }
+
+    const stored = this.readStoredPublishCredentialPreparation(false);
+    if (reviewId === undefined || stored?.reviewId === reviewId) {
+      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+    }
+  }
+
+  private readStoredPublishCredentialPreparation(clearExpired = true): StoredPublishCredentialPreparation | null {
+    const raw = this.getSessionStorageItem(this.publishCredentialPreparationStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const value = JSON.parse(raw) as Partial<StoredPublishCredentialPreparation>;
+      const reviewId = Number(value.reviewId);
+      const updatedAt = Number(value.updatedAt);
+      const loginAt = value.loginAt === undefined ? undefined : Number(value.loginAt);
+      const passwordAt = value.passwordAt === undefined ? undefined : Number(value.passwordAt);
+      if (
+        !Number.isFinite(reviewId) ||
+        reviewId <= 0 ||
+        !Number.isFinite(updatedAt) ||
+        (loginAt !== undefined && !Number.isFinite(loginAt)) ||
+        (passwordAt !== undefined && !Number.isFinite(passwordAt))
+      ) {
+        this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+        return null;
+      }
+
+      if (clearExpired && Date.now() - updatedAt > this.publishCredentialPreparationMaxAgeMs) {
+        this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+        return null;
+      }
+
+      const botId = value.botId === null || value.botId === undefined ? null : Number(value.botId);
+      return {
+        reviewId,
+        botId: Number.isFinite(botId) ? botId : null,
+        loginAt,
+        passwordAt,
+        updatedAt
+      };
+    } catch {
+      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+      return null;
+    }
+  }
+
+  private getSessionStorageItem(key: string): string | null {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private setSessionStorageItem(key: string, value: string): void {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // В приватном режиме браузер может запретить sessionStorage; рабочая логика останется в памяти страницы.
+    }
+  }
+
+  private removeSessionStorageItem(key: string): void {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Игнорируем: это только восстановление UI-состояния.
+    }
   }
 
   async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {

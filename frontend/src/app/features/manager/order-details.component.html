@@ -402,6 +402,7 @@
                 type="button"
                 class="publish-button"
                 [class.publish-button--published]="review.publish"
+                [class.publish-button--credential-locked]="reviewPublishActionLocked(review)"
                 (click)="publishReview(review)"
                 [disabled]="review.publish || reviewPublishActionLocked(review) || isMutating('publish-' + review.id)"
                 [title]="reviewPublishActionTitle(review)"

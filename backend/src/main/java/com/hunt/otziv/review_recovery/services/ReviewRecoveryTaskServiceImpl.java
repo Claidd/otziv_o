@@ -5,10 +5,14 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
@@ -26,6 +30,7 @@ import jakarta.persistence.EntityNotFoundException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
@@ -33,6 +38,7 @@ import java.util.Objects;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageImpl;
@@ -47,7 +53,10 @@ import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholde
 @RequiredArgsConstructor
 public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService {
 
-    private static final int SCHEDULE_STEP_DAYS = 3;
+    private static final String STATUS_TO_PUBLISH = "Публикация";
+    private static final String STATUS_PUBLIC = "Опубликовано";
+    private static final String STATUS_TO_PAY = "Выставлен счет";
+    private static final String STATUS_REMINDER = "Напоминание";
     private static final EnumSet<ReviewRecoveryBatchStatus> ACTIVE_BATCH_STATUSES =
             EnumSet.of(ReviewRecoveryBatchStatus.OPEN, ReviewRecoveryBatchStatus.COMPLETED);
     private static final EnumSet<ReviewRecoveryTaskStatus> ACTIVE_TASK_STATUSES =
@@ -63,9 +72,14 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final BotService botService;
     private final ReviewRecoveryNoticeScheduler recoveryNoticeScheduler;
     private final ReviewRecoveryHoldService recoveryHoldService;
+    private final ReviewRecoveryGateService recoveryGateService;
     private final GamificationEventService gamificationEventService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
+    private final OrderRepository orderRepository;
+    private final OrderStatusCheckerService orderStatusCheckerService;
+    private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+    private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
 
     @Override
     @Transactional(readOnly = true)
@@ -164,6 +178,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         gamificationEventService.recordReviewRecoveryTaskDone(savedTask);
         completeBatchIfReady(savedTask.getBatch());
+        resumeOrderAfterRecoveryIfReady(savedTask.getOrder());
         auditTaskCompleted(savedTask);
 
         log.info("Задача восстановления {} выполнена, отзыв {}, заказ {}",
@@ -185,6 +200,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         task.setStatus(ReviewRecoveryTaskStatus.CANCELLED);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         completeBatchIfReady(savedTask.getBatch());
+        resumeOrderAfterRecoveryIfReady(savedTask.getOrder());
 
         log.info("Задача восстановления {} отменена, отзыв {}, заказ {}",
                 savedTask.getId(), reviewId(savedTask), orderId(savedTask));
@@ -458,26 +474,22 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     private LocalDate nextScheduledDate(ReviewRecoveryBatch batch) {
-        if (batch == null || batch.getId() == null) {
-            return LocalDate.now();
-        }
-
-        LocalDate maxDate = taskRepository.maxScheduledDateByBatchId(batch.getId(), ReviewRecoveryTaskStatus.CANCELLED);
-        return maxDate == null ? LocalDate.now() : maxDate.plusDays(SCHEDULE_STEP_DAYS);
+        Long orderId = batch != null && batch.getOrder() != null ? batch.getOrder().getId() : null;
+        return recoveryGateService.nextScheduledDate(orderId);
     }
 
-    private void completeBatchIfReady(ReviewRecoveryBatch batch) {
+    private ReviewRecoveryBatch completeBatchIfReady(ReviewRecoveryBatch batch) {
         if (batch == null || batch.getId() == null) {
-            return;
+            return null;
         }
 
         long plannedCount = taskRepository.countByBatchIdAndStatus(batch.getId(), ReviewRecoveryTaskStatus.PLANNED);
         if (plannedCount > 0) {
-            return;
+            return null;
         }
         long doneCount = taskRepository.countByBatchIdAndStatus(batch.getId(), ReviewRecoveryTaskStatus.DONE);
         if (doneCount <= 0) {
-            return;
+            return null;
         }
 
         batch.setStatus(ReviewRecoveryBatchStatus.COMPLETED);
@@ -486,6 +498,55 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         createCompletionReminder(savedBatch);
         handleCompletedBatchClientNotice(savedBatch);
         log.info("Пачка восстановления {} завершена", batch.getId());
+        return savedBatch;
+    }
+
+    private void resumeOrderAfterRecoveryIfReady(Order sourceOrder) {
+        if (sourceOrder == null || sourceOrder.getId() == null) {
+            return;
+        }
+        Long orderId = sourceOrder.getId();
+        if (recoveryGateService.hasActiveRecoveryTasks(orderId)) {
+            return;
+        }
+
+        Order order = orderRepository.findByIdForMutation(orderId).orElse(sourceOrder);
+        if (order == null || order.getId() == null) {
+            return;
+        }
+
+        order.setStatusChangedAt(LocalDateTime.now());
+        orderRepository.save(order);
+
+        String status = statusTitle(order);
+        try {
+            if (STATUS_TO_PUBLISH.equals(status)) {
+                orderStatusCheckerService.checkAndMarkOrderCompleted(order);
+                return;
+            }
+            if (STATUS_PUBLIC.equals(status)) {
+                CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+                if (commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(order.getId())) {
+                    return;
+                }
+                paymentInvoiceRetryScheduler.scheduleInitialInvoice(order);
+                return;
+            }
+            if (STATUS_TO_PAY.equals(status) || STATUS_REMINDER.equals(status)) {
+                CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+                if (commonBillingService != null) {
+                    commonBillingService.refreshLinkedOrderAmount(order.getId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Не удалось возобновить клиентский сценарий после восстановления, orderId={}", order.getId(), e);
+        }
+    }
+
+    private String statusTitle(Order order) {
+        return order == null || order.getStatus() == null || order.getStatus().getTitle() == null
+                ? ""
+                : order.getStatus().getTitle();
     }
 
     private void handleCompletedBatchClientNotice(ReviewRecoveryBatch batch) {

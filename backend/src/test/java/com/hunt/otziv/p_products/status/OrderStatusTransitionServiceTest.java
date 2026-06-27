@@ -21,6 +21,7 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -116,6 +117,9 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private CommonBillingService commonBillingService;
+
+    @Mock
+    private ReviewRecoveryGateService recoveryGateService;
 
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
@@ -701,6 +705,25 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void publicStatusRejectsActiveRecoveryTasks() {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(64L, "Публикация", "Компания", "group");
+
+        when(orderRepository.findByIdForMutation(64L)).thenReturn(Optional.of(order));
+        when(recoveryGateService.hasActiveRecoveryTasks(64L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(64L, "Опубликовано")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("Сначала выполните все задачи восстановления отзывов", exception.getReason());
+        verifyNoInteractions(orderBotLifecycleService, orderCompanyStatusService, orderStatusNotificationService);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
     void publicStatusKeepsManualTransitionSuccessfulWhenClientMessageFails() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(61L, "Публикация", "Компания", "group");
@@ -1016,7 +1039,8 @@ class OrderStatusTransitionServiceTest {
                 paymentInvoiceRetryScheduler,
                 appSettingService,
                 businessAuditService,
-                commonBillingServiceProvider
+                commonBillingServiceProvider,
+                recoveryGateService
         );
     }
 

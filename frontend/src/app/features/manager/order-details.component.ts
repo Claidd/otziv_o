@@ -53,6 +53,7 @@ type SideNoteField = 'order' | 'company';
 type ReviewQuickFilter = 'all' | 'unpublished' | 'missing-photo' | 'with-note';
 type ReviewEditDraft = ReviewUpdateRequest;
 type ReviewCredentialCopyState = { botId?: number | null; botLoginAt?: number; botPasswordAt?: number };
+type StoredReviewCredentialCopyState = ReviewCredentialCopyState & { reviewId: number; updatedAt: number };
 type RecoveryTaskDraft = {
   recoveryText: string;
   scheduledDate: string | null;
@@ -111,6 +112,8 @@ export class OrderDetailsComponent {
   private readonly toastService = inject(ToastService);
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly publishCredentialWaitMs = 150_000;
+  private readonly reviewPublishCredentialStorageKey = 'otziv-order-details-worker-all-publish-prep:v1';
+  private readonly reviewPublishCredentialMaxAgeMs = 60 * 60 * 1000;
   private readonly reviewFieldDraftToastIds = new Map<string, number>();
   private restoredReviewFieldsToastId: number | null = null;
   private publishCredentialWaitTimer: number | null = null;
@@ -241,7 +244,14 @@ export class OrderDetailsComponent {
     this.route.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
-        this.openedFromWorkerAll.set(params.get('from') === 'worker-all');
+        const openedFromWorkerAll = params.get('from') === 'worker-all';
+        this.openedFromWorkerAll.set(openedFromWorkerAll);
+        if (openedFromWorkerAll) {
+          this.restoreReviewPublishCredentialPreparation();
+        } else {
+          this.copiedReviewCredentials.set({});
+          this.clearReviewPublishWaitTimer();
+        }
       });
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -310,6 +320,7 @@ export class OrderDetailsComponent {
         }
         this.loading.set(false);
         this.loadCompanyReportState(false);
+        this.refreshReviewPublishWaitTimer();
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось загрузить детали заказа');
@@ -1451,7 +1462,8 @@ export class OrderDetailsComponent {
       `publish-${review.id}`,
       this.managerApi.publishOrderReview(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Отзыв опубликован',
-      `Отзыв #${review.id} учтен в заказе`
+      `Отзыв #${review.id} учтен в заказе`,
+      () => this.clearReviewPublishCredentialPreparation(review.id)
     );
   }
 
@@ -2586,6 +2598,7 @@ export class OrderDetailsComponent {
       };
     });
     this.refreshReviewPublishWaitTimer();
+    this.storeReviewPublishCredentialPreparation(review);
   }
 
   private reviewPublishWaitLeftSeconds(review: OrderReviewItem): number {
@@ -2636,6 +2649,117 @@ export class OrderDetailsComponent {
 
     window.clearInterval(this.publishCredentialWaitTimer);
     this.publishCredentialWaitTimer = null;
+  }
+
+  private restoreReviewPublishCredentialPreparation(): void {
+    const stored = this.readStoredReviewPublishCredentialPreparation();
+    if (!stored) {
+      return;
+    }
+
+    this.copiedReviewCredentials.set({
+      [stored.reviewId]: {
+        botId: stored.botId ?? null,
+        botLoginAt: stored.botLoginAt,
+        botPasswordAt: stored.botPasswordAt
+      }
+    });
+    this.refreshReviewPublishWaitTimer();
+  }
+
+  private storeReviewPublishCredentialPreparation(review: OrderReviewItem): void {
+    const copied = this.copiedReviewCredentials()[review.id];
+    if (!copied) {
+      this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
+      return;
+    }
+
+    this.setSessionStorageItem(this.reviewPublishCredentialStorageKey, JSON.stringify({
+      reviewId: review.id,
+      botId: copied.botId ?? null,
+      botLoginAt: copied.botLoginAt,
+      botPasswordAt: copied.botPasswordAt,
+      updatedAt: Date.now()
+    } satisfies StoredReviewCredentialCopyState));
+  }
+
+  private clearReviewPublishCredentialPreparation(reviewId?: number): void {
+    const current = this.copiedReviewCredentials();
+    if (reviewId === undefined || current[reviewId]) {
+      this.copiedReviewCredentials.set({});
+      this.clearReviewPublishWaitTimer();
+    }
+
+    const stored = this.readStoredReviewPublishCredentialPreparation(false);
+    if (reviewId === undefined || stored?.reviewId === reviewId) {
+      this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
+    }
+  }
+
+  private readStoredReviewPublishCredentialPreparation(clearExpired = true): StoredReviewCredentialCopyState | null {
+    const raw = this.getSessionStorageItem(this.reviewPublishCredentialStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const value = JSON.parse(raw) as Partial<StoredReviewCredentialCopyState>;
+      const reviewId = Number(value.reviewId);
+      const updatedAt = Number(value.updatedAt);
+      const botLoginAt = value.botLoginAt === undefined ? undefined : Number(value.botLoginAt);
+      const botPasswordAt = value.botPasswordAt === undefined ? undefined : Number(value.botPasswordAt);
+      if (
+        !Number.isFinite(reviewId) ||
+        reviewId <= 0 ||
+        !Number.isFinite(updatedAt) ||
+        (botLoginAt !== undefined && !Number.isFinite(botLoginAt)) ||
+        (botPasswordAt !== undefined && !Number.isFinite(botPasswordAt))
+      ) {
+        this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
+        return null;
+      }
+
+      if (clearExpired && Date.now() - updatedAt > this.reviewPublishCredentialMaxAgeMs) {
+        this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
+        return null;
+      }
+
+      const botId = value.botId === null || value.botId === undefined ? null : Number(value.botId);
+      return {
+        reviewId,
+        botId: Number.isFinite(botId) ? botId : null,
+        botLoginAt,
+        botPasswordAt,
+        updatedAt
+      };
+    } catch {
+      this.removeSessionStorageItem(this.reviewPublishCredentialStorageKey);
+      return null;
+    }
+  }
+
+  private getSessionStorageItem(key: string): string | null {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private setSessionStorageItem(key: string, value: string): void {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // В приватном режиме браузер может запретить sessionStorage; рабочая логика останется в памяти страницы.
+    }
+  }
+
+  private removeSessionStorageItem(key: string): void {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Игнорируем: это только восстановление UI-состояния.
+    }
   }
 
   private async logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): Promise<boolean> {

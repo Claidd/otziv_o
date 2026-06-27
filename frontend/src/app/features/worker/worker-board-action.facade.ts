@@ -39,6 +39,7 @@ export type WorkerBoardActionFacadeDeps = {
   patchBoard?: (updater: (board: WorkerBoard) => WorkerBoard) => void;
   errorMessage: (err: unknown, fallback: string) => string;
   reviewActionSource?: () => WorkerActivitySource;
+  onReviewPublished?: (reviewId: number) => void;
 };
 
 export class WorkerBoardActionFacade {
@@ -213,6 +214,7 @@ export class WorkerBoardActionFacade {
       next: () => {
         this.deps.mutationKey.set(null);
         this.deps.toastService.success('Отзыв опубликован', `Отзыв #${review.id}`);
+        this.deps.onReviewPublished?.(review.id);
         this.deps.loadBoard();
       },
       error: (err) => {

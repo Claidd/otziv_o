@@ -41,6 +41,7 @@ import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
@@ -143,6 +144,8 @@ class CommonBillingServiceTest {
     private TbankPaymentProperties properties;
     @Mock
     private PlatformTransactionManager transactionManager;
+    @Mock
+    private ReviewRecoveryGateService recoveryGateService;
 
     @InjectMocks
     private CommonBillingService service;
@@ -1152,6 +1155,49 @@ class CommonBillingServiceTest {
 
         verify(messageSender, never()).send(any(), any(), any(), any());
         verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(10L);
+    }
+
+    @Test
+    void dueReminderPostponesWhileReviewRecoveryIsActive() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setNextReminderAt(LocalDateTime.now().minusMinutes(5));
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+
+        when(invoiceRepository.findReminderCandidates(any(), any(), any())).thenReturn(List.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(recoveryGateService.hasActiveRecoveryTasks(101L)).thenReturn(true);
+
+        assertEquals(0, service.sendDueReminders(10));
+
+        assertTrue(invoice.getLastError().contains("review_recovery_active"));
+        assertNotNull(invoice.getNextReminderAt());
+        verify(invoiceRepository, times(2)).save(invoice);
+        verify(messageSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void manualInvoiceSendRejectsActiveReviewRecovery() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setReady(true);
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(recoveryGateService.hasActiveRecoveryTasks(101L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> service.sendInvoice(10L, true));
+
+        assertEquals("Общий счет ждет завершения задач восстановления отзывов", exception.getReason());
+        verify(messageSender, never()).send(any(), any(), any(), any());
     }
 
     @Test

@@ -45,6 +45,22 @@ class ReviewBotCooldownServiceTest {
         assertTrue(service.isAvailableForAssignment(readyToday));
     }
 
+    @Test
+    void reservedBotIsReleasedToTwoDayCooldownFromBaseDate() {
+        ReviewBotCooldownService service = service();
+        Bot bot = bot(13L);
+        LocalDate completedDate = LocalDate.of(2026, 6, 28);
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_COOLDOWN_DAYS, 2)).thenReturn(2);
+
+        service.markReservedUntilTaskCompletion(bot, "bad task");
+        assertFalse(service.isAvailableForAssignment(bot));
+
+        service.markReleasedFrom(bot, completedDate, "done");
+
+        assertEquals(LocalDate.of(2026, 6, 30), bot.getCooldownUntil());
+    }
+
     private ReviewBotCooldownService service() {
         return new ReviewBotCooldownService(appSettingService);
     }

@@ -19,6 +19,7 @@ import {
   WorkerBoard,
   WorkerBoardSection,
   WorkerBoardSectionQuery,
+  WorkerActivitySource,
   WorkerBotItem,
   WorkerOption,
   WorkerReviewItem
@@ -61,6 +62,21 @@ import {
   type SideNoteField,
   type WorkerStatusAction
 } from './worker/worker-board.helpers';
+
+type PublishCredentialPreparation = {
+  reviewId: number | null;
+  botId?: number | null;
+  loginAt?: number;
+  passwordAt?: number;
+  invalidated: Record<number, { botId?: number | null }>;
+};
+type StoredPublishCredentialPreparation = {
+  reviewId: number;
+  botId?: number | null;
+  loginAt?: number;
+  passwordAt?: number;
+  updatedAt: number;
+};
 
 @Component({
   selector: 'app-worker',
@@ -326,8 +342,10 @@ import {
                     class="publish-button"
                     type="button"
                     [class.published]="isPublishedPublishAction(review)"
+                    [class.credential-locked]="publishLockedByCredentialWait(review)"
                     (click)="markReviewDone(review)"
-                    [disabled]="isPublishedPublishAction(review) || isMutating(reviewDoneMutationKey(review))"
+                    [disabled]="isPublishedPublishAction(review) || publishLockedByCredentialWait(review) || isMutating(reviewDoneMutationKey(review))"
+                    [title]="publishCredentialWaitTitle(review)"
                   >
                     {{ isMutating(reviewDoneMutationKey(review)) ? '...' : doneLabel(review) }}
                   </button>
@@ -977,6 +995,14 @@ import {
       opacity: 1;
     }
 
+    .publish-button.credential-locked,
+    .publish-button.credential-locked:disabled {
+      color: rgba(103, 116, 131, 0.58) !important;
+      border-color: rgba(103, 116, 131, 0.16) !important;
+      background: #eef1f5 !important;
+      opacity: 1;
+    }
+
     .worker-bottom-controls {
       flex: 0 0 auto;
       justify-content: flex-start;
@@ -1273,6 +1299,10 @@ export class WorkerPage implements OnInit, OnDestroy {
   private lastMobileNavKey = '';
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  private publishCredentialWaitTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly publishCredentialPreparationStorageKey = 'otziv-mobile-worker-publish-prep:v1';
+  private readonly publishCredentialPreparationMaxAgeMs = 60 * 60 * 1000;
+  private readonly publishCredentialWaitMs = 150_000;
 
   readonly orderStatusActions = ORDER_STATUS_ACTIONS;
   readonly board = signal<WorkerBoard | null>(null);
@@ -1306,6 +1336,11 @@ export class WorkerPage implements OnInit, OnDestroy {
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly sideNoteDrafts = signal<Record<string, string>>({});
   readonly uploadingPhotoReviewId = signal<number | null>(null);
+  readonly publishCredentialPreparation = signal<PublishCredentialPreparation>({
+    reviewId: null,
+    invalidated: {}
+  });
+  readonly publishCredentialWaitNow = signal(Date.now());
 
   readonly permissions = computed(() => this.board()?.permissions ?? DEFAULT_WORKER_PERMISSIONS);
   readonly workerBots = computed(() => this.board()?.bots ?? []);
@@ -1348,6 +1383,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.restoreStoredPublishCredentialPreparation();
     this.applyMobileNavIntent(false);
     this.lastMobileNavKey = this.mobileNavKey();
     void this.load();
@@ -1370,6 +1406,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.routeSubscription?.unsubscribe();
     this.clearSearchTimer();
     this.clearNoticeTimer();
+    this.clearPublishCredentialWaitTimer();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -1786,9 +1823,6 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
-    if (this.activeSection() === 'nagul' && (kind === 'login' || kind === 'password')) {
-      this.api.logWorkerReviewCopyClick(review.id, kind).subscribe({ error: () => undefined });
-    }
     const value = {
       url: review.filialUrl || review.url || '',
       login: review.botLogin || '',
@@ -1797,11 +1831,144 @@ export class WorkerPage implements OnInit, OnDestroy {
       answer: review.answer || '',
       vk: 'https://vk.com/'
     }[kind];
-    await this.copyText(value, `${kind}-${review.id}`);
+    if (!(await this.copyText(value, `${kind}-${review.id}`))) {
+      return;
+    }
+
+    if (kind === 'login' || kind === 'password') {
+      if (this.activeSection() === 'nagul') {
+        this.api.logWorkerReviewCopyClick(review.id, kind, this.workerActivitySource()).subscribe({ error: () => undefined });
+        return;
+      }
+
+      if (this.activeSection() !== 'publish') {
+        return;
+      }
+
+      if (!(await this.logReviewCredentialCopyClick(review, kind))) {
+        return;
+      }
+      this.markPublishCredentialCopied(review, kind);
+    }
   }
 
   async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {
     await this.copyText(kind === 'login' ? bot.login || '' : bot.password || '', `bot-${kind}-${bot.id}`);
+  }
+
+  private async logReviewCredentialCopyClick(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<boolean> {
+    if (kind !== 'login' && kind !== 'password') {
+      return true;
+    }
+
+    try {
+      await firstValueFrom(this.api.logWorkerReviewCopyClick(review.id, kind, this.workerActivitySource()));
+      return true;
+    } catch {
+      this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
+      return false;
+    }
+  }
+
+  private markPublishCredentialCopied(review: WorkerReviewItem, kind: ReviewCopyKind): void {
+    if ((kind !== 'login' && kind !== 'password') || !this.shouldUsePublishCredentialWait()) {
+      return;
+    }
+
+    this.publishCredentialPreparation.update((current) => {
+      const botId = review.botId ?? null;
+      const sameReviewBot = current.reviewId === review.id && current.botId === botId;
+      const invalidated = { ...current.invalidated };
+
+      if (current.reviewId !== null && !sameReviewBot) {
+        invalidated[current.reviewId] = { botId: current.botId ?? null };
+      }
+      delete invalidated[review.id];
+
+      const base = sameReviewBot ? current : { reviewId: review.id, botId };
+      return {
+        ...base,
+        invalidated,
+        [kind === 'login' ? 'loginAt' : 'passwordAt']: Date.now()
+      };
+    });
+    this.refreshPublishCredentialWaitTimer();
+    this.storePublishCredentialPreparation();
+  }
+
+  publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {
+    if (!this.shouldUsePublishCredentialWait() || review.publish) {
+      return 0;
+    }
+
+    const preparation = this.publishCredentialPreparation();
+    if (
+      preparation.reviewId !== review.id ||
+      preparation.botId !== (review.botId ?? null) ||
+      !preparation.loginAt ||
+      !preparation.passwordAt
+    ) {
+      return 0;
+    }
+
+    const readyAt = Math.max(preparation.loginAt, preparation.passwordAt) + this.publishCredentialWaitMs;
+    return Math.max(0, Math.ceil((readyAt - this.publishCredentialWaitNow()) / 1000));
+  }
+
+  publishLockedByCredentialWait(review: WorkerReviewItem): boolean {
+    if (!this.shouldUsePublishCredentialWait() || review.publish) {
+      return false;
+    }
+
+    const preparation = this.publishCredentialPreparation();
+    const botId = review.botId ?? null;
+    const invalidated = preparation.invalidated[review.id];
+    if (invalidated && invalidated.botId === botId) {
+      return true;
+    }
+
+    if (preparation.reviewId === review.id && preparation.botId === botId) {
+      return !preparation.loginAt || !preparation.passwordAt || this.publishCredentialWaitLeftSeconds(review) > 0;
+    }
+
+    return true;
+  }
+
+  publishCredentialWaitTitle(review: WorkerReviewItem): string {
+    const preparation = this.publishCredentialPreparation();
+    const botId = review.botId ?? null;
+    const invalidated = preparation.invalidated[review.id];
+    if (invalidated && invalidated.botId === botId) {
+      return 'Подготовка сброшена: снова скопируйте логин и пароль.';
+    }
+
+    if (preparation.reviewId !== review.id || preparation.botId !== botId) {
+      return 'Сначала скопируйте логин и пароль аккаунта.';
+    }
+
+    if (!preparation.loginAt || !preparation.passwordAt) {
+      const missing = [
+        !preparation.loginAt ? 'логин' : '',
+        !preparation.passwordAt ? 'пароль' : ''
+      ].filter(Boolean).join(', ');
+      return `Скопируйте ${missing}.`;
+    }
+
+    const left = this.publishCredentialWaitLeftSeconds(review);
+    return left > 0
+      ? `После копирования логина и пароля подождите еще ${left} сек.`
+      : 'Действие с отзывом';
+  }
+
+  private shouldUsePublishCredentialWait(): boolean {
+    return this.activeSection() === 'publish' && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
+  private workerActivitySource(): WorkerActivitySource {
+    return {
+      sourcePage: 'worker-board',
+      sourceSection: this.activeSection()
+    };
   }
 
   botBrowserUrlById(botId: number): string {
@@ -1876,7 +2043,16 @@ export class WorkerPage implements OnInit, OnDestroy {
       await this.runMutation(key, () => this.api.nagulWorkerReview(review.id), 'Не удалось отметить выгул.');
       return;
     }
-    await this.runMutation(key, () => this.api.publishWorkerReview(review.id), 'Не удалось отметить публикацию.');
+    if (this.publishLockedByCredentialWait(review)) {
+      this.error.set(this.publishCredentialWaitTitle(review));
+      return;
+    }
+    await this.runMutation(
+      key,
+      () => this.api.publishWorkerReview(review.id),
+      'Не удалось отметить публикацию.',
+      () => this.clearStoredPublishCredentialPreparation(review.id)
+    );
   }
 
   openOrderDetails(order: OrderItem): void {
@@ -1890,7 +2066,9 @@ export class WorkerPage implements OnInit, OnDestroy {
     if (!review.companyId || !review.orderId) {
       return;
     }
-    void this.router.navigate(['/tabs/orders', review.companyId, review.orderId]);
+    void this.router.navigate(['/tabs/orders', review.companyId, review.orderId], {
+      queryParams: this.activeSection() === 'all' ? { from: 'worker-all' } : undefined
+    });
   }
 
   handleReviewFooterClick(review: WorkerReviewItem): void {
@@ -2294,7 +2472,11 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   reviewDetailsHref(review: WorkerReviewItem): string {
-    return review.companyId && review.orderId ? `/tabs/orders/${review.companyId}/${review.orderId}` : '/tabs/worker';
+    if (!review.companyId || !review.orderId) {
+      return '/tabs/worker';
+    }
+    const path = `/tabs/orders/${review.companyId}/${review.orderId}`;
+    return this.activeSection() === 'all' ? `${path}?from=worker-all` : path;
   }
 
   hasMeaningfulNote(value?: string | null): boolean {
@@ -2335,6 +2517,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       if (board.message) {
         this.showBoardNotice(board.message);
       }
+      this.refreshPublishCredentialWaitTimer();
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, 'Не удалось загрузить раздел специалиста.'));
     } finally {
@@ -2381,10 +2564,16 @@ export class WorkerPage implements OnInit, OnDestroy {
     return `${params.get('mobileNav') ?? ''}:${params.get('navTs') ?? ''}`;
   }
 
-  private async runMutation<T>(key: string, request: () => { subscribe: unknown } | import('rxjs').Observable<T>, fallback: string): Promise<void> {
+  private async runMutation<T>(
+    key: string,
+    request: () => { subscribe: unknown } | import('rxjs').Observable<T>,
+    fallback: string,
+    afterSuccess?: () => void
+  ): Promise<void> {
     this.mutationKey.set(key);
     try {
       await firstValueFrom(request() as import('rxjs').Observable<T>);
+      afterSuccess?.();
       await this.load();
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, fallback));
@@ -2393,10 +2582,10 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
   }
 
-  private async copyText(text: string, key: string): Promise<void> {
+  private async copyText(text: string, key: string): Promise<boolean> {
     const value = text.trim();
     if (!value) {
-      return;
+      return false;
     }
     try {
       await navigator.clipboard.writeText(value);
@@ -2406,8 +2595,10 @@ export class WorkerPage implements OnInit, OnDestroy {
           this.copiedKey.set(null);
         }
       }, 1200);
+      return true;
     } catch {
       this.error.set('Браузер не дал доступ к буферу обмена.');
+      return false;
     }
   }
 
@@ -2468,6 +2659,153 @@ export class WorkerPage implements OnInit, OnDestroy {
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
       this.searchTimer = null;
+    }
+  }
+
+  private refreshPublishCredentialWaitTimer(): void {
+    this.publishCredentialWaitNow.set(Date.now());
+    if (!this.hasActivePublishCredentialWait()) {
+      this.clearPublishCredentialWaitTimer();
+      return;
+    }
+
+    if (this.publishCredentialWaitTimer) {
+      return;
+    }
+
+    this.publishCredentialWaitTimer = setInterval(() => {
+      this.publishCredentialWaitNow.set(Date.now());
+      if (!this.hasActivePublishCredentialWait()) {
+        this.clearPublishCredentialWaitTimer();
+      }
+    }, 1000);
+  }
+
+  private hasActivePublishCredentialWait(): boolean {
+    if (!this.shouldUsePublishCredentialWait()) {
+      return false;
+    }
+
+    return (this.board()?.reviews?.content ?? []).some((review) => this.publishCredentialWaitLeftSeconds(review) > 0);
+  }
+
+  private clearPublishCredentialWaitTimer(): void {
+    if (!this.publishCredentialWaitTimer) {
+      return;
+    }
+
+    clearInterval(this.publishCredentialWaitTimer);
+    this.publishCredentialWaitTimer = null;
+  }
+
+  private restoreStoredPublishCredentialPreparation(): void {
+    const stored = this.readStoredPublishCredentialPreparation();
+    if (!stored) {
+      return;
+    }
+
+    this.publishCredentialPreparation.set({
+      reviewId: stored.reviewId,
+      botId: stored.botId ?? null,
+      loginAt: stored.loginAt,
+      passwordAt: stored.passwordAt,
+      invalidated: {}
+    });
+    this.refreshPublishCredentialWaitTimer();
+  }
+
+  private storePublishCredentialPreparation(): void {
+    const preparation = this.publishCredentialPreparation();
+    if (preparation.reviewId === null) {
+      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+      return;
+    }
+
+    this.setSessionStorageItem(this.publishCredentialPreparationStorageKey, JSON.stringify({
+      reviewId: preparation.reviewId,
+      botId: preparation.botId ?? null,
+      loginAt: preparation.loginAt,
+      passwordAt: preparation.passwordAt,
+      updatedAt: Date.now()
+    } satisfies StoredPublishCredentialPreparation));
+  }
+
+  private clearStoredPublishCredentialPreparation(reviewId?: number): void {
+    const current = this.publishCredentialPreparation();
+    if (reviewId === undefined || current.reviewId === reviewId) {
+      this.publishCredentialPreparation.set({ reviewId: null, invalidated: {} });
+      this.clearPublishCredentialWaitTimer();
+    }
+
+    const stored = this.readStoredPublishCredentialPreparation(false);
+    if (reviewId === undefined || stored?.reviewId === reviewId) {
+      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+    }
+  }
+
+  private readStoredPublishCredentialPreparation(clearExpired = true): StoredPublishCredentialPreparation | null {
+    const raw = this.getSessionStorageItem(this.publishCredentialPreparationStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const value = JSON.parse(raw) as Partial<StoredPublishCredentialPreparation>;
+      const reviewId = Number(value.reviewId);
+      const updatedAt = Number(value.updatedAt);
+      const loginAt = value.loginAt === undefined ? undefined : Number(value.loginAt);
+      const passwordAt = value.passwordAt === undefined ? undefined : Number(value.passwordAt);
+      if (
+        !Number.isFinite(reviewId) ||
+        reviewId <= 0 ||
+        !Number.isFinite(updatedAt) ||
+        (loginAt !== undefined && !Number.isFinite(loginAt)) ||
+        (passwordAt !== undefined && !Number.isFinite(passwordAt))
+      ) {
+        this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+        return null;
+      }
+
+      if (clearExpired && Date.now() - updatedAt > this.publishCredentialPreparationMaxAgeMs) {
+        this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+        return null;
+      }
+
+      const botId = value.botId === null || value.botId === undefined ? null : Number(value.botId);
+      return {
+        reviewId,
+        botId: Number.isFinite(botId) ? botId : null,
+        loginAt,
+        passwordAt,
+        updatedAt
+      };
+    } catch {
+      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+      return null;
+    }
+  }
+
+  private getSessionStorageItem(key: string): string | null {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private setSessionStorageItem(key: string, value: string): void {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // Storage can be blocked; the current page still keeps the state in memory.
+    }
+  }
+
+  private removeSessionStorageItem(key: string): void {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // This only affects UI state restoration.
     }
   }
 

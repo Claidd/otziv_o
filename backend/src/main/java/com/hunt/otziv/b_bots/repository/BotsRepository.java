@@ -218,6 +218,25 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
         FROM Bot b
         LEFT JOIN FETCH b.status
         LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.active = true
+          AND b.id <> 1
+          AND b.counter >= :minCounter
+          AND b.botCity IS NOT NULL
+          AND b.botCity.id <> :cityId
+        ORDER BY b.counter DESC, b.id
+    """)
+    List<Bot> findActiveBotsOutsideCityWithCounterAtLeast(
+            @Param("cityId") Long cityId,
+            @Param("minCounter") int minCounter
+    );
+
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
         WHERE b.fio = :fio
           AND b.botCity.id = :cityId
     """)

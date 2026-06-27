@@ -7,10 +7,15 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.client_messages.service.ReviewRecoveryNoticeScheduler;
+import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -32,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,16 +75,34 @@ class ReviewRecoveryTaskServiceImplTest {
     private ReviewRecoveryHoldService recoveryHoldService;
 
     @Mock
+    private ReviewRecoveryGateService recoveryGateService;
+
+    @Mock
     private GamificationEventService gamificationEventService;
 
     @Mock
     private BusinessAuditService businessAuditService;
 
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
+
+    @Mock
+    private OrderRepository orderRepository;
+
+    @Mock
+    private OrderStatusCheckerService orderStatusCheckerService;
+
+    @Mock
+    private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
+
+    @Mock
+    private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+
     @InjectMocks
     private ReviewRecoveryTaskServiceImpl service;
 
     @Test
-    void createTaskCreatesBatchCopiesTextBotAndSchedulesToday() {
+    void createTaskCreatesBatchCopiesTextBotAndUsesNextRecoveryDate() {
         User actor = user(1L);
         Review review = review(100L, "старый текст", order(10L), bot(20L));
 
@@ -95,12 +119,13 @@ class ReviewRecoveryTaskServiceImplTest {
             task.setId(40L);
             return task;
         });
+        when(recoveryGateService.nextScheduledDate(10L)).thenReturn(LocalDate.of(2026, 5, 17));
 
         ReviewRecoveryTask task = service.createTask(100L, actor);
 
         assertEquals(40L, task.getId());
         assertEquals(ReviewRecoveryTaskStatus.PLANNED, task.getStatus());
-        assertEquals(LocalDate.now(), task.getScheduledDate());
+        assertEquals(LocalDate.of(2026, 5, 17), task.getScheduledDate());
         assertEquals("старый текст", task.getOriginalText());
         assertEquals("старый текст", task.getRecoveryText());
         assertEquals("login", task.getBotLoginSnapshot());
@@ -116,7 +141,7 @@ class ReviewRecoveryTaskServiceImplTest {
     }
 
     @Test
-    void createTaskSchedulesNextTaskThreeDaysAfterBatchMaxDate() {
+    void createTaskSchedulesNextTaskFromOrderRecoveryTail() {
         ReviewRecoveryBatch batch = batch(30L, order(10L), ReviewRecoveryBatchStatus.OPEN);
         Review review = review(101L, "следующий текст", batch.getOrder(), null);
         LocalDate previousDate = LocalDate.of(2026, 5, 14);
@@ -125,7 +150,7 @@ class ReviewRecoveryTaskServiceImplTest {
         when(batchRepository.findFirstByOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
                 .thenReturn(Optional.of(batch));
         when(batchRepository.save(batch)).thenReturn(batch);
-        when(taskRepository.maxScheduledDateByBatchId(30L, ReviewRecoveryTaskStatus.CANCELLED)).thenReturn(previousDate);
+        when(recoveryGateService.nextScheduledDate(10L)).thenReturn(previousDate.plusDays(3));
         when(taskRepository.save(any(ReviewRecoveryTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ReviewRecoveryTask task = service.createTask(101L, user(2L));
@@ -143,8 +168,7 @@ class ReviewRecoveryTaskServiceImplTest {
         when(batchRepository.findFirstByOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
                 .thenReturn(Optional.of(batch));
         when(batchRepository.save(batch)).thenReturn(batch);
-        when(taskRepository.maxScheduledDateByBatchId(30L, ReviewRecoveryTaskStatus.CANCELLED))
-                .thenReturn(LocalDate.of(2026, 5, 31));
+        when(recoveryGateService.nextScheduledDate(10L)).thenReturn(LocalDate.of(2026, 6, 3));
         when(taskRepository.save(any(ReviewRecoveryTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ReviewRecoveryTask task = service.createTask(101L, user(2L));
@@ -206,6 +230,7 @@ class ReviewRecoveryTaskServiceImplTest {
 
         when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
         when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(nextBot));
+        when(botCooldownService.isAvailableForAssignment(nextBot)).thenReturn(true);
         when(taskRepository.save(task)).thenReturn(task);
 
         ReviewRecoveryTask updated = service.changeTaskBot(40L);
@@ -236,6 +261,7 @@ class ReviewRecoveryTaskServiceImplTest {
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.PLANNED)).thenReturn(0L);
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.DONE)).thenReturn(1L);
         when(batchRepository.save(batch)).thenReturn(batch);
+        when(orderRepository.findByIdForMutation(10L)).thenReturn(Optional.of(batch.getOrder()));
 
         ReviewRecoveryTask completed = service.completeTask(40L, actor);
 

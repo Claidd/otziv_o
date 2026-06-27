@@ -63,6 +63,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private static final int DEFAULT_ORIGINAL_RATING = 5;
     private static final int DEFAULT_TARGET_RATING = 2;
     private static final int SCHEDULE_STEP_DAYS = 2;
+    private static final int BAD_REVIEW_PREFERRED_COUNTER = 5;
     private static final String STATUS_NOT_PAID = "Не оплачено";
 
     private final BadReviewTaskRepository badReviewTaskRepository;
@@ -169,6 +170,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
         task.setStatus(BadReviewTaskStatus.DONE);
         task.setCompletedDate(LocalDate.now());
+        releaseCrossCityBotAfterCompletion(task);
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         gamificationEventService.recordBadReviewTaskDone(savedTask);
         runCompletionSideEffects(savedTask);
@@ -466,7 +468,11 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
             return task;
         }
 
+        boolean wasNew = task.getStatus() == BadReviewTaskStatus.NEW;
         task.setStatus(BadReviewTaskStatus.CANCELED);
+        if (wasNew) {
+            releaseCrossCityBotAfterCompletion(task);
+        }
         BadReviewTask savedTask = badReviewTaskRepository.save(task);
         Order order = savedTask.getOrder();
         User managerUser = managerUser(order);
@@ -526,12 +532,17 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     public BadReviewTask changeTaskBot(Long taskId) {
         BadReviewTask task = requireTask(taskId);
         Bot oldBot = task.getBot();
-        Bot nextBot = pickReplacementBot(task);
+        BotSelection nextSelection = pickReplacementBot(task);
+        Bot nextBot = nextSelection != null ? nextSelection.bot() : null;
         if (nextBot == null) {
             throw new IllegalStateException("Нет доступных аккаунтов для плохой задачи");
         }
 
         markReleasedIfChanged(oldBot, nextBot, "bad review task bot changed");
+        task.setCrossCityBot(nextSelection.crossCity());
+        if (nextSelection.crossCity()) {
+            botCooldownService.markReservedUntilTaskCompletion(nextBot, "bad review task " + task.getId());
+        }
         task.setBot(nextBot);
         task.setBotLoginSnapshot(botLogin(nextBot));
         task.setBotPasswordSnapshot(botPassword(nextBot));
@@ -781,7 +792,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         return order != null && (order.isComplete() || "Оплачено".equals(status));
     }
 
-    private Bot pickReplacementBot(BadReviewTask task) {
+    private BotSelection pickReplacementBot(BadReviewTask task) {
         City city = task != null && task.getSourceReview() != null
                 && task.getSourceReview().getFilial() != null
                 ? task.getSourceReview().getFilial().getCity()
@@ -791,20 +802,82 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
 
         Long currentBotId = currentBotId(task);
+        Set<Long> excludedBotIds = replacementExcludedBotIds(task, currentBotId);
         List<Bot> candidates = botService.getFindAllByFilialCityId(city.getId()).stream()
                 .filter(Objects::nonNull)
                 .filter(Bot::isActive)
                 .filter(bot -> bot.getId() != null)
                 .filter(botCooldownService::isAvailableForAssignment)
-                .filter(bot -> !Objects.equals(bot.getId(), currentBotId))
+                .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .toList();
 
-        if (!candidates.isEmpty()) {
-            return candidates.get(random.nextInt(candidates.size()));
+        List<Bot> preferredCityBots = candidates.stream()
+                .filter(bot -> bot.getCounter() >= BAD_REVIEW_PREFERRED_COUNTER)
+                .toList();
+        if (!preferredCityBots.isEmpty()) {
+            return new BotSelection(randomBot(preferredCityBots), false);
         }
 
-        return botService.claimReserveBotForCity(city, currentBotId == null ? Set.of() : Set.of(currentBotId))
+        List<Bot> crossCityBots = botService
+                .getActiveBotsOutsideCityWithCounterAtLeast(city.getId(), BAD_REVIEW_PREFERRED_COUNTER)
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(bot -> bot.getId() != null)
+                .filter(botCooldownService::isAvailableForAssignment)
+                .filter(bot -> !excludedBotIds.contains(bot.getId()))
+                .toList();
+        if (!crossCityBots.isEmpty()) {
+            return new BotSelection(randomBot(crossCityBots), true);
+        }
+
+        if (!candidates.isEmpty()) {
+            return new BotSelection(randomBot(candidates), false);
+        }
+
+        return botService.claimReserveBotForCity(city, excludedBotIds)
+                .map(bot -> new BotSelection(bot, false))
                 .orElse(null);
+    }
+
+    private Bot randomBot(List<Bot> bots) {
+        return bots.get(random.nextInt(bots.size()));
+    }
+
+    private Set<Long> replacementExcludedBotIds(BadReviewTask task, Long currentBotId) {
+        Set<Long> excludedBotIds = new java.util.HashSet<>();
+        if (currentBotId != null) {
+            excludedBotIds.add(currentBotId);
+        }
+        try {
+            Set<Long> reservedByReviews = reviewRepository.findReservedBotIdsByUnpublishedReviews(null);
+            if (reservedByReviews != null) {
+                excludedBotIds.addAll(reservedByReviews);
+            }
+        } catch (Exception e) {
+            log.error("Ошибка при получении аккаунтов, занятых в неопубликованных отзывах", e);
+        }
+        try {
+            Set<Long> reservedByBadTasks = badReviewTaskRepository.findBotIdsByStatus(
+                    BadReviewTaskStatus.NEW,
+                    task != null ? task.getId() : null
+            );
+            if (reservedByBadTasks != null) {
+                excludedBotIds.addAll(reservedByBadTasks);
+            }
+        } catch (Exception e) {
+            log.error("Ошибка при получении аккаунтов, занятых в плохих задачах", e);
+        }
+        excludedBotIds.remove(null);
+        return excludedBotIds;
+    }
+
+    private void releaseCrossCityBotAfterCompletion(BadReviewTask task) {
+        if (task == null || !task.isCrossCityBot() || task.getBot() == null) {
+            return;
+        }
+
+        LocalDate baseDate = task.getCompletedDate() != null ? task.getCompletedDate() : LocalDate.now();
+        botCooldownService.markReleasedFrom(task.getBot(), baseDate, "bad review cross-city task finished");
     }
 
     private Long currentBotId(BadReviewTask task) {
@@ -835,6 +908,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (oldBotId != null && !Objects.equals(oldBotId, newBotId)) {
             botCooldownService.markReleased(oldBot, reason);
         }
+    }
+
+    private record BotSelection(Bot bot, boolean crossCity) {
     }
 
     private BadReviewTaskSummary summaryFromRows(List<Object[]> rows) {

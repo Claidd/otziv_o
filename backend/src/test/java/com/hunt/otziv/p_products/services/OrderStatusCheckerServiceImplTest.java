@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -58,6 +59,9 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private CommonBillingService commonBillingService;
+
+    @Mock
+    private ReviewRecoveryGateService recoveryGateService;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -157,6 +161,19 @@ class OrderStatusCheckerServiceImplTest {
         verifyNoInteractions(orderStatusNotificationService, appSettingService);
     }
 
+    @Test
+    void checkAndMarkOrderCompletedWaitsForRecoveryTasks() throws Exception {
+        Order order = payableOrder(53L);
+
+        when(recoveryGateService.hasActiveRecoveryTasks(53L)).thenReturn(true);
+
+        service().checkAndMarkOrderCompleted(order);
+
+        verify(orderRepository, never()).save(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleInitialInvoice(order);
+        verifyNoInteractions(orderStatusNotificationService, appSettingService, commonBillingService);
+    }
+
     private OrderStatusCheckerServiceImpl service() {
         return new OrderStatusCheckerServiceImpl(
                 emailService,
@@ -165,7 +182,8 @@ class OrderStatusCheckerServiceImplTest {
                 paymentInvoiceRetryScheduler,
                 orderStatusService,
                 appSettingService,
-                commonBillingService
+                commonBillingService,
+                recoveryGateService
         );
     }
 

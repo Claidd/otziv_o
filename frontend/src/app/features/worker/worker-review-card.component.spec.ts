@@ -253,6 +253,7 @@ describe('WorkerReviewCardComponent', () => {
     const publishButton = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.publish-button');
     expect(publishButton?.textContent?.trim()).toBe('ОПУБЛИКОВАЛ');
     expect(publishButton?.disabled).toBe(true);
+    expect(publishButton?.classList.contains('publish-button--credential-locked')).toBe(true);
     expect(publishButton?.title).toBe('После копирования логина и пароля подождите еще 150 сек.');
   });
 

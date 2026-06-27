@@ -563,6 +563,14 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     int countPublishedByOrderId(@Param("orderId") Long orderId);
 
     @Query("""
+        SELECT MAX(r.publishedDate)
+        FROM Review r
+        WHERE r.orderDetails.order.id = :orderId
+          AND r.publishedDate IS NOT NULL
+    """)
+    LocalDate maxPublishedDateByOrderId(@Param("orderId") Long orderId);
+
+    @Query("""
         SELECT DISTINCT r.bot.id
         FROM Review r
         WHERE r.bot IS NOT NULL

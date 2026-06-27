@@ -16,6 +16,7 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import jakarta.ws.rs.NotFoundException;
 import java.util.List;
@@ -79,6 +80,7 @@ public class OrderStatusTransitionService {
     private final AppSettingService appSettingService;
     private final BusinessAuditService businessAuditService;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+    private final ReviewRecoveryGateService recoveryGateService;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -705,6 +707,14 @@ public class OrderStatusTransitionService {
     }
 
     private boolean handlePublicStatus(Order order) {
+        if (order != null
+                && order.getId() != null
+                && recoveryGateService.hasActiveRecoveryTasks(order.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сначала выполните все задачи восстановления отзывов"
+            );
+        }
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'ПУБЛИКАЦИЯ' ===");
 

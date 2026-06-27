@@ -3,7 +3,6 @@ package com.hunt.otziv.review_recovery.services;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
-import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,24 +22,14 @@ public class ReviewRecoveryHoldService {
 
     private final ReviewRecoveryBatchRepository batchRepository;
     private final OrderRepository orderRepository;
+    private final ReviewRecoveryGateService recoveryGateService;
 
     @Transactional(readOnly = true)
     public boolean shouldPauseClientMessages(Order order) {
         if (order == null || order.getId() == null || isTerminal(order)) {
             return false;
         }
-        return batchRepository
-                .findFirstByOrderIdAndStatusAndHoldReleasedAtIsNullOrderByCreatedAtDesc(
-                        order.getId(),
-                        ReviewRecoveryBatchStatus.OPEN
-                )
-                .isPresent()
-                || batchRepository
-                .findFirstByOrderIdAndStatusAndHoldReleasedAtIsNullOrderByCreatedAtDesc(
-                        order.getId(),
-                        ReviewRecoveryBatchStatus.COMPLETED
-                )
-                .isPresent();
+        return recoveryGateService.hasActiveRecoveryTasks(order.getId());
     }
 
     @Transactional

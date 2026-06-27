@@ -21,6 +21,7 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -29,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -43,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,6 +92,9 @@ class BadReviewTaskServiceImplTest {
     @Mock
     private BusinessAuditService businessAuditService;
 
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
+
     @InjectMocks
     private BadReviewTaskServiceImpl service;
 
@@ -96,6 +102,8 @@ class BadReviewTaskServiceImplTest {
     void setUpProviders() {
         ReflectionTestUtils.setField(service, "paymentLinkServiceProvider", paymentLinkServiceProvider);
         ReflectionTestUtils.setField(service, "commonBillingServiceProvider", commonBillingServiceProvider);
+        lenient().when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+        lenient().when(botService.getActiveBotsOutsideCityWithCounterAtLeast(any(), eq(5))).thenReturn(List.of());
     }
 
     @Test
@@ -194,6 +202,7 @@ class BadReviewTaskServiceImplTest {
                 .login("next-login")
                 .password("next-password")
                 .active(true)
+                .counter(5)
                 .build();
         Review review = Review.builder()
                 .id(88L)
@@ -220,6 +229,178 @@ class BadReviewTaskServiceImplTest {
         assertEquals("Новый П.", updated.getBotFioSnapshot());
         verify(reviewRepository).save(review);
         verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void changeTaskBotPrefersCrossCityCounterFiveWhenCityHasOnlyLowCounter() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        City otherCity = City.builder().id(5L).title("Ангарск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(false)
+                .build();
+        Bot cityLowCounterBot = Bot.builder()
+                .id(8L)
+                .fio("Городской новый")
+                .login("city-low")
+                .password("city-low-password")
+                .active(true)
+                .counter(4)
+                .build();
+        Bot crossCityBot = Bot.builder()
+                .id(9L)
+                .fio("Внешний готовый")
+                .login("cross-city")
+                .password("cross-city-password")
+                .active(true)
+                .counter(5)
+                .botCity(otherCity)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, 42L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of());
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, cityLowCounterBot));
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 5)).thenReturn(List.of(crossCityBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(crossCityBot, updated.getBot());
+        assertEquals(crossCityBot, review.getBot());
+        assertEquals("cross-city", updated.getBotLoginSnapshot());
+        assertEquals("cross-city-password", updated.getBotPasswordSnapshot());
+        assertEquals("Внешний готовый", updated.getBotFioSnapshot());
+        assertEquals(true, updated.isCrossCityBot());
+        verify(botCooldownService).markReservedUntilTaskCompletion(crossCityBot, "bad review task 42");
+        verify(reviewRepository).save(review);
+        verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void changeTaskBotSkipsCrossCityBotReservedByUnpublishedReview() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        City otherCity = City.builder().id(5L).title("Ангарск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(false)
+                .build();
+        Bot cityLowCounterBot = Bot.builder()
+                .id(8L)
+                .fio("Городской новый")
+                .login("city-low")
+                .password("city-low-password")
+                .active(true)
+                .counter(4)
+                .build();
+        Bot reservedCrossCityBot = Bot.builder()
+                .id(9L)
+                .fio("Внешний занятый")
+                .login("reserved-cross-city")
+                .password("reserved-password")
+                .active(true)
+                .counter(8)
+                .botCity(otherCity)
+                .build();
+        Bot availableCrossCityBot = Bot.builder()
+                .id(10L)
+                .fio("Внешний свободный")
+                .login("available-cross-city")
+                .password("available-password")
+                .active(true)
+                .counter(5)
+                .botCity(otherCity)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, 42L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(9L));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, cityLowCounterBot));
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 5))
+                .thenReturn(List.of(reservedCrossCityBot, availableCrossCityBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(availableCrossCityBot, updated.getBot());
+        assertEquals(true, updated.isCrossCityBot());
+        verify(botCooldownService).markReservedUntilTaskCompletion(availableCrossCityBot, "bad review task 42");
+        verify(botCooldownService, never()).markReservedUntilTaskCompletion(reservedCrossCityBot, "bad review task 42");
+    }
+
+    @Test
+    void changeTaskBotUsesCityCounterFiveBeforeCrossCityFallback() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot oldBot = Bot.builder()
+                .id(7L)
+                .fio("Старый П.")
+                .login("old-login")
+                .password("old-password")
+                .active(false)
+                .build();
+        Bot cityReadyBot = Bot.builder()
+                .id(8L)
+                .fio("Городской готовый")
+                .login("city-ready")
+                .password("city-ready-password")
+                .active(true)
+                .counter(5)
+                .build();
+        Review review = Review.builder()
+                .id(88L)
+                .bot(oldBot)
+                .filial(filial)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(oldBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findById(42L)).thenReturn(Optional.of(task));
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of());
+        when(badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, 42L)).thenReturn(Set.of());
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(oldBot, cityReadyBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.changeTaskBot(42L);
+
+        assertEquals(cityReadyBot, updated.getBot());
+        assertEquals(false, updated.isCrossCityBot());
+        verify(botService, never()).getActiveBotsOutsideCityWithCounterAtLeast(3L, 5);
+        verify(botCooldownService, never()).markReservedUntilTaskCompletion(any(), any());
     }
 
     @Test
@@ -332,6 +513,40 @@ class BadReviewTaskServiceImplTest {
                 "счет после плохого отзыва"
         );
         verify(paymentInvoiceRetryScheduler).scheduleBadReviewAutoBan(order);
+    }
+
+    @Test
+    void completeTaskReleasesCrossCityBotForTwoDayCooldown() {
+        Order order = order(20L);
+        Bot crossCityBot = Bot.builder()
+                .id(9L)
+                .login("cross-city")
+                .password("cross-city-password")
+                .active(true)
+                .counter(5)
+                .build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(50L)
+                .order(order)
+                .bot(crossCityBot)
+                .crossCityBot(true)
+                .status(BadReviewTaskStatus.NEW)
+                .price(BigDecimal.valueOf(300))
+                .build();
+
+        when(badReviewTaskRepository.findById(50L)).thenReturn(Optional.of(task));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+        when(badReviewTaskRepository.summarizeByOrderId(20L)).thenReturn(List.<Object[]>of(
+                new Object[]{BadReviewTaskStatus.DONE, 1L, BigDecimal.valueOf(300)}
+        ));
+
+        service.completeTask(50L);
+
+        verify(botCooldownService).markReleasedFrom(
+                crossCityBot,
+                LocalDate.now(),
+                "bad review cross-city task finished"
+        );
     }
 
     @Test
