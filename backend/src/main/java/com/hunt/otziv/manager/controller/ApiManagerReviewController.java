@@ -38,7 +38,7 @@ import com.hunt.otziv.s3.service.S3UploadService;
 import com.hunt.otziv.text_generator.service.AutoTextService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
-import com.hunt.otziv.worker_activity.WorkerActivityService;
+import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

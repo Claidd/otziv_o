@@ -1,4 +1,4 @@
-package com.hunt.otziv.worker_activity;
+package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -633,6 +633,7 @@ public class WorkerRiskEvaluationService {
         WorkerRiskIncident savedIncident = incidentRepository.save(incident);
 
         notifySafely(() -> notifyManagers(workerUser, savedIncident), workerUser.getId(), savedIncident.getId());
+        notifySafely(() -> notifyWorkerGroup(workerUser, savedIncident), workerUser.getId(), savedIncident.getId());
         log.warn(
                 "Подозрительное действие специалиста: incidentId={}, workerUserId={}, username={}, rule={}, score={}, action={}, entityType={}, entityId={}, orderId={}, reviewId={}",
                 savedIncident.getId(),
@@ -693,6 +694,28 @@ public class WorkerRiskEvaluationService {
             String telegramText = managerNotificationTelegramText(workerUser, incident, recipient.includeLogin());
             notifyUser(recipient.user(), "Проверьте действия специалиста", text, telegramText, incident.getId());
         });
+    }
+
+    private void notifyWorkerGroup(User workerUser, WorkerRiskIncident incident) {
+        Long groupChatId = workerUser == null ? null : workerUser.getWorkerTelegramGroupChatId();
+        if (groupChatId == null) {
+            return;
+        }
+
+        String telegramText = "Система заметила риск по действию специалиста."
+                + "\nСпециалист: " + html(clean(workerName(workerUser)))
+                + "\nПричина: " + html(clean(incident.getTitle()))
+                + "\nРиск: " + incident.getScore()
+                + incidentContextHtml(incident)
+                + "\n\nЕсли действие выполнено корректно, нажмите «Пояснить причину» "
+                + "и отправьте пояснение следующим сообщением в эту группу.";
+
+        telegramService.sendMessageWithInlineKeyboard(
+                groupChatId,
+                telegramText,
+                "HTML",
+                WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
+        );
     }
 
     private String managerNotificationText(User workerUser, WorkerRiskIncident incident, boolean includeLogin) {

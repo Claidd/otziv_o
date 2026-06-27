@@ -7,7 +7,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
-import com.hunt.otziv.worker_activity.WorkerRiskEvaluationService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
@@ -67,7 +67,7 @@ public class WorkerRiskTelegramCallbackService {
 
     public static List<List<InlineKeyboardButton>> explanationKeyboard(Long incidentId) {
         InlineKeyboardButton button = new InlineKeyboardButton();
-        button.setText("Дать пояснение");
+        button.setText("Пояснить причину");
         button.setCallbackData(EXPLANATION_CALLBACK_PREFIX + incidentId);
         return List.of(List.of(button));
     }
@@ -119,7 +119,27 @@ public class WorkerRiskTelegramCallbackService {
         if (user == null || user.getId() == null || !user.isActive() || clean(messageText).isBlank()) {
             return false;
         }
+        return saveWorkerExplanation(chatId, user, messageText);
+    }
 
+    @Transactional
+    public boolean handleWorkerGroupTextMessage(long chatId, Long actorTelegramId, String messageText) {
+        if (chatId >= 0 || actorTelegramId == null || clean(messageText).isBlank()) {
+            return false;
+        }
+
+        User user = userService.findByChatId(actorTelegramId).orElse(null);
+        if (user == null || user.getId() == null || !user.isActive()) {
+            return false;
+        }
+        if (!Objects.equals(user.getWorkerTelegramGroupChatId(), chatId)) {
+            return false;
+        }
+
+        return saveWorkerExplanation(chatId, user, messageText);
+    }
+
+    private boolean saveWorkerExplanation(long chatId, User user, String messageText) {
         Optional<WorkerRiskIncident> pending = incidentRepository
                 .findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
                         user.getId(),
@@ -184,10 +204,19 @@ public class WorkerRiskTelegramCallbackService {
             return Optional.of("Пояснение уже отправлено");
         }
 
-        incident.setExplanationPromptedAt(LocalDateTime.now());
+        Long chatId = callbackQuery.getMessage() == null ? actor.getTelegramChatId() : callbackQuery.getMessage().getChatId();
+        if (chatId != null && chatId < 0 && !Objects.equals(actor.getWorkerTelegramGroupChatId(), chatId)) {
+            return Optional.of("Эта группа не привязана к специалисту");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        if (incident.getExplanationRequestedAt() == null) {
+            incident.setExplanationRequestedAt(now);
+        }
+        incident.setExplanationPromptedAt(now);
         incidentRepository.save(incident);
 
-        Long chatId = callbackQuery.getMessage() == null ? actor.getTelegramChatId() : callbackQuery.getMessage().getChatId();
         if (chatId != null) {
             telegramService.sendMessage(chatId,
                     "Напишите пояснение следующим сообщением."
@@ -303,9 +332,9 @@ public class WorkerRiskTelegramCallbackService {
                         incident.getId(),
                         incident.getOrderId()
                 );
-                if (worker.getTelegramChatId() != null) {
+                if (worker.getWorkerTelegramGroupChatId() != null) {
                     telegramService.sendMessageWithInlineKeyboard(
-                            worker.getTelegramChatId(),
+                            worker.getWorkerTelegramGroupChatId(),
                             text,
                             null,
                             explanationKeyboard(incident.getId())
@@ -412,8 +441,8 @@ public class WorkerRiskTelegramCallbackService {
                         incident.getId(),
                         incident.getOrderId()
                 );
-                if (worker.getTelegramChatId() != null) {
-                    telegramService.sendMessage(worker.getTelegramChatId(), text);
+                if (worker.getWorkerTelegramGroupChatId() != null) {
+                    telegramService.sendMessage(worker.getWorkerTelegramGroupChatId(), text);
                 }
             } catch (RuntimeException exception) {
                 log.warn("Не удалось отправить уведомление о нарушении incidentId={}, workerUserId={}",

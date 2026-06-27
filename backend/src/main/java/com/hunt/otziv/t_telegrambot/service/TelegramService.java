@@ -142,6 +142,14 @@ public class TelegramService extends TelegramLongPollingBot {
         }
 
         if (!isPrivateChat(update)) {
+            WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
+                    workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
+            Long actorTelegramId = update.getMessage().getFrom() == null ? null : update.getMessage().getFrom().getId();
+            if (workerRiskTelegramCallbackService != null
+                    && workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(chatId, actorTelegramId, messageText)) {
+                return;
+            }
+
             Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
                     handlePublicationPreferenceCommand(chatId, messageText);
             if (preferenceUpdate.isPresent()) {

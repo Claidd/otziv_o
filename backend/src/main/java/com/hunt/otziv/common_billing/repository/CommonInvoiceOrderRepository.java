@@ -47,6 +47,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         LEFT JOIN FETCH order.filial
         LEFT JOIN FETCH order.manager orderManager
         LEFT JOIN FETCH orderManager.user
+        LEFT JOIN FETCH order.worker worker
+        LEFT JOIN FETCH worker.user
         WHERE item.invoice.id = :invoiceId
         ORDER BY item.id ASC
     """)
@@ -61,6 +63,8 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         LEFT JOIN FETCH order.filial
         LEFT JOIN FETCH order.manager orderManager
         LEFT JOIN FETCH orderManager.user
+        LEFT JOIN FETCH order.worker worker
+        LEFT JOIN FETCH worker.user
         WHERE item.invoice.id IN :invoiceIds
         ORDER BY item.invoice.id ASC, item.id ASC
     """)

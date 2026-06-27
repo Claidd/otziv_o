@@ -92,6 +92,14 @@ export interface ManagerControlConcreteItem {
   workerNotificationAcceptedByUserId?: number | null;
   workerNotificationFailureReason?: string | null;
   contactText?: string | null;
+  riskResolutionAction?: string | null;
+  workerExplanation?: string | null;
+  workerExplanationAt?: string | null;
+  penaltyPoints?: number | null;
+  rollbackStatus?: string | null;
+  rollbackMessage?: string | null;
+  canRollback?: boolean | null;
+  specialistName?: string | null;
 }
 
 export interface ManagerControlManagerDetail {

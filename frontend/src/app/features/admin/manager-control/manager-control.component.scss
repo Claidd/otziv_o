@@ -1190,7 +1190,11 @@ p {
 }
 
 .detail-example-flags {
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: stretch;
+  justify-items: center;
+  gap: 8px;
   width: 100%;
 }
 
@@ -1312,7 +1316,8 @@ a.review-action.review-action:hover {
 .review-action.order-action,
 button.review-action.text-action,
 .review-action.client-action,
-button.review-action.repair-action {
+button.review-action.repair-action,
+button.review-action.secondary-action {
   border-color: #cbd5e1;
   background: #f8fafc;
   color: #617088;
@@ -1325,6 +1330,12 @@ button.review-action.text-action.done {
 }
 
 button.review-action.send-action {
+  border-color: #efc0ca;
+  background: #fff5f7;
+  color: #b81f45;
+}
+
+button.review-action.danger-action {
   border-color: #efc0ca;
   background: #fff5f7;
   color: #b81f45;
@@ -1452,17 +1463,32 @@ button.review-action.request-action {
 }
 
 .day-control-panel {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) repeat(4, minmax(5.5rem, max-content)) minmax(10rem, 1fr);
   min-width: 0;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .day-score,
 .stage-actions button {
   min-height: 34px;
   padding: 0 10px;
+}
+
+.day-control-panel > .stage-actions {
+  display: contents;
+}
+
+.day-control-panel > .stage-actions button,
+.day-control-panel > .day-score,
+.day-control-panel > .close-blockers {
+  width: 100%;
+}
+
+.day-control-panel > .close-blockers {
+  min-width: 0;
+  justify-content: flex-start;
 }
 
 .day-score {
@@ -1648,17 +1674,12 @@ button.review-action.request-action {
   }
 
   .day-control-panel {
-    flex-wrap: wrap;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .stage-actions,
   .close-blockers {
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
     justify-content: center;
-  }
-
-  .stage-actions {
-    flex-wrap: wrap;
   }
 
   .event-log article {
@@ -1678,6 +1699,10 @@ button.review-action.request-action {
 
   .summary-tile {
     min-height: 6.2rem;
+  }
+
+  .day-control-panel {
+    grid-template-columns: 1fr;
   }
 
 }

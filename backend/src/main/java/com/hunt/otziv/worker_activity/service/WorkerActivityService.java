@@ -1,4 +1,4 @@
-package com.hunt.otziv.worker_activity;
+package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;

@@ -371,7 +371,11 @@
                               </span>
                               <span class="detail-example-field">
                                 <small>Заказ</small>
-                                <strong>{{ controlCardOrder(example) }}</strong>
+                                @if (controlCardOrderUrl(example); as orderUrl) {
+                                  <a [href]="orderUrl">{{ controlCardOrder(example) }}</a>
+                                } @else {
+                                  <strong>{{ controlCardOrder(example) }}</strong>
+                                }
                               </span>
                               <span class="detail-example-field">
                                 <small>Отзыв</small>
@@ -409,10 +413,6 @@
 
                           @if (example.type === 'ORDER') {
                             <div class="review-followup order-open-action">
-                              <a class="review-action order-action" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
-                                <span class="material-icons-sharp">view_kanban</span>
-                                Заказ
-                              </a>
                               @if (canContactOrder(example)) {
                                 <button type="button" class="review-action text-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)">
                                   <span class="material-icons-sharp">content_copy</span>
@@ -439,14 +439,62 @@
                             </div>
                           }
 
-                          @if (canRequestWorkerTask(example)) {
-                            <div class="review-followup worker-request">
-                              @if (canOpenOrderFromWorkerTask(example)) {
-                                <a class="review-action order-action" [href]="detailExamplePrimaryUrl(example, item.targetUrl)">
-                                  <span class="material-icons-sharp">view_kanban</span>
-                                  Заказ
-                                </a>
+                          @if (example.type === 'RISK') {
+                            <div class="review-followup risk-followup">
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="ignoreRisk(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Правило сработало лишний раз"
+                              >
+                                <span class="material-icons-sharp">visibility_off</span>
+                                Игнорировать
+                              </button>
+                              @if (riskExplanationRequested(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action request-action"
+                                  disabled
+                                  title="Запрос уже отправлен, карточка остается открытой"
+                                >
+                                  <span class="material-icons-sharp">{{ riskExplanationButtonIcon(example) }}</span>
+                                  {{ riskExplanationButtonLabel(example) }}
+                                </button>
+                              } @else {
+                                <button
+                                  type="button"
+                                  class="review-action request-action"
+                                  (click)="requestRiskExplanation(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Отправить специалисту запрос разъяснения"
+                                >
+                                  <span class="material-icons-sharp">contact_support</span>
+                                  Запросить разъяснение
+                                </button>
                               }
+                              <button
+                                type="button"
+                                class="review-action danger-action"
+                                (click)="confirmRiskViolation(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Зафиксировать нарушение и штраф"
+                              >
+                                <span class="material-icons-sharp">gpp_bad</span>
+                                Нарушение / штраф
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action done"
+                                (click)="resolveRisk(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                              >
+                                <span class="material-icons-sharp">task_alt</span>
+                                Проверено
+                              </button>
+                            </div>
+                          } @else if (canRequestWorkerTask(example)) {
+                            <div class="review-followup worker-request">
                               @if (chatUrl(example)) {
                                 <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                   <span class="material-icons-sharp">forum</span>
@@ -492,8 +540,20 @@
                               </a>
                               <a class="review-action client-action" [href]="commonInvoiceDetailUrl(example, item.targetUrl)">
                                 <span class="material-icons-sharp">receipt_long</span>
-                                Счет
+                                Детали
                               </a>
+                              @if (canRepairAutomationIssue(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action repair-action"
+                                  (click)="repairConcreteItem(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Починить ошибку общего счета"
+                                >
+                                  <span class="material-icons-sharp">build</span>
+                                  Починить
+                                </button>
+                              }
                               <small>сначала карточка в заказах, затем правая панель счета</small>
                             </div>
                           }

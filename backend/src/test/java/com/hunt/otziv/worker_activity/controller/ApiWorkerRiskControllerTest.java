@@ -8,7 +8,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskResolutionRequest;
-import com.hunt.otziv.worker_activity.WorkerRiskEvaluationService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;

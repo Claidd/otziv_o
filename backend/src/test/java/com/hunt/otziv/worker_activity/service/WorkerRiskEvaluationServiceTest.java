@@ -1,4 +1,4 @@
-package com.hunt.otziv.worker_activity;
+package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.p_products.repository.OrderRepository;

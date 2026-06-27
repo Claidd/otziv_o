@@ -4,6 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
+  ManagerApi,
+  WorkerRiskIncident,
+  WorkerRiskResolutionAction
+} from '../../../core/manager.api';
+import {
   ManagerControlApi,
   ManagerControlActionType,
   ManagerControlConcreteItem,
@@ -32,6 +37,7 @@ import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 })
 export class ManagerControlComponent {
   private readonly api = inject(ManagerControlApi);
+  private readonly managerApi = inject(ManagerApi);
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -504,6 +510,22 @@ export class ManagerControlComponent {
     this.markConcreteItem(example, 'ACTION_TAKEN');
   }
 
+  resolveRisk(example: ManagerControlConcreteItem): void {
+    this.updateRiskIncident(example, 'VERIFIED');
+  }
+
+  ignoreRisk(example: ManagerControlConcreteItem): void {
+    this.updateRiskIncident(example, 'FALSE_POSITIVE');
+  }
+
+  requestRiskExplanation(example: ManagerControlConcreteItem): void {
+    this.updateRiskIncident(example, 'EXPLANATION_REQUESTED');
+  }
+
+  confirmRiskViolation(example: ManagerControlConcreteItem): void {
+    this.updateRiskIncident(example, 'VIOLATION_CONFIRMED', 1);
+  }
+
   requestControlCardExplanation(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
     if (itemId && !this.detailConcreteComment(itemId)) {
@@ -538,6 +560,9 @@ export class ManagerControlComponent {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
+    if (example.type === 'COMMON_INVOICE') {
+      return reason.includes('нажмите «починить»') || reason.includes('нажмите "починить"');
+    }
     const repairableWaitingClient = example.type === 'WORKER_ORDER_NEW'
       && this.isWaitingForClientExample(example)
       && (
@@ -611,8 +636,7 @@ export class ManagerControlComponent {
       || example.type === 'PUBLISH_REVIEW'
       || example.type === 'NAGUL_REVIEW'
       || example.type === 'WORKER_ORDER_NEW'
-      || example.type === 'WORKER_ORDER_CORRECT'
-      || example.type === 'RISK';
+      || example.type === 'WORKER_ORDER_CORRECT';
   }
 
   canOpenOrderFromWorkerTask(example: ManagerControlConcreteItem): boolean {
@@ -647,33 +671,32 @@ export class ManagerControlComponent {
   }
 
   controlCardSpecialist(example: ManagerControlConcreteItem): string {
-    const subtitle = (example.subtitle ?? '').replace(/\s+/g, ' ').trim();
-    const subtitleName = this.specialistNameFromText(subtitle, '·');
-    if (subtitleName) {
-      return subtitleName;
+    const explicitName = (example.specialistName ?? '').trim();
+    if (explicitName) {
+      return explicitName;
     }
-    const reasonName = this.specialistNameFromText(example.reason ?? '', '-')
-      || this.specialistNameFromText(example.reason ?? '', '–')
-      || this.specialistNameFromText(example.reason ?? '', '—');
-    return reasonName || '-';
+    if (example.type === 'COMMON_INVOICE') {
+      return '-';
+    }
+    if (example.type === 'ORDER') {
+      return '-';
+    }
+    return this.specialistNameFromText(example.subtitle)
+      || this.specialistNameFromText(example.reason)
+      || '-';
   }
 
   controlCardOrder(example: ManagerControlConcreteItem): string {
-    if (example.entityId !== null && example.entityId !== undefined) {
-      return `#${example.entityId}`;
-    }
-    return '-';
+    return this.controlCardOrderUrl(example) ? 'перейти' : '-';
+  }
+
+  controlCardOrderUrl(example: ManagerControlConcreteItem): string {
+    const url = this.detailExamplePrimaryUrl(example, null);
+    return url === '#' ? '' : url;
   }
 
   controlCardReview(example: ManagerControlConcreteItem): string {
-    const orderDetailsId = String(example.orderDetailsId ?? '').trim();
-    if (orderDetailsId) {
-      return 'отзыв';
-    }
-    if (example.type === 'RISK') {
-      return 'риск';
-    }
-    return '-';
+    return this.controlCardReviewUrl(example) ? 'перейти' : '-';
   }
 
   controlCardReviewUrl(example: ManagerControlConcreteItem): string {
@@ -750,6 +773,19 @@ export class ManagerControlComponent {
     return this.workerNotificationNote(example) || 'Запрос в группу еще не отправлялся';
   }
 
+  riskExplanationRequested(example: ManagerControlConcreteItem): boolean {
+    return example.riskResolutionAction === 'EXPLANATION_REQUESTED'
+      || example.riskResolutionAction === 'WORKER_WARNED';
+  }
+
+  riskExplanationButtonLabel(example: ManagerControlConcreteItem): string {
+    return example.workerExplanation ? 'Ответ получен' : 'Ждем разъяснение';
+  }
+
+  riskExplanationButtonIcon(example: ManagerControlConcreteItem): string {
+    return example.workerExplanation ? 'mark_chat_read' : 'hourglass_top';
+  }
+
   isManualWorkerRequest(example: ManagerControlConcreteItem): boolean {
     return this.canRequestWorkerTask(example)
       && example.actionType === 'ACTION_TAKEN'
@@ -793,16 +829,49 @@ export class ManagerControlComponent {
     return `/orders?${params.toString()}`;
   }
 
-  private specialistNameFromText(value: string | null | undefined, separator: string): string {
+  private specialistNameFromText(value: string | null | undefined): string {
     const text = (value ?? '').replace(/\s+/g, ' ').trim();
-    if (!text.includes(separator)) {
+    if (!text) {
       return '';
     }
-    const candidate = text.split(separator)[0]?.trim() ?? '';
-    if (!candidate || /^(Новый|На проверке|PLANNED|Коррекция|Выгул|Публикация|Восстановление)$/i.test(candidate)) {
-      return '';
+    const parts = text.includes('·')
+      ? text.split('·')
+      : text.split(/\s[-–—]\s/);
+    return parts
+      .map((part) => part.trim())
+      .find((part) => this.isSpecialistNameCandidate(part)) ?? '';
+  }
+
+  private isSpecialistNameCandidate(value: string): boolean {
+    const candidate = value.replace(/^(специалист|работник)\s*[:\-]\s*/i, '').trim();
+    if (!candidate || candidate === '-') {
+      return false;
     }
-    return candidate;
+    const lower = candidate.toLowerCase();
+    if (/^(new|warning|planned|open|closed)$/i.test(candidate)) {
+      return false;
+    }
+    if (/^(новый|новые|коррекция|плохие|выгул|публикация|восстановление|на проверке|в проверку|отключен|отключён|общий счет|общий счёт)$/i.test(candidate)) {
+      return false;
+    }
+    return !(
+      lower.includes('общий счет')
+      || lower.includes('общий счёт')
+      || lower.startsWith('план ')
+      || lower.startsWith('заказ ')
+      || lower.startsWith('статус ')
+      || lower.startsWith('сумма ')
+      || lower.includes(' без изменений ')
+      || lower.includes('ждет клиента')
+      || lower.includes('ждёт клиента')
+      || lower.includes(' руб')
+      || lower.includes(' дн')
+      || lower.includes('объект:')
+      || lower.includes('действие:')
+      || lower.includes('риск:')
+      || lower.includes('review_')
+      || lower.includes('manual_')
+    );
   }
 
   commonInvoiceDetailUrl(example: ManagerControlConcreteItem, fallbackUrl?: string | null): string {
@@ -962,6 +1031,77 @@ export class ManagerControlComponent {
       }
     }
     this.toast.success('Карточка обновлена', this.actionToast(actionType));
+  }
+
+  private updateRiskIncident(
+    example: ManagerControlConcreteItem,
+    action: WorkerRiskResolutionAction,
+    penaltyPoints?: number
+  ): void {
+    const incidentId = example.entityId;
+    const itemId = example.controlEntityId;
+    if (!incidentId || !itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.managerApi.setWorkerRiskIncidentResolution(incidentId, action, penaltyPoints).subscribe({
+      next: (incident) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        const merged = this.patchDetailConcreteItem(example, this.riskConcretePatch(example, incident));
+        this.toast.success(this.riskActionToast(action));
+        if (incident.status !== 'OPEN') {
+          this.removeConcreteItemFromDetail(merged);
+        }
+        this.load();
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Статус риска не изменен', apiErrorMessage(err, 'Не удалось обновить риск'));
+      }
+    });
+  }
+
+  private riskConcretePatch(
+    example: ManagerControlConcreteItem,
+    incident: WorkerRiskIncident
+  ): ManagerControlConcreteItem {
+    return {
+      ...example,
+      status: incident.level,
+      reason: incident.details || incident.message || example.reason,
+      riskResolutionAction: incident.resolutionAction ?? null,
+      workerExplanation: incident.workerExplanation ?? null,
+      workerExplanationAt: incident.workerExplanationAt ?? null,
+      penaltyPoints: incident.penaltyPoints,
+      rollbackStatus: incident.rollbackStatus ?? null,
+      rollbackMessage: incident.rollbackMessage ?? null,
+      canRollback: incident.canRollback,
+      itemStatus: incident.status === 'OPEN' ? 'OPEN' : 'RESOLVED',
+      actionType: incident.status === 'OPEN' ? 'ACTION_TAKEN' : 'RESOLVED',
+      resolvedAt: incident.resolvedAt ?? example.resolvedAt
+    };
+  }
+
+  private riskActionToast(action: WorkerRiskResolutionAction): string {
+    switch (action) {
+      case 'FALSE_POSITIVE':
+        return 'Инцидент проигнорирован';
+      case 'EXPLANATION_REQUESTED':
+      case 'WORKER_WARNED':
+        return 'Разъяснение запрошено';
+      case 'VIOLATION_CONFIRMED':
+        return 'Нарушение зафиксировано';
+      default:
+        return 'Инцидент проверен';
+    }
   }
 
   updateDetailComment(itemId: number, comment: string): void {

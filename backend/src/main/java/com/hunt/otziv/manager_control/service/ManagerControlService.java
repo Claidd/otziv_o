@@ -12,8 +12,11 @@ import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
+import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
@@ -216,6 +219,8 @@ public class ManagerControlService {
     private final ReviewRepository reviewRepository;
     private final OrderRepository orderRepository;
     private final CommonInvoiceRepository commonInvoiceRepository;
+    private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+    private final CommonBillingService commonBillingService;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final ManagerDailyControlRepository dailyControlRepository;
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
@@ -570,6 +575,9 @@ public class ManagerControlService {
         ManagerDailyControl control = concreteItem.getControl();
         requireControlAccess(control, principal, authentication);
         String entityType = safe(concreteItem.getEntityType());
+        if ("COMMON_INVOICE".equals(entityType)) {
+            return repairCommonInvoiceConcreteItem(concreteItem, control, principal);
+        }
         if (!ENTITY_WORKER_ORDER_NEW.equals(entityType) && !"ORDER".equals(entityType)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Автопочинка доступна только для заказов с клиентской автоматизацией");
         }
@@ -624,6 +632,43 @@ public class ManagerControlService {
                 "Очередь CLIENT_TEXT_REMINDER восстановлена, автоответчик продолжит напоминания",
                 principal,
                 "Восстановлена очередь CLIENT_TEXT_REMINDER"
+        );
+    }
+
+    private ManagerControlConcreteItemResponse repairCommonInvoiceConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Principal principal
+    ) {
+        Long invoiceId = concreteItem.getEntityId();
+        if (invoiceId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У карточки общего счета нет ID счета");
+        }
+        CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        if (commonInvoicePaymentNotificationRepairable(invoice)) {
+            commonBillingService.resolvePaymentSuccessNotification(invoiceId);
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Ошибка уведомления об оплате закрыта",
+                    principal,
+                    "Закрыта ошибка уведомления об оплате общего счета"
+            );
+        }
+        if (commonInvoiceTechnicalTailRepairable(invoice)) {
+            commonBillingService.resolveTechnicalTail(invoiceId);
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Технический хвост общего счета скрыт из контроля",
+                    principal,
+                    "Закрыт технический хвост общего счета"
+            );
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Эту ошибку общего счета нельзя исправить автоматически. Откройте счет и проверьте позиции вручную."
         );
     }
 
@@ -1699,7 +1744,8 @@ public class ManagerControlService {
                 item.getWorkerNotificationAcceptedAt(),
                 item.getWorkerNotificationAcceptedByUserId(),
                 item.getWorkerNotificationFailureReason(),
-                contactText
+                contactText,
+                specialistNameForConcreteItem(item)
         );
     }
 
@@ -2074,7 +2120,7 @@ public class ManagerControlService {
                     }
                     yield worker == null ? null : worker.getUser();
                 }
-                case ENTITY_WORKER_ORDER_NEW, ENTITY_WORKER_ORDER_CORRECT -> {
+                case "ORDER", ENTITY_WORKER_ORDER_NEW, ENTITY_WORKER_ORDER_CORRECT -> {
                     Order order = orderRepository.findById(concreteItem.getEntityId()).orElse(null);
                     yield order == null || order.getWorker() == null ? null : order.getWorker().getUser();
                 }
@@ -2089,6 +2135,49 @@ public class ManagerControlService {
         } catch (RuntimeException ignored) {
             return null;
         }
+    }
+
+    private String specialistNameForConcreteItem(ManagerDailyControlConcreteItem concreteItem) {
+        if (concreteItem == null) {
+            return "";
+        }
+        if ("COMMON_INVOICE".equals(safe(concreteItem.getEntityType()))) {
+            return commonInvoiceSpecialistName(concreteItem.getEntityId());
+        }
+        return userDisplayName(workerUserForTask(concreteItem));
+    }
+
+    private String commonInvoiceSpecialistName(Long invoiceId) {
+        if (invoiceId == null) {
+            return "";
+        }
+        try {
+            List<String> names = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId).stream()
+                    .map(CommonInvoiceOrder::getOrder)
+                    .map(order -> order == null || order.getWorker() == null ? null : order.getWorker().getUser())
+                    .map(this::userDisplayName)
+                    .filter(name -> !name.isBlank())
+                    .distinct()
+                    .toList();
+            if (names.size() == 1) {
+                return names.getFirst();
+            }
+            if (names.size() > 1) {
+                return names.size() + " специалистов";
+            }
+            return "";
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось получить специалистов общего счета invoiceId={}: {}", invoiceId, exception.getMessage());
+            return "";
+        }
+    }
+
+    private String userDisplayName(User user) {
+        String fio = safe(user == null ? null : user.getFio());
+        if (!fio.isBlank()) {
+            return fio;
+        }
+        return safe(user == null ? null : user.getUsername());
     }
 
     private Long orderIdForTask(ManagerDailyControlConcreteItem concreteItem) {
@@ -2880,8 +2969,26 @@ public class ManagerControlService {
                 null,
                 null,
                 null,
-                null
+                null,
+                incident.getResolutionAction() == null ? null : incident.getResolutionAction().name(),
+                incident.getWorkerExplanation(),
+                incident.getWorkerExplanationAt(),
+                incident.getPenaltyPoints(),
+                incident.getRollbackStatus() == null ? null : incident.getRollbackStatus().name(),
+                incident.getRollbackMessage(),
+                canRollbackRiskIncident(incident),
+                safe(incident.getWorkerName()).isBlank() ? incident.getWorkerUsername() : incident.getWorkerName()
         );
+    }
+
+    private boolean canRollbackRiskIncident(WorkerRiskIncident incident) {
+        if (incident == null
+                || incident.getStatus() != WorkerRiskIncidentStatus.VIOLATION
+                || incident.getRollbackStatus() != null) {
+            return false;
+        }
+        return "BAD_TASK_COMPLETE".equals(incident.getAction())
+                || "RECOVERY_TASK_COMPLETE".equals(incident.getAction());
     }
 
     private long commonInvoiceActionCount(Manager manager) {
@@ -2946,24 +3053,109 @@ public class ManagerControlService {
     private String commonInvoiceReason(CommonInvoice invoice, LocalDate today) {
         String lastError = safe(invoice.getLastError());
         if (!lastError.isBlank()) {
-            return "Ошибка общего счета: " + limit(lastError, 220);
+            return commonInvoiceLastErrorReason(invoice, lastError);
         }
         String notificationError = safe(invoice.getPaymentSuccessNotificationError());
         if (!notificationError.isBlank()) {
-            return "Ошибка уведомления об оплате: " + limit(notificationError, 220);
+            return commonInvoicePaymentNotificationReason(notificationError);
         }
         CommonInvoiceStatus status = invoice.getStatus();
         if (status == CommonInvoiceStatus.NEEDS_ATTENTION) {
-            return "Счет требует ручного разбора";
+            return "Счет требует ручного разбора. Рекомендация: откройте «Счет», проверьте позиции и выберите подходящее действие в правой панели.";
         }
         if (status == CommonInvoiceStatus.UNPAID) {
-            return "Счет переведен в не оплачено";
+            return "Счет переведен в «Не оплачено». Рекомендация: проверьте, нужно ли вернуть позиции в работу или закрыть карточку контроля.";
         }
         if (status == CommonInvoiceStatus.BAN) {
-            return "Счет в бане";
+            return "Счет в бане. Рекомендация: проверьте причину блокировки в карточке счета.";
         }
         long ageDays = invoice.getUpdatedAt() == null ? 0 : daysSince(invoice.getUpdatedAt().toLocalDate(), today);
-        return "Завис в статусе " + commonInvoiceStatusLabel(status) + " " + ageDays + " дн.";
+        return "Счет завис в статусе «" + commonInvoiceStatusLabel(status) + "» " + ageDays
+                + " дн. Рекомендация: откройте «Счет» и проверьте следующий шаг оплаты.";
+    }
+
+    private String commonInvoiceLastErrorReason(CommonInvoice invoice, String rawError) {
+        String error = safe(rawError).toLowerCase(Locale.ROOT);
+        if (error.startsWith("manual_fix:") && error.contains("moved_to_invoice_")) {
+            String targetInvoice = valueAfter(error, "moved_to_invoice_");
+            return "Заказ уже перенесен в другой общий счет"
+                    + (targetInvoice.isBlank() ? "" : " #" + targetInvoice)
+                    + ". Это технический хвост старого счета. Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
+        }
+        if (error.startsWith("merged_into:")) {
+            String targetInvoice = valueAfter(error, "common_invoice_");
+            return "Этот общий счет объединен с другим счетом"
+                    + (targetInvoice.isBlank() ? "" : " #" + targetInvoice)
+                    + ". Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
+        }
+        if (error.startsWith("empty:")) {
+            return "В общем счете больше нет заказов. Рекомендация: нажмите «Починить», чтобы убрать пустой счет из контроля.";
+        }
+        if (error.startsWith("disabled:")) {
+            return "Общий счет отключен. Рекомендация: нажмите «Починить», если в нем не осталось неоплаченных позиций.";
+        }
+        if (error.startsWith("whatsapp_group_missing") || error.contains("whatsapp-групп")) {
+            return "Для WhatsApp-группы не задан groupId. Рекомендация: откройте «Счет», затем заказ/компанию и привяжите WhatsApp-группу к боту.";
+        }
+        if (error.startsWith("auto_send_disabled")) {
+            return "Автоматическая отправка клиентских сообщений выключена. Рекомендация: включите моментальные сообщения или обработайте счет вручную.";
+        }
+        if (error.startsWith("message_send_stale") || error.startsWith("message_send_in_progress")) {
+            return "Отправка сообщения по счету зависла. Рекомендация: откройте «Счет» и повторите отправку вручную.";
+        }
+        if (error.startsWith("payment_init")) {
+            return "Проблема при создании платежной ссылки T-Bank. Рекомендация: откройте «Счет» и сверьте состояние платежа в банке.";
+        }
+        if (error.startsWith("close_failed")) {
+            return "Оплата получена, но часть заказов не закрылась. Рекомендация: исправьте заказы и повторите действие в карточке счета.";
+        }
+        if (error.startsWith("next_order_failed")) {
+            return "Платеж закрыт, но следующие заказы не создались. Рекомендация: откройте «Счет» и повторите создание следующих заказов.";
+        }
+        if (commonInvoiceTechnicalTailRepairable(invoice)) {
+            return "У общего счета остался технический хвост. Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
+        }
+        return "Ошибка общего счета: " + limit(rawError, 160)
+                + ". Рекомендация: откройте «Счет» и проверьте причину вручную.";
+    }
+
+    private String commonInvoicePaymentNotificationReason(String rawError) {
+        String error = safe(rawError).toLowerCase(Locale.ROOT);
+        if (error.startsWith("immediate_messages_disabled")) {
+            return "Уведомление об оплате не отправлено: моментальные клиентские сообщения выключены. Рекомендация: включите отправку или нажмите «Починить», чтобы закрыть эту ошибку.";
+        }
+        if (error.startsWith("whatsapp_group_missing") || error.contains("groupid")) {
+            return "Уведомление об оплате не отправлено: у WhatsApp-группы не задан groupId. Рекомендация: привяжите группу к боту, затем отправьте сообщение вручную или нажмите «Починить», если уведомление уже не нужно.";
+        }
+        return "Ошибка уведомления об оплате: " + limit(rawError, 160)
+                + ". Рекомендация: проверьте сообщение клиенту или нажмите «Починить», чтобы закрыть ошибку уведомления.";
+    }
+
+    private boolean commonInvoiceTechnicalTailRepairable(CommonInvoice invoice) {
+        String error = safe(invoice == null ? null : invoice.getLastError()).toLowerCase(Locale.ROOT);
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.DISABLED
+                && (error.startsWith("disabled:")
+                || error.startsWith("empty:")
+                || error.startsWith("merged_into:")
+                || error.startsWith("manual_fix:"));
+    }
+
+    private boolean commonInvoicePaymentNotificationRepairable(CommonInvoice invoice) {
+        return !safe(invoice == null ? null : invoice.getPaymentSuccessNotificationError()).isBlank();
+    }
+
+    private String valueAfter(String value, String marker) {
+        int index = safe(value).indexOf(marker);
+        if (index < 0) {
+            return "";
+        }
+        String suffix = value.substring(index + marker.length()).trim();
+        int end = 0;
+        while (end < suffix.length() && Character.isDigit(suffix.charAt(end))) {
+            end++;
+        }
+        return end == 0 ? "" : suffix.substring(0, end);
     }
 
     private String commonInvoiceStatusLabel(CommonInvoiceStatus status) {

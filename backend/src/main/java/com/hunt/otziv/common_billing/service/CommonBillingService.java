@@ -229,7 +229,8 @@ public class CommonBillingService {
     private static final Set<String> RESOLVABLE_TECHNICAL_TAIL_ERROR_PREFIXES = Set.of(
             "disabled:",
             "empty:",
-            "merged_into:"
+            "merged_into:",
+            "manual_fix:"
     );
     private static final java.time.Duration OPERATION_IN_PROGRESS_TIMEOUT = java.time.Duration.ofMinutes(30);
     private static final ZoneId MOSCOW_ZONE = ZoneId.of("Europe/Moscow");
