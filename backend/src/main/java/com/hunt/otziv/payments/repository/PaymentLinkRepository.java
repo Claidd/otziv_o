@@ -7,6 +7,7 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.u_users.model.Manager;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -205,6 +206,25 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     );
 
     List<PaymentLink> findByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
+
+    @Query("""
+        SELECT DISTINCT link
+        FROM PaymentLink link
+        JOIN FETCH link.order o
+        JOIN FETCH o.company c
+        WHERE o.manager = :manager
+          AND link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+          AND link.paymentSuccessNotifiedAt IS NULL
+          AND link.paymentSuccessNotificationError IS NOT NULL
+          AND c.telegramGroupChatId IS NOT NULL
+          AND (
+              LOWER(link.paymentSuccessNotificationError) LIKE '%telegram%'
+              OR LOWER(link.paymentSuccessNotificationError) LIKE '%supergroup%'
+              OR LOWER(link.paymentSuccessNotificationError) LIKE '%migrate%'
+          )
+        ORDER BY link.updatedAt DESC, link.id DESC
+    """)
+    List<PaymentLink> findTelegramSuccessNotificationErrorsByManager(@Param("manager") Manager manager);
 
     @Query("""
         SELECT COALESCE(SUM(CASE

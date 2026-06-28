@@ -3,6 +3,7 @@ package com.hunt.otziv.manager.dto.api;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
 
 public record OrderDetailsResponse(
         Long orderId,
@@ -31,6 +32,7 @@ public record OrderDetailsResponse(
         boolean canEditReviewDates,
         boolean canEditReviewPublish,
         boolean canEditReviewVigul,
-        boolean canDeleteReviews
+        boolean canDeleteReviews,
+        WorkerCredentialPreparationResponse credentialPreparation
 ) {
 }

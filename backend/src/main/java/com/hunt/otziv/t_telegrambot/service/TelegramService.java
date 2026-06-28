@@ -25,8 +25,10 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
@@ -53,6 +55,7 @@ public class TelegramService extends TelegramLongPollingBot {
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
+    private final TelegramChatMigrationService telegramChatMigrationService;
 
     public TelegramService(
             DefaultBotOptions botOptions,
@@ -77,6 +80,7 @@ public class TelegramService extends TelegramLongPollingBot {
                 telegramGroupLinkService,
                 publicationProgressPreferenceService,
                 workerRiskTelegramCallbackServiceProvider,
+                null,
                 null
         );
     }
@@ -93,7 +97,8 @@ public class TelegramService extends TelegramLongPollingBot {
             TelegramGroupLinkService telegramGroupLinkService,
             PublicationProgressPreferenceService publicationProgressPreferenceService,
             ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider,
-            ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider
+            ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider,
+            TelegramChatMigrationService telegramChatMigrationService
     ) {
         super(botOptions, botToken);
         this.botUsername = botUsername;
@@ -105,6 +110,7 @@ public class TelegramService extends TelegramLongPollingBot {
         this.publicationProgressPreferenceService = publicationProgressPreferenceService;
         this.workerRiskTelegramCallbackServiceProvider = workerRiskTelegramCallbackServiceProvider;
         this.managerControlWorkerTaskTelegramCallbackServiceProvider = managerControlWorkerTaskTelegramCallbackServiceProvider;
+        this.telegramChatMigrationService = telegramChatMigrationService;
     }
 
     @Override
@@ -121,6 +127,9 @@ public class TelegramService extends TelegramLongPollingBot {
         }
         if (update != null && update.hasCallbackQuery()) {
             handleCallbackQuery(update.getCallbackQuery());
+            return;
+        }
+        if (handleChatMigrationUpdate(update)) {
             return;
         }
         if (update == null || !update.hasMessage() || !update.getMessage().hasText()) {
@@ -304,6 +313,26 @@ public class TelegramService extends TelegramLongPollingBot {
         response.ifPresent(message -> sendMessage(chatId, message));
     }
 
+    private boolean handleChatMigrationUpdate(Update update) {
+        if (update == null || !update.hasMessage() || telegramChatMigrationService == null) {
+            return false;
+        }
+
+        Long migrateToChatId = update.getMessage().getMigrateToChatId();
+        if (migrateToChatId != null) {
+            telegramChatMigrationService.migrateChatId(update.getMessage().getChatId(), migrateToChatId);
+            return true;
+        }
+
+        Long migrateFromChatId = update.getMessage().getMigrateFromChatId();
+        if (migrateFromChatId != null) {
+            telegramChatMigrationService.migrateChatId(migrateFromChatId, update.getMessage().getChatId());
+            return true;
+        }
+
+        return false;
+    }
+
     private boolean isBotAddedToChat(ChatMemberUpdated memberUpdate) {
         if (memberUpdate == null) {
             return false;
@@ -432,6 +461,10 @@ public class TelegramService extends TelegramLongPollingBot {
                 }
                 return true;
             } catch (TelegramApiRequestException e) {
+                Optional<Long> migratedChatId = migrateToChatId(e);
+                if (migratedChatId.isPresent()) {
+                    return resendAfterChatMigration(chatId, migratedChatId.get(), text, parseMode, replyMarkup);
+                }
                 if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
                     log.warn("Telegram-бот заблокирован пользователем. ChatId: {}", chatId);
                 } else if (isNotFound(e)) {
@@ -459,6 +492,50 @@ public class TelegramService extends TelegramLongPollingBot {
             }
         }
         return false;
+    }
+
+    public Optional<TelegramChatMigrationResult> repairMigratedChatId(long oldChatId) {
+        if (telegramChatMigrationService == null) {
+            return Optional.empty();
+        }
+        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken())) {
+            return Optional.empty();
+        }
+
+        GetChat request = new GetChat(String.valueOf(oldChatId));
+        try {
+            executeGetChat(request);
+            return Optional.empty();
+        } catch (TelegramApiRequestException e) {
+            Optional<Long> newChatId = migrateToChatId(e);
+            return newChatId.map(value -> telegramChatMigrationService.migrateChatId(oldChatId, value));
+        } catch (TelegramApiException e) {
+            log.warn("Не удалось проверить миграцию Telegram-чата chatId={}: {}", oldChatId, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private boolean resendAfterChatMigration(
+            long oldChatId,
+            long newChatId,
+            String text,
+            String parseMode,
+            InlineKeyboardMarkup replyMarkup
+    ) {
+        if (telegramChatMigrationService != null) {
+            telegramChatMigrationService.migrateChatId(oldChatId, newChatId);
+        } else {
+            log.warn("Telegram chat migrated oldChatId={} newChatId={}, but migration service is unavailable", oldChatId, newChatId);
+        }
+        log.info("Повторяем Telegram-сообщение после миграции chatId={} -> {}", oldChatId, newChatId);
+        return sendSingleMessage(newChatId, text, parseMode, replyMarkup);
+    }
+
+    private Optional<Long> migrateToChatId(TelegramApiRequestException e) {
+        if (e == null || e.getParameters() == null || e.getParameters().getMigrateToChatId() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(e.getParameters().getMigrateToChatId());
     }
 
     private InlineKeyboardMarkup inlineKeyboard(String buttonText, String callbackData) {
@@ -492,6 +569,10 @@ public class TelegramService extends TelegramLongPollingBot {
 
     void executeTelegramMessage(SendMessage message) throws TelegramApiException {
         execute(message);
+    }
+
+    Chat executeGetChat(GetChat request) throws TelegramApiException {
+        return execute(request);
     }
 
     void executeAnswerCallback(AnswerCallbackQuery answer) throws TelegramApiException {

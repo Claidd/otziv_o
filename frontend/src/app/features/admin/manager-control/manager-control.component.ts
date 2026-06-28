@@ -29,6 +29,24 @@ import { LoadErrorCardComponent } from '../../../shared/load-error-card.componen
 import { ToastService } from '../../../shared/toast.service';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 
+const ORDER_LIST_STATUSES = new Set([
+  'Все',
+  'Новый',
+  'В проверку',
+  'На проверке',
+  'Коррекция',
+  'Публикация',
+  'Опубликовано',
+  'Ожидает общего счета',
+  'Выставлен счет',
+  'Напоминание',
+  'Требует внимания',
+  'Не оплачено',
+  'Бан',
+  'Оплачено',
+  'Архив'
+]);
+
 @Component({
   selector: 'app-manager-control',
   imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent],
@@ -564,6 +582,9 @@ export class ManagerControlComponent {
     if (example.type === 'COMMON_INVOICE') {
       return reason.includes('нажмите «починить»') || reason.includes('нажмите "починить"');
     }
+    if (example.type === 'TELEGRAM_CHAT') {
+      return true;
+    }
     const repairableWaitingClient = example.type === 'WORKER_ORDER_NEW'
       && this.isWaitingForClientExample(example)
       && (
@@ -694,21 +715,102 @@ export class ManagerControlComponent {
   }
 
   controlCardOrder(example: ManagerControlConcreteItem): string {
-    return this.controlCardOrderUrl(example) ? 'перейти' : '-';
+    return this.controlCardOrderUrl(example) ? 'Перейти' : '-';
   }
 
   controlCardOrderUrl(example: ManagerControlConcreteItem): string {
+    if (example.type === 'COMMON_INVOICE') {
+      return this.commonInvoiceOrdersUrl(example);
+    }
+    const orderId = this.controlCardOrderId(example);
+    if (orderId) {
+      return this.orderListUrlForControlCard(example, orderId);
+    }
     const url = this.detailExamplePrimaryUrl(example, null);
     return url === '#' ? '' : url;
   }
 
   controlCardReview(example: ManagerControlConcreteItem): string {
-    return this.controlCardReviewUrl(example) ? 'перейти' : '-';
+    return this.controlCardReviewUrl(example) ? 'Перейти' : '-';
   }
 
   controlCardReviewUrl(example: ManagerControlConcreteItem): string {
     const url = this.detailExamplePrimaryUrl(example, null);
     return url === '#' ? '' : url;
+  }
+
+  private controlCardOrderId(example: ManagerControlConcreteItem): number | null {
+    if (this.isOrderEntityType(example.type) && this.isPositiveNumber(example.entityId)) {
+      return example.entityId;
+    }
+
+    const url = (example.targetUrl ?? '').trim();
+    const pathMatch = url.match(/\/(?:manager\/)?orders\/\d+\/(\d+)(?:[/?#]|$)/);
+    if (pathMatch) {
+      return Number(pathMatch[1]);
+    }
+
+    const keyword = this.urlParam(url, 'keyword');
+    if (keyword && /^\d+$/.test(keyword)) {
+      return Number(keyword);
+    }
+
+    return null;
+  }
+
+  private orderListUrlForControlCard(example: ManagerControlConcreteItem, orderId: number): string {
+    const params = new URLSearchParams({
+      status: this.controlCardOrderStatus(example),
+      keyword: String(orderId),
+      pageNumber: '0',
+      pageSize: '10',
+      sortDirection: 'desc'
+    });
+    const managerId = this.urlParam(example.targetUrl, 'managerId');
+    const control = this.urlParam(example.targetUrl, 'control');
+    if (managerId && /^\d+$/.test(managerId)) {
+      params.set('managerId', managerId);
+    }
+    if (control) {
+      params.set('control', control);
+    }
+    return `/orders?${params.toString()}`;
+  }
+
+  private controlCardOrderStatus(example: ManagerControlConcreteItem): string {
+    const explicitStatus = this.normalizeOrderListStatus(example.status);
+    if (explicitStatus) {
+      return explicitStatus;
+    }
+    const targetStatus = this.normalizeOrderListStatus(this.urlParam(example.targetUrl, 'status'));
+    return targetStatus || 'Все';
+  }
+
+  private normalizeOrderListStatus(status: string | null | undefined): string {
+    const normalized = (status ?? '').trim();
+    return ORDER_LIST_STATUSES.has(normalized) ? normalized : '';
+  }
+
+  private isOrderEntityType(type: string | null | undefined): boolean {
+    return type === 'ORDER'
+      || type === 'WORKER_ORDER_NEW'
+      || type === 'WORKER_ORDER_CORRECT';
+  }
+
+  private isPositiveNumber(value: number | null | undefined): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  }
+
+  private urlParam(value: string | null | undefined, name: string): string {
+    const raw = (value ?? '').trim();
+    if (!raw) {
+      return '';
+    }
+    try {
+      return new URL(raw, 'http://localhost').searchParams.get(name)?.trim() ?? '';
+    } catch {
+      return '';
+    }
   }
 
   managerActionNote(example: ManagerControlConcreteItem): string {

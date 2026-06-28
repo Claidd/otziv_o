@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
@@ -119,49 +120,72 @@ public class WorkerRiskTelegramCallbackService {
         if (user == null || user.getId() == null || !user.isActive() || clean(messageText).isBlank()) {
             return false;
         }
-        return saveWorkerExplanation(chatId, user, messageText);
+        return findPendingWorkerExplanation(user)
+                .map(incident -> saveWorkerExplanation(chatId, user, user, incident, messageText))
+                .orElse(false);
     }
 
     @Transactional
     public boolean handleWorkerGroupTextMessage(long chatId, Long actorTelegramId, String messageText) {
-        if (chatId >= 0 || actorTelegramId == null || clean(messageText).isBlank()) {
+        if (chatId >= 0 || clean(messageText).isBlank()) {
             return false;
         }
 
-        User user = userService.findByChatId(actorTelegramId).orElse(null);
-        if (user == null || user.getId() == null || !user.isActive()) {
-            return false;
-        }
-        if (!Objects.equals(user.getWorkerTelegramGroupChatId(), chatId)) {
+        WorkerRiskIncident incident = findPendingGroupExplanation(chatId).orElse(null);
+        if (incident == null) {
             return false;
         }
 
-        return saveWorkerExplanation(chatId, user, messageText);
+        User worker = workerFor(incident).orElse(null);
+        if (worker == null || worker.getId() == null || !worker.isActive()
+                || !Objects.equals(worker.getWorkerTelegramGroupChatId(), chatId)) {
+            return false;
+        }
+
+        User actor = actorTelegramId == null
+                ? null
+                : userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
+        return saveWorkerExplanation(chatId, worker, actor, incident, messageText);
     }
 
-    private boolean saveWorkerExplanation(long chatId, User user, String messageText) {
-        Optional<WorkerRiskIncident> pending = incidentRepository
-                .findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
-                        user.getId(),
-                        WorkerRiskIncidentStatus.OPEN,
-                        WorkerRiskResolutionAction.EXPLANATION_REQUESTED
-                );
-        if (pending.isEmpty()) {
-            return false;
-        }
-
-        WorkerRiskIncident incident = pending.get();
+    private boolean saveWorkerExplanation(
+            long chatId,
+            User worker,
+            User actor,
+            WorkerRiskIncident incident,
+            String messageText
+    ) {
         incident.setWorkerExplanation(limit(clean(messageText), 2000));
         incident.setWorkerExplanationAt(LocalDateTime.now());
-        incident.setWorkerExplanationByUserId(user.getId());
+        incident.setWorkerExplanationByUserId(actor != null && actor.getId() != null ? actor.getId() : worker.getId());
         incidentRepository.save(incident);
+        personalReminderService.deleteSystemReminderBySource(worker, SOURCE_MANAGER_WARNING, incident.getId());
 
         telegramService.sendMessage(chatId,
                 "Пояснение сохранено и отправлено менеджеру."
                         + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                         + "\nОтзыв: #" + valueOrDash(incident.getReviewId()));
-        notifyReviewersAboutExplanation(user, incident);
+        notifyReviewersAboutExplanation(worker, incident);
         return true;
+    }
+
+    private Optional<WorkerRiskIncident> findPendingWorkerExplanation(User worker) {
+        return incidentRepository
+                .findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
+                        worker.getId(),
+                        WorkerRiskIncidentStatus.OPEN,
+                        WorkerRiskResolutionAction.EXPLANATION_REQUESTED
+                );
+    }
+
+    private Optional<WorkerRiskIncident> findPendingGroupExplanation(long chatId) {
+        return incidentRepository.findPendingExplanationByWorkerGroupChatId(
+                        chatId,
+                        WorkerRiskIncidentStatus.OPEN,
+                        WorkerRiskResolutionAction.EXPLANATION_REQUESTED,
+                        PageRequest.of(0, 1)
+                ).stream()
+                .findFirst();
     }
 
     private Optional<CallbackCommand> parse(String callbackData) {
@@ -179,34 +203,41 @@ public class WorkerRiskTelegramCallbackService {
 
     private Optional<String> handleExplanationPrompt(CallbackQuery callbackQuery) {
         Long actorTelegramId = callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId();
-        if (actorTelegramId == null) {
-            return Optional.of("Не удалось определить пользователя");
-        }
-
         Long incidentId = parseExplanationIncidentId(callbackQuery.getData());
         if (incidentId == null) {
             return Optional.of("Инцидент не найден");
-        }
-
-        User actor = userService.findByChatId(actorTelegramId).orElse(null);
-        if (actor == null || !actor.isActive()) {
-            return Optional.of("Telegram не привязан к пользователю");
         }
 
         WorkerRiskIncident incident = incidentRepository.findById(incidentId).orElse(null);
         if (incident == null) {
             return Optional.of("Инцидент не найден");
         }
-        if (!Objects.equals(actor.getId(), incident.getWorkerUserId())) {
-            return Optional.of("Эта кнопка предназначена специалисту");
-        }
         if (incident.getWorkerExplanationAt() != null) {
             return Optional.of("Пояснение уже отправлено");
         }
 
-        Long chatId = callbackQuery.getMessage() == null ? actor.getTelegramChatId() : callbackQuery.getMessage().getChatId();
-        if (chatId != null && chatId < 0 && !Objects.equals(actor.getWorkerTelegramGroupChatId(), chatId)) {
-            return Optional.of("Эта группа не привязана к специалисту");
+        Long chatId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId();
+        User worker = workerFor(incident).orElse(null);
+        if (worker == null || worker.getId() == null || !worker.isActive()) {
+            return Optional.of("Специалист не найден");
+        }
+
+        if (chatId != null && chatId < 0) {
+            if (!Objects.equals(worker.getWorkerTelegramGroupChatId(), chatId)) {
+                return Optional.of("Эта группа не привязана к специалисту");
+            }
+        } else {
+            if (actorTelegramId == null) {
+                return Optional.of("Не удалось определить пользователя");
+            }
+            User actor = userService.findByChatId(actorTelegramId).orElse(null);
+            if (actor == null || !actor.isActive()) {
+                return Optional.of("Telegram не привязан к пользователю");
+            }
+            if (!Objects.equals(actor.getId(), incident.getWorkerUserId())) {
+                return Optional.of("Эта кнопка предназначена специалисту");
+            }
+            chatId = chatId == null ? actor.getTelegramChatId() : chatId;
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -225,6 +256,14 @@ public class WorkerRiskTelegramCallbackService {
                             + "\nПричина: " + clean(incident.getTitle()));
         }
         return Optional.of("Напишите пояснение следующим сообщением");
+    }
+
+    private Optional<User> workerFor(WorkerRiskIncident incident) {
+        if (incident == null) {
+            return Optional.empty();
+        }
+        return userService.findByUserName(incident.getWorkerUsername())
+                .filter(user -> Objects.equals(user.getId(), incident.getWorkerUserId()));
     }
 
     private Long parseExplanationIncidentId(String callbackData) {
@@ -305,6 +344,8 @@ public class WorkerRiskTelegramCallbackService {
                 WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
                 incident.getId()
         );
+        personalReminderService.deleteSystemRemindersBySource(SOURCE_MANAGER_WARNING, incident.getId());
+        personalReminderService.deleteSystemRemindersBySource(SOURCE_WORKER_EXPLANATION, incident.getId());
     }
 
     private void requestWorkerExplanation(WorkerRiskIncident incident) {

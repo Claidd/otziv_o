@@ -16,7 +16,8 @@ import {
   OrderReviewItem,
   ReviewRecoveryBatchItem,
   ReviewRecoveryTaskItem,
-  ReviewUpdateRequest
+  ReviewUpdateRequest,
+  WorkerCredentialPreparation
 } from '../../core/manager.api';
 import { PaymentsApi } from '../../core/payments.api';
 import type { ManagerPaymentLinkResponse, TbankPaymentStatus } from '../../core/payments.api';
@@ -112,6 +113,7 @@ export class OrderDetailsComponent {
   private readonly toastService = inject(ToastService);
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly publishCredentialWaitMs = 150_000;
+  private readonly publishCredentialWaitSafetyBufferMs = 2_000;
   private readonly reviewPublishCredentialStorageKey = 'otziv-order-details-worker-all-publish-prep:v1';
   private readonly reviewPublishCredentialMaxAgeMs = 60 * 60 * 1000;
   private readonly reviewFieldDraftToastIds = new Map<string, number>();
@@ -320,6 +322,7 @@ export class OrderDetailsComponent {
         }
         this.loading.set(false);
         this.loadCompanyReportState(false);
+        this.applyServerReviewPublishCredentialPreparation(details.credentialPreparation);
         this.refreshReviewPublishWaitTimer();
       },
       error: (err) => {
@@ -2611,7 +2614,9 @@ export class OrderDetailsComponent {
       return 0;
     }
 
-    const readyAt = Math.max(copied.botLoginAt, copied.botPasswordAt) + this.publishCredentialWaitMs;
+    const readyAt = Math.max(copied.botLoginAt, copied.botPasswordAt)
+      + this.publishCredentialWaitMs
+      + this.publishCredentialWaitSafetyBufferMs;
     return Math.max(0, Math.ceil((readyAt - this.reviewPublishWaitNow()) / 1000));
   }
 
@@ -2665,6 +2670,43 @@ export class OrderDetailsComponent {
       }
     });
     this.refreshReviewPublishWaitTimer();
+  }
+
+  private applyServerReviewPublishCredentialPreparation(preparation?: WorkerCredentialPreparation | null): void {
+    if (!this.openedFromWorkerAll() || !preparation) {
+      this.clearReviewPublishCredentialPreparation();
+      return;
+    }
+
+    if ((preparation.scope ?? '').toUpperCase() !== 'PUBLISH') {
+      this.clearReviewPublishCredentialPreparation();
+      return;
+    }
+
+    const reviewId = Number(preparation.reviewId);
+    const botId = preparation.botId === null || preparation.botId === undefined ? null : Number(preparation.botId);
+    if (!Number.isFinite(reviewId) || reviewId <= 0 || (botId !== null && !Number.isFinite(botId))) {
+      this.clearReviewPublishCredentialPreparation();
+      return;
+    }
+
+    this.copiedReviewCredentials.set({
+      [reviewId]: {
+        botId,
+        botLoginAt: this.serverTimestamp(preparation.loginCopiedAt),
+        botPasswordAt: this.serverTimestamp(preparation.passwordCopiedAt)
+      }
+    });
+
+    const review = this.reviews().find((item) => item.id === reviewId);
+    if (review) {
+      this.storeReviewPublishCredentialPreparation(review);
+    }
+  }
+
+  private serverTimestamp(value?: string | null): number | undefined {
+    const timestamp = value ? Date.parse(value) : NaN;
+    return Number.isFinite(timestamp) ? timestamp : undefined;
   }
 
   private storeReviewPublishCredentialPreparation(review: OrderReviewItem): void {

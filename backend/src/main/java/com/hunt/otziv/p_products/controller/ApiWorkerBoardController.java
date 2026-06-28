@@ -36,6 +36,9 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
+import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
+import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -100,6 +103,8 @@ public class ApiWorkerBoardController {
             "Публикация"
     );
     private static final Set<String> REVIEW_CREDENTIAL_COPY_FIELDS = Set.of("login", "password");
+    private static final int REVIEW_PUBLISH_CREDENTIAL_WAIT_SECONDS = 150;
+    private static final int REVIEW_NAGUL_CREDENTIAL_WAIT_SECONDS = 180;
     private static final String REVIEW_DTO_ERROR_COMPANY_TITLE = "ОШИБКА ПРИ ОБРАБОТКЕ";
     private static final String REVIEW_DTO_MISSING_ORDER_TITLE = "НЕТ ЗАКАЗА";
     private static final List<String> CURRENT_WORK_SECTIONS = List.of(
@@ -130,6 +135,7 @@ public class ApiWorkerBoardController {
     private final AppSettingService appSettingService;
     private final WorkerPublicationGateService workerPublicationGateService;
     private final WorkerActivityService workerActivityService;
+    private final WorkerCredentialPreparationService credentialPreparationService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -189,7 +195,8 @@ public class ApiWorkerBoardController {
                     workerId(selectedWorker),
                     workerSelection.available(),
                     message,
-                    warning
+                    warning,
+                    activeCredentialPreparation(authentication, normalizedSection)
             );
         });
     }
@@ -400,7 +407,8 @@ public class ApiWorkerBoardController {
     public void logReviewCredentialCopyClick(
             @PathVariable Long reviewId,
             @RequestBody ReviewCopyClickRequest request,
-            Principal principal
+            Principal principal,
+            Authentication authentication
     ) {
         String field = normalizeReviewCopyField(request);
         Review review = reviewService.getReviewById(reviewId);
@@ -430,6 +438,14 @@ public class ApiWorkerBoardController {
                 "copy",
                 withSource(credentialCopyDetails(field, bot), request)
         );
+        credentialPreparationService.recordCopy(
+                authentication,
+                review,
+                field,
+                request == null ? null : request.sourcePage(),
+                request == null ? null : request.sourceEntry(),
+                request == null ? null : request.sourceSection()
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/publish")
@@ -447,6 +463,15 @@ public class ApiWorkerBoardController {
 
         try {
             Review review = reviewService.getReviewById(reviewId);
+            credentialPreparationService.blockUntilReady(
+                    authentication,
+                    WorkerCredentialPreparationScope.PUBLISH,
+                    reviewId,
+                    botId(review),
+                    REVIEW_PUBLISH_CREDENTIAL_WAIT_SECONDS
+            ).ifPresent(block -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, block.message());
+            });
             if (!orderService.changeStatusAndOrderCounter(reviewId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не отмечен опубликованным");
             }
@@ -460,6 +485,7 @@ public class ApiWorkerBoardController {
                     SECTION_PUBLISH,
                     botDetails(review == null ? null : review.getBot())
             );
+            credentialPreparationService.clear(authentication, WorkerCredentialPreparationScope.PUBLISH);
         } catch (ResponseStatusException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -677,10 +703,20 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public WorkerActionResponse nagulReview(
             @PathVariable Long reviewId,
-            Principal principal
+            Principal principal,
+            Authentication authentication
     ) {
         try {
             Review review = reviewService.getReviewById(reviewId);
+            credentialPreparationService.blockUntilReady(
+                    authentication,
+                    WorkerCredentialPreparationScope.NAGUL,
+                    reviewId,
+                    botId(review),
+                    REVIEW_NAGUL_CREDENTIAL_WAIT_SECONDS
+            ).ifPresent(block -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, block.message());
+            });
             reviewService.performNagulWithExceptions(reviewId, principal.getName());
             workerActivityService.recordCurrentAuthenticationSafely(
                     WorkerActivityAction.REVIEW_NAGUL,
@@ -691,9 +727,12 @@ public class ApiWorkerBoardController {
                     SECTION_NAGUL,
                     botDetails(review == null ? null : review.getBot())
             );
+            credentialPreparationService.clear(authentication, WorkerCredentialPreparationScope.NAGUL);
             return new WorkerActionResponse(true, "Отзыв успешно выгулен");
         } catch (NagulTooFastException | BotTemplateNameException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage(), exception);
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Произошла ошибка при выполнении выгула", exception);
         }
@@ -1223,6 +1262,16 @@ public class ApiWorkerBoardController {
                 admin || owner || manager || worker,
                 admin || owner || manager || worker
         );
+    }
+
+    private WorkerCredentialPreparationResponse activeCredentialPreparation(Authentication authentication, String section) {
+        if (SECTION_PUBLISH.equals(section)) {
+            return credentialPreparationService.active(authentication, WorkerCredentialPreparationScope.PUBLISH);
+        }
+        if (SECTION_NAGUL.equals(section)) {
+            return credentialPreparationService.active(authentication, WorkerCredentialPreparationScope.NAGUL);
+        }
+        return null;
     }
 
     private BotResponse toBotResponse(BotDTO bot) {
@@ -2126,7 +2175,8 @@ public class ApiWorkerBoardController {
             Long selectedWorkerId,
             boolean workerFilterAvailable,
             String message,
-            boolean warning
+            boolean warning,
+            WorkerCredentialPreparationResponse credentialPreparation
     ) {
     }
 

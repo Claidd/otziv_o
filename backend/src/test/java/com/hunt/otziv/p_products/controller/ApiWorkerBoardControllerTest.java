@@ -32,6 +32,8 @@ import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
+import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -124,6 +127,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private WorkerActivityService workerActivityService;
 
+    @Mock
+    private WorkerCredentialPreparationService credentialPreparationService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -169,11 +175,14 @@ class ApiWorkerBoardControllerTest {
                         workerFlowLockService,
                         appSettingService
                 ),
-                workerActivityService
+                workerActivityService,
+                credentialPreparationService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
         lenient().when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
+        lenient().when(credentialPreparationService.blockUntilReady(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Optional.empty());
         lenient().when(orderService.countActionableOrdersByStatusToWorker(worker)).thenReturn(Map.of());
         lenient().when(orderService.countActionableOrdersByStatusToWorkerChangedOnOrBefore(
                 eq(worker),
@@ -594,6 +603,32 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void workerPublishActionIsRejectedWhenCredentialPreparationIsNotReady() throws Exception {
+        Review review = new Review();
+        review.setId(15L);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+        when(credentialPreparationService.blockUntilReady(
+                eq(workerAuth),
+                eq(WorkerCredentialPreparationScope.PUBLISH),
+                eq(15L),
+                eq(null),
+                eq(150)
+        )).thenReturn(Optional.of(new WorkerCredentialPreparationService.CredentialPreparationBlock(
+                "После копирования логина и пароля подождите еще 1 сек.",
+                1
+        )));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.publishReview(15L, principal, workerAuth)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals("После копирования логина и пароля подождите еще 1 сек.", exception.getReason());
+        verify(orderService, never()).changeStatusAndOrderCounter(15L);
+    }
+
+    @Test
     void workerPublishActionAllowsTasksOverdueExactlyTwoDays() throws Exception {
         when(appSettingService.getBoolean(AppSettingService.WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED, false))
                 .thenReturn(true);
@@ -612,6 +647,32 @@ class ApiWorkerBoardControllerTest {
         controller.publishReview(15L, principal, workerAuth);
 
         verify(orderService).changeStatusAndOrderCounter(15L);
+    }
+
+    @Test
+    void workerNagulActionIsRejectedWhenCredentialPreparationIsNotReady() {
+        Review review = new Review();
+        review.setId(15L);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+        when(credentialPreparationService.blockUntilReady(
+                eq(workerAuth),
+                eq(WorkerCredentialPreparationScope.NAGUL),
+                eq(15L),
+                eq(null),
+                eq(180)
+        )).thenReturn(Optional.of(new WorkerCredentialPreparationService.CredentialPreparationBlock(
+                "После копирования логина и пароля подождите еще 2 сек.",
+                2
+        )));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.nagulReview(15L, principal, workerAuth)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals("После копирования логина и пароля подождите еще 2 сек.", exception.getReason());
+        verify(reviewService, never()).performNagulWithExceptions(15L, "worker");
     }
 
     @Test
@@ -831,7 +892,8 @@ class ApiWorkerBoardControllerTest {
         controller.logReviewCredentialCopyClick(
                 15L,
                 new ApiWorkerBoardController.ReviewCopyClickRequest("login"),
-                principal
+                principal,
+                workerAuth
         );
 
         verify(reviewService).getReviewById(15L);
@@ -844,7 +906,8 @@ class ApiWorkerBoardControllerTest {
                 () -> controller.logReviewCredentialCopyClick(
                         15L,
                         new ApiWorkerBoardController.ReviewCopyClickRequest("text"),
-                        principal
+                        principal,
+                        workerAuth
                 )
         );
 

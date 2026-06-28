@@ -40,6 +40,8 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
+import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -87,6 +89,7 @@ public class ApiManagerReviewController {
     private final ManagerPermissionService managerPermissionService;
     private final ManagerAccessService managerAccessService;
     private final WorkerActivityService workerActivityService;
+    private final WorkerCredentialPreparationService credentialPreparationService;
     private final Map<Long, Boolean> reviewHelpDraftLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/orders/{orderId}/details")
@@ -476,6 +479,7 @@ public class ApiManagerReviewController {
                         source
                 )
         );
+        credentialPreparationService.clear(authentication, WorkerCredentialPreparationScope.PUBLISH);
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
     }

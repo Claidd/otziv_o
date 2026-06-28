@@ -48,6 +48,7 @@ public class ApiWorkerRiskController {
     private static final int MAX_PAGE_SIZE = 100;
     private static final String SOURCE_MANAGER_WARNING = "WORKER_RISK_MANAGER_WARNING";
     private static final String SOURCE_MANAGER_VIOLATION = "WORKER_RISK_MANAGER_VIOLATION";
+    private static final String SOURCE_WORKER_EXPLANATION = "WORKER_RISK_WORKER_EXPLANATION";
     private static final String WORKER_RISK_PENALTY_EVENT = "WORKER_RISK_PENALTY";
     private static final int DEFAULT_PENALTY_POINTS = 1;
 
@@ -188,6 +189,8 @@ public class ApiWorkerRiskController {
                 WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
                 incident.getId()
         );
+        personalReminderService.deleteSystemRemindersBySource(SOURCE_MANAGER_WARNING, incident.getId());
+        personalReminderService.deleteSystemRemindersBySource(SOURCE_WORKER_EXPLANATION, incident.getId());
     }
 
     private WorkerRiskResolutionAction parseResolutionAction(String action) {

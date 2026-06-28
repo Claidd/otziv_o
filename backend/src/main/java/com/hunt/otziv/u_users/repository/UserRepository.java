@@ -3,6 +3,7 @@ package com.hunt.otziv.u_users.repository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -116,6 +117,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
         WHERE u.telegramChatId = :telegramId
     """)
     Optional<User> findByTelegramChatId(@Param("telegramId") long telegramId);
+
+    List<User> findAllByWorkerTelegramGroupChatIdOrderById(Long workerTelegramGroupChatId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE User u
+        SET u.workerTelegramGroupChatId = :newChatId
+        WHERE u.workerTelegramGroupChatId = :oldChatId
+    """)
+    int updateWorkerTelegramGroupChatId(@Param("oldChatId") Long oldChatId, @Param("newChatId") Long newChatId);
 
     List<User> findTop3ByWorkerTelegramGroupChatIdIsNullAndWorkerChatUrlContainingIgnoreCase(String value);
 

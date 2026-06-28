@@ -21,6 +21,7 @@ import {
   ReviewRecoveryTaskItem,
   TbankPaymentStatus,
   WorkerActivitySource,
+  WorkerCredentialPreparation,
   ReviewUpdateRequest
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
@@ -2030,6 +2031,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   private readonly reviewPublishCredentialStorageKey = 'otziv-mobile-order-details-worker-all-publish-prep:v1';
   private readonly reviewPublishCredentialMaxAgeMs = 60 * 60 * 1000;
   private readonly publishCredentialWaitMs = 150_000;
+  private readonly publishCredentialWaitSafetyBufferMs = 2_000;
   private reviewDrag: {
     pointerId: number;
     startX: number;
@@ -2199,6 +2201,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.reviewNoteDrafts.set({});
         this.reviewSideNoteDrafts.set({});
         this.badReviewTaskDrafts.set({});
+        this.applyServerReviewPublishCredentialPreparation(details.credentialPreparation);
         this.refreshReviewPublishWaitTimer();
         this.recoveryTaskDrafts.set({});
         this.editingFieldKey.set(null);
@@ -3147,7 +3150,9 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return 0;
     }
 
-    const readyAt = Math.max(copied.botLoginAt, copied.botPasswordAt) + this.publishCredentialWaitMs;
+    const readyAt = Math.max(copied.botLoginAt, copied.botPasswordAt)
+      + this.publishCredentialWaitMs
+      + this.publishCredentialWaitSafetyBufferMs;
     return Math.max(0, Math.ceil((readyAt - this.reviewPublishWaitNow()) / 1000));
   }
 
@@ -4488,6 +4493,43 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       }
     });
     this.refreshReviewPublishWaitTimer();
+  }
+
+  private applyServerReviewPublishCredentialPreparation(preparation?: WorkerCredentialPreparation | null): void {
+    if (!this.openedFromWorkerAll() || !preparation) {
+      this.clearReviewPublishCredentialPreparation();
+      return;
+    }
+
+    if ((preparation.scope ?? '').toUpperCase() !== 'PUBLISH') {
+      this.clearReviewPublishCredentialPreparation();
+      return;
+    }
+
+    const reviewId = Number(preparation.reviewId);
+    const botId = preparation.botId === null || preparation.botId === undefined ? null : Number(preparation.botId);
+    if (!Number.isFinite(reviewId) || reviewId <= 0 || (botId !== null && !Number.isFinite(botId))) {
+      this.clearReviewPublishCredentialPreparation();
+      return;
+    }
+
+    this.copiedReviewCredentials.set({
+      [reviewId]: {
+        botId,
+        botLoginAt: this.serverTimestamp(preparation.loginCopiedAt),
+        botPasswordAt: this.serverTimestamp(preparation.passwordCopiedAt)
+      }
+    });
+
+    const review = this.details()?.reviews?.find((item) => item.id === reviewId);
+    if (review) {
+      this.storeReviewPublishCredentialPreparation(review);
+    }
+  }
+
+  private serverTimestamp(value?: string | null): number | undefined {
+    const timestamp = value ? Date.parse(value) : NaN;
+    return Number.isFinite(timestamp) ? timestamp : undefined;
   }
 
   private storeReviewPublishCredentialPreparation(review: OrderReviewItem): void {

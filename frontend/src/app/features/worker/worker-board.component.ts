@@ -18,6 +18,7 @@ import {
   WorkerMetric,
   WorkerOption,
   WorkerPage,
+  WorkerCredentialPreparation,
   WorkerReviewItem,
   WorkerSection
 } from '../../core/worker.api';
@@ -81,6 +82,7 @@ type StoredPublishCredentialPreparation = {
   passwordAt?: number;
   updatedAt: number;
 };
+type CredentialWaitSection = 'publish' | 'nagul';
 
 @Component({
   selector: 'app-worker-board',
@@ -108,10 +110,17 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
-  private readonly publishCredentialPreparationStorageKey = 'otziv-worker-publish-prep:v1';
+  private readonly publishCredentialPreparationStorageKeys: Record<CredentialWaitSection, string> = {
+    publish: 'otziv-worker-publish-prep:v1',
+    nagul: 'otziv-worker-nagul-prep:v1'
+  };
   private readonly publishCredentialPreparationMaxAgeMs = 60 * 60 * 1000;
+  private readonly credentialWaitSafetyBufferMs = 2_000;
   private readonly searchDelayMs = 500;
-  private readonly publishCredentialWaitMs = 150_000;
+  private readonly credentialWaitMs: Record<CredentialWaitSection, number> = {
+    publish: 150_000,
+    nagul: 180_000
+  };
 
   readonly sections = WORKER_SECTIONS;
   readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
@@ -206,7 +215,8 @@ export class WorkerBoardComponent implements OnDestroy {
     patchBoard: (updater) => this.patchBoard(updater),
     errorMessage: (err, fallback) => this.errorMessage(err, fallback),
     reviewActionSource: () => this.workerActivitySource(),
-    onReviewPublished: (reviewId) => this.clearStoredPublishCredentialPreparation(reviewId)
+    onReviewPublished: (reviewId) => this.clearStoredPublishCredentialPreparation(reviewId),
+    onReviewNagul: (reviewId) => this.clearStoredPublishCredentialPreparation(reviewId)
   });
   readonly editOrder = this.editFacade.editOrder;
   readonly orderDraft = this.editFacade.orderDraft;
@@ -281,6 +291,7 @@ export class WorkerBoardComponent implements OnDestroy {
           this.pageNumber.set(board.reviews.number || board.orders.number || 0);
         }
         this.storeActiveSection(this.activeSection());
+        this.applyServerCredentialPreparation(board.credentialPreparation);
         this.refreshPublishCredentialWaitTimer();
 
         if (board.message) {
@@ -437,7 +448,7 @@ export class WorkerBoardComponent implements OnDestroy {
 
   markReviewDone(review: WorkerReviewItem): void {
     if (this.publishLockedByCredentialWait(review)) {
-      this.toastService.info('Публикация подождет', this.publishCredentialWaitTitle(review));
+      this.toastService.info(this.activeWorkerSection() === 'nagul' ? 'Выгул подождет' : 'Публикация подождет', this.publishCredentialWaitTitle(review));
       return;
     }
 
@@ -683,7 +694,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {
-    if (!this.shouldUsePublishCredentialWait() || review.publish) {
+    if (!this.shouldUsePublishCredentialWait() || this.isPublishedCredentialWaitDone(review)) {
       return 0;
     }
 
@@ -697,12 +708,14 @@ export class WorkerBoardComponent implements OnDestroy {
       return 0;
     }
 
-    const readyAt = Math.max(preparation.loginAt, preparation.passwordAt) + this.publishCredentialWaitMs;
+    const readyAt = Math.max(preparation.loginAt, preparation.passwordAt)
+      + this.activeCredentialWaitMs()
+      + this.credentialWaitSafetyBufferMs;
     return Math.max(0, Math.ceil((readyAt - this.publishCredentialWaitNow()) / 1000));
   }
 
   publishLockedByCredentialWait(review: WorkerReviewItem): boolean {
-    if (!this.shouldUsePublishCredentialWait() || review.publish) {
+    if (!this.shouldUsePublishCredentialWait() || this.isPublishedCredentialWaitDone(review)) {
       return false;
     }
 
@@ -749,7 +762,30 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   private shouldUsePublishCredentialWait(): boolean {
-    return this.isOnlyWorkerRole() && this.activeWorkerSection() === 'publish';
+    return this.activeCredentialWaitSection() !== null;
+  }
+
+  private activeCredentialWaitSection(): CredentialWaitSection | null {
+    if (!this.isOnlyWorkerRole()) {
+      return null;
+    }
+
+    const section = this.activeWorkerSection();
+    return section === 'publish' || section === 'nagul' ? section : null;
+  }
+
+  private activeCredentialWaitMs(): number {
+    const section = this.activeCredentialWaitSection();
+    return section ? this.credentialWaitMs[section] : 0;
+  }
+
+  private isPublishedCredentialWaitDone(review: WorkerReviewItem): boolean {
+    return this.activeCredentialWaitSection() === 'publish' && Boolean(review.publish);
+  }
+
+  private currentCredentialPreparationStorageKey(): string | null {
+    const section = this.activeCredentialWaitSection();
+    return section ? this.publishCredentialPreparationStorageKeys[section] : null;
   }
 
   private refreshPublishCredentialWaitTimer(): void {
@@ -791,6 +827,10 @@ export class WorkerBoardComponent implements OnDestroy {
   private restoreStoredPublishCredentialPreparation(): void {
     const stored = this.readStoredPublishCredentialPreparation();
     if (!stored) {
+      this.publishCredentialPreparation.set({
+        reviewId: null,
+        invalidated: {}
+      });
       return;
     }
 
@@ -804,14 +844,54 @@ export class WorkerBoardComponent implements OnDestroy {
     this.refreshPublishCredentialWaitTimer();
   }
 
-  private storePublishCredentialPreparation(): void {
-    const preparation = this.publishCredentialPreparation();
-    if (preparation.reviewId === null) {
-      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+  private applyServerCredentialPreparation(preparation?: WorkerCredentialPreparation | null): void {
+    if (!this.shouldUsePublishCredentialWait() || !preparation) {
+      this.clearStoredPublishCredentialPreparation();
       return;
     }
 
-    this.setSessionStorageItem(this.publishCredentialPreparationStorageKey, JSON.stringify({
+    const section = this.activeCredentialWaitSection();
+    const expectedScope = section === 'nagul' ? 'NAGUL' : 'PUBLISH';
+    if ((preparation.scope ?? '').toUpperCase() !== expectedScope) {
+      this.clearStoredPublishCredentialPreparation();
+      return;
+    }
+
+    const reviewId = Number(preparation.reviewId);
+    const botId = preparation.botId === null || preparation.botId === undefined ? null : Number(preparation.botId);
+    if (!Number.isFinite(reviewId) || reviewId <= 0 || (botId !== null && !Number.isFinite(botId))) {
+      this.clearStoredPublishCredentialPreparation();
+      return;
+    }
+
+    this.publishCredentialPreparation.set({
+      reviewId,
+      botId,
+      loginAt: this.serverTimestamp(preparation.loginCopiedAt),
+      passwordAt: this.serverTimestamp(preparation.passwordCopiedAt),
+      invalidated: {}
+    });
+    this.storePublishCredentialPreparation();
+  }
+
+  private serverTimestamp(value?: string | null): number | undefined {
+    const timestamp = value ? Date.parse(value) : NaN;
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+
+  private storePublishCredentialPreparation(): void {
+    const storageKey = this.currentCredentialPreparationStorageKey();
+    if (!storageKey) {
+      return;
+    }
+
+    const preparation = this.publishCredentialPreparation();
+    if (preparation.reviewId === null) {
+      this.removeSessionStorageItem(storageKey);
+      return;
+    }
+
+    this.setSessionStorageItem(storageKey, JSON.stringify({
       reviewId: preparation.reviewId,
       botId: preparation.botId ?? null,
       loginAt: preparation.loginAt,
@@ -821,6 +901,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   private clearStoredPublishCredentialPreparation(reviewId?: number): void {
+    const storageKey = this.currentCredentialPreparationStorageKey();
     const current = this.publishCredentialPreparation();
     if (reviewId === undefined || current.reviewId === reviewId) {
       this.publishCredentialPreparation.set({ reviewId: null, invalidated: {} });
@@ -829,12 +910,19 @@ export class WorkerBoardComponent implements OnDestroy {
 
     const stored = this.readStoredPublishCredentialPreparation(false);
     if (reviewId === undefined || stored?.reviewId === reviewId) {
-      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+      if (storageKey) {
+        this.removeSessionStorageItem(storageKey);
+      }
     }
   }
 
   private readStoredPublishCredentialPreparation(clearExpired = true): StoredPublishCredentialPreparation | null {
-    const raw = this.getSessionStorageItem(this.publishCredentialPreparationStorageKey);
+    const storageKey = this.currentCredentialPreparationStorageKey();
+    if (!storageKey) {
+      return null;
+    }
+
+    const raw = this.getSessionStorageItem(storageKey);
     if (!raw) {
       return null;
     }
@@ -852,12 +940,12 @@ export class WorkerBoardComponent implements OnDestroy {
         (loginAt !== undefined && !Number.isFinite(loginAt)) ||
         (passwordAt !== undefined && !Number.isFinite(passwordAt))
       ) {
-        this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+        this.removeSessionStorageItem(storageKey);
         return null;
       }
 
       if (clearExpired && Date.now() - updatedAt > this.publishCredentialPreparationMaxAgeMs) {
-        this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+        this.removeSessionStorageItem(storageKey);
         return null;
       }
 
@@ -870,7 +958,7 @@ export class WorkerBoardComponent implements OnDestroy {
         updatedAt
       };
     } catch {
-      this.removeSessionStorageItem(this.publishCredentialPreparationStorageKey);
+      this.removeSessionStorageItem(storageKey);
       return null;
     }
   }

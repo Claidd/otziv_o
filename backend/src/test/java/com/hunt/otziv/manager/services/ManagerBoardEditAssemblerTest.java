@@ -34,6 +34,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -95,6 +96,9 @@ class ManagerBoardEditAssemblerTest {
 
     @Mock
     private ReviewRecoveryTaskService reviewRecoveryTaskService;
+
+    @Mock
+    private WorkerCredentialPreparationService credentialPreparationService;
 
     @Spy
     private ManagerPermissionService managerPermissionService = new ManagerPermissionService();

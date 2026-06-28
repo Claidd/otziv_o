@@ -8,9 +8,12 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparation;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
+import com.hunt.otziv.worker_activity.repository.WorkerCredentialPreparationRepository;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,6 +37,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,6 +49,9 @@ class WorkerRiskEvaluationServiceTest {
 
     @Mock
     private WorkerRiskIncidentRepository incidentRepository;
+
+    @Mock
+    private WorkerCredentialPreparationRepository credentialPreparationRepository;
 
     @Mock
     private PersonalReminderService personalReminderService;
@@ -204,31 +211,33 @@ class WorkerRiskEvaluationServiceTest {
         WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_PUBLISH);
         event.setDetails("botId=10;");
         User worker = user(1L, "worker", "Иван Работник", 101L);
+        when(credentialPreparationRepository.findByWorkerUserIdAndScope(1L, WorkerCredentialPreparationScope.PUBLISH))
+                .thenReturn(Optional.of(preparation(
+                        WorkerCredentialPreparationScope.PUBLISH,
+                        501L,
+                        10L,
+                        event.getCreatedAt().minusMinutes(10)
+                )));
 
-        when(eventRepository.existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtBetweenAndDetailsContaining(
-                eq(1L),
-                eq(WorkerActivityAction.REVIEW_COPY_LOGIN),
-                eq(501L),
-                any(LocalDateTime.class),
-                any(LocalDateTime.class),
-                eq("botId=10;")
-        )).thenReturn(true);
-        when(eventRepository.existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtBetweenAndDetailsContaining(
-                eq(1L),
-                eq(WorkerActivityAction.REVIEW_COPY_PASSWORD),
-                eq(501L),
-                any(LocalDateTime.class),
-                any(LocalDateTime.class),
-                eq("botId=10;")
-        )).thenReturn(true);
-        when(eventRepository.findTopByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetweenAndDetailsContainingOrderByCreatedAtDesc(
-                eq(1L),
-                any(),
-                eq(501L),
-                any(LocalDateTime.class),
-                any(LocalDateTime.class),
-                eq("botId=10;")
-        )).thenReturn(Optional.empty());
+        service.evaluateSafely(event, worker);
+
+        verify(incidentRepository, never()).save(any(WorkerRiskIncident.class));
+    }
+
+    @Test
+    void publishAllowsOldCredentialCopyWhenPreparationIsStillActive() {
+        WorkerRiskEvaluationService service = service();
+        WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_PUBLISH);
+        event.setCreatedAt(LocalDateTime.of(2026, 6, 22, 12, 0));
+        event.setDetails("botId=10;");
+        User worker = user(1L, "worker", "Иван Работник", 101L);
+        when(credentialPreparationRepository.findByWorkerUserIdAndScope(1L, WorkerCredentialPreparationScope.PUBLISH))
+                .thenReturn(Optional.of(preparation(
+                        WorkerCredentialPreparationScope.PUBLISH,
+                        501L,
+                        10L,
+                        event.getCreatedAt().minusMinutes(64)
+                )));
 
         service.evaluateSafely(event, worker);
 
@@ -242,22 +251,13 @@ class WorkerRiskEvaluationServiceTest {
         event.setCreatedAt(LocalDateTime.of(2026, 6, 22, 12, 0));
         User worker = user(1L, "worker", "Иван Работник", 101L);
 
-        when(eventRepository.existsByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetween(
-                eq(1L),
-                any(),
-                eq(501L),
-                any(LocalDateTime.class),
-                eq(event.getCreatedAt())
-        )).thenReturn(true);
-        WorkerActivityEvent copyEvent = event(WorkerActivityAction.REVIEW_COPY_PASSWORD);
-        copyEvent.setCreatedAt(event.getCreatedAt().minusSeconds(3));
-        when(eventRepository.findTopByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(1L),
-                any(),
-                eq(501L),
-                any(LocalDateTime.class),
-                eq(event.getCreatedAt())
-        )).thenReturn(Optional.of(copyEvent));
+        when(credentialPreparationRepository.findByWorkerUserIdAndScope(1L, WorkerCredentialPreparationScope.PUBLISH))
+                .thenReturn(Optional.of(preparation(
+                        WorkerCredentialPreparationScope.PUBLISH,
+                        501L,
+                        null,
+                        event.getCreatedAt().minusSeconds(3)
+                )));
         when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
                 eq(1L),
                 eq("PUBLISH_TOO_FAST_AFTER_CREDENTIAL_COPY"),
@@ -283,22 +283,13 @@ class WorkerRiskEvaluationServiceTest {
         event.setCreatedAt(LocalDateTime.of(2026, 6, 22, 12, 0));
         User worker = user(1L, "worker", "Иван Работник", 101L);
 
-        when(eventRepository.existsByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetween(
-                eq(1L),
-                any(),
-                eq(501L),
-                any(LocalDateTime.class),
-                eq(event.getCreatedAt())
-        )).thenReturn(true);
-        WorkerActivityEvent copyEvent = event(WorkerActivityAction.REVIEW_COPY_PASSWORD);
-        copyEvent.setCreatedAt(event.getCreatedAt().minusSeconds(10));
-        when(eventRepository.findTopByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetweenOrderByCreatedAtDesc(
-                eq(1L),
-                any(),
-                eq(501L),
-                any(LocalDateTime.class),
-                eq(event.getCreatedAt())
-        )).thenReturn(Optional.of(copyEvent));
+        when(credentialPreparationRepository.findByWorkerUserIdAndScope(1L, WorkerCredentialPreparationScope.NAGUL))
+                .thenReturn(Optional.of(preparation(
+                        WorkerCredentialPreparationScope.NAGUL,
+                        501L,
+                        null,
+                        event.getCreatedAt().minusSeconds(10)
+                )));
         when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
                 eq(1L),
                 eq("NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY"),
@@ -314,7 +305,7 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(true, captor.getValue().getDetails().contains("10 сек"));
-        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 150 сек"));
+        assertEquals(true, captor.getValue().getDetails().contains("Минимум: 180 сек"));
     }
 
     @Test
@@ -510,9 +501,12 @@ class WorkerRiskEvaluationServiceTest {
     }
 
     private WorkerRiskEvaluationService service() {
+        lenient().when(credentialPreparationRepository.findByWorkerUserIdAndScope(anyLong(), any()))
+                .thenReturn(Optional.empty());
         return new WorkerRiskEvaluationService(
                 eventRepository,
                 incidentRepository,
+                credentialPreparationRepository,
                 personalReminderService,
                 userService,
                 telegramService,
@@ -534,6 +528,22 @@ class WorkerRiskEvaluationServiceTest {
         event.setOrderId(100L);
         event.setReviewId(501L);
         return event;
+    }
+
+    private WorkerCredentialPreparation preparation(
+            WorkerCredentialPreparationScope scope,
+            Long reviewId,
+            Long botId,
+            LocalDateTime lastCopyAt
+    ) {
+        WorkerCredentialPreparation preparation = new WorkerCredentialPreparation();
+        preparation.setWorkerUserId(1L);
+        preparation.setScope(scope);
+        preparation.setReviewId(reviewId);
+        preparation.setBotId(botId);
+        preparation.setLoginCopiedAt(lastCopyAt.minusSeconds(5));
+        preparation.setPasswordCopiedAt(lastCopyAt);
+        return preparation;
     }
 
     private User user(Long id, String username, String fio, Long telegramChatId) {

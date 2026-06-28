@@ -107,6 +107,15 @@ export interface WorkerPermissions {
   canEditNotes: boolean;
 }
 
+export interface WorkerCredentialPreparation {
+  scope: string;
+  reviewId: number;
+  botId?: number | null;
+  loginCopiedAt?: string | null;
+  passwordCopiedAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface WorkerBoard {
   section: WorkerSection;
   title: string;
@@ -121,6 +130,7 @@ export interface WorkerBoard {
   workerFilterAvailable?: boolean;
   message: string;
   warning: boolean;
+  credentialPreparation?: WorkerCredentialPreparation | null;
 }
 
 export interface WorkerActionResponse {

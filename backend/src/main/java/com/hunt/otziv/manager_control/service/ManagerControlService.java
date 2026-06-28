@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_control.service;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
@@ -50,12 +51,15 @@ import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.t_telegrambot.service.TelegramChatMigrationResult;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -87,6 +91,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -116,6 +121,7 @@ public class ManagerControlService {
     private static final String ENTITY_NAGUL_REVIEW = "NAGUL_REVIEW";
     private static final String ENTITY_WORKER_ORDER_NEW = "WORKER_ORDER_NEW";
     private static final String ENTITY_WORKER_ORDER_CORRECT = "WORKER_ORDER_CORRECT";
+    private static final String ENTITY_TELEGRAM_CHAT = "TELEGRAM_CHAT";
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
             "Архив",
@@ -218,6 +224,8 @@ public class ManagerControlService {
     private final ReviewService reviewService;
     private final ReviewRepository reviewRepository;
     private final OrderRepository orderRepository;
+    private final CompanyRepository companyRepository;
+    private final PaymentLinkRepository paymentLinkRepository;
     private final CommonInvoiceRepository commonInvoiceRepository;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     private final CommonBillingService commonBillingService;
@@ -569,6 +577,9 @@ public class ManagerControlService {
         if ("COMMON_INVOICE".equals(entityType)) {
             return repairCommonInvoiceConcreteItem(concreteItem, control, principal);
         }
+        if (ENTITY_TELEGRAM_CHAT.equals(entityType)) {
+            return repairTelegramChatConcreteItem(concreteItem, control, principal);
+        }
         if (!ENTITY_WORKER_ORDER_NEW.equals(entityType)
                 && !ENTITY_WORKER_ORDER_CORRECT.equals(entityType)
                 && !"ORDER".equals(entityType)) {
@@ -662,6 +673,53 @@ public class ManagerControlService {
         throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Эту ошибку общего счета нельзя исправить автоматически. Откройте счет и проверьте позиции вручную."
+        );
+    }
+
+    private ManagerControlConcreteItemResponse repairTelegramChatConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Principal principal
+    ) {
+        Long companyId = concreteItem.getEntityId();
+        if (companyId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У карточки Telegram-группы нет ID компании");
+        }
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Компания не найдена"));
+        Long oldChatId = company.getTelegramGroupChatId();
+        if (oldChatId == null) {
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Telegram-группа уже не привязана к старому chat_id",
+                    principal,
+                    "Telegram-группа уже отвязана"
+            );
+        }
+
+        Optional<TelegramChatMigrationResult> result = telegramService.repairMigratedChatId(oldChatId);
+        if (result.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Telegram не вернул новый chat_id. Возможно, группа еще не стала супергруппой или бот потерял доступ."
+            );
+        }
+
+        TelegramChatMigrationResult migration = result.get();
+        if (!migration.updated()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Telegram вернул новый chat_id, но в БД не нашлось записей со старым id " + oldChatId
+            );
+        }
+
+        return resolveRepairedConcreteItem(
+                concreteItem,
+                control,
+                "Telegram chat_id обновлен: " + migration.oldChatId() + " -> " + migration.newChatId(),
+                principal,
+                "Обновлен Telegram chat_id компании"
         );
     }
 
@@ -1247,17 +1305,19 @@ public class ManagerControlService {
         long workerWorkloadCount = workerCounts.workloadTotal();
         long requiresAttention = orderCounts.getOrDefault("Требует внимания", 0);
         long commonInvoiceActionCount = commonInvoiceActionCount(manager);
+        long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
 
         List<ManagerControlProblemResponse> problems = new ArrayList<>();
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
         addProblem(problems, "OPEN_RISKS", "Риски", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
+        addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + workerActionCount;
+        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + telegramChatIssueCount + workerActionCount;
         long warningCount = 0;
         long workloadCount = orderAttention + workerWorkloadCount;
         DailyControlSyncResult controlSync = syncDailyControl(
@@ -1619,6 +1679,9 @@ public class ManagerControlService {
         }
         if ("COMMON_INVOICES".equals(item.getReasonCode())) {
             return commonInvoiceExamples(manager, today, limit);
+        }
+        if ("TELEGRAM_CHAT_MIGRATION".equals(item.getReasonCode())) {
+            return telegramChatIssueExamples(manager, limit);
         }
         if ("OPEN_RISKS".equals(item.getReasonCode()) || "risk".equals(item.getSectionCode())) {
             return riskExamples(manager, limit);
@@ -2994,6 +3057,69 @@ public class ManagerControlService {
                 COMMON_INVOICE_STALE_STATUSES,
                 LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS)
         );
+    }
+
+    private List<Company> telegramChatIssueCompanies(Manager manager, int limit) {
+        Map<Long, Company> companies = new LinkedHashMap<>();
+        companyRepository.findTelegramChatIssueCompanies(manager, PageRequest.of(0, Math.max(1, limit)))
+                .forEach(company -> addTelegramIssueCompany(companies, company));
+        if (companies.size() < limit) {
+            paymentLinkRepository.findTelegramSuccessNotificationErrorsByManager(manager).stream()
+                    .map(PaymentLink::getOrder)
+                    .filter(Objects::nonNull)
+                    .map(Order::getCompany)
+                    .filter(Objects::nonNull)
+                    .limit(Math.max(0, limit - companies.size()))
+                    .forEach(company -> addTelegramIssueCompany(companies, company));
+        }
+        return new ArrayList<>(companies.values());
+    }
+
+    private void addTelegramIssueCompany(Map<Long, Company> companies, Company company) {
+        if (company == null || company.getId() == null || company.getTelegramGroupChatId() == null) {
+            return;
+        }
+        companies.putIfAbsent(company.getId(), company);
+    }
+
+    private List<ManagerControlConcreteItemResponse> telegramChatIssueExamples(Manager manager, int limit) {
+        return telegramChatIssueCompanies(manager, limit).stream()
+                .map(company -> telegramChatIssueExample(manager, company))
+                .toList();
+    }
+
+    private ManagerControlConcreteItemResponse telegramChatIssueExample(Manager manager, Company company) {
+        Long chatId = company.getTelegramGroupChatId();
+        return new ManagerControlConcreteItemResponse(
+                null,
+                ENTITY_TELEGRAM_CHAT,
+                company.getId(),
+                safe(company.getTitle()).isBlank() ? "Компания #" + company.getId() : company.getTitle(),
+                chatId == null ? "Telegram chat_id не задан" : "Telegram chat_id " + chatId,
+                "Telegram",
+                null,
+                "Telegram-отправка по компании получила ошибку. Если группа стала супергруппой, нажмите «Починить»: система запросит новый chat_id у Telegram и обновит привязку.",
+                companyTargetUrl(manager, company),
+                null,
+                company.getUrlChat(),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private String companyTargetUrl(Manager manager, Company company) {
+        StringBuilder url = new StringBuilder(ordersUrl(manager, null));
+        String title = safe(company == null ? null : company.getTitle());
+        if (!title.isBlank()) {
+            url.append("&keyword=").append(encode(title));
+        }
+        return url.toString();
     }
 
     private List<ManagerControlConcreteItemResponse> commonInvoiceExamples(Manager manager, LocalDate today, int limit) {

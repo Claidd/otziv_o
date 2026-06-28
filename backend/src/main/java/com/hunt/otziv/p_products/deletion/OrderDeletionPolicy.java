@@ -4,6 +4,7 @@ import com.hunt.otziv.p_products.model.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
+import java.util.Set;
 
 import static com.hunt.otziv.p_products.utils.OrderReviewGraph.safeStatusTitle;
 
@@ -13,7 +14,13 @@ public class OrderDeletionPolicy {
     private static final String ADMIN = "ROLE_ADMIN";
     private static final String OWNER = "ROLE_OWNER";
     private static final String MANAGER = "ROLE_MANAGER";
-    private static final String MANAGER_DELETABLE_STATUS = "Новый";
+    private static final Set<String> MANAGER_DELETABLE_STATUSES = Set.of(
+            "Новый",
+            "В проверку",
+            "На проверке",
+            "Коррекция",
+            "Архив"
+    );
 
     public boolean canDelete(String role, Order orderToDelete) {
         return canDelete(role, safeStatusTitle(orderToDelete));
@@ -30,7 +37,7 @@ public class OrderDeletionPolicy {
 
     private boolean canManagerDelete(String statusTitle) {
         String status = statusTitle == null ? "" : statusTitle.trim();
-        return MANAGER_DELETABLE_STATUS.equals(status);
+        return MANAGER_DELETABLE_STATUSES.contains(status);
     }
 
     private String normalizeRole(String role) {

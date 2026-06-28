@@ -135,64 +135,66 @@
   </section>
 
   <section admin-right-content class="control-side">
-    <section class="side-summary" aria-label="Сводка контроля">
-      <div class="side-title">
-        <span class="material-icons-sharp">fact_check</span>
-        <h2>Сводка</h2>
-      </div>
+    @if (!isDetailPage()) {
+      <section class="side-summary" aria-label="Сводка контроля">
+        <div class="side-title">
+          <span class="material-icons-sharp">fact_check</span>
+          <h2>Сводка</h2>
+        </div>
 
-      <div class="summary-grid">
-        <article class="summary-tile red">
-          <span class="material-icons-sharp">error</span>
-          <div>
-            <strong>{{ redCount() }}</strong>
-            <small>красных</small>
-          </div>
-        </article>
-        <article class="summary-tile yellow">
-          <span class="material-icons-sharp">report_problem</span>
-          <div>
-            <strong>{{ yellowCount() }}</strong>
-            <small>желтых</small>
-          </div>
-        </article>
-        <article class="summary-tile green">
-          <span class="material-icons-sharp">task_alt</span>
-          <div>
-            <strong>{{ greenCount() }}</strong>
-            <small>зеленых</small>
-          </div>
-        </article>
-        <article class="summary-tile neutral">
-          <span class="material-icons-sharp">radar</span>
-          <div>
-            <strong>{{ attentionTotal() }}</strong>
-            <small>к действию</small>
-          </div>
-        </article>
-        <article class="summary-tile neutral">
-          <span class="material-icons-sharp">priority_high</span>
-          <div>
-            <strong>{{ criticalTotal() }}</strong>
-            <small>крит. действий</small>
-          </div>
-        </article>
-        <article class="summary-tile neutral">
-          <span class="material-icons-sharp">inventory_2</span>
-          <div>
-            <strong>{{ workloadTotal() }}</strong>
-            <small>нагрузка</small>
-          </div>
-        </article>
-        <article class="summary-tile neutral">
-          <span class="material-icons-sharp">groups</span>
-          <div>
-            <strong>{{ managersTotal() }}</strong>
-            <small>менеджеров</small>
-          </div>
-        </article>
-      </div>
-    </section>
+        <div class="summary-grid">
+          <article class="summary-tile red">
+            <span class="material-icons-sharp">error</span>
+            <div>
+              <strong>{{ redCount() }}</strong>
+              <small>красных</small>
+            </div>
+          </article>
+          <article class="summary-tile yellow">
+            <span class="material-icons-sharp">report_problem</span>
+            <div>
+              <strong>{{ yellowCount() }}</strong>
+              <small>желтых</small>
+            </div>
+          </article>
+          <article class="summary-tile green">
+            <span class="material-icons-sharp">task_alt</span>
+            <div>
+              <strong>{{ greenCount() }}</strong>
+              <small>зеленых</small>
+            </div>
+          </article>
+          <article class="summary-tile neutral">
+            <span class="material-icons-sharp">radar</span>
+            <div>
+              <strong>{{ attentionTotal() }}</strong>
+              <small>к действию</small>
+            </div>
+          </article>
+          <article class="summary-tile neutral">
+            <span class="material-icons-sharp">priority_high</span>
+            <div>
+              <strong>{{ criticalTotal() }}</strong>
+              <small>крит. действий</small>
+            </div>
+          </article>
+          <article class="summary-tile neutral">
+            <span class="material-icons-sharp">inventory_2</span>
+            <div>
+              <strong>{{ workloadTotal() }}</strong>
+              <small>нагрузка</small>
+            </div>
+          </article>
+          <article class="summary-tile neutral">
+            <span class="material-icons-sharp">groups</span>
+            <div>
+              <strong>{{ managersTotal() }}</strong>
+              <small>менеджеров</small>
+            </div>
+          </article>
+        </div>
+      </section>
+    }
 
     @if (selectedManager(); as manager) {
       <section class="side-load-card" aria-label="Нагрузка выбранного менеджера">

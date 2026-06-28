@@ -8,10 +8,13 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparation;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
+import com.hunt.otziv.worker_activity.repository.WorkerCredentialPreparationRepository;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import java.time.Duration;
@@ -72,6 +75,7 @@ public class WorkerRiskEvaluationService {
 
     private final WorkerActivityEventRepository eventRepository;
     private final WorkerRiskIncidentRepository incidentRepository;
+    private final WorkerCredentialPreparationRepository credentialPreparationRepository;
     private final PersonalReminderService personalReminderService;
     private final UserService userService;
     private final TelegramService telegramService;
@@ -81,14 +85,14 @@ public class WorkerRiskEvaluationService {
     @Value("${worker.risk.duplicate-window-minutes:30}")
     private int duplicateWindowMinutes = 30;
 
-    @Value("${worker.risk.publish-prep-window-minutes:60}")
-    private int publishPrepWindowMinutes = 60;
-
     @Value("${worker.risk.publish-too-fast-seconds:150}")
     private int publishTooFastSeconds = 150;
 
     @Value("${worker.risk.close-after-account-copy-too-fast-seconds:150}")
     private int closeAfterAccountCopyTooFastSeconds = 150;
+
+    @Value("${worker.risk.nagul-too-fast-after-credential-copy-seconds:180}")
+    private int nagulTooFastAfterCredentialCopySeconds = 180;
 
     @Value("${worker.risk.close-after-account-copy-too-fast.window-minutes:30}")
     private int closeAfterAccountCopyTooFastWindowMinutes = 30;
@@ -347,24 +351,17 @@ public class WorkerRiskEvaluationService {
             return;
         }
 
-        LocalDateTime since = now.minusMinutes(Math.max(1, publishPrepWindowMinutes));
-        String botToken = botToken(event);
-        boolean copiedLogin = copiedCredentialBetween(event, WorkerActivityAction.REVIEW_COPY_LOGIN, since, event.getCreatedAt(), botToken);
-        boolean copiedPassword = copiedCredentialBetween(event, WorkerActivityAction.REVIEW_COPY_PASSWORD, since, event.getCreatedAt(), botToken);
-        if (!copiedLogin || !copiedPassword) {
-            return;
-        }
-
-        findLastCredentialCopyBetween(event, botToken, since, event.getCreatedAt())
-                .filter(copyEvent -> copyEvent.getCreatedAt() != null && event.getCreatedAt() != null)
-                .filter(copyEvent -> secondsBetween(copyEvent, event) <= Math.max(1, closeAfterAccountCopyTooFastSeconds))
-                .ifPresent(copyEvent -> result.add(new RiskFinding(
+        activeCredentialPreparation(event, WorkerCredentialPreparationScope.NAGUL)
+                .filter(preparation -> preparationMatchesEvent(preparation, event))
+                .flatMap(preparation -> lastCredentialCopyAt(preparation).map(lastCopyAt -> secondsBetween(lastCopyAt, event)))
+                .filter(seconds -> seconds < Math.max(1, nagulTooFastAfterCredentialCopySeconds))
+                .ifPresent(seconds -> result.add(new RiskFinding(
                         "NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY",
                         30,
                         "Выгул слишком быстро после копирования данных",
                         "После последнего копирования логина/пароля до выгула прошло "
-                                + secondsBetween(copyEvent, event)
-                                + " сек. Минимум: " + Math.max(1, closeAfterAccountCopyTooFastSeconds) + " сек."
+                                + seconds
+                                + " сек. Минимум: " + Math.max(1, nagulTooFastAfterCredentialCopySeconds) + " сек."
                 )));
     }
 
@@ -427,68 +424,30 @@ public class WorkerRiskEvaluationService {
             return;
         }
 
-        LocalDateTime since = now.minusMinutes(Math.max(1, publishPrepWindowMinutes));
-        String botToken = botToken(event);
-        boolean copiedLogin = copiedCredentialForPublishedBot(event, WorkerActivityAction.REVIEW_COPY_LOGIN, since, botToken);
-        boolean copiedPassword = copiedCredentialForPublishedBot(event, WorkerActivityAction.REVIEW_COPY_PASSWORD, since, botToken);
+        Optional<WorkerCredentialPreparation> preparation = activeCredentialPreparation(event, WorkerCredentialPreparationScope.PUBLISH)
+                .filter(value -> preparationMatchesEvent(value, event));
 
-        if (!copiedLogin || !copiedPassword) {
+        if (preparation.isEmpty() || preparation.get().getLoginCopiedAt() == null || preparation.get().getPasswordCopiedAt() == null) {
             result.add(new RiskFinding(
                     "PUBLISH_WITHOUT_CREDENTIAL_COPY",
                     30,
                     "Публикация без копирования данных аккаунта",
-                    botToken.isBlank()
-                            ? "Перед публикацией по этому отзыву не видно копирования логина и пароля за последний час."
-                            : "Перед публикацией по этому отзыву не видно копирования логина и пароля закрепленного аккаунта за последний час."
+                    "Перед публикацией по этому отзыву не видно актуального копирования логина и пароля закрепленного аккаунта."
             ));
             return;
         }
 
-        findLastCredentialCopyForPublishedBot(event, botToken)
-                .filter(copyEvent -> copyEvent.getCreatedAt() != null && event.getCreatedAt() != null)
-                .filter(copyEvent -> secondsBetween(copyEvent, event) <= Math.max(1, publishTooFastSeconds))
-                .ifPresent(copyEvent -> result.add(new RiskFinding(
+        lastCredentialCopyAt(preparation.get())
+                .map(lastCopyAt -> secondsBetween(lastCopyAt, event))
+                .filter(seconds -> seconds < Math.max(1, publishTooFastSeconds))
+                .ifPresent(seconds -> result.add(new RiskFinding(
                         "PUBLISH_TOO_FAST_AFTER_CREDENTIAL_COPY",
                         30,
                         "Публикация слишком быстро после копирования данных",
                         "После последнего копирования логина/пароля до публикации прошло "
-                                + secondsBetween(copyEvent, event)
+                                + seconds
                                 + " сек. Минимум: " + Math.max(1, publishTooFastSeconds) + " сек."
                 )));
-    }
-
-    private boolean copiedCredentialForPublishedBot(
-            WorkerActivityEvent event,
-            WorkerActivityAction action,
-            LocalDateTime since,
-            String botToken
-    ) {
-        if (!botToken.isBlank()) {
-            return eventRepository.existsByWorkerUserIdAndActionAndReviewIdAndCreatedAtBetweenAndDetailsContaining(
-                    event.getWorkerUserId(),
-                    action,
-                    event.getReviewId(),
-                    since,
-                    event.getCreatedAt(),
-                    botToken
-            );
-        }
-
-        return eventRepository.existsByWorkerUserIdAndActionInAndReviewIdAndCreatedAtBetween(
-                event.getWorkerUserId(),
-                List.of(action),
-                event.getReviewId(),
-                since,
-                event.getCreatedAt()
-        );
-    }
-
-    private Optional<WorkerActivityEvent> findLastCredentialCopyForPublishedBot(WorkerActivityEvent event, String botToken) {
-        if (event == null || event.getCreatedAt() == null) {
-            return Optional.empty();
-        }
-        LocalDateTime since = event.getCreatedAt().minusMinutes(Math.max(1, publishPrepWindowMinutes));
-        return findLastCredentialCopyBetween(event, botToken, since, event.getCreatedAt());
     }
 
     private Optional<WorkerActivityEvent> findLastCredentialCopyBetween(
@@ -555,6 +514,57 @@ public class WorkerRiskEvaluationService {
         }
         long seconds = Duration.between(first.getCreatedAt(), second.getCreatedAt()).getSeconds();
         return seconds < 0 ? Long.MAX_VALUE : seconds;
+    }
+
+    private long secondsBetween(LocalDateTime first, WorkerActivityEvent second) {
+        if (first == null || second == null || second.getCreatedAt() == null) {
+            return Long.MAX_VALUE;
+        }
+        long seconds = Duration.between(first, second.getCreatedAt()).getSeconds();
+        return seconds < 0 ? Long.MAX_VALUE : seconds;
+    }
+
+    private Optional<WorkerCredentialPreparation> activeCredentialPreparation(
+            WorkerActivityEvent event,
+            WorkerCredentialPreparationScope scope
+    ) {
+        if (event == null || event.getWorkerUserId() == null || scope == null) {
+            return Optional.empty();
+        }
+        return credentialPreparationRepository.findByWorkerUserIdAndScope(event.getWorkerUserId(), scope);
+    }
+
+    private boolean preparationMatchesEvent(WorkerCredentialPreparation preparation, WorkerActivityEvent event) {
+        if (preparation == null || event == null || event.getReviewId() == null) {
+            return false;
+        }
+        if (!Objects.equals(preparation.getReviewId(), event.getReviewId())) {
+            return false;
+        }
+
+        Long eventBotId = eventBotId(event);
+        return eventBotId == null || Objects.equals(preparation.getBotId(), eventBotId);
+    }
+
+    private Optional<LocalDateTime> lastCredentialCopyAt(WorkerCredentialPreparation preparation) {
+        if (preparation == null || preparation.getLoginCopiedAt() == null || preparation.getPasswordCopiedAt() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(preparation.getLoginCopiedAt().isAfter(preparation.getPasswordCopiedAt())
+                ? preparation.getLoginCopiedAt()
+                : preparation.getPasswordCopiedAt());
+    }
+
+    private Long eventBotId(WorkerActivityEvent event) {
+        String raw = detailValue(event == null ? null : event.getDetails(), "botId");
+        if (raw.isBlank() || "-".equals(raw)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private List<WorkerActivityAction> workClosingActions() {

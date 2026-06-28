@@ -54,6 +54,8 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
+import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -89,6 +91,7 @@ public class ManagerBoardEditAssembler {
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
     private final OrderDeletionPolicy orderDeletionPolicy;
+    private final WorkerCredentialPreparationService credentialPreparationService;
 
     public CompanyEditResponse buildCompanyEditResponse(
             CompanyDTO company,
@@ -323,7 +326,8 @@ public class ManagerBoardEditAssembler {
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"),
                 canEditReviewVigul(authentication),
-                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER")
+                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER"),
+                credentialPreparationService.active(authentication, WorkerCredentialPreparationScope.PUBLISH)
         );
     }
 

@@ -3,8 +3,9 @@ package com.hunt.otziv.c_companies.repository;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.u_users.model.Manager;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -525,6 +526,32 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     Optional<Company> findByTelegramGroupChatId(Long telegramGroupChatId);
 
     List<Company> findAllByTelegramGroupChatIdOrderById(Long telegramGroupChatId);
+
+    @Query("""
+        SELECT DISTINCT c
+        FROM Company c
+        JOIN c.orderList o,
+             ScheduledClientMessageState state
+        WHERE o.manager = :manager
+          AND state.orderId = o.id
+          AND c.telegramGroupChatId IS NOT NULL
+          AND (
+              LOWER(COALESCE(state.lastErrorCode, '')) LIKE '%telegram%'
+              OR LOWER(COALESCE(state.lastErrorMessage, '')) LIKE '%telegram%'
+              OR LOWER(COALESCE(state.lastErrorMessage, '')) LIKE '%supergroup%'
+              OR LOWER(COALESCE(state.lastErrorMessage, '')) LIKE '%migrate%'
+          )
+        ORDER BY c.id
+    """)
+    List<Company> findTelegramChatIssueCompanies(@Param("manager") Manager manager, Pageable pageable);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Company c
+        SET c.telegramGroupChatId = :newChatId
+        WHERE c.telegramGroupChatId = :oldChatId
+    """)
+    int updateTelegramGroupChatId(@Param("oldChatId") Long oldChatId, @Param("newChatId") Long newChatId);
 
     Optional<Company> findByMaxGroupChatId(Long maxGroupChatId);
 

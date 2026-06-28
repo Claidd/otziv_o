@@ -824,6 +824,15 @@ export interface ReviewRecoveryTaskUpdateRequest {
   scheduledDate?: string | null;
 }
 
+export interface WorkerCredentialPreparation {
+  scope: string;
+  reviewId: number;
+  botId?: number | null;
+  loginCopiedAt?: string | null;
+  passwordCopiedAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface OrderDetailsPayload {
   orderId: number;
   companyId?: number | null;
@@ -851,6 +860,7 @@ export interface OrderDetailsPayload {
   canEditReviewPublish: boolean;
   canEditReviewVigul: boolean;
   canDeleteReviews: boolean;
+  credentialPreparation?: WorkerCredentialPreparation | null;
 }
 
 export interface ReviewUpdateRequest {
@@ -1164,6 +1174,7 @@ export interface WorkerBoard {
   workerFilterAvailable?: boolean;
   message?: string;
   warning?: boolean;
+  credentialPreparation?: WorkerCredentialPreparation | null;
 }
 
 export interface WorkerBoardQuery {
