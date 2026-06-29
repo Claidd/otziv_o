@@ -220,6 +220,7 @@ public class ApiWorkerRiskController {
         incident.setExplanationRequestedAt(LocalDateTime.now());
 
         String text = "Менеджер проверил подозрительное действие и просит дать пояснение."
+                + "\nСтатус: ждем пояснение"
                 + "\nПричина: " + clean(incident.getTitle())
                 + "\nДействие: " + clean(incident.getAction())
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())

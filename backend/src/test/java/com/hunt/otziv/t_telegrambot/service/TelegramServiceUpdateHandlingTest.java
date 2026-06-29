@@ -202,8 +202,9 @@ class TelegramServiceUpdateHandlingTest {
         }
 
         @Override
-        void executeTelegramMessage(SendMessage message) throws TelegramApiException {
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
             sentMessages.add(message);
+            return new Message();
         }
 
         @Override

@@ -340,14 +340,20 @@
               <button
                 type="button"
                 class="review-credential-action"
+                [class.review-credential-action--muted]="reviewCredentialActionDisabled(review, 'botLogin')"
                 (click)="copyReviewField(review, 'botLogin')"
+                [disabled]="reviewCredentialActionDisabled(review, 'botLogin')"
+                [title]="reviewCredentialActionTitle(review, 'botLogin')"
               >
                 {{ copied() === review.id + '-botLogin' ? 'готово' : 'логин' }}
               </button>
               <button
                 type="button"
                 class="review-credential-action"
+                [class.review-credential-action--muted]="reviewCredentialActionDisabled(review, 'botPassword')"
                 (click)="copyReviewField(review, 'botPassword')"
+                [disabled]="reviewCredentialActionDisabled(review, 'botPassword')"
+                [title]="reviewCredentialActionTitle(review, 'botPassword')"
               >
                 {{ copied() === review.id + '-botPassword' ? 'готово' : 'пароль' }}
               </button>
@@ -390,7 +396,7 @@
               <button
                 type="button"
                 (click)="deactivateBot(review)"
-                [disabled]="reviewAccountActionLocked(review) || !review.botId || isMutating('block-' + review.id)"
+                [disabled]="reviewAccountActionLocked(review) || !review.botId || review.botId === 1 || isMutating('block-' + review.id)"
                 [title]="reviewAccountActionTitle(review)"
               >
                 {{ isMutating('block-' + review.id) ? '...' : 'блок' }}
@@ -1423,14 +1429,16 @@
               }
 
               <div class="lead-edit-actions-group">
-                <button
-                  type="button"
-                  class="secondary review-new-account"
-                  (click)="assignReviewNewAccount()"
-                  [disabled]="reviewEditBusy()"
-                >
-                  {{ reviewEditNewAccountSaving() ? 'Назначаю...' : 'Новый аккаунт' }}
-                </button>
+                @if (!hideReviewNewAccountAction()) {
+                  <button
+                    type="button"
+                    class="secondary review-new-account"
+                    (click)="assignReviewNewAccount()"
+                    [disabled]="reviewEditBusy()"
+                  >
+                    {{ reviewEditNewAccountSaving() ? 'Назначаю...' : 'Новый аккаунт' }}
+                  </button>
+                }
                 <button
                   type="button"
                   class="secondary"

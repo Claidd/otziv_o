@@ -267,10 +267,12 @@
               [disabled]="!hasArchiveReviewLink(order, details)"
               title="Скопировать текст проверки отзывов"
             >
-              {{ copied() === 'archive-review-' + order.id ? '✓' : 'текст' }}
+              <span class="material-icons-sharp">{{ copied() === 'archive-review-' + order.id ? 'done' : 'content_copy' }}</span>
+              {{ copied() === 'archive-review-' + order.id ? 'Скопировано' : 'Текст' }}
             </button>
             <a [href]="archiveOrderChatUrl(order)" target="_blank" rel="noopener">
-              перейти в чат
+              <span class="material-icons-sharp">chat</span>
+              Чат
             </a>
           </section>
 
@@ -356,6 +358,18 @@
                   <footer>
                     <span>{{ review.publishedDate || review.changed || review.created || '-' }}</span>
                     <span>{{ review.publish ? 'опубликован' : 'не опубликован' }}</span>
+                    @if (order.source === 'archive') {
+                      <button
+                        type="button"
+                        class="archive-review-recovery-button"
+                        (click)="createArchiveRecoveryTask(order, review)"
+                        [disabled]="!canCreateArchiveRecoveryTask(review) || !!recoveryTaskMutationKey()"
+                        title="Создать задачу восстановления по этому архивному отзыву"
+                      >
+                        <span class="material-icons-sharp">restore</span>
+                        {{ isArchiveRecoveryTaskCreating(order, review) ? 'Создаю' : 'Задача' }}
+                      </button>
+                    }
                   </footer>
                 </article>
               } @empty {

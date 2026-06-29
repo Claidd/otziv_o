@@ -384,7 +384,15 @@ public class ApiManagerReviewController {
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
+        boolean restrictedWorkerAccountRepair = isRestrictedWorkerOrderDetailsSource(source) && workerActivityService.isPlainWorker(authentication);
+        if (restrictedWorkerAccountRepair && !reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Смена аккаунта здесь доступна только для отзыва без рабочего аккаунта");
+        }
+
         reviewService.changeBot(reviewId);
+        if (restrictedWorkerAccountRepair && reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
+            reviewService.assignNewAccount(reviewId);
+        }
         workerActivityService.recordSafely(
                 authentication,
                 WorkerActivityAction.REVIEW_BOT_CHANGE,
@@ -403,10 +411,14 @@ public class ApiManagerReviewController {
     public ReviewDetailsResponse assignOrderReviewNewAccount(
             @PathVariable Long orderId,
             @PathVariable Long reviewId,
-            Authentication authentication
+            Authentication authentication,
+            @RequestBody(required = false) ReviewActivitySourceRequest source
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
+        if (isWorkerAllSource(source) && workerActivityService.isPlainWorker(authentication)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Новый аккаунт в деталях из раздела Все назначается только через кнопку смена");
+        }
 
         try {
             reviewService.assignNewAccount(reviewId);
@@ -418,7 +430,7 @@ public class ApiManagerReviewController {
                     orderId,
                     reviewId,
                     "review",
-                    "newAccount=true"
+                    withSource("newAccount=true", source)
             );
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Новый аккаунт не назначен: " + exception.getMessage(), exception);
@@ -438,6 +450,11 @@ public class ApiManagerReviewController {
     ) {
         managerAccessService.requireOrderAccess(orderId, authentication);
         requireReviewForOrder(orderId, reviewId);
+        if (isRestrictedWorkerOrderDetailsSource(source)
+                && workerActivityService.isPlainWorker(authentication)
+                && !reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Блокировка аккаунта здесь доступна только для отзыва без рабочего аккаунта");
+        }
         reviewService.deActivateAndChangeBot(reviewId, botId);
         workerActivityService.recordSafely(
                 authentication,
@@ -1131,6 +1148,40 @@ public class ApiManagerReviewController {
 
     private String sourceDetails(ReviewActivitySourceRequest source) {
         return withSource("", source);
+    }
+
+    private boolean isWorkerAllSource(ReviewActivitySourceRequest source) {
+        return source != null
+                && "order-details".equalsIgnoreCase(normalize(source.sourcePage()))
+                && "worker-all".equalsIgnoreCase(normalize(source.sourceEntry()));
+    }
+
+    private boolean isRestrictedWorkerOrderDetailsSource(ReviewActivitySourceRequest source) {
+        if (source == null || !"order-details".equalsIgnoreCase(normalize(source.sourcePage()))) {
+            return false;
+        }
+
+        String entry = normalize(source.sourceEntry()).toLowerCase(Locale.ROOT);
+        String section = normalize(source.sourceSection()).toLowerCase(Locale.ROOT);
+        return entry.equals("worker-all")
+                || entry.equals("worker-new")
+                || entry.equals("worker-correction")
+                || section.equals("all")
+                || section.equals("new")
+                || section.equals("correction");
+    }
+
+    private boolean reviewNeedsAccountAssignment(Review review) {
+        if (review == null || review.getBot() == null || review.getBot().getId() == null || review.getBot().getId() == 1L) {
+            return true;
+        }
+
+        String botFio = normalize(review.getBot().getFio()).toLowerCase(Locale.ROOT);
+        return !review.getBot().isActive()
+                || isBlank(review.getBot().getLogin())
+                || isBlank(review.getBot().getPassword())
+                || botFio.equals("нет доступных аккаунтов")
+                || botFio.equals("добавьте аккаунты и нажмите сменить");
     }
 
     private String withSource(String details, ReviewActivitySourceRequest source) {

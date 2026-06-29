@@ -19,12 +19,19 @@ public interface ReviewRecoveryBatchRepository extends JpaRepository<ReviewRecov
             Collection<ReviewRecoveryBatchStatus> statuses
     );
 
+    Optional<ReviewRecoveryBatch> findFirstByArchiveOrderIdAndStatusInOrderByCreatedAtDesc(
+            Long archiveOrderId,
+            Collection<ReviewRecoveryBatchStatus> statuses
+    );
+
     Optional<ReviewRecoveryBatch> findFirstByOrderIdAndStatusAndHoldReleasedAtIsNullOrderByCreatedAtDesc(
             Long orderId,
             ReviewRecoveryBatchStatus status
     );
 
     boolean existsByIdAndOrderId(Long id, Long orderId);
+
+    boolean existsByIdAndArchiveOrderId(Long id, Long archiveOrderId);
 
     long countByStatus(ReviewRecoveryBatchStatus status);
 

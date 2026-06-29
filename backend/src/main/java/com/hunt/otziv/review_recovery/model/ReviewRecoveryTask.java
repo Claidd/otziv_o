@@ -24,8 +24,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Data
@@ -44,13 +46,84 @@ public class ReviewRecoveryTask {
     @JoinColumn(name = "review_recovery_task_batch", nullable = false)
     private ReviewRecoveryBatch batch;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "review_recovery_task_order", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_recovery_task_order")
     private Order order;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "review_recovery_task_review", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_recovery_task_review")
     private Review sourceReview;
+
+    @Column(name = "review_recovery_task_archive_order_id")
+    private Long archiveOrderId;
+
+    @Column(name = "review_recovery_task_archive_review_id")
+    private Long archiveReviewId;
+
+    @Column(name = "review_recovery_task_archive_company_id")
+    private Long archiveCompanyId;
+
+    @Column(name = "review_recovery_task_archive_order_details_id")
+    private UUID archiveOrderDetailsId;
+
+    @Column(name = "review_recovery_task_archive_order_status")
+    private String archiveOrderStatus;
+
+    @Column(name = "review_recovery_task_archive_company_title")
+    private String archiveCompanyTitle;
+
+    @Column(name = "review_recovery_task_archive_company_note", columnDefinition = "TEXT")
+    private String archiveCompanyNote;
+
+    @Column(name = "review_recovery_task_archive_order_note", columnDefinition = "TEXT")
+    private String archiveOrderNote;
+
+    @Column(name = "review_recovery_task_archive_filial_city")
+    private String archiveFilialCity;
+
+    @Column(name = "review_recovery_task_archive_filial_city_id")
+    private Long archiveFilialCityId;
+
+    @Column(name = "review_recovery_task_archive_filial_title")
+    private String archiveFilialTitle;
+
+    @Column(name = "review_recovery_task_archive_filial_url")
+    private String archiveFilialUrl;
+
+    @Column(name = "review_recovery_task_archive_category")
+    private String archiveCategory;
+
+    @Column(name = "review_recovery_task_archive_subcategory")
+    private String archiveSubCategory;
+
+    @Column(name = "review_recovery_task_archive_product_id")
+    private Long archiveProductId;
+
+    @Column(name = "review_recovery_task_archive_product_title")
+    private String archiveProductTitle;
+
+    @Column(name = "review_recovery_task_archive_review_created")
+    private LocalDate archiveReviewCreated;
+
+    @Column(name = "review_recovery_task_archive_review_changed")
+    private LocalDate archiveReviewChanged;
+
+    @Column(name = "review_recovery_task_archive_review_published_date")
+    private LocalDate archiveReviewPublishedDate;
+
+    @Builder.Default
+    @Column(name = "review_recovery_task_archive_review_publish", nullable = false)
+    private boolean archiveReviewPublish = false;
+
+    @Builder.Default
+    @Column(name = "review_recovery_task_archive_review_vigul", nullable = false)
+    private boolean archiveReviewVigul = false;
+
+    @Column(name = "review_recovery_task_archive_review_price")
+    private BigDecimal archiveReviewPrice;
+
+    @Column(name = "review_recovery_task_archive_review_url")
+    private String archiveReviewUrl;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_recovery_task_worker")

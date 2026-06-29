@@ -110,6 +110,9 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAUSE_REASON = "client.messages.pause-reason";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS = "client.messages.whatsapp-auth.retry-hours";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = "client.messages.whatsapp-auth.alert-cooldown-hours";
+    public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED = "manager-control.unanswered-client-messages.auto-ignore-enabled";
+    public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH = "manager-control.unanswered-client-messages.auto-ignore-max-length";
+    public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES = "manager-control.unanswered-client-messages.auto-ignore-phrases";
     public static final String PAYMENTS_TBANK_RUNTIME_MODE = "payments.tbank.runtime-mode";
     public static final String PAYMENTS_TBANK_ENABLED = "payments.tbank.enabled";
     public static final String PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED = "payments.tbank.payment-links-enabled";
@@ -159,6 +162,12 @@ public class AppSettingService {
         return trimToNull(getCachedValue(key))
                 .filter(value -> !value.isEmpty())
                 .orElse(fallback);
+    }
+
+    @Transactional(readOnly = true)
+    public String getStringAllowEmpty(String key, String fallback) {
+        String value = getCachedValue(key);
+        return value == null ? fallback : value.trim();
     }
 
     @Transactional

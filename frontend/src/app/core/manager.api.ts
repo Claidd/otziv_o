@@ -482,6 +482,7 @@ export interface OrderReviewItem {
   botLogin: string;
   botPassword: string;
   botCounter: number;
+  botActive?: boolean;
   companyTitle: string;
   commentCompany: string;
   orderComments: string;
@@ -576,6 +577,11 @@ export interface WorkerCredentialPreparation {
   loginCopiedAt?: string | null;
   passwordCopiedAt?: string | null;
   updatedAt?: string | null;
+  loginCopied?: boolean;
+  passwordCopied?: boolean;
+  ready?: boolean;
+  remainingSeconds?: number;
+  waitSeconds?: number;
 }
 
 export interface OrderDetailsPayload {
@@ -824,6 +830,13 @@ export class ManagerApi {
     );
   }
 
+  createArchiveReviewRecoveryTask(orderId: number, reviewId: number): Observable<ArchiveOrderDetailsPayload> {
+    return this.http.post<ArchiveOrderDetailsPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/archive/orders/${orderId}/reviews/${reviewId}/recovery-tasks`,
+      {}
+    );
+  }
+
   getCompanyEdit(companyId: number): Observable<CompanyEditPayload> {
     return this.http.get<CompanyEditPayload>(`${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/edit`);
   }
@@ -960,10 +973,10 @@ export class ManagerApi {
     );
   }
 
-  assignOrderReviewNewAccount(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+  assignOrderReviewNewAccount(orderId: number, reviewId: number, source?: ReviewActivitySource): Observable<OrderReviewItem> {
     return this.http.post<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`,
-      {}
+      source ?? {}
     );
   }
 

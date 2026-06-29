@@ -354,9 +354,9 @@ function wireClientEvents(instance) {
     scheduleRestart();
   });
 
-  instance.on("message", (message) => {
+  instance.on("message_create", (message) => {
     handleIncomingMessage(message).catch((error) => {
-      log("warn", "Incoming message webhook failed", { error: error.message });
+      log("warn", "Message webhook failed", { error: error.message });
     });
   });
 }
@@ -449,7 +449,7 @@ function scheduleRestart() {
 }
 
 async function handleIncomingMessage(message) {
-  if (!message || message.fromMe || message.from === "status@broadcast") {
+  if (!message || message.from === "status@broadcast") {
     return;
   }
 
@@ -465,8 +465,16 @@ async function handleIncomingMessage(message) {
       groupId: chat.id && chat.id._serialized ? chat.id._serialized : message.from,
       groupName: chat.name || "",
       from: message.author || message.from,
+      fromName: message._data && message._data.notifyName ? message._data.notifyName : "",
+      messageId: message.id && message.id._serialized ? message.id._serialized : null,
+      timestamp: message.timestamp || null,
+      fromMe: Boolean(message.fromMe),
       message: body,
     });
+    return;
+  }
+
+  if (message.fromMe) {
     return;
   }
 

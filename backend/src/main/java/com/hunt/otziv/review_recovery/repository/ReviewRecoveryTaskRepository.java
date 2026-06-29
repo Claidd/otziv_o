@@ -32,6 +32,19 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     );
 
     @Query("""
+        SELECT COUNT(t.id)
+        FROM ReviewRecoveryTask t
+        WHERE t.archiveReviewId = :archiveReviewId
+          AND t.status IN :taskStatuses
+          AND t.batch.status IN :batchStatuses
+    """)
+    long countActiveTasksForArchiveReview(
+            @Param("archiveReviewId") Long archiveReviewId,
+            @Param("taskStatuses") Collection<ReviewRecoveryTaskStatus> taskStatuses,
+            @Param("batchStatuses") Collection<ReviewRecoveryBatchStatus> batchStatuses
+    );
+
+    @Query("""
         SELECT MAX(t.scheduledDate)
         FROM ReviewRecoveryTask t
         WHERE t.batch.id = :batchId
@@ -54,6 +67,17 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     );
 
     @Query("""
+        SELECT MAX(t.scheduledDate)
+        FROM ReviewRecoveryTask t
+        WHERE t.archiveOrderId = :archiveOrderId
+          AND t.status <> :excludedStatus
+    """)
+    LocalDate maxScheduledDateByArchiveOrderId(
+            @Param("archiveOrderId") Long archiveOrderId,
+            @Param("excludedStatus") ReviewRecoveryTaskStatus excludedStatus
+    );
+
+    @Query("""
         SELECT COUNT(t.id)
         FROM ReviewRecoveryTask t
         WHERE t.order.id = :orderId
@@ -62,6 +86,19 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     """)
     long countByOrderIdAndStatusAndBatchStatus(
             @Param("orderId") Long orderId,
+            @Param("taskStatus") ReviewRecoveryTaskStatus taskStatus,
+            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus
+    );
+
+    @Query("""
+        SELECT COUNT(t.id)
+        FROM ReviewRecoveryTask t
+        WHERE t.archiveOrderId = :archiveOrderId
+          AND t.status = :taskStatus
+          AND t.batch.status = :batchStatus
+    """)
+    long countByArchiveOrderIdAndStatusAndBatchStatus(
+            @Param("archiveOrderId") Long archiveOrderId,
             @Param("taskStatus") ReviewRecoveryTaskStatus taskStatus,
             @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus
     );
@@ -87,14 +124,35 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             @Param("batchStatuses") Collection<ReviewRecoveryBatchStatus> batchStatuses
     );
 
+    @Query("""
+        SELECT t
+        FROM ReviewRecoveryTask t
+        JOIN FETCH t.batch b
+        LEFT JOIN FETCH t.order o
+        LEFT JOIN FETCH t.sourceReview r
+        LEFT JOIN FETCH r.bot rb
+        LEFT JOIN FETCH t.worker w
+        LEFT JOIN FETCH w.user
+        LEFT JOIN FETCH t.bot bot
+        WHERE t.archiveOrderId = :archiveOrderId
+          AND b.status IN :batchStatuses
+        ORDER BY t.scheduledDate ASC, t.id ASC
+    """)
+    List<ReviewRecoveryTask> findByArchiveOrderIdAndBatchStatusIn(
+            @Param("archiveOrderId") Long archiveOrderId,
+            @Param("batchStatuses") Collection<ReviewRecoveryBatchStatus> batchStatuses
+    );
+
     boolean existsByIdAndOrderId(Long id, Long orderId);
+
+    boolean existsByIdAndArchiveOrderId(Long id, Long archiveOrderId);
 
     @Query(
             value = """
                 SELECT DISTINCT t
                 FROM ReviewRecoveryTask t
                 JOIN FETCH t.batch batch
-                JOIN FETCH t.order o
+                LEFT JOIN FETCH t.order o
                 LEFT JOIN FETCH o.company c
                 LEFT JOIN FETCH o.status
                 LEFT JOIN FETCH o.manager om
@@ -126,6 +184,11 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                   AND t.scheduledDate <= :date
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -139,7 +202,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT COUNT(t.id)
                 FROM ReviewRecoveryTask t
                 JOIN t.batch batch
-                JOIN t.order o
+                LEFT JOIN t.order o
                 LEFT JOIN o.company c
                 LEFT JOIN t.sourceReview r
                 LEFT JOIN r.filial f
@@ -151,6 +214,11 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                   AND t.scheduledDate <= :date
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -174,7 +242,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT DISTINCT t
                 FROM ReviewRecoveryTask t
                 JOIN FETCH t.batch batch
-                JOIN FETCH t.order o
+                LEFT JOIN FETCH t.order o
                 LEFT JOIN FETCH o.company c
                 LEFT JOIN FETCH o.status
                 LEFT JOIN FETCH o.manager om
@@ -204,9 +272,14 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 WHERE t.status = :status
                   AND batch.status = :batchStatus
                   AND t.scheduledDate <= :date
-                  AND o.manager IN :managers
+                  AND (o.manager IN :managers OR t.manager IN :managers)
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -220,7 +293,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT COUNT(t.id)
                 FROM ReviewRecoveryTask t
                 JOIN t.batch batch
-                JOIN t.order o
+                LEFT JOIN t.order o
                 LEFT JOIN o.company c
                 LEFT JOIN t.sourceReview r
                 LEFT JOIN r.filial f
@@ -230,9 +303,14 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 WHERE t.status = :status
                   AND batch.status = :batchStatus
                   AND t.scheduledDate <= :date
-                  AND o.manager IN :managers
+                  AND (o.manager IN :managers OR t.manager IN :managers)
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -257,7 +335,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT DISTINCT t
                 FROM ReviewRecoveryTask t
                 JOIN FETCH t.batch batch
-                JOIN FETCH t.order o
+                LEFT JOIN FETCH t.order o
                 LEFT JOIN FETCH o.company c
                 LEFT JOIN FETCH o.status
                 LEFT JOIN FETCH o.manager om
@@ -287,9 +365,14 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 WHERE t.status = :status
                   AND batch.status = :batchStatus
                   AND t.scheduledDate <= :date
-                  AND o.manager = :manager
+                  AND (o.manager = :manager OR t.manager = :manager)
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -303,7 +386,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT COUNT(t.id)
                 FROM ReviewRecoveryTask t
                 JOIN t.batch batch
-                JOIN t.order o
+                LEFT JOIN t.order o
                 LEFT JOIN o.company c
                 LEFT JOIN t.sourceReview r
                 LEFT JOIN r.filial f
@@ -313,9 +396,14 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 WHERE t.status = :status
                   AND batch.status = :batchStatus
                   AND t.scheduledDate <= :date
-                  AND o.manager = :manager
+                  AND (o.manager = :manager OR t.manager = :manager)
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -340,7 +428,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT DISTINCT t
                 FROM ReviewRecoveryTask t
                 JOIN FETCH t.batch batch
-                JOIN FETCH t.order o
+                LEFT JOIN FETCH t.order o
                 LEFT JOIN FETCH o.company c
                 LEFT JOIN FETCH o.status
                 LEFT JOIN FETCH o.manager om
@@ -373,6 +461,11 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                   AND t.worker = :worker
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -386,7 +479,7 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                 SELECT COUNT(t.id)
                 FROM ReviewRecoveryTask t
                 JOIN t.batch batch
-                JOIN t.order o
+                LEFT JOIN t.order o
                 LEFT JOIN o.company c
                 LEFT JOIN t.sourceReview r
                 LEFT JOIN r.filial f
@@ -399,6 +492,11 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
                   AND t.worker = :worker
                   AND (
                     LOWER(COALESCE(c.title, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCompanyTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialTitle, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveFilialCity, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveCategory, '')) LIKE :keyword
+                    OR LOWER(COALESCE(t.archiveProductTitle, '')) LIKE :keyword
                     OR LOWER(COALESCE(t.recoveryText, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.text, '')) LIKE :keyword
                     OR LOWER(COALESCE(r.answer, '')) LIKE :keyword
@@ -431,18 +529,36 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             Worker worker
     );
 
+    @Query("""
+        SELECT COUNT(t.id)
+        FROM ReviewRecoveryTask t
+        LEFT JOIN t.order o
+        WHERE t.status = :status
+          AND t.batch.status = :batchStatus
+          AND t.scheduledDate <= :scheduledDate
+          AND (o.manager = :manager OR t.manager = :manager)
+    """)
     long countByStatusAndBatchStatusAndScheduledDateLessThanEqualAndOrderManager(
-            ReviewRecoveryTaskStatus status,
-            ReviewRecoveryBatchStatus batchStatus,
-            LocalDate scheduledDate,
-            Manager manager
+            @Param("status") ReviewRecoveryTaskStatus status,
+            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus,
+            @Param("scheduledDate") LocalDate scheduledDate,
+            @Param("manager") Manager manager
     );
 
+    @Query("""
+        SELECT COUNT(t.id)
+        FROM ReviewRecoveryTask t
+        LEFT JOIN t.order o
+        WHERE t.status = :status
+          AND t.batch.status = :batchStatus
+          AND t.scheduledDate <= :scheduledDate
+          AND (o.manager IN :managers OR t.manager IN :managers)
+    """)
     long countByStatusAndBatchStatusAndScheduledDateLessThanEqualAndOrderManagerIn(
-            ReviewRecoveryTaskStatus status,
-            ReviewRecoveryBatchStatus batchStatus,
-            LocalDate scheduledDate,
-            Collection<Manager> managers
+            @Param("status") ReviewRecoveryTaskStatus status,
+            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus,
+            @Param("scheduledDate") LocalDate scheduledDate,
+            @Param("managers") Collection<Manager> managers
     );
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)

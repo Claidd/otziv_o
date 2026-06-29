@@ -120,6 +120,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByWorkerTelegramGroupChatIdOrderById(Long workerTelegramGroupChatId);
 
+    @Query("""
+        SELECT u
+        FROM User u
+        WHERE u.active = true
+          AND u.phoneNumber IS NOT NULL
+          AND TRIM(u.phoneNumber) <> ''
+    """)
+    List<User> findAllActiveUsersWithPhoneNumbers();
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE User u

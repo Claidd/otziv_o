@@ -21,6 +21,7 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.format.DateTimeParseException;
 import java.time.LocalDate;
@@ -135,7 +136,8 @@ public class ApiReviewCheckController {
     public ReviewCheckResponse approveReviews(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckUpdateRequest request,
-            Authentication authentication
+            Authentication authentication,
+            HttpServletRequest servletRequest
     ) throws Exception {
         ReviewCheckPermissions permissions = permissions(authentication);
         if (!permissions.canApprovePublication()) {
@@ -165,7 +167,7 @@ public class ApiReviewCheckController {
                 null,
                 null,
                 "Публикация",
-                "reviews=" + updateDto.getReviews().size()
+                "reviews=" + updateDto.getReviews().size() + ";" + approvalAuditDetails(authentication, servletRequest)
         );
 
         return buildResponse(orderDetailId, authentication);
@@ -635,6 +637,43 @@ public class ApiReviewCheckController {
 
     private String restoredBy(Authentication authentication) {
         return isAuthenticated(authentication) ? authentication.getName() : "anonymous-review-check";
+    }
+
+    private String approvalAuditDetails(Authentication authentication, HttpServletRequest request) {
+        StringBuilder details = new StringBuilder();
+        appendDetail(details, "identity", isAuthenticated(authentication) ? "authenticated" : "anonymous_public_link");
+        appendDetail(details, "actor", isAuthenticated(authentication) ? authentication.getName() : null);
+        appendDetail(details, "ip", clientIp(request));
+        appendDetail(details, "userAgent", header(request, "User-Agent"));
+        appendDetail(details, "referer", header(request, "Referer"));
+        appendDetail(details, "origin", header(request, "Origin"));
+        return details.toString();
+    }
+
+    private void appendDetail(StringBuilder details, String key, String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        details.append(key).append('=').append(value.replace(';', ',')).append(';');
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = header(request, "X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            int comma = forwarded.indexOf(',');
+            return comma >= 0 ? forwarded.substring(0, comma).trim() : forwarded.trim();
+        }
+
+        String realIp = header(request, "X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+
+        return request == null ? null : request.getRemoteAddr();
+    }
+
+    private String header(HttpServletRequest request, String name) {
+        return request == null ? null : request.getHeader(name);
     }
 
     private void requireLiveClientMutationAllowed(OrderDetails orderDetails, Authentication authentication) {

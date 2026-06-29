@@ -9,6 +9,7 @@ import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -49,6 +50,7 @@ public class OrderDetailsController {
     private final OrderService orderService;
     private final AutoTextService autoTextService;
     private final AppSettingService appSettingService;
+    private final WorkerPublicationGateService workerPublicationGateService;
 
     @GetMapping("/{companyId}/{orderId}") // Переход на страницу Просмотра  деталей заказа
     public String orderDetailsList(@PathVariable Long companyId, @PathVariable Long orderId, RedirectAttributes rm, Model model, Principal principal){
@@ -271,6 +273,10 @@ public class OrderDetailsController {
     @PostMapping("/{companyId}/{orderId}/published/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReview(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model, Principal principal){
         log.info("1. Смена статуса отзыва на В Опубликован - {}", principal != null ? principal.getName() : "Гость");
+        String blockedRedirect = blockWorkerPublicationRedirect(reviewId, rm, principal);
+        if (blockedRedirect != null) {
+            return blockedRedirect;
+        }
         try {
             orderService.changeStatusAndOrderCounter(reviewId);
             rm.addFlashAttribute("saveSuccess", "true");
@@ -286,6 +292,10 @@ public class OrderDetailsController {
     @PostMapping("/{companyId}/{orderId}/published_to_worker/{reviewId}") // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
     public String publishReviewToWorker(@PathVariable Long reviewId,@PathVariable Long companyId, RedirectAttributes rm, @PathVariable Long orderId, Model model, Principal principal){
         log.info("1. Смена статуса отзыва на Опубликован - {}", principal != null ? principal.getName() : "Гость");
+        String blockedRedirect = blockWorkerPublicationRedirect(reviewId, rm, principal);
+        if (blockedRedirect != null) {
+            return blockedRedirect;
+        }
         try {
             orderService.changeStatusAndOrderCounter(reviewId);
             rm.addFlashAttribute("saveSuccess", "true");
@@ -297,6 +307,28 @@ public class OrderDetailsController {
         }
         return "redirect:/worker/publish";
     } // Изменение статуса отзыва и сохранение копии в архив + проверка на выполнение заказа.
+
+    private String blockWorkerPublicationRedirect(Long reviewId, RedirectAttributes rm, Principal principal) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        var publicationBlock = workerPublicationGateService.blockForPublication(principal, authentication);
+        if (publicationBlock.isPresent()) {
+            rm.addFlashAttribute("saveSuccess", "false");
+            rm.addFlashAttribute("errorMessage", publicationBlock.get().message());
+            log.warn("Работник {} пытался опубликовать отзыв {}, но публикация заблокирована: {}",
+                    principal != null ? principal.getName() : "Гость",
+                    reviewId,
+                    publicationBlock.get().message());
+            return legacyWorkerRedirect(publicationBlock.get().section());
+        }
+        return null;
+    }
+
+    private String legacyWorkerRedirect(String section) {
+        return switch (section) {
+            case WorkerPublicationGateService.SECTION_CORRECT -> "redirect:/worker/correct";
+            default -> "redirect:/worker/new_orders";
+        };
+    }
 
     @PostMapping("/{companyId}/{orderId}/nagul_to_worker/{reviewId}")
     public String nagulReviewToWorker(@PathVariable Long reviewId,

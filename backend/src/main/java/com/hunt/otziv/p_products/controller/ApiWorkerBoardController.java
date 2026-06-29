@@ -1413,7 +1413,9 @@ public class ApiWorkerBoardController {
 
     private WorkerReviewResponse toRecoveryTaskReviewResponse(ReviewRecoveryTask task) {
         Review sourceReview = task.getSourceReview();
-        ReviewDTOOne review = reviewService.toReviewDTOOne(sourceReview);
+        ReviewDTOOne review = sourceReview == null
+                ? archiveRecoveryReview(task)
+                : reviewService.toReviewDTOOne(sourceReview);
         Bot bot = task.getBot();
         Long botId = bot != null ? bot.getId() : review.getBotId();
         String botFio = bot != null ? safe(bot.getFio()) : safe(task.getBotFioSnapshot());
@@ -1475,6 +1477,50 @@ public class ApiWorkerBoardController {
                 dateValue(task.getScheduledDate()),
                 dateValue(task.getCompletedDate())
         );
+    }
+
+    private ReviewDTOOne archiveRecoveryReview(ReviewRecoveryTask task) {
+        if (task == null) {
+            return new ReviewDTOOne();
+        }
+        Bot bot = task.getBot();
+        return ReviewDTOOne.builder()
+                .id(task.getArchiveReviewId())
+                .companyId(task.getArchiveCompanyId())
+                .orderDetailsId(task.getArchiveOrderDetailsId())
+                .orderId(task.getArchiveOrderId())
+                .orderStatus(firstNonBlank(task.getArchiveOrderStatus(), "Архив"))
+                .text(task.getOriginalText())
+                .answer(task.getOriginalAnswer())
+                .category(task.getArchiveCategory())
+                .subCategory(task.getArchiveSubCategory())
+                .botId(bot != null ? bot.getId() : null)
+                .botFio(bot != null ? bot.getFio() : task.getBotFioSnapshot())
+                .botLogin(bot != null ? bot.getLogin() : task.getBotLoginSnapshot())
+                .botPassword(bot != null ? bot.getPassword() : task.getBotPasswordSnapshot())
+                .botCounter(bot != null ? bot.getCounter() : 0)
+                .companyTitle(task.getArchiveCompanyTitle())
+                .commentCompany(task.getArchiveCompanyNote())
+                .orderComments(task.getArchiveOrderNote())
+                .filialCity(task.getArchiveFilialCity())
+                .filialTitle(task.getArchiveFilialTitle())
+                .filialUrl(task.getArchiveFilialUrl())
+                .productId(task.getArchiveProductId())
+                .productTitle(task.getArchiveProductTitle())
+                .productPhoto(false)
+                .workerFio(task.getWorker() != null && task.getWorker().getUser() != null
+                        ? task.getWorker().getUser().getFio()
+                        : "")
+                .created(task.getArchiveReviewCreated())
+                .changed(task.getArchiveReviewChanged())
+                .publishedDate(task.getArchiveReviewPublishedDate())
+                .publish(task.isArchiveReviewPublish())
+                .vigul(task.isArchiveReviewVigul())
+                .comment("")
+                .price(task.getArchiveReviewPrice())
+                .url(task.getArchiveReviewUrl())
+                .urlPhoto(task.getArchiveReviewUrl())
+                .build();
     }
 
     private Long recoveryCompanyId(ReviewRecoveryTask task, ReviewDTOOne review) {
@@ -2145,7 +2191,7 @@ public class ApiWorkerBoardController {
 
     private Long orderId(ReviewRecoveryTask task) {
         Order order = task != null ? task.getOrder() : null;
-        return order != null ? order.getId() : null;
+        return order != null ? order.getId() : task != null ? task.getArchiveOrderId() : null;
     }
 
     private Long reviewId(BadReviewTask task) {
@@ -2155,7 +2201,7 @@ public class ApiWorkerBoardController {
 
     private Long reviewId(ReviewRecoveryTask task) {
         Review review = task != null ? task.getSourceReview() : null;
-        return review != null ? review.getId() : null;
+        return review != null ? review.getId() : task != null ? task.getArchiveReviewId() : null;
     }
 
     private String valueOrDash(Object value) {

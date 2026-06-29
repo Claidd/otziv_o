@@ -12,5 +12,9 @@ public class WhatsAppGroupReplyDTO {
     private String groupId;
     private String groupName;
     private String from;
+    private String fromName;
+    private String messageId;
+    private Long timestamp;
+    private boolean fromMe;
     private String message;
 }

@@ -2,6 +2,7 @@ package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +26,9 @@ class MaxBotUpdateServiceTest {
 
     @Mock
     private PublicationProgressPreferenceService publicationProgressPreferenceService;
+
+    @Mock
+    private ClientChatMessageTrackerService clientChatMessageTrackerService;
 
     @Test
     void handlesBotStartedDeepLinkPayload() throws Exception {
@@ -117,6 +121,11 @@ class MaxBotUpdateServiceTest {
     }
 
     private MaxBotUpdateService service() {
-        return new MaxBotUpdateService(maxGroupLinkService, maxBotClient, publicationProgressPreferenceService);
+        return new MaxBotUpdateService(
+                maxGroupLinkService,
+                maxBotClient,
+                publicationProgressPreferenceService,
+                clientChatMessageTrackerService
+        );
     }
 }

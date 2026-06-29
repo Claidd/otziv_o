@@ -344,6 +344,11 @@ export class OrderDetailsComponent {
     };
 
     const item = map[kind];
+    if (this.reviewCredentialActionDisabled(review, kind)) {
+      this.toastService.info('Данные скрыты', 'В этих деталях заказа логин и пароль недоступны');
+      return;
+    }
+
     if (!(await this.copyText(item.value, `${review.id}-${kind}`, item.label))) {
       return;
     }
@@ -357,18 +362,23 @@ export class OrderDetailsComponent {
   }
 
   reviewAccountActionLocked(review: OrderReviewItem): boolean {
-    if (!this.openedFromWorkerAll()) {
-      return false;
-    }
-
-    const copied = this.copiedReviewCredentials()[review.id];
-    return !(copied?.botLoginAt && copied.botPasswordAt && copied.botId === (review.botId ?? null));
+    return this.restrictedWorkerOrderDetailsMode() && !this.reviewNeedsAccountRepair(review);
   }
 
   reviewAccountActionTitle(review: OrderReviewItem): string {
     return this.reviewAccountActionLocked(review)
-      ? 'Сначала скопируйте логин и пароль аккаунта'
+      ? 'В деталях заказа смена доступна только когда аккаунт нужно назначить или заменить'
       : 'Действие с аккаунтом';
+  }
+
+  reviewCredentialActionDisabled(review: OrderReviewItem, kind: ReviewCopyKind): boolean {
+    return this.restrictedWorkerOrderDetailsMode() && (kind === 'botLogin' || kind === 'botPassword');
+  }
+
+  reviewCredentialActionTitle(review: OrderReviewItem, kind: ReviewCopyKind): string {
+    return this.reviewCredentialActionDisabled(review, kind)
+      ? 'В этих деталях заказа логин и пароль недоступны'
+      : 'Скопировать';
   }
 
   reviewPublishActionLocked(review: OrderReviewItem): boolean {
@@ -410,6 +420,29 @@ export class OrderDetailsComponent {
 
   hideReviewBotPasswordField(): boolean {
     return this.isOnlyWorkerRole();
+  }
+
+  hideReviewNewAccountAction(): boolean {
+    return this.openedFromWorkerAll() && this.isOnlyWorkerRole();
+  }
+
+  restrictedWorkerOrderDetailsMode(): boolean {
+    if (!this.isOnlyWorkerRole()) {
+      return false;
+    }
+
+    return this.openedFromWorkerAll() || this.restrictedWorkerOrderDetailsSection() !== null;
+  }
+
+  private restrictedWorkerOrderDetailsSection(): 'new' | 'correction' | null {
+    const status = (this.details()?.status ?? '').trim().toLocaleLowerCase('ru-RU').replace('ё', 'е');
+    if (status === 'новый') {
+      return 'new';
+    }
+    if (status === 'коррекция') {
+      return 'correction';
+    }
+    return null;
   }
 
   startReviewFieldEdit(review: OrderReviewItem, field: ReviewEditableField): void {
@@ -1393,11 +1426,16 @@ export class OrderDetailsComponent {
       return;
     }
 
+    if (this.hideReviewNewAccountAction()) {
+      this.toastService.info('Новый аккаунт скрыт', 'В этих деталях заказа используйте кнопку смена на карточке');
+      return;
+    }
+
     const oldBotId = review.botId ?? null;
     this.reviewEditNewAccountSaving.set(true);
     this.reviewEditError.set(null);
 
-    this.managerApi.assignOrderReviewNewAccount(review.orderId, review.id).subscribe({
+    this.managerApi.assignOrderReviewNewAccount(review.orderId, review.id, this.orderDetailsActivitySource()).subscribe({
       next: (updatedReview) => {
         this.applyUpdatedOrderReview(updatedReview);
         this.editReview.set(updatedReview);
@@ -2223,7 +2261,41 @@ export class OrderDetailsComponent {
   }
 
   hasUnavailableBot(review: OrderReviewItem): boolean {
-    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
+    return this.reviewNeedsAccountAssignment(review);
+  }
+
+  reviewNeedsAccountRepair(review: OrderReviewItem): boolean {
+    if (!this.canPublishWithCurrentBot(review)) {
+      return true;
+    }
+
+    return review.botActive === false;
+  }
+
+  reviewNeedsAccountAssignment(review: OrderReviewItem): boolean {
+    if (!review.botId || review.botId === 1) {
+      return true;
+    }
+
+    const botFio = (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    return (
+      botFio === 'нет доступных аккаунтов' ||
+      botFio === 'добавьте аккаунты и нажмите сменить'
+    );
+  }
+
+  private canPublishWithCurrentBot(review: OrderReviewItem): boolean {
+    if (!review.botId || review.botId === 1) {
+      return false;
+    }
+
+    const botFio = (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    return (
+      !!review.botLogin?.trim() &&
+      !!review.botPassword?.trim() &&
+      botFio !== 'нет доступных аккаунтов' &&
+      botFio !== 'добавьте аккаунты и нажмите сменить'
+    );
   }
 
   private botChangeMessage(oldBotId?: number | null, newBotId?: number | null): string {
@@ -2693,8 +2765,7 @@ export class OrderDetailsComponent {
     this.copiedReviewCredentials.set({
       [reviewId]: {
         botId,
-        botLoginAt: this.serverTimestamp(preparation.loginCopiedAt),
-        botPasswordAt: this.serverTimestamp(preparation.passwordCopiedAt)
+        ...this.serverReviewCredentialCopyState(preparation)
       }
     });
 
@@ -2704,9 +2775,34 @@ export class OrderDetailsComponent {
     }
   }
 
-  private serverTimestamp(value?: string | null): number | undefined {
-    const timestamp = value ? Date.parse(value) : NaN;
-    return Number.isFinite(timestamp) ? timestamp : undefined;
+  private serverReviewCredentialCopyState(preparation: WorkerCredentialPreparation): Omit<ReviewCredentialCopyState, 'botId'> {
+    const loginCopied = typeof preparation.loginCopied === 'boolean'
+      ? preparation.loginCopied
+      : Boolean(preparation.loginCopiedAt);
+    const passwordCopied = typeof preparation.passwordCopied === 'boolean'
+      ? preparation.passwordCopied
+      : Boolean(preparation.passwordCopiedAt);
+
+    if (!loginCopied && !passwordCopied) {
+      return {};
+    }
+
+    const now = Date.now();
+    if (loginCopied && passwordCopied) {
+      const remainingSeconds = Math.max(0, Number(preparation.remainingSeconds ?? 0));
+      const lastCopyAt = preparation.ready === true
+        ? now - this.publishCredentialWaitMs - this.publishCredentialWaitSafetyBufferMs
+        : now - this.publishCredentialWaitMs + remainingSeconds * 1000;
+      return {
+        botLoginAt: lastCopyAt,
+        botPasswordAt: lastCopyAt
+      };
+    }
+
+    return {
+      botLoginAt: loginCopied ? now : undefined,
+      botPasswordAt: passwordCopied ? now : undefined
+    };
   }
 
   private storeReviewPublishCredentialPreparation(review: OrderReviewItem): void {
@@ -2823,10 +2919,15 @@ export class OrderDetailsComponent {
   }
 
   private orderDetailsActivitySource(): { sourcePage: string; sourceEntry?: string; sourceSection?: string } {
+    const restrictedSection = this.restrictedWorkerOrderDetailsSection();
     return {
       sourcePage: 'order-details',
-      sourceEntry: this.openedFromWorkerAll() ? 'worker-all' : undefined,
-      sourceSection: this.openedFromWorkerAll() ? 'all' : undefined
+      sourceEntry: this.openedFromWorkerAll()
+        ? 'worker-all'
+        : restrictedSection
+          ? `worker-${restrictedSection}`
+          : undefined,
+      sourceSection: this.openedFromWorkerAll() ? 'all' : restrictedSection ?? undefined
     };
   }
 

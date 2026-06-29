@@ -6,6 +6,11 @@ public record WorkerCredentialPreparationResponse(
         Long botId,
         String loginCopiedAt,
         String passwordCopiedAt,
-        String updatedAt
+        String updatedAt,
+        boolean loginCopied,
+        boolean passwordCopied,
+        boolean ready,
+        long remainingSeconds,
+        int waitSeconds
 ) {
 }

@@ -358,7 +358,20 @@
                               <strong>{{ example.title }}</strong>
                               <span class="detail-example-badges">
                                 <span>{{ (example.updatedAt || item.updatedAt) | date: 'dd.MM.yyyy HH:mm' }}</span>
-                                <b>{{ example.status || severityLabel(item.severity) }}</b>
+                                @if (statusChatUrl(example)) {
+                                  <a
+                                    class="detail-example-status-link"
+                                    [href]="statusChatUrl(example)"
+                                    target="_blank"
+                                    rel="noopener"
+                                    (click)="$event.stopPropagation()"
+                                    [title]="'Открыть чат: ' + (example.status || 'чат')"
+                                  >
+                                    {{ example.status || severityLabel(item.severity) }}
+                                  </a>
+                                } @else {
+                                  <b>{{ example.status || severityLabel(item.severity) }}</b>
+                                }
                               </span>
                             </header>
 
@@ -391,6 +404,17 @@
                               }
                               @if (managerActionNote(example)) {
                                 <em class="manager-action-note">{{ managerActionNote(example) }}</em>
+                              }
+                              @if (example.type === 'RISK' && example.workerExplanation) {
+                                <em class="worker-explanation-note">
+                                  <span>
+                                    Ответ специалиста
+                                    @if (example.workerExplanationAt) {
+                                      от {{ example.workerExplanationAt | date:'dd.MM HH:mm' }}
+                                    }
+                                  </span>
+                                  <span>{{ example.workerExplanation }}</span>
+                                </em>
                               }
                             </span>
                             <span class="detail-example-flags">
@@ -567,6 +591,77 @@
                                 </button>
                               }
                               <small>сначала карточка в заказах, затем правая панель счета</small>
+                            </div>
+                          }
+
+                          @if (example.type === 'TELEGRAM_CHAT') {
+                            <div class="review-followup order-open-action">
+                              @if (chatUrl(example)) {
+                                <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                  <span class="material-icons-sharp">forum</span>
+                                  Чат
+                                </a>
+                              }
+                              <button
+                                type="button"
+                                class="review-action repair-action"
+                                (click)="repairConcreteItem(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Запросить новый Telegram chat_id и обновить привязку"
+                              >
+                                <span class="material-icons-sharp">build</span>
+                                Починить
+                              </button>
+                            </div>
+                          }
+
+                          @if (isUnansweredClientMessage(example)) {
+                            <div class="review-followup order-open-action">
+                              @if (chatUrl(example)) {
+                                <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                  <span class="material-icons-sharp">forum</span>
+                                  {{ clientChatPlatformLabel(example) }}
+                                </a>
+                              }
+                              <button
+                                type="button"
+                                class="review-action done"
+                                (click)="markUnansweredAnswered(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Клиенту уже ответили"
+                              >
+                                <span class="material-icons-sharp">task_alt</span>
+                                Отвечено
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="markUnansweredNoResponseNeeded(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Закрыть без ответа клиенту"
+                              >
+                                <span class="material-icons-sharp">visibility_off</span>
+                                Не требует ответа
+                              </button>
+                              <small>{{ example.contactText || 'Последнее сообщение клиента сохранено в карточке' }}</small>
+                              <div class="unanswered-reply">
+                                <textarea
+                                  rows="2"
+                                  [ngModel]="unansweredReplyDraft(example.controlEntityId)"
+                                  (ngModelChange)="updateUnansweredReplyDraft(example.controlEntityId, $event)"
+                                  placeholder="Ответ клиенту"
+                                ></textarea>
+                                <button
+                                  type="button"
+                                  class="review-action send-action"
+                                  (click)="sendUnansweredReply(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId) || unansweredReplyDraft(example.controlEntityId).trim().length === 0"
+                                  title="Отправить ответ в этот чат и закрыть карточку"
+                                >
+                                  <span class="material-icons-sharp">send</span>
+                                  Отправить
+                                </button>
+                              </div>
                             </div>
                           }
 

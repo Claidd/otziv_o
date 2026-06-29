@@ -16,7 +16,7 @@
       </nav>
 
       <div class="dictionary-actions">
-        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <label class="dictionary-search" [appTooltip]="searchTooltip()">
             <span class="material-icons-sharp">search</span>
             <input
@@ -37,7 +37,7 @@
           </button>
         }
 
-        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
@@ -1066,6 +1066,32 @@
               </table>
             }
 
+            @case ('messageDictionary') {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Фраза</th>
+                    <th>Статус</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (phrase of autoIgnorePhrases(); track phrase; let index = $index) {
+                    <tr [class.selected]="editingAutoIgnorePhraseIndex() === index" (click)="startEditAutoIgnorePhrase(index, phrase)">
+                      <td>
+                        <strong>{{ phrase }}</strong>
+                        <span>короткий ответ клиента</span>
+                      </td>
+                      <td>
+                        <span class="usage-pill">{{ autoresponderForm.controls.unansweredAutoIgnoreEnabled.value ? 'не требует ответа' : 'выключено' }}</span>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="2" class="no-results">Фраз пока нет.</td></tr>
+                  }
+                </tbody>
+              </table>
+            }
+
             @case ('gamification') {
               <table>
                 <thead>
@@ -1934,6 +1960,99 @@
                 <p>Тексты оплаты, начала, предложения, напоминания и старта откроются здесь.</p>
               </div>
             }
+          }
+
+          @case ('messageDictionary') {
+            <form class="settings-form" [formGroup]="autoresponderForm" (ngSubmit)="saveActive()">
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
+                    <h3>Фразы без ответа</h3>
+                    <p class="settings-hint">Короткие ответы вроде "ок" и "спасибо" не будут создавать пункт "неотвеченное сообщение" в контроле менеджера.</p>
+                  </div>
+                  <span class="total-badge">{{ autoIgnorePhrases().length }}</span>
+                </div>
+
+                <div class="auto-ignore-body">
+                  <div class="auto-ignore-settings-grid">
+                    <label class="checkbox" appTooltip="Если клиент написал только короткое подтверждение вроде 'спасибо' или 'ок', сообщение будет сохранено, но не станет неотвеченным. Вопросы и сообщения с признаками проблемы не игнорируются.">
+                      <input class="switch" type="checkbox" formControlName="unansweredAutoIgnoreEnabled">
+                      <span>Не требовать ответ на короткие подтверждения</span>
+                    </label>
+
+                    <label appTooltip="Фразы длиннее этого лимита не будут считаться коротким подтверждением и попадут в обычную проверку ответа.">
+                      <span>Максимальная длина фразы</span>
+                      <input type="number" min="1" max="500" step="1" formControlName="unansweredAutoIgnoreMaxLength">
+                    </label>
+                  </div>
+
+                  <div class="auto-ignore-editor">
+                    <label class="auto-ignore-add" appTooltip="Добавьте отдельное слово или короткую фразу. Список сохранится общей кнопкой 'Сохранить'.">
+                      <span>Новая фраза</span>
+                      <div class="inline-add-control">
+                        <input
+                          type="text"
+                          [value]="autoIgnorePhraseDraft()"
+                          (input)="updateAutoIgnorePhraseDraft($any($event.target).value)"
+                          (keydown.enter)="addAutoIgnorePhrase(); $event.preventDefault()"
+                          placeholder="например: принято"
+                        >
+                        <button type="button" class="icon-button" (click)="addAutoIgnorePhrase()" [disabled]="!autoIgnorePhraseDraft().trim()" title="Добавить фразу">
+                          <span class="material-icons-sharp">add</span>
+                        </button>
+                      </div>
+                    </label>
+
+                    <div class="auto-ignore-chip-list" aria-label="Фразы, не требующие ответа">
+                      @for (phrase of autoIgnorePhrases(); track phrase; let index = $index) {
+                        <div class="auto-ignore-chip">
+                          @if (editingAutoIgnorePhraseIndex() === index) {
+                            <input
+                              class="auto-ignore-edit-input"
+                              type="text"
+                              [value]="editingAutoIgnorePhraseValue()"
+                              (input)="updateEditingAutoIgnorePhraseValue($any($event.target).value)"
+                              (keydown.enter)="saveAutoIgnorePhraseEdit(index); $event.preventDefault()"
+                              (keydown.escape)="cancelAutoIgnorePhraseEdit()"
+                              aria-label="Редактирование фразы"
+                            >
+                            <div class="auto-ignore-row-actions">
+                              <button type="button" class="chip-icon-button" (click)="saveAutoIgnorePhraseEdit(index)" title="Сохранить фразу">
+                                <span class="material-icons-sharp">check</span>
+                              </button>
+                              <button type="button" class="chip-icon-button" (click)="cancelAutoIgnorePhraseEdit()" title="Отменить">
+                                <span class="material-icons-sharp">close</span>
+                              </button>
+                            </div>
+                          } @else {
+                            <span>{{ phrase }}</span>
+                            <div class="auto-ignore-row-actions">
+                              <button type="button" class="chip-icon-button" (click)="startEditAutoIgnorePhrase(index, phrase)" title="Редактировать фразу">
+                                <span class="material-icons-sharp">edit</span>
+                              </button>
+                              <button type="button" class="chip-icon-button danger" (click)="removeAutoIgnorePhrase(index)" title="Удалить фразу">
+                                <span class="material-icons-sharp">delete</span>
+                              </button>
+                            </div>
+                          }
+                        </div>
+                      } @empty {
+                        <p class="settings-hint">Список пуст. Если правило включено, короткие ответы не будут автоигнорироваться до добавления фраз.</p>
+                      }
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              @if (autoresponderForm.controls.unansweredAutoIgnoreMaxLength.invalid && autoresponderForm.controls.unansweredAutoIgnoreMaxLength.touched) {
+                <p class="error compact">Максимальная длина фразы должна быть от 1 до 500 символов.</p>
+              }
+
+              <div class="actions">
+                <button type="button" class="secondary" (click)="resetAutoresponderForm()" [disabled]="saving()">Сбросить</button>
+                <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
+              </div>
+            </form>
           }
 
           @case ('gamification') {

@@ -262,6 +262,7 @@ export interface AdminClientMessageSettings {
   paymentOverdueLiveEnabled: boolean;
   archiveReorderEnabled: boolean;
   errorProtectionEnabled: boolean;
+  unansweredAutoIgnoreEnabled: boolean;
   reviewCheckIntervalDays: number;
   reviewCheckAutoArchiveDays: number;
   clientTextReminderIntervalDays: number;
@@ -288,6 +289,7 @@ export interface AdminClientMessageSettings {
   whatsAppGapSeconds: number;
   telegramGapSeconds: number;
   maxGapSeconds: number;
+  unansweredAutoIgnoreMaxLength: number;
   businessWindows: string;
   reviewCheckStatuses: string;
   clientTextReminderStatuses: string;
@@ -309,6 +311,7 @@ export interface AdminClientMessageSettings {
   paymentSuccessText: string;
   reviewRecoveryNoticeText: string;
   archiveOfferText: string;
+  unansweredAutoIgnorePhrases: string;
 }
 
 export interface AdminClientMessageMonitorScenario {

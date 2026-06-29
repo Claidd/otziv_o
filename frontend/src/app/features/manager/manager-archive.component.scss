@@ -357,10 +357,12 @@
 .archive-link-actions a,
 .restore-link-actions button,
 .restore-link-actions a {
-  display: grid;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.38rem;
   min-width: 0;
   min-height: 2rem;
-  place-items: center;
   border: 1px solid rgba(115, 128, 236, 0.24);
   border-radius: 999px;
   padding: 0 0.5rem;
@@ -371,6 +373,20 @@
   font-weight: 900;
   text-align: center;
   text-decoration: none;
+}
+
+.restore-link-actions button,
+.restore-link-actions a {
+  min-height: 2.28rem;
+  border-color: rgba(49, 95, 155, 0.16);
+  background: rgba(255, 255, 255, 0.82);
+  color: #315f9b;
+  font-size: 0.74rem;
+  box-shadow: 0 0.35rem 0.75rem rgba(49, 95, 155, 0.06);
+}
+
+.restore-link-actions .material-icons-sharp {
+  font-size: 1rem;
 }
 
 .archive-link-actions button:not(:disabled):hover,
@@ -633,8 +649,8 @@ button.details-button:disabled {
 .restore-link-actions {
   border: 1px solid rgba(103, 116, 131, 0.12);
   border-radius: var(--otziv-small-radius);
-  padding: 0.65rem;
-  background: var(--otziv-light);
+  padding: 0.7rem;
+  background: linear-gradient(180deg, rgba(244, 248, 255, 0.92), rgba(248, 250, 255, 0.74));
 }
 
 .restore-target header {
@@ -851,6 +867,44 @@ button.details-button:disabled {
   font-size: 0.7rem;
 }
 
+.archive-review-recovery-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  min-height: 2rem;
+  border: 1px solid rgba(49, 95, 155, 0.22);
+  border-radius: 999px;
+  padding: 0 0.68rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #315f9b;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 0.35rem 0.8rem rgba(49, 95, 155, 0.08);
+}
+
+.archive-review-recovery-button span {
+  display: inline-grid;
+  width: 1.08rem;
+  height: 1.08rem;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(49, 95, 155, 0.1);
+  font-size: 0.86rem;
+}
+
+.archive-review-recovery-button:not(:disabled):hover {
+  border-color: rgba(49, 95, 155, 0.36);
+  background: #f4f8ff;
+  transform: translateY(-1px);
+}
+
+.archive-review-recovery-button:disabled {
+  opacity: 0.54;
+}
+
 .restore-finance-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -879,37 +933,44 @@ button.details-button:disabled {
 }
 
 .restore-status-segment button {
-  min-height: 2.15rem;
-  border: 1px solid rgba(103, 116, 131, 0.2);
+  min-height: 2.2rem;
+  border: 1px solid rgba(103, 116, 131, 0.18);
   border-radius: 999px;
   color: var(--otziv-dark);
-  background: var(--otziv-white);
+  background: rgba(255, 255, 255, 0.82);
   font-family: inherit;
   font-size: 0.76rem;
   font-weight: 900;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 .restore-status-segment button.active,
 .restore-status-segment button:not(.active):hover {
-  border-color: transparent;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
+  border-color: rgba(49, 95, 155, 0.34);
+  color: #315f9b;
+  background: #edf4ff;
 }
 
 .restore-confirm-inline {
   display: inline-flex;
-  min-height: 2.45rem;
+  justify-self: start;
+  min-height: 2.35rem;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 0;
-  border-radius: var(--otziv-small-radius);
+  border: 1px solid rgba(49, 95, 155, 0.2);
+  border-radius: 999px;
+  padding: 0 1rem;
   color: var(--otziv-white);
-  background: var(--otziv-primary);
+  background: linear-gradient(180deg, #7fa5d9, #638cc7);
   font-family: inherit;
   font-size: 0.82rem;
   font-weight: 900;
-  box-shadow: 0 0.7rem 1.25rem rgba(115, 128, 236, 0.2);
+  box-shadow: 0 0.55rem 1rem rgba(49, 95, 155, 0.18);
+}
+
+.restore-confirm-inline .material-icons-sharp {
+  font-size: 1.16rem;
 }
 
 .restore-confirm-inline:disabled {

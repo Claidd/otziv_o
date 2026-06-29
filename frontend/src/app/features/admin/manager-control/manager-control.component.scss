@@ -1093,7 +1093,8 @@ p {
 }
 
 .detail-example-badges span,
-.detail-example-badges b {
+.detail-example-badges b,
+.detail-example-status-link {
   justify-self: center;
   border: 1px solid #dce5f2;
   border-radius: 999px;
@@ -1108,6 +1109,19 @@ p {
   border-color: #b9dbc9;
   background: #f2fbf6;
   color: #287767;
+}
+
+.detail-example-status-link {
+  border-color: #b9dbc9;
+  background: #f2fbf6;
+  color: #287767;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.detail-example-status-link:hover {
+  border-color: #7ec7a2;
+  background: #eaf8f0;
 }
 
 .detail-example.waiting-client .detail-example-badges b {
@@ -1189,6 +1203,20 @@ p {
   border-color: #b9dbc9;
   color: #246f5c;
   background: #f2fbf6;
+}
+
+.detail-example-text .worker-explanation-note {
+  display: grid;
+  gap: 6px;
+  border-color: #b9dbc9;
+  color: #255f52;
+  background: #f5fcf8;
+  font-weight: 700;
+}
+
+.detail-example-text .worker-explanation-note span:first-child {
+  color: #3b7a67;
+  font-size: 12px;
 }
 
 .detail-example-flags {
@@ -1332,9 +1360,17 @@ button.review-action.text-action.done {
 }
 
 button.review-action.send-action {
-  border-color: #efc0ca;
-  background: #fff5f7;
-  color: #b81f45;
+  border-color: #95d5bd;
+  background: #effaf5;
+  color: #287767;
+}
+
+button.review-action.send-action:disabled {
+  border-color: #dce5f2;
+  background: #f8fafc;
+  color: #9aa6b8;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 button.review-action.danger-action {
@@ -1366,6 +1402,42 @@ button.review-action.request-action {
   font-size: 12px;
   line-height: 1;
   padding: 5px 9px;
+}
+
+.unanswered-reply {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: 100%;
+}
+
+.unanswered-reply textarea {
+  width: 100%;
+  min-height: 4.2rem;
+  resize: vertical;
+  border: 1px solid #dce5f2;
+  border-radius: 8px;
+  padding: 0.68rem 0.85rem;
+  color: #293348;
+  background: #fbfcfe;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.unanswered-reply button {
+  align-self: center;
+  min-width: 8.5rem;
+  height: 40px;
+  padding: 0 18px;
+  box-shadow: 0 8px 18px rgba(40, 119, 103, 0.1);
+}
+
+.unanswered-reply button:hover:not(:disabled) {
+  border-color: #6ec49e;
+  background: #e4f7ee;
+  box-shadow: 0 10px 22px rgba(40, 119, 103, 0.14);
 }
 
 .detail-example-control {

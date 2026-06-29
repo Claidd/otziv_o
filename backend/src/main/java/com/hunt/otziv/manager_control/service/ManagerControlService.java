@@ -4,6 +4,11 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
+import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
+import com.hunt.otziv.client_chat_control.dto.ClientChatUnansweredExample;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
@@ -19,6 +24,7 @@ import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
+import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
@@ -78,6 +84,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.springframework.http.HttpStatus;
 
 import java.security.Principal;
@@ -122,6 +129,7 @@ public class ManagerControlService {
     private static final String ENTITY_WORKER_ORDER_NEW = "WORKER_ORDER_NEW";
     private static final String ENTITY_WORKER_ORDER_CORRECT = "WORKER_ORDER_CORRECT";
     private static final String ENTITY_TELEGRAM_CHAT = "TELEGRAM_CHAT";
+    private static final String ENTITY_CLIENT_CHAT_UNANSWERED = "CLIENT_CHAT_UNANSWERED";
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
             "Архив",
@@ -219,6 +227,8 @@ public class ManagerControlService {
     private final ScheduledClientMessageService scheduledClientMessageService;
     private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
     private final ClientChatMessageSender clientChatMessageSender;
+    private final ClientChatMessageTrackerService clientChatMessageTrackerService;
+    private final ClientChatUnansweredItemRepository clientChatUnansweredItemRepository;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ReviewService reviewService;
@@ -452,6 +462,10 @@ public class ManagerControlService {
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
                 movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem);
             }
+        } else if (ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType())) {
+            concreteItem.setLastManualTouchAt(now);
+            concreteItem.setFollowUpAt(null);
+            clientChatMessageTrackerService.markFromManagerControl(concreteItem.getEntityId(), actionType, comment);
         } else if (specialistActionConcrete
                 && status != ManagerDailyControlItemStatus.RESOLVED
                 && actionType != ManagerDailyControlActionType.ACKNOWLEDGED) {
@@ -565,6 +579,93 @@ public class ManagerControlService {
     }
 
     @Transactional
+    public ManagerControlConcreteItemResponse replyToClientMessage(
+            Long concreteItemId,
+            ManagerControlClientReplyRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        String message = safe(request == null ? null : request.message());
+        if (message.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Введите текст ответа клиенту");
+        }
+        if (message.length() > 4000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ответ клиенту слишком длинный");
+        }
+
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControl control = concreteItem.getControl();
+        requireControlAccess(control, principal, authentication);
+        if (!ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ответ из карточки доступен только для неотвеченных сообщений");
+        }
+        if (concreteItem.getEntityId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Карточка не связана с сообщением клиента");
+        }
+
+        ClientChatUnansweredItem unansweredItem = clientChatUnansweredItemRepository.findById(concreteItem.getEntityId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
+        if (unansweredItem.getStatus() != ClientChatUnansweredStatus.OPEN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Это сообщение уже закрыто");
+        }
+        Company company = unansweredItem.getCompany();
+        Manager manager = unansweredItem.getManager() == null ? control.getManager() : unansweredItem.getManager();
+        ClientMessageSendResult result = clientChatMessageSender.sendToPlatform(
+                unansweredItem.getPlatform(),
+                company,
+                manager == null ? null : manager.getClientId(),
+                unansweredItem.getChatId(),
+                unansweredItem.getChatId(),
+                message
+        );
+        if (!result.sent()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ответ клиенту не отправлен: " + clientMessageError(result)
+            );
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        concreteItem.setLastManualTouchAt(now);
+        concreteItem.setResolvedAt(now);
+        concreteItem.setFollowUpAt(null);
+        concreteItem.setComment(limit("Ответ отправлен через " + safe(result.channel()) + ": " + message, 1000));
+        ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
+
+        clientChatMessageTrackerService.markFromManagerControl(
+                unansweredItem.getId(),
+                ManagerDailyControlActionType.ACTION_TAKEN,
+                "Ответ отправлен из контроля менеджера через " + safe(result.channel())
+        );
+        updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
+
+        if (control.getStartedAt() == null) {
+            control.setStartedAt(now);
+        }
+        control.setLastActivityAt(now);
+        control.setStatus(recalculateControlStatus(control));
+        dailyControlRepository.save(control);
+
+        saveEvent(
+                control,
+                savedConcreteItem.getParentItem(),
+                actorUserId(principal),
+                ManagerDailyControlEventType.ITEM_ACTION,
+                ManagerDailyControlActionType.ACTION_TAKEN,
+                "Ответ клиенту отправлен из карточки: " + concreteItem.getTitle()
+                        + " через " + safe(result.channel())
+        );
+
+        return concreteItemResponse(savedConcreteItem, message);
+    }
+
+    @Transactional
     public ManagerControlConcreteItemResponse repairConcreteItem(Long concreteItemId, Principal principal, Authentication authentication) {
         if (concreteItemId == null || concreteItemId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
@@ -658,6 +759,17 @@ public class ManagerControlService {
                     "Ошибка уведомления об оплате закрыта",
                     principal,
                     "Закрыта ошибка уведомления об оплате общего счета"
+            );
+        }
+        if (commonInvoiceWhatsappGroupTailRepairable(invoice)) {
+            invoice.setLastError(null);
+            commonInvoiceRepository.save(invoice);
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Старый хвост WhatsApp groupId скрыт из контроля",
+                    principal,
+                    "Закрыта устаревшая ошибка WhatsApp groupId общего счета"
             );
         }
         if (commonInvoiceTechnicalTailRepairable(invoice)) {
@@ -1306,6 +1418,7 @@ public class ManagerControlService {
         long requiresAttention = orderCounts.getOrDefault("Требует внимания", 0);
         long commonInvoiceActionCount = commonInvoiceActionCount(manager);
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
+        long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
 
         List<ManagerControlProblemResponse> problems = new ArrayList<>();
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
@@ -1313,11 +1426,12 @@ public class ManagerControlService {
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
+        addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + telegramChatIssueCount + workerActionCount;
+        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
         long warningCount = 0;
         long workloadCount = orderAttention + workerWorkloadCount;
         DailyControlSyncResult controlSync = syncDailyControl(
@@ -1683,6 +1797,9 @@ public class ManagerControlService {
         if ("TELEGRAM_CHAT_MIGRATION".equals(item.getReasonCode())) {
             return telegramChatIssueExamples(manager, limit);
         }
+        if ("UNANSWERED_CLIENT_MESSAGES".equals(item.getReasonCode())) {
+            return unansweredClientMessageExamples(manager, limit);
+        }
         if ("OPEN_RISKS".equals(item.getReasonCode()) || "risk".equals(item.getSectionCode())) {
             return riskExamples(manager, limit);
         }
@@ -1750,7 +1867,11 @@ public class ManagerControlService {
                 dailyControlConcreteItemRepository.save(concreteItem);
                 continue;
             }
-            synced.add(concreteItemResponse(dailyControlConcreteItemRepository.save(concreteItem), example.contactText()));
+            synced.add(concreteItemResponse(
+                    dailyControlConcreteItemRepository.save(concreteItem),
+                    example.contactText(),
+                    example.specialistName()
+            ));
         }
         return synced;
     }
@@ -1769,6 +1890,17 @@ public class ManagerControlService {
     }
 
     private ManagerControlConcreteItemResponse concreteItemResponse(ManagerDailyControlConcreteItem item, String contactText) {
+        return concreteItemResponse(item, contactText, null);
+    }
+
+    private ManagerControlConcreteItemResponse concreteItemResponse(
+            ManagerDailyControlConcreteItem item,
+            String contactText,
+            String specialistNameOverride
+    ) {
+        String specialistName = safe(specialistNameOverride).isBlank()
+                ? specialistNameForConcreteItem(item)
+                : specialistNameOverride;
         return new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
@@ -1794,7 +1926,7 @@ public class ManagerControlService {
                 item.getWorkerNotificationAcceptedByUserId(),
                 item.getWorkerNotificationFailureReason(),
                 contactText,
-                specialistNameForConcreteItem(item)
+                specialistName
         );
     }
 
@@ -2103,6 +2235,9 @@ public class ManagerControlService {
         String title = workerTaskRequestTitle(concreteItem);
         String text = List.of(
                         "Менеджер запросил действие: " + specialistProblemLabel(concreteItem) + ".",
+                        isWorkerRiskConcrete(concreteItem)
+                                ? "Статус: принято, нужен комментарий после нажатия кнопки."
+                                : "",
                         "Менеджер: " + managerName,
                         "Карточка: " + safe(concreteItem.getTitle()),
                         safe(concreteItem.getSubtitle()),
@@ -2129,7 +2264,7 @@ public class ManagerControlService {
                 workerUser.getWorkerTelegramGroupChatId(),
                 text,
                 null,
-                List.of(List.of(ManagerControlWorkerTaskTelegramCallbackService.acceptButton(concreteItem.getId())))
+                List.of(List.of(workerTaskTelegramButton(concreteItem)))
         );
         if (sent) {
             concreteItem.setWorkerNotificationSentAt(now);
@@ -2138,6 +2273,13 @@ public class ManagerControlService {
             concreteItem.setWorkerNotificationFailureReason("Telegram не отправил сообщение");
             return false;
         }
+    }
+
+    private InlineKeyboardButton workerTaskTelegramButton(ManagerDailyControlConcreteItem concreteItem) {
+        if (isWorkerRiskConcrete(concreteItem)) {
+            return ManagerControlWorkerTaskTelegramCallbackService.riskExplanationButton(concreteItem.getId());
+        }
+        return ManagerControlWorkerTaskTelegramCallbackService.acceptButton(concreteItem.getId());
     }
 
     private String workerTaskRequestTitle(ManagerDailyControlConcreteItem concreteItem) {
@@ -2958,6 +3100,18 @@ public class ManagerControlService {
         return fio.isBlank() ? safe(worker.getUser().getUsername()) : fio;
     }
 
+    private String companyWorkerName(Company company) {
+        if (company == null || company.getWorkers() == null || company.getWorkers().isEmpty()) {
+            return "Исполнитель не назначен";
+        }
+        return company.getWorkers().stream()
+                .map(this::workerName)
+                .filter(value -> !safe(value).isBlank())
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .findFirst()
+                .orElse("Исполнитель не назначен");
+    }
+
     private String orderTitle(Order order, String fallback) {
         if (order == null) {
             return fallback;
@@ -3089,19 +3243,19 @@ public class ManagerControlService {
     }
 
     private ManagerControlConcreteItemResponse telegramChatIssueExample(Manager manager, Company company) {
-        Long chatId = company.getTelegramGroupChatId();
+        String specialistName = companyWorkerName(company);
         return new ManagerControlConcreteItemResponse(
                 null,
                 ENTITY_TELEGRAM_CHAT,
                 company.getId(),
                 safe(company.getTitle()).isBlank() ? "Компания #" + company.getId() : company.getTitle(),
-                chatId == null ? "Telegram chat_id не задан" : "Telegram chat_id " + chatId,
+                specialistName,
                 "Telegram",
                 null,
                 "Telegram-отправка по компании получила ошибку. Если группа стала супергруппой, нажмите «Починить»: система запросит новый chat_id у Telegram и обновит привязку.",
                 companyTargetUrl(manager, company),
                 null,
-                company.getUrlChat(),
+                normalizedChatUrl(company.getUrlChat()),
                 null,
                 null,
                 ManagerDailyControlItemStatus.OPEN.name(),
@@ -3109,8 +3263,85 @@ public class ManagerControlService {
                 null,
                 null,
                 null,
-                null
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                specialistName
         );
+    }
+
+    private List<ManagerControlConcreteItemResponse> unansweredClientMessageExamples(Manager manager, int limit) {
+        return clientChatMessageTrackerService.dueExamples(manager, limit).stream()
+                .map(this::unansweredClientMessageExample)
+                .toList();
+    }
+
+    private ManagerControlConcreteItemResponse unansweredClientMessageExample(ClientChatUnansweredExample example) {
+        String companyTitle = safe(example.companyTitle()).isBlank()
+                ? "Компания не определена"
+                : example.companyTitle();
+        String sender = safe(example.senderName()).isBlank() ? "Клиент" : example.senderName();
+        String waiting = waitingLabel(example.waitingMinutes());
+        return new ManagerControlConcreteItemResponse(
+                null,
+                ENTITY_CLIENT_CHAT_UNANSWERED,
+                example.id(),
+                companyTitle,
+                platformLabel(example.platform()) + " · " + safe(example.chatTitle()),
+                waiting,
+                Math.max(0, example.waitingMinutes() / (60L * 24L)),
+                sender + " написал " + waiting + ". Последнее сообщение: " + compact(example.lastMessageText(), 260),
+                example.targetUrl(),
+                null,
+                example.chatUrl(),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                compact(example.lastMessageText(), 1000),
+                example.specialistName()
+        );
+    }
+
+    private String platformLabel(com.hunt.otziv.client_chat_control.model.ClientChatPlatform platform) {
+        if (platform == null) {
+            return "Чат";
+        }
+        return switch (platform) {
+            case TELEGRAM -> "Telegram";
+            case WHATSAPP -> "WhatsApp";
+            case MAX -> "MAX";
+        };
+    }
+
+    private String waitingLabel(long minutes) {
+        long safeMinutes = Math.max(0, minutes);
+        if (safeMinutes < 60) {
+            return safeMinutes + " мин. без ответа";
+        }
+        long hours = safeMinutes / 60;
+        long restMinutes = safeMinutes % 60;
+        if (hours < 24) {
+            return restMinutes == 0
+                    ? hours + " ч. без ответа"
+                    : hours + " ч. " + restMinutes + " мин. без ответа";
+        }
+        long days = hours / 24;
+        long restHours = hours % 24;
+        return restHours == 0
+                ? days + " дн. без ответа"
+                : days + " дн. " + restHours + " ч. без ответа";
     }
 
     private String companyTargetUrl(Manager manager, Company company) {
@@ -3179,7 +3410,7 @@ public class ManagerControlService {
         }
         String notificationError = safe(invoice.getPaymentSuccessNotificationError());
         if (!notificationError.isBlank()) {
-            return commonInvoicePaymentNotificationReason(notificationError);
+            return commonInvoicePaymentNotificationReason(invoice, notificationError);
         }
         CommonInvoiceStatus status = invoice.getStatus();
         if (status == CommonInvoiceStatus.NEEDS_ATTENTION) {
@@ -3217,7 +3448,7 @@ public class ManagerControlService {
             return "Общий счет отключен. Рекомендация: нажмите «Починить», если в нем не осталось неоплаченных позиций.";
         }
         if (error.startsWith("whatsapp_group_missing") || error.contains("whatsapp-групп")) {
-            return "Для WhatsApp-группы не задан groupId. Рекомендация: откройте «Счет», затем заказ/компанию и привяжите WhatsApp-группу к боту.";
+            return commonInvoiceWhatsappGroupMissingReason(invoice, false);
         }
         if (error.startsWith("auto_send_disabled")) {
             return "Автоматическая отправка клиентских сообщений выключена. Рекомендация: включите моментальные сообщения или обработайте счет вручную.";
@@ -3241,16 +3472,82 @@ public class ManagerControlService {
                 + ". Рекомендация: откройте «Счет» и проверьте причину вручную.";
     }
 
-    private String commonInvoicePaymentNotificationReason(String rawError) {
+    private String commonInvoicePaymentNotificationReason(CommonInvoice invoice, String rawError) {
         String error = safe(rawError).toLowerCase(Locale.ROOT);
         if (error.startsWith("immediate_messages_disabled")) {
             return "Уведомление об оплате не отправлено: моментальные клиентские сообщения выключены. Рекомендация: включите отправку или нажмите «Починить», чтобы закрыть эту ошибку.";
         }
         if (error.startsWith("whatsapp_group_missing") || error.contains("groupid")) {
-            return "Уведомление об оплате не отправлено: у WhatsApp-группы не задан groupId. Рекомендация: привяжите группу к боту, затем отправьте сообщение вручную или нажмите «Починить», если уведомление уже не нужно.";
+            return commonInvoiceWhatsappGroupMissingReason(invoice, true);
         }
         return "Ошибка уведомления об оплате: " + limit(rawError, 160)
                 + ". Рекомендация: проверьте сообщение клиенту или нажмите «Починить», чтобы закрыть ошибку уведомления.";
+    }
+
+    private String commonInvoiceWhatsappGroupMissingReason(CommonInvoice invoice, boolean paymentNotification) {
+        CommonInvoiceChatBinding binding = commonInvoiceChatBinding(invoice);
+        Company primaryCompany = binding.primaryCompany();
+        Company linkedCompanyWithGroup = binding.linkedCompanyWithGroup();
+        String primaryName = safe(primaryCompany == null ? null : primaryCompany.getTitle());
+        String prefix = paymentNotification
+                ? "Уведомление об оплате не отправлено"
+                : "Сообщение общего счета не отправлено";
+
+        if (hasText(primaryCompany == null ? null : primaryCompany.getGroupId())) {
+            return prefix + ": у компании"
+                    + (primaryName.isBlank() ? "" : " «" + primaryName + "»")
+                    + " сейчас уже есть groupId, но в общем счете осталась старая ошибка WhatsApp. "
+                    + "Рекомендация: повторите отправку из «Счета» или нажмите «Починить», если сообщение уже отправлено вручную или больше не нужно.";
+        }
+
+        if (linkedCompanyWithGroup != null) {
+            String linkedName = safe(linkedCompanyWithGroup.getTitle());
+            return prefix + ": у главной компании общего счета"
+                    + (primaryName.isBlank() ? "" : " «" + primaryName + "»")
+                    + " нет groupId. У связанной компании"
+                    + (linkedName.isBlank() ? "" : " «" + linkedName + "»")
+                    + " groupId есть, но общий счет отправляется через главную компанию. "
+                    + "Рекомендация: привяжите WhatsApp-группу главной компании к боту или смените главную компанию счета"
+                    + (paymentNotification ? ", либо нажмите «Починить», если уведомление уже не нужно." : ".");
+        }
+
+        return prefix + ": у WhatsApp-группы главной компании общего счета не задан groupId. "
+                + "Рекомендация: откройте «Счет», затем заказ/компанию и привяжите WhatsApp-группу к боту"
+                + (paymentNotification ? ", либо нажмите «Починить», если уведомление уже не нужно." : ".");
+    }
+
+    private CommonInvoiceChatBinding commonInvoiceChatBinding(CommonInvoice invoice) {
+        List<CommonInvoiceOrder> items = invoice == null || invoice.getId() == null
+                ? List.of()
+                : commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        Company primaryCompany = commonInvoicePrimaryChatCompany(invoice, items);
+        Long primaryCompanyId = primaryCompany == null ? null : primaryCompany.getId();
+        Company linkedCompanyWithGroup = items.stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .filter(Objects::nonNull)
+                .map(Order::getCompany)
+                .filter(Objects::nonNull)
+                .filter(company -> company.getId() != null && !Objects.equals(company.getId(), primaryCompanyId))
+                .filter(company -> hasText(company.getGroupId()))
+                .findFirst()
+                .orElse(null);
+        return new CommonInvoiceChatBinding(primaryCompany, linkedCompanyWithGroup);
+    }
+
+    private Company commonInvoicePrimaryChatCompany(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (invoice == null) {
+            return null;
+        }
+        if (invoice.getAccount() != null && invoice.getAccount().getInvoiceCompany() != null) {
+            return invoice.getAccount().getInvoiceCompany();
+        }
+        return (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .filter(Objects::nonNull)
+                .map(Order::getCompany)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private boolean commonInvoiceTechnicalTailRepairable(CommonInvoice invoice) {
@@ -3263,8 +3560,26 @@ public class ManagerControlService {
                 || error.startsWith("manual_fix:"));
     }
 
+    private boolean commonInvoiceWhatsappGroupTailRepairable(CommonInvoice invoice) {
+        String error = safe(invoice == null ? null : invoice.getLastError()).toLowerCase(Locale.ROOT);
+        if (invoice == null || !(error.startsWith("whatsapp_group_missing") || error.contains("whatsapp-групп"))) {
+            return false;
+        }
+        CommonInvoiceChatBinding binding = commonInvoiceChatBinding(invoice);
+        return hasText(binding.primaryCompany() == null
+                ? null
+                : binding.primaryCompany().getGroupId());
+    }
+
     private boolean commonInvoicePaymentNotificationRepairable(CommonInvoice invoice) {
         return !safe(invoice == null ? null : invoice.getPaymentSuccessNotificationError()).isBlank();
+    }
+
+    private boolean hasText(String value) {
+        return !safe(value).isBlank();
+    }
+
+    private record CommonInvoiceChatBinding(Company primaryCompany, Company linkedCompanyWithGroup) {
     }
 
     private String valueAfter(String value, String marker) {
@@ -3485,6 +3800,9 @@ public class ManagerControlService {
         if (actionType != ManagerDailyControlActionType.ACKNOWLEDGED) {
             return;
         }
+        if (concreteItem != null && ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType())) {
+            return;
+        }
         ManagerDailyControlItem parentItem = concreteItem == null ? null : concreteItem.getParentItem();
         if (parentItem != null
                 && parentItem.getGroup() == ManagerDailyControlGroup.ACTION
@@ -3584,6 +3902,14 @@ public class ManagerControlService {
         }
         String trimmed = value.trim();
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
+    }
+
+    private String compact(String value, int maxLength) {
+        String trimmed = safe(value).replaceAll("\\s+", " ");
+        if (trimmed.length() <= maxLength) {
+            return trimmed;
+        }
+        return trimmed.substring(0, Math.max(0, maxLength - 1)).trim() + "…";
     }
 
     private WorkerSectionCounts workerSectionCounts(Manager manager, LocalDate today) {
@@ -3911,6 +4237,17 @@ public class ManagerControlService {
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private String normalizedChatUrl(String value) {
+        String url = safe(value);
+        if (url.isBlank()) {
+            return null;
+        }
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            return url;
+        }
+        return "https://" + url;
     }
 
     private String managerName(Manager manager) {

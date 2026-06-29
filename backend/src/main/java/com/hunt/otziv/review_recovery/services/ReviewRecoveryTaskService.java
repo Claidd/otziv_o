@@ -1,5 +1,6 @@
 package com.hunt.otziv.review_recovery.services;
 
+import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.u_users.model.Manager;
@@ -18,6 +19,8 @@ public interface ReviewRecoveryTaskService {
     List<ReviewRecoveryTask> getTasksByOrderId(Long orderId);
 
     ReviewRecoveryTask createTask(Long reviewId, User createdBy);
+
+    ReviewRecoveryTask createArchiveTask(ArchiveReviewRecoverySource source, User createdBy);
 
     ReviewRecoveryTask getTask(Long taskId);
 

@@ -535,6 +535,8 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
         WHERE o.manager = :manager
           AND state.orderId = o.id
           AND c.telegramGroupChatId IS NOT NULL
+          AND state.status <> com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus.DONE
+          AND LOWER(COALESCE(state.lastErrorCode, '')) <> 'telegram_group_missing'
           AND (
               LOWER(COALESCE(state.lastErrorCode, '')) LIKE '%telegram%'
               OR LOWER(COALESCE(state.lastErrorMessage, '')) LIKE '%telegram%'

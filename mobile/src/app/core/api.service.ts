@@ -737,6 +737,7 @@ export interface OrderReviewItem {
   botLogin: string;
   botPassword: string;
   botCounter: number;
+  botActive?: boolean;
   companyTitle: string;
   commentCompany: string;
   orderComments: string;
@@ -831,6 +832,11 @@ export interface WorkerCredentialPreparation {
   loginCopiedAt?: string | null;
   passwordCopiedAt?: string | null;
   updatedAt?: string | null;
+  loginCopied?: boolean;
+  passwordCopied?: boolean;
+  ready?: boolean;
+  remainingSeconds?: number;
+  waitSeconds?: number;
 }
 
 export interface OrderDetailsPayload {
@@ -2925,18 +2931,18 @@ export class ApiService {
     return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/change-text`), {});
   }
 
-  assignManagerOrderReviewNewAccount(orderId: number, reviewId: number): Observable<OrderReviewItem> {
-    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`), {});
+  assignManagerOrderReviewNewAccount(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/new-account`), source ?? {});
   }
 
-  changeManagerOrderReviewBot(orderId: number, reviewId: number): Observable<OrderReviewItem> {
-    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/change-bot`), {});
+  changeManagerOrderReviewBot(orderId: number, reviewId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/change-bot`), source ?? {});
   }
 
-  deactivateManagerOrderReviewBot(orderId: number, reviewId: number, botId: number): Observable<OrderReviewItem> {
+  deactivateManagerOrderReviewBot(orderId: number, reviewId: number, botId: number, source?: WorkerActivitySource): Observable<OrderReviewItem> {
     return this.http.post<OrderReviewItem>(
       this.apiUrl(`/api/manager/orders/${orderId}/reviews/${reviewId}/bots/${botId}/deactivate`),
-      {}
+      source ?? {}
     );
   }
 

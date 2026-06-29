@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkerCredentialPreparationService {
 
     private static final int VALUE_LIMIT = 80;
+    private static final int PUBLISH_WAIT_SECONDS = 150;
+    private static final int NAGUL_WAIT_SECONDS = 180;
 
     private final WorkerCredentialPreparationRepository repository;
     private final UserService userService;
@@ -106,7 +108,7 @@ public class WorkerCredentialPreparationService {
             return null;
         }
         return repository.findByWorkerUserIdAndScope(workerUser.getId(), scope)
-                .map(this::toResponse)
+                .map(preparation -> toResponse(preparation, waitSeconds(scope)))
                 .orElse(null);
     }
 
@@ -129,12 +131,13 @@ public class WorkerCredentialPreparationService {
 
         int normalizedWaitSeconds = Math.max(1, waitSeconds);
         return repository.findByWorkerUserIdAndScope(workerUser.getId(), scope)
-                .map(preparation -> Optional.ofNullable(blockReason(
+                .map(preparation -> preparationState(
                         preparation,
                         reviewId,
                         botId,
-                        normalizedWaitSeconds
-                )))
+                        normalizedWaitSeconds,
+                        LocalDateTime.now()
+                ).block())
                 .orElseGet(() -> Optional.of(missingPreparationBlock(normalizedWaitSeconds)));
     }
 
@@ -155,49 +158,76 @@ public class WorkerCredentialPreparationService {
         return null;
     }
 
-    private WorkerCredentialPreparationResponse toResponse(WorkerCredentialPreparation preparation) {
+    private WorkerCredentialPreparationResponse toResponse(WorkerCredentialPreparation preparation, int waitSeconds) {
+        CredentialPreparationState state = preparationState(
+                preparation,
+                preparation.getReviewId(),
+                preparation.getBotId(),
+                waitSeconds,
+                LocalDateTime.now()
+        );
         return new WorkerCredentialPreparationResponse(
                 preparation.getScope().name(),
                 preparation.getReviewId(),
                 preparation.getBotId(),
                 dateValue(preparation.getLoginCopiedAt()),
                 dateValue(preparation.getPasswordCopiedAt()),
-                dateValue(preparation.getUpdatedAt())
+                dateValue(preparation.getUpdatedAt()),
+                state.loginCopied(),
+                state.passwordCopied(),
+                state.ready(),
+                state.remainingSeconds(),
+                waitSeconds
         );
     }
 
-    private CredentialPreparationBlock blockReason(
+    private CredentialPreparationState preparationState(
             WorkerCredentialPreparation preparation,
             Long reviewId,
             Long botId,
-            int waitSeconds
+            int waitSeconds,
+            LocalDateTime now
     ) {
         if (preparation == null
                 || !Objects.equals(preparation.getReviewId(), reviewId)
-                || !Objects.equals(preparation.getBotId(), botId)
-                || preparation.getLoginCopiedAt() == null
-                || preparation.getPasswordCopiedAt() == null) {
-            return missingPreparationBlock(waitSeconds);
+                || !Objects.equals(preparation.getBotId(), botId)) {
+            return CredentialPreparationState.missing(waitSeconds);
+        }
+
+        boolean loginCopied = preparation.getLoginCopiedAt() != null;
+        boolean passwordCopied = preparation.getPasswordCopiedAt() != null;
+        if (!loginCopied || !passwordCopied) {
+            return new CredentialPreparationState(
+                    loginCopied,
+                    passwordCopied,
+                    false,
+                    0,
+                    Optional.of(missingPreparationBlock(waitSeconds))
+            );
         }
 
         LocalDateTime lastCopyAt = preparation.getLoginCopiedAt().isAfter(preparation.getPasswordCopiedAt())
                 ? preparation.getLoginCopiedAt()
                 : preparation.getPasswordCopiedAt();
         LocalDateTime readyAt = lastCopyAt.plusSeconds(waitSeconds);
-        LocalDateTime now = LocalDateTime.now();
         if (!now.isBefore(readyAt)) {
-            return null;
+            return new CredentialPreparationState(true, true, true, 0, Optional.empty());
         }
 
         long remainingSeconds = Math.max(1, Duration.between(now, readyAt).toSeconds() + 1);
-        return new CredentialPreparationBlock(
+        CredentialPreparationBlock block = new CredentialPreparationBlock(
                 "После копирования логина и пароля подождите еще " + remainingSeconds + " сек.",
                 remainingSeconds
         );
+        return new CredentialPreparationState(true, true, false, remainingSeconds, Optional.of(block));
     }
 
     private CredentialPreparationBlock missingPreparationBlock(int waitSeconds) {
         return new CredentialPreparationBlock("Сначала скопируйте логин и пароль аккаунта.", waitSeconds);
+    }
+
+    private int waitSeconds(WorkerCredentialPreparationScope scope) {
+        return scope == WorkerCredentialPreparationScope.NAGUL ? NAGUL_WAIT_SECONDS : PUBLISH_WAIT_SECONDS;
     }
 
     private User currentUser(Authentication authentication) {
@@ -227,5 +257,24 @@ public class WorkerCredentialPreparationService {
     }
 
     public record CredentialPreparationBlock(String message, long remainingSeconds) {
+    }
+
+    private record CredentialPreparationState(
+            boolean loginCopied,
+            boolean passwordCopied,
+            boolean ready,
+            long remainingSeconds,
+            Optional<CredentialPreparationBlock> block
+    ) {
+
+        private static CredentialPreparationState missing(int waitSeconds) {
+            return new CredentialPreparationState(
+                    false,
+                    false,
+                    false,
+                    0,
+                    Optional.of(new CredentialPreparationBlock("Сначала скопируйте логин и пароль аккаунта.", waitSeconds))
+            );
+        }
     }
 }

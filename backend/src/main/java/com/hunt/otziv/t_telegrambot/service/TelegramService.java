@@ -1,6 +1,10 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
+import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCallbackService;
 import com.hunt.otziv.u_users.model.Role;
@@ -9,6 +13,9 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -27,10 +34,12 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -56,6 +65,7 @@ public class TelegramService extends TelegramLongPollingBot {
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
+    private final ClientChatMessageTrackerService clientChatMessageTrackerService;
 
     public TelegramService(
             DefaultBotOptions botOptions,
@@ -81,6 +91,7 @@ public class TelegramService extends TelegramLongPollingBot {
                 publicationProgressPreferenceService,
                 workerRiskTelegramCallbackServiceProvider,
                 null,
+                null,
                 null
         );
     }
@@ -98,7 +109,8 @@ public class TelegramService extends TelegramLongPollingBot {
             PublicationProgressPreferenceService publicationProgressPreferenceService,
             ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider,
             ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider,
-            TelegramChatMigrationService telegramChatMigrationService
+            TelegramChatMigrationService telegramChatMigrationService,
+            ClientChatMessageTrackerService clientChatMessageTrackerService
     ) {
         super(botOptions, botToken);
         this.botUsername = botUsername;
@@ -111,6 +123,7 @@ public class TelegramService extends TelegramLongPollingBot {
         this.workerRiskTelegramCallbackServiceProvider = workerRiskTelegramCallbackServiceProvider;
         this.managerControlWorkerTaskTelegramCallbackServiceProvider = managerControlWorkerTaskTelegramCallbackServiceProvider;
         this.telegramChatMigrationService = telegramChatMigrationService;
+        this.clientChatMessageTrackerService = clientChatMessageTrackerService;
     }
 
     @Override
@@ -165,7 +178,7 @@ public class TelegramService extends TelegramLongPollingBot {
                 sendPreferenceResponse(chatId, preferenceUpdate.get());
                 return;
             }
-            log.debug("Telegram group message ignored chatId={}: '{}'", chatId, messageText);
+            trackTelegramGroupMessage(update);
             return;
         }
 
@@ -279,6 +292,49 @@ public class TelegramService extends TelegramLongPollingBot {
         Optional<PublicationProgressPreferenceService.PreferenceUpdate> update =
                 publicationProgressPreferenceService.handleTelegramCommand(chatId, messageText);
         return update == null ? Optional.empty() : update;
+    }
+
+    private void trackTelegramGroupMessage(Update update) {
+        if (clientChatMessageTrackerService == null || update == null || !update.hasMessage()) {
+            return;
+        }
+        try {
+            var message = update.getMessage();
+            var chat = message.getChat();
+            var from = message.getFrom();
+            clientChatMessageTrackerService.track(new ClientChatMessageCommand(
+                    ClientChatPlatform.TELEGRAM,
+                    ClientChatDirection.INCOMING,
+                    String.valueOf(message.getChatId()),
+                    chat == null ? null : chat.getTitle(),
+                    message.getMessageId() == null ? null : String.valueOf(message.getMessageId()),
+                    from == null || from.getId() == null ? null : String.valueOf(from.getId()),
+                    telegramSenderName(from),
+                    message.getText(),
+                    telegramMessageTime(message.getDate())
+            ));
+        } catch (Exception e) {
+            log.warn("Telegram group message tracking failed chatId={}", update.getMessage().getChatId(), e);
+        }
+    }
+
+    private static String telegramSenderName(org.telegram.telegrambots.meta.api.objects.User from) {
+        if (from == null) {
+            return null;
+        }
+        if (hasText(from.getUserName())) {
+            return "@" + from.getUserName();
+        }
+        String name = ((from.getFirstName() == null ? "" : from.getFirstName()) + " "
+                + (from.getLastName() == null ? "" : from.getLastName())).trim();
+        return name.isBlank() ? null : name;
+    }
+
+    private static LocalDateTime telegramMessageTime(Integer unixSeconds) {
+        if (unixSeconds == null) {
+            return LocalDateTime.now();
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochSecond(unixSeconds), ZoneId.systemDefault());
     }
 
     private void sendPreferenceResponse(long chatId, PublicationProgressPreferenceService.PreferenceUpdate update) {
@@ -414,6 +470,66 @@ public class TelegramService extends TelegramLongPollingBot {
         return sendSingleMessage(chatId, text, parseMode, markup);
     }
 
+    public Optional<Integer> sendMessageWithInlineKeyboardMessageId(
+            long chatId,
+            String text,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return Optional.empty();
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return Optional.empty();
+        }
+        if (!hasText(text)) {
+            log.warn("Telegram-сообщение для {} не отправлено: текст пустой", chatId);
+            return Optional.empty();
+        }
+
+        InlineKeyboardMarkup markup = null;
+        if (keyboard != null && !keyboard.isEmpty()) {
+            markup = new InlineKeyboardMarkup();
+            markup.setKeyboard(keyboard);
+        }
+        return sendSingleMessageResult(chatId, text, parseMode, markup)
+                .map(Message::getMessageId);
+    }
+
+    public boolean editMessageText(
+            long chatId,
+            int messageId,
+            String text,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken()) || !hasText(text)) {
+            return false;
+        }
+        try {
+            EditMessageText edit = new EditMessageText();
+            edit.setChatId(String.valueOf(chatId));
+            edit.setMessageId(messageId);
+            edit.setText(text);
+            edit.setDisableWebPagePreview(true);
+            if (hasText(parseMode)) {
+                edit.setParseMode(parseMode);
+            }
+            if (keyboard != null && !keyboard.isEmpty()) {
+                InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+                markup.setKeyboard(keyboard);
+                edit.setReplyMarkup(markup);
+            }
+            executeEditMessageText(edit);
+            return true;
+        } catch (TelegramApiException e) {
+            log.warn("Не удалось обновить Telegram-сообщение chatId={} messageId={}: {}", chatId, messageId, e.getMessage());
+            return false;
+        }
+    }
+
     public boolean sendMessage(long chatId, String text, String parseMode) {
         if (!sendingEnabled) {
             log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
@@ -440,6 +556,10 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     private boolean sendSingleMessage(long chatId, String text, String parseMode, InlineKeyboardMarkup replyMarkup) {
+        return sendSingleMessageResult(chatId, text, parseMode, replyMarkup).isPresent();
+    }
+
+    private Optional<Message> sendSingleMessageResult(long chatId, String text, String parseMode, InlineKeyboardMarkup replyMarkup) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
@@ -453,17 +573,17 @@ public class TelegramService extends TelegramLongPollingBot {
 
         for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
             try {
-                executeTelegramMessage(message);
+                Message sentMessage = executeTelegramMessage(message);
                 if (attempt > 1) {
                     log.info("Telegram-сообщение отправлено chatId={} после повтора {}", chatId, attempt);
                 } else {
                     log.info("Telegram-сообщение отправлено chatId={}", chatId);
                 }
-                return true;
+                return Optional.ofNullable(sentMessage);
             } catch (TelegramApiRequestException e) {
                 Optional<Long> migratedChatId = migrateToChatId(e);
                 if (migratedChatId.isPresent()) {
-                    return resendAfterChatMigration(chatId, migratedChatId.get(), text, parseMode, replyMarkup);
+                    return resendAfterChatMigrationResult(chatId, migratedChatId.get(), text, parseMode, replyMarkup);
                 }
                 if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
                     log.warn("Telegram-бот заблокирован пользователем. ChatId: {}", chatId);
@@ -472,7 +592,7 @@ public class TelegramService extends TelegramLongPollingBot {
                 } else {
                     log.error("Telegram API ошибка для chatId={}: {}", chatId, e.getApiResponse(), e);
                 }
-                return false;
+                return Optional.empty();
             } catch (TelegramApiException e) {
                 if (handleRetryableSendException(chatId, attempt, e)) {
                     continue;
@@ -480,7 +600,7 @@ public class TelegramService extends TelegramLongPollingBot {
                 if (!isTransientNetworkException(e)) {
                     log.error("Ошибка при отправке Telegram-сообщения chatId={}: {}", chatId, e.getMessage(), e);
                 }
-                return false;
+                return Optional.empty();
             } catch (Exception e) {
                 if (handleRetryableSendException(chatId, attempt, e)) {
                     continue;
@@ -488,10 +608,10 @@ public class TelegramService extends TelegramLongPollingBot {
                 if (!isTransientNetworkException(e)) {
                     log.error("Неизвестная ошибка при отправке Telegram-сообщения chatId={}: {}", chatId, e.getMessage(), e);
                 }
-                return false;
+                return Optional.empty();
             }
         }
-        return false;
+        return Optional.empty();
     }
 
     public Optional<TelegramChatMigrationResult> repairMigratedChatId(long oldChatId) {
@@ -531,6 +651,22 @@ public class TelegramService extends TelegramLongPollingBot {
         return sendSingleMessage(newChatId, text, parseMode, replyMarkup);
     }
 
+    private Optional<Message> resendAfterChatMigrationResult(
+            long oldChatId,
+            long newChatId,
+            String text,
+            String parseMode,
+            InlineKeyboardMarkup replyMarkup
+    ) {
+        if (telegramChatMigrationService != null) {
+            telegramChatMigrationService.migrateChatId(oldChatId, newChatId);
+        } else {
+            log.warn("Telegram chat migrated oldChatId={} newChatId={}, but migration service is unavailable", oldChatId, newChatId);
+        }
+        log.info("Повторяем Telegram-сообщение после миграции chatId={} -> {}", oldChatId, newChatId);
+        return sendSingleMessageResult(newChatId, text, parseMode, replyMarkup);
+    }
+
     private Optional<Long> migrateToChatId(TelegramApiRequestException e) {
         if (e == null || e.getParameters() == null || e.getParameters().getMigrateToChatId() == null) {
             return Optional.empty();
@@ -567,8 +703,8 @@ public class TelegramService extends TelegramLongPollingBot {
         }
     }
 
-    void executeTelegramMessage(SendMessage message) throws TelegramApiException {
-        execute(message);
+    Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
+        return execute(message);
     }
 
     Chat executeGetChat(GetChat request) throws TelegramApiException {
@@ -577,6 +713,10 @@ public class TelegramService extends TelegramLongPollingBot {
 
     void executeAnswerCallback(AnswerCallbackQuery answer) throws TelegramApiException {
         execute(answer);
+    }
+
+    void executeEditMessageText(EditMessageText edit) throws TelegramApiException {
+        execute(edit);
     }
 
     private boolean handleRetryableSendException(long chatId, int attempt, Exception exception) {

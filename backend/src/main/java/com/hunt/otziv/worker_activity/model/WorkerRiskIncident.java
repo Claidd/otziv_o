@@ -104,6 +104,12 @@ public class WorkerRiskIncident {
     @Column(name = "worker_explanation_by_user_id")
     private Long workerExplanationByUserId;
 
+    @Column(name = "telegram_notification_chat_id")
+    private Long telegramNotificationChatId;
+
+    @Column(name = "telegram_notification_message_id")
+    private Integer telegramNotificationMessageId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "resolution_action", length = 40)
     private WorkerRiskResolutionAction resolutionAction;

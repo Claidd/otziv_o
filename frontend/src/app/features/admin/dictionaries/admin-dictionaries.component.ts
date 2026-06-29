@@ -72,7 +72,7 @@ import {
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'specialistTransfer' | 'gamification' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -126,6 +126,7 @@ const PROMO_TEXT_LABELS: Record<number, string> = {
 };
 
 const CLIENT_MESSAGE_MONITOR_POLLING_MS = 60000;
+const DEFAULT_AUTO_IGNORE_PHRASES = 'ок,окей,хорошо,спасибо,спасибо большое,благодарю,да,нет,понял,поняла,поняли,принято,договорились,отлично,супер,ясно,ладно,хорошо спасибо,спс';
 
 const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   categories: {
@@ -159,6 +160,10 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
   managerTexts: {
     title: 'Тексты менеджеров',
     text: 'Персональные шаблоны сообщений, которые менеджер использует в работе.'
+  },
+  messageDictionary: {
+    title: 'Фразы без ответа',
+    text: 'Короткие ответы клиента, после которых контроль менеджера не создает неотвеченное сообщение.'
   },
   specialistTransfer: {
     title: 'Передача компаний',
@@ -206,6 +211,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     { key: 'accounts', label: 'Аккаунты', icon: 'manage_accounts' },
     { key: 'promo', label: 'Промо', icon: 'smart_button' },
     { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' },
+    { key: 'messageDictionary', label: 'Фразы без ответа', icon: 'menu_book' },
     { key: 'specialistTransfer', label: 'Передача', icon: 'sync_alt' },
     { key: 'gamification', label: 'Геймификация', icon: 'emoji_events' },
     { key: 'settings', label: 'Настройки', icon: 'tune' },
@@ -295,6 +301,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly expandedMonitorQueueKey = signal<string | null>(null);
   readonly clientMessageManualAction = signal<string | null>(null);
   readonly maintenanceAction = signal<string | null>(null);
+  readonly autoIgnorePhraseDraft = signal('');
+  readonly editingAutoIgnorePhraseIndex = signal<number | null>(null);
+  readonly editingAutoIgnorePhraseValue = signal('');
   readonly productCategories = signal<DictionaryOption[]>([]);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
@@ -426,6 +435,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     paymentOverdueLiveEnabled: [false],
     archiveReorderEnabled: [true],
     errorProtectionEnabled: [true],
+    unansweredAutoIgnoreEnabled: [true],
     reviewCheckIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
     reviewCheckAutoArchiveDays: [30, [Validators.required, Validators.min(1), Validators.max(3650)]],
     clientTextReminderIntervalDays: [3, [Validators.required, Validators.min(1), Validators.max(365)]],
@@ -452,6 +462,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     whatsAppGapSeconds: [180, [Validators.required, Validators.min(30), Validators.max(86400)]],
     telegramGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
     maxGapSeconds: [90, [Validators.required, Validators.min(30), Validators.max(86400)]],
+    unansweredAutoIgnoreMaxLength: [60, [Validators.required, Validators.min(1), Validators.max(500)]],
     businessWindows: ['10:00-12:00,14:00-17:00,19:00-21:00', [Validators.required, Validators.maxLength(500)]],
     reviewCheckStatuses: ['На проверке', [Validators.required, Validators.maxLength(500)]],
     clientTextReminderStatuses: ['Новый', [Validators.required, Validators.maxLength(500)]],
@@ -472,7 +483,8 @@ export class AdminDictionariesComponent implements OnDestroy {
     paymentLinkCopyText: ['', [Validators.required, Validators.maxLength(500)]],
     paymentSuccessText: ['', [Validators.required, Validators.maxLength(500)]],
     reviewRecoveryNoticeText: ['', [Validators.required, Validators.maxLength(500)]],
-    archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]]
+    archiveOfferText: ['', [Validators.required, Validators.maxLength(500)]],
+    unansweredAutoIgnorePhrases: [DEFAULT_AUTO_IGNORE_PHRASES, [Validators.maxLength(2000)]]
   });
 
   readonly activeLabel = computed(() => this.tabs().find((tab) => tab.key === this.activeTab())?.label ?? '');
@@ -536,6 +548,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         return this.promoTexts().length;
       case 'managerTexts':
         return this.managerTexts().length;
+      case 'messageDictionary':
+        return this.autoIgnorePhrases().length;
       case 'specialistTransfer':
         return 0;
       case 'gamification':
@@ -567,6 +581,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       { label: 'Аккаунты', value: this.botsTotal(), icon: 'manage_accounts', tone: 'pink' },
       { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
       { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
+      { label: 'Фраз без ответа', value: this.autoIgnorePhrases().length, icon: 'menu_book', tone: 'blue' },
       { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
       { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
       { label: 'Порог аккаунта', value: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3, icon: 'verified_user', tone: 'green' },
@@ -1210,6 +1225,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'settings':
         this.saveSettings();
         return;
+      case 'messageDictionary':
+        this.saveAutoresponderSettings('Справочник сохранен', (settings) => `${settings.unansweredAutoIgnorePhrases ? this.splitAutoIgnorePhrases(settings.unansweredAutoIgnorePhrases).length : 0} фраз`);
+        return;
       case 'autoresponder':
         this.saveAutoresponderSettings();
         return;
@@ -1268,6 +1286,69 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.toastService.error('Общие чаты не синхронизированы', message);
       }
     });
+  }
+
+  autoIgnorePhrases(): string[] {
+    return this.splitAutoIgnorePhrases(this.autoresponderForm.controls.unansweredAutoIgnorePhrases.value);
+  }
+
+  updateAutoIgnorePhraseDraft(value: string): void {
+    this.autoIgnorePhraseDraft.set(value);
+  }
+
+  updateEditingAutoIgnorePhraseValue(value: string): void {
+    this.editingAutoIgnorePhraseValue.set(value);
+  }
+
+  addAutoIgnorePhrase(): void {
+    const phrase = this.normalizeAutoIgnorePhrase(this.autoIgnorePhraseDraft());
+    if (!phrase) {
+      return;
+    }
+    const phrases = this.autoIgnorePhrases();
+    if (phrases.some((item) => item.toLocaleLowerCase() === phrase.toLocaleLowerCase())) {
+      this.toastService.info('Фраза уже есть', phrase);
+      return;
+    }
+    this.setAutoIgnorePhrases([...phrases, phrase]);
+    this.autoIgnorePhraseDraft.set('');
+  }
+
+  startEditAutoIgnorePhrase(index: number, phrase: string): void {
+    this.editingAutoIgnorePhraseIndex.set(index);
+    this.editingAutoIgnorePhraseValue.set(phrase);
+  }
+
+  saveAutoIgnorePhraseEdit(index: number): void {
+    const phrase = this.normalizeAutoIgnorePhrase(this.editingAutoIgnorePhraseValue());
+    if (!phrase) {
+      this.removeAutoIgnorePhrase(index);
+      return;
+    }
+    const phrases = this.autoIgnorePhrases();
+    const duplicateIndex = phrases.findIndex((item, itemIndex) =>
+      itemIndex !== index && item.toLocaleLowerCase() === phrase.toLocaleLowerCase()
+    );
+    if (duplicateIndex >= 0) {
+      this.toastService.info('Фраза уже есть', phrase);
+      return;
+    }
+    phrases[index] = phrase;
+    this.setAutoIgnorePhrases(phrases);
+    this.cancelAutoIgnorePhraseEdit();
+  }
+
+  cancelAutoIgnorePhraseEdit(): void {
+    this.editingAutoIgnorePhraseIndex.set(null);
+    this.editingAutoIgnorePhraseValue.set('');
+  }
+
+  removeAutoIgnorePhrase(index: number): void {
+    const phrases = this.autoIgnorePhrases().filter((_phrase, itemIndex) => itemIndex !== index);
+    this.setAutoIgnorePhrases(phrases);
+    if (this.editingAutoIgnorePhraseIndex() === index) {
+      this.cancelAutoIgnorePhraseEdit();
+    }
   }
 
   setClientMessageMonitorEnabled(enabled: boolean): void {
@@ -1684,6 +1765,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       || activeTab === 'specialistTransfer'
       || activeTab === 'gamification'
       || activeTab === 'settings'
+      || activeTab === 'messageDictionary'
       || activeTab === 'autoresponder'
       || activeTab === 'autoresponderMonitor') {
       return;
@@ -1770,6 +1852,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       accounts: this.botsTotal(),
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
+      messageDictionary: this.autoIgnorePhrases().length,
       specialistTransfer: 0,
       gamification: this.gamificationTotal(),
       settings: this.settingsTotal(),
@@ -2051,6 +2134,10 @@ export class AdminDictionariesComponent implements OnDestroy {
 
     if (this.activeTab() === 'settings') {
       return 'Рассылки и выгул';
+    }
+
+    if (this.activeTab() === 'messageDictionary') {
+      return 'Фразы без ответа';
     }
 
     if (this.activeTab() === 'specialistTransfer') {
@@ -2398,6 +2485,9 @@ export class AdminDictionariesComponent implements OnDestroy {
           clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings()
         });
         break;
+      case 'messageDictionary':
+        request = this.dictionariesApi.getClientMessageSettings();
+        break;
       case 'autoresponder':
         request = this.dictionariesApi.getClientMessageSettings();
         break;
@@ -2449,6 +2539,9 @@ export class AdminDictionariesComponent implements OnDestroy {
             this.applyClientPublicationProgressReportSettings(payload.clientPublicationProgressReportSettings);
             break;
           }
+          case 'messageDictionary':
+            this.applyClientMessageSettings(response as AdminClientMessageSettings);
+            break;
           case 'autoresponder':
             this.applyClientMessageSettings(response as AdminClientMessageSettings);
             break;
@@ -2794,7 +2887,11 @@ export class AdminDictionariesComponent implements OnDestroy {
     });
   }
 
-  private saveAutoresponderSettings(): void {
+  private saveAutoresponderSettings(
+    successTitle = 'Автоответчик сохранен',
+    successMessage: (settings: AdminClientMessageSettings) => string = (settings) =>
+      settings.workerEnabled ? `лимит ${settings.dailyLimit} в день` : 'сервис выключен'
+  ): void {
     if (this.autoresponderForm.invalid) {
       this.autoresponderForm.markAllAsTouched();
       return;
@@ -2817,6 +2914,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentOverdueLiveEnabled: raw.paymentOverdueLiveEnabled,
       archiveReorderEnabled: raw.archiveReorderEnabled,
       errorProtectionEnabled: raw.errorProtectionEnabled,
+      unansweredAutoIgnoreEnabled: raw.unansweredAutoIgnoreEnabled,
       reviewCheckIntervalDays: Number(raw.reviewCheckIntervalDays ?? 2),
       reviewCheckAutoArchiveDays: Number(raw.reviewCheckAutoArchiveDays ?? 30),
       clientTextReminderIntervalDays: Number(raw.clientTextReminderIntervalDays ?? 3),
@@ -2843,6 +2941,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       whatsAppGapSeconds: Number(raw.whatsAppGapSeconds ?? 180),
       telegramGapSeconds: Number(raw.telegramGapSeconds ?? 90),
       maxGapSeconds: Number(raw.maxGapSeconds ?? 90),
+      unansweredAutoIgnoreMaxLength: Number(raw.unansweredAutoIgnoreMaxLength ?? 60),
       businessWindows: raw.businessWindows.trim(),
       reviewCheckStatuses: raw.reviewCheckStatuses.trim(),
       clientTextReminderStatuses: raw.clientTextReminderStatuses.trim(),
@@ -2863,7 +2962,8 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentLinkCopyText: raw.paymentLinkCopyText.trim(),
       paymentSuccessText: raw.paymentSuccessText.trim(),
       reviewRecoveryNoticeText: raw.reviewRecoveryNoticeText.trim(),
-      archiveOfferText: raw.archiveOfferText.trim()
+      archiveOfferText: raw.archiveOfferText.trim(),
+      unansweredAutoIgnorePhrases: this.joinAutoIgnorePhrases(this.splitAutoIgnorePhrases(raw.unansweredAutoIgnorePhrases))
     };
 
     this.saving.set(true);
@@ -2874,8 +2974,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.saving.set(false);
         this.applyClientMessageSettings(settings);
         this.toastService.success(
-          'Автоответчик сохранен',
-          settings.workerEnabled ? `лимит ${settings.dailyLimit} в день` : 'сервис выключен'
+          successTitle,
+          successMessage(settings)
         );
       },
       error: (err) => {
@@ -3211,6 +3311,32 @@ export class AdminDictionariesComponent implements OnDestroy {
       && (typeof document === 'undefined' || document.visibilityState === 'visible');
   }
 
+  private setAutoIgnorePhrases(phrases: string[]): void {
+    this.autoresponderForm.controls.unansweredAutoIgnorePhrases.setValue(this.joinAutoIgnorePhrases(phrases));
+    this.autoresponderForm.controls.unansweredAutoIgnorePhrases.markAsDirty();
+  }
+
+  private splitAutoIgnorePhrases(value: string | null | undefined): string[] {
+    return (value ?? '')
+      .split(',')
+      .map((item) => this.normalizeAutoIgnorePhrase(item))
+      .filter(Boolean)
+      .filter((item, index, list) =>
+        list.findIndex((candidate) => candidate.toLocaleLowerCase() === item.toLocaleLowerCase()) === index
+      );
+  }
+
+  private joinAutoIgnorePhrases(phrases: string[]): string {
+    return phrases
+      .map((item) => this.normalizeAutoIgnorePhrase(item))
+      .filter(Boolean)
+      .join(',');
+  }
+
+  private normalizeAutoIgnorePhrase(value: string | null | undefined): string {
+    return (value ?? '').trim().replace(/\s+/g, ' ');
+  }
+
   private sharedChatSyncSummary(response: AdminSharedChatLinkSyncResponse): string {
     const parts = [
       `компаний обновлено: ${response.updatedCompanies}`,
@@ -3284,6 +3410,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentOverdueLiveEnabled: settings?.paymentOverdueLiveEnabled ?? false,
       archiveReorderEnabled: settings?.archiveReorderEnabled ?? true,
       errorProtectionEnabled: settings?.errorProtectionEnabled ?? true,
+      unansweredAutoIgnoreEnabled: settings?.unansweredAutoIgnoreEnabled ?? true,
       reviewCheckIntervalDays: settings?.reviewCheckIntervalDays ?? 2,
       reviewCheckAutoArchiveDays: settings?.reviewCheckAutoArchiveDays ?? 30,
       clientTextReminderIntervalDays: settings?.clientTextReminderIntervalDays ?? 3,
@@ -3310,6 +3437,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       whatsAppGapSeconds: settings?.whatsAppGapSeconds ?? 180,
       telegramGapSeconds: settings?.telegramGapSeconds ?? 90,
       maxGapSeconds: settings?.maxGapSeconds ?? 90,
+      unansweredAutoIgnoreMaxLength: settings?.unansweredAutoIgnoreMaxLength ?? 60,
       businessWindows: settings?.businessWindows ?? '10:00-12:00,14:00-17:00,19:00-21:00',
       reviewCheckStatuses: settings?.reviewCheckStatuses ?? 'На проверке',
       clientTextReminderStatuses: settings?.clientTextReminderStatuses ?? 'Новый',
@@ -3338,8 +3466,12 @@ export class AdminDictionariesComponent implements OnDestroy {
       reviewRecoveryNoticeText: settings?.reviewRecoveryNoticeText
         ?? '{companyAndFilial}\n\nВсе отзывы по заказу №{orderId} восстановлены. Продолжаем работу.',
       archiveOfferText: settings?.archiveOfferText
-        ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.'
+        ?? '{company}\n\nЗдравствуйте! Давно не запускали новый заказ. Можем подготовить новую аккуратную серию отзывов и обновить карточку компании. Если актуально, напишите, пожалуйста, сколько отзывов нужно в этот раз.',
+      unansweredAutoIgnorePhrases: settings?.unansweredAutoIgnorePhrases ?? DEFAULT_AUTO_IGNORE_PHRASES
     });
+    this.autoIgnorePhraseDraft.set('');
+    this.editingAutoIgnorePhraseIndex.set(null);
+    this.editingAutoIgnorePhraseValue.set('');
   }
 
   private reloadPromoManagement(): void {
@@ -3388,6 +3520,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       'accounts',
       'promo',
       'managerTexts',
+      'messageDictionary',
       'specialistTransfer',
       'gamification',
       'settings',

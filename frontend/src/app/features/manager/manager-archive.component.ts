@@ -109,6 +109,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly restoreTargetStatus = signal('Архив');
   readonly activeArchiveOrderId = signal<number | null>(null);
   readonly liveStatusMutationKey = signal<string | null>(null);
+  readonly recoveryTaskMutationKey = signal<string | null>(null);
   readonly copied = signal<string | null>(null);
   readonly liveStatusActions = LIVE_ARCHIVE_STATUS_ACTIONS;
   readonly restoreStatuses = RESTORE_STATUS_OPTIONS;
@@ -364,6 +365,39 @@ export class ManagerArchiveComponent implements OnDestroy {
     });
   }
 
+  createArchiveRecoveryTask(order: ArchiveOrderListItem, review: ArchiveReviewItem): void {
+    if (!order?.id || !review?.id || this.recoveryTaskMutationKey()) {
+      return;
+    }
+
+    const key = this.archiveRecoveryKey(order, review);
+    this.recoveryTaskMutationKey.set(key);
+    this.restoreError.set(null);
+
+    this.managerApi.createArchiveReviewRecoveryTask(order.id, review.id).subscribe({
+      next: (details) => {
+        this.restoreOrder.set(details.order);
+        this.restoreDetails.set(details);
+        this.recoveryTaskMutationKey.set(null);
+        this.toastService.success('Задача создана', `Отзыв #${review.id} добавлен в восстановление`);
+      },
+      error: (err) => {
+        const message = apiErrorMessage(err, 'Не удалось создать задачу восстановления');
+        this.restoreError.set(message);
+        this.recoveryTaskMutationKey.set(null);
+        this.toastService.error('Задача не создана', message);
+      }
+    });
+  }
+
+  isArchiveRecoveryTaskCreating(order: ArchiveOrderListItem, review: ArchiveReviewItem): boolean {
+    return this.recoveryTaskMutationKey() === this.archiveRecoveryKey(order, review);
+  }
+
+  canCreateArchiveRecoveryTask(review: ArchiveReviewItem): boolean {
+    return !!review.id && !!(review.text || '').trim();
+  }
+
   restoreStatusOptions(_order: ArchiveOrderListItem): string[] {
     return [...this.restoreStatuses];
   }
@@ -434,6 +468,10 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   private liveStatusKey(order: ArchiveOrderListItem, status: string): string {
     return `archive-live-${order.id}-${status}`;
+  }
+
+  private archiveRecoveryKey(order: ArchiveOrderListItem, review: ArchiveReviewItem): string {
+    return `archive-recovery-${order.id}-${review.id}`;
   }
 
   private archiveOrderDetailsId(order: ArchiveOrderListItem, details?: ArchiveOrderDetailsPayload | null): string {

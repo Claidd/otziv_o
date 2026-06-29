@@ -713,6 +713,7 @@ public class WorkerRiskEvaluationService {
         }
 
         String telegramText = "Система заметила риск по действию специалиста."
+                + "\nСтатус: ждем пояснение"
                 + "\nСпециалист: " + html(clean(workerName(workerUser)))
                 + "\nПричина: " + html(clean(incident.getTitle()))
                 + "\nРиск: " + incident.getScore()
@@ -720,12 +721,16 @@ public class WorkerRiskEvaluationService {
                 + "\n\nЕсли действие выполнено корректно, нажмите «Пояснить причину» "
                 + "и отправьте пояснение следующим сообщением в эту группу.";
 
-        telegramService.sendMessageWithInlineKeyboard(
+        telegramService.sendMessageWithInlineKeyboardMessageId(
                 groupChatId,
                 telegramText,
                 "HTML",
                 WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
-        );
+        ).ifPresent(messageId -> {
+            incident.setTelegramNotificationChatId(groupChatId);
+            incident.setTelegramNotificationMessageId(messageId);
+            incidentRepository.save(incident);
+        });
     }
 
     private String managerNotificationText(User workerUser, WorkerRiskIncident incident, boolean includeLogin) {

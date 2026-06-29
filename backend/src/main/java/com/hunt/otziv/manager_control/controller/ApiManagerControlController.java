@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_control.controller;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
+import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlManagerDetailResponse;
@@ -82,6 +83,20 @@ public class ApiManagerControlController {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-send-client-message",
                 () -> managerControlService.sendClientMessage(concreteItemId, principal, authentication)
+        );
+    }
+
+    @PostMapping("/concrete-items/{concreteItemId}/reply")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ManagerControlConcreteItemResponse replyToClientMessage(
+            @PathVariable Long concreteItemId,
+            @RequestBody(required = false) ManagerControlClientReplyRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-reply",
+                () -> managerControlService.replyToClientMessage(concreteItemId, request, principal, authentication)
         );
     }
 

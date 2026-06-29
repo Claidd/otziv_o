@@ -1,10 +1,19 @@
 package com.hunt.otziv.maxbot.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
+import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Locale;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,6 +28,10 @@ public class MaxBotUpdateService {
     private final MaxGroupLinkService maxGroupLinkService;
     private final MaxBotClient maxBotClient;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
+    private final ClientChatMessageTrackerService clientChatMessageTrackerService;
+
+    @Value("${max.bot.username:}")
+    private String botUsername;
 
     public void handleUpdate(JsonNode update) {
         if (update == null || update.isNull()) {
@@ -62,6 +75,8 @@ public class MaxBotUpdateService {
             if (publicationProgressPreferenceService.isPreferenceCommand(messageText)) {
                 return;
             }
+            trackMessageCreated(update, chatId, userId, messageText);
+            return;
         }
 
         log.debug("MAX update ignored: type={}, chatId={}, userId={}", updateType, chatId, userId);
@@ -160,6 +175,108 @@ public class MaxBotUpdateService {
         }
 
         return "";
+    }
+
+    private void trackMessageCreated(JsonNode update, Long chatId, Long userId, String messageText) {
+        if (clientChatMessageTrackerService == null || chatId == null || !hasText(messageText)) {
+            return;
+        }
+        if (isKnownBotSender(update)) {
+            log.debug("MAX bot/self message ignored chatId={} userId={}", chatId, userId);
+            return;
+        }
+        try {
+            clientChatMessageTrackerService.track(new ClientChatMessageCommand(
+                    ClientChatPlatform.MAX,
+                    ClientChatDirection.INCOMING,
+                    String.valueOf(chatId),
+                    text(update.path("message").path("chat"), "title"),
+                    messageId(update),
+                    userId == null ? null : String.valueOf(userId),
+                    text(update.path("message").path("sender"), "name"),
+                    messageText,
+                    messageTime(update)
+            ));
+        } catch (Exception e) {
+            log.warn("MAX message_created tracking failed chatId={}", chatId, e);
+        }
+    }
+
+    private boolean isKnownBotSender(JsonNode update) {
+        JsonNode sender = update.path("message").path("sender");
+        if (sender.isMissingNode() || sender.isNull()) {
+            sender = update.path("sender");
+        }
+
+        if (sender.path("is_bot").asBoolean(false)) {
+            return true;
+        }
+
+        String type = text(sender, "type");
+        if ("bot".equalsIgnoreCase(type)) {
+            return true;
+        }
+
+        String configuredUsername = normalizeBotUsername(botUsername);
+        String senderUsername = normalizeBotUsername(firstTextField(sender, "username", "login", "link"));
+        if (hasText(configuredUsername) && configuredUsername.equals(senderUsername)) {
+            return true;
+        }
+
+        String name = text(sender, "name").trim();
+        if ("O Company Bot".equalsIgnoreCase(name)) {
+            return true;
+        }
+
+        return hasText(senderUsername) && senderUsername.toLowerCase(Locale.ROOT).endsWith("_bot");
+    }
+
+    private static String firstTextField(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String value = text(node, field);
+            if (hasText(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private static String normalizeBotUsername(String value) {
+        if (!hasText(value)) {
+            return "";
+        }
+        String normalized = value.trim();
+        int slash = normalized.lastIndexOf('/');
+        if (slash >= 0 && slash + 1 < normalized.length()) {
+            normalized = normalized.substring(slash + 1);
+        }
+        return normalized
+                .replaceFirst("^@", "")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+    }
+
+    private static String messageId(JsonNode update) {
+        String textId = text(update.path("message"), "mid");
+        if (hasText(textId)) {
+            return textId;
+        }
+        Long numeric = longValue(update.path("message"), "message_id");
+        return numeric == null ? null : String.valueOf(numeric);
+    }
+
+    private static LocalDateTime messageTime(JsonNode update) {
+        Long timestamp = longValue(update.path("message"), "timestamp");
+        if (timestamp == null) {
+            timestamp = longValue(update, "timestamp");
+        }
+        if (timestamp == null || timestamp <= 0) {
+            return LocalDateTime.now();
+        }
+        if (timestamp > 10_000_000_000L) {
+            return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochSecond(timestamp), ZoneId.systemDefault());
     }
 
     private static String text(JsonNode node, String field) {

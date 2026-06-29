@@ -69,6 +69,7 @@ export class ManagerControlComponent {
   readonly detailError = signal<string | null>(null);
   readonly detailComments = signal<Record<number, string>>({});
   readonly detailConcreteComments = signal<Record<number, string>>({});
+  readonly unansweredReplyDrafts = signal<Record<number, string>>({});
   readonly updatingConcreteItemIds = signal<Set<number>>(new Set());
   readonly preparedContactItemIds = signal<Set<number>>(new Set());
   readonly updatingControl = signal(false);
@@ -397,7 +398,7 @@ export class ManagerControlComponent {
   markConcreteItem(
     example: ManagerControlConcreteItem,
     actionType: ManagerControlActionType,
-    options: { manualWorkerNotification?: boolean } = {}
+    options: { manualWorkerNotification?: boolean; comment?: string | null } = {}
   ): void {
     const itemId = example.controlEntityId;
     if (!itemId || this.isConcreteUpdating(itemId)) {
@@ -407,7 +408,7 @@ export class ManagerControlComponent {
       this.toast.error('Сначала подготовьте сообщение', 'Нажмите «Текст», отправьте его клиенту, затем отметьте действие');
       return;
     }
-    const comment = this.concreteActionComment(example, actionType);
+    const comment = options.comment ?? this.concreteActionComment(example, actionType);
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
     this.api.actionConcreteItem(itemId, {
       actionType,
@@ -529,6 +530,66 @@ export class ManagerControlComponent {
     this.markConcreteItem(example, 'ACTION_TAKEN');
   }
 
+  markUnansweredAnswered(example: ManagerControlConcreteItem): void {
+    this.markConcreteItem(example, 'ACTION_TAKEN', { comment: 'Ответ клиенту проверен вручную' });
+  }
+
+  markUnansweredNoResponseNeeded(example: ManagerControlConcreteItem): void {
+    this.markConcreteItem(example, 'ACKNOWLEDGED', { comment: 'Сообщение клиента не требует ответа' });
+  }
+
+  unansweredReplyDraft(itemId: number | null | undefined): string {
+    return itemId ? this.unansweredReplyDrafts()[itemId] ?? '' : '';
+  }
+
+  updateUnansweredReplyDraft(itemId: number | null | undefined, value: string): void {
+    if (!itemId) {
+      return;
+    }
+    this.unansweredReplyDrafts.update((drafts) => ({ ...drafts, [itemId]: value }));
+  }
+
+  sendUnansweredReply(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    const message = this.unansweredReplyDraft(itemId).trim();
+    if (!itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    if (!message) {
+      this.toast.error('Введите ответ', 'Поле ответа клиенту пустое');
+      return;
+    }
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.api.replyToClientMessage(itemId, { message }).subscribe({
+      next: (updated) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.unansweredReplyDrafts.update((drafts) => {
+          const next = { ...drafts };
+          delete next[itemId];
+          return next;
+        });
+        const merged = this.patchDetailConcreteItem(example, updated);
+        this.toast.success('Ответ отправлен', 'Карточка закрыта как отвеченная');
+        if (this.shouldHideConcreteItemAfterAction(merged)) {
+          this.removeConcreteItemFromDetail(merged);
+        }
+        this.load();
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Ответ не отправлен', apiErrorMessage(err, 'Не удалось отправить ответ клиенту'));
+      }
+    });
+  }
+
   resolveRisk(example: ManagerControlConcreteItem): void {
     this.updateRiskIncident(example, 'VERIFIED');
   }
@@ -569,8 +630,34 @@ export class ManagerControlComponent {
     return (example.chatUrl ?? '').trim();
   }
 
+  statusChatUrl(example: ManagerControlConcreteItem): string {
+    const status = (example.status ?? '').trim().toLowerCase();
+    if (!['telegram', 'whatsapp', 'max'].includes(status)) {
+      return '';
+    }
+    return this.chatUrl(example);
+  }
+
   canContactOrder(example: ManagerControlConcreteItem): boolean {
     return example.type === 'ORDER' && !!this.contactText(example);
+  }
+
+  isUnansweredClientMessage(example: ManagerControlConcreteItem): boolean {
+    return example.type === 'CLIENT_CHAT_UNANSWERED';
+  }
+
+  clientChatPlatformLabel(example: ManagerControlConcreteItem): string {
+    const source = `${example.subtitle ?? ''} ${example.status ?? ''}`.toLowerCase();
+    if (source.includes('whatsapp')) {
+      return 'WhatsApp';
+    }
+    if (source.includes('telegram')) {
+      return 'Telegram';
+    }
+    if (/\bmax\b|макс/i.test(source)) {
+      return 'MAX';
+    }
+    return 'Чат';
   }
 
   canSendClientMessage(example: ManagerControlConcreteItem): boolean {
@@ -888,11 +975,17 @@ export class ManagerControlComponent {
   }
 
   riskExplanationButtonLabel(example: ManagerControlConcreteItem): string {
-    return example.workerExplanation ? 'Ответ получен' : 'Ждем разъяснение';
+    if (example.workerExplanation) {
+      return 'Ответ получен';
+    }
+    return example.workerNotificationAcceptedAt ? 'Принято, нужен комментарий' : 'Ждем пояснение';
   }
 
   riskExplanationButtonIcon(example: ManagerControlConcreteItem): string {
-    return example.workerExplanation ? 'mark_chat_read' : 'hourglass_top';
+    if (example.workerExplanation) {
+      return 'mark_chat_read';
+    }
+    return example.workerNotificationAcceptedAt ? 'edit_note' : 'hourglass_top';
   }
 
   isManualWorkerRequest(example: ManagerControlConcreteItem): boolean {
@@ -1011,6 +1104,8 @@ export class ManagerControlComponent {
         return 'warning';
       case 'COMMON_INVOICE':
         return 'receipt_long';
+      case 'CLIENT_CHAT_UNANSWERED':
+        return 'mark_chat_unread';
       case 'BAD_REVIEW_TASK':
         return 'thumb_down';
       case 'RECOVERY_TASK':

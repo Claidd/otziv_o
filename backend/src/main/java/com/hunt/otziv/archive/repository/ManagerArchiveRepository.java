@@ -6,6 +6,7 @@ import com.hunt.otziv.archive.dto.ArchiveNextOrderRequestItem;
 import com.hunt.otziv.archive.dto.ArchiveOrderDetailItem;
 import com.hunt.otziv.archive.dto.ArchivePaymentCheckItem;
 import com.hunt.otziv.archive.dto.ArchiveReviewItem;
+import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.archive.dto.ArchiveZpItem;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import java.math.BigDecimal;
@@ -242,6 +243,94 @@ public class ManagerArchiveRepository {
                 rowBigDecimal(rs, "review_price"),
                 safeString(rs.getString("review_url"))
         ));
+    }
+
+    public Optional<ArchiveReviewRecoverySource> findReviewRecoverySource(Long orderId, Long reviewId) {
+        List<ArchiveReviewRecoverySource> rows = jdbc.query("""
+                SELECT
+                    ao.order_id,
+                    ao.order_company,
+                    BIN_TO_UUID(ar.review_order_details) AS order_detail_uuid,
+                    ar.review_id,
+                    COALESCE(os.order_status_title, '') AS order_status_title,
+                    COALESCE(c.company_title, ao.company_title_snapshot, '') AS company_title,
+                    COALESCE(c.company_comments, '') AS company_comments,
+                    COALESCE(c.company_url_chat, '') AS company_url_chat,
+                    COALESCE(ao.order_zametka, '') AS order_zametka,
+                    ao.order_manager,
+                    COALESCE(ar.review_worker, ao.order_worker) AS worker_id,
+                    ar.review_bot,
+                    COALESCE(b.bot_login, '') AS bot_login,
+                    COALESCE(b.bot_password, '') AS bot_password,
+                    COALESCE(b.bot_fio, '') AS bot_fio,
+                    city.city_id AS filial_city_id,
+                    COALESCE(city.city_title, c.company_city, ao.company_city_snapshot, '') AS filial_city,
+                    COALESCE(f.filial_title, ao.filial_title_snapshot, '') AS filial_title,
+                    COALESCE(f.filial_url, '') AS filial_url,
+                    COALESCE(cat.category_title, '') AS category_title,
+                    COALESCE(sub.subcategory_title, '') AS subcategory_title,
+                    ar.review_product,
+                    COALESCE(p.product_title, '') AS product_title,
+                    COALESCE(ar.review_text, '') AS review_text,
+                    COALESCE(ar.review_answer, '') AS review_answer,
+                    ar.review_created,
+                    ar.review_changed,
+                    ar.review_publish_date,
+                    ar.review_publish,
+                    ar.review_vigul,
+                    ar.review_price,
+                    COALESCE(ar.review_url, '') AS review_url
+                FROM archive_reviews ar
+                JOIN archive_order_details aod ON aod.order_detail_id = ar.review_order_details
+                JOIN archive_orders ao ON ao.order_id = aod.order_detail_order
+                LEFT JOIN companies c ON c.company_id = ao.order_company
+                LEFT JOIN order_statuses os ON os.order_status_id = ao.order_status
+                LEFT JOIN bots b ON b.bot_id = ar.review_bot
+                LEFT JOIN filial f ON f.filial_id = ar.review_filial
+                LEFT JOIN cities city ON city.city_id = f.city_id
+                LEFT JOIN categorys cat ON cat.category_id = ar.review_category
+                LEFT JOIN subcategoryes sub ON sub.subcategory_id = ar.review_subcategory
+                LEFT JOIN products p ON p.product_id = ar.review_product
+                WHERE ao.order_id = :orderId
+                  AND ar.review_id = :reviewId
+                LIMIT 1
+                """, new MapSqlParameterSource()
+                .addValue("orderId", orderId)
+                .addValue("reviewId", reviewId), (rs, rowNum) -> new ArchiveReviewRecoverySource(
+                rowLong(rs, "order_id"),
+                rowLong(rs, "review_id"),
+                rowLong(rs, "order_company"),
+                rowUuid(rs, "order_detail_uuid"),
+                safeString(rs.getString("order_status_title")),
+                safeString(rs.getString("company_title")),
+                safeString(rs.getString("company_comments")),
+                safeString(rs.getString("company_url_chat")),
+                safeString(rs.getString("order_zametka")),
+                rowLong(rs, "order_manager"),
+                rowLong(rs, "worker_id"),
+                rowLong(rs, "review_bot"),
+                safeString(rs.getString("bot_login")),
+                safeString(rs.getString("bot_password")),
+                safeString(rs.getString("bot_fio")),
+                rowLong(rs, "filial_city_id"),
+                safeString(rs.getString("filial_city")),
+                safeString(rs.getString("filial_title")),
+                safeString(rs.getString("filial_url")),
+                safeString(rs.getString("category_title")),
+                safeString(rs.getString("subcategory_title")),
+                rowLong(rs, "review_product"),
+                safeString(rs.getString("product_title")),
+                safeString(rs.getString("review_text")),
+                safeString(rs.getString("review_answer")),
+                rowLocalDate(rs, "review_created"),
+                rowLocalDate(rs, "review_changed"),
+                rowLocalDate(rs, "review_publish_date"),
+                rowBoolean(rs, "review_publish"),
+                rowBoolean(rs, "review_vigul"),
+                rowBigDecimal(rs, "review_price"),
+                safeString(rs.getString("review_url"))
+        ));
+        return rows.stream().findFirst();
     }
 
     public List<ArchiveBadReviewTaskItem> findBadReviewTasks(Long orderId) {

@@ -13,6 +13,7 @@ import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +40,7 @@ public class WorkerRiskTelegramCallbackService {
     private static final String SOURCE_WORKER_EXPLANATION = "WORKER_RISK_WORKER_EXPLANATION";
     private static final String WORKER_RISK_PENALTY_EVENT = "WORKER_RISK_PENALTY";
     private static final int DEFAULT_PENALTY_POINTS = 1;
+    private static final DateTimeFormatter TELEGRAM_TIME_FORMAT = DateTimeFormatter.ofPattern("dd.MM HH:mm");
 
     private final WorkerRiskIncidentRepository incidentRepository;
     private final GamificationScoreLedgerRepository scoreLedgerRepository;
@@ -163,10 +165,44 @@ public class WorkerRiskTelegramCallbackService {
 
         telegramService.sendMessage(chatId,
                 "Пояснение сохранено и отправлено менеджеру."
+                        + "\nСтатус: ответ отправлен менеджеру."
                         + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                         + "\nОтзыв: #" + valueOrDash(incident.getReviewId()));
+        updateOriginalRiskTelegramMessage(incident, "ответ отправлен менеджеру", false);
         notifyReviewersAboutExplanation(worker, incident);
         return true;
+    }
+
+    private void updateOriginalRiskTelegramMessage(
+            WorkerRiskIncident incident,
+            String status,
+            boolean waitingForExplanation
+    ) {
+        if (incident.getTelegramNotificationChatId() == null || incident.getTelegramNotificationMessageId() == null) {
+            return;
+        }
+        String text = "Система заметила риск по действию специалиста."
+                + "\nСтатус: " + status
+                + "\nСпециалист: " + html(firstNonBlank(incident.getWorkerName(), incident.getWorkerUsername()))
+                + "\nПричина: " + html(clean(incident.getTitle()))
+                + "\nРиск: " + incident.getScore()
+                + "\nДействие: " + html(clean(incident.getAction()))
+                + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
+                + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
+                + "\nОбъект: " + html(clean(incident.getEntityType())) + " #" + valueOrDash(incident.getEntityId())
+                + "\nДетали: " + html(clean(incident.getDetails()))
+                + (waitingForExplanation
+                        ? "\n\nНапишите пояснение следующим сообщением в эту группу."
+                        : "\n\nОтвет получен: " + formatTelegramTime(incident.getWorkerExplanationAt())
+                        + "\nПояснение:\n" + html(clean(incident.getWorkerExplanation())));
+
+        telegramService.editMessageText(
+                incident.getTelegramNotificationChatId(),
+                incident.getTelegramNotificationMessageId(),
+                text,
+                "HTML",
+                null
+        );
     }
 
     private Optional<WorkerRiskIncident> findPendingWorkerExplanation(User worker) {
@@ -246,11 +282,14 @@ public class WorkerRiskTelegramCallbackService {
             incident.setExplanationRequestedAt(now);
         }
         incident.setExplanationPromptedAt(now);
+        rememberPromptMessage(incident, chatId, callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getMessageId());
         incidentRepository.save(incident);
 
         if (chatId != null) {
+            updateOriginalRiskTelegramMessage(incident, "принято, нужен комментарий", true);
             telegramService.sendMessage(chatId,
-                    "Напишите пояснение следующим сообщением."
+                    "Статус: принято, нужен комментарий."
+                            + "\nНапишите пояснение следующим сообщением."
                             + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                             + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
                             + "\nПричина: " + clean(incident.getTitle()));
@@ -326,6 +365,14 @@ public class WorkerRiskTelegramCallbackService {
         deleteResolvedRiskReminders(savedIncident);
     }
 
+    private void rememberPromptMessage(WorkerRiskIncident incident, Long chatId, Integer messageId) {
+        if (chatId == null || messageId == null) {
+            return;
+        }
+        incident.setTelegramNotificationChatId(chatId);
+        incident.setTelegramNotificationMessageId(messageId);
+    }
+
     private WorkerRiskIncidentStatus statusFor(WorkerRiskResolutionAction action) {
         return switch (action) {
             case FALSE_POSITIVE, NORMAL_ACCOUNT_SELECTION -> WorkerRiskIncidentStatus.IGNORED;
@@ -356,6 +403,7 @@ public class WorkerRiskTelegramCallbackService {
         incident.setExplanationRequestedAt(LocalDateTime.now());
 
         String text = "Менеджер проверил подозрительное действие и просит дать пояснение."
+                + "\nСтатус: ждем пояснение"
                 + "\nПричина: " + clean(incident.getTitle())
                 + "\nДействие: " + clean(incident.getAction())
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
@@ -537,6 +585,17 @@ public class WorkerRiskTelegramCallbackService {
     private String limit(String value, int maxLength) {
         String cleaned = clean(value);
         return cleaned.length() <= maxLength ? cleaned : cleaned.substring(0, maxLength - 1) + "…";
+    }
+
+    private String formatTelegramTime(LocalDateTime value) {
+        return value == null ? "-" : value.format(TELEGRAM_TIME_FORMAT);
+    }
+
+    private String html(String value) {
+        return clean(value)
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private String valueOrDash(Object value) {

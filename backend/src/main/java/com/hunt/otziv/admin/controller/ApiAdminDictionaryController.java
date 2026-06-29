@@ -18,6 +18,7 @@ import com.hunt.otziv.c_companies.services.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.client_messages.service.ClientMessageSlotPlanner;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.client_chat_control.service.ClientChatAutoIgnoreService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.model.PromoText;
@@ -687,6 +688,10 @@ public class ApiAdminDictionaryController {
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, request.paymentOverdueLiveEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, request.archiveReorderEnabled());
         appSettingService.setBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, request.errorProtectionEnabled());
+        appSettingService.setBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED,
+                request.unansweredAutoIgnoreEnabled() == null || request.unansweredAutoIgnoreEnabled()
+        );
 
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS, request.reviewCheckAutoArchiveDays(), 1, 3650, "Автоархив проверки отзывов");
@@ -714,6 +719,13 @@ public class ApiAdminDictionaryController {
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_GAP_SECONDS, request.whatsAppGapSeconds(), 30, 86400, "Пауза WhatsApp");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_TELEGRAM_GAP_SECONDS, request.telegramGapSeconds(), 30, 86400, "Пауза Telegram");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS, request.maxGapSeconds(), 30, 86400, "Пауза MAX");
+        saveIntSetting(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH,
+                request.unansweredAutoIgnoreMaxLength(),
+                1,
+                500,
+                "Максимальная длина фразы без ответа"
+        );
 
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS, businessWindows);
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, requiredSettingText(request.reviewCheckStatuses(), "Укажите статусы проверки отзывов"));
@@ -747,6 +759,10 @@ public class ApiAdminDictionaryController {
                 : request.reviewRecoveryNoticeText();
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_TEXT, requiredSettingText(reviewRecoveryNoticeText, "Укажите текст уведомления о восстановлении"));
         appSettingService.setString(AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT, requiredSettingText(request.archiveOfferText(), "Укажите текст архивного предложения"));
+        appSettingService.setString(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES,
+                normalizedSettingList(request.unansweredAutoIgnorePhrases(), "Фразы без ответа")
+        );
 
         return clientMessageSettings();
     }
@@ -1071,6 +1087,7 @@ public class ApiAdminDictionaryController {
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_LIVE_ENABLED, false),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, true),
+                appSettingService.getBoolean(AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED, true),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
                         ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
@@ -1175,6 +1192,10 @@ public class ApiAdminDictionaryController {
                         AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS,
                         ScheduledClientMessageService.DEFAULT_MAX_GAP_SECONDS
                 ),
+                appSettingService.getInt(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH,
+                        60
+                ),
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
                         ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
@@ -1258,6 +1279,10 @@ public class ApiAdminDictionaryController {
                 appSettingService.getString(
                         AppSettingService.CLIENT_MESSAGES_ARCHIVE_OFFER_TEXT,
                         ScheduledClientMessageService.DEFAULT_ARCHIVE_OFFER_TEXT
+                ),
+                appSettingService.getStringAllowEmpty(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES,
+                        ClientChatAutoIgnoreService.DEFAULT_PHRASES
                 )
         );
     }
@@ -1286,6 +1311,25 @@ public class ApiAdminDictionaryController {
             throw badRequest(message + ": не больше 500 символов");
         }
         return text;
+    }
+
+    private String normalizedSettingList(String value, String title) {
+        String text = safe(value);
+        if (text.length() > 2000) {
+            throw badRequest(title + ": не больше 2000 символов");
+        }
+        List<String> items = StreamSupport.stream(List.of(text.split(",")).spliterator(), false)
+                .map(item -> item.trim().replaceAll("\\s+", " "))
+                .filter(item -> !item.isBlank())
+                .distinct()
+                .toList();
+        Optional<String> tooLong = items.stream()
+                .filter(item -> item.length() > 80)
+                .findFirst();
+        if (tooLong.isPresent()) {
+            throw badRequest(title + ": фраза \"" + tooLong.get() + "\" длиннее 80 символов");
+        }
+        return String.join(",", items);
     }
 
     private String requiredTitle(String value) {
@@ -1638,6 +1682,7 @@ public class ApiAdminDictionaryController {
             boolean paymentOverdueLiveEnabled,
             boolean archiveReorderEnabled,
             boolean errorProtectionEnabled,
+            Boolean unansweredAutoIgnoreEnabled,
             Integer reviewCheckIntervalDays,
             Integer reviewCheckAutoArchiveDays,
             Integer clientTextReminderIntervalDays,
@@ -1664,6 +1709,7 @@ public class ApiAdminDictionaryController {
             Integer whatsAppGapSeconds,
             Integer telegramGapSeconds,
             Integer maxGapSeconds,
+            Integer unansweredAutoIgnoreMaxLength,
             String businessWindows,
             String reviewCheckStatuses,
             String clientTextReminderStatuses,
@@ -1684,7 +1730,8 @@ public class ApiAdminDictionaryController {
             String paymentLinkCopyText,
             String paymentSuccessText,
             String reviewRecoveryNoticeText,
-            String archiveOfferText
+            String archiveOfferText,
+            String unansweredAutoIgnorePhrases
     ) {
     }
 
@@ -1704,6 +1751,7 @@ public class ApiAdminDictionaryController {
             boolean paymentOverdueLiveEnabled,
             boolean archiveReorderEnabled,
             boolean errorProtectionEnabled,
+            boolean unansweredAutoIgnoreEnabled,
             int reviewCheckIntervalDays,
             int reviewCheckAutoArchiveDays,
             int clientTextReminderIntervalDays,
@@ -1730,6 +1778,7 @@ public class ApiAdminDictionaryController {
             int whatsAppGapSeconds,
             int telegramGapSeconds,
             int maxGapSeconds,
+            int unansweredAutoIgnoreMaxLength,
             String businessWindows,
             String reviewCheckStatuses,
             String clientTextReminderStatuses,
@@ -1750,7 +1799,8 @@ public class ApiAdminDictionaryController {
             String paymentLinkCopyText,
             String paymentSuccessText,
             String reviewRecoveryNoticeText,
-            String archiveOfferText
+            String archiveOfferText,
+            String unansweredAutoIgnorePhrases
     ) {
     }
 }

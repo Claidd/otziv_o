@@ -1,12 +1,14 @@
 package com.hunt.otziv.archive.service;
 
 import com.hunt.otziv.archive.dto.ArchiveAccessScope;
+import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.archive.dto.ArchiveRestoreResult;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderDetailsResponse;
 import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import com.hunt.otziv.archive.repository.ManagerArchiveRepository;
 import com.hunt.otziv.manager.dto.api.PageResponse;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -30,6 +32,7 @@ public class ManagerArchiveService {
 
     private final ManagerArchiveRepository repository;
     private final OrderArchiveRestoreService restoreService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -118,6 +121,30 @@ public class ManagerArchiveService {
         return restoreService.restoreOrder(orderId, targetStatus, restoredBy, confirm);
     }
 
+    @Transactional
+    public ManagerArchiveOrderDetailsResponse createReviewRecoveryTask(
+            Long orderId,
+            Long reviewId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (orderId == null || reviewId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Order id and review id are required");
+        }
+
+        ArchiveAccessScope scope = resolveScope(principal, authentication);
+        ManagerArchiveOrderListItem order = repository.findOrder(scope, orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивный заказ не найден"));
+        if (!"archive".equals(order.source())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Задачу восстановления можно создать только из архивной записи");
+        }
+
+        ArchiveReviewRecoverySource source = repository.findReviewRecoverySource(orderId, reviewId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Архивный отзыв не найден"));
+        reviewRecoveryTaskService.createArchiveTask(source, currentUser(principal));
+        return getOrder(orderId, principal, authentication);
+    }
+
     private ArchiveAccessScope resolveScope(Principal principal, Authentication authentication) {
         if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             return ArchiveAccessScope.all();
@@ -145,6 +172,14 @@ public class ManagerArchiveService {
         }
 
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Нет доступа к архиву");
+    }
+
+    private User currentUser(Principal principal) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не определен");
+        }
+        return userService.findByUserName(principal.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
     }
 
     private int totalPages(long total, int pageSize) {

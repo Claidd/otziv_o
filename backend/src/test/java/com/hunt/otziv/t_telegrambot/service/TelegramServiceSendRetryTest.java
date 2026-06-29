@@ -3,6 +3,7 @@ package com.hunt.otziv.t_telegrambot.service;
 import org.junit.jupiter.api.Test;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.ResponseParameters;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
@@ -72,11 +73,12 @@ class TelegramServiceSendRetryTest {
         }
 
         @Override
-        void executeTelegramMessage(SendMessage message) throws TelegramApiException {
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
             attempts++;
             if (attempts <= failuresBeforeSuccess) {
                 throw new TelegramApiException("temporary telegram failure", new SocketTimeoutException("Read timed out"));
             }
+            return new Message();
         }
 
         @Override
@@ -101,16 +103,18 @@ class TelegramServiceSendRetryTest {
                     null,
                     null,
                     null,
-                    migrationService);
+                    migrationService,
+                    null);
         }
 
         @Override
-        void executeTelegramMessage(SendMessage message) throws TelegramApiException {
+        Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
             chatIds[attempts] = message.getChatId();
             attempts++;
             if (attempts == 1) {
                 throw migratedException(-1003538237871L);
             }
+            return new Message();
         }
     }
 

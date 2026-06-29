@@ -867,16 +867,41 @@ export class WorkerBoardComponent implements OnDestroy {
     this.publishCredentialPreparation.set({
       reviewId,
       botId,
-      loginAt: this.serverTimestamp(preparation.loginCopiedAt),
-      passwordAt: this.serverTimestamp(preparation.passwordCopiedAt),
+      ...this.serverCredentialCopyState(preparation),
       invalidated: {}
     });
     this.storePublishCredentialPreparation();
   }
 
-  private serverTimestamp(value?: string | null): number | undefined {
-    const timestamp = value ? Date.parse(value) : NaN;
-    return Number.isFinite(timestamp) ? timestamp : undefined;
+  private serverCredentialCopyState(preparation: WorkerCredentialPreparation): Pick<PublishCredentialPreparation, 'loginAt' | 'passwordAt'> {
+    const loginCopied = typeof preparation.loginCopied === 'boolean'
+      ? preparation.loginCopied
+      : Boolean(preparation.loginCopiedAt);
+    const passwordCopied = typeof preparation.passwordCopied === 'boolean'
+      ? preparation.passwordCopied
+      : Boolean(preparation.passwordCopiedAt);
+
+    if (!loginCopied && !passwordCopied) {
+      return {};
+    }
+
+    const now = Date.now();
+    if (loginCopied && passwordCopied) {
+      const remainingSeconds = Math.max(0, Number(preparation.remainingSeconds ?? 0));
+      const waitMs = this.activeCredentialWaitMs();
+      const lastCopyAt = preparation.ready === true
+        ? now - waitMs - this.credentialWaitSafetyBufferMs
+        : now - waitMs + remainingSeconds * 1000;
+      return {
+        loginAt: lastCopyAt,
+        passwordAt: lastCopyAt
+      };
+    }
+
+    return {
+      loginAt: loginCopied ? now : undefined,
+      passwordAt: passwordCopied ? now : undefined
+    };
   }
 
   private storePublishCredentialPreparation(): void {

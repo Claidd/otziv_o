@@ -1,12 +1,14 @@
 package com.hunt.otziv.client_messages.service;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import java.util.Locale;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,6 +53,35 @@ public class ClientChatMessageSender {
                     ? sendToMax(company.getMaxGroupChatId(), message)
                     : missingActiveChannel("max_group_missing", "Для MAX-группы не задан chatId");
             case UNKNOWN -> missingActiveChannel("chat_platform_unknown", "Ссылка на чат не распознана или не указана");
+        };
+    }
+
+    public ClientMessageSendResult sendToPlatform(
+            ClientChatPlatform platform,
+            Company company,
+            String clientId,
+            String groupId,
+            String chatId,
+            String message
+    ) {
+        if (platform == null) {
+            return ClientMessageSendResult.failed("chat_platform_missing", "Канал сообщения не определен");
+        }
+        if (company == null) {
+            return ClientMessageSendResult.failed("company_missing", "Компания не найдена");
+        }
+        if (!hasText(message)) {
+            return ClientMessageSendResult.failed("message_empty", "Текст сообщения пустой");
+        }
+
+        return switch (platform) {
+            case WHATSAPP -> sendToWhatsApp(clientId, hasText(groupId) ? groupId : chatId, message);
+            case TELEGRAM -> parseLong(hasText(chatId) ? chatId : String.valueOf(company.getTelegramGroupChatId()))
+                    .map(id -> sendToTelegram(id, message))
+                    .orElseGet(() -> missingActiveChannel("telegram_group_missing", "Для Telegram-группы не задан chatId"));
+            case MAX -> parseLong(hasText(chatId) ? chatId : String.valueOf(company.getMaxGroupChatId()))
+                    .map(id -> sendToMax(id, message))
+                    .orElseGet(() -> missingActiveChannel("max_group_missing", "Для MAX-группы не задан chatId"));
         };
     }
 
@@ -138,6 +169,17 @@ public class ClientChatMessageSender {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private Optional<Long> parseLong(String value) {
+        if (!hasText(value) || "null".equalsIgnoreCase(value.trim())) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Long.parseLong(value.trim()));
+        } catch (NumberFormatException ignored) {
+            return Optional.empty();
+        }
     }
 
     private enum ChatPlatform {

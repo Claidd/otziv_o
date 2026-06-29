@@ -229,8 +229,24 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
                   <div class="review-actions">
                     <button type="button" (click)="copyReviewField(review, 'filialUrl')">{{ copiedKey() === review.id + '-filialUrl' ? 'готово' : 'ссылка' }}</button>
-                    <button type="button" (click)="copyReviewField(review, 'botLogin')">{{ copiedKey() === review.id + '-botLogin' ? 'готово' : 'логин' }}</button>
-                    <button type="button" (click)="copyReviewField(review, 'botPassword')">{{ copiedKey() === review.id + '-botPassword' ? 'готово' : 'пароль' }}</button>
+                    <button
+                      type="button"
+                      [class.credential-muted]="reviewCredentialActionDisabled(review, 'botLogin')"
+                      [disabled]="reviewCredentialActionDisabled(review, 'botLogin')"
+                      [title]="reviewCredentialActionTitle(review, 'botLogin')"
+                      (click)="copyReviewField(review, 'botLogin')"
+                    >
+                      {{ copiedKey() === review.id + '-botLogin' ? 'готово' : 'логин' }}
+                    </button>
+                    <button
+                      type="button"
+                      [class.credential-muted]="reviewCredentialActionDisabled(review, 'botPassword')"
+                      [disabled]="reviewCredentialActionDisabled(review, 'botPassword')"
+                      [title]="reviewCredentialActionTitle(review, 'botPassword')"
+                      (click)="copyReviewField(review, 'botPassword')"
+                    >
+                      {{ copiedKey() === review.id + '-botPassword' ? 'готово' : 'пароль' }}
+                    </button>
                     @if (showReviewAiAction(details)) {
                       <button
                         class="ai-action"
@@ -254,8 +270,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     }
                     <button type="button" (click)="copyReviewField(review, 'text')">{{ copiedKey() === review.id + '-text' ? 'готово' : 'текст' }}</button>
                     <button type="button" (click)="copyReviewField(review, 'answer')">{{ copiedKey() === review.id + '-answer' ? 'готово' : 'ответ' }}</button>
-                    <button type="button" (click)="changeBot(review)" [disabled]="isMutating('bot-' + review.id)">{{ isMutating('bot-' + review.id) ? '...' : 'смена' }}</button>
-                    <button type="button" (click)="deactivateBot(review)" [disabled]="!review.botId || isMutating('block-' + review.id)">{{ isMutating('block-' + review.id) ? '...' : 'блок' }}</button>
+                    <button type="button" (click)="changeBot(review)" [disabled]="reviewAccountActionLocked(review) || isMutating('bot-' + review.id)">{{ isMutating('bot-' + review.id) ? '...' : 'смена' }}</button>
+                    <button type="button" (click)="deactivateBot(review)" [disabled]="reviewAccountActionLocked(review) || !review.botId || review.botId === 1 || isMutating('block-' + review.id)">{{ isMutating('block-' + review.id) ? '...' : 'блок' }}</button>
                   </div>
 
                   @if (canShowPublishButton(details, review)) {
@@ -723,16 +739,18 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                       >
                     </label>
 
-                    <label class="sheet-field">
-                      <span>Пароль</span>
-                      <input
-                        name="reviewEditPassword"
-                        type="text"
-                        [ngModel]="draft.botPassword"
-                        (ngModelChange)="setReviewEditField('botPassword', $event)"
-                        [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
-                      >
-                    </label>
+                    @if (!hideReviewBotPasswordField()) {
+                      <label class="sheet-field">
+                        <span>Пароль</span>
+                        <input
+                          name="reviewEditPassword"
+                          type="text"
+                          [ngModel]="draft.botPassword"
+                          (ngModelChange)="setReviewEditField('botPassword', $event)"
+                          [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
+                        >
+                      </label>
+                    }
 
                     <label class="sheet-field">
                       <span>Дата публикации</span>
@@ -746,12 +764,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                       >
                     </label>
 
-                    <div class="sheet-utility-actions sheet-utility-actions--single">
-                      <button type="button" (click)="assignReviewNewAccount(review)" [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading() || isMutating('new-account-' + review.id)">
-                        <span class="material-icons-sharp">person_add</span>
-                        {{ isMutating('new-account-' + review.id) ? 'Ищу' : 'Добавить новый' }}
-                      </button>
-                    </div>
+                    @if (!hideReviewNewAccountAction()) {
+                      <div class="sheet-utility-actions sheet-utility-actions--single">
+                        <button type="button" (click)="assignReviewNewAccount(review)" [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading() || isMutating('new-account-' + review.id)">
+                          <span class="material-icons-sharp">person_add</span>
+                          {{ isMutating('new-account-' + review.id) ? 'Ищу' : 'Добавить новый' }}
+                        </button>
+                      </div>
+                    }
 
                     <label class="sheet-field review-edit-main-text">
                       <span>Текст отзыва</span>
@@ -1758,6 +1778,13 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     .review-actions .recovery-action.planned {
       color: var(--otziv-info);
       background: var(--otziv-muted-surface);
+    }
+
+    .review-actions button.credential-muted:disabled {
+      border-color: rgba(103, 116, 131, 0.14);
+      color: rgba(103, 116, 131, 0.46);
+      background: #eef1f5;
+      box-shadow: none;
     }
 
     :host-context(body.otziv-dark-theme) .review-actions .ai-action {
@@ -2981,6 +3008,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       answer: this.reviewFieldValue(review, 'answer')
     };
 
+    if (this.reviewCredentialActionDisabled(review, kind)) {
+      this.error.set('В этих деталях заказа логин и пароль недоступны.');
+      return;
+    }
+
     if (!(await this.copyText(values[kind] ?? '', `${review.id}-${kind}`))) {
       return;
     }
@@ -2997,10 +3029,14 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     if (this.isMutating(`bot-${review.id}`)) {
       return;
     }
+    if (this.reviewAccountActionLocked(review)) {
+      this.error.set(this.reviewAccountActionTitle(review));
+      return;
+    }
 
     this.runReviewMutation(
       `bot-${review.id}`,
-      () => this.api.changeManagerOrderReviewBot(review.orderId, review.id),
+      () => this.api.changeManagerOrderReviewBot(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Не удалось сменить аккаунт'
     );
   }
@@ -3021,16 +3057,24 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     if (this.isMutating(`new-account-${review.id}`)) {
       return;
     }
+    if (this.hideReviewNewAccountAction()) {
+      this.error.set('В деталях из раздела Все используйте кнопку смена на карточке.');
+      return;
+    }
 
     this.runReviewMutation(
       `new-account-${review.id}`,
-      () => this.api.assignManagerOrderReviewNewAccount(review.orderId, review.id),
+      () => this.api.assignManagerOrderReviewNewAccount(review.orderId, review.id, this.orderDetailsActivitySource()),
       'Не удалось назначить новый аккаунт'
     );
   }
 
   async deactivateBot(review: OrderReviewItem): Promise<void> {
     if (!review.botId || this.isMutating(`block-${review.id}`)) {
+      return;
+    }
+    if (this.reviewAccountActionLocked(review)) {
+      this.error.set(this.reviewAccountActionTitle(review));
       return;
     }
 
@@ -3046,7 +3090,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     this.runReviewMutation(
       `block-${review.id}`,
-      () => this.api.deactivateManagerOrderReviewBot(review.orderId, review.id, review.botId!),
+      () => this.api.deactivateManagerOrderReviewBot(review.orderId, review.id, review.botId!, this.orderDetailsActivitySource()),
       'Не удалось заблокировать аккаунт'
     );
   }
@@ -3068,6 +3112,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       'Не удалось опубликовать отзыв',
       () => this.clearReviewPublishCredentialPreparation(review.id)
     );
+  }
+
+  reviewAccountActionLocked(review: OrderReviewItem): boolean {
+    return this.restrictedWorkerOrderDetailsMode() && !this.reviewNeedsAccountRepair(review);
+  }
+
+  reviewAccountActionTitle(review: OrderReviewItem): string {
+    return this.reviewAccountActionLocked(review)
+      ? 'В деталях заказа смена доступна только когда аккаунт нужно назначить или заменить.'
+      : 'Действие с аккаунтом';
+  }
+
+  reviewCredentialActionDisabled(review: OrderReviewItem, kind: ReviewCopyKind): boolean {
+    return this.restrictedWorkerOrderDetailsMode() && (kind === 'botLogin' || kind === 'botPassword');
+  }
+
+  reviewCredentialActionTitle(review: OrderReviewItem, kind: ReviewCopyKind): string {
+    return this.reviewCredentialActionDisabled(review, kind)
+      ? 'В этих деталях заказа логин и пароль недоступны'
+      : 'Скопировать';
   }
 
   reviewPublishActionLocked(review: OrderReviewItem): boolean {
@@ -3157,10 +3221,15 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   private orderDetailsActivitySource(): WorkerActivitySource {
+    const restrictedSection = this.restrictedWorkerOrderDetailsSection();
     return {
       sourcePage: 'order-details',
-      sourceEntry: this.openedFromWorkerAll() ? 'worker-all' : undefined,
-      sourceSection: this.openedFromWorkerAll() ? 'all' : undefined
+      sourceEntry: this.openedFromWorkerAll()
+        ? 'worker-all'
+        : restrictedSection
+          ? `worker-${restrictedSection}`
+          : undefined,
+      sourceSection: this.openedFromWorkerAll() ? 'all' : restrictedSection ?? undefined
     };
   }
 
@@ -3826,12 +3895,72 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   hasUnavailableBot(review: OrderReviewItem): boolean {
+    return this.reviewNeedsAccountAssignment(review);
+  }
+
+  reviewNeedsAccountRepair(review: OrderReviewItem): boolean {
+    if (!this.canPublishWithCurrentBot(review)) {
+      return true;
+    }
+
+    return review.botActive === false;
+  }
+
+  reviewNeedsAccountAssignment(review: OrderReviewItem): boolean {
+    if (!review.botId || review.botId === 1) {
+      return true;
+    }
+
     const bot = (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
-    return bot === 'нет доступных аккаунтов' || this.hasCompactBotPrompt(review);
+    return (
+      bot === 'нет доступных аккаунтов' ||
+      bot === 'добавьте аккаунты и нажмите сменить'
+    );
+  }
+
+  private canPublishWithCurrentBot(review: OrderReviewItem): boolean {
+    if (!review.botId || review.botId === 1) {
+      return false;
+    }
+
+    const bot = (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    return (
+      !!review.botLogin?.trim() &&
+      !!review.botPassword?.trim() &&
+      bot !== 'нет доступных аккаунтов' &&
+      bot !== 'добавьте аккаунты и нажмите сменить'
+    );
   }
 
   hasCompactBotPrompt(review: OrderReviewItem): boolean {
     return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'добавьте аккаунты и нажмите сменить';
+  }
+
+  hideReviewBotPasswordField(): boolean {
+    return this.openedFromWorkerAll() && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
+  hideReviewNewAccountAction(): boolean {
+    return this.openedFromWorkerAll() && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
+  restrictedWorkerOrderDetailsMode(): boolean {
+    if (this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER'])) {
+      return false;
+    }
+
+    return this.openedFromWorkerAll() || this.restrictedWorkerOrderDetailsSection() !== null;
+  }
+
+  private restrictedWorkerOrderDetailsSection(): 'new' | 'correction' | null {
+    const status = (this.details()?.status ?? '').trim().toLocaleLowerCase('ru-RU').replace('ё', 'е');
+    if (status === 'новый') {
+      return 'new';
+    }
+    if (status === 'коррекция') {
+      return 'correction';
+    }
+    return null;
   }
 
   money(value?: number): string {
@@ -4516,8 +4645,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.copiedReviewCredentials.set({
       [reviewId]: {
         botId,
-        botLoginAt: this.serverTimestamp(preparation.loginCopiedAt),
-        botPasswordAt: this.serverTimestamp(preparation.passwordCopiedAt)
+        ...this.serverReviewCredentialCopyState(preparation)
       }
     });
 
@@ -4527,9 +4655,34 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
   }
 
-  private serverTimestamp(value?: string | null): number | undefined {
-    const timestamp = value ? Date.parse(value) : NaN;
-    return Number.isFinite(timestamp) ? timestamp : undefined;
+  private serverReviewCredentialCopyState(preparation: WorkerCredentialPreparation): Omit<ReviewCredentialCopyState, 'botId'> {
+    const loginCopied = typeof preparation.loginCopied === 'boolean'
+      ? preparation.loginCopied
+      : Boolean(preparation.loginCopiedAt);
+    const passwordCopied = typeof preparation.passwordCopied === 'boolean'
+      ? preparation.passwordCopied
+      : Boolean(preparation.passwordCopiedAt);
+
+    if (!loginCopied && !passwordCopied) {
+      return {};
+    }
+
+    const now = Date.now();
+    if (loginCopied && passwordCopied) {
+      const remainingSeconds = Math.max(0, Number(preparation.remainingSeconds ?? 0));
+      const lastCopyAt = preparation.ready === true
+        ? now - this.publishCredentialWaitMs - this.publishCredentialWaitSafetyBufferMs
+        : now - this.publishCredentialWaitMs + remainingSeconds * 1000;
+      return {
+        botLoginAt: lastCopyAt,
+        botPasswordAt: lastCopyAt
+      };
+    }
+
+    return {
+      botLoginAt: loginCopied ? now : undefined,
+      botPasswordAt: passwordCopied ? now : undefined
+    };
   }
 
   private storeReviewPublishCredentialPreparation(review: OrderReviewItem): void {

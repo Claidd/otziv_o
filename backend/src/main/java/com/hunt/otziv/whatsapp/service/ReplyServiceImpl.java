@@ -2,6 +2,10 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
+import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.l_lead.model.Telephone;
@@ -13,6 +17,9 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import jakarta.annotation.PostConstruct;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +41,7 @@ public class ReplyServiceImpl implements ReplyService {
     private final WhatsAppGroupCompanyLinker groupCompanyLinker;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
     private final WhatsAppService whatsAppService;
+    private final ClientChatMessageTrackerService clientChatMessageTrackerService;
 
     private List<String> offerList;
 
@@ -188,10 +196,37 @@ public class ReplyServiceImpl implements ReplyService {
         }
         groupCompanyLinker.linkByGroupName(reply.getGroupId(), reply.getGroupName());
 
-        publicationProgressPreferenceService.handleWhatsAppCommand(reply.getGroupId(), reply.getMessage())
-                .ifPresent(update -> sendGroupPreferenceResponse(reply, update.message()));
+        Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
+                publicationProgressPreferenceService.handleWhatsAppCommand(reply.getGroupId(), reply.getMessage());
+        if (preferenceUpdate.isPresent()) {
+            sendGroupPreferenceResponse(reply, preferenceUpdate.get().message());
+            return;
+        }
+
+        trackGroupReply(reply);
 
         log.info("✅ Обработка ответа из группы '{}' завершена", reply.getGroupName());
+    }
+
+    private void trackGroupReply(WhatsAppGroupReplyDTO reply) {
+        if (clientChatMessageTrackerService == null || reply == null) {
+            return;
+        }
+        try {
+            clientChatMessageTrackerService.track(new ClientChatMessageCommand(
+                    ClientChatPlatform.WHATSAPP,
+                    reply.isFromMe() ? ClientChatDirection.OUTGOING : ClientChatDirection.INCOMING,
+                    reply.getGroupId(),
+                    reply.getGroupName(),
+                    reply.getMessageId(),
+                    reply.getFrom(),
+                    reply.getFromName(),
+                    reply.getMessage(),
+                    whatsappMessageTime(reply.getTimestamp())
+            ));
+        } catch (Exception e) {
+            log.warn("WhatsApp group reply tracking failed groupId={}", reply.getGroupId(), e);
+        }
     }
 
     private void sendGroupPreferenceResponse(WhatsAppGroupReplyDTO reply, String message) {
@@ -221,5 +256,12 @@ public class ReplyServiceImpl implements ReplyService {
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private static LocalDateTime whatsappMessageTime(Long timestamp) {
+        if (timestamp == null || timestamp <= 0) {
+            return LocalDateTime.now();
+        }
+        return LocalDateTime.ofInstant(Instant.ofEpochSecond(timestamp), ZoneId.systemDefault());
     }
 }

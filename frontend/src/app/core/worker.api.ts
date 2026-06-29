@@ -114,6 +114,11 @@ export interface WorkerCredentialPreparation {
   loginCopiedAt?: string | null;
   passwordCopiedAt?: string | null;
   updatedAt?: string | null;
+  loginCopied?: boolean;
+  passwordCopied?: boolean;
+  ready?: boolean;
+  remainingSeconds?: number;
+  waitSeconds?: number;
 }
 
 export interface WorkerBoard {

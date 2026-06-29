@@ -1,5 +1,6 @@
 package com.hunt.otziv.review_recovery.services;
 
+import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
@@ -24,8 +25,11 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
+import com.hunt.otziv.u_users.repository.WorkerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -77,6 +81,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
     private final OrderRepository orderRepository;
+    private final ManagerRepository managerRepository;
+    private final WorkerRepository workerRepository;
     private final OrderStatusCheckerService orderStatusCheckerService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
@@ -126,6 +132,74 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         log.info("Создана задача восстановления {} для отзыва {}, заказа {}, дата {}",
                 savedTask.getId(), review.getId(), order.getId(), scheduledDate);
+        return savedTask;
+    }
+
+    @Override
+    @Transactional
+    public ReviewRecoveryTask createArchiveTask(ArchiveReviewRecoverySource source, User createdBy) {
+        if (source == null || source.orderId() == null || source.reviewId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Архивный отзыв для восстановления не найден");
+        }
+        if (hasActiveArchiveTask(source.reviewId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Задача восстановления уже создана");
+        }
+
+        Manager manager = source.managerId() == null
+                ? null
+                : managerRepository.findById(source.managerId()).orElse(null);
+        Worker worker = source.workerId() == null
+                ? null
+                : workerRepository.findById(source.workerId()).orElse(null);
+        Bot bot = source.botId() == null
+                ? null
+                : botService.findBotById(source.botId());
+        ReviewRecoveryBatch batch = getOrCreateActiveArchiveBatch(source, manager, createdBy);
+        LocalDate scheduledDate = nextArchiveScheduledDate(source);
+
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .batch(batch)
+                .archiveOrderId(source.orderId())
+                .archiveReviewId(source.reviewId())
+                .archiveCompanyId(source.companyId())
+                .archiveOrderDetailsId(source.orderDetailsId())
+                .archiveOrderStatus(source.orderStatus())
+                .archiveCompanyTitle(source.companyTitle())
+                .archiveCompanyNote(source.companyNote())
+                .archiveOrderNote(source.orderNote())
+                .archiveFilialCity(source.filialCity())
+                .archiveFilialCityId(source.filialCityId())
+                .archiveFilialTitle(source.filialTitle())
+                .archiveFilialUrl(source.filialUrl())
+                .archiveCategory(source.category())
+                .archiveSubCategory(source.subCategory())
+                .archiveProductId(source.productId())
+                .archiveProductTitle(source.productTitle())
+                .archiveReviewCreated(source.created())
+                .archiveReviewChanged(source.changed())
+                .archiveReviewPublishedDate(source.publishedDate())
+                .archiveReviewPublish(source.publish())
+                .archiveReviewVigul(source.vigul())
+                .archiveReviewPrice(source.price())
+                .archiveReviewUrl(source.url())
+                .worker(worker)
+                .manager(manager)
+                .bot(bot)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .originalText(source.text())
+                .recoveryText(safeText(source.text()))
+                .originalAnswer(source.answer())
+                .recoveryAnswer(source.answer())
+                .botLoginSnapshot(firstNonBlank(botLogin(bot), source.botLogin()))
+                .botPasswordSnapshot(firstNonBlank(botPassword(bot), source.botPassword()))
+                .botFioSnapshot(firstNonBlank(botFio(bot), source.botFio()))
+                .scheduledDate(scheduledDate)
+                .createdBy(createdBy)
+                .build();
+
+        ReviewRecoveryTask savedTask = taskRepository.save(task);
+        log.info("Создана архивная задача восстановления {} для архивного отзыва {}, заказа {}, дата {}",
+                savedTask.getId(), source.reviewId(), source.orderId(), scheduledDate);
         return savedTask;
     }
 
@@ -436,6 +510,10 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         return taskRepository.countActiveTasksForReview(reviewId, ACTIVE_TASK_STATUSES, ACTIVE_BATCH_STATUSES) > 0;
     }
 
+    private boolean hasActiveArchiveTask(Long archiveReviewId) {
+        return taskRepository.countActiveTasksForArchiveReview(archiveReviewId, ACTIVE_TASK_STATUSES, ACTIVE_BATCH_STATUSES) > 0;
+    }
+
     private ReviewRecoveryBatch getOrCreateActiveBatch(Order order, User createdBy) {
         ReviewRecoveryBatch batch = batchRepository
                 .findFirstByOrderIdAndStatusInOrderByCreatedAtDesc(order.getId(), ACTIVE_BATCH_STATUSES)
@@ -473,9 +551,79 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         return batch;
     }
 
+    private ReviewRecoveryBatch getOrCreateActiveArchiveBatch(
+            ArchiveReviewRecoverySource source,
+            Manager manager,
+            User createdBy
+    ) {
+        ReviewRecoveryBatch batch = batchRepository
+                .findFirstByArchiveOrderIdAndStatusInOrderByCreatedAtDesc(source.orderId(), ACTIVE_BATCH_STATUSES)
+                .orElseGet(() -> ReviewRecoveryBatch.builder()
+                        .archiveOrderId(source.orderId())
+                        .archiveCompanyTitle(source.companyTitle())
+                        .archiveChatUrl(source.companyChatUrl())
+                        .archiveOrderStatus(source.orderStatus())
+                        .manager(manager)
+                        .status(ReviewRecoveryBatchStatus.OPEN)
+                        .createdBy(createdBy)
+                        .holdStartedAt(Instant.now())
+                        .build());
+
+        if (batch.getStatus() == ReviewRecoveryBatchStatus.COMPLETED) {
+            batch.setStatus(ReviewRecoveryBatchStatus.OPEN);
+            batch.setCompletedAt(null);
+            batch.setClientNotifiedAt(null);
+            batch.setClientNotifiedBy(null);
+            batch.setHoldStartedAt(Instant.now());
+            batch.setHoldReleasedAt(null);
+            batch.setDeadlineShiftAppliedAt(null);
+            batch.setDeadlineShiftSeconds(0);
+        }
+
+        batch.setArchiveOrderId(source.orderId());
+        batch.setArchiveCompanyTitle(source.companyTitle());
+        batch.setArchiveChatUrl(source.companyChatUrl());
+        batch.setArchiveOrderStatus(source.orderStatus());
+        if (batch.getManager() == null) {
+            batch.setManager(manager);
+        }
+        if (batch.getHoldStartedAt() == null || batch.getHoldReleasedAt() != null) {
+            batch.setHoldStartedAt(Instant.now());
+            batch.setHoldReleasedAt(null);
+            batch.setDeadlineShiftAppliedAt(null);
+            batch.setDeadlineShiftSeconds(0);
+        }
+
+        return batchRepository.save(batch);
+    }
+
     private LocalDate nextScheduledDate(ReviewRecoveryBatch batch) {
         Long orderId = batch != null && batch.getOrder() != null ? batch.getOrder().getId() : null;
         return recoveryGateService.nextScheduledDate(orderId);
+    }
+
+    private LocalDate nextArchiveScheduledDate(ArchiveReviewRecoverySource source) {
+        LocalDate archiveReviewDate = maxDate(
+                maxDate(source == null ? null : source.publishedDate(), source == null ? null : source.changed()),
+                source == null ? null : source.created()
+        );
+        LocalDate baseDate = maxDate(
+                archiveReviewDate,
+                source == null || source.orderId() == null
+                        ? null
+                        : taskRepository.maxScheduledDateByArchiveOrderId(source.orderId(), ReviewRecoveryTaskStatus.CANCELLED)
+        );
+        return (baseDate == null ? LocalDate.now() : baseDate).plusDays(ReviewRecoveryGateService.RECOVERY_SCHEDULE_STEP_DAYS);
+    }
+
+    private LocalDate maxDate(LocalDate first, LocalDate second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return first.isAfter(second) ? first : second;
     }
 
     private ReviewRecoveryBatch completeBatchIfReady(ReviewRecoveryBatch batch) {
@@ -495,10 +643,19 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         batch.setStatus(ReviewRecoveryBatchStatus.COMPLETED);
         batch.setCompletedAt(Instant.now());
         ReviewRecoveryBatch savedBatch = batchRepository.save(batch);
+        if (isArchiveOnlyBatch(savedBatch)) {
+            savedBatch.setStatus(ReviewRecoveryBatchStatus.CLIENT_NOTIFIED);
+            savedBatch.setClientNotifiedAt(Instant.now());
+            return batchRepository.save(savedBatch);
+        }
         createCompletionReminder(savedBatch);
         handleCompletedBatchClientNotice(savedBatch);
         log.info("Пачка восстановления {} завершена", batch.getId());
         return savedBatch;
+    }
+
+    private boolean isArchiveOnlyBatch(ReviewRecoveryBatch batch) {
+        return batch != null && batch.getOrder() == null && batch.getArchiveOrderId() != null;
     }
 
     private void resumeOrderAfterRecoveryIfReady(Order sourceOrder) {
@@ -633,12 +790,19 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     private String recoveryCompanyTitle(ReviewRecoveryBatch batch) {
+        if (batch != null && batch.getOrder() == null && batch.getArchiveOrderId() != null) {
+            String title = safeText(batch.getArchiveCompanyTitle()).trim();
+            return title.isBlank() ? "архивная компания не указана" : title;
+        }
         Company company = recoveryCompany(batch);
         String title = company != null ? safeText(company.getTitle()).trim() : "";
         return title.isBlank() ? "компания не указана" : title;
     }
 
     private String recoveryChatUrl(ReviewRecoveryBatch batch) {
+        if (batch != null && batch.getOrder() == null && batch.getArchiveOrderId() != null) {
+            return safeText(batch.getArchiveChatUrl()).trim();
+        }
         Company company = recoveryCompany(batch);
         return company == null ? "" : safeText(company.getUrlChat()).trim();
     }
@@ -706,12 +870,30 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         return text == null ? "" : text;
     }
 
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     private Long orderId(ReviewRecoveryTask task) {
-        return task != null && task.getOrder() != null ? task.getOrder().getId() : null;
+        if (task == null) {
+            return null;
+        }
+        return task.getOrder() != null ? task.getOrder().getId() : task.getArchiveOrderId();
     }
 
     private Long reviewId(ReviewRecoveryTask task) {
-        return task != null && task.getSourceReview() != null ? task.getSourceReview().getId() : null;
+        if (task == null) {
+            return null;
+        }
+        return task.getSourceReview() != null ? task.getSourceReview().getId() : task.getArchiveReviewId();
     }
 
     private String botLogin(Bot bot) {
@@ -731,6 +913,12 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 && task.getSourceReview().getFilial() != null
                 ? task.getSourceReview().getFilial().getCity()
                 : null;
+        if ((city == null || city.getId() == null) && task != null && task.getArchiveFilialCityId() != null) {
+            city = City.builder()
+                    .id(task.getArchiveFilialCityId())
+                    .title(task.getArchiveFilialCity())
+                    .build();
+        }
         if (city == null || city.getId() == null) {
             return null;
         }
@@ -811,8 +999,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 WorkerTaskCompletionMonitorService.ACTION_TASK_COMPLETED,
                 "review_recovery_task",
                 task.getId(),
-                task.getOrder() == null ? null : task.getOrder().getId(),
-                task.getSourceReview() == null ? null : task.getSourceReview().getId(),
+                orderId(task),
+                reviewId(task),
                 ReviewRecoveryTaskStatus.PLANNED,
                 ReviewRecoveryTaskStatus.DONE,
                 "Задача восстановления отмечена выполненной"

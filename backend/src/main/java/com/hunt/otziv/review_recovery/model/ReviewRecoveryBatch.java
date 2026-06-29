@@ -36,9 +36,21 @@ public class ReviewRecoveryBatch {
     @Column(name = "review_recovery_batch_id")
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "review_recovery_batch_order", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_recovery_batch_order")
     private Order order;
+
+    @Column(name = "review_recovery_batch_archive_order_id")
+    private Long archiveOrderId;
+
+    @Column(name = "review_recovery_batch_archive_company_title")
+    private String archiveCompanyTitle;
+
+    @Column(name = "review_recovery_batch_archive_chat_url")
+    private String archiveChatUrl;
+
+    @Column(name = "review_recovery_batch_archive_order_status")
+    private String archiveOrderStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_recovery_batch_manager")

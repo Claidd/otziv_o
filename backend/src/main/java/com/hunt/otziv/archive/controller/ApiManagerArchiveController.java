@@ -67,4 +67,14 @@ public class ApiManagerArchiveController {
             throw new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, exception.getMessage(), exception);
         }
     }
+
+    @PostMapping("/orders/{orderId}/reviews/{reviewId}/recovery-tasks")
+    public ManagerArchiveOrderDetailsResponse createReviewRecoveryTask(
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return managerArchiveService.createReviewRecoveryTask(orderId, reviewId, principal, authentication);
+    }
 }

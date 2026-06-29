@@ -15,6 +15,10 @@ export interface ManagerControlActionPayload {
   manualWorkerNotification?: boolean | null;
 }
 
+export interface ManagerControlClientReplyPayload {
+  message: string;
+}
+
 export interface ManagerControlStagePayload {
   stage: 'MORNING_DONE' | 'FINAL_CHECK';
   comment?: string | null;
@@ -246,6 +250,13 @@ export class ManagerControlApi {
     return this.http.post<ManagerControlConcreteItem>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/send-client-message`,
       {}
+    );
+  }
+
+  replyToClientMessage(concreteItemId: number, payload: ManagerControlClientReplyPayload): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/reply`,
+      payload
     );
   }
 
