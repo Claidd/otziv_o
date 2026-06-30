@@ -8,6 +8,8 @@ import java.util.Set;
 @Data
 public class UpdateUserAssignmentsRequest {
 
+    private String ownerControlViewMode;
+
     private Set<Long> managerIds = new LinkedHashSet<>();
 
     private Set<Long> workerIds = new LinkedHashSet<>();

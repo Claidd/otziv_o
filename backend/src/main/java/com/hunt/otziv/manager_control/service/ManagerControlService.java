@@ -124,6 +124,7 @@ public class ManagerControlService {
     private static final LocalTime FINAL_STAGE_START = LocalTime.of(20, 0);
     private static final String SOURCE_CONTROL_OWNER = "MANAGER_CONTROL_OWNER";
     private static final String SOURCE_WORKER_TASK_REQUEST = "MANAGER_CONTROL_WORKER_TASK_REQUEST";
+    private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
     private static final String ENTITY_PUBLISH_REVIEW = "PUBLISH_REVIEW";
     private static final String ENTITY_NAGUL_REVIEW = "NAGUL_REVIEW";
     private static final String ENTITY_WORKER_ORDER_NEW = "WORKER_ORDER_NEW";
@@ -269,7 +270,8 @@ public class ManagerControlService {
                 today,
                 LocalDateTime.now(),
                 true,
-                false,
+                managerPermissionService.hasRole(authentication, "MANAGER")
+                        && !managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"),
                 managers.size(),
                 green,
                 yellow,
@@ -1192,8 +1194,23 @@ public class ManagerControlService {
         }
 
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            User owner = currentUser(principal);
+            if (OWNER_CONTROL_ALL_MANAGERS.equalsIgnoreCase(safe(owner == null ? null : owner.getOwnerControlViewMode()))) {
+                List<Manager> managers = managerRepository.findAllWithUserAndImage();
+                return managers.isEmpty() ? List.of() : managerRepository.findAllManagersWorkers(managers);
+            }
             List<Manager> managers = userService.findManagersByUserName(principal.getName()).stream().toList();
             return managers.isEmpty() ? List.of() : managerRepository.findAllManagersWorkers(managers);
+        }
+
+        if (managerPermissionService.hasRole(authentication, "MANAGER")) {
+            User user = currentUser(principal);
+            if (user == null || user.getId() == null) {
+                return List.of();
+            }
+            return managerRepository.findByUserId(user.getId())
+                    .map(List::of)
+                    .orElseGet(List::of);
         }
 
         return List.of();
@@ -3060,7 +3077,7 @@ public class ManagerControlService {
                 taskSubtitle("Плохие", task.getWorker(), task.getScheduledDate(), today),
                 task.getStatus() == null ? null : task.getStatus().name(),
                 daysSince(task.getScheduledDate(), today),
-                "Задача по плохому отзыву требует проверки менеджера",
+                badReviewTaskReason(task, today),
                 orderTargetUrl(order),
                 null,
                 orderChatUrl(order),
@@ -3073,6 +3090,32 @@ public class ManagerControlService {
                 null,
                 null
         );
+    }
+
+    private String badReviewTaskReason(BadReviewTask task, LocalDate today) {
+        List<String> parts = new ArrayList<>();
+        long days = daysSince(task == null ? null : task.getScheduledDate(), today);
+        if (task != null && task.getScheduledDate() != null) {
+            parts.add(days > 0
+                    ? "Плохой отзыв просрочен " + days + " дн., план был " + task.getScheduledDate()
+                    : "Плохой отзыв запланирован на сегодня");
+        } else {
+            parts.add("Плохой отзыв без плановой даты");
+        }
+
+        if (task != null && (task.getOriginalRating() != null || task.getTargetRating() != null)) {
+            String from = task.getOriginalRating() == null ? "?" : task.getOriginalRating().toString();
+            String to = task.getTargetRating() == null ? "?" : task.getTargetRating().toString();
+            parts.add("рейтинг " + from + " -> " + to);
+        }
+
+        String comment = compact(task == null ? null : task.getComment(), 140);
+        if (!comment.isBlank()) {
+            parts.add("комментарий: " + comment);
+        }
+
+        parts.add("Проверьте карточку отзыва и работу специалиста.");
+        return String.join(". ", parts);
     }
 
     private String taskSubtitle(String type, Worker worker, LocalDate scheduledDate, LocalDate today) {
@@ -3856,25 +3899,47 @@ public class ManagerControlService {
         if (managerPermissionService.hasRole(authentication, "ADMIN")) {
             return;
         }
-        if (!managerPermissionService.hasRole(authentication, "OWNER")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав");
-        }
-        Set<Long> managerIds = userService.findManagersByUserName(principal.getName()).stream()
-                .map(Manager::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
         Long controlManagerId = control.getManager() == null ? null : control.getManager().getId();
-        if (controlManagerId == null || !managerIds.contains(controlManagerId)) {
+
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            User owner = currentUser(principal);
+            if (OWNER_CONTROL_ALL_MANAGERS.equalsIgnoreCase(safe(owner == null ? null : owner.getOwnerControlViewMode()))) {
+                return;
+            }
+            Set<Long> managerIds = userService.findManagersByUserName(principal.getName()).stream()
+                    .map(Manager::getId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (controlManagerId != null && managerIds.contains(controlManagerId)) {
+                return;
+            }
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен");
         }
+
+        if (managerPermissionService.hasRole(authentication, "MANAGER")) {
+            User user = currentUser(principal);
+            Long ownManagerId = user == null || user.getId() == null
+                    ? null
+                    : managerRepository.findByUserId(user.getId()).map(Manager::getId).orElse(null);
+            if (controlManagerId != null && controlManagerId.equals(ownManagerId)) {
+                return;
+            }
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен");
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав");
     }
 
     private Long actorUserId(Principal principal) {
+        User user = currentUser(principal);
+        return user == null ? null : user.getId();
+    }
+
+    private User currentUser(Principal principal) {
         if (principal == null || principal.getName() == null) {
             return null;
         }
         return userService.findByUserName(principal.getName())
-                .map(User::getId)
                 .orElse(null);
     }
 

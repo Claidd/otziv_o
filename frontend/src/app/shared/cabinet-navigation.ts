@@ -4,6 +4,8 @@ export type CabinetNavigationLink = {
   icon: string;
   active: string;
   roles: string[];
+  adminOnly?: boolean;
+  exactRoleOnly?: boolean;
   routerLink?: string;
   href?: string;
 };
@@ -35,11 +37,21 @@ export const CABINET_SECTION_LINKS: CabinetNavigationLink[] = [
     roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
   },
   {
+    label: 'Мои замечания',
+    description: 'Личный контроль дня',
+    icon: 'fact_check',
+    active: 'manager-control-self',
+    routerLink: '/cabinet/manager-control',
+    exactRoleOnly: true,
+    roles: ['MANAGER']
+  },
+  {
     label: 'Мои достижения',
     description: 'Цели, серии и личный прогресс',
     icon: 'emoji_events',
     active: 'gamification-progress',
     routerLink: '/gamification/progress',
+    adminOnly: true,
     roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
   },
   {
@@ -63,6 +75,14 @@ export function canSeeCabinetNavigationLink(link: CabinetNavigationLink, roles: 
   }
 
   const roleSet = new Set(roles);
+  if (link.adminOnly) {
+    return roleSet.has('ADMIN');
+  }
+
+  if (link.exactRoleOnly) {
+    return link.roles.some((role) => roleSet.has(role));
+  }
+
   if (roleSet.has('ADMIN') || roleSet.has('OWNER')) {
     return true;
   }

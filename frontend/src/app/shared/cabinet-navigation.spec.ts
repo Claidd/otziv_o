@@ -7,16 +7,21 @@ describe('cabinet navigation', () => {
   it('filters links by business role', () => {
     expect(visibleCabinetNavigationLinks(['WORKER']).map((link) => link.label)).toEqual([
       'Личный кабинет',
-      'Рейтинг',
-      'Мои достижения'
+      'Рейтинг'
     ]);
     expect(visibleCabinetNavigationLinks(['MANAGER']).map((link) => link.label)).toEqual([
       'Личный кабинет',
       'Моя команда',
       'Рейтинг',
-      'Мои достижения'
+      'Мои замечания'
     ]);
     expect(visibleCabinetNavigationLinks(['OWNER']).map((link) => link.label)).toEqual([
+      'Личный кабинет',
+      'Моя команда',
+      'Рейтинг',
+      'Аналитика'
+    ]);
+    expect(visibleCabinetNavigationLinks(['ADMIN']).map((link) => link.label)).toEqual([
       'Личный кабинет',
       'Моя команда',
       'Рейтинг',
@@ -42,8 +47,7 @@ describe('cabinet navigation', () => {
 
     expect(cards.map((card) => card.querySelector('strong')?.textContent?.trim())).toEqual([
       'Личный кабинет',
-      'Рейтинг',
-      'Мои достижения'
+      'Рейтинг'
     ]);
     expect(element.querySelector('.cabinet-nav-card.active strong')?.textContent?.trim()).toBe('Рейтинг');
     expect(element.textContent).not.toContain('Аналитика');

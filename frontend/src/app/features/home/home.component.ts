@@ -27,6 +27,7 @@ import {
   type CabinetLineChart
 } from '../cabinet/cabinet-chart.helpers';
 import { CabinetLineChartComponent } from '../cabinet/cabinet-line-chart.component';
+import { ManagerControlComponent } from '../admin/manager-control/manager-control.component';
 
 type DashboardAction = {
   label: string;
@@ -80,7 +81,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     LoadErrorCardComponent,
     RouterLink,
     CabinetBarChartComponent,
-    CabinetLineChartComponent
+    CabinetLineChartComponent,
+    ManagerControlComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'
@@ -287,6 +289,7 @@ export class HomeComponent {
   });
 
   readonly showManualPaymentTasks = computed(() => this.isManagerUser());
+  readonly showManagerControl = computed(() => this.isManagerUser());
 
   readonly canCreateManualTask = computed(() => {
     const hasTarget = this.manualTaskPaymentType() === 'MOBILE_BANK'

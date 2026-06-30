@@ -34,6 +34,9 @@ type UserMetric = {
   tone: 'blue' | 'green' | 'teal' | 'yellow' | 'pink' | 'gray';
 };
 
+type OwnerControlViewMode = 'OWN_MANAGERS' | 'ALL_MANAGERS';
+type AssignmentIdControlName = 'managerIds' | 'workerIds' | 'operatorIds' | 'marketologIds';
+
 @Component({
   selector: 'app-users-admin',
   imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
@@ -181,6 +184,7 @@ export class UsersAdminComponent implements OnDestroy {
   });
 
   readonly assignmentForm = this.fb.nonNullable.group({
+    ownerControlViewMode: this.fb.nonNullable.control<OwnerControlViewMode>('OWN_MANAGERS'),
     managerIds: this.fb.nonNullable.control<number[]>([]),
     workerIds: this.fb.nonNullable.control<number[]>([]),
     operatorIds: this.fb.nonNullable.control<number[]>([]),
@@ -278,6 +282,10 @@ export class UsersAdminComponent implements OnDestroy {
 
   isWorkerProfile(): boolean {
     return this.isRoleSelected('WORKER');
+  }
+
+  isOwnerProfile(): boolean {
+    return this.isRoleSelected('OWNER');
   }
 
   workerChatStatus(user: AdminUser | null | undefined): string {
@@ -533,7 +541,7 @@ export class UsersAdminComponent implements OnDestroy {
     });
   }
 
-  toggleAssignment(controlName: keyof UpdateUserAssignmentsRequest, id: number, checked: boolean): void {
+  toggleAssignment(controlName: AssignmentIdControlName, id: number, checked: boolean): void {
     const control = this.assignmentForm.controls[controlName];
     const ids = new Set(control.value);
 
@@ -547,7 +555,7 @@ export class UsersAdminComponent implements OnDestroy {
     control.markAsDirty();
   }
 
-  isAssignmentSelected(controlName: keyof UpdateUserAssignmentsRequest, id: number): boolean {
+  isAssignmentSelected(controlName: AssignmentIdControlName, id: number): boolean {
     return this.assignmentForm.controls[controlName].value.includes(id);
   }
 
@@ -562,6 +570,7 @@ export class UsersAdminComponent implements OnDestroy {
 
     const raw = this.assignmentForm.getRawValue();
     const request: UpdateUserAssignmentsRequest = {
+      ownerControlViewMode: raw.ownerControlViewMode,
       managerIds: raw.managerIds,
       workerIds: raw.workerIds,
       operatorIds: raw.operatorIds,
@@ -723,6 +732,7 @@ export class UsersAdminComponent implements OnDestroy {
 
   private patchAssignmentForm(assignments: UserAssignments): void {
     this.assignmentForm.reset({
+      ownerControlViewMode: assignments.ownerControlViewMode ?? 'OWN_MANAGERS',
       managerIds: assignments.managerIds ?? [],
       workerIds: assignments.workerIds ?? [],
       operatorIds: assignments.operatorIds ?? [],

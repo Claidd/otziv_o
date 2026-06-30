@@ -307,6 +307,16 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'cabinet/manager-control',
+    loadComponent: () => import('./features/admin/manager-control/manager-control.component')
+      .then((m) => m.ManagerControlComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['MANAGER'],
+      personalControl: true
+    }
+  },
+  {
     path: 'admin/analyse',
     loadComponent: () => import('./features/cabinet/admin-analytics.component')
       .then((m) => m.AdminAnalyticsComponent),

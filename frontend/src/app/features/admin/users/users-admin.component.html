@@ -386,6 +386,22 @@
               <p class="error compact">{{ assignmentsError() }}</p>
             }
 
+            @if (isOwnerProfile()) {
+              <section class="role-block">
+                <span>Раздел «Контроль»</span>
+                <div class="role-grid">
+                  <label class="checkbox">
+                    <input type="radio" formControlName="ownerControlViewMode" value="OWN_MANAGERS">
+                    <span>Только свои менеджеры</span>
+                  </label>
+                  <label class="checkbox">
+                    <input type="radio" formControlName="ownerControlViewMode" value="ALL_MANAGERS">
+                    <span>Все менеджеры сайта</span>
+                  </label>
+                </div>
+              </section>
+            }
+
             <section class="role-block">
               <span>Менеджеры</span>
               <div class="role-grid">

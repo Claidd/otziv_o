@@ -70,7 +70,9 @@ public class ClientChatMessageTrackerService {
         ClientChatSenderRole senderRole = normalizeSenderRole(command, participantClassifier.classify(
                 command.platform(),
                 direction,
-                command.senderExternalId()
+                command.senderExternalId(),
+                command.senderName(),
+                company
         ));
 
         ClientChatMessage message = new ClientChatMessage();

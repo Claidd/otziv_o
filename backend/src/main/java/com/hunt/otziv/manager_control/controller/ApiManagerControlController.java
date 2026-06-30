@@ -31,7 +31,7 @@ public class ApiManagerControlController {
     private final PerformanceMetrics performanceMetrics;
 
     @GetMapping("/today")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlSummaryResponse today(
             Principal principal,
             Authentication authentication
@@ -43,7 +43,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/items/{itemId}/action")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public void actionItem(
             @PathVariable Long itemId,
             @RequestBody(required = false) ManagerControlItemActionRequest request,
@@ -60,7 +60,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/concrete-items/{concreteItemId}/action")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlConcreteItemResponse actionConcreteItem(
             @PathVariable Long concreteItemId,
             @RequestBody(required = false) ManagerControlItemActionRequest request,
@@ -74,7 +74,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/concrete-items/{concreteItemId}/send-client-message")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlConcreteItemResponse sendClientMessage(
             @PathVariable Long concreteItemId,
             Principal principal,
@@ -87,7 +87,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/concrete-items/{concreteItemId}/reply")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlConcreteItemResponse replyToClientMessage(
             @PathVariable Long concreteItemId,
             @RequestBody(required = false) ManagerControlClientReplyRequest request,
@@ -101,7 +101,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/concrete-items/{concreteItemId}/repair")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlConcreteItemResponse repairConcreteItem(
             @PathVariable Long concreteItemId,
             Principal principal,
@@ -114,7 +114,7 @@ public class ApiManagerControlController {
     }
 
     @GetMapping("/managers/{managerId}/today")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlManagerDetailResponse managerDetails(
             @PathVariable Long managerId,
             Principal principal,
@@ -127,7 +127,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/controls/{controlId}/stage")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlManagerDetailResponse markStage(
             @PathVariable Long controlId,
             @RequestBody(required = false) ManagerControlStageRequest request,
@@ -141,7 +141,7 @@ public class ApiManagerControlController {
     }
 
     @PostMapping("/controls/{controlId}/close")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public ManagerControlCloseResponse closeDay(
             @PathVariable Long controlId,
             @RequestBody(required = false) ManagerControlCloseRequest request,

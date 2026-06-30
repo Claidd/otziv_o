@@ -1,21 +1,36 @@
-<app-admin-layout title="Контроль менеджеров" active="manager-control" rightPanelMode="custom">
-  <section class="manager-control" [class.detail-mode]="isDetailPage()">
-    <header class="control-head">
-      <div>
-        <p class="eyebrow">ADMIN / OWNER</p>
-        <h2>Контроль дня</h2>
-      </div>
-      <div class="toolbar-actions">
-        <div class="date-pill">
-          <strong>{{ summaryDate() | date: 'dd.MM.yyyy' }}</strong>
-          <span>{{ generatedAt() | date: 'HH:mm' }}</span>
+@if (embeddedMode()) {
+  <ng-container [ngTemplateOutlet]="managerControlContent"></ng-container>
+} @else {
+  <app-admin-layout [title]="layoutTitle()" [active]="layoutActive()" rightPanelMode="custom">
+    <ng-container [ngTemplateOutlet]="managerControlContent"></ng-container>
+  </app-admin-layout>
+}
+
+<ng-template #managerControlContent>
+  <section
+    class="manager-control"
+    [class.detail-mode]="isDetailPage()"
+    [class.embedded-mode]="embeddedMode()"
+    [class.personal-mode]="isPersonalControl()"
+  >
+    @if (!embeddedMode()) {
+      <header class="control-head">
+        <div>
+          <p class="eyebrow">{{ pageEyebrow() }}</p>
+          <h2>{{ pageTitle() }}</h2>
         </div>
-        <button type="button" class="refresh" (click)="load()" [disabled]="loading()">
-          <span class="material-icons-sharp">refresh</span>
-          {{ loading() ? 'Обновляю' : 'Обновить' }}
-        </button>
-      </div>
-    </header>
+        <div class="toolbar-actions">
+          <div class="date-pill">
+            <strong>{{ summaryDate() | date: 'dd.MM.yyyy' }}</strong>
+            <span>{{ generatedAt() | date: 'HH:mm' }}</span>
+          </div>
+          <button type="button" class="refresh" (click)="load()" [disabled]="loading()">
+            <span class="material-icons-sharp">refresh</span>
+            {{ loading() ? 'Обновляю' : 'Обновить' }}
+          </button>
+        </div>
+      </header>
+    }
 
     @if (error()) {
       <app-load-error-card
@@ -29,12 +44,98 @@
 
     <section class="control-section manager-section" aria-label="Менеджеры">
       <div class="section-title">
-        <span class="material-icons-sharp">manage_accounts</span>
-        <h2>Менеджеры</h2>
+        <span class="material-icons-sharp">{{ isPersonalControl() ? 'fact_check' : 'manage_accounts' }}</span>
+        <h2>{{ isPersonalControl() ? 'Мои замечания' : 'Менеджеры' }}</h2>
       </div>
 
       <div class="manager-list">
         @for (manager of managers(); track trackManager($index, manager)) {
+          @if (personalEmbeddedMode()) {
+            <article class="personal-remark-card" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
+              <header class="personal-remark-head {{ countToneClass(manager.totalAttentionCount) }}">
+                <div class="manager-main">
+                  <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
+                  <div class="personal-remark-total">
+                    <span class="status-badge">{{ statusLabel(manager.status) }}</span>
+                    &nbsp;
+                    <strong>{{ manager.totalAttentionCount }} к действию</strong>
+                    &nbsp;
+                    <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
+                  </div>
+                </div>
+
+                <button type="button" class="manager-details-chip control-chip workload secondary" (click)="openDetails(manager)">
+                  <span class="material-icons-sharp">list_alt</span>
+                  Детали
+                </button>
+              </header>
+
+              <div class="personal-remark-metrics">
+                <article class="personal-metric overdue {{ countToneClass(manager.overdueOrderCount) }}">
+                  <span class="material-icons-sharp">schedule</span>
+                  <small>Просрочки</small>
+                  <b>{{ manager.overdueOrderCount }}</b>
+                </article>
+                <article class="personal-metric risks {{ countToneClass(manager.openRiskCount) }}">
+                  <span class="material-icons-sharp">warning</span>
+                  <small>Риски</small>
+                  <b>{{ manager.openRiskCount }}</b>
+                </article>
+                <article class="personal-metric other {{ countToneClass(otherCriticalCount(manager)) }}">
+                  <span class="material-icons-sharp">fact_check</span>
+                  <small>Прочее</small>
+                  <b>{{ otherCriticalCount(manager) }}</b>
+                </article>
+              </div>
+
+              @if (hasActionRows(manager)) {
+                <section class="personal-remark-actions {{ countToneClass(manager.totalAttentionCount) }}">
+                  <div class="group-head">
+                    <span class="material-icons-sharp">priority_high</span>
+                    <strong>К действию</strong>
+                  </div>
+                  <div class="chip-list">
+                    @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
+                      <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                        <span class="material-icons-sharp">{{ problem.icon }}</span>
+                        <span>{{ problem.label }}</span>
+                        <strong>{{ problem.count }}</strong>
+                        @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
+                          <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
+                        }
+                      </a>
+                    }
+                    @if (manager.overdueStatuses.length > 0) {
+                      @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
+                        <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical {{ countToneClass(overdue.count) }} {{ itemActionClass(overdue.actionType) }}" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
+                          <span>{{ overdue.status }}</span>
+                          <strong>{{ overdue.count }}</strong>
+                          <small>{{ overdue.maxDays }} дн.</small>
+                          @if (overdue.itemStatus && overdue.itemStatus !== 'OPEN') {
+                            <em>{{ itemStatusLabel(overdue.itemStatus) }}</em>
+                          }
+                        </a>
+                      }
+                    }
+                    @for (section of actionSections(manager); track trackSection($index, section)) {
+                      <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }}" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
+                        <span>{{ section.label }}</span>
+                        <strong>{{ section.count }}</strong>
+                        @if (section.itemStatus && section.itemStatus !== 'OPEN') {
+                          <em>{{ itemStatusLabel(section.itemStatus) }}</em>
+                        }
+                      </a>
+                    }
+                  </div>
+                </section>
+              } @else {
+                <div class="clean-state">
+                  <span class="material-icons-sharp">done_all</span>
+                  Нет открытых действий
+                </div>
+              }
+            </article>
+          } @else {
           <article
             class="manager-row"
             [class.red]="manager.status === 'RED'"
@@ -124,6 +225,7 @@
             }
 
           </article>
+          }
         } @empty {
           <div class="empty-state">
             <span class="material-icons-sharp">manage_accounts</span>
@@ -134,6 +236,7 @@
     </section>
   </section>
 
+  @if (!embeddedMode()) {
   <section admin-right-content class="control-side">
     @if (!isDetailPage()) {
       <section class="side-summary" aria-label="Сводка контроля">
@@ -260,6 +363,7 @@
       </article>
     }
   </section>
+  }
 
   @if (isDetailPage()) {
     <section class="detail-page" aria-label="Детализация контроля менеджера">
@@ -306,7 +410,7 @@
               }
             </section>
           }
-          <button type="button" class="detail-close" title="К списку менеджеров" (click)="closeDetails()">
+          <button type="button" class="detail-close" [title]="detailBackTitle()" (click)="closeDetails()">
             <span class="material-icons-sharp">arrow_back</span>
           </button>
         </header>
@@ -770,4 +874,4 @@
       </section>
     </section>
   }
-</app-admin-layout>
+</ng-template>

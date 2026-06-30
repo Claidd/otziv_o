@@ -1,5 +1,5 @@
-import { DatePipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
+import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -49,16 +49,20 @@ const ORDER_LIST_STATUSES = new Set([
 
 @Component({
   selector: 'app-manager-control',
-  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent],
+  imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet],
   templateUrl: './manager-control.component.html',
   styleUrl: './manager-control.component.scss'
 })
-export class ManagerControlComponent {
+export class ManagerControlComponent implements OnInit {
   private readonly api = inject(ManagerControlApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly toast = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly routePersonalControl = this.route.snapshot.data['personalControl'] === true;
+
+  @Input() embedded = false;
+  @Input() personalControl = false;
 
   readonly summary = signal<ManagerControlSummary | null>(null);
   readonly loading = signal(false);
@@ -112,28 +116,43 @@ export class ManagerControlComponent {
       this.detailPageManagerId.set(null);
       this.clearDetails();
     });
+  }
+
+  ngOnInit(): void {
     this.load();
   }
 
-  load(): void {
-    this.loading.set(true);
-    this.error.set(null);
+  load(options: { silent?: boolean } = {}): void {
+    if (!options.silent) {
+      this.loading.set(true);
+      this.error.set(null);
+    }
     this.api.today().subscribe({
       next: (summary) => {
         this.summary.set(summary);
         const selectedId = this.detailPageManagerId() ?? this.selectedManagerId();
-        if (this.detailPageManagerId()) {
+        if (this.isPersonalControl()) {
+          const personalManagerId = summary.managers[0]?.managerId ?? null;
+          this.selectedManagerId.set(personalManagerId);
+          if (!personalManagerId) {
+            this.clearDetails();
+          }
+        } else if (this.detailPageManagerId()) {
           this.selectedManagerId.set(this.detailPageManagerId());
         } else if (!selectedId || !summary.managers.some((manager) => manager.managerId === selectedId)) {
           this.selectedManagerId.set(summary.managers[0]?.managerId ?? null);
         }
-        this.loading.set(false);
+        if (!options.silent) {
+          this.loading.set(false);
+        }
       },
       error: (err) => {
         const message = apiErrorMessage(err, 'Контроль менеджеров не загрузился');
-        this.error.set(message);
-        this.loading.set(false);
-        this.toast.error('Контроль не загружен', message);
+        if (!options.silent) {
+          this.error.set(message);
+          this.loading.set(false);
+          this.toast.error('Контроль не загружен', message);
+        }
       }
     });
   }
@@ -190,6 +209,23 @@ export class ManagerControlComponent {
 
   otherCriticalCount(manager: ManagerControlManager): number {
     return Math.max(0, manager.criticalCount - manager.overdueOrderCount - manager.openRiskCount);
+  }
+
+  countToneClass(count: number | null | undefined): string {
+    const value = count ?? 0;
+    if (value <= 0) {
+      return 'tone-green';
+    }
+    if (value <= 5) {
+      return 'tone-blue';
+    }
+    if (value <= 10) {
+      return 'tone-yellow';
+    }
+    if (value < 20) {
+      return 'tone-orange';
+    }
+    return 'tone-red';
   }
 
   workloadTotal(): number {
@@ -263,6 +299,11 @@ export class ManagerControlComponent {
 
   openDetails(manager: ManagerControlManager): void {
     this.selectManager(manager);
+    if (this.isPersonalControl()) {
+      this.detailPageManagerId.set(manager.managerId);
+      this.loadDetails(manager.managerId);
+      return;
+    }
     void this.router.navigate(['/admin/manager-control', manager.managerId]);
   }
 
@@ -295,11 +336,48 @@ export class ManagerControlComponent {
   }
 
   closeDetails(): void {
+    if (this.isPersonalControl()) {
+      this.detailPageManagerId.set(null);
+      this.clearDetails();
+      return;
+    }
     if (this.isDetailPage()) {
       void this.router.navigate(['/admin/manager-control']);
       return;
     }
     this.clearDetails();
+  }
+
+  layoutTitle(): string {
+    return this.isPersonalControl() ? 'Мои замечания' : 'Контроль менеджеров';
+  }
+
+  layoutActive(): string {
+    return this.isPersonalControl() ? 'manager-control-self' : 'manager-control';
+  }
+
+  pageEyebrow(): string {
+    return this.isPersonalControl() ? 'MANAGER' : 'ADMIN / OWNER';
+  }
+
+  pageTitle(): string {
+    return this.isPersonalControl() ? 'Мои замечания' : 'Контроль дня';
+  }
+
+  detailBackTitle(): string {
+    return this.isPersonalControl() ? 'В личный кабинет' : 'К списку менеджеров';
+  }
+
+  embeddedMode(): boolean {
+    return this.embedded;
+  }
+
+  personalEmbeddedMode(): boolean {
+    return this.embeddedMode() && this.isPersonalControl();
+  }
+
+  isPersonalControl(): boolean {
+    return this.personalControl || this.routePersonalControl;
   }
 
   private clearDetails(): void {
@@ -323,7 +401,7 @@ export class ManagerControlComponent {
         this.detail.set(updated);
         this.updatingControl.set(false);
         this.toast.success('Этап отмечен', this.stageLabel(stage));
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingControl.set(false);
@@ -348,7 +426,7 @@ export class ManagerControlComponent {
           this.toast.error('День не закрыт', result.blockers.join('; '));
         }
         this.reloadCurrentDetails();
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingControl.set(false);
@@ -382,7 +460,7 @@ export class ManagerControlComponent {
         if (currentDetail) {
           this.loadDetails(currentDetail.managerId);
         }
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingItemIds.update((ids) => {
@@ -426,7 +504,6 @@ export class ManagerControlComponent {
         if (this.shouldHideConcreteItemAfterAction(merged)) {
           this.removeConcreteItemFromDetail(merged);
         }
-        this.load();
       },
       error: (err) => {
         this.updatingConcreteItemIds.update((ids) => {
@@ -478,7 +555,7 @@ export class ManagerControlComponent {
         if (this.shouldHideConcreteItemAfterAction(merged)) {
           this.removeConcreteItemFromDetail(merged);
         }
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingConcreteItemIds.update((ids) => {
@@ -509,7 +586,7 @@ export class ManagerControlComponent {
         if (this.shouldHideConcreteItemAfterAction(merged)) {
           this.removeConcreteItemFromDetail(merged);
         }
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingConcreteItemIds.update((ids) => {
@@ -577,7 +654,7 @@ export class ManagerControlComponent {
         if (this.shouldHideConcreteItemAfterAction(merged)) {
           this.removeConcreteItemFromDetail(merged);
         }
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingConcreteItemIds.update((ids) => {
@@ -1186,6 +1263,11 @@ export class ManagerControlComponent {
   }
 
   private shouldHideConcreteItemAfterAction(example: ManagerControlConcreteItem): boolean {
+    if (this.isUnansweredClientMessage(example)) {
+      return (!!example.itemStatus && example.itemStatus !== 'OPEN')
+        || example.actionType === 'ACTION_TAKEN'
+        || example.actionType === 'ACKNOWLEDGED';
+    }
     return !!example.itemStatus
       && example.itemStatus !== 'OPEN'
       && (!!example.followUpAt || example.itemStatus === 'RESOLVED');
@@ -1260,7 +1342,7 @@ export class ManagerControlComponent {
         if (incident.status !== 'OPEN') {
           this.removeConcreteItemFromDetail(merged);
         }
-        this.load();
+        this.load({ silent: true });
       },
       error: (err) => {
         this.updatingConcreteItemIds.update((ids) => {

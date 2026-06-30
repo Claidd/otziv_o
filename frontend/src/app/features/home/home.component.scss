@@ -51,6 +51,7 @@ small {
 
 .cabinet-metrics {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-inline: clamp(0.35rem, 0.8vw, 0.75rem);
 }
 
 .dashboard-grid {
@@ -60,6 +61,7 @@ small {
 .chart-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  margin-inline: clamp(0.35rem, 0.8vw, 0.75rem);
 }
 
 .cabinet-metrics > *,
@@ -131,8 +133,42 @@ small {
   order: 2;
 }
 
+.hero-card--authenticated button.secondary.refresh-button,
+.hero-card--authenticated button.secondary.health-button {
+  min-height: 2.2rem;
+  border: 1px solid rgba(121, 151, 191, 0.28);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  color: var(--otziv-dark);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: none;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.hero-card--authenticated button.secondary.refresh-button:hover:not(:disabled),
+.hero-card--authenticated button.secondary.health-button:hover:not(:disabled) {
+  border-color: rgba(121, 151, 191, 0.45);
+  background: rgba(121, 151, 191, 0.08);
+}
+
 .hero-card--authenticated .date-control {
   order: 3;
+}
+
+.manager-control-strip {
+  display: block;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 1.05rem;
+  padding-inline: clamp(0.35rem, 0.8vw, 0.75rem);
+}
+
+.manager-control-strip app-manager-control {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dashboard-warnings {
@@ -748,6 +784,10 @@ dd {
 }
 
 @media (max-width: 760px) {
+  .manager-control-strip {
+    padding-inline: 0;
+  }
+
   .hero-card--authenticated .hero-intro,
   .hero-card--authenticated .health-button {
     display: none;

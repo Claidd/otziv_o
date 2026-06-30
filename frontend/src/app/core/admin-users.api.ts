@@ -82,6 +82,7 @@ export interface AssignmentOptions {
 
 export interface UserAssignments {
   userId: number;
+  ownerControlViewMode?: 'OWN_MANAGERS' | 'ALL_MANAGERS';
   managerIds: number[];
   workerIds: number[];
   operatorIds: number[];
@@ -89,6 +90,7 @@ export interface UserAssignments {
 }
 
 export interface UpdateUserAssignmentsRequest {
+  ownerControlViewMode?: 'OWN_MANAGERS' | 'ALL_MANAGERS';
   managerIds: number[];
   workerIds: number[];
   operatorIds: number[];

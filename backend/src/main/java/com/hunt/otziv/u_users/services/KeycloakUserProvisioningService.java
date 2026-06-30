@@ -68,6 +68,9 @@ public class KeycloakUserProvisioningService {
     private static final String CLIENT_ROLE = "CLIENT";
     private static final String ADMIN_ROLE = "ROLE_ADMIN";
     private static final String ADMIN_KEYCLOAK_ROLE = "ADMIN";
+    private static final String OWNER_ROLE = "ROLE_OWNER";
+    private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
+    private static final String OWNER_CONTROL_OWN_MANAGERS = "OWN_MANAGERS";
 
     private final UserRepository userRepository;
     private final ImageRepository imageRepository;
@@ -273,6 +276,10 @@ public class KeycloakUserProvisioningService {
         Set<Worker> workers = findWorkers(request.getWorkerIds());
         Set<Operator> operators = findOperators(request.getOperatorIds());
         Set<Marketolog> marketologs = findMarketologs(request.getMarketologIds());
+
+        if (hasLocalRole(user, OWNER_ROLE)) {
+            user.setOwnerControlViewMode(normalizeOwnerControlViewMode(request.getOwnerControlViewMode()));
+        }
 
         replaceSet(user.getManagers(), managers, user::setManagers);
         replaceSet(user.getWorkers(), workers, user::setWorkers);
@@ -485,6 +492,7 @@ public class KeycloakUserProvisioningService {
     private UserAssignmentsResponse toAssignmentsResponse(User user) {
         return new UserAssignmentsResponse(
                 user.getId(),
+                normalizeOwnerControlViewMode(user.getOwnerControlViewMode()),
                 ids(user.getManagers()),
                 ids(user.getWorkers()),
                 ids(user.getOperators()),
@@ -670,6 +678,14 @@ public class KeycloakUserProvisioningService {
         return user.getRoles().stream()
                 .map(Role::getName)
                 .anyMatch(roleName::equals);
+    }
+
+    private String normalizeOwnerControlViewMode(String value) {
+        String normalized = trimToNull(value);
+        if (normalized != null && OWNER_CONTROL_ALL_MANAGERS.equalsIgnoreCase(normalized)) {
+            return OWNER_CONTROL_ALL_MANAGERS;
+        }
+        return OWNER_CONTROL_OWN_MANAGERS;
     }
 
     private CreatedKeycloakUserResponse toResponse(User user, Set<String> keycloakRoles) {

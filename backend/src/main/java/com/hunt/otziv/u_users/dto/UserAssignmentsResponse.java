@@ -4,6 +4,7 @@ import java.util.Set;
 
 public record UserAssignmentsResponse(
         Long userId,
+        String ownerControlViewMode,
         Set<Long> managerIds,
         Set<Long> workerIds,
         Set<Long> operatorIds,

@@ -3831,3 +3831,233 @@ app-admin-dictionaries {
   }
 }
 
+.personal-mode .control-section { padding: clamp(1.15rem, 1.45vw, 1.55rem); }
+.personal-mode .section-title > span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  color: var(--otziv-primary);
+  background: rgba(121, 151, 191, 0.12);
+  font-size: 1.35rem;
+}
+.personal-remark-card {
+  --pr-card-bg: linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.96)), linear-gradient(135deg, rgba(108,155,207,.18), rgba(255,0,96,.1));
+  --pr-head-bg: radial-gradient(circle at 8% 18%, rgba(108,155,207,.28), transparent 34%), linear-gradient(135deg, rgba(238,246,255,.96), rgba(255,242,248,.92));
+  --pr-button-bg: linear-gradient(135deg, rgba(255,255,255,.94), rgba(235,243,255,.9));
+  --pr-overdue-bg: linear-gradient(135deg, rgba(255,0,96,.13), rgba(255,255,255,.82));
+  --pr-risks-bg: linear-gradient(135deg, rgba(247,208,96,.22), rgba(255,255,255,.82));
+  --pr-other-bg: linear-gradient(135deg, rgba(108,155,207,.2), rgba(255,255,255,.82));
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(121,151,191,.16);
+  border-radius: 1.25rem;
+  padding: 1rem;
+  background: var(--pr-card-bg);
+  box-shadow: 0 1.1rem 2.2rem rgba(38,51,77,.08);
+}
+.personal-remark-head {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1fr) auto;
+  align-items: center;
+  gap: .9rem;
+  min-width: 0;
+  border-radius: 1rem;
+  padding: clamp(1rem, 1.7vw, 1.35rem);
+  background: var(--pr-head-bg);
+}
+.personal-mode .manager-main { gap: 1rem; }
+.personal-mode .status-icon {
+  width: 4.25rem;
+  height: 4.25rem;
+  border: .45rem solid rgba(255,255,255,.9);
+  color: var(--otziv-primary);
+  background: linear-gradient(135deg, rgba(108,155,207,.9), rgba(255,0,96,.72));
+  box-shadow: 0 .9rem 1.8rem rgba(108,155,207,.2);
+  font-size: 1.35rem;
+}
+.personal-remark-card.red .status-badge { background: rgba(255,0,96,.12); }
+.personal-remark-card.yellow .status-badge { background: rgba(247,208,96,.22); }
+.personal-remark-card.green .status-badge { background: rgba(27,156,133,.14); }
+.personal-remark-total { min-width: 0; }
+.personal-remark-total strong {
+  color: var(--otziv-dark);
+  font-size: clamp(1rem, 1.35vw, 1.28rem);
+  font-weight: 900;
+}
+.personal-remark-total small {
+  color: var(--otziv-dark);
+  font-size: .82rem;
+  font-weight: 700;
+}
+.personal-remark-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+.personal-metric {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  min-height: 5rem;
+  align-content: center;
+  gap: .18rem .65rem;
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: .95rem;
+  padding: .82rem .95rem;
+  color: var(--otziv-dark);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62);
+}
+.personal-metric.overdue { background: var(--pr-overdue-bg); }
+.personal-metric.risks { background: var(--pr-risks-bg); }
+.personal-metric.other { background: var(--pr-other-bg); }
+.personal-remark-head.tone-green { --pr-head-bg: radial-gradient(circle at 8% 18%, rgba(27,156,133,.28), transparent 34%), linear-gradient(135deg, rgba(236,255,247,.96), rgba(255,255,255,.9)); }
+.personal-remark-head.tone-blue { --pr-head-bg: radial-gradient(circle at 8% 18%, rgba(108,155,207,.3), transparent 34%), linear-gradient(135deg, rgba(238,246,255,.96), rgba(255,255,255,.9)); }
+.personal-remark-head.tone-yellow { --pr-head-bg: radial-gradient(circle at 8% 18%, rgba(247,208,96,.34), transparent 34%), linear-gradient(135deg, rgba(255,251,232,.96), rgba(255,255,255,.9)); }
+.personal-remark-head.tone-orange { --pr-head-bg: radial-gradient(circle at 8% 18%, rgba(245,158,11,.32), transparent 34%), linear-gradient(135deg, rgba(255,244,224,.96), rgba(255,255,255,.9)); }
+.personal-remark-head.tone-red { --pr-head-bg: radial-gradient(circle at 8% 18%, rgba(255,0,96,.24), transparent 34%), linear-gradient(135deg, rgba(255,238,246,.96), rgba(255,255,255,.9)); }
+.personal-metric.tone-green { background: linear-gradient(135deg, rgba(27,156,133,.15), rgba(255,255,255,.84)); }
+.personal-metric.tone-blue { background: linear-gradient(135deg, rgba(108,155,207,.18), rgba(255,255,255,.84)); }
+.personal-metric.tone-yellow { background: linear-gradient(135deg, rgba(247,208,96,.28), rgba(255,255,255,.84)); }
+.personal-metric.tone-orange { background: linear-gradient(135deg, rgba(245,158,11,.22), rgba(255,255,255,.84)); }
+.personal-metric.tone-red { background: linear-gradient(135deg, rgba(255,0,96,.14), rgba(255,255,255,.84)); }
+.personal-metric .material-icons-sharp {
+  grid-row: span 2;
+  align-self: center;
+  color: currentColor;
+  font-size: 1.28rem;
+  opacity: .76;
+}
+.personal-metric small {
+  color: var(--otziv-info);
+  font-size: .76rem;
+  font-weight: 900;
+}
+.personal-metric b {
+  color: var(--otziv-dark);
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.personal-remark-actions {
+  display: grid;
+  gap: .55rem;
+  min-width: 0;
+  border-radius: 1rem;
+  padding: .85rem;
+  background: linear-gradient(135deg, rgba(108,155,207,.08), rgba(255,255,255,.74));
+}
+.personal-remark-actions.tone-green { background: linear-gradient(135deg, rgba(27,156,133,.1), rgba(255,255,255,.78)); }
+.personal-remark-actions.tone-blue { background: linear-gradient(135deg, rgba(108,155,207,.12), rgba(255,255,255,.78)); }
+.personal-remark-actions.tone-yellow { background: linear-gradient(135deg, rgba(247,208,96,.16), rgba(255,255,255,.78)); }
+.personal-remark-actions.tone-orange { background: linear-gradient(135deg, rgba(245,158,11,.15), rgba(255,255,255,.78)); }
+.personal-remark-actions.tone-red { background: linear-gradient(135deg, rgba(255,0,96,.1), rgba(255,255,255,.78)); }
+.personal-remark-actions .group-head {
+  margin-bottom: .1rem;
+}
+.personal-mode .personal-remark-actions .chip-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: .75rem;
+}
+.personal-mode .personal-remark-actions .control-chip.control-chip {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  min-height: 4.4rem;
+  justify-content: stretch;
+  gap: .18rem .65rem;
+  border-color: rgba(255,255,255,.68);
+  border-radius: .95rem;
+  padding: .78rem .9rem;
+  background: linear-gradient(135deg, rgba(255,0,96,.1), rgba(255,255,255,.82));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
+}
+.personal-mode .personal-remark-actions .control-chip.workload,
+.personal-mode .personal-remark-actions .overdue-chip {
+  background: var(--pr-other-bg);
+}
+.personal-mode .personal-remark-actions .control-chip.tone-green { background: linear-gradient(135deg, rgba(27,156,133,.14), rgba(255,255,255,.84)); }
+.personal-mode .personal-remark-actions .control-chip.tone-blue { background: linear-gradient(135deg, rgba(108,155,207,.16), rgba(255,255,255,.84)); }
+.personal-mode .personal-remark-actions .control-chip.tone-yellow { background: linear-gradient(135deg, rgba(247,208,96,.24), rgba(255,255,255,.84)); }
+.personal-mode .personal-remark-actions .control-chip.tone-orange { background: linear-gradient(135deg, rgba(245,158,11,.2), rgba(255,255,255,.84)); }
+.personal-mode .personal-remark-actions .control-chip.tone-red { background: linear-gradient(135deg, rgba(255,0,96,.13), rgba(255,255,255,.84)); }
+.personal-mode .personal-remark-actions .control-chip .material-icons-sharp {
+  grid-row: span 2;
+  align-self: center;
+  font-size: 1.35rem;
+}
+.personal-mode .personal-remark-actions .control-chip span:not(.material-icons-sharp) {
+  white-space: normal;
+  line-height: 1.15;
+}
+.personal-mode .personal-remark-actions .control-chip strong {
+  align-self: end;
+  font-size: 1.1rem;
+}
+.personal-mode .personal-remark-actions .control-chip small,
+.personal-mode .personal-remark-actions .control-chip em {
+  grid-column: 2 / -1;
+  justify-self: start;
+}
+.personal-mode .personal-remark-head button.manager-details-chip.manager-details-chip {
+  border: 1px solid rgba(121,151,191,.32);
+  border-radius: .95rem;
+  min-height: 3rem;
+  padding: .42rem .85rem;
+  color: var(--otziv-dark);
+  background: var(--pr-button-bg);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 .65rem 1.25rem rgba(38,51,77,.09);
+}
+.personal-mode .personal-remark-head button.manager-details-chip .material-icons-sharp {
+  font-size: 1.25rem;
+}
+body.otziv-dark-theme .personal-remark-card {
+  --pr-card-bg: linear-gradient(180deg, rgba(32,37,40,.82), rgba(32,37,40,.96)), linear-gradient(135deg, rgba(45,80,139,.52), rgba(117,45,92,.34));
+  --pr-head-bg: radial-gradient(circle at 10% 18%, rgba(122,167,220,.34), transparent 35%), linear-gradient(135deg, rgba(30,51,86,.96), rgba(81,43,75,.9));
+  --pr-button-bg: linear-gradient(135deg, rgba(39,55,83,.96), rgba(43,37,61,.92));
+  --pr-overdue-bg: linear-gradient(135deg, rgba(255,91,143,.18), rgba(34,39,51,.86));
+  --pr-risks-bg: linear-gradient(135deg, rgba(248,217,117,.18), rgba(34,39,51,.86));
+  --pr-other-bg: linear-gradient(135deg, rgba(122,167,220,.22), rgba(34,39,51,.86));
+  border-color: rgba(122,167,220,.18);
+  box-shadow: 0 1.2rem 2.4rem rgba(0,0,0,.28);
+}
+body.otziv-dark-theme .personal-metric {
+  border-color: rgba(255,255,255,.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+body.otziv-dark-theme .personal-remark-head.tone-green { --pr-head-bg: radial-gradient(circle at 10% 18%, rgba(74,198,177,.28), transparent 35%), linear-gradient(135deg, rgba(24,68,61,.92), rgba(34,39,51,.88)); }
+body.otziv-dark-theme .personal-remark-head.tone-blue { --pr-head-bg: radial-gradient(circle at 10% 18%, rgba(122,167,220,.34), transparent 35%), linear-gradient(135deg, rgba(30,51,86,.96), rgba(34,39,51,.88)); }
+body.otziv-dark-theme .personal-remark-head.tone-yellow { --pr-head-bg: radial-gradient(circle at 10% 18%, rgba(248,217,117,.26), transparent 35%), linear-gradient(135deg, rgba(77,67,32,.9), rgba(34,39,51,.88)); }
+body.otziv-dark-theme .personal-remark-head.tone-orange { --pr-head-bg: radial-gradient(circle at 10% 18%, rgba(245,158,11,.28), transparent 35%), linear-gradient(135deg, rgba(83,53,25,.9), rgba(34,39,51,.88)); }
+body.otziv-dark-theme .personal-remark-head.tone-red { --pr-head-bg: radial-gradient(circle at 10% 18%, rgba(255,91,143,.28), transparent 35%), linear-gradient(135deg, rgba(84,35,55,.92), rgba(34,39,51,.88)); }
+body.otziv-dark-theme .personal-metric.tone-green { background: linear-gradient(135deg, rgba(74,198,177,.18), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-metric.tone-blue { background: linear-gradient(135deg, rgba(122,167,220,.2), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-metric.tone-yellow { background: linear-gradient(135deg, rgba(248,217,117,.2), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-metric.tone-orange { background: linear-gradient(135deg, rgba(245,158,11,.2), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-metric.tone-red { background: linear-gradient(135deg, rgba(255,91,143,.18), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-remark-actions.tone-green { background: linear-gradient(135deg, rgba(74,198,177,.12), rgba(34,39,51,.84)); }
+body.otziv-dark-theme .personal-remark-actions.tone-blue { background: linear-gradient(135deg, rgba(122,167,220,.14), rgba(34,39,51,.84)); }
+body.otziv-dark-theme .personal-remark-actions.tone-yellow { background: linear-gradient(135deg, rgba(248,217,117,.13), rgba(34,39,51,.84)); }
+body.otziv-dark-theme .personal-remark-actions.tone-orange { background: linear-gradient(135deg, rgba(245,158,11,.14), rgba(34,39,51,.84)); }
+body.otziv-dark-theme .personal-remark-actions.tone-red { background: linear-gradient(135deg, rgba(255,91,143,.12), rgba(34,39,51,.84)); }
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.control-chip {
+  border-color: rgba(255,255,255,.08);
+  background: linear-gradient(135deg, rgba(255,91,143,.14), rgba(34,39,51,.86));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.workload,
+body.otziv-dark-theme .personal-mode .personal-remark-actions .overdue-chip {
+  background: var(--pr-other-bg);
+}
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.tone-green { background: linear-gradient(135deg, rgba(74,198,177,.18), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.tone-blue { background: linear-gradient(135deg, rgba(122,167,220,.18), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.tone-yellow { background: linear-gradient(135deg, rgba(248,217,117,.17), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.tone-orange { background: linear-gradient(135deg, rgba(245,158,11,.18), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.tone-red { background: linear-gradient(135deg, rgba(255,91,143,.18), rgba(34,39,51,.86)); }
+body.otziv-dark-theme .personal-mode .personal-remark-head button.manager-details-chip.manager-details-chip {
+  border-color: rgba(255,255,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+

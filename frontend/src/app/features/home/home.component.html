@@ -39,6 +39,12 @@
         </div>
       </section>
 
+      @if (showManagerControl()) {
+        <div class="manager-control-strip">
+          <app-manager-control [embedded]="true" [personalControl]="true" />
+        </div>
+      }
+
       @if (warnings().length > 0) {
         <section class="dashboard-warnings" aria-label="Предупреждения">
           @for (warning of warnings(); track warning.title) {

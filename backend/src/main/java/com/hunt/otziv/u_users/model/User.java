@@ -65,6 +65,10 @@ public class User {
     @Column(name = "worker_telegram_group_chat_id")
     private Long workerTelegramGroupChatId;
 
+    @Builder.Default
+    @Column(name = "owner_control_view_mode", nullable = false, length = 32)
+    private String ownerControlViewMode = "OWN_MANAGERS";
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "users_roles",

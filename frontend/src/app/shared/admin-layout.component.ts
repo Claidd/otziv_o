@@ -16,6 +16,7 @@ type ShellLink = {
   active: string;
   roles: string[];
   adminOnly?: boolean;
+  exactRoleOnly?: boolean;
   routerLink?: string;
   href?: string;
   openInNewTab?: boolean;
@@ -194,6 +195,10 @@ export class AdminLayoutComponent {
 
     if (link.adminOnly) {
       return roles.has('ADMIN');
+    }
+
+    if (link.exactRoleOnly) {
+      return requiredRoles.some((role) => roles.has(role));
     }
 
     if (roles.has('ADMIN') || roles.has('OWNER')) {
