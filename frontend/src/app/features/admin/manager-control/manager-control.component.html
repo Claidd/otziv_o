@@ -3,6 +3,132 @@
 } @else {
   <app-admin-layout [title]="layoutTitle()" [active]="layoutActive()" rightPanelMode="custom">
     <ng-container [ngTemplateOutlet]="managerControlContent"></ng-container>
+    <section admin-right-content class="control-side">
+      @if (!isDetailPage()) {
+        <section class="side-summary" aria-label="Сводка контроля">
+          <div class="side-title">
+            <span class="material-icons-sharp">fact_check</span>
+            <h2>Сводка</h2>
+          </div>
+
+          <div class="summary-grid">
+            <article class="summary-tile red">
+              <span class="material-icons-sharp">error</span>
+              <div>
+                <strong>{{ redCount() }}</strong>
+                <small>красных</small>
+              </div>
+            </article>
+            <article class="summary-tile yellow">
+              <span class="material-icons-sharp">report_problem</span>
+              <div>
+                <strong>{{ yellowCount() }}</strong>
+                <small>желтых</small>
+              </div>
+            </article>
+            <article class="summary-tile green">
+              <span class="material-icons-sharp">task_alt</span>
+              <div>
+                <strong>{{ greenCount() }}</strong>
+                <small>зеленых</small>
+              </div>
+            </article>
+            <article class="summary-tile neutral">
+              <span class="material-icons-sharp">radar</span>
+              <div>
+                <strong>{{ attentionTotal() }}</strong>
+                <small>к действию</small>
+              </div>
+            </article>
+            <article class="summary-tile neutral">
+              <span class="material-icons-sharp">priority_high</span>
+              <div>
+                <strong>{{ criticalTotal() }}</strong>
+                <small>крит. действий</small>
+              </div>
+            </article>
+            <article class="summary-tile neutral">
+              <span class="material-icons-sharp">inventory_2</span>
+              <div>
+                <strong>{{ workloadTotal() }}</strong>
+                <small>нагрузка</small>
+              </div>
+            </article>
+            <article class="summary-tile neutral">
+              <span class="material-icons-sharp">groups</span>
+              <div>
+                <strong>{{ managersTotal() }}</strong>
+                <small>менеджеров</small>
+              </div>
+            </article>
+          </div>
+        </section>
+      }
+
+      @if (selectedManager(); as manager) {
+        <section class="side-load-card" aria-label="Нагрузка выбранного менеджера">
+          <div class="side-title">
+            <span class="material-icons-sharp">inventory_2</span>
+            <h2>Нагрузка менеджера</h2>
+          </div>
+          <div class="side-load-head">
+            <div>
+              <strong>{{ manager.name }}</strong>
+              <small>{{ manager.username || 'без логина' }}</small>
+            </div>
+            <span class="status-badge">{{ statusLabel(manager.status) }}</span>
+          </div>
+
+          <div class="load-metrics">
+            <span><b>{{ manager.workloadCount }}</b><small>всего в работе</small></span>
+            <span><b>{{ manager.orderAttentionCount }}</b><small>заказов</small></span>
+            <span><b>{{ manager.workerSectionCount }}</b><small>спец.</small></span>
+          </div>
+
+          @if (hasWorkloadRows(manager)) {
+            <div class="side-chip-list">
+              @for (problem of workloadProblems(manager); track trackProblem($index, problem)) {
+                <a [href]="problem.targetUrl" class="side-load-chip">
+                  <span class="material-icons-sharp">{{ problem.icon }}</span>
+                  <span>{{ problem.label }}</span>
+                  <strong>{{ problem.count }}</strong>
+                  @if (workloadProblemAlert(manager, problem); as alert) {
+                    <small>{{ alert }}</small>
+                  }
+                </a>
+              }
+              @for (section of workloadSections(manager); track trackSection($index, section)) {
+                <a [href]="section.targetUrl" class="side-load-chip">
+                  <span>{{ section.label }}</span>
+                  <strong>{{ section.count }}</strong>
+                </a>
+              }
+            </div>
+          } @else {
+            <p class="side-empty">Рабочей нагрузки нет</p>
+          }
+        </section>
+      }
+
+      <h2>Тестовый режим</h2>
+      <div class="side-metric">
+        <span>Видимость</span>
+        <strong>{{ summary()?.managerVisible ? 'менеджеры' : 'админ / владелец' }}</strong>
+      </div>
+      <div class="side-metric">
+        <span>Состояние</span>
+        <strong>{{ summary()?.testMode ? 'наблюдение' : 'рабочий контур' }}</strong>
+      </div>
+      @for (manager of topManagers(); track trackManager($index, manager)) {
+        <article class="side-manager" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
+          <span class="material-icons-sharp">{{ statusIcon(manager.status) }}</span>
+          <div>
+            <strong>{{ manager.name }}</strong>
+            <small>{{ manager.totalAttentionCount }} к действию · {{ manager.workloadCount }} нагрузка</small>
+          </div>
+        </article>
+      }
+    </section>
   </app-admin-layout>
 }
 
@@ -135,7 +261,7 @@
             </article>
           } @else {
           <article
-            class="manager-row"
+            class="manager-row {{ detailCountToneClass(manager.totalAttentionCount) }}"
             [class.red]="manager.status === 'RED'"
             [class.yellow]="manager.status === 'YELLOW'"
             [class.green]="manager.status === 'GREEN'"
@@ -143,7 +269,7 @@
             (mouseenter)="selectManager(manager)"
             (focusin)="selectManager(manager)"
           >
-            <header class="manager-card-head">
+            <header class="manager-card-head {{ countToneClass(manager.totalAttentionCount) }}">
               <div class="manager-main">
                 <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
                 <div>
@@ -165,9 +291,9 @@
             </header>
 
             <div class="manager-numbers">
-              <span class="metric urgent"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
-              <span class="metric urgent"><b>{{ manager.openRiskCount }}</b><small>риски</small></span>
-              <span class="metric">
+              <span class="metric urgent {{ countToneClass(manager.overdueOrderCount) }}"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
+              <span class="metric urgent {{ countToneClass(manager.openRiskCount) }}"><b>{{ manager.openRiskCount }}</b><small>риски</small></span>
+              <span class="metric {{ countToneClass(otherCriticalCount(manager)) }}">
                 <b>{{ manager.criticalCount }}</b>
                 <small>всего к действию</small>
                 <small>{{ manager.overdueOrderCount }} проср. + {{ manager.openRiskCount }} риски + {{ otherCriticalCount(manager) }} прочее</small>
@@ -175,14 +301,14 @@
             </div>
 
             @if (hasActionRows(manager)) {
-              <section class="control-group action-group">
+              <section class="control-group action-group {{ countToneClass(manager.totalAttentionCount) }}">
                 <div class="group-head">
                   <span class="material-icons-sharp">priority_high</span>
                   <strong>К действию</strong>
                 </div>
                 <div class="chip-list">
                   @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
-                    <a [href]="problem.targetUrl" class="control-chip critical" [class]="itemActionClass(problem.actionType)" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                    <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }}" [class]="itemActionClass(problem.actionType)" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
                       <span class="material-icons-sharp">{{ problem.icon }}</span>
                       <span>{{ problem.label }}</span>
                       <strong>{{ problem.count }}</strong>
@@ -192,9 +318,8 @@
                     </a>
                   }
                   @if (manager.overdueStatuses.length > 0) {
-                    <span class="control-chip workload">состав просрочек</span>
                     @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
-                      <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical" [class]="itemActionClass(overdue.actionType)" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
+                      <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical {{ countToneClass(overdue.count) }}" [class]="itemActionClass(overdue.actionType)" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
                         <span>{{ overdue.status }}</span>
                         <strong>{{ overdue.count }}</strong>
                         <small>{{ overdue.maxDays }} дн.</small>
@@ -205,7 +330,7 @@
                     }
                   }
                   @for (section of actionSections(manager); track trackSection($index, section)) {
-                    <a [href]="section.targetUrl" class="control-chip critical" [class]="itemActionClass(section.actionType)" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
+                    <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }}" [class]="itemActionClass(section.actionType)" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
                       <span>{{ section.label }}</span>
                       <strong>{{ section.count }}</strong>
                       @if (section.itemStatus && section.itemStatus !== 'OPEN') {
@@ -234,8 +359,7 @@
     </section>
   </section>
 
-  @if (!embeddedMode()) {
-  <section admin-right-content class="control-side">
+  <ng-template #managerControlRight>
     @if (!isDetailPage()) {
       <section class="side-summary" aria-label="Сводка контроля">
         <div class="side-title">
@@ -360,8 +484,7 @@
         </div>
       </article>
     }
-  </section>
-  }
+  </ng-template>
 
   @if (isDetailPage()) {
     <section class="detail-page themed-detail" aria-label="Детализация контроля менеджера">
