@@ -591,7 +591,10 @@ export class DeepResearchReportViewComponent {
     const [header, ...body] = rows;
     const head = `<thead><tr>${header.map((cell) => `<th>${this.renderInline(cell)}</th>`).join('')}</tr></thead>`;
     const bodyRows = body
-      .map((row) => `<tr>${row.map((cell) => `<td>${this.renderInline(cell)}</td>`).join('')}</tr>`)
+      .map((row) => `<tr>${row.map((cell, index) => {
+        const label = this.renderInline(header[index] ?? '');
+        return `<td><span class="deep-report-mobile-cell-label">${label}</span><span class="deep-report-table-cell-value">${this.renderInline(cell)}</span></td>`;
+      }).join('')}</tr>`)
       .join('');
     return `<table>${head}<tbody>${bodyRows}</tbody></table>`;
   }

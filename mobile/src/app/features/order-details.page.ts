@@ -1014,11 +1014,14 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 
     .company-report-modal {
       --height: min(92vh, 48rem);
+      --width: min(100%, 38rem);
     }
 
     .company-report-sheet {
       grid-template-rows: auto minmax(0, 1fr) auto;
       height: 100%;
+      min-height: 0;
+      min-width: 0;
       overflow: hidden;
       font-family: var(--otziv-font-family);
     }
@@ -1035,13 +1038,20 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       display: grid;
       gap: 0.78rem;
       min-height: 0;
+      min-width: 0;
+      max-width: 100%;
       overflow: auto;
+      overscroll-behavior: contain;
       padding: 0 0.1rem 0.18rem 0;
       scrollbar-width: thin;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
     }
 
     .company-report-state-card,
     .company-report-section {
+      min-width: 0;
+      max-width: 100%;
       border: 1px solid rgba(103, 116, 131, 0.2);
       border-radius: 0.74rem;
       background: var(--otziv-white);
@@ -1080,6 +1090,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     }
 
     .company-report-reader-section {
+      min-width: 0;
+      max-width: 100%;
       border: 1px solid rgba(103, 116, 131, 0.2);
       border-radius: 0.74rem;
       background: var(--otziv-white);
@@ -1230,6 +1242,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     :host ::ng-deep .company-report-table-card {
       display: grid;
       gap: 0.28rem;
+      min-width: 0;
+      max-width: 100%;
       margin: 0;
       padding: 0.52rem 0.56rem;
       border: 1px solid rgba(103, 116, 131, 0.16);

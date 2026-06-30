@@ -226,10 +226,15 @@ export class WorkerApi {
     );
   }
 
-  updateRecoveryTask(taskId: number, recoveryText: string, scheduledDate?: string | null): Observable<void> {
+  updateRecoveryTask(
+    taskId: number,
+    recoveryText: string,
+    scheduledDate?: string | null,
+    recoveryAnswer?: string | null
+  ): Observable<void> {
     return this.http.put<void>(
       `${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}`,
-      { recoveryText, scheduledDate: scheduledDate || null }
+      { recoveryText, scheduledDate: scheduledDate || null, recoveryAnswer: recoveryAnswer ?? null }
     );
   }
 

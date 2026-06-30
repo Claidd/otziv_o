@@ -11,8 +11,10 @@ import {
   workerPatchOrderNote,
   workerPatchReviewField,
   workerPatchReviewNote,
+  workerPatchRecoveryTaskScheduledDate,
   workerPatchReviewSideNote,
   workerRemoveRecordKey,
+  workerRecoveryTaskDateMutationKey,
   workerReviewFieldKey,
   workerReviewFieldSourceValue,
   workerReviewNoteMutationKey,
@@ -58,6 +60,9 @@ export class WorkerBoardNoteFacade {
   readonly editingReviewNoteId = signal<number | null>(null);
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly savedReviewNoteId = signal<number | null>(null);
+  readonly editingRecoveryTaskDateId = signal<number | null>(null);
+  readonly recoveryTaskDateDrafts = signal<Record<number, string>>({});
+  readonly savedRecoveryTaskDateId = signal<number | null>(null);
   readonly editingSideNoteKey = signal<string | null>(null);
   readonly sideNoteDrafts = signal<Record<string, string>>({});
   readonly savedSideNoteKey = signal<string | null>(null);
@@ -183,10 +188,15 @@ export class WorkerBoardNoteFacade {
 
     const key = workerSaveReviewFieldMutationKey(review, field);
     const fieldKey = workerReviewFieldKey(review, field);
-    const request = field === 'text' && review.badTask && review.badTaskId
+    const request = review.recoveryTask && review.recoveryTaskId
+      ? this.deps.workerApi.updateRecoveryTask(
+          review.recoveryTaskId,
+          field === 'text' ? value : review.text ?? '',
+          review.recoveryTaskScheduledDate || null,
+          field === 'answer' ? value : review.answer ?? null
+        )
+      : field === 'text' && review.badTask && review.badTaskId
       ? this.deps.workerApi.updateBadReviewTask(review.badTaskId, value, review.badTaskScheduledDate || review.publishedDate || null)
-      : field === 'text' && review.recoveryTask && review.recoveryTaskId
-      ? this.deps.workerApi.updateRecoveryTask(review.recoveryTaskId, value, review.recoveryTaskScheduledDate || review.publishedDate || null)
       : field === 'text'
         ? this.deps.workerApi.updateReviewText(review.id, review.orderId, value)
         : this.deps.workerApi.updateReviewAnswer(review.id, review.orderId, value);
@@ -297,6 +307,87 @@ export class WorkerBoardNoteFacade {
 
   reviewNoteValue(review: WorkerReviewItem): string {
     return this.reviewNoteDrafts()[review.id] ?? review.comment ?? '';
+  }
+
+  startRecoveryTaskDateEdit(review: WorkerReviewItem): void {
+    if (!review.recoveryTaskId || this.isMutating(workerRecoveryTaskDateMutationKey(review))) {
+      return;
+    }
+
+    this.savedRecoveryTaskDateId.set(null);
+    this.editingRecoveryTaskDateId.set(review.recoveryTaskId);
+    this.recoveryTaskDateDrafts.update((drafts) => {
+      if (review.recoveryTaskId! in drafts) {
+        return drafts;
+      }
+
+      return {
+        ...drafts,
+        [review.recoveryTaskId!]: review.recoveryTaskScheduledDate ?? ''
+      };
+    });
+  }
+
+  setRecoveryTaskDateDraft(review: WorkerReviewItem, value: string): void {
+    if (!review.recoveryTaskId) {
+      return;
+    }
+
+    this.recoveryTaskDateDrafts.update((drafts) => ({ ...drafts, [review.recoveryTaskId!]: value }));
+  }
+
+  cancelRecoveryTaskDateEdit(review: WorkerReviewItem): void {
+    if (!review.recoveryTaskId || this.isMutating(workerRecoveryTaskDateMutationKey(review))) {
+      return;
+    }
+
+    this.savedRecoveryTaskDateId.set(null);
+    this.editingRecoveryTaskDateId.set(null);
+    this.recoveryTaskDateDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.recoveryTaskId!));
+  }
+
+  saveRecoveryTaskDate(review: WorkerReviewItem): void {
+    if (!review.recoveryTaskId) {
+      return;
+    }
+
+    const value = this.recoveryTaskDateDraft(review).trim();
+    if (!value) {
+      this.deps.toastService.error('Дата не сохранена', 'Укажите плановую дату восстановления');
+      return;
+    }
+
+    const key = workerRecoveryTaskDateMutationKey(review);
+    this.deps.mutationKey.set(key);
+
+    this.deps.workerApi.updateRecoveryTask(review.recoveryTaskId, review.text ?? '', value, review.answer ?? null).subscribe({
+      next: () => {
+        this.deps.setBoardPatch(workerPatchRecoveryTaskScheduledDate(this.deps.board(), review.recoveryTaskId!, value));
+        this.deps.mutationKey.set(null);
+        this.editingRecoveryTaskDateId.set(null);
+        this.savedRecoveryTaskDateId.set(review.recoveryTaskId!);
+        this.recoveryTaskDateDrafts.update((drafts) => workerRemoveRecordKey(drafts, review.recoveryTaskId!));
+        this.deps.toastService.success('Дата восстановления сохранена', `Задача #${review.recoveryTaskId} обновлена`);
+
+        window.setTimeout(() => {
+          if (this.savedRecoveryTaskDateId() === review.recoveryTaskId) {
+            this.savedRecoveryTaskDateId.set(null);
+          }
+        }, 1400);
+      },
+      error: (err) => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.error('Дата не сохранена', this.deps.errorMessage(err, 'Не удалось сохранить дату восстановления'));
+      }
+    });
+  }
+
+  recoveryTaskDateDraft(review: WorkerReviewItem): string {
+    if (!review.recoveryTaskId) {
+      return '';
+    }
+
+    return this.recoveryTaskDateDrafts()[review.recoveryTaskId] ?? review.recoveryTaskScheduledDate ?? '';
   }
 
   startSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {

@@ -14,6 +14,7 @@ import {
   workerHasReviewNote,
   workerHasReviewOrderNote,
   workerHasReviewOwnNote,
+  workerRecoveryTaskDateMutationKey,
   workerReviewFieldKey,
   workerReviewFieldSourceValue,
   workerReviewNoteMutationKey,
@@ -50,10 +51,14 @@ export class WorkerReviewCardComponent {
   @Input() mutationKey: string | null = null;
   @Input() canOpenEditModal = false;
   @Input() canOpenTitleLink = true;
+  @Input() canEditRecoveryTaskDate = false;
   @Input() showFilialCityInFooter = false;
   @Input() reviewFieldDrafts: Record<string, string> = {};
   @Input() editingReviewFieldKey: string | null = null;
   @Input() savedReviewFieldKey: string | null = null;
+  @Input() recoveryTaskDateDrafts: Record<number, string> = {};
+  @Input() editingRecoveryTaskDateId: number | null = null;
+  @Input() savedRecoveryTaskDateId: number | null = null;
   @Input() expandedReviewTextIds: Record<number, boolean> = {};
   @Input() editingReviewNoteId: number | null = null;
   @Input() reviewNoteDrafts: Record<number, string> = {};
@@ -77,6 +82,10 @@ export class WorkerReviewCardComponent {
   @Output() readonly reviewNoteDraftChanged = new EventEmitter<string>();
   @Output() readonly reviewNoteEditCanceled = new EventEmitter<void>();
   @Output() readonly reviewNoteSaveRequested = new EventEmitter<void>();
+  @Output() readonly recoveryTaskDateEditStarted = new EventEmitter<void>();
+  @Output() readonly recoveryTaskDateDraftChanged = new EventEmitter<string>();
+  @Output() readonly recoveryTaskDateEditCanceled = new EventEmitter<void>();
+  @Output() readonly recoveryTaskDateSaveRequested = new EventEmitter<void>();
   @Output() readonly sideNoteEditStarted = new EventEmitter<SideNoteField>();
   @Output() readonly sideNoteDraftChanged = new EventEmitter<SideNoteValueChange>();
   @Output() readonly sideNoteEditCanceled = new EventEmitter<SideNoteField>();
@@ -295,6 +304,30 @@ export class WorkerReviewCardComponent {
 
   reviewNoteMutationKey(): string {
     return workerReviewNoteMutationKey(this.review);
+  }
+
+  recoveryTaskDateValue(): string {
+    if (!this.review.recoveryTaskId) {
+      return '';
+    }
+
+    return this.recoveryTaskDateDrafts[this.review.recoveryTaskId] ?? this.review.recoveryTaskScheduledDate ?? '';
+  }
+
+  isRecoveryTaskDateEditing(): boolean {
+    return !!this.review.recoveryTaskId && this.editingRecoveryTaskDateId === this.review.recoveryTaskId;
+  }
+
+  isRecoveryTaskDateChanged(): boolean {
+    return this.recoveryTaskDateValue() !== (this.review.recoveryTaskScheduledDate ?? '');
+  }
+
+  isRecoveryTaskDateSaved(): boolean {
+    return !!this.review.recoveryTaskId && this.savedRecoveryTaskDateId === this.review.recoveryTaskId;
+  }
+
+  recoveryTaskDateMutationKey(): string {
+    return workerRecoveryTaskDateMutationKey(this.review);
   }
 
   sideNoteValue(field: SideNoteField): string {

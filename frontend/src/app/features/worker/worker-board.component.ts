@@ -246,6 +246,9 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly editingReviewNoteId = this.noteFacade.editingReviewNoteId;
   readonly reviewNoteDrafts = this.noteFacade.reviewNoteDrafts;
   readonly savedReviewNoteId = this.noteFacade.savedReviewNoteId;
+  readonly editingRecoveryTaskDateId = this.noteFacade.editingRecoveryTaskDateId;
+  readonly recoveryTaskDateDrafts = this.noteFacade.recoveryTaskDateDrafts;
+  readonly savedRecoveryTaskDateId = this.noteFacade.savedRecoveryTaskDateId;
   readonly editingSideNoteKey = this.noteFacade.editingSideNoteKey;
   readonly sideNoteDrafts = this.noteFacade.sideNoteDrafts;
   readonly savedSideNoteKey = this.noteFacade.savedSideNoteKey;
@@ -565,6 +568,31 @@ export class WorkerBoardComponent implements OnDestroy {
 
   reviewNoteValue(review: WorkerReviewItem): string {
     return this.noteFacade.reviewNoteValue(review);
+  }
+
+  startRecoveryTaskDateEdit(review: WorkerReviewItem): void {
+    if (!this.canEditTaskSchedule()) {
+      return;
+    }
+
+    this.noteFacade.startRecoveryTaskDateEdit(review);
+  }
+
+  setRecoveryTaskDateDraft(review: WorkerReviewItem, value: string): void {
+    this.noteFacade.setRecoveryTaskDateDraft(review, value);
+  }
+
+  cancelRecoveryTaskDateEdit(review: WorkerReviewItem): void {
+    this.noteFacade.cancelRecoveryTaskDateEdit(review);
+  }
+
+  saveRecoveryTaskDate(review: WorkerReviewItem): void {
+    if (!this.canEditTaskSchedule()) {
+      this.toastService.error('Дата не сохранена', 'Плановую дату может менять только менеджер, владелец или администратор');
+      return;
+    }
+
+    this.noteFacade.saveRecoveryTaskDate(review);
   }
 
   startSideNoteEdit(review: WorkerReviewItem, field: SideNoteField): void {
@@ -1081,6 +1109,11 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   canOpenReviewTitleLink(): boolean {
+    this.auth.tokenParsed();
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
+  canEditTaskSchedule(): boolean {
     this.auth.tokenParsed();
     return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
   }

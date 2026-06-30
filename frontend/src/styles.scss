@@ -3859,6 +3859,11 @@ app-admin-dictionaries {
   background: var(--pr-card-bg);
   box-shadow: 0 1.1rem 2.2rem rgba(38,51,77,.08);
 }
+.personal-remark-card.detail-tone-green { border-color: rgba(27,156,133,.42); }
+.personal-remark-card.detail-tone-blue { border-color: rgba(108,155,207,.48); }
+.personal-remark-card.detail-tone-yellow { border-color: rgba(247,208,96,.58); }
+.personal-remark-card.detail-tone-orange { border-color: rgba(245,158,11,.54); }
+.personal-remark-card.detail-tone-red { border-color: rgba(255,0,96,.46); }
 .personal-remark-head {
   display: grid;
   grid-template-columns: minmax(13rem, 1fr) auto;
@@ -3879,9 +3884,6 @@ app-admin-dictionaries {
   box-shadow: 0 .9rem 1.8rem rgba(108,155,207,.2);
   font-size: 1.35rem;
 }
-.personal-remark-card.red .status-badge { background: rgba(255,0,96,.12); }
-.personal-remark-card.yellow .status-badge { background: rgba(247,208,96,.22); }
-.personal-remark-card.green .status-badge { background: rgba(27,156,133,.14); }
 .personal-remark-total { min-width: 0; }
 .personal-remark-total strong {
   color: var(--otziv-dark);
@@ -4023,6 +4025,11 @@ body.otziv-dark-theme .personal-remark-card {
   border-color: rgba(122,167,220,.18);
   box-shadow: 0 1.2rem 2.4rem rgba(0,0,0,.28);
 }
+body.otziv-dark-theme .personal-remark-card.detail-tone-green { border-color: rgba(74,198,177,.44); }
+body.otziv-dark-theme .personal-remark-card.detail-tone-blue { border-color: rgba(122,167,220,.48); }
+body.otziv-dark-theme .personal-remark-card.detail-tone-yellow { border-color: rgba(248,217,117,.48); }
+body.otziv-dark-theme .personal-remark-card.detail-tone-orange { border-color: rgba(245,158,11,.48); }
+body.otziv-dark-theme .personal-remark-card.detail-tone-red { border-color: rgba(255,91,143,.48); }
 body.otziv-dark-theme .personal-metric {
   border-color: rgba(255,255,255,.08);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
@@ -4059,5 +4066,321 @@ body.otziv-dark-theme .personal-mode .personal-remark-actions .control-chip.tone
 body.otziv-dark-theme .personal-mode .personal-remark-head button.manager-details-chip.manager-details-chip {
   border-color: rgba(255,255,255,.16);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+.themed-detail {
+  --td-card: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.98)), linear-gradient(135deg, rgba(108,155,207,.12), rgba(255,0,96,.08));
+  --td-head: linear-gradient(110deg, rgba(230,255,246,.96) 0%, rgba(244,252,255,.92) 43%, rgba(255,248,236,.9) 67%, rgba(255,235,244,.92) 100%);
+  --td-section: linear-gradient(135deg, rgba(224,239,255,.9), rgba(255,245,250,.78));
+  --td-inner-card: linear-gradient(135deg, rgba(255,255,255,.98), rgba(242,247,255,.92));
+  --td-red: linear-gradient(135deg, rgba(255,0,96,.12), rgba(255,255,255,.86));
+  --td-blue: linear-gradient(135deg, rgba(108,155,207,.16), rgba(255,255,255,.86));
+  --td-green: linear-gradient(135deg, rgba(27,156,133,.14), rgba(255,255,255,.86));
+  --td-yellow: linear-gradient(135deg, rgba(247,208,96,.22), rgba(255,255,255,.86));
+  --td-line: rgba(121,151,191,.18);
+}
+.themed-detail .detail-modal {
+  overflow: hidden;
+  border-color: var(--td-line);
+  border-radius: 1.25rem;
+  background: var(--td-card);
+  box-shadow: 0 1.2rem 2.4rem rgba(38,51,77,.08);
+}
+.themed-detail .detail-head {
+  margin: 1rem;
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: var(--td-head);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.58);
+}
+.themed-detail .detail-title h2,
+.themed-detail .detail-item-main h3,
+.themed-detail .detail-example-head > strong {
+  color: var(--otziv-dark);
+}
+.themed-detail .day-score,
+.themed-detail .stage-actions button,
+.themed-detail .detail-close,
+.themed-detail .close-blockers,
+.themed-detail .detail-badges span,
+.themed-detail .detail-meta span,
+.themed-detail .detail-meta a,
+.themed-detail .detail-example-badges span,
+.themed-detail .detail-example-badges b,
+.themed-detail .detail-example-status-link,
+.themed-detail .detail-example-status,
+.themed-detail .worker-notification-badge {
+  border-color: rgba(121,151,191,.2);
+  background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(238,246,255,.78));
+  color: var(--otziv-dark);
+}
+.themed-detail .detail-close {
+  width: 2.7rem;
+  height: 2.7rem;
+  color: var(--otziv-primary);
+}
+.themed-detail .detail-list {
+  gap: 1rem;
+}
+.themed-detail .detail-item {
+  overflow: hidden;
+  border-color: var(--td-line);
+  border-radius: 1.05rem;
+  padding: 1rem;
+  background: var(--td-section);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.62), 0 .75rem 1.65rem rgba(38,51,77,.05);
+}
+.themed-detail .detail-item.critical {
+  border-color: rgba(255,0,96,.18);
+  background: linear-gradient(135deg, rgba(255,237,246,.84), rgba(236,246,255,.72));
+}
+.themed-detail .detail-item.workload {
+  background: linear-gradient(135deg, rgba(255,249,229,.84), rgba(236,246,255,.72));
+}
+.themed-detail .detail-item.handled {
+  background: linear-gradient(135deg, rgba(235,255,247,.84), rgba(236,246,255,.72));
+}
+.themed-detail .detail-item.detail-tone-green {
+  border-color: rgba(27,156,133,.22);
+  background: linear-gradient(135deg, rgba(235,255,247,.88), rgba(244,251,255,.78));
+}
+.themed-detail .detail-item.detail-tone-blue {
+  border-color: rgba(108,155,207,.24);
+  background: linear-gradient(135deg, rgba(232,244,255,.9), rgba(247,251,255,.78));
+}
+.themed-detail .detail-item.detail-tone-yellow {
+  border-color: rgba(247,208,96,.34);
+  background: linear-gradient(135deg, rgba(255,250,229,.9), rgba(247,251,255,.78));
+}
+.themed-detail .detail-item.detail-tone-orange {
+  border-color: rgba(245,158,11,.3);
+  background: linear-gradient(135deg, rgba(255,241,220,.9), rgba(247,251,255,.78));
+}
+.themed-detail .detail-item.detail-tone-red {
+  border-color: rgba(255,0,96,.24);
+  background: linear-gradient(135deg, rgba(255,235,244,.9), rgba(247,251,255,.78));
+}
+.themed-detail .detail-examples {
+  gap: 1rem;
+}
+.themed-detail .detail-examples .detail-example {
+  border-color: rgba(121,151,191,.24);
+  border-radius: 2.5rem;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.76), 0 1rem 1.9rem rgba(38,51,77,.11);
+}
+.themed-detail .detail-example.waiting-client {
+  background: #fff;
+}
+.themed-detail .detail-example.handled {
+  background: #fff;
+}
+.themed-detail .detail-example-field,
+.themed-detail .detail-example-text em,
+.themed-detail .detail-comment textarea,
+.themed-detail .detail-example-control textarea,
+.themed-detail .unanswered-reply textarea {
+  border-color: rgba(121,151,191,.18);
+  background: rgba(255,255,255,.82);
+}
+.themed-detail button.review-action.review-action,
+.themed-detail a.review-action.review-action,
+.themed-detail .detail-actions button,
+.themed-detail .detail-example-actions button {
+  border-color: rgba(121,151,191,.22);
+  background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(238,246,255,.72));
+  color: var(--otziv-dark);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55);
+}
+.themed-detail button.review-action.send-action,
+.themed-detail button.review-action.done,
+.themed-detail .detail-example-actions .action-done {
+  background: var(--td-green);
+}
+.themed-detail button.review-action.request-action,
+.themed-detail .detail-example-actions .action-defer {
+  background: var(--td-yellow);
+}
+.themed-detail button.review-action.danger-action {
+  background: var(--td-red);
+}
+.themed-detail .event-log {
+  margin: 0 1rem 1rem;
+  border-color: var(--td-line);
+  border-radius: 1rem;
+  background: var(--td-card);
+}
+
+body.otziv-dark-theme .themed-detail {
+  --td-card: linear-gradient(180deg, rgba(31,38,47,.98), rgba(24,29,36,.98));
+  --td-head: linear-gradient(110deg, rgba(39,94,78,.9) 0%, rgba(39,58,76,.92) 44%, rgba(92,70,38,.88) 68%, rgba(93,43,63,.9) 100%);
+  --td-section: linear-gradient(135deg, rgba(37,48,61,.98), rgba(31,38,48,.98));
+  --td-inner-card: linear-gradient(135deg, rgba(44,52,64,.98), rgba(37,45,56,.98));
+  --td-red: linear-gradient(135deg, rgba(255,91,143,.22), rgba(44,52,64,.9));
+  --td-blue: linear-gradient(135deg, rgba(122,167,220,.22), rgba(44,52,64,.9));
+  --td-green: linear-gradient(135deg, rgba(74,198,177,.2), rgba(44,52,64,.9));
+  --td-yellow: linear-gradient(135deg, rgba(248,217,117,.2), rgba(44,52,64,.9));
+  --td-line: rgba(159,184,215,.18);
+  color: rgba(236,242,250,.94);
+}
+body.otziv-dark-theme .themed-detail .detail-modal {
+  border-color: rgba(159,184,215,.18);
+  background: var(--td-card);
+  box-shadow: 0 1.2rem 2.6rem rgba(0,0,0,.28);
+}
+body.otziv-dark-theme .themed-detail .detail-head {
+  border-color: rgba(255,255,255,.1);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 .8rem 1.8rem rgba(0,0,0,.2);
+}
+body.otziv-dark-theme .themed-detail .detail-title h2,
+body.otziv-dark-theme .themed-detail .detail-item-main h3,
+body.otziv-dark-theme .themed-detail .detail-example-head > strong,
+body.otziv-dark-theme .themed-detail .detail-meta b,
+body.otziv-dark-theme .themed-detail .event-log strong {
+  color: #f3f7ff;
+}
+body.otziv-dark-theme .themed-detail .detail-head small,
+body.otziv-dark-theme .themed-detail .detail-item-main p,
+body.otziv-dark-theme .themed-detail .detail-example-text small,
+body.otziv-dark-theme .themed-detail .event-log small,
+body.otziv-dark-theme .themed-detail .event-log time,
+body.otziv-dark-theme .themed-detail .event-empty {
+  color: rgba(195,209,229,.78);
+}
+body.otziv-dark-theme .themed-detail .detail-head,
+body.otziv-dark-theme .themed-detail .detail-example,
+body.otziv-dark-theme .themed-detail button.review-action.review-action,
+body.otziv-dark-theme .themed-detail a.review-action.review-action,
+body.otziv-dark-theme .themed-detail .detail-actions button,
+body.otziv-dark-theme .themed-detail .detail-example-actions button {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+}
+body.otziv-dark-theme .themed-detail .detail-item.critical {
+  background: linear-gradient(135deg, rgba(75,44,58,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.workload {
+  background: linear-gradient(135deg, rgba(78,65,36,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.handled {
+  background: linear-gradient(135deg, rgba(31,75,66,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.detail-tone-green {
+  border-color: rgba(74,198,177,.34);
+  background: linear-gradient(135deg, rgba(31,75,66,.9), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.detail-tone-blue {
+  border-color: rgba(122,167,220,.34);
+  background: linear-gradient(135deg, rgba(36,58,82,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.detail-tone-yellow {
+  border-color: rgba(248,217,117,.34);
+  background: linear-gradient(135deg, rgba(78,65,36,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.detail-tone-orange {
+  border-color: rgba(245,158,11,.34);
+  background: linear-gradient(135deg, rgba(84,57,33,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-item.detail-tone-red {
+  border-color: rgba(255,91,143,.34);
+  background: linear-gradient(135deg, rgba(75,44,58,.92), rgba(37,48,61,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-example {
+  border-color: rgba(159,184,215,.16);
+  background: var(--td-inner-card);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 1rem 1.9rem rgba(0,0,0,.26);
+}
+body.otziv-dark-theme .themed-detail .detail-example.waiting-client {
+  background: linear-gradient(135deg, rgba(44,52,64,.98), rgba(72,63,39,.95));
+}
+body.otziv-dark-theme .themed-detail .detail-example.handled {
+  background: linear-gradient(135deg, rgba(44,52,64,.98), rgba(34,72,63,.95));
+}
+body.otziv-dark-theme .themed-detail .day-score,
+body.otziv-dark-theme .themed-detail .stage-actions button,
+body.otziv-dark-theme .themed-detail .detail-close,
+body.otziv-dark-theme .themed-detail .close-blockers,
+body.otziv-dark-theme .themed-detail .detail-badges span,
+body.otziv-dark-theme .themed-detail .detail-meta span,
+body.otziv-dark-theme .themed-detail .detail-meta a,
+body.otziv-dark-theme .themed-detail .detail-example-badges span,
+body.otziv-dark-theme .themed-detail .detail-example-badges b,
+body.otziv-dark-theme .themed-detail .detail-example-status-link,
+body.otziv-dark-theme .themed-detail .detail-example-status,
+body.otziv-dark-theme .themed-detail .worker-notification-badge,
+body.otziv-dark-theme .themed-detail .detail-example-field,
+body.otziv-dark-theme .themed-detail .detail-example-text em,
+body.otziv-dark-theme .themed-detail .detail-comment textarea,
+body.otziv-dark-theme .themed-detail .detail-example-control textarea,
+body.otziv-dark-theme .themed-detail .unanswered-reply textarea {
+  border-color: rgba(159,184,215,.16);
+  background: rgba(255,255,255,.07);
+  color: rgba(236,242,250,.92);
+}
+body.otziv-dark-theme .themed-detail .detail-example-field strong,
+body.otziv-dark-theme .themed-detail .detail-example-field a,
+body.otziv-dark-theme .themed-detail .detail-example-text em {
+  color: #f3f7ff;
+}
+body.otziv-dark-theme .themed-detail .detail-example-field small,
+body.otziv-dark-theme .themed-detail .detail-example-badges span {
+  color: rgba(195,209,229,.78);
+}
+body.otziv-dark-theme .themed-detail .detail-example-status-link,
+body.otziv-dark-theme .themed-detail .detail-meta a,
+body.otziv-dark-theme .themed-detail .reminder-chat-link {
+  color: #9fc4ff;
+}
+body.otziv-dark-theme .themed-detail button.review-action.review-action,
+body.otziv-dark-theme .themed-detail a.review-action.review-action,
+body.otziv-dark-theme .themed-detail .detail-actions button,
+body.otziv-dark-theme .themed-detail .detail-example-actions button {
+  border-color: rgba(159,184,215,.22);
+  background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.055));
+  color: #f3f7ff;
+}
+body.otziv-dark-theme .themed-detail button.review-action.send-action,
+body.otziv-dark-theme .themed-detail button.review-action.done,
+body.otziv-dark-theme .themed-detail .detail-example-actions .action-done {
+  color: #d9fff4;
+}
+body.otziv-dark-theme .themed-detail button.review-action.request-action,
+body.otziv-dark-theme .themed-detail .detail-example-actions .action-defer {
+  color: #fff0be;
+}
+body.otziv-dark-theme .themed-detail .event-log {
+  border-color: rgba(159,184,215,.16);
+  background: var(--td-card);
+}
+
+body.otziv-dark-theme app-personal-reminders .reminder-alert,
+body.otziv-dark-theme app-personal-reminders .personal-reminders {
+  border: 1px solid rgba(255,91,143,.22);
+  background: linear-gradient(135deg, rgba(72,35,52,.72), rgba(28,34,42,.96));
+  box-shadow: 0 1rem 2rem rgba(0,0,0,.28);
+}
+body.otziv-dark-theme app-personal-reminders .reminder-alert__item,
+body.otziv-dark-theme app-personal-reminders .personal-reminder {
+  border-color: rgba(159,184,215,.14);
+  background: rgba(255,255,255,.06);
+  color: #f3f7ff;
+}
+body.otziv-dark-theme app-personal-reminders .reminder-alert__head strong,
+body.otziv-dark-theme app-personal-reminders .personal-reminders__head h2,
+body.otziv-dark-theme app-personal-reminders .reminder-alert__item h3,
+body.otziv-dark-theme app-personal-reminders .personal-reminder h3,
+body.otziv-dark-theme app-personal-reminders .personal-reminders__empty p {
+  color: #f3f7ff;
+}
+body.otziv-dark-theme app-personal-reminders .reminder-alert__item p,
+body.otziv-dark-theme app-personal-reminders .personal-reminder p,
+body.otziv-dark-theme app-personal-reminders .reminder-alert__head small,
+body.otziv-dark-theme app-personal-reminders .personal-reminders__head small,
+body.otziv-dark-theme app-personal-reminders .reminder-alert__item small,
+body.otziv-dark-theme app-personal-reminders .personal-reminder small {
+  color: rgba(195,209,229,.8);
+}
+body.otziv-dark-theme app-personal-reminders .reminder-chat-link {
+  color: #9fc4ff;
 }
 

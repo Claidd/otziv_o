@@ -2,6 +2,7 @@ package com.hunt.otziv.review_recovery.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -156,6 +157,31 @@ class ReviewRecoveryTaskServiceImplTest {
         ReviewRecoveryTask task = service.createTask(101L, user(2L));
 
         assertEquals(LocalDate.of(2026, 5, 17), task.getScheduledDate());
+    }
+
+    @Test
+    void createArchiveTaskDoesNotScheduleFromPastArchiveDates() {
+        LocalDate today = LocalDate.now();
+        ArchiveReviewRecoverySource source = archiveSource(
+                10L,
+                101L,
+                today.minusMonths(8),
+                today.minusMonths(7),
+                today.minusMonths(6)
+        );
+
+        when(batchRepository.findFirstByArchiveOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
+                .thenReturn(Optional.empty());
+        when(batchRepository.save(any(ReviewRecoveryBatch.class))).thenAnswer(invocation -> {
+            ReviewRecoveryBatch batch = invocation.getArgument(0);
+            batch.setId(30L);
+            return batch;
+        });
+        when(taskRepository.save(any(ReviewRecoveryTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewRecoveryTask task = service.createArchiveTask(source, user(2L));
+
+        assertEquals(today.plusDays(ReviewRecoveryGateService.RECOVERY_SCHEDULE_STEP_DAYS), task.getScheduledDate());
     }
 
     @Test
@@ -452,6 +478,49 @@ class ReviewRecoveryTaskServiceImplTest {
         review.setWorker(order.getWorker());
         review.setBot(bot);
         return review;
+    }
+
+    private ArchiveReviewRecoverySource archiveSource(
+            Long orderId,
+            Long reviewId,
+            LocalDate created,
+            LocalDate changed,
+            LocalDate publishedDate
+    ) {
+        return new ArchiveReviewRecoverySource(
+                orderId,
+                reviewId,
+                20L,
+                null,
+                "Архив",
+                "Компания",
+                "",
+                "",
+                "",
+                null,
+                null,
+                null,
+                "",
+                "",
+                "",
+                null,
+                "Иркутск",
+                "Филиал",
+                "",
+                "Категория",
+                "Подкатегория",
+                null,
+                "Продукт",
+                "архивный текст",
+                "",
+                created,
+                changed,
+                publishedDate,
+                false,
+                false,
+                null,
+                ""
+        );
     }
 
     private Bot bot(Long id) {

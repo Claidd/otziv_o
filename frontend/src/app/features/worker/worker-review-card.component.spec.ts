@@ -173,6 +173,52 @@ describe('WorkerReviewCardComponent', () => {
     expect(element.querySelector('footer a')?.textContent?.trim()).toBe('City');
   });
 
+  it('shows recovery planned date editor for privileged recovery cards', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({
+      recoveryTask: true,
+      recoveryTaskId: 92,
+      recoveryTaskScheduledDate: '2026-07-04'
+    });
+    component.activeSection = 'recovery';
+    component.canEditRecoveryTaskDate = true;
+    let edited = false;
+    let draft = '';
+    let saved = false;
+    component.recoveryTaskDateEditStarted.subscribe(() => {
+      edited = true;
+    });
+    component.recoveryTaskDateDraftChanged.subscribe((value) => {
+      draft = value;
+    });
+    component.recoveryTaskDateSaveRequested.subscribe(() => {
+      saved = true;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const input = element.querySelector<HTMLInputElement>('.recovery-date-editor input');
+    expect(component.recoveryTaskDateValue()).toBe('2026-07-04');
+
+    input?.dispatchEvent(new Event('focus'));
+    component.recoveryTaskDateDrafts = { 92: '2026-07-09' };
+    component.editingRecoveryTaskDateId = 92;
+    fixture.detectChanges();
+
+    const saveButton = element.querySelector<HTMLButtonElement>('.recovery-date-editor .save');
+    expect(edited).toBe(true);
+    expect(saveButton?.disabled).toBe(false);
+
+    input!.value = '2026-07-10';
+    input?.dispatchEvent(new Event('input'));
+    saveButton?.click();
+
+    expect(draft).toBe('2026-07-10');
+    expect(saved).toBe(true);
+  });
+
   it('expands and emits full review title for worker role view', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;

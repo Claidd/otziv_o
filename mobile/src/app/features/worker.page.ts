@@ -1690,7 +1690,7 @@ export class WorkerPage implements OnInit, OnDestroy {
         await firstValueFrom(this.api.updateWorkerRecoveryTask(
           review.recoveryTaskId,
           recoveryText,
-          review.recoveryTaskScheduledDate || review.publishedDate || null,
+          review.recoveryTaskScheduledDate || null,
           recoveryAnswer
         ));
       } else if (field === 'text') {

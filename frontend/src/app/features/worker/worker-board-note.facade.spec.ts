@@ -109,8 +109,8 @@ function createFacade(sourceBoard = board()) {
         calls.push(`bad-text:${id}:${value}:${scheduledDate ?? ''}`);
         return of(void 0);
       },
-      updateRecoveryTask: (id: number, value: string, scheduledDate?: string | null) => {
-        calls.push(`recovery-text:${id}:${value}:${scheduledDate ?? ''}`);
+      updateRecoveryTask: (id: number, value: string, scheduledDate?: string | null, recoveryAnswer?: string | null) => {
+        calls.push(`recovery-text:${id}:${value}:${scheduledDate ?? ''}:${recoveryAnswer ?? ''}`);
         return of(void 0);
       },
       updateReviewNote: (id: number, orderId: number, value: string) => {
@@ -224,6 +224,36 @@ describe('WorkerBoardNoteFacade', () => {
     expect(calls).toContain('bad-text:91:new bad task text:2026-05-23');
     expect(calls.some((call) => call.startsWith('review-text'))).toBe(false);
     expect(boardSignal()?.reviews.content[0].text).toBe('new bad task text');
+  });
+
+  it('saves recovery task fields and planned date without using publication date fallback', () => {
+    const item = review({
+      id: 7,
+      orderId: 20,
+      text: 'old recovery text',
+      answer: 'old recovery answer',
+      recoveryTask: true,
+      recoveryTaskId: 92,
+      recoveryTaskScheduledDate: '2026-07-04',
+      publishedDate: '2025-12-23'
+    });
+    const { facade, boardSignal, calls } = createFacade(board([], [item]));
+
+    facade.startReviewFieldEdit(item, 'answer');
+    facade.setReviewFieldDraft(item, 'answer', 'new recovery answer');
+    facade.saveReviewField(item, 'answer');
+
+    expect(calls).toContain('recovery-text:92:old recovery text:2026-07-04:new recovery answer');
+    expect(calls.some((call) => call.startsWith('review-answer'))).toBe(false);
+    expect(boardSignal()?.reviews.content[0].answer).toBe('new recovery answer');
+
+    facade.startRecoveryTaskDateEdit(item);
+    facade.setRecoveryTaskDateDraft(item, '2026-07-09');
+    facade.saveRecoveryTaskDate(item);
+
+    expect(calls).toContain('recovery-text:92:old recovery text:2026-07-09:old recovery answer');
+    expect(boardSignal()?.reviews.content[0].recoveryTaskScheduledDate).toBe('2026-07-09');
+    expect(boardSignal()?.reviews.content[0].publishedDate).toBe('2026-07-09');
   });
 
   it('saves review notes and shared side notes', () => {

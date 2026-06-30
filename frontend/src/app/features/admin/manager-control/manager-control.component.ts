@@ -228,6 +228,23 @@ export class ManagerControlComponent implements OnInit {
     return 'tone-red';
   }
 
+  detailCountToneClass(count: number | null | undefined): string {
+    const value = count ?? 0;
+    if (value <= 3) {
+      return 'detail-tone-green';
+    }
+    if (value <= 5) {
+      return 'detail-tone-blue';
+    }
+    if (value <= 10) {
+      return 'detail-tone-yellow';
+    }
+    if (value < 20) {
+      return 'detail-tone-orange';
+    }
+    return 'detail-tone-red';
+  }
+
   workloadTotal(): number {
     return this.summary()?.workloadTotal ?? 0;
   }

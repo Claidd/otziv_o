@@ -62,6 +62,10 @@ export function workerReviewNoteMutationKey(review: WorkerReviewItem): string {
   return `save-note-${review.id}`;
 }
 
+export function workerRecoveryTaskDateMutationKey(review: WorkerReviewItem): string {
+  return `save-recovery-date-${review.recoveryTaskId ?? review.id}`;
+}
+
 export function workerReviewNoteTitle(review: WorkerReviewItem): string {
   const items: string[] = [];
 
@@ -208,6 +212,26 @@ export function workerPatchReviewSideNote(
 
       return item;
     })
+  };
+
+  return { ...board, reviews };
+}
+
+export function workerPatchRecoveryTaskScheduledDate(
+  board: WorkerBoard | null,
+  taskId: number,
+  value: string
+): WorkerBoard | null {
+  if (!board) {
+    return board;
+  }
+
+  const reviews = {
+    ...board.reviews,
+    content: board.reviews.content.map((review) => review.recoveryTaskId === taskId
+      ? { ...review, recoveryTaskScheduledDate: value, publishedDate: value }
+      : review
+    )
   };
 
   return { ...board, reviews };

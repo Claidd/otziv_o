@@ -51,13 +51,11 @@
       <div class="manager-list">
         @for (manager of managers(); track trackManager($index, manager)) {
           @if (personalEmbeddedMode()) {
-            <article class="personal-remark-card" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
+            <article class="personal-remark-card {{ detailCountToneClass(manager.totalAttentionCount) }}" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
               <header class="personal-remark-head {{ countToneClass(manager.totalAttentionCount) }}">
                 <div class="manager-main">
                   <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
                   <div class="personal-remark-total">
-                    <span class="status-badge">{{ statusLabel(manager.status) }}</span>
-                    &nbsp;
                     <strong>{{ manager.totalAttentionCount }} к действию</strong>
                     &nbsp;
                     <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
@@ -366,7 +364,7 @@
   }
 
   @if (isDetailPage()) {
-    <section class="detail-page" aria-label="Детализация контроля менеджера">
+    <section class="detail-page themed-detail" aria-label="Детализация контроля менеджера">
       <section class="detail-modal detail-page-card">
         <header class="detail-head">
           <div class="detail-title">
@@ -428,7 +426,7 @@
         } @else if (detail()) {
           <div class="detail-list">
             @for (item of visibleDetailItems(); track trackDetailItem($index, item)) {
-              <article class="detail-item" [class.critical]="item.severity === 'CRITICAL'" [class.workload]="item.group === 'WORKLOAD'" [class.handled]="item.itemStatus !== 'OPEN'">
+              <article class="detail-item {{ detailCountToneClass(detailItemVisibleCount(item)) }}" [class.critical]="item.severity === 'CRITICAL'" [class.workload]="item.group === 'WORKLOAD'" [class.handled]="item.itemStatus !== 'OPEN'">
                 <div class="detail-item-main">
                   <div>
                     <h3>{{ item.label }}</h3>

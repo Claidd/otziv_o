@@ -32,14 +32,15 @@ public class ReviewRecoveryGateService {
 
     @Transactional(readOnly = true)
     public LocalDate nextScheduledDate(Long orderId) {
+        LocalDate today = LocalDate.now();
         if (orderId == null) {
-            return LocalDate.now().plusDays(RECOVERY_SCHEDULE_STEP_DAYS);
+            return today.plusDays(RECOVERY_SCHEDULE_STEP_DAYS);
         }
         LocalDate baseDate = maxDate(
                 reviewRepository.maxPublishedDateByOrderId(orderId),
                 taskRepository.maxScheduledDateByOrderId(orderId, ReviewRecoveryTaskStatus.CANCELLED)
         );
-        return (baseDate == null ? LocalDate.now() : baseDate).plusDays(RECOVERY_SCHEDULE_STEP_DAYS);
+        return maxDate(baseDate, today).plusDays(RECOVERY_SCHEDULE_STEP_DAYS);
     }
 
     private LocalDate maxDate(LocalDate first, LocalDate second) {

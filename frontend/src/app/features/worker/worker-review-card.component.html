@@ -385,6 +385,52 @@
     </button>
   </div>
 
+  @if (canEditRecoveryTaskDate && isRecoveryTask()) {
+    <div
+      class="recovery-date-editor"
+      [class.editing]="isRecoveryTaskDateEditing()"
+      [class.saved]="isRecoveryTaskDateSaved()"
+    >
+      <span class="material-icons-sharp" aria-hidden="true">event</span>
+      <input
+        [name]="'recovery-date-' + review.recoveryTaskId"
+        type="date"
+        [ngModel]="recoveryTaskDateValue()"
+        (ngModelChange)="recoveryTaskDateDraftChanged.emit($event || '')"
+        (focus)="recoveryTaskDateEditStarted.emit()"
+        (click)="recoveryTaskDateEditStarted.emit()"
+        [disabled]="isMutating(recoveryTaskDateMutationKey())"
+        aria-label="Плановая дата восстановления"
+      >
+      @if (isRecoveryTaskDateEditing()) {
+        <button
+          type="button"
+          class="cancel"
+          (click)="recoveryTaskDateEditCanceled.emit()"
+          [disabled]="isMutating(recoveryTaskDateMutationKey())"
+          title="Отменить"
+        >
+          X
+        </button>
+        <button
+          type="button"
+          class="save"
+          (click)="recoveryTaskDateSaveRequested.emit()"
+          [disabled]="
+            isMutating(recoveryTaskDateMutationKey()) ||
+            !isRecoveryTaskDateChanged() ||
+            !recoveryTaskDateValue()
+          "
+          title="Сохранить дату восстановления"
+        >
+          <span class="material-icons-sharp">
+            {{ isRecoveryTaskDateSaved() ? 'check' : 'save' }}
+          </span>
+        </button>
+      }
+    </div>
+  }
+
   <button
     type="button"
     class="publish-button"

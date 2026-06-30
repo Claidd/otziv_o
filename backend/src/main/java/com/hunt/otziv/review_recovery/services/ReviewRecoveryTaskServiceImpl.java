@@ -613,7 +613,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                         ? null
                         : taskRepository.maxScheduledDateByArchiveOrderId(source.orderId(), ReviewRecoveryTaskStatus.CANCELLED)
         );
-        return (baseDate == null ? LocalDate.now() : baseDate).plusDays(ReviewRecoveryGateService.RECOVERY_SCHEDULE_STEP_DAYS);
+        return maxDate(baseDate, LocalDate.now()).plusDays(ReviewRecoveryGateService.RECOVERY_SCHEDULE_STEP_DAYS);
     }
 
     private LocalDate maxDate(LocalDate first, LocalDate second) {
