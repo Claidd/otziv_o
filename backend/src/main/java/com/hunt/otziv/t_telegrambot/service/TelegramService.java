@@ -41,7 +41,9 @@ import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
@@ -169,6 +171,15 @@ public class TelegramService extends TelegramLongPollingBot {
             Long actorTelegramId = update.getMessage().getFrom() == null ? null : update.getMessage().getFrom().getId();
             if (workerRiskTelegramCallbackService != null
                     && workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(chatId, actorTelegramId, messageText)) {
+                return;
+            }
+
+            ManagerControlWorkerTaskTelegramCallbackService managerControlWorkerTaskTelegramCallbackService =
+                    managerControlWorkerTaskTelegramCallbackServiceProvider == null
+                            ? null
+                            : managerControlWorkerTaskTelegramCallbackServiceProvider.getIfAvailable();
+            if (managerControlWorkerTaskTelegramCallbackService != null
+                    && managerControlWorkerTaskTelegramCallbackService.handleWorkerGroupTextMessage(chatId, actorTelegramId, messageText)) {
                 return;
             }
 
@@ -470,6 +481,25 @@ public class TelegramService extends TelegramLongPollingBot {
         return sendSingleMessage(chatId, text, parseMode, markup);
     }
 
+    public boolean sendForceReplyMessage(long chatId, String text) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return false;
+        }
+        if (!hasText(text)) {
+            log.warn("Telegram-сообщение для {} не отправлено: текст пустой", chatId);
+            return false;
+        }
+        ForceReplyKeyboard forceReply = new ForceReplyKeyboard();
+        forceReply.setForceReply(true);
+        forceReply.setSelective(false);
+        return sendSingleMessage(chatId, text, null, forceReply);
+    }
+
     public Optional<Integer> sendMessageWithInlineKeyboardMessageId(
             long chatId,
             String text,
@@ -555,11 +585,11 @@ public class TelegramService extends TelegramLongPollingBot {
         return sendSingleMessage(chatId, text, parseMode, null);
     }
 
-    private boolean sendSingleMessage(long chatId, String text, String parseMode, InlineKeyboardMarkup replyMarkup) {
+    private boolean sendSingleMessage(long chatId, String text, String parseMode, ReplyKeyboard replyMarkup) {
         return sendSingleMessageResult(chatId, text, parseMode, replyMarkup).isPresent();
     }
 
-    private Optional<Message> sendSingleMessageResult(long chatId, String text, String parseMode, InlineKeyboardMarkup replyMarkup) {
+    private Optional<Message> sendSingleMessageResult(long chatId, String text, String parseMode, ReplyKeyboard replyMarkup) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
@@ -640,7 +670,7 @@ public class TelegramService extends TelegramLongPollingBot {
             long newChatId,
             String text,
             String parseMode,
-            InlineKeyboardMarkup replyMarkup
+            ReplyKeyboard replyMarkup
     ) {
         if (telegramChatMigrationService != null) {
             telegramChatMigrationService.migrateChatId(oldChatId, newChatId);
@@ -656,7 +686,7 @@ public class TelegramService extends TelegramLongPollingBot {
             long newChatId,
             String text,
             String parseMode,
-            InlineKeyboardMarkup replyMarkup
+            ReplyKeyboard replyMarkup
     ) {
         if (telegramChatMigrationService != null) {
             telegramChatMigrationService.migrateChatId(oldChatId, newChatId);

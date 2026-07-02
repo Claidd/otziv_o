@@ -27,6 +27,7 @@ public record ManagerControlManagerDetailResponse(
         List<String> closeBlockers,
         long openItemCount,
         long handledItemCount,
+        List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats,
         List<ManagerControlItemDetailResponse> items,
         List<ManagerControlEventResponse> events
 ) {

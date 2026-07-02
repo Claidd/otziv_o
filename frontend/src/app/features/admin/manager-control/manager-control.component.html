@@ -107,7 +107,86 @@
           } @else {
             <p class="side-empty">Рабочей нагрузки нет</p>
           }
+
         </section>
+
+        @if (hasWorkerExplanationRows(manager)) {
+          <section class="side-load-card" aria-label="Ответы специалистов">
+            <div class="side-title">
+              <span class="material-icons-sharp">contact_support</span>
+              <h2>Ответы специалистов</h2>
+            </div>
+            <div class="side-chip-list">
+              @for (row of workerExplanationRows(manager); track row.workerUserId || row.workerName) {
+                <article
+                  class="side-manager worker-explanation-row"
+                  [class.red]="workerExplanationTone(row) === 'red'"
+                  [class.yellow]="workerExplanationTone(row) === 'yellow'"
+                  [class.green]="workerExplanationTone(row) === 'green'"
+                >
+                  <span class="material-icons-sharp">
+                    {{ row.overdueCount > 0 ? 'error' : row.unansweredCount > 0 ? 'hourglass_top' : 'task_alt' }}
+                  </span>
+                  <div>
+                    <strong>{{ row.workerName }}</strong>
+                    <small>{{ workerExplanationSummary(row) }}</small>
+                  </div>
+                </article>
+              }
+            </div>
+          </section>
+        }
+
+        @if (manager.managerPerformance; as performance) {
+          <section class="manager-performance-card side-performance-card {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}" aria-label="Эффективность выбранного менеджера">
+            <header>
+              <span class="material-icons-sharp">military_tech</span>
+              <div>
+                <strong>Расчет оценки {{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</strong>
+                <small>база {{ performance.performanceScore }} · {{ workloadLevelLabel(performance.workloadLevel) }} нагрузка</small>
+              </div>
+            </header>
+
+            <div class="manager-performance-facts">
+              @for (row of managerPerformanceRows(manager); track row.key) {
+                <button
+                  type="button"
+                  class="manager-performance-fact"
+                  [class.active]="activePerformanceTip() === performanceRowTipKey(manager, row)"
+                  (click)="togglePerformanceRowTip($event, manager, row)"
+                >
+                  <small>{{ row.label }}</small>
+                  <b>{{ row.value }}</b>
+                </button>
+              }
+            </div>
+            @if (activePerformanceRowHint(manager); as hint) {
+              <p class="manager-performance-tip">{{ hint }}</p>
+            }
+
+            <div class="manager-performance-formula">
+              <div>
+                @for (factor of managerPerformanceFactors(manager); track factor.key) {
+                  <button
+                    type="button"
+                    class="manager-performance-factor"
+                    [class.active]="activePerformanceTip() === performanceTipKey(manager, factor)"
+                    (click)="togglePerformanceTip($event, manager, factor)"
+                  >
+                    <span>
+                      <small>{{ factor.weight }}%</small>
+                      <b>{{ factor.label }}</b>
+                    </span>
+                    <strong>{{ factor.score }}/100</strong>
+                    @if (activePerformanceTip() === performanceTipKey(manager, factor)) {
+                      <em>{{ factor.hint }}</em>
+                    }
+                  </button>
+                }
+              </div>
+            </div>
+          </section>
+        }
       }
 
       <h2>Тестовый режим</h2>
@@ -150,9 +229,9 @@
             <strong>{{ summaryDate() | date: 'dd.MM.yyyy' }}</strong>
             <span>{{ generatedAt() | date: 'HH:mm' }}</span>
           </div>
-          <button type="button" class="refresh" (click)="load()" [disabled]="loading()">
+          <button type="button" class="refresh" (click)="refreshControl()" [disabled]="loading() || detailLoading()">
             <span class="material-icons-sharp">refresh</span>
-            {{ loading() ? 'Обновляю' : 'Обновить' }}
+            {{ loading() || detailLoading() ? 'Обновляю' : 'Обновить' }}
           </button>
         </div>
       </header>
@@ -182,7 +261,12 @@
                 <div class="manager-main">
                   <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
                   <div class="personal-remark-total">
-                    <strong>{{ manager.totalAttentionCount }} к действию</strong>
+                    <strong>
+                      {{ manager.totalAttentionCount }} к действию
+                      @if (manager.managerPerformance; as performance) {
+                        <span class="manager-score-badge {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}">{{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</span>
+                      }
+                    </strong>
                     &nbsp;
                     <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
                   </div>
@@ -224,22 +308,13 @@
                         <span class="material-icons-sharp">{{ problem.icon }}</span>
                         <span>{{ problem.label }}</span>
                         <strong>{{ problem.count }}</strong>
+                        @if (problem.code === 'OVERDUE_ORDERS' && overdueBreakdown(manager)) {
+                          <small>{{ overdueBreakdown(manager) }}</small>
+                        }
                         @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
                           <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
                         }
                       </a>
-                    }
-                    @if (manager.overdueStatuses.length > 0) {
-                      @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
-                        <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical {{ countToneClass(overdue.count) }} {{ itemActionClass(overdue.actionType) }}" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
-                          <span>{{ overdue.status }}</span>
-                          <strong>{{ overdue.count }}</strong>
-                          <small>{{ overdue.maxDays }} дн.</small>
-                          @if (overdue.itemStatus && overdue.itemStatus !== 'OPEN') {
-                            <em>{{ itemStatusLabel(overdue.itemStatus) }}</em>
-                          }
-                        </a>
-                      }
                     }
                     @for (section of actionSections(manager); track trackSection($index, section)) {
                       <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }}" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
@@ -273,7 +348,12 @@
               <div class="manager-main">
                 <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
                 <div>
-                  <h2>{{ manager.name }}</h2>
+                  <h2>
+                    <span>{{ manager.name }}</span>
+                    @if (manager.managerPerformance; as performance) {
+                      <span class="manager-score-badge {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}">{{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</span>
+                    }
+                  </h2>
                   <p>{{ manager.username || 'без логина' }}</p>
                 </div>
               </div>
@@ -308,29 +388,20 @@
                 </div>
                 <div class="chip-list">
                   @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
-                    <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }}" [class]="itemActionClass(problem.actionType)" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                    <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
                       <span class="material-icons-sharp">{{ problem.icon }}</span>
                       <span>{{ problem.label }}</span>
                       <strong>{{ problem.count }}</strong>
+                      @if (problem.code === 'OVERDUE_ORDERS' && overdueBreakdown(manager)) {
+                        <small>{{ overdueBreakdown(manager) }}</small>
+                      }
                       @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
                         <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
                       }
                     </a>
                   }
-                  @if (manager.overdueStatuses.length > 0) {
-                    @for (overdue of manager.overdueStatuses; track trackOverdueStatus($index, overdue)) {
-                      <a [href]="overdue.targetUrl" class="control-chip overdue-chip critical {{ countToneClass(overdue.count) }}" [class]="itemActionClass(overdue.actionType)" [class.handled]="overdue.itemStatus && overdue.itemStatus !== 'OPEN'">
-                        <span>{{ overdue.status }}</span>
-                        <strong>{{ overdue.count }}</strong>
-                        <small>{{ overdue.maxDays }} дн.</small>
-                        @if (overdue.itemStatus && overdue.itemStatus !== 'OPEN') {
-                          <em>{{ itemStatusLabel(overdue.itemStatus) }}</em>
-                        }
-                      </a>
-                    }
-                  }
                   @for (section of actionSections(manager); track trackSection($index, section)) {
-                    <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }}" [class]="itemActionClass(section.actionType)" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
+                    <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }}" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
                       <span>{{ section.label }}</span>
                       <strong>{{ section.count }}</strong>
                       @if (section.itemStatus && section.itemStatus !== 'OPEN') {
@@ -463,6 +534,7 @@
         } @else {
           <p class="side-empty">Рабочей нагрузки нет</p>
         }
+
       </section>
     }
 
@@ -507,18 +579,21 @@
                 </div>
               </div>
               <div class="stage-actions">
-                <button type="button" [class.done]="stageDone('morningCompletedAt')" (click)="markStage('MORNING_DONE')" [disabled]="updatingControl()">
+                <button type="button" [class.done]="stageDone('morningCompletedAt')" (click)="markStage('MORNING_DONE')" [disabled]="updatingControl() || !canRunDayControlActions()" [title]="dayControlActionTitle()">
                   <span class="material-icons-sharp">task_alt</span>
-                  Начало дня
+                  {{ stageDone('morningCompletedAt') ? 'Контроль принят' : 'Принять контроль' }}
                 </button>
-                <button type="button" [class.done]="stageDone('finalCheckedAt')" (click)="markStage('FINAL_CHECK')" [disabled]="updatingControl()">
-                  <span class="material-icons-sharp">fact_check</span>
-                  Конец дня
-                </button>
-                <button type="button" class="close-day-button" [class.ready]="detail()!.canCloseDay" (click)="closeDay()" [disabled]="updatingControl()">
+                <button type="button" class="close-day-button" [class.ready]="detail()!.canCloseDay" (click)="closeDay()" [disabled]="updatingControl() || !canRunDayControlActions()" [title]="dayControlActionTitle()">
                   <span class="material-icons-sharp">lock</span>
-                  Закрыть день
+                  Закрыть контроль
                 </button>
+              </div>
+              @if (dayControlHint()) {
+                <p class="day-control-hint">{{ dayControlHint() }}</p>
+              }
+              <div class="auto-close-state" [class.ready]="detail()!.canCloseDay && !detail()!.closedAt" [class.closed]="!!detail()!.closedAt">
+                <span class="material-icons-sharp">{{ detail()!.closedAt ? 'verified' : detail()!.canCloseDay ? 'schedule' : 'lock_clock' }}</span>
+                <em>{{ controlAutoCloseStatus() }}</em>
               </div>
               @if (detail()!.closeBlockers.length) {
                 <div class="close-blockers" [title]="detail()!.closeBlockers.join('\n')">
@@ -628,9 +703,19 @@
                                 <em>{{ example.reason }}</em>
                               }
                               @if (managerActionNote(example)) {
-                                <em class="manager-action-note">{{ managerActionNote(example) }}</em>
+                                <em
+                                  class="manager-action-note"
+                                  [class.failed]="isWorkerNotificationFailed(example)"
+                                >
+                                  {{ managerActionNote(example) }}
+                                </em>
                               }
-                              @if (example.type === 'RISK' && example.workerExplanation) {
+                              @if (!example.controlEntityId) {
+                                <em class="manager-action-note">
+                                  Карточка найдена свежей проверкой. Нажмите «Обновить кабинет», чтобы обработать ее кнопками.
+                                </em>
+                              }
+                              @if (example.workerExplanation) {
                                 <em class="worker-explanation-note">
                                   <span>
                                     Ответ специалиста
@@ -660,6 +745,18 @@
 
                           @if (example.type === 'ORDER') {
                             <div class="review-followup order-open-action">
+                              @if (canRepairAutomationIssue(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action repair-action"
+                                  (click)="repairConcreteItem(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Сначала попробовать автоматическую починку"
+                                >
+                                  <span class="material-icons-sharp">build</span>
+                                  Починить
+                                </button>
+                              }
                               @if (canContactOrder(example)) {
                                 <button type="button" class="review-action text-action" [class.done]="isContactTextCopied(example)" (click)="copyContactText(example)">
                                   <span class="material-icons-sharp">content_copy</span>
@@ -680,18 +777,6 @@
                                 >
                                   <span class="material-icons-sharp">send</span>
                                   Отправить
-                                </button>
-                              }
-                              @if (canRepairAutomationIssue(example)) {
-                                <button
-                                  type="button"
-                                  class="review-action repair-action"
-                                  (click)="repairConcreteItem(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                  title="Починить очередь автоответчика"
-                                >
-                                  <span class="material-icons-sharp">build</span>
-                                  Починить
                                 </button>
                               }
                               @if (canContactOrder(example)) {
@@ -720,7 +805,7 @@
                                   title="Запрос уже отправлен, карточка остается открытой"
                                 >
                                   <span class="material-icons-sharp">{{ riskExplanationButtonIcon(example) }}</span>
-                                  {{ riskExplanationButtonLabel(example) }}
+                                  {{ workerRequestButtonLabel(example) }}
                                 </button>
                               } @else {
                                 <button
@@ -731,7 +816,7 @@
                                   title="Отправить специалисту запрос разъяснения"
                                 >
                                   <span class="material-icons-sharp">contact_support</span>
-                                  Запросить разъяснение
+                                  {{ workerRequestButtonLabel(example) }}
                                 </button>
                               }
                               <button
@@ -756,6 +841,18 @@
                             </div>
                           } @else if (canRequestWorkerTask(example)) {
                             <div class="review-followup worker-request">
+                              @if (canRepairAutomationIssue(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action repair-action"
+                                  (click)="repairConcreteItem(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Сначала попробовать автоматическую починку"
+                                >
+                                  <span class="material-icons-sharp">build</span>
+                                  Починить
+                                </button>
+                              }
                               @if (canShowWorkerClientAction(example)) {
                                 <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
                                   <span class="material-icons-sharp">forum</span>
@@ -774,21 +871,14 @@
                                   Отправить
                                 </button>
                               }
-                              @if (canRepairAutomationIssue(example)) {
-                                <button
-                                  type="button"
-                                  class="review-action repair-action"
-                                  (click)="repairConcreteItem(example)"
-                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                  title="Починить очередь автоответчика"
-                                >
-                                  <span class="material-icons-sharp">build</span>
-                                  Починить
-                                </button>
-                              }
-                              <button type="button" class="review-action request-action" (click)="requestWorkerTask(example)" [disabled]="isConcreteUpdating(example.controlEntityId)">
+                              <button
+                                type="button"
+                                class="review-action request-action"
+                                (click)="requestWorkerTask(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId) || isWorkerWaitingForExplanation(example)"
+                              >
                                 <span class="material-icons-sharp">campaign</span>
-                                Запросить
+                                {{ workerRequestButtonLabel(example) }}
                               </button>
                             </div>
                           }
@@ -908,25 +998,40 @@
                               >
                                 <span class="material-icons-sharp">schedule</span>
                               </button>
-                              <button
-                                type="button"
-                                class="action-done"
-                                [title]="concreteActionTitle(example, 'ACTION_TAKEN', 'Действие сделано')"
-                                aria-label="Действие сделано"
-                                (click)="markConcreteItem(example, 'ACTION_TAKEN')"
-                                [disabled]="isConcreteActionDisabled(example, 'ACTION_TAKEN')"
-                              >
-                                <span class="material-icons-sharp">task_alt</span>
-                              </button>
+                              @if (canAdminQuickResolveRisk(example)) {
+                                <button
+                                  type="button"
+                                  class="action-done"
+                                  title="Быстро закрыть риск как проверенный"
+                                  aria-label="Быстро закрыть риск"
+                                  (click)="resolveRisk(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                >
+                                  <span class="material-icons-sharp">task_alt</span>
+                                </button>
+                              } @else if (example.type !== 'RISK') {
+                                <button
+                                  type="button"
+                                  class="action-done"
+                                  [title]="concreteActionTitle(example, 'ACTION_TAKEN', 'Действие сделано')"
+                                  aria-label="Действие сделано"
+                                  (click)="markConcreteDone(example)"
+                                  [disabled]="isConcreteActionDisabled(example, 'ACTION_TAKEN')"
+                                >
+                                  <span class="material-icons-sharp">task_alt</span>
+                                </button>
+                              }
                             </div>
                           </div>
                         </div>
                       </div>
                     }
-                    @if (item.hiddenExampleCount > 0) {
-                      <span class="detail-example-more">Еще {{ item.hiddenExampleCount }} в разделе</span>
-                    }
                   </div>
+                  @if (item.hiddenExampleCount > 0) {
+                    <p class="detail-example-more">
+                      Показана часть карточек. Еще {{ item.hiddenExampleCount }} {{ item.hiddenExampleCount === 1 ? 'карточка' : 'карточек' }} внутри раздела.
+                    </p>
+                  }
                 }
 
                 @if (item.group !== 'ACTION') {

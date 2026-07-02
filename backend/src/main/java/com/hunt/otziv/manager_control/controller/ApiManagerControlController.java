@@ -42,6 +42,18 @@ public class ApiManagerControlController {
         );
     }
 
+    @PostMapping("/today/sync")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlSummaryResponse syncToday(
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.today-sync",
+                () -> managerControlService.syncToday(principal, authentication)
+        );
+    }
+
     @PostMapping("/items/{itemId}/action")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     public void actionItem(
@@ -123,6 +135,32 @@ public class ApiManagerControlController {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.manager-details",
                 () -> managerControlService.managerDetails(managerId, principal, authentication)
+        );
+    }
+
+    @PostMapping("/managers/{managerId}/today/sync")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlManagerDetailResponse syncManagerDetails(
+            @PathVariable Long managerId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.manager-details-sync",
+                () -> managerControlService.syncManagerDetails(managerId, principal, authentication)
+        );
+    }
+
+    @PostMapping("/controls/{controlId}/accept")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlManagerDetailResponse acceptControl(
+            @PathVariable Long controlId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.accept",
+                () -> managerControlService.acceptControl(controlId, principal, authentication)
         );
     }
 

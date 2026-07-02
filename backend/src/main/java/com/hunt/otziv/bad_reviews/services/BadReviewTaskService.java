@@ -23,6 +23,8 @@ public interface BadReviewTaskService {
 
     int deletePendingTasksForOrder(Order order);
 
+    int reassignPendingTasksForOrder(Long orderId, Worker worker);
+
     BadReviewTask completeTask(Long taskId);
 
     BadReviewTask getTask(Long taskId);

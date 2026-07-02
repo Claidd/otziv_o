@@ -5,6 +5,7 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.u_users.model.Manager;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -48,5 +49,22 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
             @Param("status") ClientChatUnansweredStatus status,
             @Param("cutoff") LocalDateTime cutoff,
             Pageable pageable
+    );
+
+    @Query("""
+        SELECT item
+        FROM ClientChatUnansweredItem item
+        WHERE item.manager IN :managers
+          AND (
+                item.createdAt BETWEEN :from AND :to
+                OR item.closedAt BETWEEN :from AND :to
+                OR (item.status = :openStatus AND item.lastClientMessageAt <= :to)
+          )
+    """)
+    List<ClientChatUnansweredItem> findPerformanceItems(
+            @Param("managers") Collection<Manager> managers,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("openStatus") ClientChatUnansweredStatus openStatus
     );
 }

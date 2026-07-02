@@ -140,6 +140,40 @@ class ApiReviewCheckControllerTest {
     }
 
     @Test
+    void anonymousApproveAllowsPublicationWithClientTextChanges() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(orderService.changeStatusForOrder(101L, "Публикация")).thenReturn(true);
+        when(reviewService.updateOrderDetailAndReviewAndPublishDate(any())).thenReturn(true);
+
+        controller().approveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                        "client comment",
+                        List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                                501L,
+                                "client changed text",
+                                "client changed answer",
+                                false,
+                                "2026-06-01",
+                                "https://real.example/review"
+                        ))
+                ),
+                null,
+                null
+        );
+
+        ArgumentCaptor<ReviewDTO> reviewCaptor = ArgumentCaptor.forClass(ReviewDTO.class);
+        verify(reviewService).updateOrderDetailAndReview(any(OrderDetailsDTO.class), reviewCaptor.capture(), eq(501L));
+        assertThat(reviewCaptor.getValue().getText()).isEqualTo("client changed text");
+        assertThat(reviewCaptor.getValue().getAnswer()).isEqualTo("client changed answer");
+        verify(orderService).changeStatusForOrder(101L, "Публикация");
+        verify(orderService, never()).changeStatusForOrder(101L, "Коррекция");
+        verify(reviewService).updateOrderDetailAndReviewAndPublishDate(any());
+    }
+
+    @Test
     void anonymousCannotUpdateReviewOutsideCurrentUuid() {
         UUID orderDetailId = UUID.randomUUID();
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
@@ -208,7 +242,7 @@ class ApiReviewCheckControllerTest {
     }
 
     @Test
-    void updateArchivedReviewTextRestoresOrderToCorrection() {
+    void updateArchivedReviewTextRestoresOrderToCorrection() throws Exception {
         UUID orderDetailId = UUID.randomUUID();
         OrderDetails restoredDetails = orderDetails(orderDetailId, "Коррекция");
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))

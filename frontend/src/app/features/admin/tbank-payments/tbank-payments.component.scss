@@ -397,6 +397,50 @@ input[type='search']::placeholder {
   background: rgba(125, 141, 161, 0.12);
 }
 
+.recipient-summary-section {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.recipient-summary-title {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+}
+
+.month-field {
+  display: grid;
+  min-width: 9.8rem;
+  gap: 0.22rem;
+}
+
+.month-field span {
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.month-field input {
+  min-height: 2.25rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.45rem 0.6rem;
+  font-weight: 850;
+}
+
+.recipient-summary-table {
+  overflow-x: auto;
+}
+
+.recipient-summary-table table {
+  min-width: 48rem;
+}
+
+.recipient-summary-table td strong,
+.recipient-summary-table td span,
+.recipient-summary-table td small {
+  overflow-wrap: anywhere;
+}
+
 .payments-panel {
   overflow: hidden;
   margin-top: 1rem;

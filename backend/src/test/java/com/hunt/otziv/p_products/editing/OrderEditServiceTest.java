@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.editing;
 
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -9,6 +10,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Worker;
@@ -46,6 +48,12 @@ class OrderEditServiceTest {
 
     @Mock
     private ReviewService reviewService;
+
+    @Mock
+    private ReviewRepository reviewRepository;
+
+    @Mock
+    private BadReviewTaskService badReviewTaskService;
 
     @Test
     void updateOrderChangesFilialOnOrderAndReviews() {
@@ -88,6 +96,8 @@ class OrderEditServiceTest {
 
         assertSame(newWorker, order.getWorker());
         assertSame(newWorker, review.getWorker());
+        verify(reviewRepository).reassignWorkerByOrderId(10L, newWorker);
+        verify(badReviewTaskService).reassignPendingTasksForOrder(10L, newWorker);
         verify(orderRepository).save(order);
         verifyNoInteractions(reviewService);
     }
@@ -142,7 +152,9 @@ class OrderEditServiceTest {
                 workerService,
                 managerService,
                 filialService,
-                reviewService
+                reviewService,
+                reviewRepository,
+                badReviewTaskService
         );
     }
 

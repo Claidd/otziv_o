@@ -113,6 +113,7 @@ public class AppSettingService {
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED = "manager-control.unanswered-client-messages.auto-ignore-enabled";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH = "manager-control.unanswered-client-messages.auto-ignore-max-length";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES = "manager-control.unanswered-client-messages.auto-ignore-phrases";
+    public static final String MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES = "manager-control.unanswered-client-messages.staff-name-aliases";
     public static final String PAYMENTS_TBANK_RUNTIME_MODE = "payments.tbank.runtime-mode";
     public static final String PAYMENTS_TBANK_ENABLED = "payments.tbank.enabled";
     public static final String PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED = "payments.tbank.payment-links-enabled";

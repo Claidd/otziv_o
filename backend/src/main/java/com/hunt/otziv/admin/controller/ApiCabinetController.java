@@ -15,6 +15,8 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
+import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
@@ -34,6 +36,7 @@ import java.security.Principal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,6 +87,7 @@ public class ApiCabinetController {
     private final AnalyticsAggregateTeamService analyticsAggregateTeamService;
     private final PaymentProfileService paymentProfileService;
     private final ManualPaymentTaskService manualPaymentTaskService;
+    private final ManagerPerformanceService managerPerformanceService;
 
     @Value("${otziv.analytics.aggregates.read-enabled:false}")
     private boolean aggregateAnalyticsReadEnabled;
@@ -300,15 +304,25 @@ public class ApiCabinetController {
         return performanceMetrics.recordEndpoint("cabinet.score", () -> {
             LocalDate selectedDate = selectedDate(date);
             boolean financeVisible = hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_OWNER");
+            boolean managerPerformanceVisible = financeVisible;
 
             return cached(
                     CacheConfig.CABINET_SCORE,
-                    cabinetKey("score", principal.getName(), financeVisible, selectedDate, aggregateAnalyticsReadEnabled),
+                    cabinetKey("score", principal.getName(), financeVisible, managerPerformanceVisible, selectedDate, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
+                        Map<Long, ManagerPerformanceScoreResponse> managerPerformanceByUserId = managerPerformanceVisible
+                                ? managerPerformanceService.score(selectedDate).stream()
+                                .filter(item -> item.managerUserId() != null)
+                                .collect(Collectors.toMap(
+                                        ManagerPerformanceScoreResponse::managerUserId,
+                                        Function.identity(),
+                                        (left, right) -> left
+                                ))
+                                : Map.of();
                         Map<String, List<ScoreUserResponse>> groupedUsers = scoreRows(selectedDate).stream()
-                                .sorted(scoreComparator(financeVisible))
-                                .map(user -> ScoreUserResponse.from(user, financeVisible))
+                                .sorted(scoreComparator(financeVisible, managerPerformanceByUserId))
+                                .map(user -> ScoreUserResponse.from(user, financeVisible, managerPerformanceByUserId.get(user.getUserId())))
                                 .collect(Collectors.groupingBy(
                                         ScoreUserResponse::role,
                                         LinkedHashMap::new,
@@ -319,6 +333,7 @@ public class ApiCabinetController {
                                 selectedDate,
                                 personalService.getUserLK(principal),
                                 financeVisible,
+                                managerPerformanceVisible,
                                 Map.of(
                                         "managers", groupedUsers.getOrDefault("ROLE_MANAGER", List.of()),
                                         "marketologs", groupedUsers.getOrDefault("ROLE_MARKETOLOG", List.of()),
@@ -559,7 +574,10 @@ public class ApiCabinetController {
         return (List<OperatorsListDTO>) personalService.gerOperatorsAndCountToDateToOwner(operators, date);
     }
 
-    private Comparator<UserData> scoreComparator(boolean financeVisible) {
+    private Comparator<UserData> scoreComparator(
+            boolean financeVisible,
+            Map<Long, ManagerPerformanceScoreResponse> managerPerformanceByUserId
+    ) {
         return Comparator
                 .comparingInt((UserData user) -> switch (Objects.toString(user.getRole(), "")) {
                     case "ROLE_MANAGER" -> 1;
@@ -568,10 +586,28 @@ public class ApiCabinetController {
                     case "ROLE_MARKETOLOG" -> 4;
                     default -> 5;
                 })
+                .thenComparing(managerPerformanceComparator(managerPerformanceByUserId))
                 .thenComparing(workerScoreComparator(financeVisible))
                 .thenComparing(Comparator.comparingLong((UserData user) -> valueOrZero(user.getTotalSum())).reversed())
                 .thenComparing(Comparator.comparingLong((UserData user) -> valueOrZero(user.getSalary())).reversed())
                 .thenComparing(UserData::getFio, Comparator.nullsLast(String::compareToIgnoreCase));
+    }
+
+    private Comparator<UserData> managerPerformanceComparator(
+            Map<Long, ManagerPerformanceScoreResponse> managerPerformanceByUserId
+    ) {
+        return (left, right) -> {
+            boolean leftManager = "ROLE_MANAGER".equals(left.getRole());
+            boolean rightManager = "ROLE_MANAGER".equals(right.getRole());
+            if (!leftManager || !rightManager) {
+                return 0;
+            }
+            ManagerPerformanceScoreResponse leftPerformance = managerPerformanceByUserId.get(left.getUserId());
+            ManagerPerformanceScoreResponse rightPerformance = managerPerformanceByUserId.get(right.getUserId());
+            int leftScore = leftPerformance == null ? 0 : leftPerformance.loadAdjustedPerformanceScore();
+            int rightScore = rightPerformance == null ? 0 : rightPerformance.loadAdjustedPerformanceScore();
+            return Integer.compare(rightScore, leftScore);
+        };
     }
 
     private Comparator<UserData> workerScoreComparator(boolean financeVisible) {
@@ -623,6 +659,7 @@ public class ApiCabinetController {
             LocalDate date,
             UserLKDTO user,
             boolean financeVisible,
+            boolean managerPerformanceVisible,
             Map<String, List<ScoreUserResponse>> groups
     ) {
     }
@@ -644,9 +681,14 @@ public class ApiCabinetController {
             Long review1Month,
             Long leadsNew,
             Long leadsInWork,
-            Long percentInWork
+            Long percentInWork,
+            ManagerPerformanceScoreResponse managerPerformance
     ) {
-        static ScoreUserResponse from(UserData user, boolean financeVisible) {
+        static ScoreUserResponse from(
+                UserData user,
+                boolean financeVisible,
+                ManagerPerformanceScoreResponse managerPerformance
+        ) {
             return new ScoreUserResponse(
                     user.getFio(),
                     user.getRole(),
@@ -664,7 +706,8 @@ public class ApiCabinetController {
                     user.getReview1Month(),
                     user.getLeadsNew(),
                     user.getLeadsInWork(),
-                    user.getPercentInWork()
+                    user.getPercentInWork(),
+                    "ROLE_MANAGER".equals(user.getRole()) ? managerPerformance : null
             );
         }
     }

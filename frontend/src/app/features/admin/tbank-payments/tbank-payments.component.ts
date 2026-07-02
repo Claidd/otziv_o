@@ -8,6 +8,8 @@ import type {
   AdminPaymentLinkResponse,
   AdminPaymentLinkSummaryResponse,
   AdminPaymentLinksPageResponse,
+  ManualPaymentRecipientMonthlySummaryItem,
+  ManualPaymentRecipientMonthlySummaryResponse,
   ManualPaymentTaskResponse,
   ManualPaymentTaskStatus,
   ManualPaymentType,
@@ -75,6 +77,8 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly recipientSummaryMonth = signal(TbankPaymentsComponent.currentMonthInput());
+  readonly recipientMonthlySummary = signal<ManualPaymentRecipientMonthlySummaryResponse | null>(null);
   readonly adminTaskManagerId = signal<number | null>(null);
   readonly adminTaskPaymentType = signal<ManualPaymentType>('MOBILE_BANK');
   readonly adminTaskPhone = signal('');
@@ -115,6 +119,7 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly paymentTotalPages = signal(0);
   readonly paymentSummary = signal<AdminPaymentLinkSummaryResponse | null>(null);
   readonly archiving = signal(false);
+  readonly loadingRecipientSummary = signal(false);
   private searchReloadTimer: number | null = null;
 
   readonly statusOptions: StatusFilterOption[] = [
@@ -147,6 +152,8 @@ export class TbankPaymentsComponent implements OnDestroy {
   readonly manualPendingCount = computed(() => {
     return this.paymentSummary()?.manualPending ?? this.manualPendingLinks().length;
   });
+
+  readonly recipientSummaryItems = computed(() => this.recipientMonthlySummary()?.items ?? []);
 
   readonly paymentPageLabel = computed(() => {
     const totalPages = this.paymentTotalPages();
@@ -327,12 +334,14 @@ export class TbankPaymentsComponent implements OnDestroy {
       links: this.paymentsApi.getAdminTbankPaymentLinks(this.paymentLinkQuery()),
       profiles: this.paymentsApi.getAdminTbankPaymentProfiles(),
       manualTasks: this.paymentsApi.getAdminManualPaymentTasks(),
+      recipientSummary: this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()),
       runtimeSettings: this.paymentsApi.getAdminTbankRuntimeSettings()
     }).subscribe({
-      next: ({ status, links, profiles, manualTasks, runtimeSettings }) => {
+      next: ({ status, links, profiles, manualTasks, recipientSummary, runtimeSettings }) => {
         this.status.set(status);
         this.applyPaymentLinksPage(links);
         this.manualTasks.set(manualTasks ?? []);
+        this.recipientMonthlySummary.set(recipientSummary);
         this.runtimeSettings.set(runtimeSettings);
         this.applyProfilesState(profiles.profiles, profiles.managers);
         this.loading.set(false);
@@ -344,6 +353,15 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.toastService.error('T-Bank платежи не загрузились', message);
       }
     });
+  }
+
+  setRecipientSummaryMonth(value: string): void {
+    const month = value || TbankPaymentsComponent.currentMonthInput();
+    if (month === this.recipientSummaryMonth()) {
+      return;
+    }
+    this.recipientSummaryMonth.set(month);
+    this.loadRecipientMonthlySummary();
   }
 
   setRuntimeMode(mode: TbankRuntimeMode): void {
@@ -766,6 +784,7 @@ export class TbankPaymentsComponent implements OnDestroy {
         this.toastService.success('Ручная оплата подтверждена', `Статус: ${this.statusLabel(updated.status)}`);
         this.loadProfilesOnly();
         this.loadPaymentLinks();
+        this.loadRecipientMonthlySummary();
       },
       error: (err) => {
         const message = apiErrorDetail(err, 'Не удалось подтвердить ручную оплату');
@@ -1080,6 +1099,19 @@ export class TbankPaymentsComponent implements OnDestroy {
       return 'Лимит профиля';
     }
     return '';
+  }
+
+  recipientSummaryPaymentTarget(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    const isExternal = item.manualPaymentType === 'EXTERNAL_LINK';
+    const target = isExternal
+      ? (item.manualPaymentUrl || item.manualPaymentButtonLabel || 'ссылка не указана')
+      : (item.manualPhone || 'телефон не указан');
+    const profile = item.paymentProfileName?.trim();
+    return profile ? `${target} · ${profile}` : target;
+  }
+
+  recipientSummarySourceLabel(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    return item.manualSource === 'MANUAL_TASK' ? 'Ручное задание' : 'Лимит профиля';
   }
 
   hasPaymentNotificationInfo(link: AdminPaymentLinkResponse): boolean {
@@ -1407,6 +1439,21 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
+  loadRecipientMonthlySummary(): void {
+    this.loadingRecipientSummary.set(true);
+    this.paymentsApi.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()).subscribe({
+      next: (summary) => {
+        this.recipientMonthlySummary.set(summary);
+        this.loadingRecipientSummary.set(false);
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось обновить сводку по получателям');
+        this.loadingRecipientSummary.set(false);
+        this.toastService.error('Сводка не обновлена', message);
+      }
+    });
+  }
+
   private paymentLinkQuery(): {
     page: number;
     size: number;
@@ -1515,5 +1562,11 @@ export class TbankPaymentsComponent implements OnDestroy {
       default:
         return 'не настроен';
     }
+  }
+
+  private static currentMonthInput(): string {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${now.getFullYear()}-${month}`;
   }
 }

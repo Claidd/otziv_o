@@ -12,6 +12,8 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateTeamService.AggregateTeam;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
+import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -76,6 +78,9 @@ class ApiCabinetControllerTest {
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
 
+    @Mock
+    private ManagerPerformanceService managerPerformanceService;
+
     private ApiCabinetController controller;
     private Principal principal;
     private Authentication authentication;
@@ -93,7 +98,8 @@ class ApiCabinetControllerTest {
                 analyticsAggregateUserStatsService,
                 analyticsAggregateTeamService,
                 paymentProfileService,
-                manualPaymentTaskService
+                manualPaymentTaskService,
+                managerPerformanceService
         );
         principal = () -> "alex";
         authentication = new UsernamePasswordAuthenticationToken(
@@ -105,6 +111,7 @@ class ApiCabinetControllerTest {
                 .username("alex")
                 .role("ADMIN")
                 .build());
+        lenient().when(managerPerformanceService.score(DATE)).thenReturn(List.of());
     }
 
     @Test
@@ -281,6 +288,24 @@ class ApiCabinetControllerTest {
     }
 
     @Test
+    void scoreSortsManagersByLoadAdjustedPerformance() {
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);
+        when(personalService.getPersonalsAndCountToScore(DATE)).thenReturn(List.of(
+                scoreUser("Low KPI", 300L, 11L),
+                scoreUser("High KPI", 100L, 12L)
+        ));
+        when(managerPerformanceService.score(DATE)).thenReturn(List.of(
+                performance(1L, 11L, 60),
+                performance(2L, 12L, 88)
+        ));
+
+        ApiCabinetController.ScoreResponse response = controller.score(principal, authentication, DATE, true);
+
+        assertEquals("High KPI", response.groups().get("managers").getFirst().fio());
+        assertEquals(88, response.groups().get("managers").getFirst().managerPerformance().loadAdjustedPerformanceScore());
+    }
+
+    @Test
     void scoreHidesFinancialFieldsForNonFinanceRoles() {
         authentication = new UsernamePasswordAuthenticationToken(
                 "worker",
@@ -337,6 +362,10 @@ class ApiCabinetControllerTest {
     }
 
     private UserData scoreUser(String fio, Long salary) {
+        return scoreUser(fio, salary, 10L);
+    }
+
+    private UserData scoreUser(String fio, Long salary, Long userId) {
         return UserData.builder()
                 .fio(fio)
                 .role("ROLE_MANAGER")
@@ -349,13 +378,53 @@ class ApiCabinetControllerTest {
                 .inVigul(0L)
                 .inPublish(0L)
                 .imageId(1L)
-                .userId(10L)
+                .userId(userId)
                 .order1Month(3L)
                 .review1Month(7L)
                 .leadsNew(0L)
                 .leadsInWork(0L)
                 .percentInWork(0L)
                 .build();
+    }
+
+    private ManagerPerformanceScoreResponse performance(Long managerId, Long userId, int adjustedScore) {
+        return new ManagerPerformanceScoreResponse(
+                managerId,
+                userId,
+                Math.max(0, adjustedScore - 2),
+                adjustedScore,
+                "B",
+                40.0,
+                "NORMAL",
+                10,
+                8,
+                2,
+                3,
+                3,
+                1,
+                10.0,
+                0.2,
+                1,
+                2,
+                100.0,
+                100.0,
+                0.0,
+                0.0,
+                10.0,
+                20.0,
+                0.0,
+                0.0,
+                1,
+                1,
+                0,
+                80,
+                90,
+                100,
+                85,
+                90,
+                100,
+                100
+        );
     }
 
     private User user(Long id, String fio) {

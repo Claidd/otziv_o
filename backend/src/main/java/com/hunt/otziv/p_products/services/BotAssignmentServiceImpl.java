@@ -343,8 +343,18 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     }
 
     @Override
+    @Transactional
     public void checkAndNotifyAboutStubBots(List<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return;
+        }
+
         log.info("Проверка наличия ботов-заглушек...");
+        int replacedStubBots = replaceStubBotsFromReservePool(reviews);
+        if (replacedStubBots > 0) {
+            log.warn("Заменено {} ботов-заглушек резервными аккаунтами из общего пула", replacedStubBots);
+        }
+
         long stubBotCount = reviews.stream()
                 .filter(review -> review.getBot() != null && STUB_BOT_ID.equals(review.getBot().getId()))
                 .count();
@@ -358,6 +368,73 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         } else {
             log.info("Ботов-заглушек не обнаружено");
         }
+    }
+
+    private int replaceStubBotsFromReservePool(List<Review> reviews) {
+        Set<Long> usedBotIds = reviews.stream()
+                .map(Review::getBot)
+                .filter(Objects::nonNull)
+                .map(Bot::getId)
+                .filter(Objects::nonNull)
+                .filter(botId -> !STUB_BOT_ID.equals(botId))
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<Review> changedReviews = new ArrayList<>();
+        int reviewIndex = 0;
+        for (Review review : reviews) {
+            if (!hasStubBot(review)) {
+                continue;
+            }
+            reviewIndex++;
+
+            if (review.isPublish()) {
+                log.warn("Отзыв ID {} уже опубликован с ботом-заглушкой, автоматическая замена пропущена",
+                        review.getId());
+                continue;
+            }
+
+            Filial filial = resolveFilial(review);
+            if (filial == null || filial.getCity() == null || filial.getCity().getId() == null) {
+                log.warn("Не удалось заменить бота-заглушку для отзыва ID {}: город филиала не найден",
+                        review.getId());
+                continue;
+            }
+
+            Bot reserveBot = claimReserveBot(filial, usedBotIds, reviewIndex);
+            if (reserveBot == null || STUB_BOT_ID.equals(reserveBot.getId())) {
+                continue;
+            }
+
+            review.setBot(reserveBot);
+            updateReviewVigulBasedOnBotCounter(review, reserveBot);
+            changedReviews.add(review);
+        }
+
+        if (!changedReviews.isEmpty()) {
+            reviewRepository.saveAll(changedReviews);
+        }
+
+        return changedReviews.size();
+    }
+
+    private boolean hasStubBot(Review review) {
+        return review != null
+                && review.getBot() != null
+                && STUB_BOT_ID.equals(review.getBot().getId());
+    }
+
+    private Filial resolveFilial(Review review) {
+        if (review == null) {
+            return null;
+        }
+        if (review.getFilial() != null) {
+            return review.getFilial();
+        }
+        if (review.getOrderDetails() != null
+                && review.getOrderDetails().getOrder() != null) {
+            return review.getOrderDetails().getOrder().getFilial();
+        }
+        return null;
     }
 
     @Override

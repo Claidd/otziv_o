@@ -1,5 +1,9 @@
 package com.hunt.otziv.worker_activity.controller;
 
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -58,6 +62,7 @@ public class ApiWorkerRiskController {
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
     private final WorkerRiskRollbackService rollbackService;
+    private final ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
 
     @GetMapping("/incidents")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
@@ -117,7 +122,7 @@ public class ApiWorkerRiskController {
     ) {
         WorkerRiskResolutionAction action = parseResolutionAction(request == null ? null : request.action());
         int penaltyPoints = request == null ? DEFAULT_PENALTY_POINTS : normalizePenaltyPoints(request.penaltyPoints());
-        return applyResolution(incidentId, action, penaltyPoints, authentication);
+        return applyResolution(incidentId, action, penaltyPoints, clean(request == null ? null : request.comment()), authentication);
     }
 
     @PostMapping("/incidents/{incidentId}/rollback")
@@ -140,16 +145,18 @@ public class ApiWorkerRiskController {
             WorkerRiskResolutionAction action,
             Authentication authentication
     ) {
-        return applyResolution(incidentId, action, DEFAULT_PENALTY_POINTS, authentication);
+        return applyResolution(incidentId, action, DEFAULT_PENALTY_POINTS, "", authentication);
     }
 
     private WorkerRiskIncidentResponse applyResolution(
             Long incidentId,
             WorkerRiskResolutionAction action,
             int penaltyPoints,
+            String comment,
             Authentication authentication
     ) {
         WorkerRiskIncident incident = findIncidentForCurrentUser(incidentId, authentication);
+        requireRiskResolutionCommentIfNeeded(incident, action, comment, authentication);
 
         User resolver = currentUser(authentication);
         incident.setStatus(statusFor(action));
@@ -158,6 +165,7 @@ public class ApiWorkerRiskController {
         incident.setResolvedByUserId(resolver.getId());
         incident.setResolvedByUsername(resolver.getUsername());
         incident.setPenaltyPoints(action == WorkerRiskResolutionAction.VIOLATION_CONFIRMED ? penaltyPoints : 0);
+        appendManagerResolutionComment(incident, action, comment, resolver);
 
         if (action == WorkerRiskResolutionAction.EXPLANATION_REQUESTED || action == WorkerRiskResolutionAction.WORKER_WARNED) {
             requestWorkerExplanation(incident);
@@ -169,6 +177,54 @@ public class ApiWorkerRiskController {
         WorkerRiskIncident savedIncident = incidentRepository.save(incident);
         deleteResolvedRiskReminders(savedIncident);
         return WorkerRiskIncidentResponse.from(savedIncident);
+    }
+
+    private void requireRiskResolutionCommentIfNeeded(
+            WorkerRiskIncident incident,
+            WorkerRiskResolutionAction action,
+            String comment,
+            Authentication authentication
+    ) {
+        if (action != WorkerRiskResolutionAction.VERIFIED
+                && action != WorkerRiskResolutionAction.FALSE_POSITIVE) {
+            return;
+        }
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER")) {
+            return;
+        }
+        if (incident != null && incident.getWorkerExplanationAt() != null) {
+            return;
+        }
+        if (clean(comment).isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Для закрытия риска нужен ответ специалиста или комментарий менеджера"
+            );
+        }
+    }
+
+    private void appendManagerResolutionComment(
+            WorkerRiskIncident incident,
+            WorkerRiskResolutionAction action,
+            String comment,
+            User resolver
+    ) {
+        String text = clean(comment);
+        if (incident == null || text.isBlank()) {
+            return;
+        }
+        String actionText = switch (action) {
+            case VERIFIED -> "Проверено";
+            case FALSE_POSITIVE -> "Игнор";
+            case VIOLATION_CONFIRMED -> "Нарушение / штраф";
+            case EXPLANATION_REQUESTED, WORKER_WARNED -> "Запрос пояснения";
+            case NORMAL_ACCOUNT_SELECTION -> "Нормальный выбор аккаунта";
+        };
+        String existing = clean(incident.getDetails());
+        String addition = "Комментарий менеджера (" + actionText + ", "
+                + firstNonBlank(resolver == null ? null : resolver.getFio(), resolver == null ? null : resolver.getUsername())
+                + "): " + text;
+        incident.setDetails(existing.isBlank() ? addition : existing + "\n\n" + addition);
     }
 
     private WorkerRiskIncidentStatus statusFor(WorkerRiskResolutionAction action) {
@@ -217,7 +273,8 @@ public class ApiWorkerRiskController {
         if (worker == null || !worker.isActive()) {
             return;
         }
-        incident.setExplanationRequestedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        incident.setExplanationRequestedAt(now);
 
         String text = "Менеджер проверил подозрительное действие и просит дать пояснение."
                 + "\nСтатус: ждем пояснение"
@@ -228,6 +285,9 @@ public class ApiWorkerRiskController {
                 + "\n\nПожалуйста, напишите менеджеру, что произошло, и подтвердите фактическое выполнение. "
                 + "Рабочие кнопки нужно нажимать только после реального выполнения задачи.";
 
+        boolean telegramAttempted = false;
+        boolean telegramSent = false;
+        String failureReason = null;
         if (!personalReminderService.hasOpenSystemReminder(worker, SOURCE_MANAGER_WARNING, incident.getId())) {
             try {
                 personalReminderService.createSystemReminderDueNow(
@@ -239,19 +299,71 @@ public class ApiWorkerRiskController {
                         incident.getOrderId()
                 );
                 if (worker.getWorkerTelegramGroupChatId() != null) {
-                    telegramService.sendMessageWithInlineKeyboard(
+                    telegramAttempted = true;
+                    telegramSent = telegramService.sendMessageWithInlineKeyboard(
                             worker.getWorkerTelegramGroupChatId(),
                             text,
                             null,
                             WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
                     );
+                    if (!telegramSent) {
+                        failureReason = "Telegram не отправил сообщение";
+                    }
+                } else {
+                    failureReason = "Telegram-группа специалиста не привязана";
                 }
             } catch (RuntimeException exception) {
+                failureReason = "Ошибка отправки Telegram: " + exception.getMessage();
                 log.warn("Не удалось отправить запрос пояснения по риск-инциденту incidentId={}, workerUserId={}",
                         incident.getId(),
                         incident.getWorkerUserId(),
                         exception);
             }
+        }
+        syncManagerControlRiskRequest(incident, worker, now, telegramAttempted, telegramSent, failureReason);
+    }
+
+    private void syncManagerControlRiskRequest(
+            WorkerRiskIncident incident,
+            User worker,
+            LocalDateTime requestedAt,
+            boolean telegramAttempted,
+            boolean telegramSent,
+            String failureReason
+    ) {
+        if (incident == null || incident.getId() == null || worker == null) {
+            return;
+        }
+        List<ManagerDailyControlConcreteItem> items = managerControlConcreteItemRepository
+                .findByEntityTypeAndEntityId("RISK", incident.getId());
+        for (ManagerDailyControlConcreteItem item : items) {
+            if (item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+                continue;
+            }
+            item.setWorkerNotificationUserId(worker.getId());
+            if (telegramAttempted) {
+                item.setWorkerNotificationAttemptedAt(requestedAt);
+                item.setWorkerNotificationSentAt(telegramSent ? requestedAt : null);
+                item.setWorkerNotificationFailureReason(telegramSent ? null : failureReason);
+            } else if (failureReason != null) {
+                item.setWorkerNotificationFailureReason(failureReason);
+            }
+            item.setWorkerExplanationRequestedAt(requestedAt);
+            item.setWorkerExplanation(null);
+            item.setWorkerExplanationAt(null);
+            item.setWorkerExplanationByUserId(null);
+            item.setLastManualTouchAt(requestedAt);
+            boolean deliveryFailed = failureReason != null && !telegramSent;
+            if (deliveryFailed) {
+                item.setStatus(ManagerDailyControlItemStatus.OPEN);
+                item.setActionType(null);
+                item.setFollowUpAt(null);
+            } else {
+                item.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+                item.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+                item.setFollowUpAt(requestedAt == null ? null : requestedAt.plusHours(3));
+            }
+            managerControlConcreteItemRepository.save(item);
         }
     }
 
@@ -338,10 +450,24 @@ public class ApiWorkerRiskController {
     private WorkerRiskIncident findIncidentForCurrentUser(Long incidentId, Authentication authentication) {
         WorkerRiskIncident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Инцидент не найден"));
-        if (!hasRole(authentication, "ADMIN") && !allowedWorkerUserIds(authentication).contains(incident.getWorkerUserId())) {
+        if (!hasRole(authentication, "ADMIN")
+                && !allowedWorkerUserIds(authentication).contains(incident.getWorkerUserId())
+                && !isVisibleInCurrentManagerControl(incidentId, authentication)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Инцидент не найден");
         }
         return incident;
+    }
+
+    private boolean isVisibleInCurrentManagerControl(Long incidentId, Authentication authentication) {
+        String username = authentication == null ? null : authentication.getName();
+        if (incidentId == null || username == null || username.isBlank()) {
+            return false;
+        }
+        return managerControlConcreteItemRepository.existsByEntityTypeAndEntityIdAndControl_Manager_User_Username(
+                "RISK",
+                incidentId,
+                username
+        );
     }
 
     private User currentUser(Authentication authentication) {

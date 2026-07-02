@@ -4,6 +4,7 @@ import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class ClientChatParticipantClassifier {
 
     private final UserRepository userRepository;
+    private final AppSettingService appSettingService;
 
     public ClientChatSenderRole classify(
             ClientChatPlatform platform,
@@ -43,10 +45,12 @@ public class ClientChatParticipantClassifier {
             case TELEGRAM -> isKnownTelegramUser(senderExternalId) || isKnownCompanyStaffName(senderName, company)
                     ? ClientChatSenderRole.STAFF
                     : ClientChatSenderRole.CLIENT;
-            case WHATSAPP -> isKnownPhone(senderExternalId)
+            case WHATSAPP -> isKnownPhone(senderExternalId) || isKnownCompanyStaffName(senderName, company)
                     ? ClientChatSenderRole.STAFF
                     : ClientChatSenderRole.CLIENT;
-            case MAX -> ClientChatSenderRole.CLIENT;
+            case MAX -> isKnownCompanyStaffName(senderName, company)
+                    ? ClientChatSenderRole.STAFF
+                    : ClientChatSenderRole.CLIENT;
         };
     }
 
@@ -87,6 +91,9 @@ public class ClientChatParticipantClassifier {
                 return true;
             }
         }
+        if (matchesConfiguredStaffAlias(sender, staff)) {
+            return true;
+        }
 
         String senderFirstName = firstToken(sender);
         if (senderFirstName.length() < 3) {
@@ -97,6 +104,43 @@ public class ClientChatParticipantClassifier {
                 .filter(senderFirstName::equals)
                 .count();
         return sameFirstNameStaff == 1;
+    }
+
+    private boolean matchesConfiguredStaffAlias(String sender, List<User> staff) {
+        String rawAliases = appSettingService.getString(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES,
+                ""
+        );
+        if (rawAliases == null || rawAliases.isBlank()) {
+            return false;
+        }
+        for (String rule : rawAliases.split("[;\\r\\n]+")) {
+            String[] parts = rule.split("=", 2);
+            if (parts.length != 2) {
+                continue;
+            }
+            String staffName = normalizedName(parts[0]);
+            if (staffName.isBlank() || !matchesAnyStaff(staffName, staff)) {
+                continue;
+            }
+            for (String alias : parts[1].split("[,|]+")) {
+                String normalizedAlias = normalizedName(alias);
+                if (matchesFullName(sender, normalizedAlias)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesAnyStaff(String staffName, List<User> staff) {
+        for (User user : staff) {
+            if (matchesFullName(staffName, normalizedName(user == null ? null : user.getFio()))
+                    || matchesFullName(staffName, normalizedName(user == null ? null : user.getUsername()))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<User> companyStaff(Company company) {

@@ -21,13 +21,15 @@ import {
   ManagerControlProblem,
   ManagerControlSection,
   ManagerControlSummary,
-  ManagerControlStatus
+  ManagerControlStatus,
+  ManagerControlWorkerExplanationStats
 } from '../../../core/manager-control.api';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
+import { AuthService } from '../../../core/auth.service';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -47,6 +49,21 @@ const ORDER_LIST_STATUSES = new Set([
   'Архив'
 ]);
 
+type ManagerPerformanceFactor = {
+  key: string;
+  label: string;
+  weight: number;
+  score: number;
+  hint: string;
+};
+
+type ManagerPerformanceRow = {
+  key: string;
+  label: string;
+  value: string;
+  hint: string;
+};
+
 @Component({
   selector: 'app-manager-control',
   imports: [AdminLayoutComponent, DatePipe, FormsModule, LoadErrorCardComponent, NgTemplateOutlet],
@@ -57,9 +74,12 @@ export class ManagerControlComponent implements OnInit {
   private readonly api = inject(ManagerControlApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly routePersonalControl = this.route.snapshot.data['personalControl'] === true;
+  private detailRequestSeq = 0;
+  private autoSyncingDetailManagerIds = new Set<number>();
 
   @Input() embedded = false;
   @Input() personalControl = false;
@@ -79,6 +99,7 @@ export class ManagerControlComponent implements OnInit {
   readonly updatingControl = signal(false);
   readonly selectedManagerId = signal<number | null>(null);
   readonly detailPageManagerId = signal<number | null>(null);
+  readonly activePerformanceTip = signal<string | null>(null);
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
 
   readonly managers = computed(() => {
@@ -122,12 +143,13 @@ export class ManagerControlComponent implements OnInit {
     this.load();
   }
 
-  load(options: { silent?: boolean } = {}): void {
+  load(options: { silent?: boolean; sync?: boolean } = {}): void {
     if (!options.silent) {
       this.loading.set(true);
       this.error.set(null);
     }
-    this.api.today().subscribe({
+    const request = options.sync ? this.api.syncToday() : this.api.today();
+    request.subscribe({
       next: (summary) => {
         this.summary.set(summary);
         const selectedId = this.detailPageManagerId() ?? this.selectedManagerId();
@@ -155,6 +177,15 @@ export class ManagerControlComponent implements OnInit {
         }
       }
     });
+  }
+
+  refreshControl(): void {
+    const detailManagerId = this.detailPageManagerId() ?? (this.isPersonalControl() ? this.selectedManagerId() : null);
+    if (detailManagerId) {
+      this.syncDetails(detailManagerId);
+      return;
+    }
+    this.load({ sync: true });
   }
 
   statusLabel(status: ManagerControlStatus): string {
@@ -257,6 +288,13 @@ export class ManagerControlComponent implements OnInit {
     return manager.problems.filter((problem) => problem.group === 'ACTION');
   }
 
+  overdueBreakdown(manager: ManagerControlManager): string {
+    return manager.overdueStatuses
+      .filter((overdue) => overdue.count > 0)
+      .map((overdue) => `${overdue.status} ${overdue.count}`)
+      .join(' · ');
+  }
+
   workloadProblems(manager: ManagerControlManager): ManagerControlProblem[] {
     return manager.problems.filter((problem) => problem.group === 'WORKLOAD');
   }
@@ -284,6 +322,159 @@ export class ManagerControlComponent implements OnInit {
     return '';
   }
 
+  managerPerformanceRows(manager: ManagerControlManager): ManagerPerformanceRow[] {
+    const performance = manager.managerPerformance;
+    if (!performance) {
+      return [];
+    }
+    return [
+      {
+        key: 'problem-sla-rate',
+        label: 'В срок проблем',
+        value: this.percent(performance.problemSlaRate),
+        hint: 'Доля замечаний, которые уже обработаны или пока идут без нарушения норматива 8 часов. Чем выше процент, тем лучше оценка.'
+      },
+      {
+        key: 'client-sla-rate',
+        label: 'В срок клиентов',
+        value: this.percent(performance.clientSlaRate),
+        hint: 'Доля клиентских сообщений, на которые ответили или пока отвечают без нарушения норматива 30 минут.'
+      },
+      {
+        key: 'overdue-rate',
+        label: 'Просрочки',
+        value: `${this.percent(performance.overdueRate)} · ${this.decimal(performance.avgDailyOverdue)} в день`,
+        hint: 'Процент просроченных заказов и среднее число просрочек в день. Чем меньше и свежее просрочки, тем выше балл.'
+      },
+      {
+        key: 'workload',
+        label: 'Заказы / спец.',
+        value: `${this.amount(performance.workloadOrder)} / ${this.amount(performance.workloadWorker)}`,
+        hint: 'Текущая нагрузка менеджера: рабочие заказы и задачи специалистов. Большая нагрузка учитывается при итоговой оценке.'
+      },
+      {
+        key: 'client-replies',
+        label: 'Ответы',
+        value: performance.clientReplyMedianMinutes > 0 ? `${this.decimal(performance.clientReplyMedianMinutes)} / ${this.decimal(performance.clientReplyP90Minutes)} мин.` : '-',
+        hint: 'Медианное и 90-процентильное время ответа клиентам в минутах. Первое число типичное, второе показывает долгие ответы.'
+      },
+      {
+        key: 'backlog',
+        label: 'Хвосты',
+        value: this.amount(performance.backlogCount),
+        hint: 'Количество открытых или повторяющихся незакрытых проблем. Чем больше хвостов, тем сильнее проседает стабильность.'
+      }
+    ];
+  }
+
+  performanceRowTipKey(manager: ManagerControlManager, row: ManagerPerformanceRow): string {
+    return `${manager.managerId}-row-${row.key}`;
+  }
+
+  togglePerformanceRowTip(event: MouseEvent, manager: ManagerControlManager, row: ManagerPerformanceRow): void {
+    event.stopPropagation();
+    const key = this.performanceRowTipKey(manager, row);
+    this.activePerformanceTip.set(this.activePerformanceTip() === key ? null : key);
+  }
+
+  activePerformanceRowHint(manager: ManagerControlManager): string | null {
+    const activeKey = this.activePerformanceTip();
+    if (!activeKey) {
+      return null;
+    }
+    return this.managerPerformanceRows(manager)
+      .find((row) => this.performanceRowTipKey(manager, row) === activeKey)
+      ?.hint ?? null;
+  }
+
+  managerPerformanceFactors(manager: ManagerControlManager): ManagerPerformanceFactor[] {
+    const performance = manager.managerPerformance;
+    if (!performance) {
+      return [];
+    }
+    return [
+      {
+        key: 'problem-speed',
+        label: 'Проблемы',
+        weight: 25,
+        score: performance.problemSpeedScore,
+        hint: 'Скорость решения замечаний из дневного контроля. Открытые задачи не штрафуются жестко, пока они еще внутри SLA 8 часов.'
+      },
+      {
+        key: 'client-response',
+        label: 'Клиенты',
+        weight: 20,
+        score: performance.clientResponseScore,
+        hint: 'Скорость ответа клиентам. Открытые сообщения считаются по текущему времени и штрафуются только по мере приближения или выхода за норматив 30 минут.'
+      },
+      {
+        key: 'overdue-control',
+        label: 'Просрочки',
+        weight: 20,
+        score: performance.overdueControlScore,
+        hint: 'Доля просроченных заказов в рабочей базе и возраст просрочек. Меньше и моложе просрочки дают выше балл.'
+      },
+      {
+        key: 'specialist-risk',
+        label: 'Спец. и риски',
+        weight: 15,
+        score: performance.specialistRiskScore,
+        hint: `Проблемы специалистов считаются по SLA 8 часов, риски по SLA 2 часа. Качество обработки рисков: ${performance.riskQualityScore}/100.`
+      },
+      {
+        key: 'control-discipline',
+        label: 'Контроль',
+        weight: 10,
+        score: performance.controlDisciplineScore,
+        hint: 'Принятие контроля, закрытие дня и отсутствие формального быстрого прокликивания.'
+      },
+      {
+        key: 'stability',
+        label: 'Стабильность',
+        weight: 10,
+        score: performance.stabilityScore,
+        hint: 'Меньше повторных проблем и отложенных задач означает более высокий балл.'
+      }
+    ];
+  }
+
+  performanceTipKey(manager: ManagerControlManager, factor: ManagerPerformanceFactor): string {
+    return `${manager.managerId}-${factor.key}`;
+  }
+
+  togglePerformanceTip(event: MouseEvent, manager: ManagerControlManager, factor: ManagerPerformanceFactor): void {
+    event.stopPropagation();
+    const key = this.performanceTipKey(manager, factor);
+    this.activePerformanceTip.set(this.activePerformanceTip() === key ? null : key);
+  }
+
+  performanceToneClass(score: number | null | undefined): string {
+    const value = score ?? 0;
+    if (value >= 90) {
+      return 'excellent';
+    }
+    if (value >= 75) {
+      return 'good';
+    }
+    if (value >= 55) {
+      return 'warning';
+    }
+    return 'risk';
+  }
+
+  workloadLevelLabel(value: string | null | undefined): string {
+    switch (value) {
+      case 'EXTREME':
+        return 'очень высокая';
+      case 'HIGH':
+        return 'высокая';
+      case 'NORMAL':
+        return 'нормальная';
+      default:
+        return 'низкая';
+    }
+  }
+
   hasActionRows(manager: ManagerControlManager): boolean {
     return this.actionProblems(manager).length > 0
       || manager.overdueStatuses.length > 0
@@ -292,6 +483,32 @@ export class ManagerControlComponent implements OnInit {
 
   hasWorkloadRows(manager: ManagerControlManager): boolean {
     return this.workloadProblems(manager).length > 0 || this.workloadSections(manager).length > 0;
+  }
+
+  workerExplanationRows(manager: ManagerControlManager): ManagerControlWorkerExplanationStats[] {
+    return manager.workerExplanationStats ?? [];
+  }
+
+  hasWorkerExplanationRows(manager: ManagerControlManager): boolean {
+    return this.workerExplanationRows(manager).length > 0;
+  }
+
+  workerExplanationTone(row: ManagerControlWorkerExplanationStats): string {
+    if (row.overdueCount > 0) {
+      return 'red';
+    }
+    if (row.unansweredCount > 0) {
+      return 'yellow';
+    }
+    return 'green';
+  }
+
+  workerAverageResponseLabel(row: ManagerControlWorkerExplanationStats): string {
+    return row.averageResponseMinutes > 0 ? `${this.decimal(row.averageResponseMinutes)} мин.` : '-';
+  }
+
+  workerExplanationSummary(row: ManagerControlWorkerExplanationStats): string {
+    return `${row.requestCount} запросов · ${row.unansweredCount} без ответа · ${row.overdueCount} проср. · ср. ${this.workerAverageResponseLabel(row)}`;
   }
 
   shouldShowDetailItem(item: ManagerControlItemDetail): boolean {
@@ -311,6 +528,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   selectManager(manager: ManagerControlManager): void {
+    if (this.selectedManagerId() !== manager.managerId) {
+      this.activePerformanceTip.set(null);
+    }
     this.selectedManagerId.set(manager.managerId);
   }
 
@@ -325,31 +545,110 @@ export class ManagerControlComponent implements OnInit {
   }
 
   private loadDetails(managerId: number): void {
+    const requestId = ++this.detailRequestSeq;
     this.detail.set(null);
     this.detailError.set(null);
     this.detailLoading.set(true);
     this.preparedContactItemIds.set(new Set());
     this.api.managerDetails(managerId).subscribe({
       next: (detail) => {
-        this.detail.set(detail);
-        this.detailComments.set(Object.fromEntries(
-          detail.items.map((item) => [item.itemId, item.comment ?? ''])
-        ));
-        this.detailConcreteComments.set(Object.fromEntries(
-          detail.items.flatMap((item) => item.examples.map((example) => [
-            example.controlEntityId ?? 0,
-            example.comment ?? ''
-          ])).filter(([id]) => Number(id) > 0)
-        ));
+        if (requestId !== this.detailRequestSeq || detail.managerId !== managerId) {
+          return;
+        }
+        this.applyDetail(detail);
         this.detailLoading.set(false);
+        this.autoSyncUnsyncedDetails(detail);
       },
       error: (err) => {
+        if (requestId !== this.detailRequestSeq) {
+          return;
+        }
         const message = apiErrorMessage(err, 'Детализация менеджера не загрузилась');
         this.detailError.set(message);
         this.detailLoading.set(false);
         this.toast.error('Детализация не загружена', message);
       }
     });
+  }
+
+  private syncDetails(managerId: number): void {
+    const requestId = ++this.detailRequestSeq;
+    this.detailError.set(null);
+    this.detailLoading.set(true);
+    this.preparedContactItemIds.set(new Set());
+    this.api.syncManagerDetails(managerId).subscribe({
+      next: (detail) => {
+        if (requestId !== this.detailRequestSeq || detail.managerId !== managerId) {
+          return;
+        }
+        this.applyDetail(detail);
+        this.detailLoading.set(false);
+        this.toast.success('Контроль обновлен', 'Карточки синхронизированы');
+        this.load({ silent: true });
+      },
+      error: (err) => {
+        if (requestId !== this.detailRequestSeq) {
+          return;
+        }
+        const message = apiErrorMessage(err, 'Контроль не синхронизирован');
+        this.detailError.set(message);
+        this.detailLoading.set(false);
+        this.toast.error('Контроль не обновлен', message);
+      }
+    });
+  }
+
+  private autoSyncUnsyncedDetails(detail: ManagerControlManagerDetail): void {
+    if (!this.needsDetailSync(detail) || this.autoSyncingDetailManagerIds.has(detail.managerId)) {
+      return;
+    }
+    this.autoSyncingDetailManagerIds.add(detail.managerId);
+    const requestId = ++this.detailRequestSeq;
+    this.detailError.set(null);
+    this.detailLoading.set(true);
+    this.api.syncManagerDetails(detail.managerId).subscribe({
+      next: (syncedDetail) => {
+        this.autoSyncingDetailManagerIds.delete(detail.managerId);
+        if (requestId !== this.detailRequestSeq || syncedDetail.managerId !== detail.managerId) {
+          return;
+        }
+        this.applyDetail(syncedDetail);
+        this.detailLoading.set(false);
+        this.load({ silent: true });
+      },
+      error: (err) => {
+        this.autoSyncingDetailManagerIds.delete(detail.managerId);
+        if (requestId !== this.detailRequestSeq) {
+          return;
+        }
+        this.detailLoading.set(false);
+        this.toast.error('Контроль не синхронизирован', apiErrorMessage(err, 'Не удалось автоматически подготовить карточки'));
+      }
+    });
+  }
+
+  private hasUnsyncedConcreteItems(detail: ManagerControlManagerDetail): boolean {
+    return detail.items.some((item) =>
+      item.itemStatus === 'OPEN'
+      && item.examples.some((example) => !example.controlEntityId)
+    );
+  }
+
+  private needsDetailSync(detail: ManagerControlManagerDetail): boolean {
+    return !detail.dailyControlId || this.hasUnsyncedConcreteItems(detail);
+  }
+
+  private applyDetail(detail: ManagerControlManagerDetail): void {
+    this.detail.set(detail);
+    this.detailComments.set(Object.fromEntries(
+      detail.items.map((item) => [item.itemId, item.comment ?? ''])
+    ));
+    this.detailConcreteComments.set(Object.fromEntries(
+      detail.items.flatMap((item) => item.examples.map((example) => [
+        example.controlEntityId ?? 0,
+        example.comment ?? ''
+      ])).filter(([id]) => Number(id) > 0)
+    ));
   }
 
   closeDetails(): void {
@@ -412,8 +711,12 @@ export class ManagerControlComponent implements OnInit {
     if (!detail || this.updatingControl()) {
       return;
     }
+    const controlId = this.requireSyncedControlId(detail);
+    if (!controlId) {
+      return;
+    }
     this.updatingControl.set(true);
-    this.api.markStage(detail.dailyControlId, { stage }).subscribe({
+    this.api.markStage(controlId, { stage }).subscribe({
       next: (updated) => {
         this.detail.set(updated);
         this.updatingControl.set(false);
@@ -432,24 +735,88 @@ export class ManagerControlComponent implements OnInit {
     if (!detail || this.updatingControl()) {
       return;
     }
+    const controlId = this.requireSyncedControlId(detail);
+    if (!controlId) {
+      return;
+    }
     const comment = window.prompt('Комментарий к закрытию дня', '') ?? '';
     this.updatingControl.set(true);
-    this.api.closeDay(detail.dailyControlId, { comment }).subscribe({
+    this.api.closeDay(controlId, { comment }).subscribe({
       next: (result) => {
         this.updatingControl.set(false);
         if (result.closed) {
-          this.toast.success('День закрыт', `Оценка ${result.qualityGrade ?? '-'} · ${result.qualityScore}`);
+          this.toast.success('Контроль закрыт', `Оценка ${result.qualityGrade ?? '-'} · ${result.qualityScore}`);
         } else {
-          this.toast.error('День не закрыт', result.blockers.join('; '));
+          this.toast.error('Контроль не закрыт', result.blockers.join('; '));
         }
         this.reloadCurrentDetails();
         this.load({ silent: true });
       },
       error: (err) => {
         this.updatingControl.set(false);
-        this.toast.error('День не закрыт', apiErrorMessage(err, 'Не удалось закрыть контроль дня'));
+        this.toast.error('Контроль не закрыт', apiErrorMessage(err, 'Не удалось закрыть контроль'));
       }
     });
+  }
+
+  canRunDayControlActions(): boolean {
+    return !!this.detail()?.dailyControlId;
+  }
+
+  dayControlActionTitle(): string {
+    return this.canRunDayControlActions()
+      ? ''
+      : 'Сначала обновите контроль';
+  }
+
+  dayControlHint(): string {
+    const detail = this.detail();
+    if (!detail) {
+      return '';
+    }
+    if (!detail.dailyControlId) {
+      return 'Контроль синхронизируется автоматически. Если действие недоступно, нажмите «Обновить кабинет».';
+    }
+    if (!detail.morningCompletedAt) {
+      return 'Нажмите «Принять контроль», когда начали разбирать карточки. Это фиксирует начало работы менеджера.';
+    }
+    if (!detail.canCloseDay && !detail.closedAt) {
+      return 'Контроль закроется автоматически, когда проблемы будут обработаны или завершится день по правилам контроля.';
+    }
+    return '';
+  }
+
+  controlAutoCloseStatus(): string {
+    const detail = this.detail();
+    if (!detail) {
+      return '';
+    }
+    if (detail.closedAt) {
+      return `Контроль закрыт: ${this.formatDateTime(detail.closedAt)}`;
+    }
+    if (detail.canCloseDay) {
+      return 'Готов к автозакрытию в 20:00-05:00';
+    }
+    return detail.closeBlockers[0] || 'Есть открытые пункты контроля';
+  }
+
+  formatDateTime(value: string | null | undefined): string {
+    if (!value) {
+      return '';
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  private requireSyncedControlId(detail: ManagerControlManagerDetail): number | null {
+    const controlId = detail.dailyControlId;
+    if (typeof controlId === 'number' && Number.isFinite(controlId) && controlId > 0) {
+      return controlId;
+    }
+    this.toast.error('Контроль еще не синхронизирован', 'Сначала нажмите «Обновить кабинет», затем выполните действие');
+    return null;
   }
 
   markItem(itemId: number | null | undefined, actionType: ManagerControlActionType): void {
@@ -496,7 +863,11 @@ export class ManagerControlComponent implements OnInit {
     options: { manualWorkerNotification?: boolean; comment?: string | null } = {}
   ): void {
     const itemId = example.controlEntityId;
-    if (!itemId || this.isConcreteUpdating(itemId)) {
+    if (!itemId) {
+      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем обработайте пункт');
+      return;
+    }
+    if (this.isConcreteUpdating(itemId)) {
       return;
     }
     if (this.requiresPreparedContact(example, actionType)) {
@@ -552,7 +923,11 @@ export class ManagerControlComponent implements OnInit {
 
   sendClientMessage(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
-    if (!itemId || this.isConcreteUpdating(itemId)) {
+    if (!itemId) {
+      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем отправьте сообщение');
+      return;
+    }
+    if (this.isConcreteUpdating(itemId)) {
       return;
     }
     if (!this.canSendClientMessage(example)) {
@@ -587,7 +962,11 @@ export class ManagerControlComponent implements OnInit {
 
   repairConcreteItem(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
-    if (!itemId || this.isConcreteUpdating(itemId)) {
+    if (!itemId) {
+      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем попробуйте починку');
+      return;
+    }
+    if (this.isConcreteUpdating(itemId)) {
       return;
     }
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
@@ -621,7 +1000,7 @@ export class ManagerControlComponent implements OnInit {
     if (itemId && !this.detailConcreteComment(itemId)) {
       this.updateConcreteComment(itemId, this.workerTaskRequestComment(example));
     }
-    this.markConcreteItem(example, 'ACTION_TAKEN');
+    this.markConcreteItem(example, 'ACTION_TAKEN', { manualWorkerNotification: true });
   }
 
   markUnansweredAnswered(example: ManagerControlConcreteItem): void {
@@ -646,7 +1025,11 @@ export class ManagerControlComponent implements OnInit {
   sendUnansweredReply(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
     const message = this.unansweredReplyDraft(itemId).trim();
-    if (!itemId || this.isConcreteUpdating(itemId)) {
+    if (!itemId) {
+      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем отправьте ответ');
+      return;
+    }
+    if (this.isConcreteUpdating(itemId)) {
       return;
     }
     if (!message) {
@@ -693,7 +1076,11 @@ export class ManagerControlComponent implements OnInit {
   }
 
   requestRiskExplanation(example: ManagerControlConcreteItem): void {
-    this.updateRiskIncident(example, 'EXPLANATION_REQUESTED');
+    const itemId = example.controlEntityId;
+    if (itemId && !this.detailConcreteComment(itemId)) {
+      this.updateConcreteComment(itemId, this.workerTaskRequestComment(example));
+    }
+    this.markConcreteItem(example, 'ACTION_TAKEN', { manualWorkerNotification: true });
   }
 
   confirmRiskViolation(example: ManagerControlConcreteItem): void {
@@ -705,7 +1092,7 @@ export class ManagerControlComponent implements OnInit {
     if (itemId && !this.detailConcreteComment(itemId)) {
       this.updateConcreteComment(itemId, this.workerTaskRequestComment(example));
     }
-    this.markConcreteItem(example, 'ACTION_TAKEN');
+    this.markConcreteItem(example, 'ACTION_TAKEN', { manualWorkerNotification: true });
   }
 
   markControlCardViolation(example: ManagerControlConcreteItem): void {
@@ -811,14 +1198,42 @@ export class ManagerControlComponent implements OnInit {
   }
 
   isConcreteActionDisabled(example: ManagerControlConcreteItem, actionType: ManagerControlActionType): boolean {
-    return this.isConcreteUpdating(example.controlEntityId) || this.requiresPreparedContact(example, actionType);
+    return this.isConcreteUpdating(example.controlEntityId)
+      || this.requiresPreparedContact(example, actionType)
+      || this.requiresWorkerExplanationBeforeDone(example, actionType);
   }
 
   concreteActionTitle(example: ManagerControlConcreteItem, actionType: ManagerControlActionType, fallback: string): string {
     if (this.requiresPreparedContact(example, actionType)) {
       return 'Сначала нажмите «Текст» и отправьте сообщение клиенту';
     }
+    if (this.requiresWorkerExplanationBeforeDone(example, actionType)) {
+      return 'Сначала запросите пояснение специалиста';
+    }
+    if (actionType === 'ACTION_TAKEN' && this.canRequestWorkerTask(example) && example.workerExplanationAt) {
+      return 'Ответ специалиста получен, скрыть до повторной проверки';
+    }
     return fallback;
+  }
+
+  markConcreteDone(example: ManagerControlConcreteItem): void {
+    if (this.canRequestWorkerTask(example) && example.workerExplanationAt) {
+      this.markConcreteItem(example, 'ACTION_TAKEN', {
+        comment: this.workerAnswerControlComment(example)
+      });
+      return;
+    }
+    this.markConcreteItem(example, 'ACTION_TAKEN');
+  }
+
+  private requiresWorkerExplanationBeforeDone(
+    example: ManagerControlConcreteItem,
+    actionType: ManagerControlActionType
+  ): boolean {
+    return actionType === 'ACTION_TAKEN'
+      && this.canRequestWorkerTask(example)
+      && this.workerRequiresExplanation(example)
+      && !example.workerExplanationAt;
   }
 
   contactFollowUpHint(example: ManagerControlConcreteItem): string {
@@ -830,11 +1245,15 @@ export class ManagerControlComponent implements OnInit {
         minute: '2-digit'
       })}`;
     }
+    if (this.canRepairAutomationIssue(example)) {
+      return 'сначала починка, если не помогла — ручная отправка';
+    }
     return 'отправит и скроет до повторной проверки';
   }
 
   canRequestWorkerTask(example: ManagerControlConcreteItem): boolean {
-    return example.type === 'BAD_REVIEW_TASK'
+    return example.type === 'RISK'
+      || example.type === 'BAD_REVIEW_TASK'
       || example.type === 'RECOVERY_TASK'
       || example.type === 'PUBLISH_REVIEW'
       || example.type === 'NAGUL_REVIEW'
@@ -849,13 +1268,46 @@ export class ManagerControlComponent implements OnInit {
   }
 
   canShowWorkerClientAction(example: ManagerControlConcreteItem): boolean {
-    return example.type !== 'NAGUL_REVIEW'
-      && example.type !== 'PUBLISH_REVIEW'
+    return this.canRequestWorkerTask(example)
       && !!this.chatUrl(example);
   }
 
   workerTaskRequestComment(example: ManagerControlConcreteItem): string {
-    return `Специалисту отправлен запрос: ${this.workerProblemLabel(example)}. Повторный контроль через 3 ч.`;
+    if (!this.workerRequiresExplanation(example)) {
+      return `Специалисту отправлено напоминание: ${this.workerProblemLabel(example)}. Повторный контроль завтра.`;
+    }
+    return `Специалисту отправлен запрос на пояснение: ${this.workerProblemLabel(example)}. Повторный контроль через 3 ч.`;
+  }
+
+  workerAnswerControlComment(example: ManagerControlConcreteItem): string {
+    const explanation = (example.workerExplanation ?? '').trim();
+    return explanation
+      ? `Ответ специалиста получен: ${explanation}. Под контролем до повторной проверки.`
+      : 'Ответ специалиста получен. Под контролем до повторной проверки.';
+  }
+
+  workerRequestButtonLabel(example: ManagerControlConcreteItem): string {
+    if (!this.workerRequiresExplanation(example)) {
+      return example.workerNotificationSentAt ? 'Напомнили' : 'Напомнить';
+    }
+    if (example.workerExplanationAt) {
+      return 'Ответ получен';
+    }
+    if (this.isWorkerWaitingForExplanation(example)) {
+      return 'Ждем ответ';
+    }
+    if (this.isWorkerNotificationFailed(example)) {
+      return 'Повторить запрос';
+    }
+    return 'Запросить пояснение';
+  }
+
+  workerRequiresExplanation(example: ManagerControlConcreteItem): boolean {
+    if (example.type === 'RISK') {
+      return true;
+    }
+    return this.canRequestWorkerTask(example)
+      && (example.ageDays == null || example.ageDays >= 2);
   }
 
   workerProblemLabel(example: ManagerControlConcreteItem): string {
@@ -1016,11 +1468,17 @@ export class ManagerControlComponent implements OnInit {
     if (!this.canRequestWorkerTask(example)) {
       return '';
     }
+    if (example.workerExplanationAt) {
+      return `ответ специалиста получен ${this.shortDateTime(example.workerExplanationAt)}`;
+    }
+    if (!this.workerRequiresExplanation(example) && example.workerNotificationSentAt) {
+      return `напоминание отправлено ${this.shortDateTime(example.workerNotificationSentAt)}, повтор завтра`;
+    }
     if (example.workerNotificationAcceptedAt) {
-      return `работник принял ${this.shortDateTime(example.workerNotificationAcceptedAt)}`;
+      return `специалист принял ${this.shortDateTime(example.workerNotificationAcceptedAt)}, ждем пояснение`;
     }
     if (example.workerNotificationSentAt) {
-      return `запрос отправлен в группу ${this.shortDateTime(example.workerNotificationSentAt)}, ждем принятия`;
+      return `запрос отправлен в группу ${this.shortDateTime(example.workerNotificationSentAt)}, ждем ответ`;
     }
     if (example.workerNotificationAttemptedAt) {
       const reason = (example.workerNotificationFailureReason ?? '').trim();
@@ -1033,8 +1491,14 @@ export class ManagerControlComponent implements OnInit {
     if (!this.canRequestWorkerTask(example)) {
       return '';
     }
+    if (example.workerExplanationAt) {
+      return 'Ответ получен';
+    }
+    if (!this.workerRequiresExplanation(example) && example.workerNotificationSentAt) {
+      return 'Напомнили';
+    }
     if (example.workerNotificationAcceptedAt) {
-      return 'Принял';
+      return 'Ждем ответ';
     }
     if (example.workerNotificationSentAt) {
       return 'В группу';
@@ -1047,8 +1511,11 @@ export class ManagerControlComponent implements OnInit {
   }
 
   workerNotificationBadgeClass(example: ManagerControlConcreteItem): string {
-    if (example.workerNotificationAcceptedAt) {
+    if (example.workerExplanationAt) {
       return 'accepted';
+    }
+    if (example.workerNotificationAcceptedAt) {
+      return 'sent';
     }
     if (example.workerNotificationSentAt) {
       return 'sent';
@@ -1063,9 +1530,25 @@ export class ManagerControlComponent implements OnInit {
     return this.workerNotificationNote(example) || 'Запрос в группу еще не отправлялся';
   }
 
+  isWorkerNotificationFailed(example: ManagerControlConcreteItem): boolean {
+    return this.canRequestWorkerTask(example)
+      && !!example.workerNotificationAttemptedAt
+      && !example.workerNotificationSentAt
+      && !example.workerExplanationAt;
+  }
+
+  isWorkerWaitingForExplanation(example: ManagerControlConcreteItem): boolean {
+    return this.canRequestWorkerTask(example)
+      && !!example.workerNotificationSentAt
+      && this.workerRequiresExplanation(example)
+      && !example.workerExplanationAt;
+  }
+
   riskExplanationRequested(example: ManagerControlConcreteItem): boolean {
     return example.riskResolutionAction === 'EXPLANATION_REQUESTED'
-      || example.riskResolutionAction === 'WORKER_WARNED';
+      || example.riskResolutionAction === 'WORKER_WARNED'
+      || this.isWorkerWaitingForExplanation(example)
+      || !!example.workerExplanationAt;
   }
 
   riskExplanationButtonLabel(example: ManagerControlConcreteItem): string {
@@ -1185,6 +1668,21 @@ export class ManagerControlComponent implements OnInit {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  private amount(value?: number | null): string {
+    return new Intl.NumberFormat('ru-RU').format(value || 0);
+  }
+
+  private percent(value?: number | null): string {
+    return `${this.decimal(value ?? 0)}%`;
+  }
+
+  private decimal(value?: number | null): string {
+    return new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 1
+    }).format(value ?? 0);
   }
 
   isWaitingForClientExample(example: ManagerControlConcreteItem): boolean {
@@ -1324,7 +1822,15 @@ export class ManagerControlComponent implements OnInit {
   ): void {
     if (actionType === 'ACTION_TAKEN' && this.canRequestWorkerTask(example)) {
       if (example.workerNotificationSentAt) {
-        this.toast.success('Запрос отправлен', 'Сообщение ушло в группу специалиста, ждем кнопку «Принял»');
+        if (!this.workerRequiresExplanation(example)) {
+          this.toast.success('Напоминание отправлено', 'Карточка скрыта до завтрашней проверки');
+          return;
+        }
+        if (example.workerExplanationAt) {
+          this.toast.success('Под контролем', 'Карточка скрыта до повторной проверки');
+          return;
+        }
+        this.toast.success('Запрос отправлен', 'Сообщение ушло в группу специалиста, ждем пояснение');
         return;
       }
       if (example.workerNotificationAttemptedAt) {
@@ -1343,11 +1849,20 @@ export class ManagerControlComponent implements OnInit {
   ): void {
     const incidentId = example.entityId;
     const itemId = example.controlEntityId;
-    if (!incidentId || !itemId || this.isConcreteUpdating(itemId)) {
+    if (!itemId) {
+      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем измените статус риска');
+      return;
+    }
+    if (!incidentId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    const comment = this.detailConcreteComment(itemId).trim();
+    if (this.riskResolutionRequiresComment(example, action) && !comment) {
+      this.toast.error('Нужен комментарий', 'Напишите комментарий по карточке или запросите пояснение специалиста');
       return;
     }
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
-    this.managerApi.setWorkerRiskIncidentResolution(incidentId, action, penaltyPoints).subscribe({
+    this.managerApi.setWorkerRiskIncidentResolution(incidentId, action, penaltyPoints, comment || null).subscribe({
       next: (incident) => {
         this.updatingConcreteItemIds.update((ids) => {
           const next = new Set(ids);
@@ -1370,6 +1885,20 @@ export class ManagerControlComponent implements OnInit {
         this.toast.error('Статус риска не изменен', apiErrorMessage(err, 'Не удалось обновить риск'));
       }
     });
+  }
+
+  canAdminQuickResolveRisk(example: ManagerControlConcreteItem): boolean {
+    return example.type === 'RISK' && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  private riskResolutionRequiresComment(
+    example: ManagerControlConcreteItem,
+    action: WorkerRiskResolutionAction
+  ): boolean {
+    return example.type === 'RISK'
+      && (action === 'VERIFIED' || action === 'FALSE_POSITIVE')
+      && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && !example.workerExplanationAt;
   }
 
   private riskConcretePatch(
@@ -1481,9 +2010,9 @@ export class ManagerControlComponent implements OnInit {
   stageLabel(stage: 'MORNING_DONE' | 'FINAL_CHECK'): string {
     switch (stage) {
       case 'MORNING_DONE':
-        return 'Начало дня отмечено';
+        return 'Контроль принят в работу';
       default:
-        return 'Конец дня отмечен';
+        return 'Контрольная проверка отмечена';
     }
   }
 
@@ -1495,6 +2024,8 @@ export class ManagerControlComponent implements OnInit {
     switch (event.eventType) {
       case 'CONTROL_CREATED':
         return 'Контроль создан';
+      case 'CONTROL_ACCEPTED':
+        return 'Контроль принят';
       case 'ITEM_CREATED':
         return 'Пункт добавлен';
       case 'ITEM_ACTION':
@@ -1508,7 +2039,9 @@ export class ManagerControlComponent implements OnInit {
       case 'CLOSE_ATTEMPT_BLOCKED':
         return 'Закрытие заблокировано';
       case 'CONTROL_CLOSED':
-        return 'День закрыт';
+        return 'Контроль закрыт';
+      case 'CONTROL_REOPENED':
+        return 'Контроль снова открыт';
       case 'QUALITY_RISK':
         return 'Риск качества';
       case 'TEST_NOTIFICATION':
@@ -1522,6 +2055,8 @@ export class ManagerControlComponent implements OnInit {
     switch (event.eventType) {
       case 'CONTROL_CLOSED':
         return 'verified';
+      case 'CONTROL_REOPENED':
+        return 'restart_alt';
       case 'CLOSE_ATTEMPT_BLOCKED':
       case 'QUALITY_RISK':
         return 'warning';

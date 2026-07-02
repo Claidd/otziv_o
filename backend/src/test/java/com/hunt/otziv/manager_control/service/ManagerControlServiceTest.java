@@ -2,8 +2,17 @@ package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
@@ -28,6 +37,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -49,6 +59,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -90,6 +101,16 @@ class ManagerControlServiceTest {
     @Mock
     private ClientMessageOrderStatusService clientMessageOrderStatusService;
     @Mock
+    private ScheduledClientMessageService scheduledClientMessageService;
+    @Mock
+    private ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
+    @Mock
+    private ClientChatMessageSender clientChatMessageSender;
+    @Mock
+    private ClientChatMessageTrackerService clientChatMessageTrackerService;
+    @Mock
+    private ClientChatUnansweredItemRepository clientChatUnansweredItemRepository;
+    @Mock
     private BadReviewTaskService badReviewTaskService;
     @Mock
     private ReviewRecoveryTaskService reviewRecoveryTaskService;
@@ -100,7 +121,15 @@ class ManagerControlServiceTest {
     @Mock
     private OrderRepository orderRepository;
     @Mock
+    private CompanyRepository companyRepository;
+    @Mock
+    private PaymentLinkRepository paymentLinkRepository;
+    @Mock
     private CommonInvoiceRepository commonInvoiceRepository;
+    @Mock
+    private CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+    @Mock
+    private CommonBillingService commonBillingService;
     @Mock
     private WorkerRiskIncidentRepository riskIncidentRepository;
     @Mock
@@ -128,6 +157,14 @@ class ManagerControlServiceTest {
         workerUser.setWorkerTelegramGroupChatId(-100123L);
         worker.setUser(workerUser);
         task.setWorker(worker);
+        Company company = new Company();
+        company.setTitle("Для Вас");
+        Order order = new Order();
+        order.setId(777L);
+        order.setCompany(company);
+        task.setOrder(order);
+        concrete.setReason("Заказ ждет текст клиента, но автоответчик не отправляет напоминания: нет записи в очереди CLIENT_TEXT_REMINDER.");
+        concrete.setComment("Специалисту отправлено напоминание. Повторный контроль завтра.");
         when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
         when(telegramService.sendMessageWithInlineKeyboard(eq(-100123L), any(), any(), any())).thenReturn(true);
 
@@ -151,7 +188,16 @@ class ManagerControlServiceTest {
         assertNull(concrete.getWorkerNotificationFailureReason());
         assertTrue(concrete.getComment().contains("Повторный контроль через 3 ч."));
         assertEquals("ACTION_TAKEN", response.itemStatus());
-        verify(telegramService).sendMessageWithInlineKeyboard(eq(-100123L), any(), any(), any());
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessageWithInlineKeyboard(eq(-100123L), messageCaptor.capture(), any(), any());
+        String message = messageCaptor.getValue();
+        assertTrue(message.contains("Причина: Заказ ждет текст клиента, автонапоминание не ушло."));
+        assertTrue(message.contains("Заказ: #777"));
+        assertTrue(message.contains("Фирма: Для Вас"));
+        assertTrue(message.contains("Что сделать: нажмите кнопку"));
+        assertFalse(message.contains("Менеджер:"));
+        assertFalse(message.contains("CLIENT_TEXT_REMINDER"));
+        assertFalse(message.contains("Повторный контроль"));
     }
 
     @Test
@@ -309,27 +355,27 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void morningStageIsBlockedWhenCriticalActionItemIsStillOpen() {
+    void closeControlIsBlockedWhenActionItemsExistButControlWasNotAccepted() {
         ManagerDailyControl control = controlReadyForClose();
         control.setMorningCompletedAt(null);
         ManagerDailyControlItem parent = actionParent(control);
+        parent.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        parent.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        parent.setComment("Взято в работу");
         when(dailyControlRepository.findById(control.getId())).thenReturn(Optional.of(control));
         when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
         when(dailyControlItemRepository.findByControl(control)).thenReturn(List.of(parent));
-        when(dailyControlConcreteItemRepository.findByParentItemIn(any())).thenReturn(List.of());
 
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> service.markStage(
+        ManagerControlCloseResponse response = service.closeDay(
                 control.getId(),
-                new ManagerControlStageRequest("MORNING_DONE", null),
+                new ManagerControlCloseRequest("Пробую закрыть"),
                 principal(),
                 adminAuth()
-        ));
+        );
 
-        assertEquals(400, ex.getStatusCode().value());
-        assertTrue(ex.getReason().contains("Утренний обход нельзя завершить"));
+        assertFalse(response.closed());
+        assertTrue(response.blockers().stream().anyMatch(blocker -> blocker.contains("Контроль не принят")));
         assertNull(control.getMorningCompletedAt());
-        verify(dailyControlRepository, never()).save(any());
-        verify(dailyControlEventRepository, never()).save(any());
     }
 
     @Test
@@ -349,33 +395,32 @@ class ManagerControlServiceTest {
         ));
 
         assertEquals(400, ex.getStatusCode().value());
-        assertTrue(ex.getReason().contains("Сначала закройте утренний обход"));
+        assertTrue(ex.getReason().contains("Сначала отметьте начало дня"));
         assertNull(control.getDayCheckedAt());
         verify(dailyControlRepository, never()).save(any());
         verify(dailyControlEventRepository, never()).save(any());
     }
 
     @Test
-    void finalStageIsBlockedUntilDayStageIsCompleted() {
+    void closeControlDoesNotRequireSeparateFinalStage() {
         ManagerDailyControl control = controlReadyForClose();
-        control.setDayCheckedAt(null);
         control.setFinalCheckedAt(null);
         when(dailyControlRepository.findById(control.getId())).thenReturn(Optional.of(control));
         when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
         when(dailyControlItemRepository.findByControl(control)).thenReturn(List.of());
+        when(dailyControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(dailyControlEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> service.markStage(
+        ManagerControlCloseResponse response = service.closeDay(
                 control.getId(),
-                new ManagerControlStageRequest("FINAL_CHECK", null),
+                new ManagerControlCloseRequest("Закрываю"),
                 principal(),
                 adminAuth()
-        ));
+        );
 
-        assertEquals(400, ex.getStatusCode().value());
-        assertTrue(ex.getReason().contains("Сначала отметьте дневной контроль"));
-        assertNull(control.getFinalCheckedAt());
-        verify(dailyControlRepository, never()).save(any());
-        verify(dailyControlEventRepository, never()).save(any());
+        assertTrue(response.closed());
+        assertNotNull(control.getClosedAt());
+        assertNotNull(control.getFinalCheckedAt());
     }
 
     @Test
@@ -411,7 +456,7 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void managerDetailsLoadsPublicationRemarksOnlyBeforeToday() {
+    void syncManagerDetailsLoadsPublicationRemarksOnlyBeforeToday() {
         LocalDate today = LocalDate.now();
         LocalDate overdueDate = today.minusDays(1);
         Manager manager = managerWithWorker(11L, 21L);
@@ -431,7 +476,6 @@ class ManagerControlServiceTest {
         when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
         when(dailyControlRepository.findByControlDateAndManager(today, manager)).thenReturn(Optional.of(control));
         when(dailyControlItemRepository.findByControl(control)).thenReturn(List.of(publish));
-        when(dailyControlItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(dailyControlRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(dailyControlConcreteItemRepository.findByControlAndFollowUpAtAfter(eq(control), any())).thenReturn(List.of());
         when(orderRepository.summarizeManagerControlOverdueOrdersByManager(
@@ -456,7 +500,7 @@ class ManagerControlServiceTest {
         when(reviewRepository.findManagerControlPublishReviewsByWorkerIds(eq(List.of(21L)), eq(overdueDate), any()))
                 .thenReturn(List.of());
 
-        service.managerDetails(11L, principal(), adminAuth());
+        service.syncManagerDetails(11L, principal(), adminAuth());
 
         verify(reviewService).countOrdersByWorkerIdsAndStatusPublish(List.of(21L), overdueDate);
         verify(reviewService, never()).countOrdersByWorkerIdsAndStatusPublish(List.of(21L), today);

@@ -162,6 +162,20 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     @Override
     @Transactional
+    public int reassignPendingTasksForOrder(Long orderId, Worker worker) {
+        if (orderId == null || worker == null) {
+            return 0;
+        }
+        int updated = badReviewTaskRepository.reassignWorkerByOrderIdAndStatus(orderId, BadReviewTaskStatus.NEW, worker);
+        if (updated > 0) {
+            log.info("Перекинули ожидающие плохие задачи заказа {} на работника {}: {}",
+                    orderId, worker.getId(), updated);
+        }
+        return updated;
+    }
+
+    @Override
+    @Transactional
     public BadReviewTask completeTask(Long taskId) {
         BadReviewTask task = requireTask(taskId);
         if (task.getStatus() != BadReviewTaskStatus.NEW) {
@@ -725,10 +739,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     }
 
     private Worker resolveWorker(Order order, Review review) {
-        if (review != null && review.getWorker() != null) {
-            return review.getWorker();
+        if (order != null && order.getWorker() != null) {
+            return order.getWorker();
         }
-        return order != null ? order.getWorker() : null;
+        return review != null ? review.getWorker() : null;
     }
 
     private String botLogin(Bot bot) {

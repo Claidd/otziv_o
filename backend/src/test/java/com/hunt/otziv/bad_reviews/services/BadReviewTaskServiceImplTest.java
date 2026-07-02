@@ -26,6 +26,7 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -164,6 +165,28 @@ class BadReviewTaskServiceImplTest {
         verify(badReviewTaskRepository).save(argThat(task ->
                 BigDecimal.valueOf(250).compareTo(task.getPrice()) == 0
         ));
+    }
+
+    @Test
+    void createTasksForUnpaidOrderAssignsCurrentOrderWorkerWhenReviewHasOldWorker() {
+        Worker oldWorker = worker(101L, "old-worker");
+        Worker newWorker = worker(202L, "new-worker");
+        Order order = order(16L);
+        order.setWorker(newWorker);
+        Review review = Review.builder()
+                .id(91L)
+                .publish(true)
+                .text("опубликованный текст")
+                .worker(oldWorker)
+                .build();
+
+        when(reviewRepository.getAllByOrderId(16L)).thenReturn(List.of(review));
+        when(badReviewTaskRepository.existsByOrderIdAndSourceReviewIdAndStatusIn(eq(16L), eq(91L), any()))
+                .thenReturn(false);
+
+        assertEquals(1, service.createTasksForUnpaidOrder(order));
+
+        verify(badReviewTaskRepository).save(argThat(task -> task.getWorker() == newWorker));
     }
 
     @Test
@@ -778,5 +801,15 @@ class BadReviewTaskServiceImplTest {
         order.setCompany(company);
         order.setSum(BigDecimal.valueOf(1000));
         return order;
+    }
+
+    private Worker worker(Long id, String username) {
+        User user = new User();
+        user.setId(id + 1000);
+        user.setUsername(username);
+        Worker worker = new Worker();
+        worker.setId(id);
+        worker.setUser(user);
+        return worker;
     }
 }

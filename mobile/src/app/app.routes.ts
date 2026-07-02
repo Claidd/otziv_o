@@ -75,6 +75,12 @@ export const routes: Routes = [
         data: { roles: rolesForAction(MOBILE_SECTIONS.commonBilling, MOBILE_ACTIONS.view) }
       },
       {
+        path: 'control',
+        loadComponent: () => import('./features/manager-control.page').then((m) => m.ManagerControlPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view) }
+      },
+      {
         path: 'review-check/:orderDetailId',
         loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage),
         canActivate: [roleGuard],

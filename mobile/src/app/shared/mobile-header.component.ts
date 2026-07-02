@@ -24,6 +24,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
   { label: 'Компании', icon: 'business', path: '/tabs/companies', roles: rolesForAction(MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view) },
   { label: 'Заказы', icon: 'inventory_2', path: '/tabs/orders', roles: rolesForAction(MOBILE_SECTIONS.orders, MOBILE_ACTIONS.view) },
   { label: 'Общие счета', icon: 'receipt_long', path: '/tabs/common-billing', roles: rolesForAction(MOBILE_SECTIONS.commonBilling, MOBILE_ACTIONS.view) },
+  { label: 'Контроль', icon: 'fact_check', path: '/tabs/control', roles: rolesForAction(MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view) },
   { label: 'Специалист', icon: 'engineering', path: '/tabs/worker', roles: rolesForAction(MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view) },
   { label: 'Риски', icon: 'policy', path: '/tabs/worker-risk', roles: rolesForAction(MOBILE_SECTIONS.workerRisk, MOBILE_ACTIONS.view) },
   { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) },

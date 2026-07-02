@@ -3,8 +3,11 @@ package com.hunt.otziv.manager_control.service;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -33,6 +36,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 public class ManagerControlWorkerTaskTelegramCallbackService {
 
     public static final String CALLBACK_PREFIX = "mc-task-ack:";
+    public static final String EXPLANATION_CALLBACK_PREFIX = "mc-task-explain:";
     public static final String RISK_EXPLANATION_CALLBACK_PREFIX = "mc-task-risk-explain:";
     public static final String SOURCE_WORKER_TASK_REQUEST = "MANAGER_CONTROL_WORKER_TASK_REQUEST";
 
@@ -42,6 +46,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ReviewRepository reviewRepository;
+    private final OrderRepository orderRepository;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final UserRepository userRepository;
     private final TelegramService telegramService;
@@ -50,6 +55,13 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         InlineKeyboardButton button = new InlineKeyboardButton();
         button.setText("Принял");
         button.setCallbackData(CALLBACK_PREFIX + concreteItemId);
+        return button;
+    }
+
+    public static InlineKeyboardButton explanationButton(Long concreteItemId) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText("Пояснить");
+        button.setCallbackData(EXPLANATION_CALLBACK_PREFIX + concreteItemId);
         return button;
     }
 
@@ -66,28 +78,21 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
             return Optional.empty();
         }
 
+        boolean explanationCallback = callbackQuery.getData().startsWith(EXPLANATION_CALLBACK_PREFIX);
         boolean riskExplanationCallback = callbackQuery.getData().startsWith(RISK_EXPLANATION_CALLBACK_PREFIX);
         boolean acceptCallback = callbackQuery.getData().startsWith(CALLBACK_PREFIX);
-        if (!riskExplanationCallback && !acceptCallback) {
+        if (!explanationCallback && !riskExplanationCallback && !acceptCallback) {
             return Optional.empty();
         }
 
         Long concreteItemId = parseConcreteItemId(
                 callbackQuery.getData(),
-                riskExplanationCallback ? RISK_EXPLANATION_CALLBACK_PREFIX : CALLBACK_PREFIX
+                riskExplanationCallback
+                        ? RISK_EXPLANATION_CALLBACK_PREFIX
+                        : explanationCallback ? EXPLANATION_CALLBACK_PREFIX : CALLBACK_PREFIX
         );
         if (concreteItemId == null) {
             return Optional.of("Задача не найдена");
-        }
-
-        Long telegramUserId = callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId();
-        if (telegramUserId == null) {
-            return Optional.of("Не удалось определить пользователя");
-        }
-
-        User actor = userService.findByChatId(telegramUserId).orElse(null);
-        if (actor == null || !actor.isActive()) {
-            return Optional.of("Telegram не привязан к пользователю");
         }
 
         ManagerDailyControlConcreteItem item = concreteItemRepository.findById(concreteItemId).orElse(null);
@@ -96,19 +101,114 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         }
 
         User worker = workerUserForTask(item);
-        if (worker == null || !Objects.equals(worker.getId(), actor.getId())) {
+        if (worker == null || worker.getId() == null) {
+            return Optional.of("Специалист карточки не найден");
+        }
+
+        Long callbackChatId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId();
+        boolean workerGroupClick = isWorkerGroupForTask(worker, callbackChatId);
+        Long telegramUserId = callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId();
+        User actor = telegramUserId == null
+                ? null
+                : userService.findByChatId(telegramUserId).filter(User::isActive).orElse(null);
+        if (actor == null) {
+            if (!workerGroupClick) {
+                return Optional.of("Telegram не привязан к пользователю");
+            }
+            actor = worker;
+        }
+
+        if (!Objects.equals(worker.getId(), actor.getId()) && !workerGroupClick) {
             return Optional.of("Эта кнопка предназначена назначенному работнику");
         }
 
-        acceptTask(item, actor);
+        if (acceptCallback) {
+            acceptTask(item, actor, true);
+            return Optional.of("Принято. Менеджер увидит подтверждение.");
+        }
 
         if (isRiskTask(item)) {
+            acceptTask(item, actor, false);
             return requestRiskExplanation(item, actor, callbackQuery);
         }
-        return Optional.of("Принято. Менеджер увидит подтверждение.");
+        acceptTask(item, actor, false);
+        return requestGeneralExplanation(item, actor, callbackQuery);
     }
 
-    private void acceptTask(ManagerDailyControlConcreteItem item, User actor) {
+    @Transactional
+    public boolean handleWorkerGroupTextMessage(long chatId, Long actorTelegramId, String messageText) {
+        if (safe(messageText).isBlank()) {
+            return false;
+        }
+        User actor = actorTelegramId == null
+                ? null
+                : userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
+        User groupWorker = workerUserForGroup(chatId);
+        if ((actor == null || actor.getId() == null) && (groupWorker == null || groupWorker.getId() == null)) {
+            return false;
+        }
+        if (actor != null
+                && actor.getWorkerTelegramGroupChatId() != null
+                && !Objects.equals(actor.getWorkerTelegramGroupChatId(), chatId)) {
+            return false;
+        }
+        ManagerDailyControlConcreteItem item = pendingExplanationItem(actor, groupWorker);
+        if (item == null) {
+            return false;
+        }
+        User explanationAuthor = actor == null || actor.getId() == null ? groupWorker : actor;
+        item.setWorkerExplanation(limit(messageText, 1000));
+        item.setWorkerExplanationAt(LocalDateTime.now());
+        item.setWorkerExplanationByUserId(explanationAuthor.getId());
+        item.setWorkerNotificationFailureReason(null);
+        item.setStatus(ManagerDailyControlItemStatus.OPEN);
+        item.setActionType(null);
+        item.setResolvedAt(null);
+        item.setFollowUpAt(null);
+        reopenParentForManagerReview(item);
+        concreteItemRepository.save(item);
+        personalReminderService.deleteSystemReminderBySource(groupWorker == null ? explanationAuthor : groupWorker, SOURCE_WORKER_TASK_REQUEST, item.getId());
+        telegramService.sendMessage(chatId,
+                "Пояснение принято. Менеджер увидит его в карточке контроля."
+                        + "\n\nСтатус: ответ получен"
+                        + "\nКарточка: " + safe(item.getTitle()));
+        return true;
+    }
+
+    private ManagerDailyControlConcreteItem pendingExplanationItem(User actor, User groupWorker) {
+        ManagerDailyControlConcreteItem item = actor == null || actor.getId() == null
+                ? null
+                : concreteItemRepository
+                .findByWorkerNotificationAcceptedByUserIdAndWorkerExplanationRequestedAtIsNotNullAndWorkerExplanationAtIsNullOrderByWorkerExplanationPromptedAtDesc(actor.getId())
+                .stream()
+                .filter(candidate -> !isRiskTask(candidate))
+                .findFirst()
+                .orElse(null);
+        if (item != null || groupWorker == null || groupWorker.getId() == null) {
+            return item;
+        }
+        return concreteItemRepository
+                .findByWorkerNotificationUserIdAndWorkerExplanationRequestedAtIsNotNullAndWorkerExplanationAtIsNullOrderByWorkerExplanationPromptedAtDesc(groupWorker.getId())
+                .stream()
+                .filter(candidate -> !isRiskTask(candidate))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void reopenParentForManagerReview(ManagerDailyControlConcreteItem item) {
+        ManagerDailyControlItem parent = item == null ? null : item.getParentItem();
+        if (parent == null) {
+            return;
+        }
+        parent.setStatus(ManagerDailyControlItemStatus.OPEN);
+        parent.setActionType(null);
+        parent.setResolvedAt(null);
+        if (item.getControl() != null) {
+            item.getControl().setLastActivityAt(LocalDateTime.now());
+        }
+    }
+
+    private void acceptTask(ManagerDailyControlConcreteItem item, User actor, boolean deleteReminder) {
         if (item.getWorkerNotificationAcceptedAt() != null) {
             return;
         }
@@ -116,7 +216,66 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         item.setWorkerNotificationAcceptedByUserId(actor.getId());
         item.setWorkerNotificationFailureReason(null);
         concreteItemRepository.save(item);
-        personalReminderService.deleteSystemReminderBySource(actor, SOURCE_WORKER_TASK_REQUEST, item.getId());
+        if (deleteReminder) {
+            personalReminderService.deleteSystemReminderBySource(actor, SOURCE_WORKER_TASK_REQUEST, item.getId());
+        }
+    }
+
+    private Optional<String> requestGeneralExplanation(
+            ManagerDailyControlConcreteItem item,
+            User actor,
+            CallbackQuery callbackQuery
+    ) {
+        if (item.getWorkerExplanationAt() != null) {
+            return Optional.of("Пояснение уже отправлено");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (item.getWorkerExplanationRequestedAt() == null) {
+            item.setWorkerExplanationRequestedAt(now);
+        }
+        item.setWorkerExplanationPromptedAt(now);
+        item.setWorkerNotificationAcceptedAt(
+                item.getWorkerNotificationAcceptedAt() == null ? now : item.getWorkerNotificationAcceptedAt()
+        );
+        item.setWorkerNotificationAcceptedByUserId(actor.getId());
+        item.setWorkerNotificationFailureReason(null);
+        concreteItemRepository.save(item);
+
+        Long chatId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId();
+        Integer messageId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getMessageId();
+        if (chatId == null) {
+            chatId = actor.getWorkerTelegramGroupChatId() == null
+                    ? actor.getTelegramChatId()
+                    : actor.getWorkerTelegramGroupChatId();
+        }
+        if (chatId != null) {
+            editGeneralTaskMessageAsAccepted(chatId, messageId, item);
+            telegramService.sendForceReplyMessage(chatId,
+                    "Принято, нужен комментарий."
+                            + "\nНапишите пояснение следующим сообщением в эту группу."
+                            + "\nКарточка: " + safe(item.getTitle())
+                            + "\nПричина: " + safe(item.getReason()));
+        }
+
+        return Optional.of("Напишите пояснение следующим сообщением");
+    }
+
+    private void editGeneralTaskMessageAsAccepted(
+            Long chatId,
+            Integer messageId,
+            ManagerDailyControlConcreteItem item
+    ) {
+        if (chatId == null || messageId == null) {
+            return;
+        }
+        String text = "Менеджер запросил пояснение."
+                + "\nСтатус: принято, нужен комментарий"
+                + "\nКарточка: " + safe(item.getTitle())
+                + "\n" + safe(item.getSubtitle())
+                + "\n" + safe(item.getReason())
+                + "\n\nНапишите пояснение следующим сообщением в эту группу.";
+        telegramService.editMessageText(chatId, messageId, text, null, null);
     }
 
     private Optional<String> requestRiskExplanation(
@@ -136,6 +295,17 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        if (item.getWorkerExplanationRequestedAt() == null) {
+            item.setWorkerExplanationRequestedAt(now);
+        }
+        item.setWorkerExplanationPromptedAt(now);
+        item.setWorkerNotificationAcceptedAt(
+                item.getWorkerNotificationAcceptedAt() == null ? now : item.getWorkerNotificationAcceptedAt()
+        );
+        item.setWorkerNotificationAcceptedByUserId(actor.getId());
+        item.setWorkerNotificationFailureReason(null);
+        concreteItemRepository.save(item);
+
         incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
         if (incident.getExplanationRequestedAt() == null) {
             incident.setExplanationRequestedAt(now);
@@ -155,7 +325,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         }
         if (chatId != null) {
             editTaskMessageAsAccepted(chatId, messageId, item, incident);
-            telegramService.sendMessage(chatId,
+            telegramService.sendForceReplyMessage(chatId,
                     "Принято, нужен комментарий."
                             + "\nНапишите пояснение следующим сообщением."
                             + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
@@ -198,6 +368,20 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         return "RISK".equals(safe(item == null ? null : item.getEntityType()));
     }
 
+    private boolean isWorkerGroupForTask(User worker, Long chatId) {
+        return worker != null
+                && chatId != null
+                && worker.getWorkerTelegramGroupChatId() != null
+                && Objects.equals(worker.getWorkerTelegramGroupChatId(), chatId);
+    }
+
+    private User workerUserForGroup(long chatId) {
+        return userRepository.findAllByWorkerTelegramGroupChatIdOrderById(chatId).stream()
+                .filter(user -> user != null && user.isActive() && user.getId() != null)
+                .findFirst()
+                .orElse(null);
+    }
+
     private User workerUserForTask(ManagerDailyControlConcreteItem item) {
         if (item == null || item.getEntityId() == null) {
             return null;
@@ -221,6 +405,19 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                     }
                     yield worker == null ? null : worker.getUser();
                 }
+                case "NAGUL_REVIEW" -> {
+                    Review review = reviewRepository.findById(item.getEntityId()).orElse(null);
+                    Worker worker = review == null ? null : review.getWorker();
+                    if (worker == null) {
+                        Order order = review == null || review.getOrderDetails() == null ? null : review.getOrderDetails().getOrder();
+                        worker = order == null ? null : order.getWorker();
+                    }
+                    yield worker == null ? null : worker.getUser();
+                }
+                case "WORKER_ORDER_NEW", "WORKER_ORDER_CORRECT" -> {
+                    Order order = orderRepository.findById(item.getEntityId()).orElse(null);
+                    yield order == null || order.getWorker() == null ? null : order.getWorker().getUser();
+                }
                 case "RISK" -> {
                     WorkerRiskIncident incident = riskIncidentRepository.findById(item.getEntityId()).orElse(null);
                     yield incident == null || incident.getWorkerUserId() == null
@@ -236,6 +433,14 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String limit(String value, int maxLength) {
+        String text = safe(value);
+        if (text.length() <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength);
     }
 
     private String valueOrDash(Object value) {

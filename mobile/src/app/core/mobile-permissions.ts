@@ -36,6 +36,7 @@ export const MOBILE_SECTIONS = {
   companies: 'companies',
   orders: 'orders',
   commonBilling: 'commonBilling',
+  managerControl: 'managerControl',
   archive: 'archive',
   workerRisk: 'workerRisk',
   worker: 'worker',
@@ -95,6 +96,11 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     create: MOBILE_ROLES.manager,
     edit: MOBILE_ROLES.manager,
     delete: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.manager
+  },
+  managerControl: {
+    view: MOBILE_ROLES.manager,
+    edit: MOBILE_ROLES.manager,
     manage: MOBILE_ROLES.manager
   },
   archive: {

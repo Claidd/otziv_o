@@ -64,6 +64,17 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     @Query("DELETE FROM BadReviewTask t WHERE t.order.id = :orderId AND t.status = :status")
     int deleteAllByOrderIdAndStatus(@Param("orderId") Long orderId, @Param("status") BadReviewTaskStatus status);
 
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE BadReviewTask t
+        SET t.worker = :worker
+        WHERE t.order.id = :orderId
+          AND t.status = :status
+    """)
+    int reassignWorkerByOrderIdAndStatus(@Param("orderId") Long orderId,
+                                         @Param("status") BadReviewTaskStatus status,
+                                         @Param("worker") Worker worker);
+
     boolean existsByOrderIdAndSourceReviewIdAndStatusIn(
             Long orderId,
             Long sourceReviewId,

@@ -85,6 +85,9 @@ public class ManagerDailyControlConcreteItem {
     @Column(name = "worker_notification_attempted_at")
     private LocalDateTime workerNotificationAttemptedAt;
 
+    @Column(name = "worker_notification_user_id")
+    private Long workerNotificationUserId;
+
     @Column(name = "worker_notification_sent_at")
     private LocalDateTime workerNotificationSentAt;
 
@@ -96,6 +99,21 @@ public class ManagerDailyControlConcreteItem {
 
     @Column(name = "worker_notification_failure_reason", length = 500)
     private String workerNotificationFailureReason;
+
+    @Column(name = "worker_explanation_requested_at")
+    private LocalDateTime workerExplanationRequestedAt;
+
+    @Column(name = "worker_explanation_prompted_at")
+    private LocalDateTime workerExplanationPromptedAt;
+
+    @Column(name = "worker_explanation", length = 1000)
+    private String workerExplanation;
+
+    @Column(name = "worker_explanation_at")
+    private LocalDateTime workerExplanationAt;
+
+    @Column(name = "worker_explanation_by_user_id")
+    private Long workerExplanationByUserId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "item_status", nullable = false, length = 30)

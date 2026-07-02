@@ -78,21 +78,13 @@ public class SpecialistTransferService {
                 )
                 """, params);
 
-        int activeOrderCount = jdbc.update("""
-                UPDATE orders o
-                SET o.order_worker = :toWorkerId
-                WHERE o.order_worker = :fromWorkerId
-                  AND o.order_company IN (:companyIds)
-                  AND o.order_complete = 0
-                """, params);
-
         int unpublishedReviewCount = jdbc.update("""
                 UPDATE reviews r
                 JOIN order_details od ON od.order_detail_id = r.review_order_details
                 JOIN orders o ON o.order_id = od.order_detail_order
                 SET r.review_worker = :toWorkerId
-                WHERE r.review_worker = :fromWorkerId
-                  AND r.review_publish = 0
+                WHERE r.review_publish = 0
+                  AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
                 """, params);
@@ -101,10 +93,18 @@ public class SpecialistTransferService {
                 UPDATE bad_review_tasks brt
                 JOIN orders o ON o.order_id = brt.bad_review_task_order
                 SET brt.bad_review_task_worker = :toWorkerId
-                WHERE brt.bad_review_task_worker = :fromWorkerId
-                  AND brt.bad_review_task_status = 'NEW'
+                WHERE brt.bad_review_task_status = 'NEW'
+                  AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
+                """, params);
+
+        int activeOrderCount = jdbc.update("""
+                UPDATE orders o
+                SET o.order_worker = :toWorkerId
+                WHERE o.order_worker = :fromWorkerId
+                  AND o.order_company IN (:companyIds)
+                  AND o.order_complete = 0
                 """, params);
 
         int companyLinksRemoved = jdbc.update("""
@@ -344,8 +344,8 @@ public class SpecialistTransferService {
                 FROM reviews r
                 JOIN order_details od ON od.order_detail_id = r.review_order_details
                 JOIN orders o ON o.order_id = od.order_detail_order
-                WHERE r.review_worker = :fromWorkerId
-                  AND r.review_publish = 0
+                WHERE r.review_publish = 0
+                  AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
                 """, params);
@@ -353,8 +353,8 @@ public class SpecialistTransferService {
                 SELECT COUNT(*)
                 FROM bad_review_tasks brt
                 JOIN orders o ON o.order_id = brt.bad_review_task_order
-                WHERE brt.bad_review_task_worker = :fromWorkerId
-                  AND brt.bad_review_task_status = 'NEW'
+                WHERE brt.bad_review_task_status = 'NEW'
+                  AND o.order_worker = :fromWorkerId
                   AND o.order_complete = 0
                   AND o.order_company IN (:companyIds)
                 """, params);

@@ -259,6 +259,31 @@ export interface ManualPaymentTaskResponse {
   routable: boolean;
 }
 
+export interface ManualPaymentRecipientMonthlySummaryItem {
+  manualRecipientName: string;
+  manualPhone?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  paymentProfileName?: string | null;
+  manualSource?: ManualPaymentSource | string | null;
+  manualPaymentType?: ManualPaymentType | string | null;
+  paymentCount: number;
+  amountKopecks: number;
+  firstConfirmedAt?: string | null;
+  lastConfirmedAt?: string | null;
+}
+
+export interface ManualPaymentRecipientMonthlySummaryResponse {
+  month: string;
+  from: string;
+  toExclusive: string;
+  totalRecipients: number;
+  totalPayments: number;
+  totalAmountKopecks: number;
+  totalAmount: number;
+  items: ManualPaymentRecipientMonthlySummaryItem[];
+}
+
 export interface CreateManualPaymentTaskRequest {
   managerId?: number | null;
   manualPaymentType?: ManualPaymentType | string | null;
@@ -548,6 +573,14 @@ export class PaymentsApi {
   getAdminManualPaymentTasks(): Observable<ManualPaymentTaskResponse[]> {
     return this.http.get<ManualPaymentTaskResponse[]>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-tasks`
+    );
+  }
+
+  getAdminManualRecipientMonthlySummary(month: string): Observable<ManualPaymentRecipientMonthlySummaryResponse> {
+    const params = month ? new HttpParams().set('month', month) : new HttpParams();
+    return this.http.get<ManualPaymentRecipientMonthlySummaryResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-recipients/monthly-summary`,
+      { params }
     );
   }
 

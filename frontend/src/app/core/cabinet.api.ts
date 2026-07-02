@@ -182,12 +182,52 @@ export interface ScoreUser {
   leadsNew?: number | null;
   leadsInWork?: number | null;
   percentInWork?: number | null;
+  managerPerformance?: ManagerPerformanceScore | null;
+}
+
+export interface ManagerPerformanceScore {
+  managerId: number;
+  managerUserId?: number | null;
+  performanceScore: number;
+  loadAdjustedPerformanceScore: number;
+  grade: string;
+  workloadIndex: number;
+  workloadLevel: 'LOW' | 'NORMAL' | 'HIGH' | 'EXTREME' | string;
+  workloadTotal: number;
+  workloadOrder: number;
+  workloadWorker: number;
+  actionTotal: number;
+  incomingProblemCount: number;
+  backlogCount: number;
+  avgDailyWorkload: number;
+  avgDailyOverdue: number;
+  openCount: number;
+  handledCount: number;
+  problemSlaRate: number;
+  clientSlaRate: number;
+  overdueRate: number;
+  averageOverdueAgeDays: number;
+  clientReplyMedianMinutes: number;
+  clientReplyP90Minutes: number;
+  riskResolutionAvgHours: number;
+  reopenRate: number;
+  controlAcceptedCount: number;
+  controlClosedCount: number;
+  fastClickCount: number;
+  problemSpeedScore: number;
+  clientResponseScore: number;
+  overdueControlScore: number;
+  specialistRiskScore: number;
+  riskQualityScore: number;
+  controlDisciplineScore: number;
+  stabilityScore: number;
 }
 
 export interface ScoreResponse {
   date: string;
   user: UserLk;
   financeVisible: boolean;
+  managerPerformanceVisible?: boolean;
   groups: {
     managers: ScoreUser[];
     marketologs: ScoreUser[];

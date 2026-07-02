@@ -1,6 +1,7 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -51,6 +52,9 @@ class WorkerRiskTelegramCallbackServiceTest {
     @Mock
     private TelegramService telegramService;
 
+    @Mock
+    private ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
+
     private WorkerRiskTelegramCallbackService service;
 
     @BeforeEach
@@ -60,7 +64,8 @@ class WorkerRiskTelegramCallbackServiceTest {
                 scoreLedgerRepository,
                 userService,
                 personalReminderService,
-                telegramService
+                telegramService,
+                managerControlConcreteItemRepository
         );
     }
 
@@ -167,7 +172,7 @@ class WorkerRiskTelegramCallbackServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
         assertEquals(WorkerRiskIncidentStatus.OPEN, captor.getValue().getStatus());
-        verify(telegramService).sendMessage(eq(-100123L), any());
+        verify(telegramService).sendForceReplyMessage(eq(-100123L), any());
     }
 
     @Test

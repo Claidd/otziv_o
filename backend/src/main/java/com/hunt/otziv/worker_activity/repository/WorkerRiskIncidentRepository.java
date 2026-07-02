@@ -63,6 +63,23 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             WorkerRiskIncidentStatus status
     );
 
+    @Query("""
+            SELECT i
+            FROM WorkerRiskIncident i
+            WHERE i.workerUserId IN :workerUserIds
+              AND (
+                    i.createdAt BETWEEN :from AND :to
+                    OR i.resolvedAt BETWEEN :from AND :to
+                    OR i.status = :openStatus
+              )
+            """)
+    List<WorkerRiskIncident> findPerformanceIncidents(
+            @Param("workerUserIds") Collection<Long> workerUserIds,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("openStatus") WorkerRiskIncidentStatus openStatus
+    );
+
     Optional<WorkerRiskIncident> findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
             Long workerUserId,
             WorkerRiskIncidentStatus status,

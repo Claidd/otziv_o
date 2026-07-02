@@ -414,6 +414,16 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     """)
     List<Review> getAllByOrderId(@Param("orderId") Long orderId);
 
+    @Modifying(flushAutomatically = true)
+    @Query("""
+        UPDATE Review r
+        SET r.worker = :worker
+        WHERE r.orderDetails.order.id = :orderId
+          AND r.publish = false
+    """)
+    int reassignWorkerByOrderId(@Param("orderId") Long orderId,
+                                @Param("worker") Worker worker);
+
     @Query("SELECT r.id FROM Review r WHERE r.worker.id = :workerId")
     List<Long> findAllIdByWorkerId(@Param("workerId") Long workerId);
 

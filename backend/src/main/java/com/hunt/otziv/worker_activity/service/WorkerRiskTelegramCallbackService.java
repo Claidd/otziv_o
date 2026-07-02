@@ -2,6 +2,11 @@ package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.gamification.model.GamificationScoreLedger;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCallbackService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -47,6 +52,7 @@ public class WorkerRiskTelegramCallbackService {
     private final UserService userService;
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
+    private final ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
 
     public static List<List<InlineKeyboardButton>> keyboard(Long incidentId) {
         return List.of(
@@ -162,6 +168,7 @@ public class WorkerRiskTelegramCallbackService {
         incident.setWorkerExplanationByUserId(actor != null && actor.getId() != null ? actor.getId() : worker.getId());
         incidentRepository.save(incident);
         personalReminderService.deleteSystemReminderBySource(worker, SOURCE_MANAGER_WARNING, incident.getId());
+        syncManagerControlRiskExplanation(worker, incident);
 
         telegramService.sendMessage(chatId,
                 "Пояснение сохранено и отправлено менеджеру."
@@ -171,6 +178,42 @@ public class WorkerRiskTelegramCallbackService {
         updateOriginalRiskTelegramMessage(incident, "ответ отправлен менеджеру", false);
         notifyReviewersAboutExplanation(worker, incident);
         return true;
+    }
+
+    private void syncManagerControlRiskExplanation(User worker, WorkerRiskIncident incident) {
+        if (incident == null || incident.getId() == null) {
+            return;
+        }
+        List<ManagerDailyControlConcreteItem> items = managerControlConcreteItemRepository
+                .findByEntityTypeAndEntityId("RISK", incident.getId());
+        for (ManagerDailyControlConcreteItem item : items) {
+            if (item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+                continue;
+            }
+            item.setWorkerExplanation(limit(clean(incident.getWorkerExplanation()), 1000));
+            item.setWorkerExplanationAt(incident.getWorkerExplanationAt());
+            item.setWorkerExplanationByUserId(incident.getWorkerExplanationByUserId());
+            item.setWorkerNotificationFailureReason(null);
+            item.setStatus(ManagerDailyControlItemStatus.OPEN);
+            item.setActionType(null);
+            item.setResolvedAt(null);
+            item.setFollowUpAt(null);
+            ManagerDailyControlItem parent = item.getParentItem();
+            if (parent != null) {
+                parent.setStatus(ManagerDailyControlItemStatus.OPEN);
+                parent.setActionType(null);
+                parent.setResolvedAt(null);
+            }
+            if (item.getControl() != null) {
+                item.getControl().setLastActivityAt(LocalDateTime.now());
+            }
+            managerControlConcreteItemRepository.save(item);
+            personalReminderService.deleteSystemReminderBySource(
+                    worker,
+                    ManagerControlWorkerTaskTelegramCallbackService.SOURCE_WORKER_TASK_REQUEST,
+                    item.getId()
+            );
+        }
     }
 
     private void updateOriginalRiskTelegramMessage(
@@ -287,7 +330,7 @@ public class WorkerRiskTelegramCallbackService {
 
         if (chatId != null) {
             updateOriginalRiskTelegramMessage(incident, "принято, нужен комментарий", true);
-            telegramService.sendMessage(chatId,
+            telegramService.sendForceReplyMessage(chatId,
                     "Статус: принято, нужен комментарий."
                             + "\nНапишите пояснение следующим сообщением."
                             + "\nЗаказ: #" + valueOrDash(incident.getOrderId())

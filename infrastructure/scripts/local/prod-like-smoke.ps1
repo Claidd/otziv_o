@@ -1137,6 +1137,16 @@ function Test-RegistryBuildFailure {
     return $Output -match "registry-1\.docker\.io|docker/dockerfile|failed to resolve source metadata|Docker Desktop has no HTTPS proxy|lookup .* no such host|no such host|network is unreachable|i/o timeout|TLS handshake timeout"
 }
 
+function Test-DockerComposeMissingNetwork {
+    param([string]$Output)
+
+    if ([string]::IsNullOrWhiteSpace($Output)) {
+        return $false
+    }
+
+    return $Output -match "failed to set up container networking:\s*network\s+[0-9a-f]+\s+not found"
+}
+
 function Invoke-DockerComposeUp {
     param(
         [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
@@ -1161,6 +1171,22 @@ function Invoke-DockerComposeUp {
         ExitCode = $exitCode
         Output = $text
     }
+}
+
+function Invoke-DockerComposeUpWithNetworkRepair {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments,
+        [Parameter(Mandatory = $true)][string[]]$UpArguments
+    )
+
+    $result = Invoke-DockerComposeUp -ComposeArguments $ComposeArguments -UpArguments $UpArguments
+    if ($result.ExitCode -eq 0 -or -not (Test-DockerComposeMissingNetwork -Output $result.Output)) {
+        return $result
+    }
+
+    Write-Warning "Docker Compose found a stale container network. Recreating local containers without removing volumes, then retrying up once."
+    Invoke-External -FilePath "docker" -Arguments ($ComposeArguments + @("down", "--remove-orphans"))
+    return Invoke-DockerComposeUp -ComposeArguments $ComposeArguments -UpArguments $UpArguments
 }
 
 function Invoke-OfflineAppBuild {
@@ -1354,7 +1380,7 @@ try {
             $upArgs += "--build"
         }
 
-        $upResult = Invoke-DockerComposeUp -ComposeArguments $composeArgs -UpArguments $upArgs
+        $upResult = Invoke-DockerComposeUpWithNetworkRepair -ComposeArguments $composeArgs -UpArguments $upArgs
         if ($upResult.ExitCode -ne 0) {
             $canFallback = -not $NoOfflineFallback -and -not $OfflineAppBuild -and -not $NoBuild -and (Test-RegistryBuildFailure -Output $upResult.Output)
             if (-not $canFallback) {
@@ -1365,7 +1391,7 @@ try {
             Invoke-OfflineAppBuild -RepoRoot $repoRoot -EnvPath $envPath
 
             $retryArgs = @("up", "-d", "--remove-orphans")
-            $retryResult = Invoke-DockerComposeUp -ComposeArguments $composeArgs -UpArguments $retryArgs
+            $retryResult = Invoke-DockerComposeUpWithNetworkRepair -ComposeArguments $composeArgs -UpArguments $retryArgs
             if ($retryResult.ExitCode -ne 0) {
                 throw "Command failed after offline fallback: docker $($composeArgs + $retryArgs -join ' ')"
             }

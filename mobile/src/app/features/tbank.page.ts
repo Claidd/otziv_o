@@ -13,6 +13,8 @@ import {
   AdminPaymentLinkSummaryResponse,
   AdminPaymentLinksPageResponse,
   ApiService,
+  ManualPaymentRecipientMonthlySummaryItem,
+  ManualPaymentRecipientMonthlySummaryResponse,
   ManualPaymentTaskResponse,
   ManualPaymentTaskStatus,
   ManualPaymentType,
@@ -37,7 +39,7 @@ import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
 
-type TbankMode = 'payments' | 'launch' | 'tasks' | 'profiles' | 'managers';
+type TbankMode = 'payments' | 'recipients' | 'launch' | 'tasks' | 'profiles' | 'managers';
 type PaymentStatusFilter = 'all' | 'active' | 'paid' | 'refunded' | 'failed' | 'created' | 'manual';
 type Tone = 'blue' | 'green' | 'yellow' | 'red' | 'teal' | 'gray';
 
@@ -64,6 +66,12 @@ const DEFAULT_MANUAL_MONTHLY_LIMIT_RUBLES = 191000;
 const DEFAULT_MANUAL_RECIPIENT_NAME = 'Сивохин И.И.';
 const DEFAULT_MANUAL_PAYMENT_URL = 'https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR';
 const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Альфа-Банк';
+
+function currentMonthInput(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${now.getFullYear()}-${month}`;
+}
 
 @Component({
   selector: 'app-tbank-page',
@@ -332,6 +340,90 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                 <span class="material-icons-sharp">swap_vert</span>
               </button>
             </app-mobile-bottom-pager>
+          } @else if (mode() === 'recipients') {
+            <section class="recipient-list" aria-label="Факт оплат по получателям">
+              <article class="manager-save-card recipient-summary-card">
+                <div>
+                  <p>{{ recipientMonthlySummary()?.month || recipientSummaryMonth() }}</p>
+                  <h2>{{ formatKopecks(recipientMonthlySummary()?.totalAmountKopecks) }}</h2>
+                  <small>
+                    {{ recipientMonthlySummary()?.totalRecipients || 0 }} получателей ·
+                    {{ recipientMonthlySummary()?.totalPayments || 0 }} платежей
+                  </small>
+                </div>
+                <button type="button" (click)="loadRecipientMonthlySummary()" [disabled]="loadingRecipientSummary()">
+                  <span class="material-icons-sharp">refresh</span>
+                  {{ loadingRecipientSummary() ? '...' : 'Обновить' }}
+                </button>
+              </article>
+
+              <article class="profile-card month-picker-card">
+                <label class="profile-field">
+                  <span>Месяц</span>
+                  <input
+                    type="month"
+                    [ngModel]="recipientSummaryMonth()"
+                    (ngModelChange)="setRecipientSummaryMonth($event)"
+                    aria-label="Месяц сводки по получателям"
+                  >
+                </label>
+              </article>
+
+              @if (loadingRecipientSummary()) {
+                <div class="empty-state">
+                  <span class="material-icons-sharp">hourglass_top</span>
+                  <strong>Загружаем сводку</strong>
+                </div>
+              } @else {
+                @for (item of recipientSummaryItems(); track item.manualRecipientName + item.manualPhone + item.manualPaymentUrl + item.paymentProfileName) {
+                  <article class="payment-card recipient-card tone-green">
+                    <header>
+                      <div>
+                        <h2>{{ item.manualRecipientName || 'Получатель не указан' }}</h2>
+                        <small>{{ recipientSummarySourceLabel(item) }}</small>
+                      </div>
+                      <span class="status-pill paid">{{ item.paymentCount }}</span>
+                    </header>
+
+                    <button
+                      type="button"
+                      class="copy-line manual"
+                      (click)="copy(recipientSummaryPaymentTarget(item), 'recipient-' + $index)"
+                    >
+                      <span class="material-icons-sharp">{{ copied() === 'recipient-' + $index ? 'check' : 'content_copy' }}</span>
+                      {{ recipientSummaryPaymentTarget(item) }}
+                    </button>
+
+                    <div class="amount-row">
+                      <span>
+                        <small>Сумма</small>
+                        <strong>{{ formatKopecks(item.amountKopecks) }}</strong>
+                      </span>
+                      <span>
+                        <small>Платежи</small>
+                        <strong>{{ item.paymentCount }}</strong>
+                      </span>
+                    </div>
+
+                    <div class="meta-grid">
+                      <span>
+                        <small>Первая сверка</small>
+                        <strong>{{ shortDate(item.firstConfirmedAt) }}</strong>
+                      </span>
+                      <span>
+                        <small>Последняя сверка</small>
+                        <strong>{{ shortDate(item.lastConfirmedAt) }}</strong>
+                      </span>
+                    </div>
+                  </article>
+                } @empty {
+                  <div class="empty-state">
+                    <span class="material-icons-sharp">payments</span>
+                    <strong>За этот месяц подтвержденных ручных оплат нет</strong>
+                  </div>
+                }
+              }
+            </section>
           } @else if (mode() === 'launch') {
             <section class="launch-list" aria-label="Пульт запуска T-Bank">
               @if (runtimeSettings(); as settings) {
@@ -1172,6 +1264,13 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       padding: var(--otziv-card-padding, 0.66rem);
     }
 
+    .recipient-card {
+      flex: 0 0 auto;
+      height: auto;
+      min-height: 8.2rem;
+      align-self: stretch;
+    }
+
     .payment-card header,
     .profile-card header,
     .bank-card,
@@ -1487,6 +1586,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .recipient-list,
     .launch-list,
     .task-list,
     .profile-list,
@@ -1501,6 +1601,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       scrollbar-width: none;
     }
 
+    .recipient-list::-webkit-scrollbar,
     .launch-list::-webkit-scrollbar,
     .task-list::-webkit-scrollbar,
     .profile-list::-webkit-scrollbar,
@@ -1923,6 +2024,8 @@ export class TbankPage implements OnInit {
   readonly profiles = signal<PaymentProfileResponse[]>([]);
   readonly managerProfiles = signal<ManagerPaymentProfileResponse[]>([]);
   readonly manualTasks = signal<ManualPaymentTaskResponse[]>([]);
+  readonly recipientSummaryMonth = signal(currentMonthInput());
+  readonly recipientMonthlySummary = signal<ManualPaymentRecipientMonthlySummaryResponse | null>(null);
   readonly profileAssignments = signal<Record<number, number | null>>({});
   readonly profilePolicies = signal<Record<number, ProfilePolicyDraft>>({});
   readonly profileAssignmentsDirty = signal(false);
@@ -1937,6 +2040,7 @@ export class TbankPage implements OnInit {
   readonly savingProfilePolicies = signal(false);
   readonly savingManualTask = signal(false);
   readonly savingRuntimeSettings = signal(false);
+  readonly loadingRecipientSummary = signal(false);
   readonly savingRoutingSettings = computed(() => this.savingProfiles() || this.savingProfilePolicies());
   readonly copied = signal<string | null>(null);
   readonly search = signal('');
@@ -1967,6 +2071,13 @@ export class TbankPage implements OnInit {
       value: `${this.links().length}/${this.paymentTotalElements() || this.links().length}`,
       icon: 'receipt_long',
       tone: 'blue'
+    },
+    {
+      key: 'recipients',
+      title: 'получатели',
+      value: this.recipientMonthlySummary()?.totalRecipients ?? 0,
+      icon: 'account_balance_wallet',
+      tone: 'teal'
     },
     {
       key: 'launch',
@@ -2052,6 +2163,8 @@ export class TbankPage implements OnInit {
   readonly manualPendingLinks = computed(() => this.links().filter((link) => {
     return this.isManualPayment(link) && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED');
   }));
+
+  readonly recipientSummaryItems = computed(() => this.recipientMonthlySummary()?.items ?? []);
 
   readonly activeManualTaskCount = computed(() => {
     return this.manualTasks().filter((task) => task.status === 'ACTIVE').length;
@@ -2185,16 +2298,18 @@ export class TbankPage implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     try {
-      const [status, linksPage, profiles, manualTasks, runtimeSettings] = await Promise.all([
+      const [status, linksPage, profiles, manualTasks, recipientSummary, runtimeSettings] = await Promise.all([
         firstValueFrom(this.api.getTbankStatus()),
         firstValueFrom(this.api.getAdminTbankPaymentLinks(this.paymentLinkQuery())),
         firstValueFrom(this.api.getAdminTbankPaymentProfiles()),
         firstValueFrom(this.api.getAdminManualPaymentTasks()),
+        firstValueFrom(this.api.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth())),
         firstValueFrom(this.api.getAdminTbankRuntimeSettings())
       ]);
       this.status.set(status);
       this.applyPaymentLinksPage(linksPage);
       this.manualTasks.set(manualTasks ?? []);
+      this.recipientMonthlySummary.set(recipientSummary);
       this.runtimeSettings.set(runtimeSettings);
       this.applyProfilesState(profiles.profiles, profiles.managers);
       this.keepPageInRange();
@@ -2211,6 +2326,15 @@ export class TbankPage implements OnInit {
 
   selectModeItem(mode: string): void {
     this.setMode(mode as TbankMode);
+  }
+
+  setRecipientSummaryMonth(value: string): void {
+    const month = value || currentMonthInput();
+    if (month === this.recipientSummaryMonth()) {
+      return;
+    }
+    this.recipientSummaryMonth.set(month);
+    void this.loadRecipientMonthlySummary();
   }
 
   setSearch(value: string): void {
@@ -2666,6 +2790,7 @@ export class TbankPage implements OnInit {
       const updated = await firstValueFrom(this.api.confirmAdminManualPaymentLink(link.id));
       this.links.update((links) => links.map((item) => item.id === updated.id ? updated : item));
       await this.loadProfilesOnly();
+      await this.loadRecipientMonthlySummary();
     } catch (error) {
       this.error.set(this.errorMessage(error, 'Не удалось подтвердить ручную оплату.'));
     } finally {
@@ -2784,6 +2909,19 @@ export class TbankPage implements OnInit {
       return link.manualTaskTitle ? `Задание: ${link.manualTaskTitle}` : 'Ручное задание';
     }
     return this.isManualPayment(link) ? 'Лимит профиля' : '';
+  }
+
+  recipientSummaryPaymentTarget(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    const isExternal = item.manualPaymentType === 'EXTERNAL_LINK';
+    const target = isExternal
+      ? (item.manualPaymentUrl || item.manualPaymentButtonLabel || 'ссылка не указана')
+      : (item.manualPhone || 'телефон не указан');
+    const profile = item.paymentProfileName?.trim();
+    return profile ? `${target} · ${profile}` : target;
+  }
+
+  recipientSummarySourceLabel(item: ManualPaymentRecipientMonthlySummaryItem): string {
+    return item.manualSource === 'MANUAL_TASK' ? 'Ручное задание' : 'Лимит профиля';
   }
 
   manualTaskTargetLine(task: ManualPaymentTaskResponse): string {
@@ -2960,6 +3098,22 @@ export class TbankPage implements OnInit {
       this.error.set(this.errorMessage(error, 'Не удалось обновить журнал платежей.'));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  async loadRecipientMonthlySummary(): Promise<void> {
+    if (this.loadingRecipientSummary()) {
+      return;
+    }
+    this.loadingRecipientSummary.set(true);
+    this.error.set(null);
+    try {
+      const summary = await firstValueFrom(this.api.getAdminManualRecipientMonthlySummary(this.recipientSummaryMonth()));
+      this.recipientMonthlySummary.set(summary);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось обновить сводку по получателям.'));
+    } finally {
+      this.loadingRecipientSummary.set(false);
     }
   }
 

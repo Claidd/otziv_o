@@ -783,11 +783,12 @@ export class ManagerApi {
   setWorkerRiskIncidentResolution(
     incidentId: number,
     action: WorkerRiskResolutionAction,
-    penaltyPoints?: number
+    penaltyPoints?: number,
+    comment?: string | null
   ): Observable<WorkerRiskIncident> {
     return this.http.post<WorkerRiskIncident>(
       `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/resolution`,
-      { action, penaltyPoints }
+      { action, penaltyPoints, comment }
     );
   }
 

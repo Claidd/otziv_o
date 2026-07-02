@@ -31,7 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -134,6 +136,39 @@ class BotAssignmentServiceImplTest {
         verify(botService).claimReserveBotForCity(eq(city), excludedIdsCaptor.capture());
         assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 888L, 9L)));
         assertSame(stubBot, assigned);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void checkAndNotifyAboutStubBotsReplacesStubFromReserveBeforeAlert() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot existingBot = bot(101L, "Аккаунт", 0);
+        Bot stubBot = bot(1L, "Нет доступных аккаунтов", 0);
+        Bot reserveBot = bot(900L, "Впиши Имя Фамилию", 0);
+
+        Review existingReview = new Review();
+        existingReview.setId(1L);
+        existingReview.setFilial(filial);
+        existingReview.setBot(existingBot);
+
+        Review stubReview = new Review();
+        stubReview.setId(2L);
+        stubReview.setFilial(filial);
+        stubReview.setBot(stubBot);
+
+        when(botService.claimReserveBotForCity(eq(city), anyCollection()))
+                .thenReturn(Optional.of(reserveBot));
+
+        service.checkAndNotifyAboutStubBots(List.of(existingReview, stubReview));
+
+        ArgumentCaptor<Collection<Long>> excludedIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+        verify(botService).claimReserveBotForCity(eq(city), excludedIdsCaptor.capture());
+        assertTrue(excludedIdsCaptor.getValue().contains(101L));
+        assertSame(reserveBot, stubReview.getBot());
+        verify(reviewRepository).saveAll(List.of(stubReview));
+        verify(telegramService, never()).sendAlertToAdmins(anyString());
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.hunt.otziv.payments.controller;
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.AdminPaymentLinksPageResponse;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
+import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
 import com.hunt.otziv.payments.dto.TbankClientPaymentModeResponse;
@@ -143,6 +144,14 @@ public class AdminPaymentController {
     @GetMapping("/api/admin/payments/manual-tasks")
     public List<ManualPaymentTaskResponse> manualPaymentTasks() {
         return manualPaymentTaskService.managementTasks();
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @GetMapping("/api/admin/payments/manual-recipients/monthly-summary")
+    public ManualPaymentRecipientMonthlySummaryResponse manualRecipientMonthlySummary(
+            @RequestParam(required = false) String month
+    ) {
+        return manualPaymentTaskService.recipientMonthlySummary(month);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

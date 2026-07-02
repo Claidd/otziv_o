@@ -22,6 +22,10 @@
     var(--otziv-white);
 }
 
+.reminder-alert + .personal-reminders {
+  margin-top: 1rem;
+}
+
 .reminder-alert__head,
 .personal-reminders__head,
 .reminder-alert__item,

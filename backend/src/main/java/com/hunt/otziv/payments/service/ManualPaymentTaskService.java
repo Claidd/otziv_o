@@ -1,6 +1,8 @@
 package com.hunt.otziv.payments.service;
 
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
+import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryItem;
+import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.model.ManualPaymentTask;
@@ -14,7 +16,10 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -126,6 +131,36 @@ public class ManualPaymentTaskService {
         return manualPaymentTaskRepository.findAllForManagement().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ManualPaymentRecipientMonthlySummaryResponse recipientMonthlySummary(String month) {
+        YearMonth selectedMonth = parseMonth(month);
+        LocalDateTime from = selectedMonth.atDay(1).atStartOfDay();
+        LocalDateTime to = selectedMonth.plusMonths(1).atDay(1).atStartOfDay();
+        List<ManualPaymentRecipientMonthlySummaryItem> items =
+                paymentLinkRepository.summarizeManualConfirmedByRecipientForPeriod(
+                        MANUAL_PAYMENT_METHODS,
+                        PaymentLinkStatus.CONFIRMED,
+                        from,
+                        to
+                );
+        long totalPayments = items.stream()
+                .mapToLong(ManualPaymentRecipientMonthlySummaryItem::paymentCount)
+                .sum();
+        long totalAmountKopecks = items.stream()
+                .mapToLong(ManualPaymentRecipientMonthlySummaryItem::amountKopecks)
+                .sum();
+        return new ManualPaymentRecipientMonthlySummaryResponse(
+                selectedMonth.toString(),
+                selectedMonth.atDay(1),
+                selectedMonth.plusMonths(1).atDay(1),
+                items.size(),
+                totalPayments,
+                totalAmountKopecks,
+                amountRubles(totalAmountKopecks),
+                items
+        );
     }
 
     @Transactional
@@ -381,6 +416,22 @@ public class ManualPaymentTaskService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите сумму задания");
         }
         return value;
+    }
+
+    private YearMonth parseMonth(String value) {
+        String clean = normalize(value);
+        if (clean.isBlank()) {
+            return YearMonth.now();
+        }
+        try {
+            return YearMonth.parse(clean);
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите месяц в формате YYYY-MM", e);
+        }
+    }
+
+    private BigDecimal amountRubles(long amountKopecks) {
+        return BigDecimal.valueOf(amountKopecks, 2);
     }
 
     private String moneyRubles(long kopecks) {

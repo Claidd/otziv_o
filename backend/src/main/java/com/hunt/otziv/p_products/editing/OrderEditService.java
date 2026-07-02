@@ -3,11 +3,13 @@ package com.hunt.otziv.p_products.editing;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
@@ -36,6 +38,8 @@ public class OrderEditService {
     private final ManagerService managerService;
     private final FilialService filialService;
     private final ReviewService reviewService;
+    private final ReviewRepository reviewRepository;
+    private final BadReviewTaskService badReviewTaskService;
 
     @Transactional
     public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) {
@@ -85,9 +89,14 @@ public class OrderEditService {
 
                 for (OrderDetails detail : Optional.ofNullable(saveOrder.getDetails()).orElse(Collections.emptyList())) {
                     for (Review review : Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList())) {
-                        review.setWorker(newWorker);
+                        if (!review.isPublish()) {
+                            review.setWorker(newWorker);
+                        }
                     }
                 }
+
+                reviewRepository.reassignWorkerByOrderId(saveOrder.getId(), newWorker);
+                badReviewTaskService.reassignPendingTasksForOrder(saveOrder.getId(), newWorker);
 
                 isChanged = true;
             }

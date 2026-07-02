@@ -1,5 +1,6 @@
 package com.hunt.otziv.manager_control.dto;
 
+import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -35,6 +36,8 @@ public record ManagerControlManagerResponse(
         long workerSectionCount,
         List<ManagerControlProblemResponse> problems,
         List<ManagerControlSectionResponse> workerSections,
-        List<ManagerControlOverdueStatusResponse> overdueStatuses
+        List<ManagerControlOverdueStatusResponse> overdueStatuses,
+        List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats,
+        ManagerPerformanceScoreResponse managerPerformance
 ) {
 }

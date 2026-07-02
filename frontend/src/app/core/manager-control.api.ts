@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { ManagerPerformanceScore } from './cabinet.api';
 
 export type ManagerControlStatus = 'GREEN' | 'YELLOW' | 'RED';
 export type ManagerControlSeverity = 'INFO' | 'WARNING' | 'CRITICAL';
@@ -111,7 +112,7 @@ export interface ManagerControlManagerDetail {
   userId?: number | null;
   username: string;
   name: string;
-  dailyControlId: number;
+  dailyControlId?: number | null;
   controlDate: string;
   dailyControlStatus: 'NOT_STARTED' | 'IN_PROGRESS' | 'GREEN' | 'YELLOW' | 'RED';
   startedAt?: string | null;
@@ -129,8 +130,18 @@ export interface ManagerControlManagerDetail {
   closeBlockers: string[];
   openItemCount: number;
   handledItemCount: number;
+  workerExplanationStats: ManagerControlWorkerExplanationStats[];
   items: ManagerControlItemDetail[];
   events: ManagerControlEvent[];
+}
+
+export interface ManagerControlWorkerExplanationStats {
+  workerUserId?: number | null;
+  workerName: string;
+  requestCount: number;
+  unansweredCount: number;
+  overdueCount: number;
+  averageResponseMinutes: number;
 }
 
 export interface ManagerControlProblem {
@@ -204,6 +215,8 @@ export interface ManagerControlManager {
   problems: ManagerControlProblem[];
   workerSections: ManagerControlSection[];
   overdueStatuses: ManagerControlOverdueStatus[];
+  workerExplanationStats: ManagerControlWorkerExplanationStats[];
+  managerPerformance?: ManagerPerformanceScore | null;
 }
 
 export interface ManagerControlSummary {
@@ -229,6 +242,13 @@ export class ManagerControlApi {
   today(): Observable<ManagerControlSummary> {
     return this.http.get<ManagerControlSummary>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/today`
+    );
+  }
+
+  syncToday(): Observable<ManagerControlSummary> {
+    return this.http.post<ManagerControlSummary>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/today/sync`,
+      {}
     );
   }
 
@@ -270,6 +290,20 @@ export class ManagerControlApi {
   managerDetails(managerId: number): Observable<ManagerControlManagerDetail> {
     return this.http.get<ManagerControlManagerDetail>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/managers/${managerId}/today`
+    );
+  }
+
+  syncManagerDetails(managerId: number): Observable<ManagerControlManagerDetail> {
+    return this.http.post<ManagerControlManagerDetail>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/managers/${managerId}/today/sync`,
+      {}
+    );
+  }
+
+  acceptControl(controlId: number): Observable<ManagerControlManagerDetail> {
+    return this.http.post<ManagerControlManagerDetail>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/controls/${controlId}/accept`,
+      {}
     );
   }
 

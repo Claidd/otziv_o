@@ -419,6 +419,12 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       <span class="material-icons-sharp">person</span>
                       профиль
                     </a>
+                    @if (canManagerControl()) {
+                      <a class="pill-button" routerLink="/tabs/control">
+                        <span class="material-icons-sharp">fact_check</span>
+                        замечания
+                      </a>
+                    }
                     <button class="pill-button" type="button" (click)="openSectionSheet()">
                       <span class="material-icons-sharp">apps</span>
                       разделы
@@ -2848,6 +2854,10 @@ export class HomePage implements OnInit, OnDestroy {
 
   canManageAllDictionaries(): boolean {
     return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.dictionaries, MOBILE_ACTIONS.manage);
+  }
+
+  canManagerControl(): boolean {
+    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view);
   }
 
   canSeeTbank(): boolean {

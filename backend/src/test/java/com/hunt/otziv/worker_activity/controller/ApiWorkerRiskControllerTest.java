@@ -2,6 +2,7 @@ package com.hunt.otziv.worker_activity.controller;
 
 import com.hunt.otziv.gamification.model.GamificationScoreLedger;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
@@ -55,6 +56,9 @@ class ApiWorkerRiskControllerTest {
     @Mock
     private WorkerRiskRollbackService rollbackService;
 
+    @Mock
+    private ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
+
     private ApiWorkerRiskController controller;
 
     @BeforeEach
@@ -65,7 +69,8 @@ class ApiWorkerRiskControllerTest {
                 userService,
                 personalReminderService,
                 telegramService,
-                rollbackService
+                rollbackService,
+                managerControlConcreteItemRepository
         );
     }
 
@@ -81,7 +86,7 @@ class ApiWorkerRiskControllerTest {
 
         WorkerRiskIncidentResponse response = controller.resolution(
                 77L,
-                new WorkerRiskResolutionRequest("EXPLANATION_REQUESTED", null),
+                new WorkerRiskResolutionRequest("EXPLANATION_REQUESTED", null, null),
                 adminAuth()
         );
 
@@ -112,7 +117,7 @@ class ApiWorkerRiskControllerTest {
 
         WorkerRiskIncidentResponse response = controller.resolution(
                 77L,
-                new WorkerRiskResolutionRequest("VIOLATION_CONFIRMED", 3),
+                new WorkerRiskResolutionRequest("VIOLATION_CONFIRMED", 3, null),
                 adminAuth()
         );
 
@@ -143,7 +148,7 @@ class ApiWorkerRiskControllerTest {
 
         WorkerRiskIncidentResponse response = controller.resolution(
                 77L,
-                new WorkerRiskResolutionRequest("VERIFIED", null),
+                new WorkerRiskResolutionRequest("VERIFIED", null, null),
                 adminAuth()
         );
 

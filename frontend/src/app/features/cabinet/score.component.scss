@@ -188,6 +188,158 @@ dd {
   font-weight: 900;
 }
 
+.manager-performance {
+  display: grid;
+  gap: 0.65rem;
+  border-top: 1px solid rgba(103, 116, 131, 0.16);
+  padding-top: 0.75rem;
+}
+
+.performance-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15rem 0.45rem;
+  align-items: center;
+}
+
+.performance-head span {
+  grid-row: span 2;
+  color: var(--otziv-primary);
+}
+
+.performance-head strong,
+.performance-head small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-head small,
+.performance-grid small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.performance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.performance-grid span {
+  display: grid;
+  min-width: 0;
+  min-height: 3rem;
+  align-content: center;
+  gap: 0.1rem;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.45rem;
+  background: var(--otziv-muted-surface);
+}
+
+.performance-grid b {
+  overflow-wrap: anywhere;
+}
+
+.score-formula {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.formula-title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.formula-title strong {
+  font-size: 0.86rem;
+}
+
+.formula-title small {
+  color: var(--otziv-info);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: lowercase;
+}
+
+.formula-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.formula-factor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 3.35rem;
+  align-items: center;
+  gap: 0.15rem 0.45rem;
+  border: 1px solid rgba(103, 116, 131, 0.15);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.5rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: none;
+  text-align: left;
+}
+
+.formula-factor:hover,
+.formula-factor.active {
+  border-color: rgba(126, 166, 228, 0.55);
+  background: rgba(126, 166, 228, 0.1);
+}
+
+.formula-factor span {
+  display: grid;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+.formula-factor small,
+.factor-tip {
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.formula-factor b,
+.formula-factor strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.formula-factor strong {
+  font-size: 0.8rem;
+}
+
+.factor-tip {
+  grid-column: 1 / -1;
+  padding-top: 0.25rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.manager-performance.excellent .performance-head span,
+.manager-performance.good .performance-head span {
+  color: var(--otziv-success);
+}
+
+.manager-performance.warning .performance-head span {
+  color: #b78a16;
+}
+
+.manager-performance.risk .performance-head span {
+  color: var(--otziv-danger);
+}
+
 .empty-section {
   display: grid;
   min-height: 13rem;
@@ -254,5 +406,9 @@ dd {
 
   .toolbar-actions button .material-icons-sharp {
     font-size: 1.35rem;
+  }
+
+  .formula-grid {
+    grid-template-columns: 1fr;
   }
 }

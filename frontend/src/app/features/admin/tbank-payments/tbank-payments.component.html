@@ -111,6 +111,83 @@
     </div>
   </section>
 
+  <section class="analytics-section recipient-summary-section" aria-label="Фактические ручные оплаты по получателям">
+    <div class="section-title recipient-summary-title">
+      <span class="material-icons-sharp">account_balance_wallet</span>
+      <div>
+        <h2>Факт по получателям</h2>
+        @if (recipientMonthlySummary(); as summary) {
+          <p>
+            {{ summary.month }} · {{ summary.totalRecipients }} получателей ·
+            {{ summary.totalPayments }} платежей · {{ formatKopecks(summary.totalAmountKopecks) }}
+          </p>
+        } @else {
+          <p>Подтвержденные ручные оплаты за выбранный месяц.</p>
+        }
+      </div>
+      <label class="month-field">
+        <span>Месяц</span>
+        <input
+          type="month"
+          [ngModel]="recipientSummaryMonth()"
+          (ngModelChange)="setRecipientSummaryMonth($event)"
+          aria-label="Месяц сводки по получателям"
+        >
+      </label>
+      <button
+        type="button"
+        class="quiet-action"
+        (click)="loadRecipientMonthlySummary()"
+        [disabled]="loadingRecipientSummary()"
+      >
+        <span class="material-icons-sharp" aria-hidden="true">refresh</span>
+        {{ loadingRecipientSummary() ? 'Обновляю' : 'Обновить' }}
+      </button>
+    </div>
+
+    <div class="recipient-summary-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Получатель</th>
+            <th>Реквизиты</th>
+            <th>Платежи</th>
+            <th>Сумма</th>
+            <th>Сверка</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of recipientSummaryItems(); track item.manualRecipientName + item.manualPhone + item.manualPaymentUrl + item.paymentProfileName) {
+            <tr>
+              <td>
+                <strong>{{ item.manualRecipientName || 'Получатель не указан' }}</strong>
+                <small>{{ recipientSummarySourceLabel(item) }}</small>
+              </td>
+              <td>
+                <span>{{ recipientSummaryPaymentTarget(item) }}</span>
+              </td>
+              <td>{{ item.paymentCount }}</td>
+              <td><strong>{{ formatKopecks(item.amountKopecks) }}</strong></td>
+              <td>
+                <span>{{ item.firstConfirmedAt | date:'dd.MM HH:mm' }}</span>
+                @if (item.lastConfirmedAt && item.lastConfirmedAt !== item.firstConfirmedAt) {
+                  <small>до {{ item.lastConfirmedAt | date:'dd.MM HH:mm' }}</small>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="empty-state compact-empty">
+                <span class="material-icons-sharp" aria-hidden="true">payments</span>
+                <strong>За этот месяц подтвержденных ручных оплат нет</strong>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   @if (manualPendingCount()) {
     <section class="analytics-section manual-alert-panel" aria-label="Ручные платежи на сверку">
       <div class="section-title compact-title">
