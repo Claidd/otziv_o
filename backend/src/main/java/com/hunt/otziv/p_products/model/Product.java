@@ -27,6 +27,13 @@ public class Product {
     @Column(name = "product_photo")
     private Boolean photo;
 
+    @Builder.Default
+    @Column(name = "product_requires_performer", nullable = false)
+    private boolean requiresPerformer = false;
+
+    @Column(name = "product_target_platform")
+    private String targetPlatform;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_category")
     @ToString.Exclude

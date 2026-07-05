@@ -209,6 +209,9 @@ public class ReviewDtoMapper {
                     .price(review.getPrice())
                     .url(review.getUrl() != null ? review.getUrl() : "")
                     .urlPhoto(review.getUrl() != null ? review.getUrl() : "")
+                    .externalConfirmStatus(Optional.ofNullable(review.getExternalConfirmStatus()).orElse("PENDING"))
+                    .externalConfirmedAt(review.getExternalConfirmedAt() != null ? review.getExternalConfirmedAt().toString() : "")
+                    .externalConfirmScreenshotUrl(Optional.ofNullable(review.getExternalConfirmScreenshotUrl()).orElse(""))
                     .build();
 
         } catch (Exception e) {

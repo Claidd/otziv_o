@@ -5,7 +5,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.dto.CityDTO;
-import com.hunt.otziv.c_cities.sevices.CityService;
+import com.hunt.otziv.c_cities.services.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;

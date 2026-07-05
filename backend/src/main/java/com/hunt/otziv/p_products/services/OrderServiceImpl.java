@@ -535,6 +535,10 @@ public class OrderServiceImpl implements OrderService {
             }
 
             review.setPublish(true);
+            review.setPublishedMarkedAt(LocalDateTime.now());
+            review.setExternalConfirmStatus("PENDING");
+            review.setExternalConfirmedAt(null);
+            review.setExternalConfirmScreenshotUrl(null);
             reviewRepository.save(review);
             gamificationEventService.recordReviewPublished(review);
             businessAuditService.recordSafely(

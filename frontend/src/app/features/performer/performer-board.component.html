@@ -1,0 +1,106 @@
+<app-admin-layout title="Кабинет исполнителя" active="performer">
+  <section class="toolbar">
+    @for (section of sections(); track section.key) {
+      <button type="button" [class.active]="activeSection() === section.key" (click)="setSection(section.key)">
+        <span class="material-icons-sharp">{{ section.icon }}</span>
+        <span>{{ section.label }}</span>
+        <strong>{{ section.count }}</strong>
+      </button>
+    }
+  </section>
+
+  @if (error()) {
+    <app-load-error-card title="Задания не загружены" [message]="error()!" />
+  }
+
+  @if (loading()) {
+    <section class="empty">Загружаю задания</section>
+  } @else if (currentItems().length === 0) {
+    <section class="empty">В этом разделе пока пусто</section>
+  } @else {
+    <section class="assignment-grid">
+      @for (item of currentItems(); track item.id) {
+        <article class="assignment-card">
+          <header>
+            <div>
+              <h2>{{ item.companyTitle || 'Компания' }}</h2>
+              <p>{{ item.cityTitle }} · {{ item.platform }} · #{{ item.id }}</p>
+            </div>
+            <span>{{ item.status }}</span>
+          </header>
+
+          @if (item.filialTitle) {
+            <p class="meta">{{ item.filialTitle }}</p>
+          }
+          <p class="instruction">{{ item.instruction }}</p>
+          <blockquote>{{ item.draftText }}</blockquote>
+
+          <footer>
+            @if (activeSection() === 'offers') {
+              <button type="button" [disabled]="actionSaving() === 'accept-' + item.offerId" (click)="accept(item)">
+                <span class="material-icons-sharp">check_circle</span>
+                Принять
+              </button>
+              <button type="button" class="secondary" [disabled]="actionSaving() === 'decline-' + item.offerId" (click)="decline(item)">
+                <span class="material-icons-sharp">cancel</span>
+                Отказаться
+              </button>
+            }
+
+            @if (activeSection() === 'active') {
+              <button type="button" [disabled]="actionSaving() === 'walked-' + item.id" (click)="walked(item)">
+                <span class="material-icons-sharp">directions_walk</span>
+                Выгулял
+              </button>
+              <button type="button" class="secondary" (click)="openPublish(item)">
+                <span class="material-icons-sharp">report_problem</span>
+                Проблема
+              </button>
+            }
+
+            @if (activeSection() === 'waitingPublication') {
+              <button type="button" [disabled]="!canPublish(item)" (click)="openPublish(item)">
+                <span class="material-icons-sharp">publish</span>
+                Опубликовал
+              </button>
+            }
+          </footer>
+
+          @if (selectedAssignment()?.id === item.id) {
+            @if (activeSection() === 'waitingPublication') {
+              <form class="publish-form" [formGroup]="publishForm" (ngSubmit)="submitPublish()">
+                <label>
+                  <span>Финальный текст</span>
+                  <textarea formControlName="finalText" rows="5"></textarea>
+                </label>
+                <label>
+                  <span>Ссылка на публикацию</span>
+                  <input type="url" formControlName="publicationUrl">
+                </label>
+                <label>
+                  <span>Комментарий</span>
+                  <input type="text" formControlName="comment">
+                </label>
+                <button type="submit" [disabled]="actionSaving() === 'published-' + item.id">
+                  <span class="material-icons-sharp">done_all</span>
+                  Отправить
+                </button>
+              </form>
+            } @else {
+              <form class="publish-form" [formGroup]="problemForm" (ngSubmit)="submitProblem(item)">
+                <label>
+                  <span>Что не так?</span>
+                  <textarea formControlName="comment" rows="3"></textarea>
+                </label>
+                <button type="submit" [disabled]="actionSaving() === 'problem-' + item.id">
+                  <span class="material-icons-sharp">send</span>
+                  Передать менеджеру
+                </button>
+              </form>
+            }
+          }
+        </article>
+      }
+    </section>
+  }
+</app-admin-layout>

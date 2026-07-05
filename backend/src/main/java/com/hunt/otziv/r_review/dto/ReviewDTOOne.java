@@ -94,6 +94,12 @@ public class ReviewDTOOne {
 
     private String urlPhoto;
 
+    private String externalConfirmStatus;
+
+    private String externalConfirmedAt;
+
+    private String externalConfirmScreenshotUrl;
+
     //    private OrderDetailsDTO orderDetails;
 
 }

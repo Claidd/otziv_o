@@ -202,6 +202,7 @@ export class OrderDetailsComponent {
     ?? null);
   readonly hasReadyCompanyReport = computed(() => !!this.companyReportState()?.latestJob?.report);
   readonly companyReportBusy = computed(() => this.companyReportLoading() || this.isActiveCompanyReport(this.companyReportJob()));
+  readonly isAdmin = computed(() => this.auth.authenticated() && this.auth.hasRealmRole('ADMIN'));
   readonly canShowPaymentLinkAction = computed(() => {
     const status = this.tbankStatus();
     return !!this.details()
@@ -1508,6 +1509,91 @@ export class OrderDetailsComponent {
     );
   }
 
+  checkExternalReview(review: OrderReviewItem): void {
+    if (!review.publish) {
+      return;
+    }
+
+    this.runReviewMutation(
+      `external-check-${review.id}`,
+      this.managerApi.checkExternalReviewPresence(review.orderId, review.id),
+      'Проверка выполнена',
+      (updatedReview) => this.externalReviewCheckToast(updatedReview)
+    );
+  }
+
+  externalReviewCheckTitle(review: OrderReviewItem): string {
+    if (!review.publish) {
+      return 'Проверка доступна после публикации';
+    }
+    const status = this.externalReviewStatus(review);
+    if (status === 'CONFIRMED') {
+      return `Наличие подтверждено${review.externalConfirmedAt ? ': ' + review.externalConfirmedAt : ''}`;
+    }
+    if (status === 'NEEDS_REVIEW') {
+      return 'Похоже найдено, нужна ручная проверка';
+    }
+    if (status === 'NOT_FOUND') {
+      return 'Текст не найден на последней проверке';
+    }
+    if (status === 'BLOCKED') {
+      return 'Площадка заблокировала автоматическую проверку';
+    }
+    if (status === 'ERROR') {
+      return 'Проверка завершилась ошибкой';
+    }
+    if (this.isMutating('external-check-' + review.id)) {
+      return 'Проверяем публичную карточку';
+    }
+    return 'Проверить наличие текста на публичной карточке';
+  }
+
+  externalReviewStatusClass(review: OrderReviewItem): string {
+    if (this.isMutating('external-check-' + review.id)) {
+      return 'external-check-button--checking';
+    }
+    return 'external-check-button--' + this.externalReviewStatus(review).toLowerCase().replace(/_/g, '-');
+  }
+
+  externalReviewStatusLabel(review: OrderReviewItem): string {
+    const status = this.externalReviewStatus(review);
+    if (status === 'CHECKING' || this.isMutating('external-check-' + review.id)) {
+      return 'Проверяем';
+    }
+    if (status === 'CONFIRMED') {
+      return 'Текст найден';
+    }
+    if (status === 'NEEDS_REVIEW') {
+      return 'Похоже найден, нужна проверка';
+    }
+    if (status === 'NOT_FOUND') {
+      return 'Текст не найден';
+    }
+    if (status === 'BLOCKED') {
+      return 'Площадка не дала проверить';
+    }
+    if (status === 'ERROR') {
+      return 'Ошибка проверки';
+    }
+    return 'Не проверено';
+  }
+
+  externalReviewIcon(review: OrderReviewItem): string {
+    if (this.isMutating('external-check-' + review.id)) {
+      return 'sync';
+    }
+    return this.externalReviewStatus(review) === 'CONFIRMED' ? 'verified' : 'fact_check';
+  }
+
+  externalReviewStatus(review: OrderReviewItem): string {
+    return (review.externalConfirmStatus || 'PENDING').toUpperCase();
+  }
+
+  private externalReviewCheckToast(review: OrderReviewItem): string {
+    const screenshotNote = review.externalConfirmScreenshotUrl ? '. Скриншот сохранен' : '';
+    return `Отзыв #${review.id}: ${this.externalReviewStatusLabel(review).toLowerCase()}${screenshotNote}`;
+  }
+
   cancelBadReviewTask(task: BadReviewTaskItem): void {
     const orderId = this.orderId();
     if (!orderId || !task.id) {
@@ -2490,7 +2576,7 @@ export class OrderDetailsComponent {
     key: string,
     request: Observable<OrderReviewItem>,
     toastTitle: string,
-    toastMessage: string
+    toastMessage: string | ((updatedReview: OrderReviewItem) => string)
   ): void {
     this.mutationKey.set(key);
     this.error.set(null);
@@ -2499,7 +2585,8 @@ export class OrderDetailsComponent {
       next: (updatedReview) => {
         this.applyUpdatedOrderReview(updatedReview);
         this.mutationKey.set(null);
-        this.toastService.success(toastTitle, toastMessage);
+        const message = typeof toastMessage === 'function' ? toastMessage(updatedReview) : toastMessage;
+        this.toastService.success(toastTitle, message);
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Действие не выполнено');

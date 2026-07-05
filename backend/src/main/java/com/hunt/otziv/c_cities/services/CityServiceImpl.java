@@ -1,4 +1,4 @@
-package com.hunt.otziv.c_cities.sevices;
+package com.hunt.otziv.c_cities.services;
 
 import com.hunt.otziv.c_cities.dto.CityDTO;
 import com.hunt.otziv.c_cities.model.City;

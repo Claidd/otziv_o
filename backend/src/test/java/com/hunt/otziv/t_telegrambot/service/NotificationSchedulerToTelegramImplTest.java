@@ -1,6 +1,7 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.services.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

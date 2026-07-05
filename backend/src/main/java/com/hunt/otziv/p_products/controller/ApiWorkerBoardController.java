@@ -366,7 +366,7 @@ public class ApiWorkerBoardController {
     ) {
         Review review = reviewService.getReviewById(reviewId);
         Long oldBotId = botId(review);
-        reviewService.changeBot(reviewId);
+        reviewService.changeBot(reviewId, isSourceSection(source, SECTION_PUBLISH));
         Long newBotId = botId(reviewService.getReviewById(reviewId));
         workerActivityService.recordCurrentAuthenticationSafely(
                 WorkerActivityAction.REVIEW_BOT_CHANGE,
@@ -2047,6 +2047,12 @@ public class ApiWorkerBoardController {
                 source == null ? null : source.sourceEntry(),
                 source == null ? null : source.sourceSection()
         );
+    }
+
+    private boolean isSourceSection(WorkerActivitySourceRequest source, String section) {
+        return source != null
+                && section != null
+                && section.equalsIgnoreCase(safe(source.sourceSection()).trim());
     }
 
     private String withSource(String details, String sourcePage, String sourceEntry, String sourceSection) {

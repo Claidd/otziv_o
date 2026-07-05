@@ -140,6 +140,11 @@ export const routes: Routes = [
       .then((m) => m.RegisterClientComponent)
   },
   {
+    path: 'register-performer',
+    loadComponent: () => import('./features/auth/register-performer.component')
+      .then((m) => m.RegisterPerformerComponent)
+  },
+  {
     path: 'legacy-migration',
     loadComponent: () => import('./features/auth/legacy-migration.component')
       .then((m) => m.LegacyMigrationComponent)
@@ -262,6 +267,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'performer',
+    loadComponent: () => import('./features/performer/performer-board.component')
+      .then((m) => m.PerformerBoardComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'PERFORMER']
+    }
+  },
+  {
     path: 'training',
     loadComponent: () => import('./features/training/training.component')
       .then((m) => m.TrainingComponent),
@@ -285,7 +299,7 @@ export const routes: Routes = [
       .then((m) => m.ScoreComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
     }
   },
   {
@@ -294,7 +308,7 @@ export const routes: Routes = [
       .then((m) => m.GamificationProgressComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
     }
   },
   {
@@ -350,6 +364,15 @@ export const routes: Routes = [
     canActivate: [roleGuard],
     data: {
       roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
+    path: 'admin/performers',
+    loadComponent: () => import('./features/admin/performers/admin-performers.component')
+      .then((m) => m.AdminPerformersComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER', 'MANAGER']
     }
   },
   {

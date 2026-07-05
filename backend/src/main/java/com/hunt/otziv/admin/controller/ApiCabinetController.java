@@ -112,7 +112,8 @@ public class ApiCabinetController {
                         return new CabinetProfileResponse(
                                 selectedDate,
                                 personalService.getUserLK(principal),
-                                workerStats(selectedDate, user)
+                                workerStats(selectedDate, user),
+                                managerPerformance(selectedDate, user, principal)
                         );
                     }
             );
@@ -628,10 +629,25 @@ public class ApiCabinetController {
         return value == null ? 0L : value;
     }
 
+    private ManagerPerformanceScoreResponse managerPerformance(LocalDate selectedDate, User user, Principal principal) {
+        if (user == null
+                || user.getId() == null
+                || !(principal instanceof Authentication authentication)
+                || !hasAnyRole(authentication, "ROLE_MANAGER")) {
+            return null;
+        }
+
+        return managerPerformanceService.score(selectedDate).stream()
+                .filter(score -> Objects.equals(score.managerUserId(), user.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
     public record CabinetProfileResponse(
             LocalDate date,
             UserLKDTO user,
-            UserStatDTO workerZp
+            UserStatDTO workerZp,
+            ManagerPerformanceScoreResponse managerPerformance
     ) {
     }
 

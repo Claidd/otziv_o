@@ -3686,6 +3686,165 @@ app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-a
   box-shadow: none;
 }
 
+body.otziv-dark-theme app-order-details .task-foldout > summary {
+  border-color: rgba(122, 167, 220, 0.24);
+  color: #f6f8ff;
+  background: linear-gradient(135deg, rgba(41, 48, 60, 0.95), rgba(50, 58, 73, 0.92));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.otziv-dark-theme app-order-details .task-foldout > summary:hover {
+  border-color: rgba(122, 167, 220, 0.38);
+  background: linear-gradient(135deg, rgba(47, 56, 72, 0.98), rgba(56, 64, 80, 0.94));
+}
+
+body.otziv-dark-theme app-order-details .task-foldout > summary small,
+body.otziv-dark-theme app-order-details .bad-review-task-head b {
+  color: #3d2f00;
+  background: #f5d66f;
+}
+
+body.otziv-dark-theme app-order-details .task-foldout > summary::after {
+  color: #d8e7ff;
+  background: rgba(122, 167, 220, 0.2);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-list {
+  border-color: rgba(122, 167, 220, 0.22);
+  background: rgba(26, 30, 37, 0.92);
+  box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.22);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-row {
+  border-color: rgba(122, 167, 220, 0.24);
+  border-left-color: rgba(122, 167, 220, 0.42);
+  color: #f6f8ff;
+  background:
+    linear-gradient(180deg, rgba(245, 214, 111, 0.14), rgba(33, 38, 48, 0.96) 34%),
+    #212630;
+  box-shadow: 0 0.75rem 1.45rem rgba(0, 0, 0, 0.24);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-row--new {
+  border-left-color: #f5d66f;
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-row--done {
+  border-left-color: #63d8b6;
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-row--canceled {
+  border-left-color: #9fb4d3;
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-head strong,
+body.otziv-dark-theme app-order-details .bad-review-task-footer strong {
+  color: #ffffff;
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-head span,
+body.otziv-dark-theme app-order-details .bad-review-task-meta,
+body.otziv-dark-theme app-order-details .bad-review-task-date-label span,
+body.otziv-dark-theme app-order-details .bad-review-task-row small {
+  color: #b9c7dc;
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-meta span {
+  border-color: rgba(122, 167, 220, 0.2);
+  color: #ffffff;
+  background: rgba(15, 18, 24, 0.58);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-meta span:first-child {
+  color: #94bdff;
+  background: rgba(122, 167, 220, 0.14);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-date-label input,
+body.otziv-dark-theme app-order-details .bad-review-task-text {
+  border-color: rgba(122, 167, 220, 0.24);
+  color: #f6f8ff;
+  background: rgba(13, 16, 21, 0.78);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-date-label input:focus,
+body.otziv-dark-theme app-order-details .bad-review-task-text:focus {
+  border-color: rgba(122, 167, 220, 0.58);
+  outline: 0;
+  box-shadow: 0 0 0 0.14rem rgba(122, 167, 220, 0.18);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-date-label input:disabled,
+body.otziv-dark-theme app-order-details .bad-review-task-text:read-only {
+  color: #c9d4e4;
+  background: rgba(24, 29, 37, 0.82);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-text::placeholder {
+  color: #8e9bb0;
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--copy,
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--bot,
+body.otziv-dark-theme app-order-details .bad-review-task-action--copy,
+body.otziv-dark-theme app-order-details .bad-review-task-action--ghost,
+body.otziv-dark-theme app-order-details .bad-review-task-action--bot {
+  border-color: rgba(122, 167, 220, 0.22);
+  color: #f6f8ff;
+  background: rgba(13, 16, 21, 0.72);
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--copy:not(:disabled):hover,
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-copy-actions button.bad-review-task-action--bot:not(:disabled):hover,
+body.otziv-dark-theme app-order-details .bad-review-task-action--copy:not(:disabled):hover,
+body.otziv-dark-theme app-order-details .bad-review-task-action--bot:not(:disabled):hover {
+  border-color: rgba(122, 167, 220, 0.42);
+  color: #ffffff;
+  background: rgba(48, 58, 74, 0.92);
+}
+
+body.otziv-dark-theme app-order-details .bad-review-task-action--save,
+body.otziv-dark-theme app-order-details .bad-review-task-icon-action--save {
+  border-color: rgba(122, 167, 220, 0.28);
+  color: #d8e7ff;
+  background: rgba(122, 167, 220, 0.16);
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--complete,
+body.otziv-dark-theme app-order-details .bad-review-task-action--complete {
+  border-color: rgba(99, 216, 182, 0.34);
+  color: #dffbf2;
+  background: rgba(35, 91, 74, 0.78);
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-footer .bad-review-task-status-pill--done,
+body.otziv-dark-theme app-order-details .bad-review-task-status-pill {
+  border-color: rgba(99, 216, 182, 0.34);
+  color: #dffbf2;
+  background: rgba(35, 91, 74, 0.62);
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--complete:not(:disabled):hover,
+body.otziv-dark-theme app-order-details .bad-review-task-action--complete:not(:disabled):hover {
+  border-color: rgba(99, 216, 182, 0.54);
+  color: #ffffff;
+  background: rgba(39, 119, 95, 0.9);
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--danger,
+body.otziv-dark-theme app-order-details .bad-review-task-action--danger {
+  border-color: rgba(255, 91, 143, 0.3);
+  color: #ffdce7;
+  background: rgba(111, 38, 67, 0.72);
+}
+
+body.otziv-dark-theme app-order-details .admin-layout .bad-review-task-footer button.bad-review-task-action--danger:not(:disabled):hover,
+body.otziv-dark-theme app-order-details .bad-review-task-action--danger:not(:disabled):hover {
+  border-color: rgba(255, 91, 143, 0.48);
+  color: #ffffff;
+  background: rgba(139, 46, 83, 0.9);
+}
+
 app-admin-dictionaries {
   .autoresponder-monitor {
     gap: 0.9rem;
@@ -4705,8 +4864,8 @@ body.otziv-dark-theme app-manager-control button.manager-details-chip.manager-de
   background: linear-gradient(135deg, rgba(67,76,106,.98), rgba(55,48,77,.96));
 }
 
-.admin-layout app-manager-control button.manager-performance-fact.manager-performance-fact,
-.admin-layout app-manager-control button.manager-performance-factor.manager-performance-factor {
+app-manager-control .admin-layout button.manager-performance-fact.manager-performance-fact,
+app-manager-control .admin-layout button.manager-performance-factor.manager-performance-factor {
   contain-intrinsic-block-size: auto 44px !important;
   display: grid !important;
   min-width: 0 !important;
@@ -4721,45 +4880,45 @@ body.otziv-dark-theme app-manager-control button.manager-details-chip.manager-de
   text-align: left !important;
 }
 
-.admin-layout app-manager-control button.manager-performance-fact.manager-performance-fact {
+app-manager-control .admin-layout button.manager-performance-fact.manager-performance-fact {
   grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: .35rem !important;
 }
 
-.admin-layout app-manager-control button.manager-performance-factor.manager-performance-factor {
+app-manager-control .admin-layout button.manager-performance-factor.manager-performance-factor {
   grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: .28rem .45rem !important;
 }
 
-.admin-layout app-manager-control button.manager-performance-fact.manager-performance-fact:hover,
-.admin-layout app-manager-control button.manager-performance-fact.manager-performance-fact.active,
-.admin-layout app-manager-control button.manager-performance-factor.manager-performance-factor:hover,
-.admin-layout app-manager-control button.manager-performance-factor.manager-performance-factor.active {
+app-manager-control .admin-layout button.manager-performance-fact.manager-performance-fact:hover,
+app-manager-control .admin-layout button.manager-performance-fact.manager-performance-fact.active,
+app-manager-control .admin-layout button.manager-performance-factor.manager-performance-factor:hover,
+app-manager-control .admin-layout button.manager-performance-factor.manager-performance-factor.active {
   border-color: rgba(121,151,191,.34) !important;
   background: linear-gradient(135deg, rgba(238,246,255,.96), rgba(255,255,255,.92)) !important;
 }
 
-.admin-layout app-manager-control .manager-performance-facts {
+app-manager-control .admin-layout .manager-performance-facts {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   align-items: stretch !important;
   gap: .45rem !important;
 }
 
-.admin-layout app-manager-control .manager-performance-formula > div {
+app-manager-control .admin-layout .manager-performance-formula > div {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: .45rem !important;
 }
 
-.admin-layout app-manager-control .manager-performance-factor span {
+app-manager-control .admin-layout .manager-performance-factor span {
   display: grid !important;
   min-width: 0 !important;
 }
 
-.admin-layout app-manager-control .day-control-hint {
+app-manager-control .admin-layout .day-control-hint {
   grid-column: 1 / -1;
   margin: 0;
   border: 1px solid rgba(121,151,191,.18);
@@ -4772,7 +4931,7 @@ body.otziv-dark-theme app-manager-control button.manager-details-chip.manager-de
   line-height: 1.25;
 }
 
-.admin-layout app-manager-control .detail-example-more {
+app-manager-control .admin-layout .detail-example-more {
   justify-self: center;
   margin: -2px 0 0;
   border: 1px solid #dce5f2;
@@ -4786,9 +4945,9 @@ body.otziv-dark-theme app-manager-control button.manager-details-chip.manager-de
   text-align: center;
 }
 
-.admin-layout app-manager-control .manager-performance-facts b,
-.admin-layout app-manager-control .manager-performance-factor b,
-.admin-layout app-manager-control .manager-performance-factor strong {
+app-manager-control .admin-layout .manager-performance-facts b,
+app-manager-control .admin-layout .manager-performance-factor b,
+app-manager-control .admin-layout .manager-performance-factor strong {
   min-width: 0 !important;
   overflow: hidden !important;
   color: var(--otziv-dark) !important;
@@ -4798,8 +4957,8 @@ body.otziv-dark-theme app-manager-control button.manager-details-chip.manager-de
   word-break: normal !important;
 }
 
-.admin-layout app-manager-control .manager-performance-facts small,
-.admin-layout app-manager-control .manager-performance-factor small {
+app-manager-control .admin-layout .manager-performance-facts small,
+app-manager-control .admin-layout .manager-performance-factor small {
   min-width: 0 !important;
   overflow: hidden !important;
   color: #6b7486 !important;
@@ -4809,12 +4968,20 @@ body.otziv-dark-theme app-manager-control button.manager-details-chip.manager-de
   word-break: normal !important;
 }
 
-body.otziv-dark-theme .admin-layout app-manager-control button.manager-performance-fact.manager-performance-fact,
-body.otziv-dark-theme .admin-layout app-manager-control button.manager-performance-factor.manager-performance-factor {
+body.otziv-dark-theme app-manager-control .admin-layout button.manager-performance-fact.manager-performance-fact,
+body.otziv-dark-theme app-manager-control .admin-layout button.manager-performance-factor.manager-performance-factor {
   border-color: rgba(159,184,215,.16) !important;
   color: #f3f7ff !important;
   background: linear-gradient(135deg, rgba(44,52,64,.98), rgba(37,45,56,.94)) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06) !important;
 }
 
-
+body.otziv-dark-theme .manager-performance-card .manager-performance-tip,
+body.otziv-dark-theme .manager-performance-card .manager-performance-factor em,
+body.otziv-dark-theme app-manager-control .manager-performance-tip,
+body.otziv-dark-theme app-manager-control .manager-performance-factor em {
+  border-color: rgba(159,184,215,.16) !important;
+  color: #f3f7ff !important;
+  background: #242b35 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05) !important;
+}

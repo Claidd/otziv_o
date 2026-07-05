@@ -22,7 +22,7 @@ export class UserCreateComponent {
   private readonly adminUsersApi = inject(AdminUsersApi);
   private readonly toastService = inject(ToastService);
 
-  readonly availableRoles = ['ADMIN', 'OWNER', 'MANAGER', 'OPERATOR', 'WORKER', 'MARKETOLOG', 'CLIENT'];
+  readonly availableRoles = ['ADMIN', 'OWNER', 'MANAGER', 'OPERATOR', 'WORKER', 'PERFORMER', 'MARKETOLOG', 'CLIENT'];
 
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
@@ -118,6 +118,7 @@ export class UserCreateComponent {
       MANAGER: 'Менеджер',
       OPERATOR: 'Оператор',
       WORKER: 'Специалист',
+      PERFORMER: 'Исполнитель',
       MARKETOLOG: 'Маркетолог',
       CLIENT: 'Клиент'
     }[role] ?? role;

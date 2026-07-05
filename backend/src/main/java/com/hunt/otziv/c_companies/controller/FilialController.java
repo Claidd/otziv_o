@@ -3,7 +3,7 @@ package com.hunt.otziv.c_companies.controller;
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.c_cities.dto.CityDTO;
-import com.hunt.otziv.c_cities.sevices.CityService;
+import com.hunt.otziv.c_cities.services.CityService;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.services.FilialService;
 import lombok.RequiredArgsConstructor;

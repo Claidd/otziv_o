@@ -282,6 +282,30 @@ p {
   font-size: 1.35rem;
 }
 
+.manager-performance-score-icon {
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  color: var(--otziv-white);
+  background: var(--otziv-primary);
+  font-size: 1.02rem;
+  font-weight: 1000;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0.55rem 1rem rgba(38, 51, 77, 0.12);
+}
+
+.manager-performance-score-icon.excellent,
+.manager-performance-score-icon.good {
+  background: var(--otziv-success);
+}
+
+.manager-performance-score-icon.warning {
+  color: #3f3210;
+  background: var(--otziv-warning);
+}
+
+.manager-performance-score-icon.risk {
+  background: var(--otziv-danger);
+}
+
 .manager-row.red .status-icon {
   background: rgba(239, 49, 100, 0.1);
 }

@@ -1,0 +1,17 @@
+{
+  "name": "otziv-external-review-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "install-browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.18.3",
+    "playwright": "^1.49.1",
+    "tesseract.js": "^5.1.1"
+  }
+}

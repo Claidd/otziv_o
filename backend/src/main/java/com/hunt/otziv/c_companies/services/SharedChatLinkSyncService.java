@@ -1,5 +1,6 @@
 package com.hunt.otziv.c_companies.services;
 
+import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import lombok.RequiredArgsConstructor;

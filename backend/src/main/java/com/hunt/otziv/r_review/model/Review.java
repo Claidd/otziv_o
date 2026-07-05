@@ -17,6 +17,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Entity
@@ -48,6 +49,15 @@ public class Review {
     private int accountWalkDelayDays;
     @Column(name = "review_publish")
     private boolean publish;
+    @Column(name = "review_published_marked_at")
+    private LocalDateTime publishedMarkedAt;
+    @Builder.Default
+    @Column(name = "review_external_confirm_status", nullable = false)
+    private String externalConfirmStatus = "PENDING";
+    @Column(name = "review_external_confirmed_at")
+    private LocalDateTime externalConfirmedAt;
+    @Column(name = "review_external_confirm_screenshot_url")
+    private String externalConfirmScreenshotUrl;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "review_category")
     private Category category;

@@ -131,6 +131,29 @@ class ReviewAccountWalkScheduleServiceTest {
         verify(reviewRepository, never()).saveAll(anyList());
     }
 
+    @Test
+    void forcedUnwalkedAssignmentFromPublicationShiftsDatesEvenWhenOldAccountWasUnwalked() {
+        ReviewAccountWalkScheduleService service = service();
+        OrderDetails details = details(400L);
+        Review trigger = review(30L, details, LocalDate.of(2026, 7, 6), false);
+        Review following = review(31L, details, LocalDate.of(2026, 7, 8), false);
+        trigger.setBot(bot(0));
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
+        when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(400L))
+                .thenReturn(List.of(trigger, following));
+
+        service.synchronizeAfterAccountChange(trigger, false, true);
+
+        assertFalse(trigger.isVigul());
+        assertEquals(2, trigger.getAccountWalkDelayDays());
+        assertEquals(2, following.getAccountWalkDelayDays());
+        assertEquals(LocalDate.of(2026, 7, 8), trigger.getPublishedDate());
+        assertEquals(LocalDate.of(2026, 7, 10), following.getPublishedDate());
+        verify(reviewRepository).saveAll(List.of(trigger, following));
+    }
+
     private ReviewAccountWalkScheduleService service() {
         return new ReviewAccountWalkScheduleService(reviewRepository, appSettingService);
     }

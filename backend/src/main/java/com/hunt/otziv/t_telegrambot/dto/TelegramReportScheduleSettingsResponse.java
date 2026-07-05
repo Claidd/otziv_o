@@ -1,4 +1,4 @@
-package com.hunt.otziv.t_telegrambot.service;
+package com.hunt.otziv.t_telegrambot.dto;
 
 public record TelegramReportScheduleSettingsResponse(
         boolean morningEnabled,

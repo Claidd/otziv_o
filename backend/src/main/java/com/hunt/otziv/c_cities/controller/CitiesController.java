@@ -5,7 +5,7 @@ import com.hunt.otziv.config.legacy.LegacyMvc;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_cities.dto.CityDTO;
 import com.hunt.otziv.c_cities.repository.CityRepository;
-import com.hunt.otziv.c_cities.sevices.CityService;
+import com.hunt.otziv.c_cities.services.CityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;

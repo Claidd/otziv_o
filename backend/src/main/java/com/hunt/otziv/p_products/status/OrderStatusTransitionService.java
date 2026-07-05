@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
+import com.hunt.otziv.performers.service.PerformerPublicationRequestedEvent;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
@@ -25,6 +26,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -81,6 +83,7 @@ public class OrderStatusTransitionService {
     private final BusinessAuditService businessAuditService;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final ReviewRecoveryGateService recoveryGateService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public boolean changeStatusForOrder(Long orderID, String title) throws Exception {
@@ -262,6 +265,7 @@ public class OrderStatusTransitionService {
             }
 
             notifyClientAboutPublicationStarted(order, previousOrderStatus);
+            eventPublisher.publishEvent(new PerformerPublicationRequestedEvent(order.getId()));
             return true;
 
         } catch (ResponseStatusException e) {

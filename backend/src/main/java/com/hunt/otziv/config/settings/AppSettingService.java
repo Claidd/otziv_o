@@ -123,6 +123,9 @@ public class AppSettingService {
     public static final String PAYMENTS_TBANK_TPAY_ENABLED = "payments.tbank.tpay-enabled";
     public static final String PAYMENTS_TBANK_SBERPAY_ENABLED = "payments.tbank.sberpay-enabled";
     public static final String PAYMENTS_TBANK_MIRPAY_ENABLED = "payments.tbank.mirpay-enabled";
+    public static final String PERFORMERS_ROLLOUT_ENABLED = "performers.rollout.enabled";
+    public static final String PERFORMERS_ROLLOUT_CITY_IDS = "performers.rollout.city-ids";
+    public static final String PERFORMERS_ROLLOUT_PRODUCT_IDS = "performers.rollout.product-ids";
 
     private final AppSettingRepository repository;
     private final Map<String, CachedSetting> cache = new ConcurrentHashMap<>();

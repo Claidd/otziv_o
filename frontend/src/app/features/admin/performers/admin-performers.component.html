@@ -1,0 +1,128 @@
+<app-admin-layout title="Исполнители" active="performers">
+  @if (error()) {
+    <app-load-error-card title="Контроль не загружен" [message]="error()!" />
+  }
+
+  @if (loading()) {
+    <section class="panel">Загружаю контроль исполнителей</section>
+  } @else if (control()) {
+    <section class="panel rollout">
+      <header class="section-header">
+        <h2>Тестовый запуск</h2>
+        <label class="switch">
+          <input type="checkbox" [ngModel]="rolloutEnabled()" (ngModelChange)="rolloutEnabled.set($event)">
+          <span>Раздача исполнителям</span>
+        </label>
+      </header>
+      <div class="rollout-grid">
+        <label>
+          <span>ID городов</span>
+          <input type="text" [ngModel]="rolloutCityIds()" (ngModelChange)="rolloutCityIds.set($event)" placeholder="Например: 1, 7">
+        </label>
+        <label>
+          <span>ID продуктов</span>
+          <input type="text" [ngModel]="rolloutProductIds()" (ngModelChange)="rolloutProductIds.set($event)" placeholder="Например: 12">
+        </label>
+        <button type="button" (click)="saveRollout()" [disabled]="saving() === 'rollout'">
+          <span class="material-icons-sharp">save</span>
+          Сохранить
+        </button>
+      </div>
+      <p class="muted">
+        Сейчас: {{ control()!.rollout.enabled ? 'включено' : 'выключено' }};
+        города: {{ control()!.rollout.parsedCityIds.length ? control()!.rollout.parsedCityIds.join(', ') : 'без ограничения' }};
+        продукты: {{ control()!.rollout.parsedProductIds.length ? control()!.rollout.parsedProductIds.join(', ') : 'без ограничения' }}.
+      </p>
+    </section>
+
+    <section class="panel manual-run">
+      <header class="section-header">
+        <h2>Ручной запуск</h2>
+        <button type="button" class="secondary" (click)="runSchedulerOnce()" [disabled]="saving() === 'scheduler'">
+          <span class="material-icons-sharp">play_arrow</span>
+          Прогнать раздачу
+        </button>
+      </header>
+      <div class="rollout-grid">
+        <label>
+          <span>ID заказа</span>
+          <input type="number" min="1" step="1" [ngModel]="manualOrderId()" (ngModelChange)="manualOrderId.set($event)" placeholder="Например: 1542">
+        </label>
+        <button type="button" (click)="createAssignmentsForOrder()" [disabled]="saving() === 'create-assignments'">
+          <span class="material-icons-sharp">add_task</span>
+          Создать задания
+        </button>
+      </div>
+      <p class="muted">
+        Для существующего заказа в публикации: сначала создать задания по заказу, потом прогнать раздачу.
+      </p>
+    </section>
+
+    <section class="metrics">
+      @for (city of control()!.cityReports; track city.cityId) {
+        <article>
+          <h2>{{ city.cityTitle }}</h2>
+          <p><span>Исполнители</span><strong>{{ city.activePerformers }}</strong></p>
+          <p><span>Очередь</span><strong>{{ city.queueAssignments }}</strong></p>
+          <p><span>В работе</span><strong>{{ city.activeAssignments }}</strong></p>
+          <p><span>Готово</span><strong>{{ city.verifiedAssignments }}</strong></p>
+        </article>
+      }
+    </section>
+
+    <section class="panel">
+      <header class="section-header">
+        <h2>Исполнители</h2>
+        <input type="text" [ngModel]="statusReason()" (ngModelChange)="statusReason.set($event)" placeholder="Причина изменения статуса">
+      </header>
+      <div class="table">
+        <div class="row header">
+          <span>Имя</span>
+          <span>Город</span>
+          <span>Статус</span>
+          <span>Telegram</span>
+          <span>Счетчики</span>
+          <span></span>
+        </div>
+        @for (performer of control()!.performers; track performer.id) {
+          <div class="row">
+            <span>{{ performer.fio || performer.username }}</span>
+            <span>{{ performer.cityTitle || '-' }}</span>
+            <span>{{ performer.status }}</span>
+            <span>{{ performer.telegramChatId || 'не привязан' }}</span>
+            <span>{{ performer.completedCount }} / {{ performer.cancelledCount }} / {{ performer.expiredOfferCount }}</span>
+            <span class="actions">
+              <button type="button" (click)="updateStatus(performer, 'ACTIVE')" [disabled]="saving() === 'status-' + performer.id">Актив</button>
+              <button type="button" class="secondary" (click)="updateStatus(performer, 'PAUSED')" [disabled]="saving() === 'status-' + performer.id">Пауза</button>
+              <button type="button" class="danger" (click)="updateStatus(performer, 'BLOCKED')" [disabled]="saving() === 'status-' + performer.id">Блок</button>
+            </span>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="section-header">
+        <h2>Задания</h2>
+      </header>
+      <div class="assignment-list">
+        @for (assignment of control()!.assignments; track assignment.id) {
+          <article>
+            <header>
+              <h3>#{{ assignment.id }} · {{ assignment.companyTitle || 'Компания' }}</h3>
+              <span>{{ assignment.status }}</span>
+            </header>
+            <p>{{ assignment.cityTitle }} · {{ assignment.platform }} · отзыв #{{ assignment.reviewId }}</p>
+            <p>{{ assignment.draftText }}</p>
+            @if (assignment.status === 'PUBLISHED_CLAIMED') {
+              <button type="button" (click)="verifyAssignment(assignment)" [disabled]="saving() === 'verify-' + assignment.id">
+                <span class="material-icons-sharp">verified</span>
+                Подтвердить вручную
+              </button>
+            }
+          </article>
+        }
+      </div>
+    </section>
+  }
+</app-admin-layout>

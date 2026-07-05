@@ -1,0 +1,95 @@
+<app-admin-layout title="Регистрация исполнителя" active="register-performer">
+  @if (!created()) {
+    <form class="panel performer-form" [formGroup]="form" (ngSubmit)="submit()">
+      <label>
+        <span>Имя и фамилия</span>
+        <input type="text" formControlName="fio" autocomplete="name">
+      </label>
+
+      <label>
+        <span>Телефон</span>
+        <input type="tel" formControlName="phoneNumber" autocomplete="tel">
+      </label>
+
+      <label>
+        <span>Город</span>
+        <select formControlName="cityId" [disabled]="loadingCities()">
+          <option [ngValue]="0">Выберите город</option>
+          @for (city of cities(); track city.id) {
+            <option [ngValue]="city.id">{{ city.cityTitle }}</option>
+          }
+        </select>
+      </label>
+
+      <label>
+        <span>Пол</span>
+        <select formControlName="gender">
+          <option value="NOT_SPECIFIED">Не указывать</option>
+          <option value="FEMALE">Женский</option>
+          <option value="MALE">Мужской</option>
+          <option value="OTHER">Другой</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Telegram</span>
+        <input type="text" formControlName="telegramUsername" placeholder="@username">
+      </label>
+
+      <label>
+        <span>Источник</span>
+        <select formControlName="registeredSource">
+          <option value="SITE">Сайт</option>
+          <option value="AVITO">Авито</option>
+          <option value="TELEGRAM">Telegram</option>
+          <option value="WHATSAPP">WhatsApp</option>
+          <option value="OTHER">Другое</option>
+        </select>
+      </label>
+
+      @if (form.invalid && form.touched) {
+        <p class="error">Заполните имя, телефон и город.</p>
+      }
+
+      @if (error()) {
+        <app-load-error-card title="Регистрация не выполнена" [message]="error()!" />
+      }
+
+      <div class="actions">
+        <a class="button secondary" routerLink="/">
+          <span class="material-icons-sharp">arrow_back</span>
+          Назад
+        </a>
+        <button type="submit" [disabled]="saving() || loadingCities()">
+          <span class="material-icons-sharp">person_add</span>
+          {{ saving() ? 'Регистрирую' : 'Зарегистрироваться' }}
+        </button>
+      </div>
+    </form>
+  } @else {
+    <section class="panel registration-success">
+      <span class="success-icon material-icons-sharp">task_alt</span>
+      <h2>Исполнитель зарегистрирован</h2>
+      <dl>
+        <div>
+          <dt>Логин</dt>
+          <dd>{{ created()!.username }}</dd>
+        </div>
+        <div>
+          <dt>Временный пароль</dt>
+          <dd>{{ created()!.temporaryPassword }}</dd>
+        </div>
+      </dl>
+      @if (created()!.telegramLinkUrl) {
+        <a class="telegram-link" [href]="created()!.telegramLinkUrl" target="_blank" rel="noreferrer">
+          <span class="material-icons-sharp">send</span>
+          Привязать Telegram
+        </a>
+      }
+      <button type="button" class="login-button" (click)="login()">
+        <span class="material-icons-sharp">login</span>
+        Войти в кабинет
+      </button>
+    </section>
+  }
+</app-admin-layout>

@@ -1,0 +1,128 @@
+:host {
+  display: block;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.toolbar button,
+.assignment-card footer button,
+.publish-form button {
+  display: inline-flex;
+  min-height: 2.8rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0.7rem;
+  padding: 0 1rem;
+  color: white;
+  background: var(--otziv-primary);
+  font-family: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.toolbar button {
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.toolbar button.active {
+  color: white;
+  background: var(--otziv-primary);
+}
+
+.toolbar strong {
+  display: grid;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  place-items: center;
+  border-radius: 999px;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.empty,
+.assignment-card {
+  margin-top: 1.2rem;
+  border-radius: var(--otziv-card-radius);
+  padding: var(--otziv-card-padding);
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.assignment-card {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0;
+}
+
+.assignment-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.assignment-card h2,
+.assignment-card p {
+  margin: 0;
+}
+
+.assignment-card header p,
+.meta {
+  color: var(--otziv-info);
+  font-weight: 800;
+}
+
+.instruction {
+  line-height: 1.45;
+}
+
+blockquote {
+  margin: 0;
+  border-left: 4px solid var(--otziv-primary);
+  padding: 0.8rem 1rem;
+  background: rgba(108, 155, 207, 0.08);
+  font-weight: 700;
+}
+
+footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+button.secondary {
+  color: var(--otziv-dark);
+  background: rgba(132, 139, 200, 0.16);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.publish-form {
+  display: grid;
+  gap: 0.8rem;
+  border-top: 1px solid rgba(132, 139, 200, 0.18);
+  padding-top: 1rem;
+}
+
+textarea {
+  resize: vertical;
+}

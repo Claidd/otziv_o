@@ -1,4 +1,4 @@
-package com.hunt.otziv.whatsapp.service;
+package com.hunt.otziv.whatsapp.dto;
 
 public record WhatsAppGroupSyncSettingsResponse(
         boolean enabled,

@@ -477,6 +477,216 @@ button.login-pill.logout {
   margin-top: 1rem;
 }
 
+.profile-performance-card {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+  border: 1px solid rgba(121, 151, 191, 0.18);
+  border-radius: 1.2rem;
+  padding: 0.95rem;
+  background: var(--otziv-white);
+  box-shadow: var(--otziv-shadow);
+}
+
+.profile-performance-card header {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.profile-performance-card header > span {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.09);
+  font-size: 1.1rem;
+}
+
+.profile-performance-card.good header > span,
+.profile-performance-card.excellent header > span {
+  color: var(--otziv-success);
+  background: rgba(76, 157, 135, 0.13);
+}
+
+.profile-performance-card.warning header > span {
+  color: #b98312;
+  background: rgba(247, 208, 96, 0.18);
+}
+
+.profile-performance-card header > div,
+.profile-performance-card .manager-performance-factor span {
+  min-width: 0;
+}
+
+.profile-performance-card header strong,
+.profile-performance-card header small,
+.profile-performance-card .manager-performance-fact small,
+.profile-performance-card .manager-performance-factor b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-performance-card header strong {
+  display: block;
+  color: var(--otziv-dark);
+  font-size: 0.9rem;
+  font-weight: 1000;
+  line-height: 1.15;
+}
+
+.profile-performance-card header small {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.profile-performance-card .manager-performance-facts,
+.profile-performance-card .manager-performance-formula > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+app-admin-layout .admin-layout button.manager-performance-fact.manager-performance-fact,
+app-admin-layout .admin-layout button.manager-performance-factor.manager-performance-factor {
+  contain-intrinsic-block-size: auto 44px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  align-items: center !important;
+  justify-content: stretch !important;
+  gap: 0.28rem 0.45rem !important;
+  border: 1px solid rgba(121, 151, 191, 0.2) !important;
+  border-radius: 0.78rem !important;
+  padding: 0.48rem 0.58rem !important;
+  color: var(--otziv-dark) !important;
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.94), rgba(255, 255, 255, 0.88)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62) !important;
+  font: inherit !important;
+  text-align: left !important;
+}
+
+app-admin-layout .admin-layout button.manager-performance-fact.manager-performance-fact:hover,
+app-admin-layout .admin-layout button.manager-performance-fact.manager-performance-fact.active,
+app-admin-layout .admin-layout button.manager-performance-factor.manager-performance-factor:hover,
+app-admin-layout .admin-layout button.manager-performance-factor.manager-performance-factor.active {
+  border-color: rgba(121, 151, 191, 0.36) !important;
+  background: linear-gradient(135deg, rgba(238, 246, 255, 0.96), rgba(255, 255, 255, 0.92)) !important;
+}
+
+.profile-performance-card .manager-performance-factor span {
+  display: grid;
+}
+
+.profile-performance-card .manager-performance-fact small,
+.profile-performance-card .manager-performance-factor small {
+  min-width: 0;
+  overflow: hidden;
+  color: #6b7486;
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-performance-card .manager-performance-fact b,
+.profile-performance-card .manager-performance-factor b,
+.profile-performance-card .manager-performance-factor strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--otziv-dark);
+  font-size: 0.72rem;
+  font-weight: 1000;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-performance-card .manager-performance-factor strong {
+  justify-self: end;
+}
+
+.manager-performance-tip,
+.manager-performance-factor em {
+  border: 1px solid rgba(121, 151, 191, 0.18);
+  border-radius: 0.78rem;
+  padding: 0.6rem 0.65rem;
+  color: var(--otziv-dark);
+  background: rgba(248, 250, 255, 0.92);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+body.otziv-dark-theme .profile-performance-card {
+  border-color: rgba(159, 184, 215, 0.14);
+  background: linear-gradient(180deg, rgba(31, 36, 43, 0.96), rgba(27, 31, 38, 0.98));
+  box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.22);
+}
+
+body.otziv-dark-theme .profile-performance-card header > span {
+  color: #ff8caf;
+  background: rgba(255, 91, 143, 0.16);
+}
+
+body.otziv-dark-theme .profile-performance-card.good header > span,
+body.otziv-dark-theme .profile-performance-card.excellent header > span {
+  color: #8de3ca;
+  background: rgba(76, 157, 135, 0.18);
+}
+
+body.otziv-dark-theme .profile-performance-card.warning header > span {
+  color: #f8d975;
+  background: rgba(247, 208, 96, 0.16);
+}
+
+body.otziv-dark-theme app-admin-layout .admin-layout button.manager-performance-fact.manager-performance-fact,
+body.otziv-dark-theme app-admin-layout .admin-layout button.manager-performance-factor.manager-performance-factor {
+  border-color: rgba(159, 184, 215, 0.16) !important;
+  color: #f3f7ff !important;
+  background: linear-gradient(135deg, rgba(44, 52, 64, 0.98), rgba(37, 45, 56, 0.94)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+body.otziv-dark-theme app-admin-layout .admin-layout button.manager-performance-fact.manager-performance-fact:hover,
+body.otziv-dark-theme app-admin-layout .admin-layout button.manager-performance-fact.manager-performance-fact.active,
+body.otziv-dark-theme app-admin-layout .admin-layout button.manager-performance-factor.manager-performance-factor:hover,
+body.otziv-dark-theme app-admin-layout .admin-layout button.manager-performance-factor.manager-performance-factor.active {
+  border-color: rgba(159, 184, 215, 0.3) !important;
+  background: linear-gradient(135deg, rgba(52, 62, 77, 0.98), rgba(43, 51, 64, 0.96)) !important;
+}
+
+body.otziv-dark-theme .profile-performance-card header strong,
+body.otziv-dark-theme .profile-performance-card .manager-performance-fact b,
+body.otziv-dark-theme .profile-performance-card .manager-performance-factor b,
+body.otziv-dark-theme .profile-performance-card .manager-performance-factor strong {
+  color: #f7f9ff;
+}
+
+body.otziv-dark-theme .profile-performance-card header small,
+body.otziv-dark-theme .profile-performance-card .manager-performance-fact small,
+body.otziv-dark-theme .profile-performance-card .manager-performance-factor small {
+  color: #9fb1ca;
+}
+
+body.otziv-dark-theme .manager-performance-tip,
+body.otziv-dark-theme .manager-performance-factor em {
+  border-color: rgba(159, 184, 215, 0.16);
+  color: #f3f7ff;
+  background: #242b35;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 .reminders {
   margin-top: 1.45rem;
 }
@@ -662,6 +872,10 @@ button.login-pill.logout {
   .admin-layout.sidebar-hidden .reminders {
     margin-top: 1rem;
   }
+
+  .admin-layout.sidebar-hidden .profile-performance-card {
+    margin-top: 1rem;
+  }
 }
 
 @media (max-width: 860px) {
@@ -707,6 +921,10 @@ button.login-pill.logout {
 
   .admin-layout.right-panel-default .admin-right .right-nav {
     display: none;
+  }
+
+  .admin-layout.right-panel-default .profile-performance-card {
+    margin-top: 1rem;
   }
 
   .admin-layout.sidebar-hidden .mobile-start-nav {
@@ -794,6 +1012,13 @@ button.login-pill.logout {
   .admin-layout.sidebar-hidden .reminders,
   .admin-layout.right-panel-default .reminders {
     margin-top: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-performance-card .manager-performance-facts,
+  .profile-performance-card .manager-performance-formula > div {
+    grid-template-columns: 1fr;
   }
 }
 

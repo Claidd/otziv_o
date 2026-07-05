@@ -153,6 +153,7 @@
                   type="button"
                   class="manager-performance-fact"
                   [class.active]="activePerformanceTip() === performanceRowTipKey(manager, row)"
+                  [title]="row.label + ': ' + row.value"
                   (click)="togglePerformanceRowTip($event, manager, row)"
                 >
                   <small>{{ row.label }}</small>
@@ -171,6 +172,7 @@
                     type="button"
                     class="manager-performance-factor"
                     [class.active]="activePerformanceTip() === performanceTipKey(manager, factor)"
+                    [title]="factor.label + ': ' + factor.score + '/100'"
                     (click)="togglePerformanceTip($event, manager, factor)"
                   >
                     <span>
@@ -259,11 +261,17 @@
             <article class="personal-remark-card {{ detailCountToneClass(manager.totalAttentionCount) }}" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
               <header class="personal-remark-head {{ countToneClass(manager.totalAttentionCount) }}">
                 <div class="manager-main">
-                  <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
+                  @if (personalManagerPerformance(manager); as performance) {
+                    <span class="status-icon manager-performance-score-icon {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}" [title]="'Оценка менеджера: ' + performance.loadAdjustedPerformanceScore">
+                      {{ performance.loadAdjustedPerformanceScore }}
+                    </span>
+                  } @else {
+                    <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
+                  }
                   <div class="personal-remark-total">
                     <strong>
                       {{ manager.totalAttentionCount }} к действию
-                      @if (manager.managerPerformance; as performance) {
+                      @if (personalManagerPerformance(manager); as performance) {
                         <span class="manager-score-badge {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}">{{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</span>
                       }
                     </strong>

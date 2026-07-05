@@ -172,6 +172,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/admin/categories", "/api/admin/categories/**", "/api/admin/subcategories", "/api/admin/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers(HttpMethod.GET, "/api/admin/bots/*").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/admin/manager-control/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
+        auth.requestMatchers("/api/admin/performers/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/operator/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR");
         auth.requestMatchers("/api/companies/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");
@@ -224,6 +225,7 @@ public class SecurityConfig {
         auth.requestMatchers(HttpMethod.DELETE, "/api/manager/orders/*/recovery-tasks/*").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/api/worker/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers("/api/performer/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "PERFORMER");
         auth.requestMatchers("/api/bots/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/api/review").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/payments/public/**").permitAll();

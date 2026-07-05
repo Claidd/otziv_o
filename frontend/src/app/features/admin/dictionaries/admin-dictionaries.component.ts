@@ -339,7 +339,9 @@ export class AdminDictionariesComponent implements OnDestroy {
     title: this.fb.nonNullable.control('', Validators.required),
     price: this.fb.nonNullable.control('0', Validators.required),
     categoryId: this.fb.control<number | null>(null, Validators.required),
-    photo: this.fb.nonNullable.control(false)
+    photo: this.fb.nonNullable.control(false),
+    requiresPerformer: this.fb.nonNullable.control(false),
+    targetPlatform: this.fb.nonNullable.control<'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER'>('OTHER')
   });
 
   readonly phoneForm = this.fb.nonNullable.group({
@@ -946,7 +948,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       title: product.title,
       price: String(product.price ?? 0),
       categoryId: product.category?.id ?? this.defaultProductCategoryId(),
-      photo: product.photo
+      photo: product.photo,
+      requiresPerformer: product.requiresPerformer,
+      targetPlatform: product.targetPlatform || 'OTHER'
     });
     this.error.set(null);
   }
@@ -1047,7 +1051,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       title: '',
       price: '0',
       categoryId: this.defaultProductCategoryId(),
-      photo: false
+      photo: false,
+      requiresPerformer: false,
+      targetPlatform: 'OTHER'
     });
     this.selectedPhone.set(null);
     this.phoneForm.reset({
@@ -2632,7 +2638,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       title: raw.title.trim(),
       price: Number(raw.price || 0),
       categoryId: raw.categoryId,
-      photo: raw.photo
+      photo: raw.photo,
+      requiresPerformer: raw.requiresPerformer,
+      targetPlatform: raw.targetPlatform || 'OTHER'
     };
     const selectedId = this.selectedId();
     const call = selectedId == null

@@ -1,5 +1,6 @@
 package com.hunt.otziv.t_telegrambot.service;
 
+import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import org.junit.jupiter.api.Test;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -68,6 +69,11 @@ class TelegramServiceSendRetryTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
                     null);
             this.failuresBeforeSuccess = failuresBeforeSuccess;
         }
@@ -97,6 +103,8 @@ class TelegramServiceSendRetryTest {
                     "test_bot",
                     true,
                     "",
+                    null,
+                    null,
                     null,
                     null,
                     null,

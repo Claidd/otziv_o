@@ -1,4 +1,4 @@
-package com.hunt.otziv.c_companies.services;
+package com.hunt.otziv.c_companies.dto;
 
 public record SharedChatLinkSyncResponse(
         int scannedCompanies,

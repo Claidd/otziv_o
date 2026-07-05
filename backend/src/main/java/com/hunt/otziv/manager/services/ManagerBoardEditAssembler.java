@@ -10,7 +10,7 @@ import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.dto.CityDTO;
-import com.hunt.otziv.c_cities.sevices.CityService;
+import com.hunt.otziv.c_cities.services.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyContactDTO;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
@@ -505,7 +505,10 @@ public class ManagerBoardEditAssembler {
                 safe(review.getComment()),
                 review.getPrice(),
                 safe(review.getUrl()),
-                !isBlank(review.getUrlPhoto()) ? safe(review.getUrlPhoto()) : safe(review.getUrl())
+                !isBlank(review.getUrlPhoto()) ? safe(review.getUrlPhoto()) : safe(review.getUrl()),
+                safe(review.getExternalConfirmStatus()),
+                safe(review.getExternalConfirmedAt()),
+                safe(review.getExternalConfirmScreenshotUrl())
         );
     }
 

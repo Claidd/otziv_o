@@ -2,6 +2,7 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.dto.presonal.UserData;
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import lombok.RequiredArgsConstructor;

@@ -31,8 +31,12 @@ export interface AdminProduct {
   title: string;
   price: number;
   photo: boolean;
+  requiresPerformer: boolean;
+  targetPlatform: PerformerTargetPlatform;
   category?: DictionaryOption | null;
 }
+
+export type PerformerTargetPlatform = 'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER';
 
 export interface AdminBot {
   id: number;
@@ -608,6 +612,8 @@ export interface ProductRequest {
   price: number;
   categoryId: number | null;
   photo: boolean;
+  requiresPerformer: boolean;
+  targetPlatform: PerformerTargetPlatform;
 }
 
 export interface BotRequest {

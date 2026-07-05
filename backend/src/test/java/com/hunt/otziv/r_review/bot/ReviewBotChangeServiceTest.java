@@ -195,6 +195,26 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
+    void changeBotCanForceWalkDelayForPublicationSection() {
+        ReviewBotChangeService service = service();
+        Review review = new Review();
+        review.setVigul(false);
+        Bot oldBot = bot(17L, "Впиши Имя Фамилию", 0);
+        Bot selectedBot = bot(18L, "Впиши Имя Фамилию", 0);
+        review.setBot(oldBot);
+
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+        when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of())))
+                .thenReturn(selectedBot);
+
+        service.changeBot(17L, true);
+
+        assertSame(selectedBot, review.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
     void assignNewAccountClaimsAccountAndClearsVigulForRegularFilialCity() {
         ReviewBotChangeService service = service();
         City city = city(9L, "Иркутск");

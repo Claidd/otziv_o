@@ -14,7 +14,7 @@ import com.hunt.otziv.c_categories.repository.ProductCategoryRepository;
 import com.hunt.otziv.c_categories.repository.SubCategoryRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
-import com.hunt.otziv.c_companies.services.SharedChatLinkSyncResponse;
+import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.client_messages.service.ClientMessageSlotPlanner;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
@@ -29,8 +29,8 @@ import com.hunt.otziv.l_lead.repository.PromoTextAssignmentRepository;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
-import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsRequest;
-import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsResponse;
+import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsRequest;
+import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -38,8 +38,8 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
 import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
-import com.hunt.otziv.whatsapp.service.WhatsAppGroupSyncSettingsRequest;
-import com.hunt.otziv.whatsapp.service.WhatsAppGroupSyncSettingsResponse;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsRequest;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsResponse;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -254,6 +254,8 @@ public class ApiAdminDictionaryController {
                 .title(requiredTitle(request.title()))
                 .price(requiredPrice(request.price()))
                 .photo(request.photo())
+                .requiresPerformer(request.requiresPerformer())
+                .targetPlatform(normalizePerformerPlatform(request.targetPlatform()))
                 .productCategory(category)
                 .build();
 
@@ -273,6 +275,8 @@ public class ApiAdminDictionaryController {
         product.setTitle(requiredTitle(request.title()));
         product.setPrice(requiredPrice(request.price()));
         product.setPhoto(request.photo());
+        product.setRequiresPerformer(request.requiresPerformer());
+        product.setTargetPlatform(normalizePerformerPlatform(request.targetPlatform()));
         product.setProductCategory(category);
 
         return toProductResponse(productRepository.save(product));
@@ -815,8 +819,18 @@ public class ApiAdminDictionaryController {
                 safe(product.getTitle()),
                 product.getPrice() == null ? BigDecimal.ZERO : product.getPrice(),
                 Boolean.TRUE.equals(product.getPhoto()),
+                product.isRequiresPerformer(),
+                safe(product.getTargetPlatform()),
                 category == null ? null : new OptionResponse(category.getId(), safe(category.getTitle()))
         );
+    }
+
+    private String normalizePerformerPlatform(String value) {
+        String platform = safe(value).trim().toUpperCase(Locale.ROOT);
+        return switch (platform) {
+            case "YANDEX", "GOOGLE", "GIS", "OTHER" -> platform;
+            default -> "OTHER";
+        };
     }
 
     private BotResponse toBotResponse(Bot bot) {
@@ -1517,7 +1531,9 @@ public class ApiAdminDictionaryController {
             String title,
             BigDecimal price,
             Long categoryId,
-            boolean photo
+            boolean photo,
+            boolean requiresPerformer,
+            String targetPlatform
     ) {
     }
 
@@ -1526,6 +1542,8 @@ public class ApiAdminDictionaryController {
             String title,
             BigDecimal price,
             boolean photo,
+            boolean requiresPerformer,
+            String targetPlatform,
             OptionResponse category
     ) {
     }

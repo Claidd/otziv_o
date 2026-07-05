@@ -4,6 +4,7 @@
   active="dashboard"
   [profileImageUrl]="profileImageUrl()"
   [profileImageAlt]="cabinet()?.workerZp?.fio || 'Фото профиля'"
+  [managerPerformance]="cabinet()?.managerPerformance || null"
 >
   @if (auth.authenticated()) {
     @if (isClientUser()) {
@@ -41,7 +42,11 @@
 
       @if (showManagerControl()) {
         <div class="manager-control-strip">
-          <app-manager-control [embedded]="true" [personalControl]="true" />
+          <app-manager-control
+            [embedded]="true"
+            [personalControl]="true"
+            [managerPerformance]="cabinet()?.managerPerformance || null"
+          />
         </div>
       }
 
@@ -498,7 +503,7 @@
     <section class="panel start-illustration-panel" aria-label="Рабочее пространство Компания О!">
       <span class="start-illustration-heading start-illustration-heading--top">Работа</span>
       <img
-        src="/assets/images/TacoCloud.jpg"
+        src="/assets/images/TacoCloud.png"
         width="1280"
         height="800"
         decoding="async"

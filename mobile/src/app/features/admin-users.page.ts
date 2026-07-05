@@ -34,7 +34,7 @@ interface UserDraft {
   roles: string[];
 }
 
-const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG'];
+const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG'];
 
 @Component({
   selector: 'app-admin-users-page',
@@ -641,6 +641,7 @@ export class AdminUsersPage implements OnInit {
       OWNER: 'Владелец',
       MANAGER: 'Менеджер',
       WORKER: 'Специалист',
+      PERFORMER: 'Исполнитель',
       OPERATOR: 'Оператор',
       MARKETOLOG: 'Маркетолог'
     }[role] ?? role;

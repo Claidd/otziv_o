@@ -860,6 +860,7 @@
                     <th>Цена</th>
                     <th>Категория</th>
                     <th>Фото</th>
+                    <th>Исполнители</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -874,9 +875,14 @@
                       <td>
                         <span class="status-pill" [class.off]="!product.photo">{{ product.photo ? 'Да' : 'Нет' }}</span>
                       </td>
+                      <td>
+                        <span class="status-pill" [class.off]="!product.requiresPerformer">
+                          {{ product.requiresPerformer ? product.targetPlatform : 'Нет' }}
+                        </span>
+                      </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="4" class="no-results">Продуктов нет.</td></tr>
+                    <tr><td colspan="5" class="no-results">Продуктов нет.</td></tr>
                   }
                 </tbody>
               </table>
@@ -1612,6 +1618,21 @@
               <label class="checkbox" appTooltip="Если включено, менеджер увидит, что для этого продукта нужно подготовить фото.">
                 <input type="checkbox" formControlName="photo">
                 <span>Нужна фотография</span>
+              </label>
+
+              <label class="checkbox" appTooltip="Если включено, после перехода заказа в публикацию отзывы по этому продукту будут передаваться исполнителям в разрешенных rollout городах.">
+                <input type="checkbox" formControlName="requiresPerformer">
+                <span>Публикация через исполнителей</span>
+              </label>
+
+              <label appTooltip="Площадка попадет в карточку задания исполнителя и поможет внешней проверке выбрать правильный сценарий.">
+                <span>Площадка исполнителя</span>
+                <select formControlName="targetPlatform">
+                  <option value="YANDEX">Яндекс</option>
+                  <option value="GOOGLE">Google</option>
+                  <option value="GIS">2GIS</option>
+                  <option value="OTHER">Другая</option>
+                </select>
               </label>
 
               @if (productForm.invalid && productForm.touched) {

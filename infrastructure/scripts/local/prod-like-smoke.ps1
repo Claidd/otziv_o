@@ -1424,7 +1424,7 @@ try {
     if (-not $NoLogs) {
         Write-Host ""
         Write-Host "Last container logs:"
-        & docker @($composeArgs + @("logs", "--tail=200", "nginx", "app", "keycloak"))
+        & docker @($composeArgs + @("logs", "--tail=200", "nginx", "app", "keycloak", "external-review-worker"))
     }
 
     throw

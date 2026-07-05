@@ -36,6 +36,9 @@ public record ReviewDetailsResponse(
         String comment,
         BigDecimal price,
         String url,
-        String urlPhoto
+        String urlPhoto,
+        String externalConfirmStatus,
+        String externalConfirmedAt,
+        String externalConfirmScreenshotUrl
 ) {
 }

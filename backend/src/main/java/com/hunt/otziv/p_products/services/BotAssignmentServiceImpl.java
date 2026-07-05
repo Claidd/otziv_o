@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -33,6 +34,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final ReviewRepository reviewRepository;
     private final TelegramService telegramService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     private static final Long STUB_BOT_ID = 1L;
     private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
@@ -400,13 +402,17 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 continue;
             }
 
+            usedBotIds.addAll(getUsedBotIdsInCompany(filial));
+            usedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
             Bot reserveBot = claimReserveBot(filial, usedBotIds, reviewIndex);
             if (reserveBot == null || STUB_BOT_ID.equals(reserveBot.getId())) {
                 continue;
             }
 
+            boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
             review.setBot(reserveBot);
             updateReviewVigulBasedOnBotCounter(review, reserveBot);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
             changedReviews.add(review);
         }
 
@@ -455,13 +461,11 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             botCounter = 0;
         }
 
-        // Если counter >= 3, устанавливаем isVigul = true
-        if (botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
-            if (!review.isVigul()) {
-                review.setVigul(true);
-                log.info("Обновлен отзыв ID {}: isVigul изменен с false на true (бот ID {} имеет counter={})",
-                        review.getId(), bot.getId(), botCounter);
-            }
+        boolean shouldBeVigul = botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT;
+        if (review.isVigul() != shouldBeVigul) {
+            review.setVigul(shouldBeVigul);
+            log.info("Обновлен отзыв ID {}: isVigul изменен на {} (бот ID {} имеет counter={})",
+                    review.getId(), shouldBeVigul, bot.getId(), botCounter);
         }
     }
 

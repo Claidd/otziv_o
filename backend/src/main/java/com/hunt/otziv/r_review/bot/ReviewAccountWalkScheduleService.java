@@ -34,6 +34,10 @@ public class ReviewAccountWalkScheduleService {
     }
 
     public void synchronizeAfterAccountChange(Review review, boolean oldWalked) {
+        synchronizeAfterAccountChange(review, oldWalked, false);
+    }
+
+    public void synchronizeAfterAccountChange(Review review, boolean oldWalked, boolean forceDelayIfUnwalked) {
         if (review == null) {
             return;
         }
@@ -45,7 +49,7 @@ public class ReviewAccountWalkScheduleService {
             return;
         }
 
-        if (oldWalked && !newWalked) {
+        if (!newWalked && (oldWalked || forceDelayIfUnwalked)) {
             applyWalkDelayCascade(review, walkDelayDays());
             return;
         }

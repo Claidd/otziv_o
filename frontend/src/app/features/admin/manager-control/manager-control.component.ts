@@ -30,6 +30,7 @@ import { LoadErrorCardComponent } from '../../../shared/load-error-card.componen
 import { ToastService } from '../../../shared/toast.service';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { AuthService } from '../../../core/auth.service';
+import { ManagerPerformanceScore } from '../../../core/cabinet.api';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -83,6 +84,7 @@ export class ManagerControlComponent implements OnInit {
 
   @Input() embedded = false;
   @Input() personalControl = false;
+  @Input() managerPerformance: ManagerPerformanceScore | null = null;
 
   readonly summary = signal<ManagerControlSummary | null>(null);
   readonly loading = signal(false);
@@ -516,7 +518,7 @@ export class ManagerControlComponent implements OnInit {
       return false;
     }
     if (item.group === 'ACTION') {
-      return item.examples.length > 0 || item.itemStatus !== 'OPEN' || !!item.comment;
+      return item.examples.length > 0;
     }
     return item.itemStatus !== 'OPEN' || !!item.comment || item.examples.some((example) =>
       !!example.comment || !!example.actionType || (!!example.itemStatus && example.itemStatus !== 'OPEN')
@@ -694,6 +696,10 @@ export class ManagerControlComponent implements OnInit {
 
   isPersonalControl(): boolean {
     return this.personalControl || this.routePersonalControl;
+  }
+
+  personalManagerPerformance(manager: ManagerControlManager): ManagerPerformanceScore | null {
+    return manager.managerPerformance ?? (this.personalEmbeddedMode() ? this.managerPerformance : null);
   }
 
   private clearDetails(): void {

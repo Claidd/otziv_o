@@ -4,6 +4,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.external_review_checks.service.ExternalReviewCheckService;
 import com.hunt.otziv.manager.dto.api.BadReviewTaskUpdateRequest;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
 import com.hunt.otziv.manager.dto.api.OrderDetailsResponse;
@@ -90,6 +91,7 @@ public class ApiManagerReviewController {
     private final ManagerAccessService managerAccessService;
     private final WorkerActivityService workerActivityService;
     private final WorkerCredentialPreparationService credentialPreparationService;
+    private final ExternalReviewCheckService externalReviewCheckService;
     private final Map<Long, Boolean> reviewHelpDraftLocks = new ConcurrentHashMap<>();
 
     @GetMapping("/orders/{orderId}/details")
@@ -389,7 +391,7 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Смена аккаунта здесь доступна только для отзыва без рабочего аккаунта");
         }
 
-        reviewService.changeBot(reviewId);
+        reviewService.changeBot(reviewId, isSourceSection(source, "publish"));
         if (restrictedWorkerAccountRepair && reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
             reviewService.assignNewAccount(reviewId);
         }
@@ -499,6 +501,23 @@ public class ApiManagerReviewController {
         credentialPreparationService.clear(authentication, WorkerCredentialPreparationScope.PUBLISH);
 
         return managerBoardEditAssembler.buildOrderDetailsResponse(orderId, authentication);
+    }
+
+    @PostMapping("/orders/{orderId}/reviews/{reviewId}/external-check")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ReviewDetailsResponse checkExternalReviewPresence(
+            @PathVariable Long orderId,
+            @PathVariable Long reviewId,
+            Authentication authentication
+    ) {
+        managerAccessService.requireOrderAccess(orderId, authentication);
+        requireReviewForOrder(orderId, reviewId);
+        try {
+            externalReviewCheckService.runManualCheck(orderId, reviewId);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+        return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }
 
     @PostMapping("/orders/{orderId}/bad-review-tasks/{taskId}/cancel")
@@ -1169,6 +1188,12 @@ public class ApiManagerReviewController {
                 || section.equals("all")
                 || section.equals("new")
                 || section.equals("correction");
+    }
+
+    private boolean isSourceSection(ReviewActivitySourceRequest source, String section) {
+        return source != null
+                && section != null
+                && section.equalsIgnoreCase(normalize(source.sourceSection()));
     }
 
     private boolean reviewNeedsAccountAssignment(Review review) {

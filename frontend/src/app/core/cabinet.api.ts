@@ -90,6 +90,7 @@ export interface CabinetProfile {
   date: string;
   user: UserLk;
   workerZp: UserStat;
+  managerPerformance?: ManagerPerformanceScore | null;
 }
 
 export interface ManagerManualPaymentSettings {

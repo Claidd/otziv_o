@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.r_review.bot.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -54,6 +55,9 @@ class BotAssignmentServiceImplTest {
 
     @Mock
     private ReviewBotCooldownService botCooldownService;
+
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @Test
     void getAvailableBotsByRulesExcludesBotsAlreadyUsedInCompany() {
@@ -157,16 +161,23 @@ class BotAssignmentServiceImplTest {
         stubReview.setId(2L);
         stubReview.setFilial(filial);
         stubReview.setBot(stubBot);
+        stubReview.setVigul(true);
 
         when(botService.claimReserveBotForCity(eq(city), anyCollection()))
                 .thenReturn(Optional.of(reserveBot));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(777L));
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(2L)).thenReturn(Set.of(888L));
+        when(accountWalkScheduleService.isWalkedAccount(stubBot)).thenReturn(true);
 
         service.checkAndNotifyAboutStubBots(List.of(existingReview, stubReview));
 
         ArgumentCaptor<Collection<Long>> excludedIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         verify(botService).claimReserveBotForCity(eq(city), excludedIdsCaptor.capture());
         assertTrue(excludedIdsCaptor.getValue().contains(101L));
+        assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 888L)));
         assertSame(reserveBot, stubReview.getBot());
+        assertEquals(false, stubReview.isVigul());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview, true);
         verify(reviewRepository).saveAll(List.of(stubReview));
         verify(telegramService, never()).sendAlertToAdmins(anyString());
     }
@@ -215,7 +226,14 @@ class BotAssignmentServiceImplTest {
     }
 
     private BotAssignmentServiceImpl service() {
-        return new BotAssignmentServiceImpl(botService, filialService, reviewRepository, telegramService, botCooldownService);
+        return new BotAssignmentServiceImpl(
+                botService,
+                filialService,
+                reviewRepository,
+                telegramService,
+                botCooldownService,
+                accountWalkScheduleService
+        );
     }
 
     private Bot bot(Long id, String fio, int counter) {

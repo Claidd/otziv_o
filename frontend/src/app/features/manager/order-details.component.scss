@@ -743,6 +743,7 @@
 .review-actions button {
   min-width: 0;
   min-height: 2.05rem;
+  border-radius: 1.5rem;
   padding: 0 0.25rem;
   overflow: hidden;
   font-size: 0.68rem;
@@ -782,7 +783,7 @@
 
 .publish-button {
   width: 100%;
-  border-radius: 1rem;
+  border-radius: 1.5rem;
   border-color: rgba(27, 156, 133, 0.24) !important;
   color: #137d69 !important;
   background: #dff7ed !important;
@@ -858,8 +859,290 @@
 .details-actions button {
   width: 100%;
   min-height: 2.65rem;
-  border-radius: 0.9rem;
+  border-radius: 1.5rem;
   text-transform: uppercase;
+}
+
+:host-context(body.otziv-dark-theme) .review-actions button {
+  border-color: rgba(122, 167, 220, 0.22);
+  color: #dbe6f8;
+  background: rgba(18, 23, 30, 0.72);
+}
+
+:host-context(body.otziv-dark-theme) .review-actions button:not(:disabled):hover {
+  border-color: rgba(122, 167, 220, 0.42);
+  color: #ffffff;
+  background: rgba(48, 58, 74, 0.92);
+}
+
+:host-context(body.otziv-dark-theme) .review-actions button:disabled,
+:host-context(body.otziv-dark-theme) .review-actions button.review-credential-action--muted:disabled {
+  border-color: rgba(122, 167, 220, 0.14);
+  color: #7f8da0;
+  background: rgba(24, 29, 37, 0.78);
+  box-shadow: none;
+}
+
+.publish-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.publish-row--with-check {
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  grid-auto-columns: 2.35rem;
+  grid-auto-flow: column;
+}
+
+.external-check-button {
+  display: inline-flex;
+  width: 2.35rem;
+  height: 2.2rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(55, 65, 81, 0.52) !important;
+  border-radius: 1.5rem;
+  color: #374151 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.external-check-button .material-icons-sharp {
+  font-size: 1.08rem;
+}
+
+.external-check-button:not(:disabled):hover {
+  border-color: rgba(31, 41, 55, 0.72);
+  color: #1f2937 !important;
+  background: transparent !important;
+}
+
+.external-check-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.external-check-button--confirmed,
+.external-check-button--needs-review,
+.external-check-button--not-found,
+.external-check-button--blocked,
+.external-check-button--error,
+.external-check-button--checking {
+  border-color: rgba(55, 65, 81, 0.52) !important;
+  color: #374151 !important;
+  background: transparent !important;
+}
+
+:host-context(body.otziv-dark-theme) .external-check-button,
+:host-context(body.otziv-dark-theme) .external-check-button--confirmed,
+:host-context(body.otziv-dark-theme) .external-check-button--needs-review,
+:host-context(body.otziv-dark-theme) .external-check-button--not-found,
+:host-context(body.otziv-dark-theme) .external-check-button--blocked,
+:host-context(body.otziv-dark-theme) .external-check-button--error,
+:host-context(body.otziv-dark-theme) .external-check-button--checking {
+  border-color: rgba(255, 255, 255, 0.66) !important;
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+:host-context(body.otziv-dark-theme) .external-check-button:not(:disabled):hover {
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.external-check-status {
+  display: inline-flex;
+  width: 100%;
+  min-height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: 1.5rem;
+  padding: 0.1rem 0.45rem;
+  color: #475569;
+  background: #f4f6fa;
+  font-family: var(--otziv-font-family);
+  font-size: 0.66rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.external-check-status .material-icons-sharp {
+  font-size: 0.92rem;
+}
+
+.external-check-status.external-check-button--confirmed {
+  border-color: rgba(25, 134, 103, 0.24) !important;
+  color: #137d69 !important;
+  background: #dff7ed !important;
+}
+
+.external-check-status.external-check-button--needs-review {
+  border-color: rgba(190, 139, 0, 0.26) !important;
+  color: #8a6500 !important;
+  background: #fff6d8 !important;
+}
+
+.external-check-status.external-check-button--not-found,
+.external-check-status.external-check-button--blocked,
+.external-check-status.external-check-button--error {
+  border-color: rgba(196, 77, 114, 0.2) !important;
+  color: #a43c60 !important;
+  background: #ffe9f1 !important;
+}
+
+.external-check-status.external-check-button--checking {
+  border-color: rgba(103, 116, 131, 0.2) !important;
+  color: #475569 !important;
+  background: #eef1f5 !important;
+}
+
+:host-context(body.otziv-dark-theme) .external-check-status {
+  border-color: rgba(122, 167, 220, 0.18);
+  color: #c9d6e8;
+  background: rgba(24, 29, 37, 0.78);
+}
+
+:host-context(body.otziv-dark-theme) .external-check-status.external-check-button--confirmed {
+  border-color: rgba(99, 216, 182, 0.3) !important;
+  color: #bff7e7 !important;
+  background: rgba(35, 91, 74, 0.5) !important;
+}
+
+:host-context(body.otziv-dark-theme) .external-check-status.external-check-button--needs-review {
+  border-color: rgba(245, 214, 111, 0.32) !important;
+  color: #ead27c !important;
+  background: rgba(82, 67, 30, 0.46) !important;
+}
+
+:host-context(body.otziv-dark-theme) .external-check-status.external-check-button--not-found,
+:host-context(body.otziv-dark-theme) .external-check-status.external-check-button--blocked,
+:host-context(body.otziv-dark-theme) .external-check-status.external-check-button--error {
+  border-color: rgba(255, 91, 143, 0.28) !important;
+  color: #ffdce7 !important;
+  background: rgba(111, 38, 67, 0.46) !important;
+}
+
+:host-context(body.otziv-dark-theme) .review-actions button.recovery-action {
+  border-color: rgba(245, 214, 111, 0.3);
+  color: #ead27c;
+  background: linear-gradient(135deg, rgba(82, 67, 30, 0.46), rgba(30, 38, 46, 0.96));
+}
+
+:host-context(body.otziv-dark-theme) .review-actions button.recovery-action--planned {
+  border-color: rgba(99, 216, 182, 0.3);
+  color: #bff7e7;
+  background: linear-gradient(135deg, rgba(35, 91, 74, 0.5), rgba(30, 38, 46, 0.96));
+}
+
+:host-context(body.otziv-dark-theme) .bot-line--empty {
+  border-color: rgba(255, 91, 143, 0.28);
+  background: rgba(111, 38, 67, 0.46);
+}
+
+:host-context(body.otziv-dark-theme) .bot-line--empty span {
+  color: #ffdce7;
+}
+
+:host-context(body.otziv-dark-theme) .publish-button {
+  border-color: rgba(99, 216, 182, 0.3) !important;
+  color: #bff7e7 !important;
+  background: linear-gradient(135deg, rgba(35, 91, 74, 0.5), rgba(30, 38, 46, 0.96)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:host-context(body.otziv-dark-theme) .publish-button:not(:disabled):hover {
+  border-color: rgba(99, 216, 182, 0.46) !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, rgba(39, 119, 95, 0.64), rgba(35, 45, 54, 0.98)) !important;
+  box-shadow: 0 0.45rem 0.9rem rgba(0, 0, 0, 0.22);
+}
+
+:host-context(body.otziv-dark-theme) .publish-button--credential-locked,
+:host-context(body.otziv-dark-theme) .publish-button--credential-locked:disabled,
+:host-context(body.otziv-dark-theme) .publish-button--credential-locked:hover,
+:host-context(body.otziv-dark-theme) .publish-button--credential-locked:disabled:hover {
+  border-color: rgba(122, 167, 220, 0.18) !important;
+  color: #8795a8 !important;
+  background: rgba(24, 29, 37, 0.78) !important;
+  box-shadow: none;
+}
+
+:host-context(body.otziv-dark-theme) .publish-button--published,
+:host-context(body.otziv-dark-theme) .publish-button--published:disabled,
+:host-context(body.otziv-dark-theme) .publish-button--published:hover,
+:host-context(body.otziv-dark-theme) .publish-button--published:disabled:hover {
+  border-color: rgba(192, 124, 226, 0.28) !important;
+  color: #d9c2e8 !important;
+  background: linear-gradient(135deg, rgba(68, 45, 82, 0.58), rgba(31, 37, 46, 0.96)) !important;
+  box-shadow: none;
+}
+
+:host-context(body.otziv-dark-theme) .details-actions a,
+:host-context(body.otziv-dark-theme) .details-actions button {
+  border-color: rgba(122, 167, 220, 0.24);
+  color: #dbe6f8;
+  background: rgba(24, 29, 37, 0.82);
+}
+
+:host-context(body.otziv-dark-theme) .details-actions a:hover,
+:host-context(body.otziv-dark-theme) .details-actions button:not(:disabled):hover {
+  border-color: rgba(122, 167, 220, 0.42);
+  color: #ffffff;
+  background: rgba(48, 58, 74, 0.92);
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-copy-actions button.bad-review-task-action,
+:host-context(body.otziv-dark-theme) .bad-review-task-footer button.bad-review-task-action,
+:host-context(body.otziv-dark-theme) .bad-review-task-status-pill,
+:host-context(body.otziv-dark-theme) .bad-review-task-meta span {
+  border-radius: 1.5rem;
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-icon-action {
+  border-radius: 0.9rem;
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-copy-actions button.bad-review-task-action--copy,
+:host-context(body.otziv-dark-theme) .bad-review-task-copy-actions button.bad-review-task-action--bot {
+  border-color: rgba(122, 167, 220, 0.22);
+  color: #dbe6f8;
+  background: rgba(18, 23, 30, 0.72);
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-copy-actions button.bad-review-task-action--copy:not(:disabled):hover,
+:host-context(body.otziv-dark-theme) .bad-review-task-copy-actions button.bad-review-task-action--bot:not(:disabled):hover {
+  border-color: rgba(122, 167, 220, 0.42);
+  color: #ffffff;
+  background: rgba(48, 58, 74, 0.92);
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-footer button.bad-review-task-action--complete,
+:host-context(body.otziv-dark-theme) .bad-review-task-status-pill--done {
+  border-color: rgba(99, 216, 182, 0.3);
+  color: #bff7e7;
+  background: linear-gradient(135deg, rgba(35, 91, 74, 0.5), rgba(30, 38, 46, 0.96));
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-footer button.bad-review-task-action--complete:not(:disabled):hover {
+  border-color: rgba(99, 216, 182, 0.46);
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(39, 119, 95, 0.64), rgba(35, 45, 54, 0.98));
+}
+
+:host-context(body.otziv-dark-theme) .bad-review-task-action--save,
+:host-context(body.otziv-dark-theme) .bad-review-task-icon-action--save {
+  border-color: rgba(122, 167, 220, 0.26);
+  color: #d8e7ff;
+  background: rgba(122, 167, 220, 0.16);
 }
 
 .details-actions .company-report-action--missing {

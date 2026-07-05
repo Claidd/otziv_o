@@ -2,10 +2,12 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.services.SharedChatLinkSyncResponse;
+import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsRequest;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsResponse;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

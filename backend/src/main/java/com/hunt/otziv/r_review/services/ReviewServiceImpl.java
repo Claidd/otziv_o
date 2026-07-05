@@ -39,6 +39,7 @@ import java.math.BigDecimal;
 import java.security.Principal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -854,6 +855,7 @@ public class ReviewServiceImpl implements ReviewService {
             if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
                 log.info("Обновляем публикацию отзыва");
                 saveReview.setPublish(reviewDTO.isPublish());
+                syncExternalConfirmationState(saveReview, oldPublish);
                 isChanged = true;
                 publishChanged = true;
             }
@@ -1006,6 +1008,23 @@ public class ReviewServiceImpl implements ReviewService {
         orderStatusCheckerService.validateCounterConsistency(order, actualPublished);
     }
 
+    private void syncExternalConfirmationState(Review review, boolean oldPublish) {
+        if (review == null) {
+            return;
+        }
+        if (!oldPublish && review.isPublish()) {
+            review.setPublishedMarkedAt(LocalDateTime.now());
+            review.setExternalConfirmStatus("PENDING");
+            review.setExternalConfirmedAt(null);
+            review.setExternalConfirmScreenshotUrl(null);
+        } else if (oldPublish && !review.isPublish()) {
+            review.setPublishedMarkedAt(null);
+            review.setExternalConfirmStatus("PENDING");
+            review.setExternalConfirmedAt(null);
+            review.setExternalConfirmScreenshotUrl(null);
+        }
+    }
+
     private void recalculateOrderAndDetailsPrice(UUID orderDetailsId) {
         OrderDetails orderDetails = orderDetailsService.getOrderDetailById(orderDetailsId);
 
@@ -1089,6 +1108,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
         if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
             saveReview.setPublish(reviewDTO.isPublish());
+            syncExternalConfirmationState(saveReview, oldPublish);
             isChanged = true;
         }
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
@@ -1243,6 +1263,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewDTO.getId())));
 
         boolean isChanged = false;
+        boolean oldPublish = saveReview.isPublish();
 
         if (!saveReview.isPublish()) {
             requireAllowed(localDate);
@@ -1264,6 +1285,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
         if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
             saveReview.setPublish(reviewDTO.isPublish());
+            syncExternalConfirmationState(saveReview, oldPublish);
             isChanged = true;
         }
 
@@ -1275,6 +1297,11 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     public void changeBot(Long reviewId) {
         reviewBotChangeService.changeBot(reviewId);
+    }
+
+    @Override
+    public void changeBot(Long reviewId, boolean forceWalkDelayIfUnwalked) {
+        reviewBotChangeService.changeBot(reviewId, forceWalkDelayIfUnwalked);
     }
 
     @Override

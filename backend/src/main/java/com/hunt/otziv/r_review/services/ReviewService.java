@@ -104,6 +104,8 @@ public interface ReviewService {
 
     void changeBot(Long reviewId);
 
+    void changeBot(Long reviewId, boolean forceWalkDelayIfUnwalked);
+
     void assignNewAccount(Long reviewId);
 
     void deActivateAndChangeBot(Long reviewId, Long botId);

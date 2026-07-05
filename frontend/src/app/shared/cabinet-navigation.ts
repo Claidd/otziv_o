@@ -34,7 +34,7 @@ export const CABINET_SECTION_LINKS: CabinetNavigationLink[] = [
     icon: 'leaderboard',
     active: 'score',
     routerLink: '/admin/score',
-    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
   },
   {
     label: 'Мои замечания',
@@ -52,7 +52,7 @@ export const CABINET_SECTION_LINKS: CabinetNavigationLink[] = [
     active: 'gamification-progress',
     routerLink: '/gamification/progress',
     adminOnly: true,
-    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'OPERATOR', 'MARKETOLOG']
+    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
   },
   {
     label: 'Аналитика',

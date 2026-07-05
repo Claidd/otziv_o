@@ -1,6 +1,8 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsRequest;
+import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -404,17 +404,47 @@
             </div>
 
             @if (canShowPublishButton(details, review)) {
-              <button
-                type="button"
-                class="publish-button"
-                [class.publish-button--published]="review.publish"
-                [class.publish-button--credential-locked]="reviewPublishActionLocked(review)"
-                (click)="publishReview(review)"
-                [disabled]="review.publish || reviewPublishActionLocked(review) || isMutating('publish-' + review.id)"
-                [title]="reviewPublishActionTitle(review)"
-              >
-                {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
-              </button>
+              <div class="publish-row" [class.publish-row--with-check]="review.publish && isAdmin()">
+                @if (review.publish && isAdmin()) {
+                  <button
+                    type="button"
+                    class="external-check-button {{ externalReviewStatusClass(review) }}"
+                    (click)="checkExternalReview(review)"
+                    [disabled]="isMutating('external-check-' + review.id)"
+                    [title]="externalReviewCheckTitle(review)"
+                  >
+                    <span class="material-icons-sharp">{{ externalReviewIcon(review) }}</span>
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="publish-button"
+                  [class.publish-button--published]="review.publish"
+                  [class.publish-button--credential-locked]="reviewPublishActionLocked(review)"
+                  (click)="publishReview(review)"
+                  [disabled]="review.publish || reviewPublishActionLocked(review) || isMutating('publish-' + review.id)"
+                  [title]="reviewPublishActionTitle(review)"
+                >
+                  {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
+                </button>
+                @if (review.publish && isAdmin() && review.externalConfirmScreenshotUrl) {
+                  <a
+                    class="external-check-button external-check-button--confirmed"
+                    [href]="review.externalConfirmScreenshotUrl"
+                    target="_blank"
+                    rel="noopener"
+                    title="Открыть скриншот подтверждения"
+                  >
+                    <span class="material-icons-sharp">image</span>
+                  </a>
+                }
+              </div>
+              @if (review.publish && isAdmin() && (externalReviewStatus(review) !== 'PENDING' || isMutating('external-check-' + review.id))) {
+                <div class="external-check-status {{ externalReviewStatusClass(review) }}">
+                  <span class="material-icons-sharp">{{ externalReviewIcon(review) }}</span>
+                  <span>{{ externalReviewStatusLabel(review) }}</span>
+                </div>
+              }
             }
 
             <footer>

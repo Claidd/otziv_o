@@ -1,6 +1,7 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

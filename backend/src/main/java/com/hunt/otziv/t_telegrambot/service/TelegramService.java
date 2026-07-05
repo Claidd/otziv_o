@@ -7,6 +7,9 @@ import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCallbackService;
+import com.hunt.otziv.performers.service.PerformerTelegramCallbackService;
+import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
+import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -64,6 +67,8 @@ public class TelegramService extends TelegramLongPollingBot {
     private final UserService userService;
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final PublicationProgressPreferenceService publicationProgressPreferenceService;
+    private final ObjectProvider<PerformerTelegramLinkService> performerTelegramLinkServiceProvider;
+    private final ObjectProvider<PerformerTelegramCallbackService> performerTelegramCallbackServiceProvider;
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
@@ -91,6 +96,8 @@ public class TelegramService extends TelegramLongPollingBot {
                 userService,
                 telegramGroupLinkService,
                 publicationProgressPreferenceService,
+                null,
+                null,
                 workerRiskTelegramCallbackServiceProvider,
                 null,
                 null,
@@ -109,6 +116,8 @@ public class TelegramService extends TelegramLongPollingBot {
             UserService userService,
             TelegramGroupLinkService telegramGroupLinkService,
             PublicationProgressPreferenceService publicationProgressPreferenceService,
+            ObjectProvider<PerformerTelegramLinkService> performerTelegramLinkServiceProvider,
+            ObjectProvider<PerformerTelegramCallbackService> performerTelegramCallbackServiceProvider,
             ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider,
             ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider,
             TelegramChatMigrationService telegramChatMigrationService,
@@ -122,6 +131,8 @@ public class TelegramService extends TelegramLongPollingBot {
         this.userService = userService;
         this.telegramGroupLinkService = telegramGroupLinkService;
         this.publicationProgressPreferenceService = publicationProgressPreferenceService;
+        this.performerTelegramLinkServiceProvider = performerTelegramLinkServiceProvider;
+        this.performerTelegramCallbackServiceProvider = performerTelegramCallbackServiceProvider;
         this.workerRiskTelegramCallbackServiceProvider = workerRiskTelegramCallbackServiceProvider;
         this.managerControlWorkerTaskTelegramCallbackServiceProvider = managerControlWorkerTaskTelegramCallbackServiceProvider;
         this.telegramChatMigrationService = telegramChatMigrationService;
@@ -153,6 +164,16 @@ public class TelegramService extends TelegramLongPollingBot {
 
         String messageText = update.getMessage().getText();
         long chatId = update.getMessage().getChatId();
+
+        PerformerTelegramLinkService performerTelegramLinkService =
+                performerTelegramLinkServiceProvider == null ? null : performerTelegramLinkServiceProvider.getIfAvailable();
+        if (performerTelegramLinkService != null) {
+            Optional<String> performerLinkResponse = performerTelegramLinkService.handleStartCommand(chatId, messageText);
+            if (performerLinkResponse.isPresent()) {
+                sendMessage(chatId, performerLinkResponse.get());
+                return;
+            }
+        }
 
         Optional<String> groupLinkResponse = telegramGroupLinkService.handleGroupStartCommand(chatId, messageText);
         if (groupLinkResponse.isPresent()) {
@@ -250,6 +271,16 @@ public class TelegramService extends TelegramLongPollingBot {
                 callbackQuery == null ? null : callbackQuery.getData(),
                 callbackQuery == null || callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId(),
                 callbackQuery == null || callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId());
+
+        PerformerTelegramCallbackService performerTelegramCallbackService =
+                performerTelegramCallbackServiceProvider == null ? null : performerTelegramCallbackServiceProvider.getIfAvailable();
+        if (performerTelegramCallbackService != null) {
+            Optional<String> performerAnswer = performerTelegramCallbackService.handle(callbackQuery);
+            if (performerAnswer.isPresent()) {
+                answerCallback(callbackQuery.getId(), performerAnswer.get());
+                return;
+            }
+        }
 
         WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
                 workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();

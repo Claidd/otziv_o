@@ -48,9 +48,14 @@ public class ReviewBotChangeService {
 
     @Transactional
     public void changeBot(Long reviewId) {
+        changeBot(reviewId, false);
+    }
+
+    @Transactional
+    public void changeBot(Long reviewId, boolean forceWalkDelayIfUnwalked) {
         try {
             log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
-            Review review = getReviewToChangeBot(reviewId);
+            Review review = getReviewToChangeBot(reviewId, forceWalkDelayIfUnwalked);
 
             if (review.getBot() == null) {
                 log.warn("2. Для отзыва ID {} не удалось установить бота (список доступных пуст)", reviewId);
@@ -225,7 +230,7 @@ public class ReviewBotChangeService {
         return Collections.emptyList();
     }
 
-    private Review getReviewToChangeBot(Long reviewId) {
+    private Review getReviewToChangeBot(Long reviewId, boolean forceWalkDelayIfUnwalked) {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
         boolean wasVigul = review.isVigul();
@@ -234,7 +239,7 @@ public class ReviewBotChangeService {
         Bot oldBot = review.getBot();
         assignBotUsingSharedRules(review, Set.of());
         markReleasedIfChanged(oldBot, review.getBot(), "review bot changed");
-        accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
+        accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
 
         log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
         return review;

@@ -7,7 +7,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
-import com.hunt.otziv.c_cities.sevices.CityService;
+import com.hunt.otziv.c_cities.services.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.manager.dto.api.OptionResponse;

@@ -49,7 +49,7 @@ export class UsersAdminComponent implements OnDestroy {
   private readonly cabinetApi = inject(CabinetApi);
   private readonly toastService = inject(ToastService);
 
-  readonly availableRoles = ['ADMIN', 'OWNER', 'MANAGER', 'OPERATOR', 'WORKER', 'MARKETOLOG', 'CLIENT'];
+  readonly availableRoles = ['ADMIN', 'OWNER', 'MANAGER', 'OPERATOR', 'WORKER', 'PERFORMER', 'MARKETOLOG', 'CLIENT'];
   readonly statusTabs: UserStatusTab[] = [
     { key: 'all', label: 'Все', icon: 'groups' },
     { key: 'active', label: 'Активные', icon: 'how_to_reg' },
@@ -657,6 +657,7 @@ export class UsersAdminComponent implements OnDestroy {
       MANAGER: 'Менеджер',
       OPERATOR: 'Оператор',
       WORKER: 'Специалист',
+      PERFORMER: 'Исполнитель',
       MARKETOLOG: 'Маркетолог',
       CLIENT: 'Клиент'
     }[role] ?? role;

@@ -503,6 +503,9 @@ export interface OrderReviewItem {
   price?: number;
   url: string;
   urlPhoto: string;
+  externalConfirmStatus?: 'PENDING' | 'CHECKING' | 'CONFIRMED' | 'NEEDS_REVIEW' | 'NOT_FOUND' | 'BLOCKED' | 'ERROR' | string;
+  externalConfirmedAt?: string;
+  externalConfirmScreenshotUrl?: string;
 }
 
 export interface BadReviewSummary {
@@ -1003,6 +1006,13 @@ export class ManagerApi {
     return this.http.post<OrderDetailsPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/publish`,
       source ?? {}
+    );
+  }
+
+  checkExternalReviewPresence(orderId: number, reviewId: number): Observable<OrderReviewItem> {
+    return this.http.post<OrderReviewItem>(
+      `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}/external-check`,
+      {}
     );
   }
 

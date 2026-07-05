@@ -69,7 +69,7 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
-import com.hunt.otziv.t_telegrambot.service.TelegramChatMigrationResult;
+import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -965,6 +965,23 @@ public class ManagerControlService {
                     "Ошибка уведомления об оплате закрыта",
                     principal,
                     "Закрыта ошибка уведомления об оплате общего счета"
+            );
+        }
+        if (commonInvoiceNextOrderRepairable(invoice)) {
+            CommonInvoiceDetailsResponse details = commonBillingService.retryAttention(invoiceId);
+            String lastError = details == null || details.summary() == null ? "" : safe(details.summary().lastError());
+            if (!lastError.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Повторное создание следующих заказов не прошло: " + limit(lastError, 180)
+                );
+            }
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Повторное создание следующих заказов запущено",
+                    principal,
+                    "Повторно обработан общий счет после ошибки создания следующих заказов"
             );
         }
         if (commonInvoiceWhatsappGroupTailRepairable(invoice)) {
@@ -4387,7 +4404,7 @@ public class ManagerControlService {
             return "Оплата получена, но часть заказов не закрылась. Рекомендация: исправьте заказы и повторите действие в карточке счета.";
         }
         if (error.startsWith("next_order_failed")) {
-            return "Платеж закрыт, но следующие заказы не создались. Рекомендация: откройте «Счет» и повторите создание следующих заказов.";
+            return "Платеж закрыт, но следующие заказы не создались. Рекомендация: нажмите «Починить», чтобы повторить создание следующих заказов.";
         }
         if (commonInvoiceTechnicalTailRepairable(invoice)) {
             return "У общего счета остался технический хвост. Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
@@ -4510,6 +4527,13 @@ public class ManagerControlService {
 
     private boolean commonInvoicePaymentNotificationRepairable(CommonInvoice invoice) {
         return !safe(invoice == null ? null : invoice.getPaymentSuccessNotificationError()).isBlank();
+    }
+
+    private boolean commonInvoiceNextOrderRepairable(CommonInvoice invoice) {
+        String error = safe(invoice == null ? null : invoice.getLastError()).toLowerCase(Locale.ROOT);
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && error.startsWith("next_order_failed");
     }
 
     private boolean hasText(String value) {

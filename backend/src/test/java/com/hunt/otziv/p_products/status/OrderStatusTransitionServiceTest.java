@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -120,6 +121,9 @@ class OrderStatusTransitionServiceTest {
 
     @Mock
     private ReviewRecoveryGateService recoveryGateService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @Test
     void paymentStatusDelegatesToTransactionServiceFromBan() throws Exception {
@@ -1040,7 +1044,8 @@ class OrderStatusTransitionServiceTest {
                 appSettingService,
                 businessAuditService,
                 commonBillingServiceProvider,
-                recoveryGateService
+                recoveryGateService,
+                eventPublisher
         );
     }
 

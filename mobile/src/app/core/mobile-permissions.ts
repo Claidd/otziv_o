@@ -3,6 +3,7 @@ export const MOBILE_ROLE = {
   owner: 'OWNER',
   manager: 'MANAGER',
   worker: 'WORKER',
+  performer: 'PERFORMER',
   operator: 'OPERATOR',
   marketolog: 'MARKETOLOG',
   client: 'CLIENT'
@@ -25,6 +26,7 @@ export const MOBILE_ROLES = {
     MOBILE_ROLE.owner,
     MOBILE_ROLE.manager,
     MOBILE_ROLE.worker,
+    MOBILE_ROLE.performer,
     MOBILE_ROLE.operator,
     MOBILE_ROLE.marketolog
   ] as MobileRoleSet
@@ -155,6 +157,7 @@ export const MOBILE_ROLE_LABELS: Record<string, string> = {
   OWNER: 'Владелец',
   MANAGER: 'Менеджер',
   WORKER: 'Специалист',
+  PERFORMER: 'Исполнитель',
   OPERATOR: 'Оператор',
   MARKETOLOG: 'Маркетолог',
   CLIENT: 'Клиент'

@@ -156,6 +156,57 @@
 
       <app-personal-reminders mode="full" />
 
+      @if (managerPerformance; as performance) {
+        <section class="manager-performance-card profile-performance-card {{ performanceTone(performance.loadAdjustedPerformanceScore) }}" aria-label="Расчет оценки менеджера">
+          <header>
+            <span class="material-icons-sharp">military_tech</span>
+            <div>
+              <strong>Расчет оценки {{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</strong>
+              <small>база {{ performance.performanceScore }} · {{ workloadLevelLabel(performance.workloadLevel) }} нагрузка</small>
+            </div>
+          </header>
+
+          <div class="manager-performance-facts">
+            @for (row of managerPerformanceRows(performance); track row.key) {
+              <button
+                type="button"
+                class="manager-performance-fact"
+                [class.active]="activePerformanceTip() === performanceRowTipKey(row)"
+                [title]="row.label + ': ' + row.value"
+                (click)="togglePerformanceRowTip($event, row)"
+              >
+                <small>{{ row.label }}</small>
+                <b>{{ row.value }}</b>
+              </button>
+            }
+          </div>
+
+          <div class="manager-performance-formula">
+            <div>
+              @for (factor of managerPerformanceFactors(performance); track factor.key) {
+                <button
+                  type="button"
+                  class="manager-performance-factor"
+                  [class.active]="activePerformanceTip() === performanceFactorTipKey(factor)"
+                  [title]="factor.label + ': ' + factor.score + '/100'"
+                  (click)="togglePerformanceFactorTip($event, factor)"
+                >
+                  <span>
+                    <small>{{ factor.weight }}%</small>
+                    <b>{{ factor.label }}</b>
+                  </span>
+                  <strong>{{ factor.score }}/100</strong>
+                </button>
+              }
+            </div>
+          </div>
+
+          @if (activePerformanceHint(); as hint) {
+            <p class="manager-performance-tip">{{ hint }}</p>
+          }
+        </section>
+      }
+
       <section class="reminders">
         <div class="reminders-head">
           <h2>Услуги</h2>
