@@ -71,4 +71,15 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
             @Param("invoiceId") Long invoiceId,
             @Param("status") String status
     );
+
+    @Query("""
+            select coalesce(sum(ref.amountKopecks), 0)
+            from CommonInvoicePaymentRef ref
+            where ref.invoice.id = :invoiceId
+              and ref.status = :status
+            """)
+    long sumAmountKopecksByInvoiceIdAndStatus(
+            @Param("invoiceId") Long invoiceId,
+            @Param("status") String status
+    );
 }

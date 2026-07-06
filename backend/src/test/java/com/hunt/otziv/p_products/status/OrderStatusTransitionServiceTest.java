@@ -876,9 +876,10 @@ class OrderStatusTransitionServiceTest {
         assertTrue(service.changeStatusForOrder(8L, "Публикация"));
 
         assertSame(toPublish, order.getStatus());
-        verify(orderBotLifecycleService).assignBotsIfNeeded(order);
+        verify(orderBotLifecycleService).assignBotsIfNeeded(order, true);
         verify(orderBotLifecycleService).checkAndNotifyAboutStubBots(
-                argThat(reviews -> reviews.size() == 1 && reviews.contains(review))
+                argThat(reviews -> reviews.size() == 1 && reviews.contains(review)),
+                eq(true)
         );
         verify(telegramService).sendMessage(
                 800L,

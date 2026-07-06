@@ -389,7 +389,7 @@ public class ApiWorkerBoardController {
             @RequestBody(required = false) WorkerActivitySourceRequest source
     ) {
         Review review = reviewService.getReviewById(reviewId);
-        reviewService.deActivateAndChangeBot(reviewId, botId);
+        reviewService.deActivateAndChangeBot(reviewId, botId, isSourceSection(source, SECTION_PUBLISH));
         workerActivityService.recordCurrentAuthenticationSafely(
                 WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
                 "review",

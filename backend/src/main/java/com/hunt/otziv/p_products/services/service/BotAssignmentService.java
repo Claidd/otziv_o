@@ -23,6 +23,8 @@ public interface BotAssignmentService {
      */
     boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial);
 
+    boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial, boolean forceWalkDelayIfUnwalked);
+
     /**
      * Выбор одного бота по тем же правилам, что и при создании заказа
      */
@@ -37,6 +39,8 @@ public interface BotAssignmentService {
      * Проверка наличия ботов-заглушек в списке отзывов
      */
     void checkAndNotifyAboutStubBots(List<Review> reviews);
+
+    void checkAndNotifyAboutStubBots(List<Review> reviews, boolean forceWalkDelayIfUnwalked);
 
     /**
      * Обновление isVigul отзыва на основе counter бота

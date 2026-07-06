@@ -128,6 +128,12 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     @Override
     @Transactional
     public boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial) {
+        return assignBotsToExistingReviews(reviews, filial, false);
+    }
+
+    @Override
+    @Transactional
+    public boolean assignBotsToExistingReviews(List<Review> reviews, Filial filial, boolean forceWalkDelayIfUnwalked) {
         try {
             log.info("=== НАЧАЛО ПЕРЕНАЗНАЧЕНИЯ БОТОВ ДЛЯ СУЩЕСТВУЮЩИХ ОТЗЫВОВ ===");
             log.info("Филиал ID: {}, город: {}", filial.getId(), filial.getCity().getTitle());
@@ -176,6 +182,13 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
                 // Обновляем isVigul на основе counter бота
                 updateReviewVigulBasedOnBotCounter(review, assignedBot);
+                if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
+                    accountWalkScheduleService.synchronizeAfterAccountChange(
+                            review,
+                            false,
+                            forceWalkDelayIfUnwalked
+                    );
+                }
 
                 if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
                     assignedCount++;
@@ -347,12 +360,18 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     @Override
     @Transactional
     public void checkAndNotifyAboutStubBots(List<Review> reviews) {
+        checkAndNotifyAboutStubBots(reviews, false);
+    }
+
+    @Override
+    @Transactional
+    public void checkAndNotifyAboutStubBots(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
         if (reviews == null || reviews.isEmpty()) {
             return;
         }
 
         log.info("Проверка наличия ботов-заглушек...");
-        int replacedStubBots = replaceStubBotsFromReservePool(reviews);
+        int replacedStubBots = replaceStubBotsFromReservePool(reviews, forceWalkDelayIfUnwalked);
         if (replacedStubBots > 0) {
             log.warn("Заменено {} ботов-заглушек резервными аккаунтами из общего пула", replacedStubBots);
         }
@@ -372,7 +391,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
     }
 
-    private int replaceStubBotsFromReservePool(List<Review> reviews) {
+    private int replaceStubBotsFromReservePool(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
         Set<Long> usedBotIds = reviews.stream()
                 .map(Review::getBot)
                 .filter(Objects::nonNull)
@@ -412,7 +431,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
             review.setBot(reserveBot);
             updateReviewVigulBasedOnBotCounter(review, reserveBot);
-            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
             changedReviews.add(review);
         }
 

@@ -11,6 +11,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -18,6 +19,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -62,6 +64,12 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private ReviewRecoveryGateService recoveryGateService;
+
+    @Mock
+    private PaymentLinkService paymentLinkService;
+
+    @Mock
+    private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -183,7 +191,8 @@ class OrderStatusCheckerServiceImplTest {
                 orderStatusService,
                 appSettingService,
                 commonBillingService,
-                recoveryGateService
+                recoveryGateService,
+                paymentLinkServiceProvider
         );
     }
 

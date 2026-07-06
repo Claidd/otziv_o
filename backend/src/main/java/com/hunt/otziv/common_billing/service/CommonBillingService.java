@@ -176,6 +176,7 @@ public class CommonBillingService {
             CommonInvoiceStatus.PARTIALLY_PAID
     );
     private static final Set<CommonInvoiceStatus> PUBLIC_PAYABLE_STATUSES = Set.of(
+            CommonInvoiceStatus.COLLECTING,
             CommonInvoiceStatus.READY,
             CommonInvoiceStatus.INVOICED,
             CommonInvoiceStatus.REMINDER,
@@ -201,6 +202,7 @@ public class CommonBillingService {
     );
     private static final int REMINDER_INTERVAL_DAYS = 2;
     private static final String PAYMENT_REF_CONFIRMED = "CONFIRMED";
+    private static final String PAYMENT_REF_PREPAID = "PREPAID";
     private static final String PAYMENT_REF_APPLYING = "APPLYING";
     private static final String PAYMENT_REF_APPLIED = "APPLIED";
     private static final String PAYMENT_REF_ARCHIVED = "ARCHIVED";
@@ -210,6 +212,7 @@ public class CommonBillingService {
     private static final String PAYMENT_REF_CANCEL_FAILED = "CANCEL_FAILED";
     private static final String PAYMENT_REF_CANCEL_FAILED_FINAL = "CANCEL_FAILED_FINAL";
     private static final String PAYMENT_REF_INIT_CONFLICT = "INIT_CONFLICT";
+    private static final String PREPAID_WAITING_COMMON_INVOICE_READY = "prepaid_waiting_common_invoice_ready";
     private static final Set<String> PAYMENT_REF_REFUNDED_STATUSES = Set.of(
             "REFUNDED",
             "PARTIAL_REFUNDED",
@@ -575,6 +578,10 @@ public class CommonBillingService {
         invoiceOrderRepository.save(item);
         markOrderWaitingCommonInvoice(order);
         recalculateInvoice(invoice);
+        List<CommonInvoiceOrder> currentItems = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        if (allOrdersReady(currentItems) && applyCommonInvoicePrepaymentIfReady(invoice, currentItems)) {
+            return true;
+        }
         if (isInvoiceReady(invoice.getId())) {
             invoice.setStatus(CommonInvoiceStatus.READY);
             invoiceRepository.save(invoice);
@@ -1215,6 +1222,16 @@ public class CommonBillingService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Общий счет еще не готов к оплате");
         }
         if (remaining <= 0) {
+            if (!allOrdersReady(items)) {
+                return new PreparedCommonPaymentInit(
+                        invoice.getId(),
+                        cleanEmail,
+                        0,
+                        null,
+                        null,
+                        new PublicPaymentInitResponse("", "", invoice.getStatus().name())
+                );
+            }
             closePaidInvoice(invoice, items);
             return new PreparedCommonPaymentInit(
                     invoice.getId(),
@@ -1365,6 +1382,11 @@ public class CommonBillingService {
                 return true;
             }
             List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+            refreshInvoiceAmounts(invoice, items);
+            if (!allOrdersReady(items)) {
+                recordCommonInvoicePrepayment(invoice, items);
+                return true;
+            }
             closePaidInvoice(invoice, items);
         } else if ("REJECTED".equals(status) || (!success && !errorCode.isBlank() && !"0".equals(errorCode))) {
             recordCurrentPaymentRef(invoice, status.isBlank() ? "REJECTED" : status, "current_payment_rejected");
@@ -2404,6 +2426,76 @@ public class CommonBillingService {
         invoiceRepository.save(invoice);
     }
 
+    private void recordCommonInvoicePrepayment(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        recordCurrentPaymentRef(invoice, PAYMENT_REF_PREPAID, PREPAID_WAITING_COMMON_INVOICE_READY);
+        long prepaid = confirmedCommonInvoicePrepaymentKopecks(invoice);
+        invoice.setPaidKopecks(Math.min(invoice.getAmountKopecks(), prepaid));
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        invoice.setNextReminderAt(null);
+        invoice.setLastError(null);
+        invoiceRepository.save(invoice);
+        log.info(
+                "Оплата общего счета {} принята как предоплата: paid={} amount={} ready={}/{}",
+                invoice.getId(),
+                invoice.getPaidKopecks(),
+                invoice.getAmountKopecks(),
+                items == null ? 0 : items.stream().filter(CommonInvoiceOrder::isReady).count(),
+                items == null ? 0 : items.size()
+        );
+    }
+
+    private boolean applyCommonInvoicePrepaymentIfReady(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        long prepaid = confirmedCommonInvoicePrepaymentKopecks(invoice);
+        if (prepaid <= 0 || !allOrdersReady(items)) {
+            return false;
+        }
+        if (prepaid >= invoice.getAmountKopecks()) {
+            closePaidInvoice(invoice, items);
+            if (items.stream().allMatch(CommonInvoiceOrder::isPaid)) {
+                markCommonInvoicePrepaymentsApplied(invoice);
+                log.info("Предоплата общего счета {} применена после готовности всех заказов", invoice.getId());
+            }
+            return true;
+        }
+
+        boolean firstPartialPrepayment = invoice.getStatus() != CommonInvoiceStatus.PARTIALLY_PAID;
+        invoice.setPaidKopecks(prepaid);
+        invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+        invoice.setLastError(null);
+        invoice.setNextReminderAt(LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
+        invoiceRepository.save(invoice);
+        markInvoiceOrdersPublished(items);
+        if (firstPartialPrepayment && immediateClientMessagesEnabled()) {
+            sendInvoiceAfterCommit(invoice.getId(), false);
+        }
+        log.info(
+                "Предоплата общего счета {} меньше итоговой суммы: prepaid={}, amount={}",
+                invoice.getId(),
+                prepaid,
+                invoice.getAmountKopecks()
+        );
+        return true;
+    }
+
+    private long confirmedCommonInvoicePrepaymentKopecks(CommonInvoice invoice) {
+        Long invoiceId = invoice == null ? null : invoice.getId();
+        if (invoiceId == null) {
+            return 0;
+        }
+        return paymentRefRepository.sumAmountKopecksByInvoiceIdAndStatus(invoiceId, PAYMENT_REF_PREPAID);
+    }
+
+    private void markCommonInvoicePrepaymentsApplied(CommonInvoice invoice) {
+        Long invoiceId = invoice == null ? null : invoice.getId();
+        if (invoiceId == null) {
+            return;
+        }
+        setPaymentRefsStatus(
+                paymentRefRepository.findByInvoiceIdAndStatusForUpdate(invoiceId, PAYMENT_REF_PREPAID),
+                PAYMENT_REF_APPLIED
+        );
+    }
+
     private void closePaidInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         List<String> closeFailures = new ArrayList<>();
         for (CommonInvoiceOrder item : items) {
@@ -2588,7 +2680,8 @@ public class CommonBillingService {
                 && invoice.getPaidKopecks() >= invoice.getAmountKopecks();
         long recordedPaid = invoice.getPaidKopecks();
         long amount = items.stream().mapToLong(CommonInvoiceOrder::getAmountKopecks).sum();
-        long paid = items.stream().filter(CommonInvoiceOrder::isPaid).mapToLong(CommonInvoiceOrder::getAmountKopecks).sum();
+        long paid = items.stream().filter(CommonInvoiceOrder::isPaid).mapToLong(CommonInvoiceOrder::getAmountKopecks).sum()
+                + confirmedCommonInvoicePrepaymentKopecks(invoice);
         invoice.setAmountKopecks(amount);
         invoice.setPaidKopecks(Math.min(amount, preserveRecordedAttentionPayment ? Math.max(recordedPaid, paid) : paid));
         if (invoice.getStatus() != CommonInvoiceStatus.PAID
@@ -2644,6 +2737,9 @@ public class CommonBillingService {
         }
         recalculateInvoice(invoice, items);
         if (invoice != null) {
+            if (allOrdersReady(items) && applyCommonInvoicePrepaymentIfReady(invoice, items)) {
+                return;
+            }
             if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING && isInvoiceReady(invoice.getId())) {
                 invoice.setStatus(CommonInvoiceStatus.READY);
                 invoiceRepository.save(invoice);

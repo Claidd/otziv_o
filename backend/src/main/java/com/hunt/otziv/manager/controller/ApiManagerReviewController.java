@@ -393,7 +393,7 @@ public class ApiManagerReviewController {
 
         reviewService.changeBot(reviewId, isSourceSection(source, "publish"));
         if (restrictedWorkerAccountRepair && reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
-            reviewService.assignNewAccount(reviewId);
+            reviewService.assignNewAccount(reviewId, isSourceSection(source, "publish"));
         }
         workerActivityService.recordSafely(
                 authentication,
@@ -423,7 +423,7 @@ public class ApiManagerReviewController {
         }
 
         try {
-            reviewService.assignNewAccount(reviewId);
+            reviewService.assignNewAccount(reviewId, isSourceSection(source, "publish"));
             workerActivityService.recordSafely(
                     authentication,
                     WorkerActivityAction.REVIEW_BOT_CHANGE,
@@ -457,7 +457,7 @@ public class ApiManagerReviewController {
                 && !reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Блокировка аккаунта здесь доступна только для отзыва без рабочего аккаунта");
         }
-        reviewService.deActivateAndChangeBot(reviewId, botId);
+        reviewService.deActivateAndChangeBot(reviewId, botId, isSourceSection(source, "publish"));
         workerActivityService.recordSafely(
                 authentication,
                 WorkerActivityAction.REVIEW_BOT_DEACTIVATE,

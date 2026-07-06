@@ -82,6 +82,7 @@ public class PaymentLinkService {
     private static final String RECEIPT_CONSENT_PATH = "/receipt-consent";
     private static final String STATUS_PAYMENT = "Оплачено";
     private static final String MANUAL_PAID_RETIRED_REASON = "Заказ отмечен оплаченным вручную; старая ссылка закрыта";
+    private static final String PREPAID_WAITING_ORDER_COMPLETION = "prepaid_waiting_order_completion";
     private static final Set<PaymentLinkStatus> REUSABLE_STATUSES = Set.of(
             PaymentLinkStatus.CREATED,
             PaymentLinkStatus.INITIATED,
@@ -547,6 +548,12 @@ public class PaymentLinkService {
         validateAmountCurrentForManualConfirm(link);
 
         try {
+            if (!canApplyOrderPaymentNow(link.getOrder())) {
+                markOrderPrepaid(link);
+                paymentLinkRepository.save(link);
+                manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
+                return toAdminResponse(link);
+            }
             boolean updated = orderTransactionService.handlePaymentStatus(link.getOrder());
             LocalDateTime now = LocalDateTime.now();
             link.setStatus(PaymentLinkStatus.CONFIRMED);
@@ -992,6 +999,11 @@ public class PaymentLinkService {
             );
             return;
         }
+        if (!canApplyOrderPaymentNow(link.getOrder())) {
+            markOrderPrepaid(link);
+            notifyPaymentSuccessIfNeeded(link);
+            return;
+        }
         try {
             boolean updated = orderTransactionService.handlePaymentStatus(link.getOrder());
             link.setStatus(PaymentLinkStatus.CONFIRMED);
@@ -1008,6 +1020,64 @@ public class PaymentLinkService {
             link.setLastError("Order payment transition failed");
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось перевести заказ в оплату", e);
         }
+    }
+
+    @Transactional
+    public boolean applyConfirmedPrepaymentIfReady(Order order) {
+        if (order == null || order.getId() == null || !canApplyOrderPaymentNow(order)) {
+            return false;
+        }
+        Optional<PaymentLink> optionalLink = paymentLinkRepository
+                .findFirstByOrder_IdAndStatusAndLastErrorOrderByPaidAtDesc(
+                        order.getId(),
+                        PaymentLinkStatus.CONFIRMED,
+                        PREPAID_WAITING_ORDER_COMPLETION
+                );
+        if (optionalLink.isEmpty()) {
+            return false;
+        }
+
+        PaymentLink link = optionalLink.get();
+        if (markAmountMismatchIfNeeded(link)) {
+            paymentLinkRepository.save(link);
+            return false;
+        }
+
+        try {
+            boolean updated = orderTransactionService.handlePaymentStatus(order);
+            link.setLastError(null);
+            paymentLinkRepository.save(link);
+            if (updated) {
+                paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Предоплата применена после завершения заказа");
+            }
+            log.info("Предоплата по ссылке {} применена после завершения заказа {}", link.getId(), order.getId());
+            return true;
+        } catch (Exception e) {
+            link.setStatus(PaymentLinkStatus.FAILED);
+            link.setLastError("Prepaid order payment transition failed");
+            paymentLinkRepository.save(link);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось применить предоплату заказа", e);
+        }
+    }
+
+    private boolean canApplyOrderPaymentNow(Order order) {
+        return order != null
+                && (order.isComplete() || order.getAmount() <= order.getCounter());
+    }
+
+    private void markOrderPrepaid(PaymentLink link) {
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setPaidAt(LocalDateTime.now());
+        link.setConfirmedAmountKopecks(link.getAmountKopecks());
+        link.setReceiptStatus(PaymentReceiptStatus.PENDING);
+        link.setLastError(PREPAID_WAITING_ORDER_COMPLETION);
+        rememberCompanyPayerEmail(link);
+        log.info(
+                "Платеж по заказу {} принят как предоплата: linkId={}, amount={}",
+                link.getOrder() == null ? null : link.getOrder().getId(),
+                link.getId(),
+                link.getAmountKopecks()
+        );
     }
 
     private void markClosedLinkConfirmed(PaymentLink link) {

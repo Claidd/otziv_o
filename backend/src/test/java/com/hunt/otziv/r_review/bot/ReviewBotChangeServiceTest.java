@@ -155,6 +155,45 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
+    void deActivateAndChangeBotCanForceWalkDelayForPublicationSection() {
+        ReviewBotChangeService service = service();
+        City city = city(9L, "Иркутск");
+        Filial filial = filial(3L, city);
+        Bot currentBot = bot(5L, "Старый Бот", 0);
+        currentBot.setActive(true);
+        Bot selectedBot = bot(8L, "Впиши Имя Фамилию", 0);
+        Bot affectedReplacement = bot(9L, "Впиши Имя Фамилию", 0);
+        Review review = new Review();
+        review.setId(21L);
+        review.setFilial(filial);
+        review.setBot(currentBot);
+        review.setVigul(false);
+        Review affectedReview = new Review();
+        affectedReview.setId(22L);
+        affectedReview.setFilial(filial);
+        affectedReview.setBot(currentBot);
+
+        when(reviewRepository.findById(21L)).thenReturn(Optional.of(review));
+        when(botService.getFindAllByFilialCityId(9L)).thenReturn(List.of(currentBot));
+        when(botService.findBotById(5L)).thenReturn(currentBot);
+        when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of(5L))))
+                .thenReturn(selectedBot);
+        when(botAssignmentService.assignBotForReviewChange(same(affectedReview), anyCollection()))
+                .thenReturn(affectedReplacement);
+        when(reviewRepository.findUnpublishedReviewsByBotIdForReassignment(5L, 21L))
+                .thenReturn(List.of(affectedReview));
+
+        service.deActivateAndChangeBot(21L, null, true);
+
+        assertFalse(currentBot.isActive());
+        assertSame(selectedBot, review.getBot());
+        assertSame(affectedReplacement, affectedReview.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(affectedReview, false, true);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
     void findAllBotsMinusFilialPrefersTemplateBotsForNotVigulReview() {
         ReviewBotChangeService service = service();
         City city = city(4L, "Иркутск");
@@ -234,7 +273,31 @@ class ReviewBotChangeServiceTest {
         service.assignNewAccount(44L);
 
         assertSame(selectedBot, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, false);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void assignNewAccountCanForceWalkDelayForPublicationSection() {
+        ReviewBotChangeService service = service();
+        City city = city(9L, "Иркутск");
+        Filial filial = filial(11L, city);
+        filial.setCompany(company(22L));
+        Bot currentBot = bot(5L, "Старый Бот", 0);
+        Bot selectedBot = bot(88L, "Впиши Имя Фамилию", 0);
+        Review review = new Review();
+        review.setFilial(filial);
+        review.setBot(currentBot);
+        review.setVigul(false);
+
+        when(reviewRepository.findByIdForBotChange(44L)).thenReturn(Optional.of(review));
+        when(reviewRepository.findUsedBotIdsByCompanyId(22L)).thenReturn(Set.of(77L));
+        when(botService.claimNewAccountForCity(same(city), eq(Set.of(77L, 5L)))).thenReturn(Optional.of(selectedBot));
+
+        service.assignNewAccount(44L, true);
+
+        assertSame(selectedBot, review.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
         verify(reviewRepository).save(review);
     }
 

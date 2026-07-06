@@ -9,10 +9,12 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
+import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,6 +30,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final AppSettingService appSettingService;
     private final CommonBillingService commonBillingService;
     private final ReviewRecoveryGateService recoveryGateService;
+    private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -102,6 +105,12 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
         if (commonBillingService.completePublishedOrderIntoCommonInvoice(order)) {
             log.info("Финальный одиночный счет не отправлен: заказ {} ожидает общий счет", order.getId());
             return CommonBillingService.STATUS_WAITING_COMMON_INVOICE;
+        }
+
+        PaymentLinkService paymentLinkService = paymentLinkServiceProvider.getIfAvailable();
+        if (paymentLinkService != null && paymentLinkService.applyConfirmedPrepaymentIfReady(order)) {
+            log.info("Финальный одиночный счет не отправлен: заказ {} закрыт ранее полученной предоплатой", order.getId());
+            return "Оплачено";
         }
 
         if (!immediateClientMessagesEnabled()) {

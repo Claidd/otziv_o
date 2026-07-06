@@ -12,13 +12,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @RequiredArgsConstructor
 public class NextOrderAutomationListener {
 
-    private static final int MAX_ATTEMPTS = 3;
-    private static final long RETRY_DELAY_MS = 300L;
+    private static final int MAX_ATTEMPTS = 6;
+    private static final long INITIAL_RETRY_DELAY_MS = 500L;
+    private static final long MAX_RETRY_DELAY_MS = 5_000L;
 
     private final NextOrderAutomationService automationService;
     private final NextOrderRequestService requestService;
 
-    @Async
+    @Async("nextOrderAutomationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handle(NextOrderRequestedEvent event) {
         Exception lastException = null;
@@ -38,7 +39,7 @@ public class NextOrderAutomationListener {
                         MAX_ATTEMPTS,
                         exception
                 );
-                sleepBeforeRetry();
+                sleepBeforeRetry(attempt);
             }
         }
 
@@ -64,9 +65,10 @@ public class NextOrderAutomationListener {
         return false;
     }
 
-    private void sleepBeforeRetry() {
+    private void sleepBeforeRetry(int attempt) {
         try {
-            Thread.sleep(RETRY_DELAY_MS);
+            long delay = Math.min(INITIAL_RETRY_DELAY_MS * (1L << Math.min(attempt - 1, 4)), MAX_RETRY_DELAY_MS);
+            Thread.sleep(delay);
         } catch (InterruptedException interruptedException) {
             Thread.currentThread().interrupt();
         }

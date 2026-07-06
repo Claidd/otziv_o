@@ -76,6 +76,11 @@ public class ReviewBotChangeService {
 
     @Transactional
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
+        deActivateAndChangeBot(reviewId, botId, false);
+    }
+
+    @Transactional
+    public void deActivateAndChangeBot(Long reviewId, Long botId, boolean forceWalkDelayIfUnwalked) {
         try {
             Review review = findReviewForBotChange(reviewId).orElse(null);
             if (review == null) {
@@ -105,12 +110,12 @@ public class ReviewBotChangeService {
             }
             assignBotUsingSharedRules(review, excludedBotIds);
             markReleasedIfChanged(currentBot, review.getBot(), "review bot blocked and changed");
-            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
             addAssignedBotToExcluded(review, excludedBotIds);
 
             log.info("Vigul обновлен: {} -> {}", wasVigul, review.isVigul());
             reviewRepository.save(review);
-            reassignUnpublishedReviewsForBlockedBot(botId, review.getId(), excludedBotIds);
+            reassignUnpublishedReviewsForBlockedBot(botId, review.getId(), excludedBotIds, forceWalkDelayIfUnwalked);
 
         } catch (Exception e) {
             log.error("Что-то пошло не так и бот не деактивирован", e);
@@ -120,6 +125,11 @@ public class ReviewBotChangeService {
 
     @Transactional
     public void assignNewAccount(Long reviewId) {
+        assignNewAccount(reviewId, false);
+    }
+
+    @Transactional
+    public void assignNewAccount(Long reviewId, boolean forceWalkDelayIfUnwalked) {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
         boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
@@ -143,7 +153,7 @@ public class ReviewBotChangeService {
         Bot oldBot = review.getBot();
         review.setBot(selectedBot);
         markReleasedIfChanged(oldBot, selectedBot, "new account assigned to review");
-        accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked);
+        accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
         reviewRepository.save(review);
 
         log.info("Новый аккаунт ID {} назначен отзыву ID {} для города филиала {}",
@@ -271,7 +281,12 @@ public class ReviewBotChangeService {
         }
     }
 
-    private void reassignUnpublishedReviewsForBlockedBot(Long blockedBotId, Long currentReviewId, Set<Long> excludedBotIds) {
+    private void reassignUnpublishedReviewsForBlockedBot(
+            Long blockedBotId,
+            Long currentReviewId,
+            Set<Long> excludedBotIds,
+            boolean forceWalkDelayIfUnwalked
+    ) {
         if (blockedBotId == null || blockedBotId <= 0 || STUB_BOT_ID.equals(blockedBotId)) {
             return;
         }
@@ -298,7 +313,11 @@ public class ReviewBotChangeService {
             Bot oldBot = affectedReview.getBot();
             assignBotUsingSharedRules(affectedReview, excludedBotIds);
             markReleasedIfChanged(oldBot, affectedReview.getBot(), "blocked bot reassigned in unpublished review");
-            accountWalkScheduleService.synchronizeAfterAccountChange(affectedReview, oldWalked);
+            accountWalkScheduleService.synchronizeAfterAccountChange(
+                    affectedReview,
+                    oldWalked,
+                    forceWalkDelayIfUnwalked
+            );
             addAssignedBotToExcluded(affectedReview, excludedBotIds);
             reassigned++;
         }

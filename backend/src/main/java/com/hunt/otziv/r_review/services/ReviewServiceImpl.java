@@ -1310,8 +1310,18 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public void assignNewAccount(Long reviewId, boolean forceWalkDelayIfUnwalked) {
+        reviewBotChangeService.assignNewAccount(reviewId, forceWalkDelayIfUnwalked);
+    }
+
+    @Override
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
         reviewBotChangeService.deActivateAndChangeBot(reviewId, botId);
+    }
+
+    @Override
+    public void deActivateAndChangeBot(Long reviewId, Long botId, boolean forceWalkDelayIfUnwalked) {
+        reviewBotChangeService.deActivateAndChangeBot(reviewId, botId, forceWalkDelayIfUnwalked);
     }
 
     public List<Bot> findAllBotsMinusFilial(Review review) {

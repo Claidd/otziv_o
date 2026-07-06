@@ -75,6 +75,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -573,7 +574,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void publicInvoiceIsNotPayableWhileInvoiceIsCollecting() {
+    void publicInvoiceIsPayableWhileInvoiceIsCollecting() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.COLLECTING);
@@ -588,7 +589,7 @@ class CommonBillingServiceTest {
 
         var response = service.publicInvoice("token");
 
-        assertFalse(response.payable());
+        assertTrue(response.payable());
         assertEquals(CommonInvoiceStatus.COLLECTING.name(), response.status());
     }
 
@@ -677,7 +678,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void initPublicPaymentRejectsCollectingInvoice() {
+    void initPublicPaymentAcceptsCollectingInvoiceAsPrepayment() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.COLLECTING);
@@ -685,21 +686,42 @@ class CommonBillingServiceTest {
         order.setStatus(status("Публикация"));
         CommonInvoiceOrder item = item(invoice, order);
         item.setReady(false);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
 
         when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
         when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
-        when(invoiceRepository.findByTokenWithAccount("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "NEW",
+                "payment-collecting",
+                "order-collecting",
+                100_000L,
+                "https://pay/collecting"
+        ));
 
-        assertThrows(ResponseStatusException.class, () -> service.initPublicPayment(
+        var response = service.initPublicPayment(
                 "token",
                 "client@example.com",
                 true,
                 true,
                 true
-        ));
-        verify(tbankClient, never()).init(any(), any());
+        );
+
+        assertEquals("https://pay/collecting", response.paymentUrl());
+        verify(tbankClient).init(any(), any());
     }
 
     @Test
@@ -826,13 +848,33 @@ class CommonBillingServiceTest {
         when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
         when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
 
-        assertThrows(ResponseStatusException.class, () -> service.initPublicPayment(
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "NEW",
+                "payment-lock",
+                "order-lock",
+                100_000L,
+                "https://pay/lock"
+        ));
+
+        service.initPublicPayment(
                 "token",
                 "client@example.com",
                 true,
                 true,
                 true
-        ));
+        );
 
         verify(invoiceRepository).findByTokenWithAccountForUpdate("token");
         verify(invoiceRepository, never()).findByTokenWithAccount("token");
@@ -1845,6 +1887,49 @@ class CommonBillingServiceTest {
         when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
 
         assertThrows(ResponseStatusException.class, () -> service.retryAttention(10L));
+        verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
+    }
+
+    @Test
+    void confirmedCurrentWebhookBeforeAllOrdersReadyStoresPrepaymentWithoutClosingOrders() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        invoice.setTbankOrderId("old-order");
+        invoice.setTbankPaymentId("old-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setPaymentUrl("https://pay/current");
+        Order order = order(101L);
+        order.setStatus(status("Публикация"));
+        order.setAmount(2);
+        order.setCounter(1);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setReady(false);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+        Map<String, String> payload = confirmedWebhookPayload();
+        payload.put("Amount", "100000");
+
+        when(invoiceRepository.findByTbankOrderId("old-order")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.findByTerminalKey("terminal")).thenReturn(Optional.of(profile));
+        when(paymentProfileService.toRuntimeForTerminal(profile, "terminal")).thenReturn(runtimeProfile);
+        when(tokenSigner.matches(payload, "password", "token")).thenReturn(true);
+
+        assertTrue(service.handleTbankWebhook(payload));
+
+        ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
+        verify(paymentRefRepository).save(captor.capture());
+        CommonInvoicePaymentRef ref = captor.getValue();
+        assertEquals("PREPAID", ref.getStatus());
+        assertEquals("prepaid_waiting_common_invoice_ready", ref.getReason());
+        assertNull(invoice.getTbankOrderId());
+        assertNull(invoice.getTbankPaymentId());
+        assertNull(invoice.getPaymentUrl());
+        assertEquals(CommonInvoiceStatus.COLLECTING, invoice.getStatus());
         verify(orderTransactionService, never()).handlePaymentStatus(any(), anyBoolean());
     }
 

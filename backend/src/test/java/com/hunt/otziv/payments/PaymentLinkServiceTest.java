@@ -718,6 +718,57 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void confirmedWebhookBeforeOrderCompletionStoresPrepaymentWithoutClosingOrder() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setTerminalKey("terminal");
+        properties.setPassword("password");
+        properties.setApplyConfirmedPayments(true);
+        TbankTokenSigner signer = new TbankTokenSigner();
+        PaymentLinkService service = service(properties, signer);
+        when(paymentProfileService.toRuntimeForTerminal(any(PaymentProfile.class), eq("terminal"))).thenReturn(new TbankPaymentProfile(
+                1L,
+                TbankPaymentProfile.PRIMARY_CODE,
+                "Основной магазин",
+                true,
+                "terminal",
+                "password",
+                false
+        ));
+        when(paymentProfileService.isTestTerminal("terminal")).thenReturn(false);
+        Order order = order(210L, "ООО Предоплата", BigDecimal.valueOf(11.11));
+        order.setAmount(2);
+        order.setCounter(1);
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("token");
+        link.setTbankOrderId("o210-test");
+        link.setAmountKopecks(1111L);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("TerminalKey", "terminal");
+        payload.put("OrderId", "o210-test");
+        payload.put("Success", "true");
+        payload.put("Status", "CONFIRMED");
+        payload.put("PaymentId", "123210");
+        payload.put("ErrorCode", "0");
+        payload.put("Amount", "1111");
+        payload.put("Token", signer.sign(payload, "password"));
+
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder("o210-test")).thenReturn(Optional.of(link));
+
+        service.handleTbankWebhook(payload);
+
+        assertEquals(PaymentLinkStatus.CONFIRMED, link.getStatus());
+        assertEquals("prepaid_waiting_order_completion", link.getLastError());
+        assertEquals(PaymentReceiptStatus.PENDING, link.getReceiptStatus());
+        assertNotNull(link.getPaidAt());
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
     void publicLinkUsesCompanyLastPayerEmailWhenLinkEmailIsEmpty() {
         TbankPaymentProperties properties = properties();
         PaymentLinkService service = service(properties);

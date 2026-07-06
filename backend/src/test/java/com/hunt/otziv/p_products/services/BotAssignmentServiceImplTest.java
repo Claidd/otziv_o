@@ -177,9 +177,56 @@ class BotAssignmentServiceImplTest {
         assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 888L)));
         assertSame(reserveBot, stubReview.getBot());
         assertEquals(false, stubReview.isVigul());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview, true, false);
         verify(reviewRepository).saveAll(List.of(stubReview));
         verify(telegramService, never()).sendAlertToAdmins(anyString());
+    }
+
+    @Test
+    void checkAndNotifyAboutStubBotsCanForceWalkDelayWhenReserveAssignedForPublication() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot stubBot = bot(1L, "Нет доступных аккаунтов", 0);
+        Bot reserveBot = bot(900L, "Впиши Имя Фамилию", 0);
+
+        Review stubReview = new Review();
+        stubReview.setId(2L);
+        stubReview.setFilial(filial);
+        stubReview.setBot(stubBot);
+
+        when(botService.claimReserveBotForCity(eq(city), anyCollection()))
+                .thenReturn(Optional.of(reserveBot));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(2L)).thenReturn(Set.of());
+
+        service.checkAndNotifyAboutStubBots(List.of(stubReview), true);
+
+        assertSame(reserveBot, stubReview.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview, false, true);
+        verify(reviewRepository).saveAll(List.of(stubReview));
+    }
+
+    @Test
+    void assignBotsToExistingReviewsCanForceWalkDelayForPublication() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot candidate = bot(900L, "Впиши Имя Фамилию", 0);
+        Review review = new Review();
+        review.setId(2L);
+        review.setFilial(filial);
+
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(candidate));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(candidate)).thenReturn(true);
+
+        assertTrue(service.assignBotsToExistingReviews(List.of(review), filial, true));
+
+        assertSame(candidate, review.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
+        verify(reviewRepository).saveAll(List.of(review));
     }
 
     @Test

@@ -34,6 +34,10 @@ public class OrderBotLifecycleService {
     private final ReviewBotCooldownService botCooldownService;
 
     public void assignBotsIfNeeded(Order order) {
+        assignBotsIfNeeded(order, false);
+    }
+
+    public void assignBotsIfNeeded(Order order, boolean forceWalkDelayIfUnwalked) {
         try {
             if (!hasDetails(order)) {
                 log.warn("У заказа ID {} нет OrderDetails", order != null ? order.getId() : null);
@@ -54,7 +58,7 @@ public class OrderBotLifecycleService {
                         nullBotCount, order.getId());
 
                 boolean botsAssigned = botAssignmentService.assignBotsToExistingReviews(
-                        reviews, order.getFilial());
+                        reviews, order.getFilial(), forceWalkDelayIfUnwalked);
 
                 if (botsAssigned) {
                     log.info("Боты успешно назначены для {} отзывов", nullBotCount);
@@ -63,7 +67,7 @@ public class OrderBotLifecycleService {
                 }
             }
 
-            botAssignmentService.checkAndNotifyAboutStubBots(reviews);
+            botAssignmentService.checkAndNotifyAboutStubBots(reviews, forceWalkDelayIfUnwalked);
 
         } catch (Exception e) {
             log.error("Ошибка при проверке/назначении ботов: {}", e.getMessage(), e);
@@ -71,11 +75,15 @@ public class OrderBotLifecycleService {
     }
 
     public void checkAndNotifyAboutStubBots(List<Review> reviews) {
+        checkAndNotifyAboutStubBots(reviews, false);
+    }
+
+    public void checkAndNotifyAboutStubBots(List<Review> reviews, boolean forceWalkDelayIfUnwalked) {
         if (reviews == null || reviews.isEmpty()) {
             return;
         }
 
-        botAssignmentService.checkAndNotifyAboutStubBots(reviews);
+        botAssignmentService.checkAndNotifyAboutStubBots(reviews, forceWalkDelayIfUnwalked);
     }
 
     public void detachBots(Order order) {

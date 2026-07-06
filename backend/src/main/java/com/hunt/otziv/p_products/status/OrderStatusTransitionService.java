@@ -234,7 +234,7 @@ public class OrderStatusTransitionService {
 
             String previousOrderStatus = safeStatusTitle(order);
 
-            orderBotLifecycleService.assignBotsIfNeeded(order);
+            orderBotLifecycleService.assignBotsIfNeeded(order, true);
 
             order.setStatus(orderStatusService.getOrderStatusByTitle(STATUS_TO_PUBLISH));
             orderCompanyStatusService.autoManageCompanyStatus(order, STATUS_TO_PUBLISH);
@@ -243,7 +243,7 @@ public class OrderStatusTransitionService {
             if (reviews.isEmpty()) {
                 log.warn("В заказе ID {} нет отзывов", order.getId());
             } else {
-                orderBotLifecycleService.checkAndNotifyAboutStubBots(reviews);
+                orderBotLifecycleService.checkAndNotifyAboutStubBots(reviews, true);
             }
 
             orderRepository.save(order);

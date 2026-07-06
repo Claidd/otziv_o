@@ -54,12 +54,12 @@ class OrderBotLifecycleServiceTest {
         List<Review> reviews = List.of(missingBot, existingBot);
         Order order = order(10L, filial, reviews);
 
-        when(botAssignmentService.assignBotsToExistingReviews(reviews, filial)).thenReturn(true);
+        when(botAssignmentService.assignBotsToExistingReviews(reviews, filial, false)).thenReturn(true);
 
         service.assignBotsIfNeeded(order);
 
-        verify(botAssignmentService).assignBotsToExistingReviews(reviews, filial);
-        verify(botAssignmentService).checkAndNotifyAboutStubBots(reviews);
+        verify(botAssignmentService).assignBotsToExistingReviews(reviews, filial, false);
+        verify(botAssignmentService).checkAndNotifyAboutStubBots(reviews, false);
         verifyNoInteractions(botService, reviewService);
     }
 

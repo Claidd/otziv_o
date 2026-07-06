@@ -208,6 +208,12 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     List<PaymentLink> findByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
 
+    Optional<PaymentLink> findFirstByOrder_IdAndStatusAndLastErrorOrderByPaidAtDesc(
+            Long orderId,
+            PaymentLinkStatus status,
+            String lastError
+    );
+
     @Query("""
         SELECT DISTINCT link
         FROM PaymentLink link
