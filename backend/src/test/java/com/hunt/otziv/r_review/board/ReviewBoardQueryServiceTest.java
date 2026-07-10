@@ -158,7 +158,7 @@ class ReviewBoardQueryServiceTest {
     }
 
     @Test
-    void countReviewIdsForPublishBoardDoesNotHideReviewsWithUnavailableAccounts() {
+    void countReviewIdsForPublishBoardRequiresWalkedReviewButDoesNotHideUnavailableAccounts() {
         ReviewBoardQueryService service = new ReviewBoardQueryService(entityManager);
         LocalDate localDate = LocalDate.of(2026, 6, 2);
         Worker worker = new Worker();
@@ -179,11 +179,49 @@ class ReviewBoardQueryServiceTest {
         );
 
         assertEquals(3L, count);
+        assertTrue(queryCaptor.getValue().contains("r.vigul = true"));
         assertTrue(queryCaptor.getValue().contains("TRIM(r.text) <> ''"));
         assertTrue(!queryCaptor.getValue().contains("b.active = true"));
         assertTrue(!queryCaptor.getValue().contains("b.id <> 1"));
         verify(countQuery).setParameter(eq("localDate"), eq(localDate));
         verify(countQuery).setParameter(eq("worker"), same(worker));
+    }
+
+    @Test
+    void findReviewIdsForPublishBoardRequiresWalkedReview() {
+        ReviewBoardQueryService service = new ReviewBoardQueryService(entityManager);
+        LocalDate localDate = LocalDate.of(2026, 7, 9);
+        ArgumentCaptor<String> queryCaptor = ArgumentCaptor.forClass(String.class);
+
+        when(entityManager.createQuery(queryCaptor.capture(), eq(Long.class)))
+                .thenReturn(idQuery)
+                .thenReturn(countQuery);
+        stubQueryParameters(idQuery);
+        stubQueryParameters(countQuery);
+        when(idQuery.setFirstResult(anyInt())).thenReturn(idQuery);
+        when(idQuery.setMaxResults(anyInt())).thenReturn(idQuery);
+        when(idQuery.getResultList()).thenReturn(List.of(167498L));
+        when(countQuery.getSingleResult()).thenReturn(1L);
+
+        Page<Long> page = service.findReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH,
+                ReviewBoardScope.ADMIN,
+                localDate,
+                null,
+                null,
+                null,
+                null,
+                "",
+                0,
+                10,
+                "desc"
+        );
+
+        assertEquals(List.of(167498L), page.getContent());
+        assertTrue(queryCaptor.getAllValues().get(0).contains("r.vigul = true"));
+        assertTrue(queryCaptor.getAllValues().get(1).contains("r.vigul = true"));
+        verify(idQuery).setParameter(eq("localDate"), eq(localDate));
+        verify(countQuery).setParameter(eq("localDate"), eq(localDate));
     }
 
     private void stubQueryParameters(TypedQuery<Long> query) {

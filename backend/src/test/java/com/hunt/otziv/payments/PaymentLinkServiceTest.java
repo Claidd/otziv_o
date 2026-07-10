@@ -668,7 +668,8 @@ class PaymentLinkServiceTest {
         properties.setPassword("password");
         properties.setApplyConfirmedPayments(true);
         TbankTokenSigner signer = new TbankTokenSigner();
-        PaymentLinkService service = service(properties, signer);
+        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        PaymentLinkService service = service(properties, signer, commonBillingService);
         when(paymentProfileService.toRuntimeForTerminal(any(PaymentProfile.class), eq("terminal"))).thenReturn(new TbankPaymentProfile(
                 1L,
                 TbankPaymentProfile.PRIMARY_CODE,
@@ -714,6 +715,11 @@ class PaymentLinkServiceTest {
         verify(orderTransactionService).handlePaymentStatus(order);
         verify(paymentSuccessClientNotifier).notifySuccess(link);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "T-Bank/SBP оплата подтверждена");
+        verify(commonBillingService).applyConfirmedOrderPayment(
+                eq(21L),
+                any(LocalDateTime.class),
+                eq("T-Bank/SBP оплата заказа")
+        );
         verify(paymentLinkRepository).save(link);
     }
 
@@ -1453,9 +1459,17 @@ class PaymentLinkServiceTest {
     }
 
     private PaymentLinkService service(TbankPaymentProperties properties, TbankTokenSigner signer) {
+        return service(properties, signer, null);
+    }
+
+    private PaymentLinkService service(
+            TbankPaymentProperties properties,
+            TbankTokenSigner signer,
+            CommonBillingService commonBillingService
+    ) {
         @SuppressWarnings("unchecked")
         ObjectProvider<CommonBillingService> commonBillingServiceProvider = org.mockito.Mockito.mock(ObjectProvider.class);
-        org.mockito.Mockito.lenient().when(commonBillingServiceProvider.getIfAvailable()).thenReturn(null);
+        org.mockito.Mockito.lenient().when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
         return new PaymentLinkService(
                 paymentLinkRepository,
                 orderRepository,

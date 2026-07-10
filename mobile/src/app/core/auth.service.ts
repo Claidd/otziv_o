@@ -15,6 +15,7 @@ export class AuthService {
   private refreshPromise: Promise<boolean> | null = null;
   private initialized = false;
   private readonly handledNativeAuthUrls = new Set<string>();
+  private lastResumeCheckAt = 0;
 
   readonly status = signal<AuthStatus>('initializing');
   readonly user = signal<AuthUser | null>(null);
@@ -62,6 +63,22 @@ export class AuthService {
   isAuthenticated(): boolean {
     const tokens = this.tokens();
     return Boolean(tokens && this.isTokenFresh(tokens, 0));
+  }
+
+  async ensureAuthenticated(minValiditySeconds = 30): Promise<boolean> {
+    const tokens = this.tokens();
+    if (!tokens) {
+      return false;
+    }
+
+    if (this.isTokenFresh(tokens, minValiditySeconds)) {
+      if (this.status() !== 'authenticated') {
+        this.status.set('authenticated');
+      }
+      return true;
+    }
+
+    return this.refreshTokens();
   }
 
   hasRealmRole(role: string): boolean {
@@ -196,6 +213,7 @@ export class AuthService {
   async logout(): Promise<void> {
     const idToken = this.tokens()?.idToken;
     await this.clearSession('anonymous');
+    await this.storage.clearPendingLogin().catch(() => undefined);
 
     const logoutUrl = new URL(`${this.issuerUrl()}/protocol/openid-connect/logout`, window.location.origin);
     logoutUrl.searchParams.set('client_id', mobileEnvironment.keycloak.clientId);
@@ -206,14 +224,21 @@ export class AuthService {
 
     if (this.isNative) {
       await this.openNativeAuthUrl(logoutUrl.toString());
-      await this.router.navigateByUrl('/login', { replaceUrl: true });
+      await this.router.navigateByUrl('/login?loggedOut=1', { replaceUrl: true });
       return;
     }
 
     window.location.assign(logoutUrl.toString());
   }
 
-  async handleUnauthorized(): Promise<void> {
+  async handleUnauthorized(tryRefresh = true): Promise<void> {
+    if (tryRefresh) {
+      const refreshed = await this.refreshTokens();
+      if (refreshed) {
+        return;
+      }
+    }
+
     await this.clearSession('anonymous');
     await this.router.navigateByUrl('/login', { replaceUrl: true });
   }
@@ -228,6 +253,12 @@ export class AuthService {
         void this.handleNativeAuthCallback(event.url);
       } else if (event.url.startsWith('otziv://logout')) {
         void Browser.close();
+      }
+    });
+
+    await CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        void this.resumeSession();
       }
     });
 
@@ -251,6 +282,27 @@ export class AuthService {
     }
 
     await this.completeLoginFromCallback(url);
+  }
+
+  private async resumeSession(): Promise<void> {
+    const now = Date.now();
+    if (now - this.lastResumeCheckAt < 1500) {
+      return;
+    }
+
+    this.lastResumeCheckAt = now;
+    const tokens = this.tokens();
+    if (!tokens) {
+      return;
+    }
+
+    if (this.isTokenFresh(tokens, 45)) {
+      this.status.set('authenticated');
+      this.scheduleRefresh();
+      return;
+    }
+
+    await this.refreshTokens();
   }
 
   private async acceptTokens(response: TokenEndpointResponse, fallbackRefreshToken?: string): Promise<void> {

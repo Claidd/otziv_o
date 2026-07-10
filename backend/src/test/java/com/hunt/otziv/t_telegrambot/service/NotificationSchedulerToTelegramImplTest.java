@@ -2,6 +2,8 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
+import com.hunt.otziv.u_users.model.Role;
+import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,9 +14,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,6 +69,42 @@ class NotificationSchedulerToTelegramImplTest {
         verify(telegramService, never()).sendMessage(794146111L, "Доброе утро! Отчёт за сегодня готов", "HTML");
     }
 
+    @Test
+    void sendsWorkerOnlyReportWhenRecipientHasWorkerRole() {
+        NotificationSchedulerToTelegramImpl scheduler = schedulerAt("2026-05-21T14:01:00Z");
+        com.hunt.otziv.admin.dto.presonal.UserData mixedData = com.hunt.otziv.admin.dto.presonal.UserData.builder()
+                .fio("Виктория Викторовна")
+                .role("ROLE_MANAGER")
+                .orderToCheck(9L)
+                .orderInCheck(8L)
+                .orderInWaitingPay1(7L)
+                .build();
+        com.hunt.otziv.admin.dto.presonal.UserData workerData = com.hunt.otziv.admin.dto.presonal.UserData.builder()
+                .fio("Виктория Викторовна")
+                .role("ROLE_WORKER")
+                .newOrders(1L)
+                .correctOrders(2L)
+                .inVigul(3L)
+                .inPublish(4L)
+                .build();
+        User shallowUser = user(77L, "victoria", "Виктория Викторовна", "ROLE_WORKER");
+        User workerUser = user(77L, "victoria", "Виктория Викторовна", "ROLE_WORKER");
+        Map<String, com.hunt.otziv.admin.dto.presonal.UserData> allData = Map.of("Виктория Викторовна", mixedData);
+        Map<String, com.hunt.otziv.admin.dto.presonal.UserData> workerOnlyData = Map.of("Виктория Викторовна", workerData);
+
+        when(userService.getAllWorkers()).thenReturn(Map.of("Виктория Викторовна", 123L));
+        when(personalService.getPersonalsAndCountToMap()).thenReturn(allData);
+        when(userService.findByFio("Виктория Викторовна")).thenReturn(Optional.of(shallowUser));
+        when(userService.findByUserNameWithAssignments("victoria")).thenReturn(Optional.of(workerUser));
+        when(personalService.getPersonalsAndCountToMapToWorker(77L)).thenReturn(workerOnlyData);
+        when(personalService.displayResultToWorker(workerOnlyData)).thenReturn("worker-only report");
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of());
+
+        scheduler.sendDailyReportToWorkers();
+
+        verify(telegramService).sendMessage(eq(123L), eq("worker-only report"), eq("HTML"));
+    }
+
     private NotificationSchedulerToTelegramImpl schedulerAt(String instant) {
         NotificationSchedulerToTelegramImpl scheduler = new NotificationSchedulerToTelegramImpl(
                 telegramService,
@@ -86,5 +127,16 @@ class NotificationSchedulerToTelegramImplTest {
                 "",
                 ""
         );
+    }
+
+    private User user(Long id, String username, String fio, String roleName) {
+        Role role = new Role();
+        role.setName(roleName);
+        User user = new User();
+        user.setId(id);
+        user.setUsername(username);
+        user.setFio(fio);
+        user.setRoles(List.of(role));
+        return user;
     }
 }

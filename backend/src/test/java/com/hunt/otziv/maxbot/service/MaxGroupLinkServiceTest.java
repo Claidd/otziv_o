@@ -55,6 +55,23 @@ class MaxGroupLinkServiceTest {
     }
 
     @Test
+    void linksBotAddedEventByMaxWebGroupUrlWithoutProtocol() {
+        Company company = new Company();
+        company.setId(1161L);
+        company.setTitle("Новая MAX фирма");
+        company.setUrlChat("web.max.ru/-72727178175095");
+
+        when(companyRepository.findTop3ByMaxGroupChatIdIsNullAndUrlChatContaining("-72727178175095"))
+                .thenReturn(List.of(company));
+
+        Optional<String> response = service.handleBotAdded(-72727178175095L, null);
+
+        assertTrue(response.orElse("").contains("Новая MAX фирма"));
+        assertEquals(-72727178175095L, company.getMaxGroupChatId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
     void linksBotAddedEventByMaxJoinLinkFromChatInfo() throws Exception {
         Company company = new Company();
         company.setId(1160L);
@@ -75,6 +92,31 @@ class MaxGroupLinkServiceTest {
         Optional<String> response = service.handleBotAdded(-74924486091383L, null);
 
         assertTrue(response.orElse("").contains("Метролог Групп"));
+        assertEquals(-74924486091383L, company.getMaxGroupChatId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksBotAddedEventByMaxJoinLinkWithoutProtocolFromChatInfo() throws Exception {
+        Company company = new Company();
+        company.setId(1161L);
+        company.setTitle("Новая MAX фирма");
+        company.setUrlChat("max.ru/join/9zHtzGdJS6B0P0kHGaH6jUGUrRURXAM5E0yXBmz4PFc");
+
+        JsonNode chat = new ObjectMapper().readTree("""
+                {
+                  "chat_id": -74924486091383,
+                  "link": "https://max.ru/join/9zHtzGdJS6B0P0kHGaH6jUGUrRURXAM5E0yXBmz4PFc"
+                }
+                """);
+
+        when(maxBotClient.getChat(-74924486091383L)).thenReturn(chat);
+        when(companyRepository.findTop3ByMaxGroupChatIdIsNullAndUrlChatContaining("9zHtzGdJS6B0P0kHGaH6jUGUrRURXAM5E0yXBmz4PFc"))
+                .thenReturn(List.of(company));
+
+        Optional<String> response = service.handleBotAdded(-74924486091383L, null);
+
+        assertTrue(response.orElse("").contains("Новая MAX фирма"));
         assertEquals(-74924486091383L, company.getMaxGroupChatId());
         verify(companyRepository).save(company);
     }

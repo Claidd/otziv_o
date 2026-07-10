@@ -231,4 +231,10 @@ export class CommonBillingApi {
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/orders/${orderId}`
     );
   }
+
+  deleteInvoiceWithOrders(invoiceId: number): Observable<void> {
+    return this.http.delete<void>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}`
+    );
+  }
 }

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -82,4 +83,13 @@ public interface CommonInvoicePaymentRefRepository extends CrudRepository<Common
             @Param("invoiceId") Long invoiceId,
             @Param("status") String status
     );
+
+    boolean existsByInvoice_Id(Long invoiceId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            delete from CommonInvoicePaymentRef ref
+            where ref.invoice.id = :invoiceId
+            """)
+    int deleteByInvoiceId(@Param("invoiceId") Long invoiceId);
 }

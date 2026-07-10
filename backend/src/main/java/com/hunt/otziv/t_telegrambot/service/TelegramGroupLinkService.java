@@ -49,6 +49,9 @@ public class TelegramGroupLinkService {
         }
 
         String normalized = url.trim().toLowerCase(Locale.ROOT);
+        if (normalized.contains("startgroup=")) {
+            return false;
+        }
         return normalized.contains("t.me/")
                 || normalized.contains("telegram.me/")
                 || normalized.contains("telegram.dog/")

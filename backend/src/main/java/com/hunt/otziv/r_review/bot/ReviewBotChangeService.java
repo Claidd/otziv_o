@@ -5,6 +5,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
@@ -40,6 +41,7 @@ public class ReviewBotChangeService {
     private final ReviewRepository reviewRepository;
     private final BotService botService;
     private final EmailService emailService;
+    private final CompanyRepository companyRepository;
     private final BotAssignmentService botAssignmentService;
     private final FilialService filialService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
@@ -135,6 +137,7 @@ public class ReviewBotChangeService {
         boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
 
         Filial filial = review.getFilial();
+        lockCompanyForBotAssignment(filial);
         City city = filial != null ? filial.getCity() : null;
         Long cityId = city != null ? city.getId() : null;
 
@@ -538,6 +541,16 @@ public class ReviewBotChangeService {
 
     private boolean isTemplateBotName(Bot bot) {
         return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
+    }
+
+    private void lockCompanyForBotAssignment(Filial filial) {
+        Long companyId = filial != null && filial.getCompany() != null ? filial.getCompany().getId() : null;
+        if (companyId == null) {
+            return;
+        }
+
+        companyRepository.findByIdForBotAssignmentLock(companyId)
+                .orElseThrow(() -> new RuntimeException("Компания для подбора аккаунта не найдена: " + companyId));
     }
 
     private void markReleasedIfChanged(Bot oldBot, Bot newBot, String reason) {

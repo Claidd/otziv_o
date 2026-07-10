@@ -1015,6 +1015,7 @@ public class PaymentLinkService {
             if (updated) {
                 paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "T-Bank/SBP оплата подтверждена");
             }
+            syncCommonInvoiceOrderPayment(link, "T-Bank/SBP оплата заказа");
         } catch (Exception e) {
             link.setStatus(PaymentLinkStatus.FAILED);
             link.setLastError("Order payment transition failed");
@@ -1050,6 +1051,7 @@ public class PaymentLinkService {
             if (updated) {
                 paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(order, "Предоплата применена после завершения заказа");
             }
+            syncCommonInvoiceOrderPayment(link, "Предоплата заказа применена после завершения");
             log.info("Предоплата по ссылке {} применена после завершения заказа {}", link.getId(), order.getId());
             return true;
         } catch (Exception e) {
@@ -1063,6 +1065,20 @@ public class PaymentLinkService {
     private boolean canApplyOrderPaymentNow(Order order) {
         return order != null
                 && (order.isComplete() || order.getAmount() <= order.getCounter());
+    }
+
+    private void syncCommonInvoiceOrderPayment(PaymentLink link, String reason) {
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        Order order = link == null ? null : link.getOrder();
+        Long orderId = order == null ? null : order.getId();
+        if (commonBillingService == null || orderId == null) {
+            return;
+        }
+        try {
+            commonBillingService.applyConfirmedOrderPayment(orderId, link.getPaidAt(), reason);
+        } catch (RuntimeException e) {
+            log.warn("Не удалось зачесть оплату заказа {} в общий счет", orderId, e);
+        }
     }
 
     private void markOrderPrepaid(PaymentLink link) {

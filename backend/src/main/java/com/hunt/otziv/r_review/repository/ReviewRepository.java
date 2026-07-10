@@ -128,48 +128,48 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     List<Review> findAllByOrderDetailsId(UUID orderDetailsId);
 
-    @Query("SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false")
+    @Query("SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true")
     List<Long> findAllByPublishedDateAndPublish(@Param("localDate") LocalDate localDate);
 
     @Query(
-            value = "SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false",
-            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false"
+            value = "SELECT r.id FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true"
     )
     Page<Long> findPageIdsByPublishedDateAndPublish(@Param("localDate") LocalDate localDate,
                                                     Pageable pageable);
 
-    @Query("SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
+    @Query("SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true")
     List<Long> findAllByWorkerAndPublishedDateAndPublish(@Param("worker") Worker worker,
                                                          @Param("localDate") LocalDate localDate);
 
     @Query(
-            value = "SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false",
-            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false"
+            value = "SELECT r.id FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true"
     )
     Page<Long> findPageIdsByWorkerAndPublishedDateAndPublish(@Param("worker") Worker worker,
                                                              @Param("localDate") LocalDate localDate,
                                                              Pageable pageable);
 
-    @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false")
+    @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true")
     List<Long> findAllByManagersAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
                                                            @Param("localDate") LocalDate localDate);
 
     @Query(
-            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.orderDetails.order.manager = :manager",
-            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.orderDetails.order.manager = :manager"
+            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true AND r.orderDetails.order.manager = :manager",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true AND r.orderDetails.order.manager = :manager"
     )
     Page<Long> findPageIdsByManagerAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
                                                               @Param("manager") Manager manager,
                                                               @Param("localDate") LocalDate localDate,
                                                               Pageable pageable);
 
-    @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false")
+    @Query("SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true")
     List<Long> findAllByOwnersAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
                                                          @Param("localDate") LocalDate localDate);
 
     @Query(
-            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false",
-            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false"
+            value = "SELECT r.id FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true",
+            countQuery = "SELECT COUNT(r.id) FROM Review r WHERE r.worker IN :workers AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true"
     )
     Page<Long> findPageIdsByWorkersAndPublishedDateAndPublish(@Param("workers") Set<Worker> workers,
                                                               @Param("localDate") LocalDate localDate,
@@ -661,7 +661,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     """, nativeQuery = true)
     Set<Long> findUsedBotIdsByCompanyId(@Param("companyId") Long companyId);
 
-    @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false")
+    @Query("SELECT COUNT(r.id) FROM Review r WHERE r.worker = :worker AND r.publishedDate <= :localDate AND r.publish = false AND r.vigul = true")
     int countByWorkerAndStatusPublish(@Param("worker") Worker worker,
                                       @Param("localDate") LocalDate localDate);
 
@@ -684,6 +684,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         WHERE r.worker.id IN :workerIds
           AND r.publishedDate <= :localDate
           AND r.publish = false
+          AND r.vigul = true
           AND r.text IS NOT NULL
           AND TRIM(r.text) <> ''
           AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
@@ -710,6 +711,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         WHERE r.worker.id IN :workerIds
           AND r.publishedDate <= :localDate
           AND r.publish = false
+          AND r.vigul = true
           AND r.text IS NOT NULL
           AND TRIM(r.text) <> ''
           AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
@@ -889,6 +891,7 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         WHERE r.worker.id IN :workerIds
           AND r.publishedDate <= :localDate
           AND r.publish = false
+          AND r.vigul = true
           AND r.text IS NOT NULL
           AND TRIM(r.text) <> ''
           AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'

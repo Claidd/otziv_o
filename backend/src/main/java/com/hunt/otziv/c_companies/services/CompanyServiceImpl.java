@@ -1393,6 +1393,7 @@ public class CompanyServiceImpl implements CompanyService{
         if (!Objects.equals(companyDTO.getUrlChat(), saveCompany.getUrlChat())){ /*Проверка смены ссылки на чат*/
             log.info("Обновляем ссылку на чат");
             saveCompany.setUrlChat(companyDTO.getUrlChat());
+            resetCurrentChatBinding(saveCompany, companyDTO.getUrlChat());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getUrlSite(), saveCompany.getUrlSite())){ /*Проверка смены официального сайта*/
@@ -1493,6 +1494,19 @@ public class CompanyServiceImpl implements CompanyService{
             log.info("3. Изменений не было, сущность в БД не изменена");
         }
     } // Обновление компании
+
+//    =====================================================================================================
+
+    private void resetCurrentChatBinding(Company company, String urlChat) {
+        String chat = urlChat == null ? "" : urlChat.trim().toLowerCase(Locale.ROOT);
+        if (chat.contains("chat.whatsapp.com/")) {
+            company.setGroupId(null);
+        } else if (chat.contains("t.me/") || chat.contains("telegram.me/")) {
+            company.setTelegramGroupChatId(null);
+        } else if (chat.contains("max.ru/") || chat.contains("max.com/")) {
+            company.setMaxGroupChatId(null);
+        }
+    }
 
 //    =====================================================================================================
 

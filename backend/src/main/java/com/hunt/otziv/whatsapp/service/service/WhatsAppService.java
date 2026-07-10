@@ -11,6 +11,9 @@ public interface WhatsAppService {
     String sendMessage(String clientId, String phone, String message);
     String sendMessageToGroup(String clientId, String groupId, String message);
     List<WhatsAppGroupInfo> listGroups(String clientId);
+    default List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
+        return listGroups(clientId);
+    }
     WhatsAppClientStatusDto getClientStatus(String clientId);
     Optional<WhatsAppUserStatusDto> getUserStatusWithLastSeen(String id, String phone);
 }

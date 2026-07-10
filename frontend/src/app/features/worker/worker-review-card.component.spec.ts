@@ -277,6 +277,14 @@ describe('WorkerReviewCardComponent', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     fixture.componentInstance.review = review({ botPassword: '' });
     fixture.componentInstance.activeSection = 'publish';
+    let repairMessage = '';
+    let doneEmitted = false;
+    fixture.componentInstance.accountRepairRequested.subscribe((message) => {
+      repairMessage = message;
+    });
+    fixture.componentInstance.doneRequested.subscribe(() => {
+      doneEmitted = true;
+    });
 
     fixture.detectChanges();
 
@@ -284,7 +292,15 @@ describe('WorkerReviewCardComponent', () => {
     expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('Bot Name 2');
     const publishButton = element.querySelector<HTMLButtonElement>('.publish-button');
     expect(publishButton?.textContent?.trim()).toBe('СМЕНИТЕ АККАУНТ');
-    expect(publishButton?.disabled).toBe(true);
+    expect(publishButton?.disabled).toBe(false);
+    const actionButtons = element.querySelectorAll<HTMLButtonElement>('.review-actions button');
+    expect(actionButtons[1]?.textContent?.trim()).toBe('логин');
+    expect(actionButtons[1]?.disabled).toBe(true);
+    expect(actionButtons[2]?.textContent?.trim()).toBe('пароль');
+    expect(actionButtons[2]?.disabled).toBe(true);
+    publishButton?.click();
+    expect(doneEmitted).toBe(false);
+    expect(repairMessage).toContain('нет логина или пароля');
   });
 
   it('blocks publication while credential wait timer is active', () => {
@@ -303,8 +319,8 @@ describe('WorkerReviewCardComponent', () => {
     expect(publishButton?.title).toBe('После копирования логина и пароля подождите еще 150 сек.');
   });
 
-  it('allows template accounts in walk section but blocks them in publication section', () => {
-    const render = (activeSection: WorkerReviewCardComponent['activeSection']): HTMLElement => {
+  it('allows template-named accounts in walk section but blocks publication with explanation', () => {
+    const render = (activeSection: WorkerReviewCardComponent['activeSection']) => {
       const fixture = TestBed.createComponent(WorkerReviewCardComponent);
       fixture.componentInstance.review = review({
         botFio: 'Впиши Имя Фамилию',
@@ -312,17 +328,36 @@ describe('WorkerReviewCardComponent', () => {
         botCounter: 0,
       });
       fixture.componentInstance.activeSection = activeSection;
+      let repairMessage = '';
+      let doneEmitted = false;
+      fixture.componentInstance.accountRepairRequested.subscribe((message) => {
+        repairMessage = message;
+      });
+      fixture.componentInstance.doneRequested.subscribe(() => {
+        doneEmitted = true;
+      });
       fixture.detectChanges();
-      return fixture.nativeElement as HTMLElement;
+      return { element: fixture.nativeElement as HTMLElement, getRepairMessage: () => repairMessage, getDoneEmitted: () => doneEmitted };
     };
 
-    let element = render('nagul');
+    let { element, getRepairMessage, getDoneEmitted } = render('nagul');
     expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('Впиши Имя Фамилию');
+    expect(element.querySelector<HTMLButtonElement>('.publish-button')?.textContent?.trim()).toBe('ВЫГУЛЯЛ');
     expect(element.querySelector<HTMLButtonElement>('.publish-button')?.disabled).toBe(false);
+    element.querySelector<HTMLButtonElement>('.publish-button')?.click();
+    expect(getDoneEmitted()).toBe(true);
+    expect(getRepairMessage()).toBe('');
 
-    element = render('publish');
-    expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('смените аккаунт');
-    expect(element.querySelector<HTMLButtonElement>('.publish-button')?.disabled).toBe(true);
+    ({ element, getRepairMessage, getDoneEmitted } = render('publish'));
+    expect(element.querySelector('.bot-line')?.textContent?.trim()).toBe('Впиши Имя Фамилию');
+    expect(element.querySelector<HTMLButtonElement>('.publish-button')?.textContent?.trim()).toBe('НУЖЕН ВЫГУЛ');
+    expect(element.querySelector<HTMLButtonElement>('.publish-button')?.disabled).toBe(false);
+    const publishActionButtons = element.querySelectorAll<HTMLButtonElement>('.review-actions button');
+    expect(publishActionButtons[1]?.disabled).toBe(true);
+    expect(publishActionButtons[2]?.disabled).toBe(true);
+    element.querySelector<HTMLButtonElement>('.publish-button')?.click();
+    expect(getDoneEmitted()).toBe(false);
+    expect(getRepairMessage()).toContain('новый невыгулянный аккаунт');
   });
 
   it('marks publication date as overdue only when it is before today', () => {

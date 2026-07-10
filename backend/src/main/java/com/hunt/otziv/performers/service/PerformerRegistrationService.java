@@ -32,7 +32,7 @@ import java.util.UUID;
 public class PerformerRegistrationService {
 
     private static final String PERFORMER_ROLE = "PERFORMER";
-    private static final String PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    private static final char[] GENERATED_CREDENTIAL_CHARS = buildGeneratedCredentialChars();
 
     private final KeycloakUserProvisioningService userProvisioningService;
     private final UserRepository userRepository;
@@ -119,10 +119,26 @@ public class PerformerRegistrationService {
     private String generateTemporaryPassword() {
         StringBuilder result = new StringBuilder("T");
         for (int i = 0; i < 11; i++) {
-            result.append(PASSWORD_ALPHABET.charAt(secureRandom.nextInt(PASSWORD_ALPHABET.length())));
+            result.append(GENERATED_CREDENTIAL_CHARS[secureRandom.nextInt(GENERATED_CREDENTIAL_CHARS.length)]);
         }
         result.append("7!");
         return result.toString();
+    }
+
+    private static char[] buildGeneratedCredentialChars() {
+        StringBuilder chars = new StringBuilder();
+        appendRange(chars, 'A', 'Z', "IO");
+        appendRange(chars, 'a', 'z', "l");
+        appendRange(chars, '2', '9', "");
+        return chars.toString().toCharArray();
+    }
+
+    private static void appendRange(StringBuilder target, char first, char last, String excluded) {
+        for (char current = first; current <= last; current++) {
+            if (excluded.indexOf(current) < 0) {
+                target.append(current);
+            }
+        }
     }
 
     private String trimToNull(String value) {

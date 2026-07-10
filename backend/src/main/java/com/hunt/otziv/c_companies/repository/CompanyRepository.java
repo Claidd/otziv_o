@@ -5,12 +5,14 @@ import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.u_users.model.Manager;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -23,6 +25,10 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     List<Company> findAll();
 
     boolean existsByIdAndManager_IdIn(Long id, Collection<Long> managerIds);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Company c WHERE c.id = :companyId")
+    Optional<Company> findByIdForBotAssignmentLock(@Param("companyId") Long companyId);
 
     @Query("""
         SELECT DISTINCT c

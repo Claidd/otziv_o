@@ -7,11 +7,13 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -29,9 +31,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -49,6 +53,9 @@ class ReviewBotChangeServiceTest {
     private EmailService emailService;
 
     @Mock
+    private CompanyRepository companyRepository;
+
+    @Mock
     private BotAssignmentService botAssignmentService;
 
     @Mock
@@ -62,6 +69,12 @@ class ReviewBotChangeServiceTest {
 
     @Mock
     private BusinessAuditService businessAuditService;
+
+    @BeforeEach
+    void allowCompanyLocks() {
+        lenient().when(companyRepository.findByIdForBotAssignmentLock(anyLong()))
+                .thenAnswer(invocation -> Optional.of(company(invocation.getArgument(0))));
+    }
 
     @Test
     void changeBotAssignsNewBotAndUpdatesVigulByCounter() {
@@ -335,6 +348,7 @@ class ReviewBotChangeServiceTest {
                 reviewRepository,
                 botService,
                 emailService,
+                companyRepository,
                 botAssignmentService,
                 filialService,
                 accountWalkScheduleService,

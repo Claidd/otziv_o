@@ -29,6 +29,7 @@ import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.mapper.OrderDtoMapper;
+import com.hunt.otziv.p_products.deletion.OrderDeletionService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.NextOrderFailureNotifier;
@@ -44,7 +45,10 @@ import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankInitCommand;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankClient;
@@ -57,6 +61,7 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -68,6 +73,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -81,6 +87,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -248,6 +255,8 @@ public class CommonBillingService {
     private final CompanyRepository companyRepository;
     private final ManagerRepository managerRepository;
     private final OrderRepository orderRepository;
+    private final ObjectProvider<OrderDeletionService> orderDeletionServiceProvider;
+    private final PaymentLinkRepository paymentLinkRepository;
     private final OrderDtoMapper orderDtoMapper;
     private final OrderStatusService orderStatusService;
     @Autowired
@@ -725,6 +734,44 @@ public class CommonBillingService {
     }
 
     @Transactional
+    public void deleteInvoiceWithOrders(Long invoiceId, Principal principal) {
+        CommonInvoice invoice = lockedInvoice(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        ensureCommonInvoiceVisibleForCurrentUser(invoice);
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        ensureCommonInvoiceCanBeDeleted(invoice, items);
+
+        List<Long> orderIds = items.stream()
+                .map(CommonInvoiceOrder::getOrder)
+                .filter(Objects::nonNull)
+                .map(Order::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        for (Long orderId : orderIds) {
+            boolean deleted = orderDeletionServiceProvider.getObject().deleteOrder(orderId, principal);
+            if (!deleted) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Не удалось удалить связанный заказ #" + orderId
+                );
+            }
+        }
+
+        int orphanLinks = invoiceOrderRepository.deleteByInvoiceId(invoiceId);
+        int paymentRefs = paymentRefRepository.deleteByInvoiceId(invoiceId);
+        invoiceRepository.deleteById(invoiceId);
+        log.info(
+                "Удален общий счет {} вместе со связанными заказами: orders={}, orphanLinks={}, paymentRefs={}",
+                invoiceId,
+                orderIds.size(),
+                orphanLinks,
+                paymentRefs
+        );
+    }
+
+    @Transactional
     public CommonInvoiceDetailsResponse markOrderPaid(Long invoiceId, Long orderId) {
         CommonInvoice invoice = lockedInvoice(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
@@ -749,6 +796,71 @@ public class CommonBillingService {
         recalculateInvoice(invoice);
         closePaidIfAllItemsPaid(invoice);
         return invoice(invoiceId);
+    }
+
+    @Transactional
+    public boolean applyConfirmedOrderPayment(Long orderId, LocalDateTime paidAt, String reason) {
+        if (orderId == null) {
+            return false;
+        }
+        Optional<CommonInvoiceOrder> optionalItem = invoiceOrderRepository.findByOrderIdWithInvoice(orderId);
+        if (optionalItem.isEmpty()) {
+            return false;
+        }
+
+        CommonInvoiceOrder item = optionalItem.get();
+        CommonInvoice itemInvoice = item.getInvoice();
+        Long invoiceId = itemInvoice == null ? null : itemInvoice.getId();
+        if (invoiceId == null) {
+            return false;
+        }
+
+        CommonInvoice invoice = lockedInvoice(invoiceId).orElse(itemInvoice);
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID
+                || invoice.getStatus() == CommonInvoiceStatus.UNPAID
+                || invoice.getStatus() == CommonInvoiceStatus.BAN
+                || invoice.getStatus() == CommonInvoiceStatus.DISABLED
+                || invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION) {
+            return false;
+        }
+
+        List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        CommonInvoiceOrder target = items.stream()
+                .filter(candidate -> candidate.getOrder() != null && orderId.equals(candidate.getOrder().getId()))
+                .findFirst()
+                .orElse(item);
+        if (target.isPaid()) {
+            closeOrderAsPaidForConfirmedItem(invoice, target);
+            refreshInvoiceAmounts(invoice, items);
+            return false;
+        }
+
+        LocalDateTime confirmedAt = paidAt == null ? LocalDateTime.now() : paidAt;
+        target.setPaid(true);
+        target.setUnpaid(false);
+        target.setPaidAt(confirmedAt);
+        invoiceOrderRepository.save(target);
+
+        refreshInvoiceAmounts(invoice, items);
+        if (!items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isPaid)) {
+            closePaidInvoice(invoice, items);
+        } else {
+            if (!closeOrderAsPaidForConfirmedItem(invoice, target)) {
+                return true;
+            }
+            invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+            if (invoice.getNextReminderAt() == null) {
+                invoice.setNextReminderAt(LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
+            }
+            invoiceRepository.save(invoice);
+        }
+        log.info(
+                "Оплата отдельной ссылки заказа {} зачтена в общий счет {}: {}",
+                orderId,
+                invoiceId,
+                normalize(reason)
+        );
+        return true;
     }
 
     @Transactional
@@ -1004,6 +1116,7 @@ public class CommonBillingService {
                 }))
                 .toList();
         List<String> closeFailures = new ArrayList<>();
+        Set<Long> closedOrderIds = new HashSet<>();
         for (CommonInvoiceOrder item : sortedItems) {
             long itemAmount = Math.max(0, item.getAmountKopecks());
             if (itemAmount > remainingPaymentKopecks) {
@@ -1011,6 +1124,9 @@ public class CommonBillingService {
             }
             try {
                 closeOrderAsPaidWithoutNextOrder(item.getOrder());
+                if (item.getOrder() != null && item.getOrder().getId() != null) {
+                    closedOrderIds.add(item.getOrder().getId());
+                }
                 item.setPaid(true);
                 item.setUnpaid(false);
                 item.setPaidAt(LocalDateTime.now());
@@ -1037,7 +1153,7 @@ public class CommonBillingService {
             return invoice(invoiceId);
         }
 
-        finishLatePaymentApply(invoice, refs, items, remainingPaymentKopecks);
+        finishLatePaymentApply(invoice, refs, items, remainingPaymentKopecks, closedOrderIds);
         return invoice(invoiceId);
     }
 
@@ -2399,6 +2515,16 @@ public class CommonBillingService {
             List<CommonInvoiceOrder> items,
             long remainingPaymentKopecks
     ) {
+        finishLatePaymentApply(invoice, refs, items, remainingPaymentKopecks, Set.of());
+    }
+
+    private void finishLatePaymentApply(
+            CommonInvoice invoice,
+            List<CommonInvoicePaymentRef> refs,
+            List<CommonInvoiceOrder> items,
+            long remainingPaymentKopecks,
+            Set<Long> closedOrderIds
+    ) {
         boolean allPaid = !items.isEmpty() && items.stream().allMatch(CommonInvoiceOrder::isPaid);
         if (remainingPaymentKopecks > 0) {
             setPaymentRefsStatus(refs, PAYMENT_REF_CONFIRMED);
@@ -2417,7 +2543,7 @@ public class CommonBillingService {
 
         setPaymentRefsStatus(refs, PAYMENT_REF_APPLIED);
         if (allPaid) {
-            closePaidInvoice(invoice, items);
+            closePaidInvoice(invoice, items, closedOrderIds);
             return;
         }
         invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
@@ -2497,10 +2623,16 @@ public class CommonBillingService {
     }
 
     private void closePaidInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        closePaidInvoice(invoice, items, Set.of());
+    }
+
+    private void closePaidInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items, Set<Long> alreadyClosedOrderIds) {
         List<String> closeFailures = new ArrayList<>();
         for (CommonInvoiceOrder item : items) {
             try {
-                if (!item.isPaid()) {
+                if (isAlreadyClosedOrder(item, alreadyClosedOrderIds)) {
+                    cleanupPaidOrderAfterCommonBilling(item.getOrder());
+                } else if (!item.isPaid() || !isOrderPaid(item.getOrder())) {
                     closeOrderAsPaidWithoutNextOrder(item.getOrder());
                 } else {
                     cleanupPaidOrderAfterCommonBilling(item.getOrder());
@@ -2543,6 +2675,42 @@ public class CommonBillingService {
             ));
             invoiceRepository.save(invoice);
         }
+    }
+
+    private boolean closeOrderAsPaidForConfirmedItem(CommonInvoice invoice, CommonInvoiceOrder item) {
+        try {
+            Order order = item == null ? null : item.getOrder();
+            if (isOrderPaid(order)) {
+                cleanupPaidOrderAfterCommonBilling(order);
+            } else {
+                closeOrderAsPaidWithoutNextOrder(order);
+            }
+            return true;
+        } catch (Exception e) {
+            Long orderId = item == null || item.getOrder() == null ? null : item.getOrder().getId();
+            log.warn("Не удалось закрыть заказ {} после подтвержденной оплаты отдельной ссылки", orderId, e);
+            if (invoice != null) {
+                invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+                invoice.setLastError(limit(
+                        "close_failed: платеж получен, но заказ не закрылся: " + orderId,
+                        512
+                ));
+                invoiceRepository.save(invoice);
+            }
+            return false;
+        }
+    }
+
+    private boolean isAlreadyClosedOrder(CommonInvoiceOrder item, Set<Long> alreadyClosedOrderIds) {
+        if (item == null || item.getOrder() == null || item.getOrder().getId() == null
+                || alreadyClosedOrderIds == null || alreadyClosedOrderIds.isEmpty()) {
+            return false;
+        }
+        return alreadyClosedOrderIds.contains(item.getOrder().getId());
+    }
+
+    private boolean isOrderPaid(Order order) {
+        return "Оплачено".equals(statusTitle(order));
     }
 
     private void closeOrderAsPaidWithoutNextOrder(Order order) throws Exception {
@@ -2723,6 +2891,10 @@ public class CommonBillingService {
                 item.setAmountKopecks(payable);
                 changed = true;
             }
+            if (markItemPaidFromConfirmedOrderLink(item)) {
+                changed = true;
+                continue;
+            }
             if (!item.isReady() && canMarkCommonInvoiceItemReady(item.getOrder())) {
                 item.setReady(true);
                 changed = true;
@@ -2749,6 +2921,37 @@ public class CommonBillingService {
                 invoiceRepository.save(invoice);
             }
         }
+    }
+
+    private boolean markItemPaidFromConfirmedOrderLink(CommonInvoiceOrder item) {
+        Order order = item == null ? null : item.getOrder();
+        Long orderId = order == null ? null : order.getId();
+        if (orderId == null) {
+            return false;
+        }
+        Optional<PaymentLink> optionalLink = paymentLinkRepository
+                .findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(orderId, PaymentLinkStatus.CONFIRMED);
+        if (optionalLink.isEmpty()) {
+            return false;
+        }
+        PaymentLink link = optionalLink.get();
+        long paidAmount = link.getConfirmedAmountKopecks() != null && link.getConfirmedAmountKopecks() > 0
+                ? link.getConfirmedAmountKopecks()
+                : link.getAmountKopecks();
+        long itemAmount = Math.max(0, item.getAmountKopecks());
+        if (itemAmount > 0 && paidAmount < itemAmount) {
+            return false;
+        }
+        item.setPaid(true);
+        item.setUnpaid(false);
+        item.setPaidAt(link.getPaidAt() == null ? LocalDateTime.now() : link.getPaidAt());
+        closeOrderAsPaidForConfirmedItem(item.getInvoice(), item);
+        log.info(
+                "Позиция общего счета по заказу {} автоматически зачтена по подтвержденной отдельной ссылке {}",
+                orderId,
+                link.getId()
+        );
+        return true;
     }
 
     private boolean canMarkCommonInvoiceItemReady(Order order) {
@@ -3201,6 +3404,31 @@ public class CommonBillingService {
                 : invoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
         if (!visibleToManager(invoice, items, visibleManagerIds)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Общий счет недоступен текущему пользователю");
+        }
+    }
+
+    private void ensureCommonInvoiceCanBeDeleted(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (invoice == null || invoice.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден");
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.PAID
+                || invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID
+                || invoice.getPaidKopecks() > 0
+                || items.stream().anyMatch(CommonInvoiceOrder::isPaid)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Нельзя удалить общий счет, по которому уже была оплата"
+            );
+        }
+        boolean hasCurrentPaymentLink = !normalize(invoice.getPaymentUrl()).isBlank()
+                || !normalize(invoice.getTbankOrderId()).isBlank()
+                || !normalize(invoice.getTbankPaymentId()).isBlank()
+                || !normalize(invoice.getTbankTerminalKey()).isBlank();
+        if (hasCurrentPaymentLink || paymentRefRepository.existsByInvoice_Id(invoice.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Нельзя удалить общий счет с платежной ссылкой T-Bank. Сначала разберите платеж вручную"
+            );
         }
     }
 

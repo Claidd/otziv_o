@@ -8,6 +8,7 @@ import {
   PersonalReminderMode,
   PersonalReminderRequest
 } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { MobileConfirmService } from './mobile-confirm.service';
 
 type PersonalReminderDraft = {
@@ -266,6 +267,7 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
 
   constructor(
     private readonly api: ApiService,
+    private readonly auth: AuthService,
     private readonly confirm: MobileConfirmService
   ) {}
 
@@ -609,6 +611,11 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
   }
 
   private async loadReminders(force = false): Promise<void> {
+    if (!this.auth.isAuthenticated()) {
+      this.reminders.set([]);
+      return;
+    }
+
     if (this.loading() || (!force && this.reminders().length)) {
       return;
     }

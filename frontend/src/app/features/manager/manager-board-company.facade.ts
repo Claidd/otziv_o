@@ -26,6 +26,7 @@ import {
   managerCompanyWorkerDeleteConfirm,
   managerCompanyWorkerDeleteKey
 } from './manager-board.company.helpers';
+import { managerChatBindingWarningForValues } from './manager-board.config';
 import type {
   ManagerCompanyEditDraftChange,
   ManagerCompanyBillingDraftChange,
@@ -54,7 +55,7 @@ type ManagerBoardCommonBillingApi = Pick<
   'accountsForCompany' | 'createAccount' | 'updateAccount' | 'addCompany' | 'removeCompany'
 >;
 
-type ManagerBoardCompanyToast = Pick<ToastService, 'success' | 'error'>;
+type ManagerBoardCompanyToast = Pick<ToastService, 'success' | 'error' | 'warning'>;
 
 export type ManagerBoardCompanyFacadeDeps = {
   managerApi: ManagerBoardCompanyApi;
@@ -170,7 +171,20 @@ export class ManagerBoardCompanyFacade {
         this.applyCompanyCardPatch(payload);
         this.editSaving.set(false);
         this.closeCompanyEdit();
-        this.deps.toastService.success('Компания сохранена', `Изменения по компании #${company.id} применены`);
+        const chatWarning = managerChatBindingWarningForValues(
+          payload.urlChat,
+          payload.groupId,
+          payload.telegramGroupChatId,
+          payload.maxGroupChatId
+        );
+        if (chatWarning) {
+          this.deps.toastService.warning(
+            'Ссылка сохранена, но группа не привязана',
+            `${chatWarning}. Проверьте, что подключенный аккаунт состоит в этой группе и ссылка открывает нужный чат.`
+          );
+        } else {
+          this.deps.toastService.success('Компания сохранена', `Изменения по компании #${company.id} применены`);
+        }
         this.deps.loadBoard();
       },
       error: (err) => {

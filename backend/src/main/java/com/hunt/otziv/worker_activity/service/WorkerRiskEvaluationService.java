@@ -260,9 +260,9 @@ public class WorkerRiskEvaluationService {
             result.add(new RiskFinding(
                     "ACCOUNT_DEACTIVATION_WITHOUT_CREDENTIAL_COPY",
                     35,
-                    "Деактивация аккаунта без копирования данных",
-                    "Перед деактивацией аккаунта по этой карточке не видно копирования логина и пароля"
-                            + (botToken(event).isBlank() ? "." : " этого аккаунта.")
+                    "Блок аккаунта без попытки войти в него",
+                    "Перед блоком аккаунта по этой карточке система не увидела попытку входа"
+                            + (botToken(event).isBlank() ? "." : " в этот аккаунт.")
             ));
         }
     }

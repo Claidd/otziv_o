@@ -30,6 +30,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
   { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) },
   { label: 'Т Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) },
   { label: 'Пользователи', icon: 'admin_panel_settings', path: '/tabs/users', roles: rolesForAction(MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view) },
+  { label: 'WhatsApp', icon: 'qr_code_2', path: '/tabs/whatsapp', roles: ['MANAGER'] },
   { label: 'Профиль', icon: 'account_circle', path: '/tabs/profile', roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
 ];
 

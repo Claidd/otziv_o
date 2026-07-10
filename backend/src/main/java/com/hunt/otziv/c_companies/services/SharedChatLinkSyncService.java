@@ -200,6 +200,9 @@ public class SharedChatLinkSyncService {
         }
 
         String trimmed = value.trim();
+        if (isTelegramBotStartGroupLink(trimmed)) {
+            return Optional.empty();
+        }
 
         Matcher whatsAppMatcher = WHATSAPP_INVITE_URL.matcher(trimmed);
         if (whatsAppMatcher.matches()) {
@@ -274,6 +277,10 @@ public class SharedChatLinkSyncService {
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private static boolean isTelegramBotStartGroupLink(String value) {
+        return hasText(value) && value.toLowerCase(Locale.ROOT).contains("startgroup=");
     }
 
     private interface ChatIdReader {

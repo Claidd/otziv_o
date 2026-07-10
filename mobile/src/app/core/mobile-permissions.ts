@@ -101,9 +101,9 @@ export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
     manage: MOBILE_ROLES.manager
   },
   managerControl: {
-    view: MOBILE_ROLES.manager,
-    edit: MOBILE_ROLES.manager,
-    manage: MOBILE_ROLES.manager
+    view: MOBILE_ROLES.ownerAdmin,
+    edit: MOBILE_ROLES.ownerAdmin,
+    manage: MOBILE_ROLES.ownerAdmin
   },
   archive: {
     view: MOBILE_ROLES.manager,

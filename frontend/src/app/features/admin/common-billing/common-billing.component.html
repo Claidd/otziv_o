@@ -248,6 +248,12 @@
                 В Бан
               </button>
             }
+            @if (canDeleteInvoiceWithOrders()) {
+              <button type="button" class="danger" (click)="deleteInvoiceWithOrders()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">delete_forever</span>
+                Удалить
+              </button>
+            }
           }
         </div>
 

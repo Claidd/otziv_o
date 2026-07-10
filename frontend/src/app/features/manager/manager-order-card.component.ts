@@ -176,6 +176,9 @@ export class ManagerOrderCardComponent implements OnDestroy {
     const status = this.commonInvoiceStatusLabel().toLocaleLowerCase('ru-RU');
     const sentAt = this.cleanLabel(this.order.commonInvoiceSentAt);
 
+    if (this.commonInvoiceRecoveryHoldActive()) {
+      return 'wait';
+    }
     if (this.cleanLabel(this.order.commonInvoiceLastError)) {
       return 'danger';
     }
@@ -201,6 +204,9 @@ export class ManagerOrderCardComponent implements OnDestroy {
   private commonInvoiceCommunicationTitle(): string {
     const status = this.commonInvoiceStatusLabel().toLocaleLowerCase('ru-RU');
 
+    if (this.commonInvoiceRecoveryHoldActive()) {
+      return 'Общий счет: ждем восстановления отзывов';
+    }
     if (this.cleanLabel(this.order.commonInvoiceLastError)) {
       return 'Контроль: ошибка общего счета';
     }
@@ -230,7 +236,9 @@ export class ManagerOrderCardComponent implements OnDestroy {
     const total = this.order.commonInvoiceTotalOrders ?? this.order.amount ?? 0;
     const paid = this.order.commonInvoicePaidOrders ?? 0;
 
-    if (error) {
+    if (this.commonInvoiceRecoveryHoldActive()) {
+      details.push('Восстановление отзывов активно, напоминания клиенту временно поставлены на паузу');
+    } else if (error) {
       details.push(`Ошибка: ${error}`);
     }
     if (this.commonInvoiceStatusLabel()) {
@@ -256,6 +264,12 @@ export class ManagerOrderCardComponent implements OnDestroy {
     }
 
     return details.length ? details : ['Общий счет еще не отправлен'];
+  }
+
+  private commonInvoiceRecoveryHoldActive(): boolean {
+    return this.cleanLabel(this.order.commonInvoiceLastError)
+      .toLocaleLowerCase('ru-RU')
+      .includes('review_recovery_active');
   }
 
   private commonInvoiceReadyToSend(): boolean {

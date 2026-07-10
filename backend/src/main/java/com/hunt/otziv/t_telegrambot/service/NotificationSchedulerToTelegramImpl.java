@@ -19,6 +19,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -212,7 +213,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
         userDataMap.forEach((fio, data) -> {
             Long chatId = chatIds.get(fio);
             if (chatId != null && chatId > 0) {
-                String message = generateMessageByRole(data.getRole(), fio, data, userDataMap);
+                String message = generateMessageForRecipient(fio, data, userDataMap);
                 sendMessageSafe(chatId, message, fio);
             } else {
 //                log.warn("У сотрудника {} chatId отсутствует", fio);
@@ -300,6 +301,55 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
             default:
                 return "Здравствуйте, " + escapeHtml(fio) + "!";
         }
+    }
+
+    private String generateMessageForRecipient(String fio, UserData userData, Map<String, UserData> result) {
+        Optional<User> recipient = findRecipientWithAssignments(fio);
+        if (recipient.isPresent() && hasRole(recipient.get(), "ROLE_WORKER")) {
+            return workerOnlyReport(fio, userData, recipient.get());
+        }
+
+        String role = userData != null ? userData.getRole() : null;
+        return generateMessageByRole(role, fio, userData, result);
+    }
+
+    private Optional<User> findRecipientWithAssignments(String fio) {
+        if (fio == null || fio.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            return userService.findByFio(fio)
+                    .map(User::getUsername)
+                    .flatMap(userService::findByUserNameWithAssignments);
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось определить роль получателя Telegram-отчета {}: {}", fio, exception.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private boolean hasRole(User user, String roleName) {
+        return user != null
+                && user.getRoles() != null
+                && user.getRoles().stream()
+                .anyMatch(role -> role != null && roleName.equals(role.getName()));
+    }
+
+    private String workerOnlyReport(String fio, UserData fallbackData, User recipient) {
+        try {
+            Map<String, UserData> workerData = personalService.getPersonalsAndCountToMapToWorker(recipient.getId());
+            String report = personalService.displayResultToWorker(workerData);
+            if (report != null && !report.isBlank()) {
+                return report;
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось собрать личный отчет специалиста {}: {}", fio, exception.getMessage());
+        }
+
+        UserData safeData = fallbackData != null
+                ? fallbackData
+                : UserData.builder().fio(fio).role("ROLE_WORKER").build();
+        return generateMessageByRole("ROLE_WORKER", fio, safeData, Map.of(fio, safeData));
     }
 
     private long safeLong(Long value) {

@@ -344,7 +344,8 @@
 
   <div
     class="bot-line"
-    [class.bot-line--empty]="hasUnavailableBot()"
+    [class.bot-line--empty]="hasUnavailablePlaceholderBot()"
+    [class.bot-line--template]="hasTemplatePublicationBot()"
     [class.bot-line--inactive]="hasInactiveRealPublicationBot()"
   >
     <span>{{ botLabel() }}</span>
@@ -354,10 +355,20 @@
     <button type="button" (click)="copyRequested.emit('url')">
       {{ copied === 'url-' + review.id ? 'готово' : 'ссылка' }}
     </button>
-    <button type="button" (click)="copyRequested.emit('login')">
+    <button
+      type="button"
+      (click)="copyRequested.emit('login')"
+      [disabled]="reviewCredentialCopyDisabled('login')"
+      [title]="reviewCredentialCopyTitle('login')"
+    >
       {{ copied === 'login-' + review.id ? 'готово' : 'логин' }}
     </button>
-    <button type="button" (click)="copyRequested.emit('password')">
+    <button
+      type="button"
+      (click)="copyRequested.emit('password')"
+      [disabled]="reviewCredentialCopyDisabled('password')"
+      [title]="reviewCredentialCopyTitle('password')"
+    >
       {{ copied === 'password-' + review.id ? 'готово' : 'пароль' }}
     </button>
     <a [href]="botBrowserUrl()" target="_blank" rel="noopener">вк</a>
@@ -436,10 +447,9 @@
     class="publish-button"
     [class.publish-button--published]="isPublishedPublishAction()"
     [class.publish-button--credential-locked]="publishLockedByCredentialWait"
-    (click)="doneRequested.emit()"
+    (click)="requestDone()"
     [disabled]="
       isPublishedPublishAction() ||
-      cannotPublishBecauseBotUnavailable() ||
       publishLockedByCredentialWait ||
       isMutating('review-' + review.id + '-publish') ||
       isMutating('review-' + review.id + '-nagul')

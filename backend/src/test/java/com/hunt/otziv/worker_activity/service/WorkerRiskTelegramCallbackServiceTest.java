@@ -266,7 +266,7 @@ class WorkerRiskTelegramCallbackServiceTest {
         incident.setEntityId(501L);
         incident.setOrderId(100L);
         incident.setReviewId(501L);
-        incident.setTitle("Деактивация аккаунта без копирования данных");
+        incident.setTitle("Блок аккаунта без попытки войти в него");
         incident.setMessage("Проверить деактивацию");
         return incident;
     }

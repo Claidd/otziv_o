@@ -83,6 +83,15 @@ type StoredPublishCredentialPreparation = {
   updatedAt: number;
 };
 type CredentialWaitSection = 'publish' | 'nagul';
+type WorkerBoardState = {
+  activeSection: WorkerBoardTabKey;
+  keyword: string;
+  pageNumber: number;
+  pageSize: number;
+  sortDirection: 'desc' | 'asc';
+  selectedWorkerId: number | null;
+  updatedAt: number;
+};
 
 @Component({
   selector: 'app-worker-board',
@@ -110,11 +119,13 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
+  private readonly boardStateStorageKeyPrefix = 'otziv-worker-board-state:v1';
   private readonly publishCredentialPreparationStorageKeys: Record<CredentialWaitSection, string> = {
     publish: 'otziv-worker-publish-prep:v1',
     nagul: 'otziv-worker-nagul-prep:v1'
   };
   private readonly publishCredentialPreparationMaxAgeMs = 60 * 60 * 1000;
+  private readonly boardStateMaxAgeMs = 2 * 60 * 60 * 1000;
   private readonly credentialWaitSafetyBufferMs = 2_000;
   private readonly searchDelayMs = 500;
   private readonly credentialWaitMs: Record<CredentialWaitSection, number> = {
@@ -272,6 +283,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   loadBoard(section: WorkerBoardSectionQuery = this.boardSectionForLoad()): void {
+    this.storeBoardState();
     this.loading.set(true);
     this.error.set(null);
     this.hideBoardNotice();
@@ -294,6 +306,7 @@ export class WorkerBoardComponent implements OnDestroy {
           this.pageNumber.set(board.reviews.number || board.orders.number || 0);
         }
         this.storeActiveSection(this.activeSection());
+        this.storeBoardState();
         this.applyServerCredentialPreparation(board.credentialPreparation);
         this.refreshPublishCredentialWaitTimer();
 
@@ -349,6 +362,7 @@ export class WorkerBoardComponent implements OnDestroy {
 
   onKeywordChange(value: string): void {
     this.keyword.set(value);
+    this.storeBoardState();
     this.scheduleSearch();
   }
 
@@ -456,6 +470,10 @@ export class WorkerBoardComponent implements OnDestroy {
     }
 
     this.actionFacade.markReviewDone(review);
+  }
+
+  showAccountRepairToast(message: string): void {
+    this.toastService.info('Нужно сменить аккаунт', message);
   }
 
   deleteBot(bot: WorkerBotItem): void {
@@ -1229,6 +1247,13 @@ export class WorkerBoardComponent implements OnDestroy {
       return;
     }
 
+    const storedState = this.readStoredBoardState();
+    if (storedState) {
+      this.applyStoredBoardState(storedState);
+      this.loadBoard(this.boardSectionForLoad());
+      return;
+    }
+
     const storedSection = this.readStoredActiveSection();
     this.activeSection.set(storedSection);
     this.loadBoard(this.boardSectionForLoad());
@@ -1354,12 +1379,83 @@ export class WorkerBoardComponent implements OnDestroy {
     return `${this.activeSectionStorageKeyPrefix}:${userKey}`;
   }
 
+  private boardStateStorageKey(): string {
+    const token = this.auth.tokenParsed() as { preferred_username?: string; sub?: string } | undefined;
+    const userKey = token?.preferred_username || token?.sub || 'user';
+    return `${this.boardStateStorageKeyPrefix}:${userKey}`;
+  }
+
   private readStoredActiveSection(): WorkerBoardTabKey {
     return this.normalizeStoredSection(this.readSessionValue(this.activeSectionStorageKey()));
   }
 
   private storeActiveSection(section: WorkerBoardTabKey): void {
     this.writeSessionValue(this.activeSectionStorageKey(), section);
+  }
+
+  private readStoredBoardState(): WorkerBoardState | null {
+    const raw = this.readSessionValue(this.boardStateStorageKey());
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const state = JSON.parse(raw) as Partial<WorkerBoardState>;
+      const activeSection = this.normalizeStoredSection(typeof state.activeSection === 'string' ? state.activeSection : null);
+      const updatedAt = Number(state.updatedAt);
+      if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > this.boardStateMaxAgeMs) {
+        this.writeSessionValue(this.boardStateStorageKey(), '');
+        return null;
+      }
+
+      return {
+        activeSection,
+        keyword: state.keyword ?? '',
+        pageNumber: this.normalizeStoredPageNumber(state.pageNumber),
+        pageSize: Number(state.pageSize ?? 10) > 0 ? Number(state.pageSize ?? 10) : 10,
+        sortDirection: state.sortDirection === 'asc' ? 'asc' : 'desc',
+        selectedWorkerId: this.normalizeStoredWorkerId(state.selectedWorkerId),
+        updatedAt
+      };
+    } catch {
+      this.writeSessionValue(this.boardStateStorageKey(), '');
+      return null;
+    }
+  }
+
+  private applyStoredBoardState(state: WorkerBoardState): void {
+    this.activeSection.set(state.activeSection);
+    this.keyword.set(state.keyword);
+    this.pageNumber.set(state.pageNumber);
+    this.pageSize.set(state.pageSize);
+    this.sortDirection.set(state.sortDirection);
+    this.selectedWorkerId.set(state.selectedWorkerId);
+  }
+
+  private storeBoardState(): void {
+    this.writeSessionValue(this.boardStateStorageKey(), JSON.stringify({
+      activeSection: this.activeSection(),
+      keyword: this.keyword(),
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      sortDirection: this.sortDirection(),
+      selectedWorkerId: this.selectedWorkerId(),
+      updatedAt: Date.now()
+    } satisfies WorkerBoardState));
+  }
+
+  private normalizeStoredWorkerId(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const workerId = Number(value);
+    return Number.isFinite(workerId) && workerId > 0 ? workerId : null;
+  }
+
+  private normalizeStoredPageNumber(value: unknown): number {
+    const pageNumber = Number(value ?? 0);
+    return Number.isFinite(pageNumber) ? Math.max(pageNumber, 0) : 0;
   }
 
   private normalizeStoredSection(section: string | null): WorkerBoardTabKey {

@@ -87,4 +87,14 @@ class TelegramGroupLinkServiceTest {
         assertEquals(-1001234567891L, worker.getWorkerTelegramGroupChatId());
         verify(userRepository).save(worker);
     }
+
+    @Test
+    void doesNotTreatBotStartGroupInviteAsCompanyChatUrl() {
+        Company company = new Company();
+        company.setId(285L);
+        company.setUrlChat("https://t.me/O_Company_Bot?startgroup=c285_abcd");
+        setField(service, "botUsername", "O_Company_Bot");
+
+        assertEquals("", service.buildInviteUrl(company));
+    }
 }

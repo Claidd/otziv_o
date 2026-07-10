@@ -425,7 +425,7 @@
                   [disabled]="review.publish || reviewPublishActionLocked(review) || isMutating('publish-' + review.id)"
                   [title]="reviewPublishActionTitle(review)"
                 >
-                  {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
+                  {{ reviewPublishActionLabel(review) }}
                 </button>
                 @if (review.publish && isAdmin() && review.externalConfirmScreenshotUrl) {
                   <a

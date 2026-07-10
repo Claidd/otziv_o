@@ -155,6 +155,10 @@ function createFacade(config: {
       error: (title: string, message?: string) => {
         toastMessages.push(`error:${title}:${message ?? ''}`);
         return toastMessages.length;
+      },
+      warning: (title: string, message?: string) => {
+        toastMessages.push(`warning:${title}:${message ?? ''}`);
+        return toastMessages.length;
       }
     },
     loadBoard: () => {

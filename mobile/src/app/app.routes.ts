@@ -1,12 +1,145 @@
 import { Routes } from '@angular/router';
+import type { UrlMatchResult, UrlSegment } from '@angular/router';
 import { roleGuard } from './core/role.guard';
 import { MOBILE_ACTIONS, MOBILE_ROLES, MOBILE_SECTIONS, rolesForAction } from './core/mobile-permissions';
+
+const REVIEW_SHORT_LINK_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function reviewShortLinkMatcher(segments: UrlSegment[]): UrlMatchResult | null {
+  if (segments.length !== 1 || !REVIEW_SHORT_LINK_PATTERN.test(segments[0].path)) {
+    return null;
+  }
+
+  return {
+    consumed: segments,
+    posParams: {
+      orderDetailId: segments[0]
+    }
+  };
+}
 
 export const routes: Routes = [
   {
     path: '',
     pathMatch: 'full',
     redirectTo: 'tabs/home'
+  },
+  {
+    path: 'services',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'services' }
+  },
+  {
+    path: 'prices',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'prices' }
+  },
+  {
+    path: 'payment',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'payment' }
+  },
+  {
+    path: 'refund',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'refund' }
+  },
+  {
+    path: 'offer',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'offer' }
+  },
+  {
+    path: 'privacy',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'privacy' }
+  },
+  {
+    path: 'contacts',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'contacts' }
+  },
+  {
+    path: 'receipt-consent',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'receiptConsent' }
+  },
+  {
+    path: 'pay/success',
+    loadComponent: () => import('./features/pay-result.page').then((m) => m.PayResultPage),
+    data: { result: 'success' }
+  },
+  {
+    path: 'pay/fail',
+    loadComponent: () => import('./features/pay-result.page').then((m) => m.PayResultPage),
+    data: { result: 'fail' }
+  },
+  {
+    path: 'pay/group/:token',
+    loadComponent: () => import('./features/public-pay-group.page').then((m) => m.PublicPayGroupPage)
+  },
+  {
+    path: 'pay/:token',
+    loadComponent: () => import('./features/public-pay.page').then((m) => m.PublicPayPage)
+  },
+  {
+    path: 'pay',
+    loadComponent: () => import('./features/public.page').then((m) => m.PublicPage),
+    data: { page: 'pay' }
+  },
+  { path: 'uslugi', redirectTo: 'services', pathMatch: 'full' },
+  { path: 'tarify', redirectTo: 'prices', pathMatch: 'full' },
+  { path: 'oplata', redirectTo: 'payment', pathMatch: 'full' },
+  { path: 'vozvrat', redirectTo: 'refund', pathMatch: 'full' },
+  { path: 'oferta', redirectTo: 'offer', pathMatch: 'full' },
+  { path: 'politika', redirectTo: 'privacy', pathMatch: 'full' },
+  { path: 'kontakty', redirectTo: 'contacts', pathMatch: 'full' },
+  {
+    path: 'register-client',
+    loadComponent: () => import('./features/public-register.page').then((m) => m.PublicRegisterPage),
+    data: { mode: 'client' }
+  },
+  {
+    path: 'register-performer',
+    loadComponent: () => import('./features/public-register.page').then((m) => m.PublicRegisterPage),
+    data: { mode: 'performer' }
+  },
+  {
+    path: 'legacy-migration',
+    loadComponent: () => import('./features/public-register.page').then((m) => m.PublicRegisterPage),
+    data: { mode: 'legacy' }
+  },
+  {
+    path: 'review/editReviews/:orderDetailId',
+    loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage)
+  },
+  {
+    matcher: reviewShortLinkMatcher,
+    loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage)
+  },
+  {
+    path: 'cabinet/whatsapp',
+    loadComponent: () => import('./features/whatsapp-bind.page').then((m) => m.WhatsAppBindPage),
+    canActivate: [roleGuard],
+    data: { roles: ['MANAGER'] }
+  },
+  {
+    path: 'cabinet/manager-control',
+    loadComponent: () => import('./features/manager-control.page').then((m) => m.ManagerControlPage),
+    canActivate: [roleGuard],
+    data: { roles: ['MANAGER'], personalControl: true }
+  },
+  {
+    path: 'admin/manager-control/:managerId',
+    loadComponent: () => import('./features/manager-control.page').then((m) => m.ManagerControlPage),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
+  },
+  {
+    path: 'admin/manager-control',
+    loadComponent: () => import('./features/manager-control.page').then((m) => m.ManagerControlPage),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
   },
   {
     path: 'login',
@@ -81,6 +214,18 @@ export const routes: Routes = [
         data: { roles: rolesForAction(MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view) }
       },
       {
+        path: 'control/:managerId',
+        loadComponent: () => import('./features/manager-control.page').then((m) => m.ManagerControlPage),
+        canActivate: [roleGuard],
+        data: { roles: rolesForAction(MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'cabinet/manager-control',
+        loadComponent: () => import('./features/manager-control.page').then((m) => m.ManagerControlPage),
+        canActivate: [roleGuard],
+        data: { roles: ['MANAGER'], personalControl: true }
+      },
+      {
         path: 'review-check/:orderDetailId',
         loadComponent: () => import('./features/review-check.page').then((m) => m.ReviewCheckPage),
         canActivate: [roleGuard],
@@ -138,6 +283,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/profile.page').then((m) => m.ProfilePage),
         canActivate: [roleGuard],
         data: { roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'whatsapp',
+        loadComponent: () => import('./features/whatsapp-bind.page').then((m) => m.WhatsAppBindPage),
+        canActivate: [roleGuard],
+        data: { roles: ['MANAGER'] }
       },
       {
         path: '',

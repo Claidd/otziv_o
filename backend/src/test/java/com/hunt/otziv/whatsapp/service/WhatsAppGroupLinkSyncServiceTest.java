@@ -17,6 +17,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,6 +55,25 @@ class WhatsAppGroupLinkSyncServiceTest {
         service.syncClientGroups("whatsapp_lika");
 
         assertEquals("120363123@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksGroupByWhatsAppInviteLinkWithoutProtocol() {
+        Company company = new Company();
+        company.setId(22861L);
+        company.setTitle("Новая фирма");
+        company.setUrlChat("chat.whatsapp.com/NoProtocolInvite12345");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363124@g.us", "Новая фирма. Отзывы", "https://chat.whatsapp.com/NoProtocolInvite12345")
+        ));
+        when(companyRepository.findByUrlChatContainingIgnoreCase("noprotocolinvite12345"))
+                .thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363124@g.us", company.getGroupId());
         verify(companyRepository).save(company);
     }
 
@@ -266,6 +286,147 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
+    void linksGroupByNameWhenCompanyUsesLeadingZeroAndGroupUsesNumberSign() {
+        Company company = new Company();
+        company.setId(236L);
+        company.setTitle("Pub 01");
+        company.setUrlChat("https://chat.whatsapp.com/DTP2ydpdPLk3ObVaASTV4v");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363236@g.us", "Pub № 1. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363236@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksGroupByNameWhenLettersAndDigitsAreSpacedDifferently() {
+        Company company = new Company();
+        company.setId(62L);
+        company.setTitle("Миг-Сервис54");
+        company.setUrlChat("https://chat.whatsapp.com/IHzF22ZdMT67IJ2yKYbA31");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363062@g.us", "Миг сервис 54. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363062@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksGroupByNameWhenThereIsOneLetterTypo() {
+        Company company = new Company();
+        company.setId(1391L);
+        company.setTitle("Study_Я");
+        company.setUrlChat("https://chat.whatsapp.com/GlzbSteDbVdAgK19bkqsol");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("1203631391@g.us", "Stydy_Я. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("1203631391@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksGroupByNameWhenCompanyTitleIsContainedInCompositeGroupName() {
+        Company company = new Company();
+        company.setId(1181L);
+        company.setTitle("Элит");
+        company.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("1203631181@g.us", "The Best Shop и Элит. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("1203631181@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void linksCurrentManagerControlChatBindingCardsByNormalizedGroupName() {
+        List<Company> companies = List.of(
+                company(901L, "Гарантия защиты"),
+                company(902L, "Эми"),
+                company(903L, "Адвокат Климова"),
+                company(904L, "Волшебная расческа"),
+                company(905L, "Лотос"),
+                company(906L, "Zawadi gift box"),
+                company(907L, "Антураж ДВ"),
+                company(908L, "Серебряный ключ, ТТур"),
+                company(909L, "Главбухвл, ЮристВЛ"),
+                company(910L, "Правовед+ Ноябрьск"),
+                company(911L, "Жемчуг")
+        );
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363901@g.us", "Ю Гарантия Защиты Отзывы", null),
+                new WhatsAppGroupInfo("120363902@g.us", "Эми. Отзывы", null),
+                new WhatsAppGroupInfo("120363903@g.us", "Адвокат Климова. Отзывы", null),
+                new WhatsAppGroupInfo("120363904@g.us", "Волшебная расческа. Отзывы", null),
+                new WhatsAppGroupInfo("120363905@g.us", "Лотос. Отзывы", null),
+                new WhatsAppGroupInfo("120363906@g.us", "Zawadi gift box. Отзывы", null),
+                new WhatsAppGroupInfo("120363907@g.us", "Антураж ДВ. Отзывы", null),
+                new WhatsAppGroupInfo("120363908@g.us", "Серебряный ключ. Отзывы", null),
+                new WhatsAppGroupInfo("120363909@g.us", "Главбухвл. Отзывы", null),
+                new WhatsAppGroupInfo("120363910@g.us", "Правовед Ноябрьск. Отзывы", null),
+                new WhatsAppGroupInfo("120363911@g.us", "Жемчуг. Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(companies);
+
+        service.syncClientGroups("whatsapp_lika");
+
+        for (Company company : companies) {
+            assertEquals("120363" + company.getId() + "@g.us", company.getGroupId(), company.getTitle());
+            verify(companyRepository).save(company);
+        }
+    }
+
+    @Test
+    void doesNotLinkClearlyDifferentSharedGroupNameToUnrelatedCompanies() {
+        Company bud = new Company();
+        bud.setId(892L);
+        bud.setTitle("Bud Burgers");
+        bud.setUrlChat("https://chat.whatsapp.com/FzUmrTnC2dUB0HZH3VcIpZ");
+
+        Company caffetteria = new Company();
+        caffetteria.setId(221L);
+        caffetteria.setTitle("Caffetteria Piu");
+        caffetteria.setUrlChat("https://chat.whatsapp.com/FzUmrTnC2dUB0HZH3VcIpZ");
+
+        Company spaten = new Company();
+        spaten.setId(222L);
+        spaten.setTitle("Spaten haus");
+        spaten.setUrlChat("https://chat.whatsapp.com/FzUmrTnC2dUB0HZH3VcIpZ");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363222@g.us", "Шереметьево .Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(bud, caffetteria, spaten));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals(null, bud.getGroupId());
+        assertEquals(null, caffetteria.getGroupId());
+        assertEquals(null, spaten.getGroupId());
+        verify(companyRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void linksCompositeGroupByNameAfterPrefixCleanupForEachPart() {
         Company first = new Company();
         first.setId(13L);
@@ -341,6 +502,73 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
+    void linksGroupByUniqueShortNameWhenCompanyTitleHasLocationTail() {
+        Company company = new Company();
+        company.setId(501L);
+        company.setTitle("Gallery and more, Колодец дракона");
+        company.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363501@g.us", "КУ Gallery and more Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(company));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363501@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+    }
+
+    @Test
+    void skipsShortNameMatchWhenItIsAmbiguous() {
+        Company first = new Company();
+        first.setId(501L);
+        first.setTitle("Gallery and more, Колодец дракона");
+        first.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+
+        Company second = new Company();
+        second.setId(502L);
+        second.setTitle("Gallery and more, Центр");
+        second.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363501@g.us", "КУ Gallery and more Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(first, second));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals(null, first.getGroupId());
+        assertEquals(null, second.getGroupId());
+        verify(companyRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void linksCompositeGroupWithShortUniquePartWhenCompaniesShareChatLink() {
+        Company gallery = new Company();
+        gallery.setId(501L);
+        gallery.setTitle("Gallery and more, Колодец дракона");
+        gallery.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+
+        Company spaten = new Company();
+        spaten.setId(502L);
+        spaten.setTitle("Spaten haus");
+        spaten.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
+                new WhatsAppGroupInfo("120363501@g.us", "КУ Gallery and more, Spaten haus Отзывы", null)
+        ));
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(gallery, spaten));
+
+        service.syncClientGroups("whatsapp_lika");
+
+        assertEquals("120363501@g.us", gallery.getGroupId());
+        assertEquals("120363501@g.us", spaten.getGroupId());
+        verify(companyRepository).save(gallery);
+        verify(companyRepository).save(spaten);
+    }
+
+    @Test
     void skipsCompositeGroupNameWhenMatchedCompaniesHaveDifferentChatLinks() {
         Company first = new Company();
         first.setId(10L);
@@ -390,6 +618,30 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
+    void repairCompanyLinkForcesGatewayRefreshAndLinksByVisibleGroupName() {
+        WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika");
+        client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+
+        Company company = new Company();
+        company.setId(1181L);
+        company.setTitle("Элит");
+        company.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
+
+        when(whatsAppService.listGroups("whatsapp_lika", true)).thenReturn(List.of(
+                new WhatsAppGroupInfo("1203631181@g.us", "The Best Shop и Элит. Отзывы", null)
+        ));
+
+        WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult result = service.repairCompanyLink(company);
+
+        assertTrue(result.linked());
+        assertEquals("1203631181@g.us", company.getGroupId());
+        verify(whatsAppService).listGroups("whatsapp_lika", true);
+        verify(companyRepository).save(company);
+    }
+
+    @Test
     void updateSettingsPersistsIntervalAndEnabledFlag() {
         when(appSettingService.getBoolean(AppSettingService.WHATSAPP_GROUP_SYNC_ENABLED, true)).thenReturn(false);
         when(appSettingService.getInt(AppSettingService.WHATSAPP_GROUP_SYNC_INTERVAL_MINUTES, 30)).thenReturn(45);
@@ -436,5 +688,13 @@ class WhatsAppGroupLinkSyncServiceTest {
 
         verify(sharedChatLinkSyncService).syncSharedChatIds();
         verify(appSettingService).setInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, 3);
+    }
+
+    private static Company company(Long id, String title) {
+        Company company = new Company();
+        company.setId(id);
+        company.setTitle(title);
+        company.setUrlChat("https://chat.whatsapp.com/invitecode" + id);
+        return company;
     }
 }

@@ -30,6 +30,15 @@ describe('apiErrorMessage', () => {
     }, 'Отчёт не запущен')).toBe('AI-провайдер не запустил отчёт из-за оплаты или квоты. Проверьте баланс проекта.');
   });
 
+  it('keeps readable backend instructions with external links', () => {
+    expect(apiErrorMessage({
+      status: 409,
+      error: { message: 'Telegram-группа пока не привязана. Откройте ссылку добавления Telegram-бота: https://t.me/O_Company_Bot?startgroup=c348.' }
+    }, 'Автоматическая починка не сработала')).toBe(
+      'Telegram-группа пока не привязана. Откройте ссылку добавления Telegram-бота: https://t.me/O_Company_Bot?startgroup=c348.'
+    );
+  });
+
   it('explains network failures without leaking implementation details', () => {
     expect(apiErrorDetail({ status: 0 })).toBe('Сервер не отвечает. Проверьте, что серверная часть запущена, и попробуйте снова.');
   });

@@ -10,6 +10,7 @@ import {
   CommonInvoiceSummaryResponse,
   OrderItem
 } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
@@ -97,6 +98,9 @@ type InvoiceAction =
                 <button type="button" class="danger" (click)="runInvoiceAction('unpaid')" [disabled]="!!mutating() || !canMarkInvoiceUnpaid(invoice)">Не оплачен</button>
                 <button type="button" (click)="runInvoiceAction('remind')" [disabled]="!!mutating() || !canRemindInvoice(invoice)">Напомнить</button>
                 <button type="button" class="danger" (click)="runInvoiceAction('ban')" [disabled]="!!mutating() || !canMarkInvoiceBan(invoice)">Бан</button>
+                @if (canDeleteInvoiceWithOrders(invoice)) {
+                  <button type="button" class="danger" (click)="deleteInvoiceWithOrders(invoice)" [disabled]="!!mutating()">Удалить</button>
+                }
                 @if (invoiceActionHint(invoice)) {
                   <p class="invoice-action-hint">{{ invoiceActionHint(invoice) }}</p>
                 }
@@ -401,6 +405,7 @@ export class CommonBillingPage implements OnInit {
 
   constructor(
     private readonly api: ApiService,
+    private readonly auth: AuthService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService
@@ -482,6 +487,33 @@ export class CommonBillingPage implements OnInit {
     }
 
     await this.runOrderMutation(`detach-${order.orderId}`, () => this.api.detachCommonInvoiceOrder(invoiceId, order.orderId));
+  }
+
+  async deleteInvoiceWithOrders(invoice: CommonInvoiceSummaryResponse): Promise<void> {
+    const invoiceId = this.invoiceId();
+    if (!invoiceId || this.mutating() || !this.canDeleteInvoiceWithOrders(invoice)) {
+      return;
+    }
+
+    const confirmed = await this.confirm.confirm({
+      message: `Удалить общий счет #${invoice.id} и все связанные с ним заказы (${invoice.totalOrders})? Действие нельзя отменить.`,
+      danger: true
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    this.mutating.set(`delete-invoice-${invoice.id}`);
+    try {
+      await firstValueFrom(this.api.deleteCommonInvoiceWithOrders(invoice.id));
+      this.details.set(null);
+      this.error.set(null);
+      void this.router.navigate(['/tabs/orders']);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Общий счет не удален.'));
+    } finally {
+      this.mutating.set(null);
+    }
   }
 
   openOrder(order: CommonInvoiceOrderResponse): void {
@@ -673,6 +705,13 @@ export class CommonBillingPage implements OnInit {
 
   canMarkInvoiceBan(invoice: CommonInvoiceSummaryResponse): boolean {
     return invoice.status === 'UNPAID';
+  }
+
+  canDeleteInvoiceWithOrders(invoice: CommonInvoiceSummaryResponse): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+      && !['PAID', 'PARTIALLY_PAID'].includes(invoice.status)
+      && invoice.paidKopecks <= 0
+      && invoice.paidOrders <= 0;
   }
 
   canApproveReviewOrders(): boolean {

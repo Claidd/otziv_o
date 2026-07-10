@@ -6,6 +6,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -16,6 +17,7 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,8 +34,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +52,9 @@ class BotAssignmentServiceImplTest {
     private FilialService filialService;
 
     @Mock
+    private CompanyRepository companyRepository;
+
+    @Mock
     private ReviewRepository reviewRepository;
 
     @Mock
@@ -58,6 +65,12 @@ class BotAssignmentServiceImplTest {
 
     @Mock
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
+    @BeforeEach
+    void allowCompanyLocks() {
+        lenient().when(companyRepository.findByIdForBotAssignmentLock(anyLong()))
+                .thenAnswer(invocation -> Optional.of(company(invocation.getArgument(0))));
+    }
 
     @Test
     void getAvailableBotsByRulesExcludesBotsAlreadyUsedInCompany() {
@@ -276,6 +289,7 @@ class BotAssignmentServiceImplTest {
         return new BotAssignmentServiceImpl(
                 botService,
                 filialService,
+                companyRepository,
                 reviewRepository,
                 telegramService,
                 botCooldownService,

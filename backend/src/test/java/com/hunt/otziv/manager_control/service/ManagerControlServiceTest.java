@@ -7,9 +7,11 @@ import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
@@ -18,6 +20,7 @@ import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
+import com.hunt.otziv.manager_control.dto.ManagerControlOverdueStatusResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlStageRequest;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
@@ -33,6 +36,7 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItem
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlEventRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
+import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -42,6 +46,7 @@ import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -50,6 +55,9 @@ import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
+import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
+import java.lang.reflect.Method;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -63,6 +71,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -105,6 +115,8 @@ class ManagerControlServiceTest {
     @Mock
     private ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
     @Mock
+    private AppSettingService appSettingService;
+    @Mock
     private ClientChatMessageSender clientChatMessageSender;
     @Mock
     private ClientChatMessageTrackerService clientChatMessageTrackerService;
@@ -132,6 +144,14 @@ class ManagerControlServiceTest {
     private CommonBillingService commonBillingService;
     @Mock
     private WorkerRiskIncidentRepository riskIncidentRepository;
+    @Mock
+    private WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
+    @Mock
+    private SharedChatLinkSyncService sharedChatLinkSyncService;
+    @Mock
+    private TelegramGroupLinkService telegramGroupLinkService;
+    @Mock
+    private MaxGroupLinkService maxGroupLinkService;
     @Mock
     private ManagerDailyControlRepository dailyControlRepository;
     @Mock
@@ -329,6 +349,141 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void clientChatUnansweredActionResolvesConcreteCard() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "CLIENT_CHAT_UNANSWERED");
+        concrete.setEntityId(101L);
+        stubSuccessfulConcreteAction(concrete, parent);
+
+        ManagerControlConcreteItemResponse response = service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest("ACTION_TAKEN", "Ответ клиенту проверен вручную", null),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.ACTION_TAKEN, concrete.getActionType());
+        assertNotNull(concrete.getResolvedAt());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, parent.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
+        verify(clientChatMessageTrackerService).markFromManagerControl(
+                101L,
+                ManagerDailyControlActionType.ACTION_TAKEN,
+                "Ответ клиенту проверен вручную"
+        );
+    }
+
+    @Test
+    void repairTelegramChatBindingResolvesWhenSharedSyncFindsBinding() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("CHAT_BINDING_ISSUES");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(77L);
+        concrete.setReason("Почему в контроле: Telegram-группа из ссылки не привязана к компании");
+        Company company = new Company();
+        company.setId(501L);
+        company.setTitle("Тропа");
+        company.setUrlChat("https://t.me/tropa_group");
+        Order order = new Order();
+        order.setId(77L);
+        order.setCompany(company);
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
+        when(sharedChatLinkSyncService.syncSharedChatIds()).thenAnswer(invocation -> {
+            company.setTelegramGroupChatId(-100501L);
+            return null;
+        });
+        when(companyRepository.findById(501L)).thenReturn(Optional.of(company));
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("Группа уже была привязана"));
+        verify(sharedChatLinkSyncService).syncSharedChatIds();
+    }
+
+    @Test
+    void repairWhatsAppChatBindingRunsTargetedRepairAndResolvesWhenBindingAppears() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("CHAT_BINDING_ISSUES");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(77L);
+        concrete.setReason("Почему в контроле: WhatsApp-группа из ссылки не привязана к компании");
+        Company company = new Company();
+        company.setId(501L);
+        company.setTitle("Gallery and more, Колодец дракона");
+        company.setUrlChat("https://chat.whatsapp.com/GqLRY4e7slyOFKjoLjIBPa");
+        Order order = new Order();
+        order.setId(77L);
+        order.setCompany(company);
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
+        when(whatsAppGroupLinkSyncService.repairCompanyLink(company)).thenAnswer(invocation -> {
+            company.setGroupId("120363501@g.us");
+            return new WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult(
+                    true,
+                    "WhatsApp-группа найдена у клиента whatsapp_lika"
+            );
+        });
+        when(companyRepository.findById(501L)).thenReturn(Optional.of(company));
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("WhatsApp-группа найдена"));
+        verify(whatsAppGroupLinkSyncService).repairCompanyLink(company);
+    }
+
+    @Test
+    void repairTelegramChatBindingFailsImmediatelyWhenBindingStillMissing() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("CHAT_BINDING_ISSUES");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(77L);
+        concrete.setReason("Почему в контроле: Telegram-группа из ссылки не привязана к компании");
+        Company company = new Company();
+        company.setId(501L);
+        company.setTitle("Тропа");
+        company.setUrlChat("https://t.me/tropa_group");
+        Order order = new Order();
+        order.setId(77L);
+        order.setCompany(company);
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
+        when(companyRepository.findById(501L)).thenReturn(Optional.of(company));
+        when(telegramGroupLinkService.buildInviteUrl(company))
+                .thenReturn("https://t.me/O_Company_Bot?startgroup=c501_token");
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        ));
+
+        assertEquals(409, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("Telegram-группа пока не привязана"));
+        assertTrue(ex.getReason().contains("замените ссылку вручную"));
+        verify(sharedChatLinkSyncService).syncSharedChatIds();
+        verify(dailyControlConcreteItemRepository, never()).save(any());
+    }
+
+    @Test
     void closeDayIsBlockedWhenCriticalActionItemIsStillOpen() {
         ManagerDailyControl control = control();
         control.setStatus(ManagerDailyControlStatus.RED);
@@ -506,6 +661,72 @@ class ManagerControlServiceTest {
         verify(reviewService, never()).countOrdersByWorkerIdsAndStatusPublish(List.of(21L), today);
         verify(reviewRepository).findManagerControlPublishReviewsByWorkerIds(eq(List.of(21L)), eq(overdueDate), any());
         verify(reviewRepository, never()).findManagerControlPublishReviewsByWorkerIds(eq(List.of(21L)), eq(today), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void overdueStatusesUseReviewCheckIntervalForMissingReviewReminderQueue() throws Exception {
+        LocalDate today = LocalDate.of(2026, 7, 8);
+        Manager manager = managerWithWorker(11L, 21L);
+        OrderDTOList order = OrderDTOList.builder()
+                .id(25100L)
+                .status("На проверке")
+                .companyTitle("22 Философа")
+                .changed(today.minusDays(2))
+                .build();
+
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
+                ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+        )).thenReturn(2);
+        when(dailyControlRepository.findByControlDateAndManager(today, manager)).thenReturn(Optional.empty());
+        when(orderRepository.summarizeManagerControlOverdueOrdersByManager(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        )).thenReturn(List.of());
+        when(orderService.getManagerControlOverdueOrdersByManager(
+                eq(manager),
+                eq(""),
+                eq("На проверке"),
+                eq(today.minusDays(2)),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                eq(0),
+                eq(1),
+                eq("desc")
+        )).thenReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 1), 1));
+
+        Method method = ManagerControlService.class.getDeclaredMethod("overdueStatuses", Manager.class, LocalDate.class);
+        method.setAccessible(true);
+        List<ManagerControlOverdueStatusResponse> statuses =
+                (List<ManagerControlOverdueStatusResponse>) method.invoke(service, manager, today);
+
+        assertEquals(1, statuses.size());
+        assertEquals("На проверке", statuses.get(0).status());
+        assertEquals(1, statuses.get(0).count());
+        assertEquals(2, statuses.get(0).maxDays());
     }
 
     private void stubSuccessfulConcreteAction(

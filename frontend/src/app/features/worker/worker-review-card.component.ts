@@ -94,6 +94,7 @@ export class WorkerReviewCardComponent {
   @Output() readonly titleCopyRequested = new EventEmitter<string>();
   @Output() readonly botChangeRequested = new EventEmitter<void>();
   @Output() readonly botDeactivateRequested = new EventEmitter<void>();
+  @Output() readonly accountRepairRequested = new EventEmitter<string>();
   @Output() readonly doneRequested = new EventEmitter<void>();
   @Output() readonly editOpened = new EventEmitter<void>();
 
@@ -358,7 +359,7 @@ export class WorkerReviewCardComponent {
       return 'аккаунт неактивен - можно закрыть';
     }
 
-    if (this.hasUnavailableBot()) {
+    if (this.hasUnavailableBot() && this.isPlaceholderBotName(this.normalizedBotFio())) {
       return 'смените аккаунт';
     }
 
@@ -374,12 +375,21 @@ export class WorkerReviewCardComponent {
       return true;
     }
 
-    const botFio = (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    const botFio = this.normalizedBotFio();
     return (
-      botFio === 'нет доступных аккаунтов' ||
-      botFio === 'добавьте аккаунты и нажмите сменить' ||
+      this.isPlaceholderBotName(botFio) ||
       (this.activeSection === 'publish' && this.isTemplateBotName(botFio))
     );
+  }
+
+  hasUnavailablePlaceholderBot(): boolean {
+    return !this.review.botId ||
+      this.review.botId === 1 ||
+      this.isPlaceholderBotName(this.normalizedBotFio());
+  }
+
+  hasTemplatePublicationBot(): boolean {
+    return this.activeSection === 'publish' && this.isTemplateBotName(this.normalizedBotFio());
   }
 
   hasInactiveRealPublicationBot(): boolean {
@@ -395,17 +405,20 @@ export class WorkerReviewCardComponent {
       return false;
     }
 
-    const botFio = (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    const botFio = this.normalizedBotFio();
     return (
       !!this.review.botLogin?.trim() &&
       !!this.review.botPassword?.trim() &&
-      botFio !== 'нет доступных аккаунтов' &&
-      botFio !== 'добавьте аккаунты и нажмите сменить' &&
+      !this.isPlaceholderBotName(botFio) &&
       !this.isTemplateBotName(botFio)
     );
   }
 
   accountActionLocked(): boolean {
+    if (this.cannotCompleteBecauseBotUnavailable()) {
+      return false;
+    }
+
     return this.requireCredentialCopyBeforeAccountAction && !this.accountActionCredentialsCopied;
   }
 
@@ -415,12 +428,23 @@ export class WorkerReviewCardComponent {
       : 'Действие с аккаунтом';
   }
 
-  private isTemplateBotName(botFio: string): boolean {
-    return (
-      botFio === 'впишите имя фамилию' ||
-      botFio === 'впиши имя фамилию' ||
-      botFio === 'впишите фамилию имя'
-    );
+  reviewCredentialCopyDisabled(kind: ReviewCopyKind): boolean {
+    return (kind === 'login' || kind === 'password') && this.cannotCompleteBecauseBotUnavailable();
+  }
+
+  reviewCredentialCopyTitle(kind: ReviewCopyKind): string {
+    return this.reviewCredentialCopyDisabled(kind)
+      ? this.accountRepairTitle()
+      : 'Скопировать';
+  }
+
+  requestDone(): void {
+    if (this.cannotCompleteBecauseBotUnavailable()) {
+      this.accountRepairRequested.emit(this.accountRepairTitle());
+      return;
+    }
+
+    this.doneRequested.emit();
   }
 
   reviewDate(): string {
@@ -460,7 +484,10 @@ export class WorkerReviewCardComponent {
       return 'ОПУБЛИКОВАНО';
     }
 
-    if (this.cannotPublishBecauseBotUnavailable()) {
+    if (this.cannotCompleteBecauseBotUnavailable()) {
+      if (this.hasTemplatePublicationBot()) {
+        return 'НУЖЕН ВЫГУЛ';
+      }
       return 'СМЕНИТЕ АККАУНТ';
     }
 
@@ -481,12 +508,81 @@ export class WorkerReviewCardComponent {
     );
   }
 
+  cannotCompleteBecauseBotUnavailable(): boolean {
+    return (
+      this.isAccountWorkSection() &&
+      !this.isBadTask() &&
+      !this.isRecoveryTask() &&
+      !this.isPublishedPublishAction() &&
+      !this.canCompleteWithCurrentBot()
+    );
+  }
+
+  private canCompleteWithCurrentBot(): boolean {
+    if (!this.review.botId || this.review.botId === 1) {
+      return false;
+    }
+
+    const botFio = this.normalizedBotFio();
+    return (
+      !!this.review.botLogin?.trim() &&
+      !!this.review.botPassword?.trim() &&
+      !this.isPlaceholderBotName(botFio) &&
+      (this.activeSection !== 'publish' || !this.isTemplateBotName(botFio))
+    );
+  }
+
   publishActionTitle(): string {
+    if (this.cannotCompleteBecauseBotUnavailable()) {
+      return this.accountRepairTitle();
+    }
+
     if (this.publishLockedByCredentialWait) {
       return this.publishCredentialWaitTitle;
     }
 
     return 'Действие с отзывом';
+  }
+
+  private accountRepairTitle(): string {
+    if (!this.review.botId || this.review.botId === 1) {
+      return 'Аккаунт не назначен. Нажмите "смена", чтобы подобрать рабочий аккаунт.';
+    }
+
+    const botFio = this.normalizedBotFio();
+    if (this.isPlaceholderBotName(botFio)) {
+      return 'Для карточки стоит заглушка вместо аккаунта. Нажмите "смена".';
+    }
+
+    if (this.isTemplateBotName(botFio)) {
+      return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
+    }
+
+    if (!this.review.botLogin?.trim() || !this.review.botPassword?.trim()) {
+      return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
+    }
+
+    return 'Этот аккаунт нельзя использовать для действия. Нажмите "смена".';
+  }
+
+  private isAccountWorkSection(): boolean {
+    return this.activeSection === 'publish' || this.activeSection === 'nagul';
+  }
+
+  private isTemplateBotName(botFio: string): boolean {
+    return (
+      botFio === 'впишите имя фамилию' ||
+      botFio === 'впиши имя фамилию' ||
+      botFio === 'впишите фамилию имя'
+    );
+  }
+
+  private isPlaceholderBotName(botFio: string): boolean {
+    return botFio === 'нет доступных аккаунтов' || botFio === 'добавьте аккаунты и нажмите сменить';
+  }
+
+  private normalizedBotFio(): string {
+    return (this.review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
   }
 
   isMutating(key: string): boolean {

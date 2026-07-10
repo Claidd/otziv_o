@@ -67,6 +67,18 @@ import {
 import { MobileCompanyCardComponent } from './manager/mobile-company-card.component';
 
 type SelectedCompany = { id: number; title: string };
+type ManagerListState = {
+  activeSection: ManagerBoardSection;
+  companyStatus: string;
+  orderStatus: string;
+  keyword: string;
+  appliedKeyword: string;
+  pageNumber: number;
+  pageSize: number;
+  sortDirection: 'desc' | 'asc';
+  selectedCompany: SelectedCompany | null;
+  updatedAt: number;
+};
 type CompanyFilialEditDraft = CompanyFilialUpdateRequest & { filialId: number };
 type CompanyNoteSaveState = ManagerNoteSaveState;
 type OrderNoteSaveState = CompanyNoteSaveState;
@@ -1960,6 +1972,8 @@ export class ManagerPage implements OnInit, OnDestroy {
   private readonly companyNoteVersions = new Map<number, number>();
   private readonly orderNoteTimers = new Map<number, ReturnType<typeof setTimeout>>();
   private readonly orderNoteVersions = new Map<number, number>();
+  private readonly listStateStorageKey = 'otziv-mobile-manager-list-state:v1';
+  private readonly listStateMaxAgeMs = 2 * 60 * 60 * 1000;
   private routeSubscription?: Subscription;
   private lastMobileNavKey = '';
 
@@ -2069,6 +2083,7 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.applyRouteSection();
+    this.restoreStoredListState();
     this.applyMobileNavIntent(false);
     this.lastMobileNavKey = this.mobileNavKey();
     this.initialized = true;
@@ -2691,6 +2706,10 @@ export class ManagerPage implements OnInit, OnDestroy {
       this.patchCompanyFromEdit(updated);
       await this.load();
       this.closeCompanyEdit();
+      const chatWarning = this.chatBindingWarningForCompanyEdit(updated);
+      this.error.set(chatWarning
+        ? `Ссылка сохранена, но группа не привязана: ${chatWarning}. Проверьте, что подключенный аккаунт состоит в этой группе и ссылка открывает нужный чат.`
+        : null);
     } catch (error) {
       this.companyEditError.set(this.apiErrorMessage(error, 'Компания не сохранена.'));
     } finally {
@@ -3317,6 +3336,7 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   openOrderDetails(order: OrderItem): void {
     if (order.commonInvoice) {
+      this.storeListState();
       const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
       void this.router.navigate(['/tabs/common-billing', invoiceId]);
       return;
@@ -3328,6 +3348,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       return;
     }
 
+    this.storeListState();
     void this.router.navigate(['/tabs/orders', companyId, order.id]);
   }
 
@@ -3558,6 +3579,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   private async load(): Promise<void> {
+    this.storeListState();
     this.loading.set(true);
 
     try {
@@ -3573,6 +3595,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       this.board.set(board);
       this.mergeCompanyNoteDrafts(board);
       this.mergeOrderNoteDrafts(board);
+      this.storeListState();
       this.error.set(null);
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, 'Не удалось загрузить раздел.'));
@@ -3626,6 +3649,112 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   private mobileNavKey(params: ParamMap = this.route.snapshot.queryParamMap): string {
     return `${params.get('mobileNav') ?? ''}:${params.get('navTs') ?? ''}`;
+  }
+
+  private restoreStoredListState(): void {
+    const state = this.readStoredListState();
+    if (!state || state.activeSection !== this.activeSection()) {
+      return;
+    }
+
+    this.companyStatus.set(state.companyStatus || ALL_STATUS);
+    this.orderStatus.set(state.orderStatus || ALL_STATUS);
+    this.keyword.set(state.keyword ?? state.appliedKeyword ?? '');
+    this.appliedKeyword.set(state.appliedKeyword ?? state.keyword ?? '');
+    this.pageNumber.set(Number.isFinite(state.pageNumber) ? Math.max(state.pageNumber, 0) : 0);
+    this.pageSize.set(Number.isFinite(state.pageSize) && state.pageSize > 0 ? state.pageSize : 10);
+    this.sortDirection.set(state.sortDirection === 'asc' ? 'asc' : 'desc');
+    this.selectedCompany.set(state.activeSection === 'orders' ? state.selectedCompany ?? null : null);
+  }
+
+  private readStoredListState(): ManagerListState | null {
+    const raw = this.getSessionStorageItem(this.listStateStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const state = JSON.parse(raw) as Partial<ManagerListState>;
+      if (state.activeSection !== 'companies' && state.activeSection !== 'orders') {
+        return null;
+      }
+      if (!state.updatedAt || Date.now() - state.updatedAt > this.listStateMaxAgeMs) {
+        this.removeSessionStorageItem(this.listStateStorageKey);
+        return null;
+      }
+
+      return {
+        activeSection: state.activeSection,
+        companyStatus: state.companyStatus || ALL_STATUS,
+        orderStatus: state.orderStatus || ALL_STATUS,
+        keyword: state.keyword ?? '',
+        appliedKeyword: state.appliedKeyword ?? state.keyword ?? '',
+        pageNumber: Number(state.pageNumber ?? 0),
+        pageSize: Number(state.pageSize ?? 10),
+        sortDirection: state.sortDirection === 'asc' ? 'asc' : 'desc',
+        selectedCompany: this.normalizeStoredSelectedCompany(state.selectedCompany),
+        updatedAt: state.updatedAt
+      };
+    } catch {
+      this.removeSessionStorageItem(this.listStateStorageKey);
+      return null;
+    }
+  }
+
+  private storeListState(): void {
+    this.setSessionStorageItem(this.listStateStorageKey, JSON.stringify({
+      activeSection: this.activeSection(),
+      companyStatus: this.companyStatus(),
+      orderStatus: this.orderStatus(),
+      keyword: this.keyword(),
+      appliedKeyword: this.appliedKeyword(),
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      sortDirection: this.sortDirection(),
+      selectedCompany: this.activeSection() === 'orders' ? this.selectedCompany() : null,
+      updatedAt: Date.now()
+    } satisfies ManagerListState));
+  }
+
+  private normalizeStoredSelectedCompany(value: unknown): SelectedCompany | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const candidate = value as Partial<SelectedCompany>;
+    const id = Number(candidate.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return null;
+    }
+
+    return {
+      id,
+      title: String(candidate.title || `Компания #${id}`)
+    };
+  }
+
+  private getSessionStorageItem(key: string): string | null {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private setSessionStorageItem(key: string, value: string): void {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // If storage is blocked, the current in-memory page still keeps the filters.
+    }
+  }
+
+  private removeSessionStorageItem(key: string): void {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Nothing to clean up when storage is blocked.
+    }
   }
 
   private emptyPage<T>(): Page<T> {
@@ -3922,10 +4051,44 @@ export class ManagerPage implements OnInit, OnDestroy {
       manager: payload.manager?.label ?? '',
       commentsCompany: payload.commentsCompany,
       countFilials: payload.filials?.length ?? 0,
-      dateNewTry: payload.dateNewTry
+      dateNewTry: payload.dateNewTry,
+      groupId: payload.groupId,
+      telegramGroupChatId: payload.telegramGroupChatId,
+      maxGroupChatId: payload.maxGroupChatId
     };
     this.patchCompany(payload.id, patch);
     this.companyDetails.update((current) => current?.id === payload.id ? { ...current, ...patch } : current);
+  }
+
+  private chatBindingWarningForCompanyEdit(payload: CompanyEditPayload): string {
+    const platform = this.chatPlatformFromUrl(payload.urlChat);
+    if (platform === 'unknown') {
+      return (payload.urlChat ?? '').trim() ? 'мессенджер по ссылке не распознан' : '';
+    }
+    if (platform === 'whatsapp' && !(payload.groupId ?? '').trim()) {
+      return 'WhatsApp-группа не привязана';
+    }
+    if (platform === 'telegram' && payload.telegramGroupChatId == null) {
+      return 'Telegram-группа не привязана';
+    }
+    if (platform === 'max' && payload.maxGroupChatId == null) {
+      return 'MAX-группа не привязана';
+    }
+    return '';
+  }
+
+  private chatPlatformFromUrl(value?: string | null): 'whatsapp' | 'telegram' | 'max' | 'unknown' {
+    const normalized = (value ?? '').trim().toLowerCase();
+    if (normalized.includes('chat.whatsapp.com/')) {
+      return 'whatsapp';
+    }
+    if (normalized.includes('t.me/') || normalized.includes('telegram.me/')) {
+      return 'telegram';
+    }
+    if (normalized.includes('max.ru/') || normalized.includes('max.com/')) {
+      return 'max';
+    }
+    return 'unknown';
   }
 
   private async loadCompanyPayload(managerId?: number | null, preserved?: CompanyPreservedFields): Promise<void> {

@@ -11,6 +11,7 @@ import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsResponse;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -95,6 +96,111 @@ public class WhatsAppGroupLinkSyncService {
         return settings();
     }
 
+    @Transactional
+    public WhatsAppGroupRepairResult repairCompanyLink(Company company) {
+        if (company == null || company.getId() == null) {
+            return WhatsAppGroupRepairResult.failed("У компании нет данных для проверки WhatsApp-группы");
+        }
+        if (WhatsAppGroupCompanyLinker.whatsAppInviteCode(company.getUrlChat()).isEmpty()) {
+            return WhatsAppGroupRepairResult.failed("В карточке компании нет корректной WhatsApp invite-ссылки");
+        }
+
+        List<WhatsAppProperties.ClientConfig> configuredClients = properties.getClients() != null
+                ? properties.getClients()
+                : List.of();
+        int clients = 0;
+        int groups = 0;
+        int groupsWithInvite = 0;
+        List<String> visibleGroupNames = new java.util.ArrayList<>();
+        List<Company> singleCompany = List.of(company);
+
+        for (WhatsAppProperties.ClientConfig client : configuredClients) {
+            if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
+                continue;
+            }
+            clients++;
+            List<WhatsAppGroupInfo> clientGroups = whatsAppService.listGroups(client.getId(), true);
+            if (clientGroups == null) {
+                clientGroups = List.of();
+            }
+            groups += clientGroups.size();
+            for (WhatsAppGroupInfo group : clientGroups) {
+                if (group == null || !hasText(group.groupId())) {
+                    continue;
+                }
+                if (hasText(group.name()) && visibleGroupNames.size() < 5) {
+                    visibleGroupNames.add(group.name());
+                }
+                if (hasText(group.inviteLink())) {
+                    groupsWithInvite++;
+                }
+
+                int linked = groupCompanyLinker.linkByInvite(group.groupId(), group.inviteLink(), singleCompany);
+                if (linked == 0) {
+                    linked = groupCompanyLinker.linkByGroupName(group.groupId(), group.name(), singleCompany);
+                }
+                if (linked > 0) {
+                    return WhatsAppGroupRepairResult.linked(
+                            "WhatsApp-группа найдена у клиента " + client.getId()
+                    );
+                }
+            }
+        }
+
+        if (clients == 0) {
+            return WhatsAppGroupRepairResult.failed(
+                    "WhatsApp-починка не настроена: нет активных WhatsApp-клиентов в конфигурации"
+            );
+        }
+        if (groups == 0) {
+            return WhatsAppGroupRepairResult.failed(
+                    "WhatsApp-шлюз доступен, но не вернул группы. Проверьте авторизацию WhatsApp-аккаунта и что он состоит в нужной группе."
+            );
+        }
+
+        String groupsHint = visibleGroupNames.isEmpty()
+                ? ""
+                : " Видимые группы: " + String.join(", ", visibleGroupNames) + ".";
+        if (groupsWithInvite == 0) {
+            return WhatsAppGroupRepairResult.failed(
+                    "WhatsApp-шлюз видит " + groups + " групп, но не вернул invite-ссылки. "
+                            + "Починка попробовала сверить название компании с названиями групп, но совпадение не найдено."
+                            + groupsHint
+            );
+        }
+
+        return WhatsAppGroupRepairResult.failed(
+                "WhatsApp-шлюз видит " + groups + " групп, из них " + groupsWithInvite
+                        + " с invite-ссылкой, но ссылка и название этой компании не совпали ни с одной группой."
+                        + groupsHint
+        );
+    }
+
+    @Async
+    public void runNowInBackground(String source) {
+        try {
+            runSync(hasText(source) ? source : "background");
+        } catch (RuntimeException e) {
+            log.warn("WhatsApp group sync failed in background source={}: {}", source, e.getMessage(), e);
+        }
+    }
+
+    public int syncSharedChatIdsNow(String source) {
+        SharedChatLinkSyncResponse sharedChatSync = sharedChatLinkSyncService.syncSharedChatIds();
+        if (sharedChatSync.updatedCompanies() > 0) {
+            log.info(
+                    "WhatsApp group sync copied shared chat ids source={} updatedCompanies={} whatsappLinked={} telegramLinked={} maxLinked={} conflictGroups={}",
+                    source,
+                    sharedChatSync.updatedCompanies(),
+                    sharedChatSync.whatsappLinked(),
+                    sharedChatSync.telegramLinked(),
+                    sharedChatSync.maxLinked(),
+                    sharedChatSync.conflictGroups()
+            );
+        }
+        return sharedChatSync.whatsappLinked();
+    }
+
     private int runSync(String source) {
         long startedAt = System.currentTimeMillis();
         int linked = 0;
@@ -124,19 +230,7 @@ public class WhatsAppGroupLinkSyncService {
             }
         }
 
-        SharedChatLinkSyncResponse sharedChatSync = sharedChatLinkSyncService.syncSharedChatIds();
-        if (sharedChatSync.updatedCompanies() > 0) {
-            linked += sharedChatSync.whatsappLinked();
-            log.info(
-                    "WhatsApp group sync copied shared chat ids source={} updatedCompanies={} whatsappLinked={} telegramLinked={} maxLinked={} conflictGroups={}",
-                    source,
-                    sharedChatSync.updatedCompanies(),
-                    sharedChatSync.whatsappLinked(),
-                    sharedChatSync.telegramLinked(),
-                    sharedChatSync.maxLinked(),
-                    sharedChatSync.conflictGroups()
-            );
-        }
+        linked += syncSharedChatIdsNow(source);
 
         appSettingService.setString(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_RUN_AT, Instant.now().toString());
         appSettingService.setInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, linked);
@@ -226,5 +320,15 @@ public class WhatsAppGroupLinkSyncService {
     }
 
     private record SyncClientResult(int groups, int linked) {
+    }
+
+    public record WhatsAppGroupRepairResult(boolean linked, String message) {
+        private static WhatsAppGroupRepairResult linked(String message) {
+            return new WhatsAppGroupRepairResult(true, message);
+        }
+
+        private static WhatsAppGroupRepairResult failed(String message) {
+            return new WhatsAppGroupRepairResult(false, message);
+        }
     }
 }

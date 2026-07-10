@@ -146,6 +146,34 @@ describe('ManagerOrderCardComponent', () => {
     expect(render(2).querySelector('.unchanged-age--alert')?.textContent).toContain('!');
   });
 
+  it('shows review recovery hold on common invoice as waiting instead of danger', () => {
+    const fixture = TestBed.createComponent(ManagerOrderCardComponent);
+    fixture.componentInstance.order = order({
+      commonInvoice: true,
+      commonInvoiceStatus: 'REMINDER',
+      commonInvoiceLastError: 'review_recovery_active: есть активные задачи восстановления отзывов',
+      commonInvoiceReadyOrders: 3,
+      commonInvoiceTotalOrders: 3,
+      commonInvoicePaidOrders: 0,
+      commonInvoiceSentAt: '2026-07-03T09:38:57',
+      commonInvoiceNextReminderAt: '2026-07-09T09:43:49'
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const indicator = element.querySelector<HTMLButtonElement>('.communication-indicator');
+    expect(indicator?.classList.contains('communication-indicator--wait')).toBe(true);
+    expect(indicator?.classList.contains('communication-indicator--danger')).toBe(false);
+    expect(indicator?.title).toBe('Общий счет: ждем восстановления отзывов');
+
+    indicator?.click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('.communication-popover')?.textContent).toContain('Восстановление отзывов активно');
+    expect(element.querySelector('.communication-popover')?.textContent).not.toContain('Ошибка: review_recovery_active');
+  });
+
   it('shows filial city from unchanged age and closes it again', () => {
     const fixture = TestBed.createComponent(ManagerOrderCardComponent);
     fixture.componentInstance.order = order({ filialCity: 'Новосибирск' });

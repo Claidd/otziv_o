@@ -12,6 +12,7 @@ export class AuthService {
   private refreshTimerId: ReturnType<typeof setInterval> | undefined;
   private refreshPromise: Promise<boolean> | null = null;
   private redirectingToLogin = false;
+  private browserResumeHandlersRegistered = false;
 
   readonly status = signal<AuthStatus>('initializing');
   readonly error = signal<string | null>(null);
@@ -26,6 +27,7 @@ export class AuthService {
     }
 
     this.registerKeycloakCallbacks();
+    this.registerBrowserResumeHandlers();
 
     try {
       const authenticated = await this.keycloak.init({
@@ -34,7 +36,7 @@ export class AuthService {
         responseMode: 'query',
         checkLoginIframe: false,
         silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
-        silentCheckSsoFallback: false
+        silentCheckSsoFallback: true
       });
 
       this.initialized = true;
@@ -155,6 +157,32 @@ export class AuthService {
     this.keycloak.onTokenExpired = () => {
       void this.refreshToken(60);
     };
+  }
+
+  private registerBrowserResumeHandlers(): void {
+    if (this.browserResumeHandlersRegistered) {
+      return;
+    }
+
+    this.browserResumeHandlersRegistered = true;
+
+    window.addEventListener('focus', () => {
+      void this.refreshTokenAfterResume();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        void this.refreshTokenAfterResume();
+      }
+    });
+  }
+
+  private async refreshTokenAfterResume(): Promise<void> {
+    if (this.redirectingToLogin || !this.keycloak.authenticated) {
+      return;
+    }
+
+    await this.refreshToken(30);
   }
 
   private async setAuthenticatedState(): Promise<void> {

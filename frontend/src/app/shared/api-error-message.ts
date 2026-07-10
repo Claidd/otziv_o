@@ -197,7 +197,6 @@ function userFacingText(value: string | undefined): string | null {
 function isTechnicalErrorText(value: string): boolean {
   return [
     /Http failure response/i,
-    /https?:\/\//i,
     /localhost:\d+/i,
     /\/api\//i,
     /No static resource/i,

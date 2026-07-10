@@ -772,7 +772,7 @@ export class ManagerControlComponent implements OnInit {
   dayControlActionTitle(): string {
     return this.canRunDayControlActions()
       ? ''
-      : 'Сначала обновите контроль';
+      : 'Контроль еще синхронизируется';
   }
 
   dayControlHint(): string {
@@ -781,7 +781,7 @@ export class ManagerControlComponent implements OnInit {
       return '';
     }
     if (!detail.dailyControlId) {
-      return 'Контроль синхронизируется автоматически. Если действие недоступно, нажмите «Обновить кабинет».';
+      return 'Контроль синхронизируется автоматически. Подождите пару секунд или откройте раздел заново.';
     }
     if (!detail.morningCompletedAt) {
       return 'Нажмите «Принять контроль», когда начали разбирать карточки. Это фиксирует начало работы менеджера.';
@@ -821,7 +821,7 @@ export class ManagerControlComponent implements OnInit {
     if (typeof controlId === 'number' && Number.isFinite(controlId) && controlId > 0) {
       return controlId;
     }
-    this.toast.error('Контроль еще не синхронизирован', 'Сначала нажмите «Обновить кабинет», затем выполните действие');
+    this.toast.error('Контроль еще синхронизируется', 'Подождите пару секунд: карточки подготавливаются автоматически.');
     return null;
   }
 
@@ -870,7 +870,7 @@ export class ManagerControlComponent implements OnInit {
   ): void {
     const itemId = example.controlEntityId;
     if (!itemId) {
-      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем обработайте пункт');
+      this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
     if (this.isConcreteUpdating(itemId)) {
@@ -930,7 +930,7 @@ export class ManagerControlComponent implements OnInit {
   sendClientMessage(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
     if (!itemId) {
-      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем отправьте сообщение');
+      this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
     if (this.isConcreteUpdating(itemId)) {
@@ -969,7 +969,7 @@ export class ManagerControlComponent implements OnInit {
   repairConcreteItem(example: ManagerControlConcreteItem): void {
     const itemId = example.controlEntityId;
     if (!itemId) {
-      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем попробуйте починку');
+      this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
     if (this.isConcreteUpdating(itemId)) {
@@ -996,9 +996,53 @@ export class ManagerControlComponent implements OnInit {
           next.delete(itemId);
           return next;
         });
-        this.toast.error('Не удалось починить', apiErrorMessage(err, 'Автоматическая починка не сработала'));
+        const message = apiErrorMessage(err, 'Автоматическая починка не сработала');
+        if (this.isManualChatBindingRepairMessage(message)) {
+          this.showManualChatBindingRepairToast(message);
+          return;
+        }
+        this.toast.error('Не удалось починить', message);
+        this.load({ silent: true });
       }
     });
+  }
+
+  private isManualChatBindingRepairMessage(message: string): boolean {
+    const normalized = (message ?? '').toLowerCase();
+    return normalized.includes('telegram-группа пока не привязана')
+      || normalized.includes('max-группа пока не привязана')
+      || normalized.includes('whatsapp-группа пока не привязана')
+      || normalized.includes('если починка не помогла');
+  }
+
+  private showManualChatBindingRepairToast(message: string): void {
+    const url = this.firstExternalUrl(message);
+    const title = message.toLowerCase().includes('telegram')
+      ? 'Жду привязку Telegram'
+      : message.toLowerCase().includes('max')
+        ? 'Жду привязку MAX'
+        : 'Жду привязку группы';
+    this.toast.info(
+      title,
+      message,
+      url
+        ? {
+            label: 'Скопировать ссылку',
+            callback: () => {
+              void copyTextToClipboard(url).then((copied) => {
+                if (copied) {
+                  this.toast.success('Ссылка скопирована');
+                }
+              });
+            }
+          }
+        : undefined
+    );
+  }
+
+  private firstExternalUrl(message: string): string {
+    const match = (message ?? '').match(/https?:\/\/[^\s»"')]+/i);
+    return match ? match[0].replace(/[.,;:!?]+$/, '') : '';
   }
 
   requestWorkerTask(example: ManagerControlConcreteItem): void {
@@ -1032,7 +1076,7 @@ export class ManagerControlComponent implements OnInit {
     const itemId = example.controlEntityId;
     const message = this.unansweredReplyDraft(itemId).trim();
     if (!itemId) {
-      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем отправьте ответ');
+      this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
     if (this.isConcreteUpdating(itemId)) {
@@ -1151,6 +1195,18 @@ export class ManagerControlComponent implements OnInit {
     return (example.type === 'ORDER' || example.type === 'WORKER_ORDER_NEW') && !!this.contactText(example);
   }
 
+  isChatBindingIssue(example: ManagerControlConcreteItem): boolean {
+    const reason = (example.reason ?? '').toLowerCase();
+    return example.type === 'ORDER'
+      && reason.includes('не привязан')
+      && (
+        reason.includes('whatsapp-группа')
+        || reason.includes('telegram-группа')
+        || reason.includes('max-группа')
+        || reason.includes('группа из ссылки')
+      );
+  }
+
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
     if (example.type === 'COMMON_INVOICE') {
@@ -1159,6 +1215,7 @@ export class ManagerControlComponent implements OnInit {
     if (example.type === 'TELEGRAM_CHAT') {
       return true;
     }
+    const repairableChatBinding = this.isChatBindingIssue(example);
     const repairableWaitingClient = example.type === 'WORKER_ORDER_NEW'
       && this.isWaitingForClientExample(example)
       && (
@@ -1176,7 +1233,7 @@ export class ManagerControlComponent implements OnInit {
         || reason.includes('автоответчик не обработал')
         || reason.includes('автоответчик не закрыл')
       );
-    return repairableWaitingClient || repairableOrderQueue;
+    return repairableChatBinding || repairableWaitingClient || repairableOrderQueue;
   }
 
   isContactTextCopied(example: ManagerControlConcreteItem): boolean {
@@ -1376,6 +1433,39 @@ export class ManagerControlComponent implements OnInit {
   controlCardReviewUrl(example: ManagerControlConcreteItem): string {
     const url = this.detailExamplePrimaryUrl(example, null);
     return url === '#' ? '' : url;
+  }
+
+  controlCardCompanyUrl(example: ManagerControlConcreteItem): string {
+    if (!this.isChatBindingIssue(example)) {
+      return '';
+    }
+    const targetUrl = (example.targetUrl ?? '').trim();
+    if (targetUrl.startsWith('/companies') && !this.hasNumericCompanyKeyword(targetUrl)) {
+      return targetUrl;
+    }
+    const keyword = (example.companyTitle ?? example.title ?? '').trim()
+      || (this.isPositiveNumber(example.companyId) ? String(example.companyId) : '');
+    if (!keyword) {
+      return '';
+    }
+    const params = new URLSearchParams({
+      section: 'companies',
+      status: 'Все',
+      keyword,
+      pageNumber: '0',
+      pageSize: '10',
+      sortDirection: 'desc'
+    });
+    return `/companies?${params.toString()}`;
+  }
+
+  private hasNumericCompanyKeyword(url: string): boolean {
+    const query = url.split('?')[1] ?? '';
+    if (!query) {
+      return false;
+    }
+    const keyword = new URLSearchParams(query).get('keyword')?.trim() ?? '';
+    return /^\d+$/.test(keyword);
   }
 
   private controlCardOrderId(example: ManagerControlConcreteItem): number | null {
@@ -1856,7 +1946,7 @@ export class ManagerControlComponent implements OnInit {
     const incidentId = example.entityId;
     const itemId = example.controlEntityId;
     if (!itemId) {
-      this.toast.error('Карточка еще не синхронизирована', 'Нажмите «Обновить кабинет», затем измените статус риска');
+      this.toast.error('Карточка еще синхронизируется', 'Подождите пару секунд: карточка подготавливается автоматически.');
       return;
     }
     if (!incidentId || this.isConcreteUpdating(itemId)) {

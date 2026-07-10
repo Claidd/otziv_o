@@ -7,6 +7,7 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -31,6 +32,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     private final BotService botService;
     private final FilialService filialService;
+    private final CompanyRepository companyRepository;
     private final ReviewRepository reviewRepository;
     private final TelegramService telegramService;
     private final ReviewBotCooldownService botCooldownService;
@@ -54,6 +56,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         if (defaultFilial == null) {
             throw new IllegalArgumentException("Филиал не может быть null");
         }
+        lockCompanyForBotAssignment(defaultFilial);
 
         // 2. Получаем значение vigul (здесь нужно получить из orderDTO, если есть)
         boolean vigul = false; // TODO: получить из orderDTO, если есть
@@ -137,6 +140,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         try {
             log.info("=== НАЧАЛО ПЕРЕНАЗНАЧЕНИЯ БОТОВ ДЛЯ СУЩЕСТВУЮЩИХ ОТЗЫВОВ ===");
             log.info("Филиал ID: {}, город: {}", filial.getId(), filial.getCity().getTitle());
+            lockCompanyForBotAssignment(filial);
 
             // 1. Фильтруем отзывы с null ботом
             List<Review> reviewsWithoutBots = reviews.stream()
@@ -233,6 +237,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         if (filial == null) {
             throw new IllegalArgumentException("Филиал отзыва не может быть null");
         }
+        lockCompanyForBotAssignment(filial);
 
         Set<Long> usedBotIdsForThisChange = new HashSet<>(getUsedBotIdsInCompany(filial));
         usedBotIdsForThisChange.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
@@ -846,5 +851,15 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     private boolean isTemplateBotName(Bot bot) {
         return bot != null && bot.getFio() != null && TEMPLATE_BOT_NAMES.contains(bot.getFio().trim());
+    }
+
+    private void lockCompanyForBotAssignment(Filial filial) {
+        Long companyId = filial != null && filial.getCompany() != null ? filial.getCompany().getId() : null;
+        if (companyId == null) {
+            return;
+        }
+
+        companyRepository.findByIdForBotAssignmentLock(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Компания для подбора аккаунта не найдена: " + companyId));
     }
 }

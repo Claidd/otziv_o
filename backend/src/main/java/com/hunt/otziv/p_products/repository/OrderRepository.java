@@ -126,6 +126,120 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LocalDateTime getStatusChangedAt();
     }
 
+    @Query("""
+        SELECT COUNT(DISTINCT o.id)
+        FROM Order o
+        JOIN o.company c
+        LEFT JOIN o.status os
+        LEFT JOIN c.status cs
+        WHERE o.complete = false
+          AND o.manager = :manager
+          AND (os.title IS NULL OR os.title <> 'Бан')
+          AND (cs.title IS NULL OR cs.title <> 'Бан')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM CommonInvoiceOrder item
+              WHERE item.order = o
+                AND item.invoice.status <> :disabledCommonInvoiceStatus
+          )
+          AND c.urlChat IS NOT NULL
+          AND TRIM(c.urlChat) <> ''
+          AND (
+              (
+                  LOWER(TRIM(c.urlChat)) LIKE 'chat.whatsapp.com/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://chat.whatsapp.com/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://chat.whatsapp.com/%'
+              )
+              AND (c.groupId IS NULL OR TRIM(c.groupId) = '')
+              OR (
+                  LOWER(TRIM(c.urlChat)) LIKE 't.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://t.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://t.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.dog/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.dog/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.dog/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'tg://resolve?%'
+              )
+              AND LOWER(TRIM(c.urlChat)) NOT LIKE '%startgroup=%'
+              AND c.telegramGroupChatId IS NULL
+              OR (
+                  LOWER(TRIM(c.urlChat)) LIKE 'max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'web.max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://web.max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://web.max.ru/%'
+              )
+              AND c.maxGroupChatId IS NULL
+          )
+    """)
+    long countManagerControlChatBindingIssuesByManager(
+            @Param("manager") Manager manager,
+            @Param("disabledCommonInvoiceStatus") CommonInvoiceStatus disabledCommonInvoiceStatus
+    );
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        LEFT JOIN FETCH o.status os
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH f.city
+        JOIN FETCH o.company c
+        LEFT JOIN c.status cs
+        WHERE o.complete = false
+          AND o.manager = :manager
+          AND (os.title IS NULL OR os.title <> 'Бан')
+          AND (cs.title IS NULL OR cs.title <> 'Бан')
+          AND NOT EXISTS (
+              SELECT 1
+              FROM CommonInvoiceOrder item
+              WHERE item.order = o
+                AND item.invoice.status <> :disabledCommonInvoiceStatus
+          )
+          AND c.urlChat IS NOT NULL
+          AND TRIM(c.urlChat) <> ''
+          AND (
+              (
+                  LOWER(TRIM(c.urlChat)) LIKE 'chat.whatsapp.com/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://chat.whatsapp.com/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://chat.whatsapp.com/%'
+              )
+              AND (c.groupId IS NULL OR TRIM(c.groupId) = '')
+              OR (
+                  LOWER(TRIM(c.urlChat)) LIKE 't.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://t.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://t.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.me/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'telegram.dog/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://telegram.dog/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://telegram.dog/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'tg://resolve?%'
+              )
+              AND LOWER(TRIM(c.urlChat)) NOT LIKE '%startgroup=%'
+              AND c.telegramGroupChatId IS NULL
+              OR (
+                  LOWER(TRIM(c.urlChat)) LIKE 'max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'web.max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'https://web.max.ru/%'
+                  OR LOWER(TRIM(c.urlChat)) LIKE 'http://web.max.ru/%'
+              )
+              AND c.maxGroupChatId IS NULL
+          )
+        ORDER BY o.changed ASC, o.id ASC
+    """)
+    List<Order> findManagerControlChatBindingIssueOrdersByManager(
+            @Param("manager") Manager manager,
+            @Param("disabledCommonInvoiceStatus") CommonInvoiceStatus disabledCommonInvoiceStatus,
+            Pageable pageable
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM Order o WHERE o.id = :orderId")
     Optional<Order> findByIdForCounterUpdate(@Param("orderId") Long orderId);

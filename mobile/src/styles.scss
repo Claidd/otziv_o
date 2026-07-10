@@ -231,7 +231,7 @@ body.otziv-dark-theme {
   --otziv-primary: #7aa7dc;
   --otziv-danger: #ff5b8f;
   --otziv-success: #4ac6b1;
-  --otziv-warning: #f8d975;
+  --otziv-warning: #d7bd78;
   --otziv-white: #202528;
   --otziv-info: #a3bdcc;
   --otziv-dark: #edeffd;
@@ -239,8 +239,8 @@ body.otziv-dark-theme {
   --otziv-background: #181a1e;
   --otziv-field-background: #202528;
   --otziv-muted-surface: #252b2f;
-  --otziv-tone-wait-border: rgba(248, 217, 117, 0.26);
-  --otziv-tone-wait-surface: #282825;
+  --otziv-tone-wait-border: rgba(215, 189, 120, 0.18);
+  --otziv-tone-wait-surface: #252621;
   --otziv-tone-correction-border: rgba(255, 91, 143, 0.24);
   --otziv-tone-correction-surface: #28242b;
   --otziv-tone-walk-border: rgba(163, 189, 204, 0.22);
@@ -323,6 +323,24 @@ body.otziv-dark-theme .otziv-tabbar {
   --background: rgba(32, 37, 40, 0.96);
   --border: 1px solid rgba(163, 189, 204, 0.14);
   box-shadow: 0 -0.7rem 1.8rem rgba(0, 0, 0, 0.24);
+}
+
+body.otziv-dark-theme app-worker .worker-list .mobile-worker-review-card .bot-line.empty,
+body.otziv-dark-theme app-order-details-mobile .bot-line.empty {
+  border-color: rgba(244, 114, 182, 0.34);
+  background: rgba(70, 24, 47, 0.78);
+  color: #ffd6e6;
+}
+
+body.otziv-dark-theme app-worker .worker-list .mobile-worker-review-card .bot-line.template,
+body.otziv-dark-theme app-order-details-mobile .bot-line.template {
+  border-color: rgba(215, 189, 120, 0.26);
+  background: rgba(58, 45, 21, 0.62);
+  color: #d8bd78;
+}
+
+body.otziv-dark-theme app-worker .worker-list .mobile-worker-review-card .bot-line.template span {
+  color: #d8bd78;
 }
 
 .material-icons-sharp {

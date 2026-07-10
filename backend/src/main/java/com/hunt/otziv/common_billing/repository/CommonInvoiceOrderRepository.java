@@ -111,4 +111,11 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         WHERE item.order.id = :orderId
     """)
     int deleteByOrderId(@Param("orderId") Long orderId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        DELETE FROM CommonInvoiceOrder item
+        WHERE item.invoice.id = :invoiceId
+    """)
+    int deleteByInvoiceId(@Param("invoiceId") Long invoiceId);
 }

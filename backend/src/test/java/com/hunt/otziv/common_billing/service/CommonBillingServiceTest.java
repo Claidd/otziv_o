@@ -36,6 +36,9 @@ import com.hunt.otziv.payments.dto.TbankCancelResponse;
 import com.hunt.otziv.payments.dto.TbankInitResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.payments.model.PaymentLink;
+import com.hunt.otziv.payments.model.PaymentLinkStatus;
+import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
@@ -105,6 +108,8 @@ class CommonBillingServiceTest {
     private CompanyRepository companyRepository;
     @Mock
     private OrderRepository orderRepository;
+    @Mock
+    private PaymentLinkRepository paymentLinkRepository;
     @Mock
     private ManagerRepository managerRepository;
     @Mock
@@ -196,6 +201,88 @@ class CommonBillingServiceTest {
         verify(orderTransactionService, never()).handlePaymentStatus(secondOrder, false);
         verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(firstOrder);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(firstOrder, "Оплата общего счета");
+        verify(nextOrderRequestService, never()).openForPaidOrder(any());
+    }
+
+    @Test
+    void applyConfirmedOrderPaymentMarksOnlyLinkedItemPaidAndClosesLinkedOrder() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.REMINDER);
+        Order paidOrder = order(101L);
+        Order openOrder = order(102L);
+        CommonInvoiceOrder paidItem = item(invoice, paidOrder);
+        CommonInvoiceOrder openItem = item(invoice, openOrder);
+        List<CommonInvoiceOrder> items = List.of(paidItem, openItem);
+        LocalDateTime paidAt = LocalDateTime.of(2026, 6, 10, 18, 54, 53);
+
+        when(invoiceOrderRepository.findByOrderIdWithInvoice(101L)).thenReturn(Optional.of(paidItem));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        when(badReviewTaskService.getPayableSum(openOrder)).thenReturn(BigDecimal.valueOf(1000));
+
+        boolean applied = service.applyConfirmedOrderPayment(101L, paidAt, "T-Bank/SBP оплата заказа");
+
+        assertTrue(applied);
+        assertTrue(paidItem.isPaid());
+        assertFalse(openItem.isPaid());
+        assertEquals(paidAt, paidItem.getPaidAt());
+        assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+        assertEquals(200_000L, invoice.getAmountKopecks());
+        assertEquals(100_000L, invoice.getPaidKopecks());
+        verify(orderTransactionService).handlePaymentStatus(paidOrder, false);
+        verify(orderTransactionService, never()).handlePaymentStatus(openOrder, false);
+        verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(paidOrder);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(paidOrder, "Оплата общего счета");
+        verify(nextOrderRequestService, never()).openForPaidOrder(any());
+    }
+
+    @Test
+    void invoiceRefreshMarksLinkedItemPaidWhenOrderHasConfirmedStandalonePayment() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.REMINDER);
+        Order paidOrder = order(101L);
+        Order openOrder = order(102L);
+        CommonInvoiceOrder paidItem = item(invoice, paidOrder);
+        CommonInvoiceOrder openItem = item(invoice, openOrder);
+        List<CommonInvoiceOrder> items = List.of(paidItem, openItem);
+        LocalDateTime paidAt = LocalDateTime.of(2026, 6, 10, 18, 54, 53);
+        PaymentLink link = new PaymentLink();
+        link.setId(501L);
+        link.setOrder(paidOrder);
+        link.setStatus(PaymentLinkStatus.CONFIRMED);
+        link.setAmountKopecks(100_000L);
+        link.setConfirmedAmountKopecks(100_000L);
+        link.setPaidAt(paidAt);
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        when(badReviewTaskService.getPayableSum(paidOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(badReviewTaskService.getPayableSum(openOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(
+                101L,
+                PaymentLinkStatus.CONFIRMED
+        )).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findFirstByOrder_IdAndStatusAndLastErrorIsNullOrderByPaidAtDesc(
+                102L,
+                PaymentLinkStatus.CONFIRMED
+        )).thenReturn(Optional.empty());
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+
+        CommonInvoiceDetailsResponse response = service.invoice(10L);
+
+        assertTrue(paidItem.isPaid());
+        assertEquals(paidAt, paidItem.getPaidAt());
+        assertFalse(openItem.isPaid());
+        assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+        assertEquals(BigDecimal.valueOf(1000).setScale(2), response.summary().paid());
+        assertEquals(BigDecimal.valueOf(1000).setScale(2), response.summary().remaining());
+        verify(orderTransactionService).handlePaymentStatus(paidOrder, false);
+        verify(orderTransactionService, never()).handlePaymentStatus(openOrder, false);
+        verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(paidOrder);
+        verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(paidOrder, "Оплата общего счета");
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
     }
 
@@ -1810,6 +1897,7 @@ class CommonBillingServiceTest {
         invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
         invoice.setLastError("late_tbank_payment: оплачена старая ссылка");
         Order manuallyPaidOrder = order(101L);
+        manuallyPaidOrder.setStatus(status("Оплачено"));
         Order unpaidOrder = order(102L);
         CommonInvoiceOrder manuallyPaidItem = item(invoice, manuallyPaidOrder);
         manuallyPaidItem.setPaid(true);

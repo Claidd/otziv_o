@@ -198,6 +198,9 @@ try {
         $scpArgs += @("-i", $SshKey)
     }
     $sshKeepAliveArgs = @(
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=15",
+        "-o", "ConnectionAttempts=2",
         "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ServerAliveInterval=20",
         "-o", "ServerAliveCountMax=12",

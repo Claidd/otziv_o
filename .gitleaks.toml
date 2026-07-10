@@ -91,6 +91,7 @@ paths = [
   '''(^|/)frontend/dist/''',
   '''(^|/)mobile/node_modules/''',
   '''(^|/)mobile/\.angular/''',
+  '''(^|/)mobile/android/\.gradle/''',
   '''(^|/)mobile/dist/''',
   '''(^|/)mobile/android/app/build/''',
   '''(^|/)mobile/android/app/src/main/assets/public/''',

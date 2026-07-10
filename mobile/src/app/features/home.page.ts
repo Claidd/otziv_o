@@ -419,8 +419,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       <span class="material-icons-sharp">person</span>
                       профиль
                     </a>
-                    @if (canManagerControl()) {
-                      <a class="pill-button" routerLink="/tabs/control">
+                    @if (canPersonalManagerControl()) {
+                      <a class="pill-button" routerLink="/tabs/cabinet/manager-control">
                         <span class="material-icons-sharp">fact_check</span>
                         замечания
                       </a>
@@ -755,6 +755,24 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       <div>
                         <strong>Т Банк</strong>
                         <small>платежи и профили</small>
+                      </div>
+                    </button>
+                  }
+                  @if (canPersonalManagerControl()) {
+                    <button type="button" (click)="openManagerRemarks()">
+                      <span class="material-icons-sharp">fact_check</span>
+                      <div>
+                        <strong>Замечания</strong>
+                        <small>личный контроль дня</small>
+                      </div>
+                    </button>
+                  }
+                  @if (canSeeManagerControl()) {
+                    <button type="button" (click)="openManagerControlSection()">
+                      <span class="material-icons-sharp">rule</span>
+                      <div>
+                        <strong>Контроль</strong>
+                        <small>замечания менеджеров</small>
                       </div>
                     </button>
                   }
@@ -2047,6 +2065,18 @@ export class HomePage implements OnInit, OnDestroy {
     this.closeSectionSheet();
   }
 
+  async openManagerRemarks(): Promise<void> {
+    this.closeSectionSheet();
+    await this.router.navigateByUrl('/tabs/cabinet/manager-control');
+    this.closeSectionSheet();
+  }
+
+  async openManagerControlSection(): Promise<void> {
+    this.closeSectionSheet();
+    await this.router.navigateByUrl('/tabs/control');
+    this.closeSectionSheet();
+  }
+
   openSectionSheet(): void {
     this.sectionSheetOpen.set(true);
   }
@@ -2856,8 +2886,12 @@ export class HomePage implements OnInit, OnDestroy {
     return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.dictionaries, MOBILE_ACTIONS.manage);
   }
 
-  canManagerControl(): boolean {
-    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.managerControl, MOBILE_ACTIONS.view);
+  canPersonalManagerControl(): boolean {
+    return this.auth.hasRealmRole('MANAGER');
+  }
+
+  canSeeManagerControl(): boolean {
+    return this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin);
   }
 
   canSeeTbank(): boolean {

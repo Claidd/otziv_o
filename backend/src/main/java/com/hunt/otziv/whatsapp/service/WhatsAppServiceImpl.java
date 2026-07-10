@@ -196,8 +196,13 @@ public class WhatsAppServiceImpl implements WhatsAppService {
 
     @Override
     public List<WhatsAppGroupInfo> listGroups(String clientId) {
+        return listGroups(clientId, false);
+    }
+
+    @Override
+    public List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
         try {
-            String url = baseUrl(clientId) + "/groups";
+            String url = baseUrl(clientId) + "/groups" + (forceRefresh ? "?refresh=1" : "");
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
             return parseGroups(response.getBody());
         } catch (WhatsAppConfigurationException e) {

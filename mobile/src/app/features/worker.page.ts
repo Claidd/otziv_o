@@ -78,6 +78,15 @@ type StoredPublishCredentialPreparation = {
   passwordAt?: number;
   updatedAt: number;
 };
+type WorkerListState = {
+  activeSection: WorkerBoardSection;
+  keyword: string;
+  pageNumber: number;
+  pageSize: number;
+  sortDirection: 'desc' | 'asc';
+  selectedWorkerId: number | null;
+  updatedAt: number;
+};
 type CredentialWaitSection = 'publish' | 'nagul';
 
 @Component({
@@ -321,14 +330,24 @@ type CredentialWaitSection = 'publish' | 'nagul';
                     </section>
                   }
 
-                  <div class="bot-line" [class.empty]="hasUnavailableBot(review)">
+                  <div class="bot-line" [class.empty]="hasUnavailableBot(review)" [class.template]="reviewHasTemplateBot(review)">
                     <span>{{ botLabel(review) }}</span>
                   </div>
 
                   <div class="card-actions review-actions">
                     <button type="button" (click)="copyReviewValue(review, 'url')">{{ copiedKey() === 'url-' + review.id ? 'готово' : 'ссылка' }}</button>
-                    <button type="button" (click)="copyReviewValue(review, 'login')">{{ copiedKey() === 'login-' + review.id ? 'готово' : 'логин' }}</button>
-                    <button type="button" (click)="copyReviewValue(review, 'password')">{{ copiedKey() === 'password-' + review.id ? 'готово' : 'пароль' }}</button>
+                    <button
+                      type="button"
+                      (click)="copyReviewValue(review, 'login')"
+                      [disabled]="reviewCredentialCopyDisabled(review, 'login')"
+                      [title]="reviewCredentialCopyTitle(review, 'login')"
+                    >{{ copiedKey() === 'login-' + review.id ? 'готово' : 'логин' }}</button>
+                    <button
+                      type="button"
+                      (click)="copyReviewValue(review, 'password')"
+                      [disabled]="reviewCredentialCopyDisabled(review, 'password')"
+                      [title]="reviewCredentialCopyTitle(review, 'password')"
+                    >{{ copiedKey() === 'password-' + review.id ? 'готово' : 'пароль' }}</button>
                     <a [href]="botBrowserUrl(review)" target="_blank" rel="noopener">вк</a>
                     <button type="button" (click)="copyReviewValue(review, 'text')">{{ copiedKey() === 'text-' + review.id ? 'готово' : 'текст' }}</button>
                     <button type="button" (click)="copyReviewValue(review, 'answer')">{{ copiedKey() === 'answer-' + review.id ? 'готово' : 'ответ' }}</button>
@@ -976,6 +995,12 @@ type CredentialWaitSection = 'publish' | 'nagul';
       color: var(--otziv-danger);
     }
 
+    .bot-line.template {
+      border-color: var(--otziv-tone-wait-border);
+      color: #8a6416;
+      background: var(--otziv-tone-wait-surface);
+    }
+
     .publish-button {
       width: 100%;
       min-height: 2.04rem;
@@ -1306,6 +1331,8 @@ export class WorkerPage implements OnInit, OnDestroy {
     publish: 'otziv-mobile-worker-publish-prep:v1',
     nagul: 'otziv-mobile-worker-nagul-prep:v1'
   };
+  private readonly listStateStorageKey = 'otziv-mobile-worker-list-state:v1';
+  private readonly listStateMaxAgeMs = 2 * 60 * 60 * 1000;
   private readonly publishCredentialPreparationMaxAgeMs = 60 * 60 * 1000;
   private readonly credentialWaitSafetyBufferMs = 2_000;
   private readonly credentialWaitMs: Record<CredentialWaitSection, number> = {
@@ -1393,6 +1420,7 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.restoreStoredPublishCredentialPreparation();
+    this.restoreStoredListState();
     this.applyMobileNavIntent(false);
     this.lastMobileNavKey = this.mobileNavKey();
     void this.load();
@@ -1832,6 +1860,11 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
+    if (this.reviewCredentialCopyDisabled(review, kind)) {
+      this.error.set(this.reviewCredentialCopyTitle(review, kind));
+      return;
+    }
+
     const value = {
       url: review.filialUrl || review.url || '',
       login: review.botLogin || '',
@@ -1854,6 +1887,16 @@ export class WorkerPage implements OnInit, OnDestroy {
       }
       this.markPublishCredentialCopied(review, kind);
     }
+  }
+
+  reviewCredentialCopyDisabled(review: WorkerReviewItem, kind: ReviewCopyKind): boolean {
+    return (kind === 'login' || kind === 'password') && this.cannotCompleteBecauseBotUnavailable(review);
+  }
+
+  reviewCredentialCopyTitle(review: WorkerReviewItem, kind: ReviewCopyKind): string {
+    return this.reviewCredentialCopyDisabled(review, kind)
+      ? this.accountRepairTitle(review)
+      : 'Скопировать';
   }
 
   async copyBotValue(bot: WorkerBotItem, kind: 'login' | 'password'): Promise<void> {
@@ -2032,7 +2075,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       ? () => this.api.changeWorkerRecoveryTaskBot(review.recoveryTaskId!)
       : this.isBadTask(review) && review.badTaskId
         ? () => this.api.changeWorkerBadReviewTaskBot(review.badTaskId!)
-        : () => this.api.changeWorkerReviewBot(review.id);
+        : () => this.api.changeWorkerReviewBot(review.id, this.workerActivitySource());
     await this.runMutation(key, request, 'Не удалось заменить аккаунт.');
   }
 
@@ -2054,7 +2097,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       ? () => this.api.deactivateWorkerRecoveryTaskBot(review.recoveryTaskId!, review.botId!)
       : this.isBadTask(review) && review.badTaskId
         ? () => this.api.deactivateWorkerBadReviewTaskBot(review.badTaskId!, review.botId!)
-        : () => this.api.deactivateWorkerReviewBot(review.id, review.botId!);
+        : () => this.api.deactivateWorkerReviewBot(review.id, review.botId!, this.workerActivitySource());
     await this.runMutation(key, request, 'Не удалось заблокировать аккаунт.');
   }
 
@@ -2066,6 +2109,10 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
     if (this.isBadTask(review) && review.badTaskId) {
       await this.runMutation(key, () => this.api.completeWorkerBadReviewTask(review.badTaskId!), 'Не удалось выполнить плохую задачу.');
+      return;
+    }
+    if (this.cannotCompleteBecauseBotUnavailable(review)) {
+      this.error.set(this.accountRepairTitle(review));
       return;
     }
     if (this.activeSection() === 'nagul') {
@@ -2093,10 +2140,70 @@ export class WorkerPage implements OnInit, OnDestroy {
     );
   }
 
+  cannotCompleteBecauseBotUnavailable(review: WorkerReviewItem): boolean {
+    return this.isAccountWorkSection()
+      && !this.isBadTask(review)
+      && !this.isRecoveryTask(review)
+      && !this.isPublishedPublishAction(review)
+      && !this.canCompleteWithCurrentBot(review);
+  }
+
+  private canCompleteWithCurrentBot(review: WorkerReviewItem): boolean {
+    if (!review.botId || review.botId === 1) {
+      return false;
+    }
+
+    const botFio = this.normalizedBotFio(review);
+    return Boolean(review.botLogin?.trim())
+      && Boolean(review.botPassword?.trim())
+      && !this.isPlaceholderBotName(botFio)
+      && (this.activeSection() !== 'publish' || !this.isTemplateBotName(botFio));
+  }
+
+  private accountRepairTitle(review: WorkerReviewItem): string {
+    if (!review.botId || review.botId === 1) {
+      return 'Аккаунт не назначен. Нажмите "смена", чтобы подобрать рабочий аккаунт.';
+    }
+
+    const botFio = this.normalizedBotFio(review);
+    if (this.isPlaceholderBotName(botFio)) {
+      return 'Для карточки стоит заглушка вместо аккаунта. Нажмите "смена".';
+    }
+
+    if (this.isTemplateBotName(botFio)) {
+      return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
+    }
+
+    if (!review.botLogin?.trim() || !review.botPassword?.trim()) {
+      return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
+    }
+
+    return 'Этот аккаунт нельзя использовать для действия. Нажмите "смена".';
+  }
+
+  private isAccountWorkSection(): boolean {
+    return this.activeSection() === 'publish' || this.activeSection() === 'nagul';
+  }
+
+  private isTemplateBotName(botFio: string): boolean {
+    return botFio === 'впишите имя фамилию'
+      || botFio === 'впиши имя фамилию'
+      || botFio === 'впишите фамилию имя';
+  }
+
+  private isPlaceholderBotName(botFio: string): boolean {
+    return botFio === 'нет доступных аккаунтов' || botFio === 'добавьте аккаунты и нажмите сменить';
+  }
+
+  private normalizedBotFio(review: WorkerReviewItem): string {
+    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+  }
+
   openOrderDetails(order: OrderItem): void {
     if (!order.companyId) {
       return;
     }
+    this.storeListState();
     void this.router.navigate(['/tabs/orders', order.companyId, order.id]);
   }
 
@@ -2104,6 +2211,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     if (!review.companyId || !review.orderId) {
       return;
     }
+    this.storeListState();
     void this.router.navigate(['/tabs/orders', review.companyId, review.orderId], {
       queryParams: this.activeSection() === 'all' ? { from: 'worker-all' } : undefined
     });
@@ -2464,14 +2572,24 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   botLabel(review: WorkerReviewItem): string {
-    if (this.hasUnavailableBot(review)) {
-      return 'нет доступных аккаунтов';
+    if (this.hasUnavailableBot(review) && this.isPlaceholderBotName(this.normalizedBotFio(review))) {
+      return 'смените аккаунт';
     }
     return review.botFio ? `${review.botFio} ${review.botCounter || ''}`.trim() : (review.productTitle || 'Аккаунт');
   }
 
   hasUnavailableBot(review: WorkerReviewItem): boolean {
-    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'нет доступных аккаунтов';
+    if (!review.botId || review.botId === 1) {
+      return true;
+    }
+
+    const botFio = this.normalizedBotFio(review);
+    return this.isPlaceholderBotName(botFio)
+      || (this.activeSection() === 'publish' && this.isTemplateBotName(botFio));
+  }
+
+  reviewHasTemplateBot(review: WorkerReviewItem): boolean {
+    return this.isTemplateBotName(this.normalizedBotFio(review));
   }
 
   botBrowserUrl(review: WorkerReviewItem): string {
@@ -2487,6 +2605,12 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
     if (this.isPublishedPublishAction(review)) {
       return 'ОПУБЛИКОВАНО';
+    }
+    if (this.cannotCompleteBecauseBotUnavailable(review)) {
+      if (this.activeSection() === 'publish' && this.isTemplateBotName(this.normalizedBotFio(review))) {
+        return 'НУЖЕН ВЫГУЛ';
+      }
+      return 'СМЕНИТЕ АККАУНТ';
     }
     return this.activeSection() === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ';
   }
@@ -2535,6 +2659,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   private async load(section: WorkerBoardSectionQuery = this.activeSection()): Promise<void> {
+    this.storeListState();
     this.loading.set(true);
     this.error.set(null);
     try {
@@ -2552,6 +2677,7 @@ export class WorkerPage implements OnInit, OnDestroy {
         this.activeSection.set(board.section);
         this.pageNumber.set(board.reviews?.number || board.orders?.number || 0);
       }
+      this.storeListState();
       if (board.message) {
         this.showBoardNotice(board.message);
       }
@@ -2601,6 +2727,77 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   private mobileNavKey(params: ParamMap = this.route.snapshot.queryParamMap): string {
     return `${params.get('mobileNav') ?? ''}:${params.get('navTs') ?? ''}`;
+  }
+
+  private restoreStoredListState(): void {
+    const state = this.readStoredListState();
+    if (!state) {
+      return;
+    }
+
+    this.activeSection.set(state.activeSection);
+    this.keyword.set(state.keyword ?? '');
+    this.pageNumber.set(Number.isFinite(state.pageNumber) ? Math.max(state.pageNumber, 0) : 0);
+    this.pageSize.set(Number.isFinite(state.pageSize) && state.pageSize > 0 ? state.pageSize : 10);
+    this.sortDirection.set(state.sortDirection === 'asc' ? 'asc' : 'desc');
+    this.selectedWorkerId.set(state.selectedWorkerId);
+  }
+
+  private readStoredListState(): WorkerListState | null {
+    const raw = this.getSessionStorageItem(this.listStateStorageKey);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const state = JSON.parse(raw) as Partial<WorkerListState>;
+      const section = this.normalizeStoredSection(state.activeSection);
+      if (!section) {
+        return null;
+      }
+      if (!state.updatedAt || Date.now() - state.updatedAt > this.listStateMaxAgeMs) {
+        this.removeSessionStorageItem(this.listStateStorageKey);
+        return null;
+      }
+
+      return {
+        activeSection: section,
+        keyword: state.keyword ?? '',
+        pageNumber: Number(state.pageNumber ?? 0),
+        pageSize: Number(state.pageSize ?? 10),
+        sortDirection: state.sortDirection === 'asc' ? 'asc' : 'desc',
+        selectedWorkerId: this.normalizeStoredWorkerId(state.selectedWorkerId),
+        updatedAt: state.updatedAt
+      };
+    } catch {
+      this.removeSessionStorageItem(this.listStateStorageKey);
+      return null;
+    }
+  }
+
+  private storeListState(): void {
+    this.setSessionStorageItem(this.listStateStorageKey, JSON.stringify({
+      activeSection: this.activeSection(),
+      keyword: this.keyword(),
+      pageNumber: this.pageNumber(),
+      pageSize: this.pageSize(),
+      sortDirection: this.sortDirection(),
+      selectedWorkerId: this.selectedWorkerId(),
+      updatedAt: Date.now()
+    } satisfies WorkerListState));
+  }
+
+  private normalizeStoredSection(section: unknown): WorkerBoardSection | null {
+    return WORKER_SECTIONS.includes(section as WorkerBoardSection) ? section as WorkerBoardSection : null;
+  }
+
+  private normalizeStoredWorkerId(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+
+    const id = Number(value);
+    return Number.isFinite(id) && id > 0 ? id : null;
   }
 
   private async runMutation<T>(

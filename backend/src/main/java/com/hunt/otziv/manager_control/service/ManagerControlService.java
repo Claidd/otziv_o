@@ -4,6 +4,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
@@ -17,6 +18,7 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceOrder;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
@@ -57,6 +59,7 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemReposito
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
+import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -70,6 +73,7 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
+import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -81,8 +85,10 @@ import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
@@ -234,6 +240,7 @@ public class ManagerControlService {
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final ScheduledClientMessageService scheduledClientMessageService;
     private final ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
+    private final AppSettingService appSettingService;
     private final ClientChatMessageSender clientChatMessageSender;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
     private final ClientChatUnansweredItemRepository clientChatUnansweredItemRepository;
@@ -248,6 +255,10 @@ public class ManagerControlService {
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     private final CommonBillingService commonBillingService;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
+    private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
+    private final TelegramGroupLinkService telegramGroupLinkService;
+    private final MaxGroupLinkService maxGroupLinkService;
     private final ManagerDailyControlRepository dailyControlRepository;
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
@@ -583,6 +594,7 @@ public class ManagerControlService {
         String comment = limit(request == null ? null : request.comment(), 1000);
         boolean manualWorkerNotification = Boolean.TRUE.equals(request == null ? null : request.manualWorkerNotification());
         boolean specialistActionConcrete = isSpecialistActionConcrete(concreteItem);
+        boolean clientChatUnansweredConcrete = ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType());
         if (manualWorkerNotification && specialistActionConcrete && safe(comment).isBlank()) {
             comment = manualWorkerNotificationComment(concreteItem);
         }
@@ -645,10 +657,16 @@ public class ManagerControlService {
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
                 movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem);
             }
-        } else if (ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType())) {
+        } else if (clientChatUnansweredConcrete) {
             concreteItem.setLastManualTouchAt(now);
             concreteItem.setFollowUpAt(null);
             clientChatMessageTrackerService.markFromManagerControl(concreteItem.getEntityId(), actionType, comment);
+            if (actionType == ManagerDailyControlActionType.ACTION_TAKEN
+                    || actionType == ManagerDailyControlActionType.ACKNOWLEDGED) {
+                concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+                concreteItem.setResolvedAt(now);
+                status = ManagerDailyControlItemStatus.RESOLVED;
+            }
         } else if (specialistActionConcrete
                 && status != ManagerDailyControlItemStatus.RESOLVED
                 && actionType != ManagerDailyControlActionType.ACKNOWLEDGED) {
@@ -877,6 +895,9 @@ public class ManagerControlService {
         }
         Order order = orderRepository.findById(concreteItem.getEntityId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ карточки контроля не найден"));
+        if (isChatBindingIssueConcrete(concreteItem)) {
+            return repairChatBindingIssueConcreteItem(concreteItem, control, order, principal);
+        }
         if (!order.isWaitingForClient() && ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
             return resolveRepairedConcreteItem(
                     concreteItem,
@@ -1055,6 +1076,72 @@ public class ManagerControlService {
                 "Telegram chat_id обновлен: " + migration.oldChatId() + " -> " + migration.newChatId(),
                 principal,
                 "Обновлен Telegram chat_id компании"
+        );
+    }
+
+    private ManagerControlConcreteItemResponse repairChatBindingIssueConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Order order,
+            Principal principal
+    ) {
+        Company company = order == null ? null : order.getCompany();
+        if (company == null || company.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У заказа нет компании для привязки группы");
+        }
+        String before = clientTextChatBindingProblem(company);
+        if (before.isBlank()) {
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Группа уже привязана, карточка скрыта из контроля",
+                    principal,
+                    "Проверена привязка соцсети"
+            );
+        }
+
+        String chat = safe(company.getUrlChat()).toLowerCase(Locale.ROOT);
+        if (isWhatsAppChat(chat)) {
+            WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult repairResult =
+                    whatsAppGroupLinkSyncService.repairCompanyLink(company);
+            company = companyRepository.findById(company.getId()).orElse(company);
+            String after = clientTextChatBindingProblem(company);
+            if (after.isBlank()) {
+                return resolveRepairedConcreteItem(
+                        concreteItem,
+                        control,
+                        "WhatsApp-группа найдена и привязана к компании",
+                        principal,
+                        "Проверена синхронизация WhatsApp-групп"
+                );
+            }
+            String repairMessage = repairResult == null ? "" : safe(repairResult.message());
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    repairMessage.isBlank()
+                            ? manualChatBindingRepairInstruction(company)
+                            : repairMessage
+            );
+        }
+
+        if (isTelegramChat(chat) || isMaxChat(chat)) {
+            sharedChatLinkSyncService.syncSharedChatIds();
+            company = companyRepository.findById(company.getId()).orElse(company);
+            String after = clientTextChatBindingProblem(company);
+            if (after.isBlank()) {
+                return resolveRepairedConcreteItem(
+                        concreteItem,
+                        control,
+                        "Группа уже была привязана по такой же ссылке, карточка скрыта из контроля",
+                        principal,
+                        "Проверена привязка соцсети"
+                );
+            }
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                manualChatBindingRepairInstruction(company)
         );
     }
 
@@ -1344,7 +1431,7 @@ public class ManagerControlService {
         return closeResponse(control, true, List.of());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ManagerControlManagerDetailResponse managerDetails(Long managerId, Principal principal, Authentication authentication) {
         if (managerId == null || managerId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный менеджер");
@@ -1731,6 +1818,10 @@ public class ManagerControlService {
         long workerWorkloadCount = workerCounts.workloadTotal();
         long requiresAttention = orderCounts.getOrDefault("Требует внимания", 0);
         long commonInvoiceActionCount = commonInvoiceActionCount(manager);
+        long chatBindingIssueCount = orderRepository.countManagerControlChatBindingIssuesByManager(
+                manager,
+                CommonInvoiceStatus.DISABLED
+        );
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
 
@@ -1739,13 +1830,15 @@ public class ManagerControlService {
         addProblem(problems, "OPEN_RISKS", "Риски", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
+        addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
+        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + chatBindingIssueCount
+                + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
         long warningCount = 0;
         long workloadCount = orderAttention + workerWorkloadCount;
         DailyControlSyncResult controlSync = persist
@@ -2310,6 +2403,9 @@ public class ManagerControlService {
         if ("COMMON_INVOICES".equals(item.getReasonCode())) {
             return commonInvoiceExamples(manager, today, limit);
         }
+        if ("CHAT_BINDING_ISSUES".equals(item.getReasonCode())) {
+            return chatBindingIssueExamples(manager, today, limit);
+        }
         if ("TELEGRAM_CHAT_MIGRATION".equals(item.getReasonCode())) {
             return telegramChatIssueExamples(manager, limit);
         }
@@ -2363,13 +2459,19 @@ public class ManagerControlService {
                 .collect(Collectors.toMap(this::concreteEntityKey, Function.identity(), (left, right) -> left));
         Map<String, ManagerDailyControlConcreteItem> storedByKey = storedExamples.stream()
                 .collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
+        Set<String> freshKeys = freshByKey.keySet();
+        resolveStaleChatBindingConcreteItems(parentItem, storedByKey, freshKeys);
         List<ManagerControlConcreteItemResponse> visibleStored = storedExamples.stream()
                 .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.RESOLVED)
+                .filter(item -> !isClosedClientChatUnansweredConcrete(item))
                 .filter(item -> !isConcreteSnoozed(item))
                 .sorted(Comparator
                         .comparing(ManagerDailyControlConcreteItem::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
                         .thenComparing(ManagerDailyControlConcreteItem::getId, Comparator.nullsLast(Long::compareTo)))
                 .map(item -> {
+                    if (reopenQueuedChatBindingRepair(item)) {
+                        dailyControlConcreteItemRepository.save(item);
+                    }
                     ManagerControlConcreteItemResponse fresh = freshByKey.get(item.getEntityKey());
                     return concreteItemResponse(
                             item,
@@ -2388,15 +2490,28 @@ public class ManagerControlService {
         return merged;
     }
 
+    private boolean isClosedClientChatUnansweredConcrete(ManagerDailyControlConcreteItem item) {
+        return item != null
+                && ENTITY_CLIENT_CHAT_UNANSWERED.equals(item.getEntityType())
+                && item.getStatus() != ManagerDailyControlItemStatus.OPEN;
+    }
+
     private List<ManagerControlConcreteItemResponse> syncConcreteExamples(
             ManagerDailyControlItem parentItem,
             List<ManagerControlConcreteItemResponse> examples
     ) {
-        if (parentItem == null || examples.isEmpty()) {
-            return examples;
+        if (parentItem == null) {
+            return List.of();
         }
         Map<String, ManagerDailyControlConcreteItem> existing = dailyControlConcreteItemRepository.findByParentItem(parentItem).stream()
                 .collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
+        Set<String> freshKeys = examples.stream()
+                .map(this::concreteEntityKey)
+                .collect(Collectors.toSet());
+        resolveStaleChatBindingConcreteItems(parentItem, existing, freshKeys);
+        if (examples.isEmpty()) {
+            return List.of();
+        }
         List<ManagerControlConcreteItemResponse> synced = new ArrayList<>();
         for (ManagerControlConcreteItemResponse example : examples) {
             String key = concreteEntityKey(example);
@@ -2411,6 +2526,9 @@ public class ManagerControlService {
                 created = true;
             }
             boolean changed = applyConcreteItemSnapshot(concreteItem, example);
+            if (reopenQueuedChatBindingRepair(concreteItem)) {
+                changed = true;
+            }
             if (reopenConcreteItemIfFollowUpDue(concreteItem)) {
                 changed = true;
             }
@@ -2439,6 +2557,34 @@ public class ManagerControlService {
             ));
         }
         return synced;
+    }
+
+    private void resolveStaleChatBindingConcreteItems(
+            ManagerDailyControlItem parentItem,
+            Map<String, ManagerDailyControlConcreteItem> existing,
+            Set<String> freshKeys
+    ) {
+        if (parentItem == null
+                || !"CHAT_BINDING_ISSUES".equals(parentItem.getReasonCode())
+                || existing == null
+                || existing.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (ManagerDailyControlConcreteItem item : existing.values()) {
+            if (item == null
+                    || item.getStatus() == ManagerDailyControlItemStatus.RESOLVED
+                    || freshKeys.contains(item.getEntityKey())) {
+                continue;
+            }
+            item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+            item.setActionType(ManagerDailyControlActionType.RESOLVED);
+            item.setComment("Группа привязана или проблема больше не актуальна");
+            item.setResolvedAt(now);
+            item.setFollowUpAt(null);
+            item.setLastManualTouchAt(null);
+            dailyControlConcreteItemRepository.save(item);
+        }
     }
 
     private boolean applyConcreteItemSnapshot(
@@ -2508,6 +2654,25 @@ public class ManagerControlService {
         return changed;
     }
 
+    private boolean reopenQueuedChatBindingRepair(ManagerDailyControlConcreteItem concreteItem) {
+        if (concreteItem == null
+                || concreteItem.getStatus() == ManagerDailyControlItemStatus.OPEN
+                || concreteItem.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
+            return false;
+        }
+        ManagerDailyControlItem parent = concreteItem.getParentItem();
+        if (parent == null || !"CHAT_BINDING_ISSUES".equals(parent.getReasonCode())) {
+            return false;
+        }
+        String comment = safe(concreteItem.getComment()).toLowerCase(Locale.ROOT);
+        if (!comment.contains("фоновая синхронизация whatsapp-групп")
+                && !comment.contains("повторная проверка через")) {
+            return false;
+        }
+        reopenConcreteItem(concreteItem);
+        return true;
+    }
+
     private boolean isResolvedConcreteItemHiddenForToday(ManagerDailyControlConcreteItem concreteItem) {
         if (concreteItem == null || concreteItem.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             return false;
@@ -2565,6 +2730,10 @@ public class ManagerControlService {
         String specialistName = safe(specialistNameOverride).isBlank()
                 ? specialistNameForConcreteItem(item)
                 : specialistNameOverride;
+        String targetUrl = item.getTargetUrl();
+        if (isChatBindingIssueConcrete(item)) {
+            targetUrl = companyBoardUrlByKeyword(item.getTitle(), targetUrl);
+        }
         return new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
@@ -2574,7 +2743,7 @@ public class ManagerControlService {
                 item.getStatusLabel(),
                 item.getAgeDays(),
                 item.getReason(),
-                item.getTargetUrl(),
+                targetUrl,
                 item.getOrderDetailsId(),
                 item.getChatUrl(),
                 item.getFollowUpAt(),
@@ -2599,6 +2768,21 @@ public class ManagerControlService {
                 null,
                 specialistName
         );
+    }
+
+    private String companyBoardUrlByKeyword(String keyword, String fallbackUrl) {
+        String normalizedKeyword = safe(keyword);
+        if (normalizedKeyword.isBlank() || normalizedKeyword.matches("\\d+")) {
+            return fallbackUrl;
+        }
+        List<String> params = new ArrayList<>();
+        params.add("section=companies");
+        params.add("status=" + encode("Все"));
+        params.add("pageNumber=0");
+        params.add("pageSize=10");
+        params.add("sortDirection=desc");
+        params.add("keyword=" + encode(normalizedKeyword));
+        return "/companies?" + String.join("&", params);
     }
 
     private ManagerControlConcreteItemResponse riskConcreteItemResponse(
@@ -2705,10 +2889,7 @@ public class ManagerControlService {
                 || item.getStatus() == ManagerDailyControlItemStatus.RESOLVED) {
             return false;
         }
-        item.setStatus(ManagerDailyControlItemStatus.OPEN);
-        item.setActionType(null);
-        item.setResolvedAt(null);
-        item.setFollowUpAt(null);
+        reopenConcreteItem(item);
         return true;
     }
 
@@ -2741,7 +2922,7 @@ public class ManagerControlService {
     }
 
     private List<ManagerControlConcreteItemResponse> overdueOrderExamples(Manager manager, String status, LocalDate today, int limit) {
-        LocalDate cutoff = today.minusDays(OVERDUE_NOTIFICATION_DAYS + 1L);
+        LocalDate cutoff = managerControlOrderCutoff(status, today);
         Set<Long> snoozedOrderIds = snoozedOrderIds(manager, today);
         List<OrderDTOList> orders = orderService.getManagerControlOverdueOrdersByManager(
                         manager,
@@ -2905,6 +3086,175 @@ public class ManagerControlService {
         return "";
     }
 
+    private List<ManagerControlConcreteItemResponse> chatBindingIssueExamples(Manager manager, LocalDate today, int limit) {
+        return orderRepository.findManagerControlChatBindingIssueOrdersByManager(
+                        manager,
+                        CommonInvoiceStatus.DISABLED,
+                        PageRequest.of(0, Math.max(1, limit))
+                ).stream()
+                .map(this::orderDtoFromOrder)
+                .map(order -> chatBindingIssueExample(order, today, manager))
+                .toList();
+    }
+
+    private OrderDTOList orderDtoFromOrder(Order order) {
+        Company company = order == null ? null : order.getCompany();
+        var filial = order == null ? null : order.getFilial();
+        var city = filial == null ? null : filial.getCity();
+        var status = order == null ? null : order.getStatus();
+        return OrderDTOList.builder()
+                .id(order == null ? null : order.getId())
+                .companyId(company == null ? null : company.getId())
+                .companyTitle(company == null ? null : company.getTitle())
+                .filialTitle(filial == null ? null : filial.getTitle())
+                .filialUrl(filial == null ? null : filial.getUrl())
+                .filialCity(city == null ? null : city.getTitle())
+                .status(status == null ? null : status.getTitle())
+                .sum(order == null ? null : order.getSum())
+                .companyUrlChat(company == null ? null : company.getUrlChat())
+                .companyTelephone(company == null ? null : company.getTelephone())
+                .companyComments(company == null ? null : company.getCommentsCompany())
+                .amount(order == null ? null : order.getAmount())
+                .counter(order == null ? null : order.getCounter())
+                .waitingForClient(order != null && order.isWaitingForClient())
+                .created(order == null ? null : order.getCreated())
+                .changed(order == null ? null : order.getChanged())
+                .payDay(order == null ? null : order.getPayDay())
+                .orderComments(order == null ? null : order.getZametka())
+                .groupId(company == null ? null : company.getGroupId())
+                .telegramGroupChatId(company == null ? null : company.getTelegramGroupChatId())
+                .telegramBotInviteUrl(company == null ? null : telegramGroupLinkService.buildInviteUrl(company))
+                .maxGroupChatId(company == null ? null : company.getMaxGroupChatId())
+                .maxBotInviteUrl(company == null ? null : maxGroupLinkService.buildInviteUrl(company))
+                .build();
+    }
+
+    private ManagerControlConcreteItemResponse chatBindingIssueExample(OrderDTOList order, LocalDate today, Manager manager) {
+        LocalDate changed = order.getChanged();
+        return new ManagerControlConcreteItemResponse(
+                null,
+                "ORDER",
+                order.getId(),
+                safe(order.getCompanyTitle()).isBlank() ? "Заказ #" + order.getId() : order.getCompanyTitle(),
+                orderSubtitle(order),
+                safe(order.getStatus()),
+                changed == null ? null : daysSince(changed, today),
+                chatBindingIssueReason(order),
+                companyBoardUrl(order),
+                order.getOrderDetailsId() == null ? null : order.getOrderDetailsId().toString(),
+                orderChatUrl(order),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    private String companyBoardUrl(OrderDTOList order) {
+        Long companyId = order == null ? null : order.getCompanyId();
+        String keyword = safe(order == null ? null : order.getCompanyTitle());
+        if (keyword.isBlank() && companyId != null) {
+            keyword = String.valueOf(companyId);
+        }
+        List<String> params = new ArrayList<>();
+        params.add("section=companies");
+        params.add("status=" + encode("Все"));
+        params.add("pageNumber=0");
+        params.add("pageSize=10");
+        params.add("sortDirection=desc");
+        if (!keyword.isBlank()) {
+            params.add("keyword=" + encode(keyword));
+        }
+        return "/companies?" + String.join("&", params);
+    }
+
+    private String chatBindingIssueReason(OrderDTOList order) {
+        String reason = chatBindingControlReason(order);
+        if (reason.isBlank()) {
+            reason = "чат компании не готов к отправке сообщений";
+        }
+        return "Почему в контроле: " + reason
+                + ". Автоответчик не сможет отправить сообщение клиенту. "
+                + chatBindingRepairInstructionLead(order)
+                + " "
+                + chatBindingManualInstruction(order);
+    }
+
+    private String chatBindingRepairInstructionLead(OrderDTOList order) {
+        String chat = safe(order == null ? null : order.getCompanyUrlChat()).toLowerCase(Locale.ROOT);
+        if (isWhatsAppChat(chat)) {
+            return "Нажмите «Починить»: система проверит уже известные WhatsApp-привязки по этой ссылке.";
+        }
+        if (isTelegramChat(chat)) {
+            return "Нажмите «Починить»: система перепроверит, не появилась ли Telegram-привязка, и закроет карточку, если бот уже добавлен.";
+        }
+        if (isMaxChat(chat)) {
+            return "Нажмите «Починить»: система перепроверит, не появилась ли MAX-привязка, и закроет карточку, если бот уже добавлен.";
+        }
+        return "Нажмите «Починить»: система перепроверит привязку чата.";
+    }
+
+    private boolean isChatBindingIssueConcrete(ManagerDailyControlConcreteItem item) {
+        if (item == null) {
+            return false;
+        }
+        ManagerDailyControlItem parent = item.getParentItem();
+        if (parent != null && "CHAT_BINDING_ISSUES".equals(parent.getReasonCode())) {
+            return true;
+        }
+        String reason = safe(item.getReason()).toLowerCase(Locale.ROOT);
+        return reason.contains("группа из ссылки") && reason.contains("не привязан");
+    }
+
+    private String chatBindingManualInstruction(OrderDTOList order) {
+        String chat = safe(order == null ? null : order.getCompanyUrlChat()).toLowerCase(Locale.ROOT);
+        if (isWhatsAppChat(chat)) {
+            return "Если починка не помогла: убедитесь, что подключенный WhatsApp-аккаунт состоит в этой группе, ссылка группы в карточке актуальна, затем отправьте любое сообщение в группу или запустите синхронизацию WhatsApp-групп вручную.";
+        }
+        if (isTelegramChat(chat)) {
+            String invite = safe(order == null ? null : order.getTelegramBotInviteUrl());
+            return "Если починка не помогла: откройте ссылку добавления Telegram-бота"
+                    + (invite.isBlank() ? "" : " " + invite)
+                    + ", выберите нужную группу и добавьте бота администратором. После добавления нажмите «Починить» еще раз.";
+        }
+        if (isMaxChat(chat)) {
+            String invite = safe(order == null ? null : order.getMaxBotInviteUrl());
+            return "Если починка не помогла: откройте ссылку привязки MAX"
+                    + (invite.isBlank() ? "" : " " + invite)
+                    + ", запустите бота, затем добавьте его администратором в нужную группу. После добавления нажмите «Починить» еще раз.";
+        }
+        return "Если починка не помогла: проверьте ссылку на чат компании, привяжите нужную группу к боту или временно отправьте сообщение клиенту вручную.";
+    }
+
+    private String manualChatBindingRepairInstruction(Company company) {
+        String problem = clientTextChatBindingProblem(company);
+        String chat = safe(company == null ? null : company.getUrlChat()).toLowerCase(Locale.ROOT);
+        if (isWhatsAppChat(chat)) {
+            return "WhatsApp-починка не нашла группу автоматически: " + problem
+                    + ". Проверьте, что подключенный WhatsApp-аккаунт состоит в группе из ссылки компании, ссылка не устарела, и отправьте любое сообщение в группу. Если ссылка не открывает нужную группу, замените ее в компании вручную.";
+        }
+        if (isTelegramChat(chat)) {
+            String invite = safe(telegramGroupLinkService.buildInviteUrl(company));
+            return "Telegram-группа пока не привязана: " + problem
+                    + ". Откройте ссылку добавления бота"
+                    + (invite.isBlank() ? "" : ": " + invite)
+                    + ". В Telegram выберите нужную группу и добавьте бота администратором. Если ссылка компании ведет не в эту группу или не открывается, замените ссылку вручную. После успешного добавления бота нажмите «Починить» еще раз.";
+        }
+        if (isMaxChat(chat)) {
+            String invite = safe(maxGroupLinkService.buildInviteUrl(company));
+            return "MAX-группа пока не привязана: " + problem
+                    + ". Откройте ссылку привязки"
+                    + (invite.isBlank() ? "" : ": " + invite)
+                    + ". Запустите бота, затем добавьте его администратором в нужную группу. Если ссылка компании ведет не в эту группу или не открывается, замените ссылку вручную. После успешного добавления бота нажмите «Починить» еще раз.";
+        }
+        return "Чат компании не удалось привязать автоматически: " + problem
+                + ". Проверьте ссылку на группу в компании и привяжите ее к боту вручную.";
+    }
+
     private boolean isWhatsAppChat(String chat) {
         return chat.startsWith("chat.whatsapp.com/")
                 || chat.startsWith("https://chat.whatsapp.com/")
@@ -2912,6 +3262,9 @@ public class ManagerControlService {
     }
 
     private boolean isTelegramChat(String chat) {
+        if (chat.contains("startgroup=")) {
+            return false;
+        }
         return chat.startsWith("t.me/")
                 || chat.startsWith("https://t.me/")
                 || chat.startsWith("http://t.me/")
@@ -4600,6 +4953,7 @@ public class ManagerControlService {
             case "OPEN_RISKS" -> "Есть открытые риски специалистов";
             case "REQUIRES_ATTENTION" -> "Есть заказы в статусе требует внимания";
             case "COMMON_INVOICES" -> "Есть общие счета с ошибкой или зависшим статусом";
+            case "CHAT_BINDING_ISSUES" -> "Есть заказы с непривязанной группой соцсети";
             case "WORKER_ACTIONS" -> "Есть задачи специалистов, которые надо разобрать";
             case "ORDERS_WORKLOAD" -> "Общий объем рабочих заказов";
             case "WORKER_WORKLOAD" -> "Нагрузка специалистов";
@@ -4643,6 +4997,9 @@ public class ManagerControlService {
         }
         if ("COMMON_INVOICES".equals(reason)) {
             return 75;
+        }
+        if ("CHAT_BINDING_ISSUES".equals(reason)) {
+            return 80;
         }
         if ("OPEN_RISKS".equals(reason) || "risk".equals(section)) {
             return 150;
@@ -5006,6 +5363,28 @@ public class ManagerControlService {
         return (today == null ? LocalDate.now() : today).minusDays(1);
     }
 
+    private LocalDate managerControlOrderCutoff(String status, LocalDate today) {
+        LocalDate base = today == null ? LocalDate.now() : today;
+        return base.minusDays(managerControlOrderThresholdDays(status));
+    }
+
+    private int managerControlOrderThresholdDays(String status) {
+        if (REVIEW_CHECK_AUTOMATION_STATUSES.contains(safe(status))) {
+            return reviewCheckIntervalDays();
+        }
+        return OVERDUE_NOTIFICATION_DAYS + 1;
+    }
+
+    private int reviewCheckIntervalDays() {
+        if (appSettingService == null) {
+            return ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS;
+        }
+        return Math.max(1, appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
+                ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+        ));
+    }
+
     private Map<String, Long> snoozedWorkerTaskCountsByType(Manager manager, LocalDate today) {
         return dailyControlRepository.findByControlDateAndManager(today, manager)
                 .map(control -> dailyControlConcreteItemRepository
@@ -5019,7 +5398,7 @@ public class ManagerControlService {
     private List<ManagerControlOverdueStatusResponse> overdueStatuses(Manager manager, LocalDate today) {
         LocalDate cutoff = today.minusDays(OVERDUE_NOTIFICATION_DAYS + 1L);
         Map<String, Long> snoozedByStatus = snoozedOrderCountsByStatus(manager, today);
-        return orderRepository.summarizeManagerControlOverdueOrdersByManager(
+        Map<String, ManagerControlOverdueStatusResponse> statusesByName = orderRepository.summarizeManagerControlOverdueOrdersByManager(
                         manager,
                         cutoff,
                         OVERDUE_IGNORED_STATUSES,
@@ -5046,10 +5425,70 @@ public class ManagerControlService {
                     );
                 })
                 .filter(status -> status.count() > 0)
+                .collect(Collectors.toMap(
+                        ManagerControlOverdueStatusResponse::status,
+                        Function.identity(),
+                        (left, right) -> right,
+                        LinkedHashMap::new
+                ));
+
+        addDynamicOverdueStatus(statusesByName, manager, "На проверке", today, snoozedByStatus);
+
+        return statusesByName.values().stream()
                 .sorted(Comparator
                         .comparingInt((ManagerControlOverdueStatusResponse status) -> orderStatusDisplayRank(status.status()))
                         .thenComparing(ManagerControlOverdueStatusResponse::status, String.CASE_INSENSITIVE_ORDER))
                 .toList();
+    }
+
+    private void addDynamicOverdueStatus(
+            Map<String, ManagerControlOverdueStatusResponse> statusesByName,
+            Manager manager,
+            String status,
+            LocalDate today,
+            Map<String, Long> snoozedByStatus
+    ) {
+        LocalDate cutoff = managerControlOrderCutoff(status, today);
+        Page<OrderDTOList> page = orderService.getManagerControlOverdueOrdersByManager(
+                manager,
+                "",
+                status,
+                cutoff,
+                OVERDUE_IGNORED_STATUSES,
+                COMMON_INVOICE_CONTROL_STATUSES,
+                PAYMENT_AUTOMATION_STATUSES,
+                PAYMENT_AUTOMATION_SCENARIOS,
+                REVIEW_CHECK_AUTOMATION_STATUSES,
+                REVIEW_CHECK_SCENARIOS,
+                DELIVERY_RETRY_AUTOMATION_STATUSES,
+                DELIVERY_RETRY_SCENARIOS,
+                CLIENT_TEXT_AUTOMATION_STATUSES,
+                CLIENT_TEXT_SCENARIOS,
+                ScheduledMessageStateStatus.ACTIVE,
+                ScheduledMessageStateStatus.DONE,
+                0,
+                1,
+                "desc"
+        );
+        if (page == null) {
+            return;
+        }
+        long adjustedCount = Math.max(0, page.getTotalElements() - snoozedByStatus.getOrDefault(status, 0L));
+        if (adjustedCount <= 0) {
+            statusesByName.remove(status);
+            return;
+        }
+        LocalDate oldestChanged = page.getContent().stream()
+                .map(OrderDTOList::getChanged)
+                .filter(Objects::nonNull)
+                .min(LocalDate::compareTo)
+                .orElse(cutoff);
+        statusesByName.put(status, new ManagerControlOverdueStatusResponse(
+                status,
+                adjustedCount,
+                daysSince(oldestChanged, today),
+                ordersUrl(manager, status)
+        ));
     }
 
     private Map<String, Long> snoozedOrderCountsByStatus(Manager manager, LocalDate today) {

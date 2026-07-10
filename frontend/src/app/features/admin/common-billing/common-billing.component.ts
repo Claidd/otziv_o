@@ -10,6 +10,7 @@ import {
   CommonInvoiceOrderResponse,
   CommonInvoiceSummaryResponse
 } from '../../../core/common-billing.api';
+import { AuthService } from '../../../core/auth.service';
 import { CompanyCardItem, ManagerApi, OrderCardItem } from '../../../core/manager.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
@@ -59,6 +60,7 @@ type DraftCompany = {
 export class CommonBillingComponent implements OnDestroy {
   private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly managerApi = inject(ManagerApi);
+  private readonly auth = inject(AuthService);
   private readonly toastService = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -242,6 +244,17 @@ export class CommonBillingComponent implements OnDestroy {
     );
   });
   readonly canMarkBan = computed(() => this.currentInvoice()?.status === 'UNPAID');
+  readonly canDeleteInvoiceWithOrders = computed(() => {
+    this.auth.tokenParsed();
+    const invoice = this.currentInvoice();
+    return Boolean(
+      invoice
+        && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])
+        && !['PAID', 'PARTIALLY_PAID'].includes(invoice.status)
+        && invoice.paidKopecks <= 0
+        && invoice.paidOrders <= 0
+    );
+  });
   readonly metrics = computed(() => {
     const accounts = this.accounts();
     const invoices = accounts.map((account) => account.currentInvoice).filter(Boolean) as CommonInvoiceSummaryResponse[];
@@ -548,6 +561,41 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
     this.invoiceAction(invoice.id, 'mark-ban', () => this.commonBillingApi.markBan(invoice.id), 'Общий счет переведен в Бан');
+  }
+
+  deleteInvoiceWithOrders(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || this.mutating() || !this.canDeleteInvoiceWithOrders()) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Удалить общий счет #${invoice.id} и все связанные с ним заказы (${invoice.totalOrders})? Действие нельзя отменить.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    this.mutating.set(`delete-invoice-${invoice.id}`);
+    this.commonBillingApi.deleteInvoiceWithOrders(invoice.id).subscribe({
+      next: () => {
+        this.invoiceDetails.set(null);
+        this.accounts.update((accounts) => accounts.map((account) =>
+          account.currentInvoice?.id === invoice.id ? { ...account, currentInvoice: null } : account
+        ));
+        this.mutating.set('');
+        this.toastService.success('Общий счет удален', 'Связанные заказы удалены штатной логикой');
+        if (this.managerInvoiceDetailMode) {
+          void this.router.navigate(['/orders']);
+          return;
+        }
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { invoiceId: null },
+          queryParamsHandling: 'merge'
+        }).then(() => this.load());
+      },
+      error: (err) => this.failMutation(err, 'Общий счет не удален')
+    });
   }
 
   retryAttention(): void {

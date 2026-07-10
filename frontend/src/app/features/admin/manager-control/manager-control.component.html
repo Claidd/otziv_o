@@ -697,11 +697,20 @@
                                 }
                               </span>
                               <span class="detail-example-field">
-                                <small>Отзыв</small>
-                                @if (controlCardReviewUrl(example); as reviewUrl) {
-                                  <a [href]="reviewUrl">{{ controlCardReview(example) }}</a>
+                                @if (isChatBindingIssue(example)) {
+                                  <small>Компания</small>
+                                  @if (controlCardCompanyUrl(example); as companyUrl) {
+                                    <a [href]="companyUrl">Перейти</a>
+                                  } @else {
+                                    <strong>-</strong>
+                                  }
                                 } @else {
-                                  <strong>{{ controlCardReview(example) }}</strong>
+                                  <small>Отзыв</small>
+                                  @if (controlCardReviewUrl(example); as reviewUrl) {
+                                    <a [href]="reviewUrl">{{ controlCardReview(example) }}</a>
+                                  } @else {
+                                    <strong>{{ controlCardReview(example) }}</strong>
+                                  }
                                 }
                               </span>
                             </span>
@@ -720,7 +729,7 @@
                               }
                               @if (!example.controlEntityId) {
                                 <em class="manager-action-note">
-                                  Карточка найдена свежей проверкой. Нажмите «Обновить кабинет», чтобы обработать ее кнопками.
+                                  Карточка найдена свежей проверкой и готовится автоматически. Через пару секунд действия станут доступны.
                                 </em>
                               }
                               @if (example.workerExplanation) {
@@ -786,6 +795,12 @@
                                   <span class="material-icons-sharp">send</span>
                                   Отправить
                                 </button>
+                              }
+                              @if (!canContactOrder(example) && isChatBindingIssue(example) && chatUrl(example)) {
+                                <a class="review-action client-action" [href]="chatUrl(example)" target="_blank" rel="noopener">
+                                  <span class="material-icons-sharp">forum</span>
+                                  Группа
+                                </a>
                               }
                               @if (canContactOrder(example)) {
                                 <small>{{ contactFollowUpHint(example) }}</small>

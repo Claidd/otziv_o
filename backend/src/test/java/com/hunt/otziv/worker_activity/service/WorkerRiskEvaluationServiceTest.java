@@ -416,6 +416,8 @@ class WorkerRiskEvaluationServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals("ACCOUNT_DEACTIVATION_WITHOUT_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(35, captor.getValue().getScore());
+        assertEquals("Блок аккаунта без попытки войти в него", captor.getValue().getTitle());
+        assertEquals(true, captor.getValue().getDetails().contains("система не увидела попытку входа"));
         assertEquals(true, captor.getValue().getDetails().contains("Место: Детали заказа, вход: Специалист -> Все, раздел: Все"));
     }
 

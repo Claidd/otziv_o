@@ -105,6 +105,8 @@ export interface ManagerControlConcreteItem {
   rollbackMessage?: string | null;
   canRollback?: boolean | null;
   specialistName?: string | null;
+  companyId?: number | null;
+  companyTitle?: string | null;
 }
 
 export interface ManagerControlManagerDetail {

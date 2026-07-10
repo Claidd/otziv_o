@@ -13,6 +13,7 @@ import com.hunt.otziv.c_companies.model.CompanyContactType;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.manager.dto.api.CompanyEditResponse;
 import com.hunt.otziv.manager.dto.api.CompanyNoteUpdateRequest;
@@ -32,8 +33,10 @@ import com.hunt.otziv.p_products.services.service.OrderCreationService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -61,6 +64,7 @@ import java.util.Set;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 @RequestMapping("/api/manager")
 public class ApiManagerCompanyController {
 
@@ -73,6 +77,8 @@ public class ApiManagerCompanyController {
     private final ManagerBoardEditAssembler managerBoardEditAssembler;
     private final ManagerPermissionService managerPermissionService;
     private final ManagerAccessService managerAccessService;
+    private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
 
     @PostMapping("/companies/{companyId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -160,9 +166,13 @@ public class ApiManagerCompanyController {
     ) {
         managerAccessService.requireCompanyAccess(companyId, authentication);
         CompanyDTO current = companyService.getCompaniesDTOById(companyId);
+        String previousChatUrl = blankToNull(current == null ? null : current.getUrlChat());
+        String nextChatUrl = blankToNull(request == null ? null : request.urlChat());
+        boolean chatUrlChanged = !Objects.equals(previousChatUrl, nextChatUrl);
 
         try {
             companyService.updateCompany(toCompanyUpdateDto(current, request, companyId, authentication), toWorkerDTO(request), companyId);
+            syncChatBindingAfterCompanySave(companyId, nextChatUrl, chatUrlChanged);
         } catch (DataIntegrityViolationException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Телефон, email или филиал уже используется", exception);
         } catch (RuntimeException exception) {
@@ -170,6 +180,42 @@ public class ApiManagerCompanyController {
         }
 
         return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
+    }
+
+    private void syncChatBindingAfterCompanySave(Long companyId, String chatUrl, boolean chatUrlChanged) {
+        if (!chatUrlChanged || isBlank(chatUrl)) {
+            return;
+        }
+        try {
+            if (isWhatsAppChatUrl(chatUrl)) {
+                whatsAppGroupLinkSyncService.runNow();
+            } else if (isTelegramChatUrl(chatUrl) || isMaxChatUrl(chatUrl)) {
+                sharedChatLinkSyncService.syncSharedChatIds();
+            }
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Chat binding sync after company save failed companyId={} chatUrl={}: {}",
+                    companyId,
+                    chatUrl,
+                    exception.getMessage(),
+                    exception
+            );
+        }
+    }
+
+    private boolean isWhatsAppChatUrl(String value) {
+        String normalized = normalize(value).toLowerCase(Locale.ROOT);
+        return normalized.contains("chat.whatsapp.com/");
+    }
+
+    private boolean isTelegramChatUrl(String value) {
+        String normalized = normalize(value).toLowerCase(Locale.ROOT);
+        return normalized.contains("t.me/") || normalized.contains("telegram.me/");
+    }
+
+    private boolean isMaxChatUrl(String value) {
+        String normalized = normalize(value).toLowerCase(Locale.ROOT);
+        return normalized.contains("max.ru/") || normalized.contains("max.com/");
     }
 
     @PutMapping("/companies/{companyId}/note")

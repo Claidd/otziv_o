@@ -79,6 +79,24 @@ class SharedChatLinkSyncServiceTest {
     }
 
     @Test
+    void ignoresTelegramBotStartGroupLinkAsCompanyChatLink() {
+        Company source = company(1L, "22 философа", "https://t.me/twenty_two_philosophers");
+        source.setTelegramGroupChatId(-10022L);
+        Company botInvite = company(285L, "GsbMoto", "https://t.me/O_Company_Bot?startgroup=c285_abcd");
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, botInvite));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(botInvite.getTelegramGroupChatId());
+        assertEquals(2, response.scannedCompanies());
+        assertEquals(0, response.sharedChatGroups());
+        assertEquals(0, response.updatedCompanies());
+        assertEquals(0, response.telegramLinked());
+        verify(companyRepository, never()).saveAll(any());
+    }
+
+    @Test
     void copiesOnlyChatIdMatchingMessengerInCurrentChatLink() {
         Company source = company(1L, "Source", "https://t.me/shared_owner");
         source.setGroupId("120363123@g.us");

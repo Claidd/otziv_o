@@ -12,6 +12,7 @@ param(
     [string]$EnvFile = ".env.prod",
     [string]$RemoteEnvFile = ".env.prod",
     [switch]$DockerLogin,
+    [switch]$SkipBuildPush,
     [switch]$SkipEnvUpload,
     [switch]$NoBuildCache,
     [switch]$Help
@@ -34,6 +35,7 @@ Useful options:
   -EnvFile .env.prod             Local env file uploaded to VPS as .env.prod.
   -RemoteEnvFile .env            Env file name used on the VPS.
   -DockerLogin                   Run local docker login before build and push.
+  -SkipBuildPush                 Skip local docker build/push and deploy already pushed APP_IMAGE/WEB_IMAGE tag.
   -SkipEnvUpload                 Keep VPS env file and only update APP_IMAGE/WEB_IMAGE in it.
   -NoBuildCache                  Build images without Docker cache.
 '@ | Write-Host
@@ -49,6 +51,50 @@ function Invoke-External {
     if ($LASTEXITCODE -ne 0) {
         throw "Command failed: $FilePath $($Arguments -join ' ')"
     }
+}
+
+function Invoke-ExternalWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [int]$Attempts = 3,
+        [int]$DelaySeconds = 5
+    )
+
+    $lastError = $null
+    for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+        try {
+            Invoke-External -FilePath $FilePath -Arguments $Arguments
+            return
+        } catch {
+            $lastError = $_
+            if ($attempt -ge $Attempts) {
+                break
+            }
+            Write-Warning "Command failed on attempt ${attempt}/${Attempts}: $FilePath $($Arguments -join ' '). Retrying in ${DelaySeconds}s..."
+            Start-Sleep -Seconds $DelaySeconds
+        }
+    }
+
+    throw $lastError
+}
+
+function Copy-DeployBundle {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$ScpArgs,
+        [Parameter(Mandatory = $true)][string]$BundlePath,
+        [Parameter(Mandatory = $true)][string]$Remote,
+        [Parameter(Mandatory = $true)][string]$RemoteBundle
+    )
+
+    try {
+        Invoke-ExternalWithRetry -FilePath "scp" -Arguments ($ScpArgs + @($BundlePath, "${Remote}:$RemoteBundle")) -Attempts 3 -DelaySeconds 10
+        return
+    } catch {
+        Write-Warning "Regular scp upload failed. Trying legacy scp protocol (-O)."
+    }
+
+    Invoke-ExternalWithRetry -FilePath "scp" -Arguments (@("-O") + $ScpArgs + @($BundlePath, "${Remote}:$RemoteBundle")) -Attempts 2 -DelaySeconds 10
 }
 
 function ConvertTo-BashSingleQuoted {
@@ -201,12 +247,16 @@ if ($DockerLogin) {
 $env:APP_IMAGE = $appImage
 $env:WEB_IMAGE = $webImage
 
-$buildArgs = @("compose", "-f", $buildCompose, "build")
-if ($NoBuildCache) {
-    $buildArgs += "--no-cache"
+if (-not $SkipBuildPush) {
+    $buildArgs = @("compose", "-f", $buildCompose, "build")
+    if ($NoBuildCache) {
+        $buildArgs += "--no-cache"
+    }
+    Invoke-External -FilePath "docker" -Arguments $buildArgs
+    Invoke-External -FilePath "docker" -Arguments @("compose", "-f", $buildCompose, "push")
+} else {
+    Write-Host "Skipping docker build/push; deploying already published images."
 }
-Invoke-External -FilePath "docker" -Arguments $buildArgs
-Invoke-External -FilePath "docker" -Arguments @("compose", "-f", $buildCompose, "push")
 
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 try {
@@ -261,6 +311,9 @@ try {
         $scpArgs += @("-i", $SshKey)
     }
     $sshKeepAliveArgs = @(
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=15",
+        "-o", "ConnectionAttempts=2",
         "-o", "StrictHostKeyChecking=accept-new",
         "-o", "ServerAliveInterval=20",
         "-o", "ServerAliveCountMax=12",
@@ -271,7 +324,7 @@ try {
 
     $mkdirScript = "mkdir -p $(ConvertTo-BashSingleQuoted $VpsPath)"
     Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $mkdirScript))
-    Invoke-External -FilePath "scp" -Arguments ($scpArgs + @($bundlePath, "${remote}:$remoteBundle"))
+    Copy-DeployBundle -ScpArgs $scpArgs -BundlePath $bundlePath -Remote $remote -RemoteBundle $remoteBundle
 
     $remotePathQuoted = ConvertTo-BashSingleQuoted $VpsPath
     $remoteBundleQuoted = ConvertTo-BashSingleQuoted $remoteBundle

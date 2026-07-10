@@ -264,6 +264,143 @@ export interface TbankPaymentStatus {
   failUrl: string;
 }
 
+export interface PublicPaymentLink {
+  token: string;
+  orderId?: number | null;
+  companyTitle: string;
+  filialTitle: string;
+  serviceTitle: string;
+  amount: number;
+  amountKopecks: number;
+  description: string;
+  payerEmail?: string | null;
+  status: string;
+  paymentMethod?: PaymentMethod;
+  expiresAt: string;
+  payable: boolean;
+  paymentPageMode?: TbankPaymentPageMode;
+  tpayEnabled?: boolean;
+  sberpayEnabled?: boolean;
+  mirpayEnabled?: boolean;
+  manualPaymentType?: ManualPaymentType | string | null;
+  manualPhone?: string | null;
+  manualRecipientName?: string | null;
+  manualPaymentUrl?: string | null;
+  manualPaymentButtonLabel?: string | null;
+  manualComment?: string | null;
+  receiptStatus?: PaymentReceiptStatus | string | null;
+}
+
+export interface PublicPaymentInitResponse {
+  paymentUrl: string;
+  paymentId: string;
+  status: string;
+  method?: PaymentMethod;
+  qrPayload?: string | null;
+  qrImage?: string | null;
+}
+
+export interface PublicCommonInvoiceOrder {
+  orderId: number;
+  companyId: number;
+  companyTitle: string;
+  filialTitle?: string | null;
+  orderStatus: string;
+  originalOrderStatus?: string | null;
+  amount: number;
+  amountKopecks: number;
+  ready: boolean;
+  paid: boolean;
+  unpaid: boolean;
+  detachable?: boolean;
+  paidAt?: string | null;
+}
+
+export interface PublicCommonInvoice {
+  token: string;
+  title: string;
+  accountName: string;
+  status: string;
+  amount: number;
+  paid: number;
+  remaining: number;
+  amountKopecks: number;
+  paidKopecks: number;
+  remainingKopecks: number;
+  payable: boolean;
+  orders: PublicCommonInvoiceOrder[];
+}
+
+export interface PublicSbpBank {
+  bankId: string;
+  nspkBankId?: string | null;
+  name: string;
+  logoUrl?: string | null;
+  order?: number | null;
+  featured: boolean;
+}
+
+export interface RegisterClientRequest {
+  username: string;
+  email: string;
+  fio?: string;
+  phoneNumber?: string;
+  password: string;
+  matchingPassword: string;
+}
+
+export interface PerformerCityOption {
+  id: number;
+  cityTitle: string;
+}
+
+export interface RegisterPerformerRequest {
+  phoneNumber: string;
+  cityId: number;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER' | 'NOT_SPECIFIED';
+  fio: string;
+  telegramUsername?: string;
+  registeredSource?: string;
+}
+
+export interface RegisterPerformerResponse {
+  userId: number;
+  performerId: number;
+  username: string;
+  temporaryPassword: string;
+  telegramLinkToken: string;
+  telegramLinkUrl: string;
+  status: string;
+}
+
+export interface LegacyUserMigrationRequest {
+  username: string;
+  password: string;
+}
+
+export interface ProvisionedUserResponse {
+  id: number;
+  keycloakId: string;
+  username: string;
+  email?: string;
+  fio?: string;
+  phoneNumber?: string;
+  coefficient?: number;
+  active: boolean;
+  roles: string[];
+}
+
+export interface WhatsAppClientStatus {
+  clientId: string;
+  configured: boolean;
+  ready: boolean;
+  qrDataUrl?: string | null;
+  message?: string | null;
+  lastError?: string | null;
+  lastQrAt?: string | null;
+  lastReadyAt?: string | null;
+}
+
 export interface TbankRuntimeSettings {
   runtimeMode: TbankRuntimeMode;
   testMode: boolean;
@@ -483,6 +620,9 @@ export interface CompanyEditPayload {
   id: number;
   title: string;
   urlChat: string;
+  groupId?: string | null;
+  telegramGroupChatId?: number | null;
+  maxGroupChatId?: number | null;
   urlSite: string;
   telephone: string;
   city: string;
@@ -1060,6 +1200,44 @@ export type WorkerRiskResolutionAction =
   | 'VIOLATION_CONFIRMED'
   | 'WORKER_WARNED';
 
+export interface ManagerPerformanceScore {
+  managerId: number;
+  managerUserId?: number | null;
+  performanceScore: number;
+  loadAdjustedPerformanceScore: number;
+  grade: string;
+  workloadIndex: number;
+  workloadLevel: 'LOW' | 'NORMAL' | 'HIGH' | 'EXTREME' | string;
+  workloadTotal: number;
+  workloadOrder: number;
+  workloadWorker: number;
+  actionTotal: number;
+  incomingProblemCount: number;
+  backlogCount: number;
+  avgDailyWorkload: number;
+  avgDailyOverdue: number;
+  openCount: number;
+  handledCount: number;
+  problemSlaRate: number;
+  clientSlaRate: number;
+  overdueRate: number;
+  averageOverdueAgeDays: number;
+  clientReplyMedianMinutes: number;
+  clientReplyP90Minutes: number;
+  riskResolutionAvgHours: number;
+  reopenRate: number;
+  controlAcceptedCount: number;
+  controlClosedCount: number;
+  fastClickCount: number;
+  problemSpeedScore: number;
+  clientResponseScore: number;
+  overdueControlScore: number;
+  specialistRiskScore: number;
+  riskQualityScore: number;
+  controlDisciplineScore: number;
+  stabilityScore: number;
+}
+
 export interface WorkerRiskIncident {
   id: number;
   createdAt: string;
@@ -1136,6 +1314,8 @@ export interface ManagerControlConcreteItem {
   controlEntityId?: number | null;
   type: 'ORDER' | 'RISK' | string;
   entityId?: number | null;
+  companyId?: number | null;
+  companyTitle?: string | null;
   title: string;
   subtitle?: string | null;
   status?: string | null;
@@ -1292,7 +1472,7 @@ export interface ManagerControlManager {
   workerSections: ManagerControlSection[];
   overdueStatuses: ManagerControlOverdueStatus[];
   workerExplanationStats: ManagerControlWorkerExplanationStats[];
-  managerPerformance?: unknown;
+  managerPerformance?: ManagerPerformanceScore | null;
 }
 
 export interface ManagerControlSummary {
@@ -3115,11 +3295,12 @@ export class ApiService {
   setManagerWorkerRiskIncidentResolution(
     incidentId: number,
     action: WorkerRiskResolutionAction,
-    penaltyPoints?: number
+    penaltyPoints?: number,
+    comment?: string | null
   ): Observable<WorkerRiskIncident> {
     return this.http.post<WorkerRiskIncident>(
       this.apiUrl(`/api/manager/worker-risk/incidents/${incidentId}/resolution`),
-      { action, penaltyPoints }
+      { action, penaltyPoints, comment }
     );
   }
 
@@ -3495,6 +3676,12 @@ export class ApiService {
     );
   }
 
+  deleteCommonInvoiceWithOrders(invoiceId: number): Observable<void> {
+    return this.http.delete<void>(
+      this.apiUrl(`/api/common-billing/invoices/${invoiceId}`)
+    );
+  }
+
   getReviewCheck(orderDetailId: string): Observable<ReviewCheckPayload> {
     return this.http.get<ReviewCheckPayload>(this.apiUrl(`/api/review-check/${orderDetailId}`));
   }
@@ -3614,12 +3801,12 @@ export class ApiService {
     return this.http.put<void>(this.apiUrl(`/api/worker/orders/${orderId}/company-note`), { companyComments });
   }
 
-  changeWorkerReviewBot(reviewId: number): Observable<BotChangeResponse> {
-    return this.http.post<BotChangeResponse>(this.apiUrl(`/api/worker/reviews/${reviewId}/change-bot`), {});
+  changeWorkerReviewBot(reviewId: number, source?: WorkerActivitySource): Observable<BotChangeResponse> {
+    return this.http.post<BotChangeResponse>(this.apiUrl(`/api/worker/reviews/${reviewId}/change-bot`), source ?? {});
   }
 
-  deactivateWorkerReviewBot(reviewId: number, botId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`), {});
+  deactivateWorkerReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<void> {
+    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`), source ?? {});
   }
 
   publishWorkerReview(reviewId: number): Observable<void> {
@@ -3850,6 +4037,87 @@ export class ApiService {
 
   getTbankStatus(): Observable<TbankPaymentStatus> {
     return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/payments/public/tbank-status'));
+  }
+
+  getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {
+    return this.http.get<PublicPaymentLink>(this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}`));
+  }
+
+  getPublicCommonInvoice(token: string): Observable<PublicCommonInvoice> {
+    return this.http.get<PublicCommonInvoice>(this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}`));
+  }
+
+  initPublicPayment(
+    token: string,
+    email: string,
+    offerConsent: boolean,
+    privacyConsent: boolean,
+    receiptConsent: boolean
+  ): Observable<PublicPaymentInitResponse> {
+    return this.http.post<PublicPaymentInitResponse>(
+      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/init`),
+      { email, offerConsent, privacyConsent, receiptConsent }
+    );
+  }
+
+  initPublicCommonInvoicePayment(
+    token: string,
+    email: string,
+    offerConsent: boolean,
+    privacyConsent: boolean,
+    receiptConsent: boolean
+  ): Observable<PublicPaymentInitResponse> {
+    return this.http.post<PublicPaymentInitResponse>(
+      this.apiUrl(`/api/payments/public/group/${encodeURIComponent(token)}/init`),
+      { email, offerConsent, privacyConsent, receiptConsent }
+    );
+  }
+
+  initPublicSbpPayment(
+    token: string,
+    email: string,
+    offerConsent: boolean,
+    privacyConsent: boolean,
+    receiptConsent: boolean,
+    sbpBankId?: string | null
+  ): Observable<PublicPaymentInitResponse> {
+    return this.http.post<PublicPaymentInitResponse>(
+      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/sbp`),
+      { email, offerConsent, privacyConsent, receiptConsent, sbpBankId }
+    );
+  }
+
+  getPublicSbpBanks(token: string): Observable<PublicSbpBank[]> {
+    return this.http.get<PublicSbpBank[]>(
+      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/sbp/banks`)
+    );
+  }
+
+  reportPublicManualPayment(token: string): Observable<PublicPaymentLink> {
+    return this.http.post<PublicPaymentLink>(
+      this.apiUrl(`/api/payments/public/${encodeURIComponent(token)}/manual-paid`),
+      {}
+    );
+  }
+
+  registerClient(request: RegisterClientRequest): Observable<ProvisionedUserResponse> {
+    return this.http.post<ProvisionedUserResponse>(this.apiUrl('/api/auth/register'), request);
+  }
+
+  getPerformerCities(): Observable<PerformerCityOption[]> {
+    return this.http.get<PerformerCityOption[]>(this.apiUrl('/api/auth/performer-cities'));
+  }
+
+  registerPerformer(request: RegisterPerformerRequest): Observable<RegisterPerformerResponse> {
+    return this.http.post<RegisterPerformerResponse>(this.apiUrl('/api/auth/register-performer'), request);
+  }
+
+  migrateLegacyUser(request: LegacyUserMigrationRequest): Observable<ProvisionedUserResponse> {
+    return this.http.post<ProvisionedUserResponse>(this.apiUrl('/api/auth/legacy-migration'), request);
+  }
+
+  getWhatsAppBindingStatus(): Observable<WhatsAppClientStatus> {
+    return this.http.get<WhatsAppClientStatus>(this.apiUrl('/api/cabinet/whatsapp'));
   }
 
   createManagerOrderPaymentLink(orderId: number): Observable<ManagerPaymentLinkResponse> {

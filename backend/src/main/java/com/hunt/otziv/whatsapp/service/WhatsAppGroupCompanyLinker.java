@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
 public class WhatsAppGroupCompanyLinker {
 
     private static final Pattern WHATSAPP_INVITE_URL = Pattern.compile(
-            "(?i)^https?://chat\\.whatsapp\\.com/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$"
+            "(?i)^(?:https?://)?chat\\.whatsapp\\.com/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$"
     );
     private static final Pattern REVIEWS_SUFFIX = Pattern.compile(
             "(?iu)(?:[\\s.\\-–—]*отзывы\\s*)+$"
@@ -35,6 +35,9 @@ public class WhatsAppGroupCompanyLinker {
     );
     private static final Pattern NON_TITLE_CHARS = Pattern.compile("[^\\p{IsAlphabetic}\\p{IsDigit}\\s]+");
     private static final Pattern SPACES = Pattern.compile("\\s+");
+    private static final Pattern NUMBER_MARKER = Pattern.compile("(?iu)\\b(?:no|n)\\s+(?=\\d)");
+    private static final Pattern LEADING_ZERO_NUMBER = Pattern.compile("\\b0+(\\d+)\\b");
+    private static final Pattern LETTER_DIGIT_BOUNDARY = Pattern.compile("(?U)(?<=\\p{Alpha})(?=\\p{Digit})|(?<=\\p{Digit})(?=\\p{Alpha})");
     private static final Set<String> SERVICE_PREFIXES = Set.of(
             "ку", "ви", "нс", "л", "ал", "м", "аб", "н", "ю", "ож", "вн",
             "юф", "ни", "ар", "вр", "ки", "кк", "лу", "мр", "п", "у", "и", "в", "б", "к"
@@ -263,7 +266,134 @@ public class WhatsAppGroupCompanyLinker {
                 return matches;
             }
         }
+        for (String titleCandidate : titleCandidates) {
+            List<Company> matches = uniquePrefixMatches(companiesByTitle, titleCandidate);
+            if (!matches.isEmpty()) {
+                return matches;
+            }
+        }
+        for (String titleCandidate : titleCandidates) {
+            List<Company> matches = uniqueContainedTitleMatches(companiesByTitle, titleCandidate);
+            if (!matches.isEmpty()) {
+                return matches;
+            }
+        }
+        for (String titleCandidate : titleCandidates) {
+            List<Company> matches = uniqueFuzzyMatches(companiesByTitle, titleCandidate);
+            if (!matches.isEmpty()) {
+                return matches;
+            }
+        }
         return List.of();
+    }
+
+    private static List<Company> uniquePrefixMatches(Map<String, List<Company>> companiesByTitle, String titleCandidate) {
+        if (!hasText(titleCandidate)) {
+            return List.of();
+        }
+
+        List<Company> result = new ArrayList<>();
+        String prefix = titleCandidate + " ";
+        for (Map.Entry<String, List<Company>> entry : companiesByTitle.entrySet()) {
+            String companyTitle = entry.getKey();
+            if (!companyTitle.startsWith(prefix)) {
+                continue;
+            }
+            result.addAll(entry.getValue());
+            if (result.size() > 1) {
+                return List.of();
+            }
+        }
+        return result.size() == 1 ? result : List.of();
+    }
+
+    private static List<Company> uniqueContainedTitleMatches(
+            Map<String, List<Company>> companiesByTitle,
+            String titleCandidate
+    ) {
+        if (!hasText(titleCandidate)) {
+            return List.of();
+        }
+
+        List<Company> result = new ArrayList<>();
+        for (Map.Entry<String, List<Company>> entry : companiesByTitle.entrySet()) {
+            String companyTitle = entry.getKey();
+            if (!isContainedTitleMatch(titleCandidate, companyTitle)) {
+                continue;
+            }
+            result.addAll(entry.getValue());
+            if (result.size() > 1) {
+                return List.of();
+            }
+        }
+        return result.size() == 1 ? result : List.of();
+    }
+
+    private static boolean isContainedTitleMatch(String groupTitle, String companyTitle) {
+        if (!hasText(groupTitle) || !hasText(companyTitle)) {
+            return false;
+        }
+        if (companyTitle.length() < 4) {
+            return false;
+        }
+        return (" " + groupTitle + " ").contains(" " + companyTitle + " ");
+    }
+
+    private static List<Company> uniqueFuzzyMatches(Map<String, List<Company>> companiesByTitle, String titleCandidate) {
+        if (!hasText(titleCandidate) || titleCandidate.length() < 6) {
+            return List.of();
+        }
+
+        List<Company> result = new ArrayList<>();
+        for (Map.Entry<String, List<Company>> entry : companiesByTitle.entrySet()) {
+            String companyTitle = entry.getKey();
+            if (!isSmallTypo(titleCandidate, companyTitle)) {
+                continue;
+            }
+            result.addAll(entry.getValue());
+            if (result.size() > 1) {
+                return List.of();
+            }
+        }
+        return result.size() == 1 ? result : List.of();
+    }
+
+    private static boolean isSmallTypo(String first, String second) {
+        if (!hasText(first) || !hasText(second)) {
+            return false;
+        }
+        int maxLength = Math.max(first.length(), second.length());
+        if (maxLength < 6 || Math.abs(first.length() - second.length()) > 1) {
+            return false;
+        }
+        return levenshteinAtMost(first, second, maxLength >= 10 ? 2 : 1);
+    }
+
+    private static boolean levenshteinAtMost(String first, String second, int threshold) {
+        int[] previous = new int[second.length() + 1];
+        int[] current = new int[second.length() + 1];
+        for (int j = 0; j <= second.length(); j++) {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= first.length(); i++) {
+            current[0] = i;
+            int rowMin = current[0];
+            for (int j = 1; j <= second.length(); j++) {
+                int cost = first.charAt(i - 1) == second.charAt(j - 1) ? 0 : 1;
+                current[j] = Math.min(
+                        Math.min(current[j - 1] + 1, previous[j] + 1),
+                        previous[j - 1] + cost
+                );
+                rowMin = Math.min(rowMin, current[j]);
+            }
+            if (rowMin > threshold) {
+                return false;
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[second.length()] <= threshold;
     }
 
     private static List<String> groupTitlePartCandidates(String rawPart) {
@@ -311,9 +441,22 @@ public class WhatsAppGroupCompanyLinker {
                 .replace('ё', 'е');
         normalized = REVIEWS_SUFFIX.matcher(normalized).replaceAll("");
         normalized = NON_TITLE_CHARS.matcher(normalized).replaceAll(" ");
+        normalized = LETTER_DIGIT_BOUNDARY.matcher(normalized).replaceAll(" ");
         normalized = SPACES.matcher(normalized).replaceAll(" ").trim();
         normalized = TRAILING_SERVICE_WORDS.matcher(normalized).replaceAll("");
+        normalized = NUMBER_MARKER.matcher(normalized).replaceAll("");
+        normalized = normalizeNumberTokens(normalized);
         return SPACES.matcher(normalized).replaceAll(" ").trim();
+    }
+
+    private static String normalizeNumberTokens(String value) {
+        Matcher matcher = LEADING_ZERO_NUMBER.matcher(value);
+        StringBuffer result = new StringBuffer();
+        while (matcher.find()) {
+            matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(1)));
+        }
+        matcher.appendTail(result);
+        return result.toString();
     }
 
     private static boolean hasText(String value) {

@@ -27,10 +27,10 @@ public class MaxGroupLinkService {
     private static final String PAYLOAD_PREFIX = "c";
     private static final int SIGNATURE_LENGTH = 12;
     private static final Pattern MAX_WEB_CHAT_URL = Pattern.compile(
-            "(?i)^https?://web\\.max\\.ru/(-?\\d{5,})(?:[/?#].*)?$"
+            "(?i)^(?:https?://)?web\\.max\\.ru/(-?\\d{5,})(?:[/?#].*)?$"
     );
     private static final Pattern MAX_JOIN_URL = Pattern.compile(
-            "(?i)^https?://(?:web\\.)?max\\.ru/join/([A-Za-z0-9_-]{8,})(?:[/?#].*)?$"
+            "(?i)^(?:https?://)?(?:web\\.)?max\\.ru/join/([A-Za-z0-9_-]{8,})(?:[/?#].*)?$"
     );
 
     private final CompanyRepository companyRepository;

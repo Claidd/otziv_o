@@ -185,7 +185,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     </button>
                   </section>
 
-                  <div class="bot-line" [class.empty]="hasUnavailableBot(review)" [class.compact]="hasCompactBotPrompt(review)">
+                  <div class="bot-line" [class.empty]="hasUnavailableBot(review)" [class.template]="reviewHasTemplateBot(review)" [class.compact]="hasCompactBotPrompt(review)">
                     {{ botLabel(review) }}
                   </div>
 
@@ -284,7 +284,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                       [title]="reviewPublishActionTitle(review)"
                       (click)="publishReview(review)"
                     >
-                      {{ review.publish ? 'ОПУБЛИКОВАНО' : isMutating('publish-' + review.id) ? 'ПУБЛИКУЮ...' : 'ОПУБЛИКОВАТЬ' }}
+                      {{ reviewPublishActionLabel(review) }}
                     </button>
                   }
 
@@ -1712,6 +1712,12 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
       color: var(--otziv-danger);
     }
 
+    .bot-line.template {
+      border-color: var(--otziv-tone-wait-border);
+      color: #8a6416;
+      background: var(--otziv-tone-wait-surface);
+    }
+
     .bot-line.compact {
       overflow: hidden;
       padding-inline: 0.35rem;
@@ -3023,7 +3029,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     };
 
     if (this.reviewCredentialActionDisabled(review, kind)) {
-      this.error.set('В этих деталях заказа логин и пароль недоступны.');
+      this.error.set(this.reviewCredentialActionTitle(review, kind));
       return;
     }
 
@@ -3115,6 +3121,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.reviewNeedsAccountRepair(review)) {
+      this.error.set(this.accountRepairTitle(review));
+      return;
+    }
+
     if (this.reviewPublishActionLocked(review)) {
       this.error.set(this.reviewPublishActionTitle(review));
       return;
@@ -3139,17 +3150,33 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   reviewCredentialActionDisabled(review: OrderReviewItem, kind: ReviewCopyKind): boolean {
-    return this.restrictedWorkerOrderDetailsMode() && (kind === 'botLogin' || kind === 'botPassword');
+    if (kind !== 'botLogin' && kind !== 'botPassword') {
+      return false;
+    }
+
+    return this.reviewNeedsAccountRepair(review) || this.restrictedWorkerOrderDetailsMode();
   }
 
   reviewCredentialActionTitle(review: OrderReviewItem, kind: ReviewCopyKind): string {
-    return this.reviewCredentialActionDisabled(review, kind)
+    if (kind !== 'botLogin' && kind !== 'botPassword') {
+      return 'Скопировать';
+    }
+
+    if (this.reviewNeedsAccountRepair(review)) {
+      return this.accountRepairTitle(review);
+    }
+
+    return this.restrictedWorkerOrderDetailsMode()
       ? 'В этих деталях заказа логин и пароль недоступны'
       : 'Скопировать';
   }
 
   reviewPublishActionLocked(review: OrderReviewItem): boolean {
     if (!this.openedFromWorkerAll() || review.publish) {
+      return false;
+    }
+
+    if (this.reviewNeedsAccountRepair(review)) {
       return false;
     }
 
@@ -3162,6 +3189,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   reviewPublishActionTitle(review: OrderReviewItem): string {
+    if (!review.publish && this.reviewNeedsAccountRepair(review)) {
+      return this.accountRepairTitle(review);
+    }
+
     if (!this.openedFromWorkerAll() || review.publish) {
       return 'Действие с отзывом';
     }
@@ -3183,6 +3214,22 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     return left > 0
       ? `После копирования логина и пароля подождите еще ${left} сек.`
       : 'Действие с отзывом';
+  }
+
+  reviewPublishActionLabel(review: OrderReviewItem): string {
+    if (review.publish) {
+      return 'ОПУБЛИКОВАНО';
+    }
+
+    if (this.isMutating('publish-' + review.id)) {
+      return 'ПУБЛИКУЮ...';
+    }
+
+    if (!this.reviewNeedsAccountRepair(review)) {
+      return 'ОПУБЛИКОВАТЬ';
+    }
+
+    return this.reviewHasTemplateBot(review) ? 'НУЖЕН ВЫГУЛ' : 'СМЕНИТЕ АККАУНТ';
   }
 
   private async logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): Promise<boolean> {
@@ -3900,7 +3947,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   botLabel(review: OrderReviewItem): string {
-    if (this.hasUnavailableBot(review)) {
+    if (this.hasUnavailableBot(review) && this.isPlaceholderBotName(this.normalizedBotFio(review))) {
       return 'нет доступных аккаунтов';
     }
 
@@ -3925,10 +3972,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return true;
     }
 
-    const bot = (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    const bot = this.normalizedBotFio(review);
     return (
-      bot === 'нет доступных аккаунтов' ||
-      bot === 'добавьте аккаунты и нажмите сменить'
+      this.isPlaceholderBotName(bot) ||
+      this.isTemplateBotName(bot)
     );
   }
 
@@ -3937,17 +3984,56 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return false;
     }
 
-    const bot = (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+    const bot = this.normalizedBotFio(review);
     return (
       !!review.botLogin?.trim() &&
       !!review.botPassword?.trim() &&
-      bot !== 'нет доступных аккаунтов' &&
-      bot !== 'добавьте аккаунты и нажмите сменить'
+      !this.isPlaceholderBotName(bot) &&
+      !this.isTemplateBotName(bot)
     );
   }
 
+  private accountRepairTitle(review: OrderReviewItem): string {
+    if (!review.botId || review.botId === 1) {
+      return 'Аккаунт не назначен. Нажмите "смена", чтобы подобрать рабочий аккаунт.';
+    }
+
+    const bot = this.normalizedBotFio(review);
+    if (this.isPlaceholderBotName(bot)) {
+      return 'Для карточки стоит заглушка вместо аккаунта. Нажмите "смена".';
+    }
+
+    if (this.isTemplateBotName(bot)) {
+      return 'Это новый невыгулянный аккаунт со служебным именем "Впиши Имя Фамилию". Сначала отправьте его в выгул; после нормального имени он станет доступен для публикации.';
+    }
+
+    if (!review.botLogin?.trim() || !review.botPassword?.trim()) {
+      return 'У назначенного аккаунта нет логина или пароля. Проверьте аккаунт или нажмите "смена".';
+    }
+
+    return 'Этот аккаунт нельзя использовать для публикации. Нажмите "смена".';
+  }
+
+  private isTemplateBotName(botFio: string): boolean {
+    return botFio === 'впишите имя фамилию'
+      || botFio === 'впиши имя фамилию'
+      || botFio === 'впишите фамилию имя';
+  }
+
+  reviewHasTemplateBot(review: OrderReviewItem): boolean {
+    return this.isTemplateBotName(this.normalizedBotFio(review));
+  }
+
+  private isPlaceholderBotName(botFio: string): boolean {
+    return botFio === 'нет доступных аккаунтов' || botFio === 'добавьте аккаунты и нажмите сменить';
+  }
+
+  private normalizedBotFio(review: OrderReviewItem): string {
+    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU');
+  }
+
   hasCompactBotPrompt(review: OrderReviewItem): boolean {
-    return (review.botFio ?? '').trim().toLocaleLowerCase('ru-RU') === 'добавьте аккаунты и нажмите сменить';
+    return this.normalizedBotFio(review) === 'добавьте аккаунты и нажмите сменить';
   }
 
   hideReviewBotPasswordField(): boolean {

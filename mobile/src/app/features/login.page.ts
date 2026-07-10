@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   IonButton,
@@ -131,6 +131,12 @@ export class LoginPage implements OnInit {
   ) {
     addIcons({ logInOutline });
 
+    effect(() => {
+      if (this.auth.status() === 'authenticated') {
+        void this.router.navigateByUrl(this.targetUrl(), { replaceUrl: true });
+      }
+    });
+
     if (this.auth.isAuthenticated()) {
       void this.router.navigateByUrl(this.targetUrl(), { replaceUrl: true });
     }
@@ -138,6 +144,11 @@ export class LoginPage implements OnInit {
 
   ngOnInit(): void {
     if (this.auth.isAuthenticated() || this.auth.error()) {
+      this.redirecting.set(false);
+      return;
+    }
+
+    if (this.isManualLogin()) {
       this.redirecting.set(false);
       return;
     }
@@ -156,6 +167,12 @@ export class LoginPage implements OnInit {
 
     this.autoLoginStarted = true;
     this.redirecting.set(true);
+    window.setTimeout(() => {
+      if (this.autoLoginStarted && !this.auth.isAuthenticated()) {
+        this.autoLoginStarted = false;
+        this.redirecting.set(false);
+      }
+    }, 12_000);
     void this.auth.login(this.targetUrl()).catch((error: unknown) => {
       this.autoLoginStarted = false;
       this.redirecting.set(false);
@@ -166,5 +183,10 @@ export class LoginPage implements OnInit {
   private targetUrl(): string {
     const target = this.route.snapshot.queryParamMap.get('target');
     return target?.startsWith('/') ? target : '/tabs/home';
+  }
+
+  private isManualLogin(): boolean {
+    const params = this.route.snapshot.queryParamMap;
+    return params.has('loggedOut') || params.get('auto') === '0';
   }
 }

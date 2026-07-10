@@ -4,6 +4,7 @@ import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -75,6 +76,12 @@ public class CommonBillingAdminController {
     @GetMapping("/api/common-billing/invoices/{invoiceId}")
     public CommonInvoiceDetailsResponse invoice(@PathVariable Long invoiceId) {
         return commonBillingService.invoice(invoiceId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @DeleteMapping("/api/common-billing/invoices/{invoiceId}")
+    public void deleteInvoice(@PathVariable Long invoiceId, Principal principal) {
+        commonBillingService.deleteInvoiceWithOrders(invoiceId, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
