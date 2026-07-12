@@ -1,6 +1,8 @@
 package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.manager.dto.api.OrderEditResponse;
 import com.hunt.otziv.manager.dto.api.OrderUpdateRequest;
 import com.hunt.otziv.manager.dto.api.StatusChangeRequest;
@@ -10,12 +12,15 @@ import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.payment.OrderPaymentCancellationService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
+import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,6 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import java.util.HashSet;
+import java.util.Objects;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequiredArgsConstructor
@@ -46,6 +54,9 @@ public class ApiManagerOrderController {
     private final ManagerPermissionService managerPermissionService;
     private final ManagerAccessService managerAccessService;
     private final OrderPaymentCancellationService orderPaymentCancellationService;
+    private final CompanyRepository companyRepository;
+    private final OrderRepository orderRepository;
+    private final WorkerService workerService;
 
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -95,6 +106,7 @@ public class ApiManagerOrderController {
 
     @PutMapping("/orders/{orderId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
     public OrderEditResponse updateOrder(
             @PathVariable Long orderId,
             @RequestBody OrderUpdateRequest request,
@@ -106,6 +118,7 @@ public class ApiManagerOrderController {
         OrderDTO update = toOrderUpdateDto(current, request, orderId, authentication);
 
         try {
+            updateCompanyWorkersForTransfer(current, request, orderId, authentication);
             if (managerPermissionService.hasOnlyWorkerRole(authentication)) {
                 orderService.updateOrderToWorker(update, current.getCompany().getId(), orderId);
             } else {
@@ -116,6 +129,49 @@ public class ApiManagerOrderController {
         }
 
         return managerBoardEditAssembler.buildOrderEditResponse(orderService.getOrderDTO(orderId), principal, authentication);
+    }
+
+    private void updateCompanyWorkersForTransfer(
+            OrderDTO current,
+            OrderUpdateRequest request,
+            Long orderId,
+            Authentication authentication
+    ) {
+        Long previousWorkerId = idOf(current.getWorker());
+        Long selectedWorkerId = request.workerId();
+        if (selectedWorkerId == null || selectedWorkerId <= 0 || Objects.equals(previousWorkerId, selectedWorkerId)) {
+            return;
+        }
+
+        Long companyId = current.getCompany() == null ? null : current.getCompany().getId();
+        if (companyId == null) {
+            throw new IllegalArgumentException("У заказа не указана компания");
+        }
+
+        Company company = companyRepository.findByIdWithWorkers(companyId)
+                .orElseThrow(() -> new IllegalArgumentException("Компания не найдена"));
+        Worker selectedWorker = workerService.getWorkerById(selectedWorkerId);
+        if (selectedWorker == null) {
+            throw new IllegalArgumentException("Новый специалист не найден");
+        }
+
+        if (managerPermissionService.hasOnlyWorkerRole(authentication)
+                && (company.getWorkers() == null || !company.getWorkers().contains(selectedWorker))) {
+            throw new IllegalArgumentException("Специалист не закреплен за компанией");
+        }
+
+        if (company.getWorkers() == null) {
+            company.setWorkers(new HashSet<>());
+        }
+        company.getWorkers().add(selectedWorker);
+
+        if (Boolean.TRUE.equals(request.removePreviousWorkerFromCompany()) && previousWorkerId != null) {
+            if (orderRepository.existsByCompany_IdAndWorker_IdAndCompleteFalseAndIdNot(companyId, previousWorkerId, orderId)) {
+                throw new IllegalArgumentException("У прежнего специалиста есть другие активные заказы этой компании");
+            }
+            company.getWorkers().removeIf(worker -> Objects.equals(worker.getId(), previousWorkerId));
+        }
+        companyRepository.save(company);
     }
 
     @DeleteMapping("/orders/{orderId}")

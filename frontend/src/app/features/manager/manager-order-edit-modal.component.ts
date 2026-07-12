@@ -13,7 +13,8 @@ export type ManagerOrderEditDraftChange = {
 @Component({
   selector: 'app-manager-order-edit-modal',
   imports: [FormsModule],
-  templateUrl: './manager-order-edit-modal.component.html'
+  templateUrl: './manager-order-edit-modal.component.html',
+  styleUrl: './manager-order-mobile-modal.component.scss'
 })
 export class ManagerOrderEditModalComponent {
   @Input() loading = false;

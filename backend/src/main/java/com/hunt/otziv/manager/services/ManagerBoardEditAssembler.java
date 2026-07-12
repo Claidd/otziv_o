@@ -240,6 +240,7 @@ public class ManagerBoardEditAssembler {
                 statusTitle
         );
         boolean canCancelPayment = adminOrOwner && "Оплачено".equals(statusTitle);
+        boolean workerOnly = managerPermissionService.hasOnlyWorkerRole(authentication);
         OptionResponse currentManager = option(order.getManager());
         List<OptionResponse> managers = managerPermissionService.hasOnlyWorkerRole(authentication)
                 ? currentManager == null ? List.of() : List.of(currentManager)
@@ -250,7 +251,7 @@ public class ManagerBoardEditAssembler {
                 order.getCompany() != null ? order.getCompany().getId() : null,
                 order.getCompany() != null ? safe(order.getCompany().getTitle()) : "",
                 optionLabel(order.getStatus()),
-                order.getSum(),
+                workerOnly ? null : order.getSum(),
                 order.getAmount(),
                 order.getCounter(),
                 dateValue(order.getCreated()),
@@ -264,7 +265,7 @@ public class ManagerBoardEditAssembler {
                 option(order.getWorker()),
                 filialOptions(order),
                 managers,
-                workerOptions(order),
+                workerOnly ? currentCompanyWorkerOptions(order) : workerOptions(order),
                 adminOrOwner,
                 canDelete,
                 canCancelPayment
@@ -280,6 +281,7 @@ public class ManagerBoardEditAssembler {
         List<ReviewRecoveryTask> recoveryTasks = reviewRecoveryTaskService.getTasksByOrderId(orderId);
         ReviewDTOOne firstReview = reviews.isEmpty() ? null : reviews.get(0);
         BigDecimal orderSum = order.getSum() == null ? BigDecimal.ZERO : order.getSum();
+        boolean workerOnly = managerPermissionService.hasOnlyWorkerRole(authentication);
 
         Long companyId = order.getCompany() != null
                 ? order.getCompany().getId()
@@ -305,9 +307,9 @@ public class ManagerBoardEditAssembler {
                 optionLabel(order.getStatus()),
                 order.getAmount(),
                 order.getCounter(),
-                order.getSum(),
-                orderSum.add(safeSummary.doneSum()),
-                toBadReviewSummaryResponse(safeSummary, orderSum),
+                workerOnly ? null : order.getSum(),
+                workerOnly ? null : orderSum.add(safeSummary.doneSum()),
+                toBadReviewSummaryResponse(safeSummary, orderSum, workerOnly),
                 firstReview != null && !isBlank(firstReview.getOrderComments())
                         ? safe(firstReview.getOrderComments())
                         : safe(order.getOrderComments()),
@@ -317,7 +319,7 @@ public class ManagerBoardEditAssembler {
                 dateValue(order.getCreated()),
                 dateValue(order.getChanged()),
                 reviews.stream().map(this::toReviewDetailsResponse).toList(),
-                badReviewTasks.stream().map(this::toBadReviewTaskResponse).toList(),
+                badReviewTasks.stream().map(task -> toBadReviewTaskResponse(task, workerOnly)).toList(),
                 recoveryTasks.stream().map(this::toReviewRecoveryTaskResponse).toList(),
                 filialOptions(order),
                 productOptions(),
@@ -362,7 +364,7 @@ public class ManagerBoardEditAssembler {
                 .toList();
     }
 
-    private BadReviewSummaryResponse toBadReviewSummaryResponse(BadReviewTaskSummary summary, BigDecimal orderSum) {
+    private BadReviewSummaryResponse toBadReviewSummaryResponse(BadReviewTaskSummary summary, BigDecimal orderSum, boolean hideMoney) {
         BigDecimal baseSum = orderSum == null ? BigDecimal.ZERO : orderSum;
         BadReviewTaskSummary safeSummary = summary == null ? BadReviewTaskSummary.empty() : summary;
         return new BadReviewSummaryResponse(
@@ -370,13 +372,13 @@ public class ManagerBoardEditAssembler {
                 safeSummary.pending(),
                 safeSummary.done(),
                 safeSummary.canceled(),
-                safeSummary.doneSum(),
-                safeSummary.pendingSum(),
-                baseSum.add(safeSummary.doneSum())
+                hideMoney ? null : safeSummary.doneSum(),
+                hideMoney ? null : safeSummary.pendingSum(),
+                hideMoney ? null : baseSum.add(safeSummary.doneSum())
         );
     }
 
-    private BadReviewTaskDetailsResponse toBadReviewTaskResponse(BadReviewTask task) {
+    private BadReviewTaskDetailsResponse toBadReviewTaskResponse(BadReviewTask task, boolean hideMoney) {
         Review review = task.getSourceReview();
         Bot taskBot = task.getBot();
         Bot sourceBot = review != null ? review.getBot() : null;
@@ -407,7 +409,7 @@ public class ManagerBoardEditAssembler {
                 task.getStatus() == null ? "" : task.getStatus().name(),
                 task.getOriginalRating(),
                 task.getTargetRating(),
-                task.getPrice(),
+                hideMoney ? null : task.getPrice(),
                 dateValue(task.getScheduledDate()),
                 dateValue(task.getCompletedDate()),
                 workerFio,
@@ -630,6 +632,17 @@ public class ManagerBoardEditAssembler {
     }
 
     private List<OptionResponse> workerOptions(OrderDTO order) {
+        if (order.getCompany() != null && order.getCompany().getManager() != null
+                && order.getCompany().getManager().getManagerId() != null) {
+            return workerService.getAllWorkersByManagerId(order.getCompany().getManager().getManagerId()).stream()
+                    .sorted(Comparator.comparing(worker -> safe(worker.getUser() != null ? worker.getUser().getFio() : "")))
+                    .map(worker -> new OptionResponse(worker.getWorkerId(), safe(worker.getUser() != null ? worker.getUser().getFio() : "Специалист #" + worker.getWorkerId())))
+                    .toList();
+        }
+        return currentCompanyWorkerOptions(order);
+    }
+
+    private List<OptionResponse> currentCompanyWorkerOptions(OrderDTO order) {
         if (order.getCompany() == null || order.getCompany().getWorkers() == null) {
             return List.of();
         }

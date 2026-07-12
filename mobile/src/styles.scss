@@ -504,6 +504,31 @@ ion-button {
   min-width: 0;
 }
 
+.sheet-head > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sheet-delete-button.sheet-delete-button {
+  flex: 0 0 2.42rem;
+  width: 2.42rem;
+  height: 2.42rem;
+  min-width: 2.42rem;
+  border: 1px solid rgba(255, 0, 96, 0.28);
+  border-radius: 50%;
+  color: var(--otziv-danger);
+  background: rgba(255, 0, 96, 0.08);
+  box-shadow: none;
+}
+
+.sheet-delete-button.sheet-delete-button .material-icons-sharp {
+  font-size: 1.32rem;
+}
+
+.sheet-delete-button.sheet-delete-button:disabled {
+  opacity: 0.54;
+}
+
 .sheet-note {
   margin: 0;
   color: var(--otziv-info);
@@ -5805,4 +5830,118 @@ body.otziv-short-phone app-manager .manager-list--orders .order-mobile-card .ord
   letter-spacing: 0 !important;
   text-size-adjust: 100% !important;
   -webkit-text-size-adjust: 100% !important;
+}
+
+/* Web/mobile parity pass: category labels use the full pill box, review text
+   owns the flexible space, and every card footer stays at the bottom. */
+body app-mobile-order-card .mobile-order-card .order-category-row,
+body app-manager .manager-list .order-mobile-card .order-category-row,
+body app-worker .worker-list .mobile-worker-order-card .order-category-row {
+  align-items: stretch !important;
+}
+
+body app-mobile-order-card .mobile-order-card .order-category-row > span,
+body app-manager .manager-list .order-mobile-card .order-category-row > span,
+body app-worker .worker-list .mobile-worker-order-card .order-category-row > span {
+  display: inline-flex !important;
+  height: auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding-block: 0 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+}
+
+body app-worker .worker-list app-mobile-review-card-shell .mobile-review-card-shell,
+body app-order-details-mobile app-mobile-review-card-shell .mobile-review-card-shell {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+body app-worker .worker-list app-mobile-review-card-shell .mobile-review-card-shell > footer,
+body app-order-details-mobile app-mobile-review-card-shell .mobile-review-card-shell > footer {
+  margin-top: auto !important;
+}
+
+body app-worker .worker-list app-mobile-review-card-shell:not(.expanded-text) .review-field--text,
+body app-order-details-mobile app-mobile-review-card-shell .mobile-review-card-shell:not(.mobile-review-card-shell--expanded-text) .review-text-editor {
+  display: flex !important;
+  flex: 1 1 4rem !important;
+  min-height: 4rem !important;
+}
+
+body app-worker .worker-list app-mobile-review-card-shell:not(.expanded-text) .review-field--text textarea,
+body app-order-details-mobile app-mobile-review-card-shell .mobile-review-card-shell:not(.mobile-review-card-shell--expanded-text) .review-text-editor :is(textarea, .review-display-field) {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 4rem !important;
+}
+
+/* Very short native viewports cannot hold a complete card, pager and tab bar
+   simultaneously. Move the board into the Ionic page scroll instead of
+   hiding the card footer behind a nested card scrollbar. */
+@media (max-width: 860px) and (max-height: 680px) {
+  body :is(
+    app-leads,
+    app-manager,
+    app-worker,
+    app-operator,
+    app-manager-archive,
+    app-review-check-mobile,
+    app-tbank-page,
+    app-order-details-mobile
+  ) ion-content {
+    --overflow: auto !important;
+  }
+
+  body :is(
+    app-leads .leads-page,
+    app-manager .manager-page,
+    app-worker .worker-page,
+    app-operator .operator-page,
+    app-manager-archive .archive-mobile-page,
+    app-review-check-mobile .review-check-page,
+    app-tbank-page .tbank-page,
+    app-order-details-mobile .order-details-mobile-page
+  ) {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  body :is(
+    app-leads .lead-list,
+    app-manager .manager-list,
+    app-worker .worker-list,
+    app-operator .operator-list,
+    app-manager-archive .archive-list,
+    app-review-check-mobile .review-check-list,
+    app-tbank-page .payment-list,
+    app-order-details-mobile .review-mobile-strip
+  ) {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  body :is(
+    app-mobile-order-card .mobile-order-card,
+    app-leads .lead-list .mobile-lead-card,
+    app-manager .manager-list .manager-card,
+    app-worker .worker-list .mobile-worker-order-card,
+    app-worker .worker-list app-mobile-review-card-shell,
+    app-worker .worker-list .mobile-review-card-shell,
+    app-operator .operator-list .operator-lead-card,
+    app-manager-archive .archive-list .archive-order-card,
+    app-review-check-mobile .review-check-list .review-check-card,
+    app-tbank-page .payment-list .payment-card,
+    app-order-details-mobile app-mobile-review-card-shell,
+    app-order-details-mobile .mobile-review-card-shell
+  ) {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
 }

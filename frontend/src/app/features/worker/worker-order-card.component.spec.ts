@@ -245,7 +245,27 @@ describe('WorkerOrderCardComponent', () => {
     element.querySelector<HTMLButtonElement>('.client-waiting-action')?.click();
 
     expect(toggled).toBe(true);
-    expect(component.canOpenInlineEdit()).toBe(false);
+    expect(component.canOpenInlineEdit()).toBe(true);
+  });
+
+  it('opens order editing from the worker name even while waiting for the client', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    const component = fixture.componentInstance;
+    let editOpened = false;
+    component.order = order({ status: 'Новый', waitingForClient: true });
+    component.activeSection = 'new';
+    component.canOpenEditModal = true;
+    component.editOpened.subscribe(() => {
+      editOpened = true;
+    });
+
+    fixture.detectChanges();
+
+    const workerLink = fixture.nativeElement.querySelector('footer a') as HTMLAnchorElement;
+    workerLink.click();
+
+    expect(editOpened).toBe(true);
+    expect(workerLink.getAttribute('href')).toBe('');
   });
 
   it('emits note editing events', () => {

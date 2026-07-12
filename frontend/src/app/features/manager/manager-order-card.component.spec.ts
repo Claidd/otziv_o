@@ -47,7 +47,7 @@ describe('ManagerOrderCardComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    expect(element.querySelector('header a')?.textContent?.trim()).toBe('Company - Filial');
+    expect(element.querySelector('.order-title-button')?.textContent?.trim()).toBe('Company - Filial');
     expect(element.querySelector('.order-id-badge')?.textContent?.trim()).toBe('#12');
     expect(element.textContent).toContain('7-908-643-10-55');
     expect(element.textContent).toMatch(/1[\s,]300 руб\./);

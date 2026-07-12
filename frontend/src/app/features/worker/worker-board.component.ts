@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -26,6 +26,13 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
+import { MobileNavIntentService } from '../../shared/mobile/mobile-nav-intent.service';
+import { MobileStatusSheetComponent } from '../../shared/mobile/mobile-status-sheet.component';
+import {
+  MobileStatusItem,
+  MobileStatusSliderComponent
+} from '../../shared/mobile/mobile-status-slider.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
@@ -54,6 +61,7 @@ import {
   workerOrderPaymentCopyText,
   workerReviewDetailsPath,
   workerOrderReviewCopyText,
+  workerMobileSections,
   workerReviewCopyLabel,
   workerSectionLabel
 } from './worker-board.config';
@@ -100,6 +108,9 @@ type WorkerBoardState = {
     FormsModule,
     GamificationMeCardComponent,
     LoadErrorCardComponent,
+    MobileBottomPagerComponent,
+    MobileStatusSheetComponent,
+    MobileStatusSliderComponent,
     PersonalRemindersComponent,
     WorkerOrderCardComponent,
     WorkerOrderEditModalComponent,
@@ -117,6 +128,7 @@ export class WorkerBoardComponent implements OnDestroy {
   private readonly toastService = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly mobileNavIntent = inject(MobileNavIntentService);
   private readonly overdueAlertStorageKeyPrefix = 'otziv-worker-overdue-alert:v2';
   private readonly activeSectionStorageKeyPrefix = 'otziv-worker-active-section:v1';
   private readonly boardStateStorageKeyPrefix = 'otziv-worker-board-state:v1';
@@ -132,6 +144,7 @@ export class WorkerBoardComponent implements OnDestroy {
     publish: 150_000,
     nagul: 180_000
   };
+  private lastMobileNavIntentStamp = 0;
 
   readonly sections = WORKER_SECTIONS;
   readonly orderStatusActions = WORKER_ORDER_STATUS_ACTIONS;
@@ -147,7 +160,8 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly error = signal<string | null>(null);
   readonly copied = signal<string | null>(null);
   readonly mutationKey = signal<string | null>(null);
-  readonly mobileMenuOpen = signal(false);
+  readonly mobileStatusSheetOpen = signal(false);
+  readonly mobileWorkerSheetOpen = signal(false);
   readonly boardNoticeVisible = signal(false);
   readonly overdueOrders = signal<ManagerOverdueOrders | null>(null);
   readonly overdueModalOpen = signal(false);
@@ -172,10 +186,36 @@ export class WorkerBoardComponent implements OnDestroy {
     return this.board()?.orders ?? EMPTY_WORKER_ORDER_PAGE;
   });
   readonly title = computed(() => `Специалист - ${this.board()?.title ?? workerSectionLabel(this.activeSection())}`);
+  readonly sortTitle = computed(() => this.sortDirection() === 'desc'
+    ? 'Сначала давно без изменений'
+    : 'Сначала недавно измененные'
+  );
   readonly metrics = computed(() => this.board()?.metrics ?? []);
   readonly visibleSections = computed(() => this.sections.filter((section) => this.shouldShowWorkerSection(section.key)));
   readonly visibleMetrics = computed(() => this.metrics().filter((metric) => this.shouldShowWorkerSection(metric.section, metric.value)));
+  readonly mobileSections = computed(() => workerMobileSections(this.sections));
+  readonly mobileStatusItems = computed<MobileStatusItem[]>(() => this.mobileSections().map((section) => {
+    const metric = this.findMetric(section.key);
+    return {
+      key: section.key,
+      label: section.label,
+      value: metric?.value ?? 0,
+      icon: section.icon,
+      tone: metric?.tone ?? 'gray',
+      badge: (metric?.delta ?? 0) > 0 ? `+${metric?.delta}` : undefined
+    };
+  }));
   readonly workerOptions = computed(() => this.board()?.workerOptions ?? []);
+  readonly mobileWorkerItems = computed<MobileStatusItem[]>(() => [
+    { key: 'all', label: 'Все работники', value: '', icon: 'groups', tone: 'blue' },
+    ...this.workerOptions().map((worker) => ({
+      key: String(worker.id),
+      label: worker.label,
+      value: '',
+      icon: 'person',
+      tone: 'teal' as const
+    }))
+  ]);
   readonly workerFilterAvailable = computed(() => {
     this.auth.tokenParsed();
     return (this.board()?.workerFilterAvailable ?? false)
@@ -266,7 +306,55 @@ export class WorkerBoardComponent implements OnDestroy {
 
   constructor() {
     this.restoreStoredPublishCredentialPreparation();
-    this.loadInitialBoard();
+
+    const initialIntent = this.mobileNavIntent.intent();
+    if (initialIntent?.tab === 'worker') {
+      this.lastMobileNavIntentStamp = initialIntent.stamp;
+      if (initialIntent.mode === 'menu') {
+        this.mobileStatusSheetOpen.set(true);
+      } else {
+        this.mobileStatusSheetOpen.set(false);
+        this.activeSection.set('new');
+        this.storeActiveSection('new');
+        this.pageNumber.set(0);
+      }
+      this.mobileNavIntent.clear(initialIntent.stamp);
+    }
+
+    effect(() => {
+      const intent = this.mobileNavIntent.intent();
+      if (!intent || intent.tab !== 'worker' || intent.stamp === this.lastMobileNavIntentStamp) {
+        return;
+      }
+      this.lastMobileNavIntentStamp = intent.stamp;
+
+      untracked(() => {
+        if (intent.mode === 'menu') {
+          this.mobileStatusSheetOpen.set(true);
+        } else {
+          this.mobileStatusSheetOpen.set(false);
+          this.activeSection.set('new');
+          this.storeActiveSection('new');
+          this.pageNumber.set(0);
+          this.loadBoard();
+        }
+        this.mobileNavIntent.clear(intent.stamp);
+      });
+    });
+
+    if (initialIntent?.tab === 'worker' && initialIntent.mode === 'all') {
+      this.activeSection.set('new');
+      this.pageNumber.set(0);
+      this.loadBoard();
+    } else {
+      this.loadInitialBoard();
+      if (initialIntent?.tab === 'worker' && initialIntent.mode === 'menu') {
+        this.mobileStatusSheetOpen.set(true);
+      }
+    }
+    if (initialIntent?.tab === 'worker') {
+      this.mobileNavIntent.clear(initialIntent.stamp);
+    }
     this.loadDailyOverdueReminder();
   }
 
@@ -330,12 +418,36 @@ export class WorkerBoardComponent implements OnDestroy {
     this.activeSection.set(section);
     this.storeActiveSection(section);
     this.pageNumber.set(0);
-    this.mobileMenuOpen.set(false);
+    this.mobileStatusSheetOpen.set(false);
     if (this.isRiskSection(section)) {
       this.loadBoard('all');
       return;
     }
     this.loadBoardAfterMetricSeen(metric);
+  }
+
+  selectMobileSection(key: string): void {
+    if (!this.mobileSections().some((section) => section.key === key)) {
+      return;
+    }
+    this.setSection(key as WorkerBoardTabKey);
+  }
+
+  closeMobileStatusSheet(): void {
+    this.mobileStatusSheetOpen.set(false);
+  }
+
+  openMobileWorkerSheet(): void {
+    this.mobileWorkerSheetOpen.set(true);
+  }
+
+  closeMobileWorkerSheet(): void {
+    this.mobileWorkerSheetOpen.set(false);
+  }
+
+  selectMobileWorker(key: string): void {
+    this.mobileWorkerSheetOpen.set(false);
+    this.changeWorkerFilter(key === 'all' ? null : key);
   }
 
   handleSectionMenu(section: WorkerBoardTabKey | ''): void {
@@ -396,6 +508,7 @@ export class WorkerBoardComponent implements OnDestroy {
   changeWorkerFilter(value: string | number | null): void {
     const workerId = value === null || value === '' ? null : Number(value);
     this.selectedWorkerId.set(Number.isFinite(workerId as number) && (workerId as number) > 0 ? workerId as number : null);
+    this.mobileWorkerSheetOpen.set(false);
     this.pageNumber.set(0);
     this.loadBoard();
   }
@@ -424,10 +537,6 @@ export class WorkerBoardComponent implements OnDestroy {
     this.loadBoard();
   }
 
-  toggleMobileMenu(): void {
-    this.mobileMenuOpen.update((open) => !open);
-  }
-
   openMetric(metric: WorkerMetric): void {
     this.setSection(metric.section);
   }
@@ -451,12 +560,16 @@ export class WorkerBoardComponent implements OnDestroy {
     this.storeActiveSection(section);
     this.keyword.set('');
     this.pageNumber.set(0);
-    this.mobileMenuOpen.set(false);
+    this.mobileStatusSheetOpen.set(false);
     this.loadBoardAfterMetricSeen(this.findMetric(section));
   }
 
   changeReviewBot(review: WorkerReviewItem): void {
     this.actionFacade.changeReviewBot(review);
+  }
+
+  updateReviewBotName(review: WorkerReviewItem, botName: string): void {
+    this.actionFacade.updateReviewBotName(review, botName);
   }
 
   deactivateReviewBot(review: WorkerReviewItem): void {
@@ -1213,7 +1326,7 @@ export class WorkerBoardComponent implements OnDestroy {
 
   private shouldShowWorkerSection(section: WorkerBoardTabKey, metricValue = this.findMetric(section)?.value ?? 0): boolean {
     if (section === 'risk') {
-      return this.canSeeRiskTab();
+      return false;
     }
 
     if (section !== 'recovery' && section !== 'bad') {
@@ -1263,7 +1376,7 @@ export class WorkerBoardComponent implements OnDestroy {
     this.keyword.set('');
     this.activeSection.set('new');
     this.pageNumber.set(0);
-    this.mobileMenuOpen.set(false);
+    this.mobileStatusSheetOpen.set(false);
     this.loadBoard('current');
   }
 
@@ -1519,9 +1632,19 @@ export class WorkerBoardComponent implements OnDestroy {
   private workerSectionForOrderStatus(status: string): WorkerSection {
     switch (status) {
       case 'Новый':
+      case 'Новые':
         return 'new';
       case 'Коррекция':
+      case 'Коррекции':
         return 'correct';
+      case 'Выгул':
+        return 'nagul';
+      case 'Публикация':
+        return 'publish';
+      case 'Восстановление':
+        return 'recovery';
+      case 'Плохие':
+        return 'bad';
       default:
         return 'all';
     }

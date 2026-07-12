@@ -7,6 +7,7 @@ public record OrderUpdateRequest(
         Integer counter,
         String orderComments,
         String commentsCompany,
-        Boolean complete
+        Boolean complete,
+        Boolean removePreviousWorkerFromCompany
 ) {
 }

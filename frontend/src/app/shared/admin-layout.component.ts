@@ -1,9 +1,22 @@
-import { Component, computed, effect, EventEmitter, inject, Input, Output, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { appEnvironment } from '../core/app-environment';
+import { Component, computed, DestroyRef, effect, EventEmitter, HostListener, inject, Input, Output, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../core/auth.service';
 import { CabinetApi, ManagerPerformanceScore } from '../core/cabinet.api';
-import { CABINET_HOME_LINK, CABINET_SECTION_LINKS } from './cabinet-navigation';
+import {
+  APP_LOGOUT_LINK,
+  APP_NAVIGATION_LINKS,
+  APP_PRIMARY_NAVIGATION,
+  appNavigationGroupForUrl,
+  appNavigationLinksForGroup,
+  appNavigationRouteForGroup,
+  isAppNavigationGroupRootUrl,
+  type AppNavigationLink
+} from './app-navigation';
+import { MobileBottomNavComponent, type MobileBottomNavRequest } from './mobile/mobile-bottom-nav.component';
+import { MobileNavIntentService } from './mobile/mobile-nav-intent.service';
+import { MobileStatusSheetComponent } from './mobile/mobile-status-sheet.component';
+import type { MobileStatusItem } from './mobile/mobile-status-slider.component';
+import { MobileViewportService } from './mobile/mobile-viewport.service';
 import { PersonalRemindersComponent } from './personal-reminders.component';
 import { normalizeRole, roleLabel } from './role-labels';
 import { requestWorkerCurrentSectionOpen } from './worker-entry-navigation';
@@ -25,32 +38,46 @@ type PerformanceFactor = {
   hint: string;
 };
 
-type ShellLink = {
-  label: string;
-  icon: string;
-  active: string;
-  roles: string[];
-  adminOnly?: boolean;
-  exactRoleOnly?: boolean;
-  routerLink?: string;
-  href?: string;
-  openInNewTab?: boolean;
-};
+type ShellLink = AppNavigationLink;
+
+const ALL_SHELL_LINKS = [...APP_PRIMARY_NAVIGATION, ...APP_NAVIGATION_LINKS];
+
+function shellLinksById(ids: string[]): ShellLink[] {
+  return ids.map((id) => {
+    const link = ALL_SHELL_LINKS.find((item) => item.id === id);
+    if (!link) {
+      throw new Error(`Unknown navigation link: ${id}`);
+    }
+    return link;
+  });
+}
 
 @Component({
   selector: 'app-admin-layout',
-  imports: [PersonalRemindersComponent, RouterLink],
+  imports: [MobileBottomNavComponent, MobileStatusSheetComponent, PersonalRemindersComponent, RouterLink],
   templateUrl: './admin-layout.component.html'
 })
 export class AdminLayoutComponent {
   private readonly auth = inject(AuthService);
   private readonly cabinetApi = inject(CabinetApi);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
+  private readonly mobileNavIntent = inject(MobileNavIntentService);
   private readonly themeStorageKey = 'otziv-theme';
   private readonly defaultBackendImageId = 1;
+  private readonly activeState = signal('');
+  private activeValue = '';
   private loadedHeaderProfileFor: string | null = null;
 
   @Input() title = 'Админка';
-  @Input() active = '';
+  @Input()
+  set active(value: string) {
+    this.activeValue = value ?? '';
+    this.activeState.set(this.activeValue);
+  }
+  get active(): string {
+    return this.activeValue;
+  }
   @Input() hideSidebarBeforeLogin = true;
   @Input() rightPanelMode: 'default' | 'custom' = 'default';
   @Input() profileImageUrl: string | null = null;
@@ -60,45 +87,26 @@ export class AdminLayoutComponent {
 
   readonly brandLogoUrl = '/assets/images/logo-o.png';
   readonly authenticated = this.auth.authenticated;
+  readonly viewport = inject(MobileViewportService);
   readonly theme = signal<ThemeMode>(this.getInitialTheme());
   readonly headerProfileFallbackUrl = signal<string | null>(null);
   readonly activePerformanceTip = signal<string | null>(null);
+  readonly currentUrl = signal(this.router.url);
+  readonly mobileMenuOpen = signal(false);
+  readonly mobileSectionPickerOpen = signal(false);
 
-  readonly headerLinks: ShellLink[] = [
-    { label: 'Главная', icon: 'home', active: 'dashboard', routerLink: '/', roles: [] },
-    { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
-    { label: 'Компании', icon: 'business', active: 'companies', routerLink: '/companies', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Заказы', icon: 'inventory_2', active: 'orders', routerLink: '/orders', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-    { label: 'Исполнитель', icon: 'assignment_ind', active: 'performer', routerLink: '/performer', roles: ['ADMIN', 'OWNER', 'MANAGER', 'PERFORMER'] },
-    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
-    CABINET_HOME_LINK
-  ];
-
-  readonly sidebarLinks: ShellLink[] = [
-    CABINET_HOME_LINK,
-    { label: 'Лиды', icon: 'notifications_active', active: 'leads', routerLink: '/leads', roles: ['ADMIN', 'OWNER', 'MANAGER', 'MARKETOLOG'] },
-    { label: 'Компании', icon: 'business', active: 'companies', routerLink: '/companies', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Заказы', icon: 'inventory_2', active: 'orders', routerLink: '/orders', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Специалист', icon: 'engineering', active: 'worker', routerLink: '/worker', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-    { label: 'Исполнитель', icon: 'assignment_ind', active: 'performer', routerLink: '/performer', roles: ['ADMIN', 'OWNER', 'MANAGER', 'PERFORMER'] },
-    { label: 'Оператор', icon: 'support_agent', active: 'operator', routerLink: '/operator', roles: ['ADMIN', 'OWNER', 'OPERATOR'] },
-    ...CABINET_SECTION_LINKS,
-    { label: 'Обучение', icon: 'school', active: 'training', routerLink: '/training', roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER'] },
-    { label: 'Архив', icon: 'archive', active: 'manager-archive', routerLink: '/manager/archive', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Города', icon: 'location_city', active: 'city-stats', routerLink: '/admin/cities', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Архиватор', icon: 'inventory_2', active: 'archive-admin', routerLink: '/admin/archive', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Контроль', icon: 'fact_check', active: 'manager-control', routerLink: '/admin/manager-control', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Исполнители', icon: 'assignment_ind', active: 'performers', routerLink: '/admin/performers', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'T-Bank', icon: 'account_balance_wallet', active: 'tbank-payments', routerLink: '/admin/tbank-payments', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Общие счета', icon: 'receipt_long', active: 'common-billing', routerLink: '/admin/common-billing', roles: ['ADMIN', 'OWNER'] },
-    { label: 'AI-помощник', icon: 'auto_awesome', active: 'reputation-ai', routerLink: '/admin/reputation-ai', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Справочники', icon: 'tune', active: 'dictionaries', routerLink: '/admin/dictionaries', roles: ['ADMIN', 'OWNER', 'MANAGER'] },
-    { label: 'Пользователи', icon: 'group_add', active: 'users', routerLink: '/admin/users', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Новый пользователь', icon: 'person_add', active: 'create-user', routerLink: '/admin/users/new', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Миграция', icon: 'sync', active: 'migration', routerLink: '/legacy-migration', roles: ['ADMIN', 'OWNER'] },
-    { label: 'Метрики', icon: 'desktop_windows', active: 'metrics', href: appEnvironment.metricsBaseUrl, openInNewTab: true, roles: ['ADMIN', 'OWNER'] },
-    { label: 'Выход', icon: 'logout', active: 'logout', roles: [] }
+  readonly headerLinks: readonly ShellLink[] = shellLinksById([
+    'home', 'leads', 'companies', 'orders', 'worker', 'performer', 'operator', 'personal-cabinet'
+  ]);
+  readonly sidebarLinks: readonly ShellLink[] = [
+    ...shellLinksById([
+      'personal-cabinet', 'leads', 'companies', 'orders', 'worker', 'performer', 'operator',
+      'team', 'score', 'manager-control-self', 'achievements', 'analytics', 'training',
+      'company-archive', 'cities', 'archive-admin', 'manager-control', 'performers-admin',
+      'tbank', 'common-billing', 'reputation-ai', 'dictionaries', 'users', 'new-user',
+      'migration', 'metrics'
+    ]),
+    APP_LOGOUT_LINK
   ];
 
   readonly visibleHeaderLinks = computed(() => {
@@ -106,7 +114,9 @@ export class AdminLayoutComponent {
       return [];
     }
 
-    return this.headerLinks.filter((link) => this.canSee(link));
+    return this.headerLinks
+      .filter((link) => this.canSee(link))
+      .filter((link) => !(link.id === 'worker' && this.isPerformerOnly()));
   });
 
   readonly visibleSidebarLinks = computed(() => {
@@ -114,7 +124,51 @@ export class AdminLayoutComponent {
       return [];
     }
 
-    return this.sidebarLinks.filter((link) => this.canSee(link));
+    return this.sidebarLinks
+      .filter((link) => this.canSee(link))
+      .filter((link) => !(link.id === 'worker' && this.isPerformerOnly()));
+  });
+
+  readonly showMobileStaffShell = computed(() => this.authenticated() && !this.isClientUser());
+
+  readonly mobilePrimaryLinks = computed(() => {
+    if (!this.showMobileStaffShell()) {
+      return [];
+    }
+    return APP_PRIMARY_NAVIGATION.filter((link) => this.canSee(link));
+  });
+
+  readonly mobileMenuLinks = computed(() => {
+    if (!this.showMobileStaffShell()) {
+      return [];
+    }
+    return APP_NAVIGATION_LINKS.filter((link) => this.canSee(link))
+      .filter((link) => !(link.id === 'worker' && this.isPerformerOnly()));
+  });
+
+  readonly activeMobileTab = computed(() => appNavigationGroupForUrl(this.currentUrl(), this.activeState()));
+
+  readonly mobileHomeSectionLinks = computed(() => {
+    if (!this.showMobileStaffShell()) {
+      return [];
+    }
+    return appNavigationLinksForGroup('home', this.realmRoles());
+  });
+
+  readonly mobileHomeSectionItems = computed<MobileStatusItem[]>(() => this.mobileHomeSectionLinks().map((link) => ({
+    key: link.id,
+    title: link.label,
+    description: link.description,
+    value: '',
+    icon: link.icon,
+    tone: this.mobileSectionTone(link.id)
+  })));
+
+  readonly activeMobileSectionKey = computed(() => {
+    const currentPath = this.currentUrl().split(/[?#]/, 1)[0];
+    return this.mobileHomeSectionLinks()
+      .find((link) => link.routerLink === currentPath || (link.routerLink !== '/' && currentPath.startsWith(`${link.routerLink}/`)))
+      ?.id ?? '';
   });
 
   readonly username = computed(() => {
@@ -136,6 +190,12 @@ export class AdminLayoutComponent {
 
   constructor() {
     this.applyTheme(this.theme());
+    const routerEvents = this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.currentUrl.set(event.urlAfterRedirects);
+        this.closeMobileOverlays();
+      }
+    });
     effect(() => {
       if (!this.authenticated()) {
         this.loadedHeaderProfileFor = null;
@@ -151,6 +211,12 @@ export class AdminLayoutComponent {
 
       this.loadHeaderProfile(this.username());
     });
+    effect((onCleanup) => {
+      const shouldLock = this.viewport.mobile() && (this.mobileMenuOpen() || this.mobileSectionPickerOpen());
+      document.body.classList.toggle('otziv-mobile-overlay-open', shouldLock);
+      onCleanup(() => document.body.classList.remove('otziv-mobile-overlay-open'));
+    });
+    this.destroyRef.onDestroy(() => routerEvents.unsubscribe());
   }
 
   displaySidebar(): boolean {
@@ -162,8 +228,8 @@ export class AdminLayoutComponent {
   }
 
   routerLinkFor(link: ShellLink): string | undefined {
-    if (link.label === 'Личный кабинет' && this.hasAdminAnalyticsHome()) {
-      return '/admin/analyse';
+    if (link.id === 'worker') {
+      return appNavigationRouteForGroup('worker', this.realmRoles());
     }
 
     return link.routerLink;
@@ -176,6 +242,76 @@ export class AdminLayoutComponent {
 
     if (this.isActive(link)) {
       this.activeLinkClicked.emit(link.active);
+    }
+  }
+
+  handleMobileNavigation(request: MobileBottomNavRequest): void {
+    if (!this.showMobileStaffShell()) {
+      return;
+    }
+
+    this.mobileNavIntent.request(request.tab, request.mode);
+    this.mobileMenuOpen.set(false);
+
+    if (request.mode === 'menu' && request.tab === 'home') {
+      this.mobileSectionPickerOpen.set(true);
+      return;
+    }
+
+    this.mobileSectionPickerOpen.set(false);
+    const target = appNavigationRouteForGroup(request.tab, this.realmRoles());
+    if (
+      request.mode === 'all'
+      || this.activeMobileTab() !== request.tab
+      || !isAppNavigationGroupRootUrl(request.tab, this.currentUrl(), this.realmRoles())
+    ) {
+      void this.router.navigateByUrl(target);
+    }
+  }
+
+  toggleMobileMenu(): void {
+    if (!this.showMobileStaffShell()) {
+      return;
+    }
+    this.mobileSectionPickerOpen.set(false);
+    this.mobileMenuOpen.update((open) => !open);
+  }
+
+  closeMobileOverlays(): void {
+    this.mobileMenuOpen.set(false);
+    this.mobileSectionPickerOpen.set(false);
+  }
+
+  selectMobileHomeSection(key: string): void {
+    const link = this.mobileHomeSectionLinks().find((item) => item.id === key);
+    if (!link) {
+      return;
+    }
+
+    this.mobileSectionPickerOpen.set(false);
+    if (link.routerLink) {
+      void this.router.navigateByUrl(this.routerLinkFor(link) ?? link.routerLink);
+      return;
+    }
+
+    if (link.href && typeof window !== 'undefined') {
+      if (link.openInNewTab) {
+        window.open(link.href, '_blank', 'noopener');
+      } else {
+        window.location.assign(link.href);
+      }
+    }
+  }
+
+  handleMobileMenuLinkClick(link: ShellLink): void {
+    this.mobileMenuOpen.set(false);
+    this.handleRouterLinkClick(link);
+  }
+
+  @HostListener('document:keydown.escape')
+  closeMobileOverlaysOnEscape(): void {
+    if (this.viewport.mobile()) {
+      this.closeMobileOverlays();
     }
   }
 
@@ -202,7 +338,7 @@ export class AdminLayoutComponent {
   }
 
   private canSee(link: ShellLink): boolean {
-    if (this.isClientUser() && link.label === CABINET_HOME_LINK.label) {
+    if (this.isClientUser() && link.id === 'personal-cabinet') {
       return false;
     }
 
@@ -212,6 +348,10 @@ export class AdminLayoutComponent {
     }
 
     const roles = new Set(this.realmRoles());
+
+    if (link.id === 'worker' && !this.viewport.mobile() && this.isPerformerOnly()) {
+      return false;
+    }
 
     if (link.adminOnly) {
       return roles.has('ADMIN');
@@ -228,9 +368,20 @@ export class AdminLayoutComponent {
     return requiredRoles.some((role) => roles.has(role));
   }
 
-  private hasAdminAnalyticsHome(): boolean {
-    const roles = new Set(this.realmRoles());
-    return roles.has('ADMIN') || roles.has('OWNER');
+  private mobileSectionTone(id: string): MobileStatusItem['tone'] {
+    if (id === 'analytics' || id === 'score') {
+      return 'blue';
+    }
+    if (id === 'team' || id === 'users') {
+      return 'teal';
+    }
+    if (id === 'tbank') {
+      return 'violet';
+    }
+    if (id.includes('control')) {
+      return 'yellow';
+    }
+    return 'gray';
   }
 
   canOpenWhatsAppBinding(): boolean {
@@ -403,6 +554,12 @@ export class AdminLayoutComponent {
 
   private isClientUser(): boolean {
     return this.realmRoles().some((role) => normalizeRole(role) === 'CLIENT');
+  }
+
+  private isPerformerOnly(): boolean {
+    const roles = new Set(this.realmRoles());
+    return roles.has('PERFORMER')
+      && !['ADMIN', 'OWNER', 'MANAGER', 'WORKER'].some((role) => roles.has(role));
   }
 
   private percent(value: number | null | undefined): string {

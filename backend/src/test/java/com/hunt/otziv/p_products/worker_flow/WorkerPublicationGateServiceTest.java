@@ -26,6 +26,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class WorkerPublicationGateServiceTest {
@@ -50,6 +52,9 @@ class WorkerPublicationGateServiceTest {
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Mock
+    private WorkerPublicationSessionService publicationSessionService;
 
     private WorkerPublicationGateService service;
     private Principal principal;
@@ -77,12 +82,18 @@ class WorkerPublicationGateServiceTest {
                 userService,
                 workerService,
                 workerFlowLockService,
-                appSettingService
+                appSettingService,
+                publicationSessionService
         );
 
         when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
         when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
         when(orderService.countActionableOrdersByStatusToWorker(worker)).thenReturn(Map.of());
+        when(publicationSessionService.evaluateEntry(eq(worker), anyBoolean())).thenReturn(
+                WorkerPublicationSessionService.SessionDecision.allowed(
+                        WorkerPublicationSessionService.SessionState.disabled()
+                )
+        );
     }
 
     @Test
@@ -126,5 +137,26 @@ class WorkerPublicationGateServiceTest {
         );
 
         assertTrue(thirdBlock.isEmpty());
+    }
+
+    @Test
+    void nagulSessionDecisionRedirectsPublicationToNagul() {
+        when(workerFlowLockService.syncPublicationLock("worker:88", 88L, false, false)).thenReturn(false);
+        when(publicationSessionService.evaluateEntry(worker, true)).thenReturn(
+                WorkerPublicationSessionService.SessionDecision.blocked(
+                        "Сначала выполните выгул",
+                        new WorkerPublicationSessionService.SessionState(true, false, null, null, 2, null)
+                )
+        );
+
+        Optional<WorkerPublicationGateService.PublicationBlock> block = service.redirectFor(
+                principal,
+                workerAuth,
+                WorkerPublicationGateService.SECTION_PUBLISH
+        );
+
+        assertTrue(block.isPresent());
+        assertEquals(WorkerPublicationGateService.SECTION_NAGUL, block.get().section());
+        assertEquals("Сначала выполните выгул", block.get().message());
     }
 }

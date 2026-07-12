@@ -254,7 +254,7 @@ describe('ManagerBoardCompanyFacade', () => {
     expect(state.lastUpdateRequest?.commentsCompany).toBe('new note');
     expect(state.facade.editCompany()).toBeNull();
     expect(state.calls).toContain('load-board');
-    expect(state.toastMessages.some((message) => message.startsWith('success:Компания сохранена'))).toBe(true);
+    expect(state.toastMessages.some((message) => message.startsWith('warning:Ссылка сохранена, но группа не привязана'))).toBe(true);
   });
 
   it('deletes company worker after confirmation and applies returned payload', () => {

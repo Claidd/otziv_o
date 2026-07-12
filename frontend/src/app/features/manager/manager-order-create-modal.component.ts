@@ -23,7 +23,8 @@ export type ManagerCreateOrderDraftChange = {
 @Component({
   selector: 'app-manager-order-create-modal',
   imports: [DecimalPipe, FormsModule],
-  templateUrl: './manager-order-create-modal.component.html'
+  templateUrl: './manager-order-create-modal.component.html',
+  styleUrl: './manager-order-mobile-modal.component.scss'
 })
 export class ManagerOrderCreateModalComponent {
   @Input() loading = false;

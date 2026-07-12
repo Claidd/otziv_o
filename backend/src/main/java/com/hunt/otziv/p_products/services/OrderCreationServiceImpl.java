@@ -73,9 +73,6 @@ public class OrderCreationServiceImpl implements OrderCreationService {
 
 
     private static final Long STUB_BOT_ID = 1L;
-    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3; // Максимум активных отзывов на бота
-
-
     @Transactional
     public boolean createNewOrderWithReviews(Long companyId, Long productId, OrderDTO orderDTO) {
         try {

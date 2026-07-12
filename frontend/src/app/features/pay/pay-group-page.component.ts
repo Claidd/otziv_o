@@ -73,7 +73,6 @@ export class PayGroupPageComponent {
       return;
     }
 
-    const bankWindow = this.openBlankBankWindow();
     this.submitting.set(true);
     this.message.set('');
     this.error.set('');
@@ -86,22 +85,13 @@ export class PayGroupPageComponent {
     ).subscribe({
       next: (response) => {
         if (response.paymentUrl) {
-          if (bankWindow && !bankWindow.closed) {
-            bankWindow.location.href = response.paymentUrl;
-            this.message.set('Открыли форму банка в новой вкладке. После оплаты вернитесь сюда: остаток обновится автоматически.');
-            this.submitting.set(false);
-            return;
-          }
-          this.message.set('Браузер заблокировал новую вкладку, поэтому открываем форму банка здесь.');
-          window.location.href = response.paymentUrl;
+          window.location.assign(response.paymentUrl);
           return;
         }
-        this.closeBankWindow(bankWindow);
         this.message.set('Банк не вернул ссылку на оплату. Попробуйте еще раз позже.');
         this.submitting.set(false);
       },
       error: (err) => {
-        this.closeBankWindow(bankWindow);
         this.error.set(apiErrorMessage(err, 'Не удалось перейти к оплате.'));
         this.submitting.set(false);
       }
@@ -168,36 +158,6 @@ export class PayGroupPageComponent {
   private applyInvoice(invoice: PublicCommonInvoice): void {
     this.invoice.set(invoice);
     this.submitting.set(false);
-  }
-
-  private openBlankBankWindow(): Window | null {
-    try {
-      const target = window.open('about:blank', '_blank');
-      if (!target) {
-        return null;
-      }
-      target.opener = null;
-      target.document.title = 'Открываем банк';
-      target.document.body.style.margin = '0';
-      target.document.body.style.fontFamily = 'system-ui, sans-serif';
-      target.document.body.style.display = 'grid';
-      target.document.body.style.minHeight = '100vh';
-      target.document.body.style.placeItems = 'center';
-      target.document.body.textContent = 'Открываем форму банка...';
-      return target;
-    } catch {
-      return null;
-    }
-  }
-
-  private closeBankWindow(target: Window | null): void {
-    try {
-      if (target && !target.closed) {
-        target.close();
-      }
-    } catch {
-      // Browser access can be denied after a navigation attempt.
-    }
   }
 
   private statusText(status?: string): string {

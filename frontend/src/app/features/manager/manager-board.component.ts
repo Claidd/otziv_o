@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -25,6 +25,13 @@ import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
+import { MobileNavIntentService } from '../../shared/mobile/mobile-nav-intent.service';
+import { MobileStatusSheetComponent } from '../../shared/mobile/mobile-status-sheet.component';
+import {
+  MobileStatusSliderComponent,
+  type MobileStatusItem
+} from '../../shared/mobile/mobile-status-slider.component';
 import { PersonalRemindersComponent } from '../../shared/personal-reminders.component';
 import { phoneDigits } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
@@ -50,6 +57,7 @@ import {
   managerChatBotInviteUrl,
   managerErrorMessage,
   managerLayoutTitle,
+  managerMobileStatusItems,
   managerOrderActions,
   managerOrderReviewCopyText,
   managerPromoItems,
@@ -101,6 +109,9 @@ type ChatBotLinkPoll = {
     FormsModule,
     GamificationMeCardComponent,
     LoadErrorCardComponent,
+    MobileBottomPagerComponent,
+    MobileStatusSheetComponent,
+    MobileStatusSliderComponent,
     ManagerCompanyCardComponent,
     ManagerCompanyEditModalComponent,
     ManagerOrderCardComponent,
@@ -123,6 +134,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
+  private readonly mobileNavIntent = inject(MobileNavIntentService);
   private readonly emptyCompanyPage = EMPTY_MANAGER_COMPANY_PAGE;
   private readonly emptyOrderPage = EMPTY_MANAGER_ORDER_PAGE;
   private readonly overdueAlertStorageKeyPrefix = 'otziv-manager-overdue-alert:v2';
@@ -134,6 +146,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private readonly paymentCopyCache = new Map<number, string>();
   private chatBotLinkRefreshInFlight = false;
   private searchTimer: number | null = null;
+  private lastMobileNavIntentStamp = 0;
 
   readonly sections = MANAGER_SECTIONS;
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
@@ -155,6 +168,7 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly copied = signal<string | null>(null);
   readonly mutationKey = signal<string | null>(null);
   readonly mobileMenuOpen = signal(false);
+  readonly mobileStatusSheetOpen = signal(false);
   readonly selectedCompany = signal<SelectedCompany | null>(null);
   readonly selectedManagerId = signal<number | null>(null);
   readonly selectedControl = signal<string | null>(null);
@@ -254,6 +268,16 @@ export class ManagerBoardComponent implements OnDestroy {
   readonly metrics = computed(() => {
     return (this.board()?.metrics ?? []).filter((metric) => metric.section === this.activeSection());
   });
+  readonly mobileStatusItems = computed<MobileStatusItem[]>(() => managerMobileStatusItems(
+    this.activeSection(),
+    this.statusOptions(),
+    this.board()?.metrics ?? [],
+    this.currentPage().totalElements
+  ));
+  readonly mobileSearchPlaceholder = computed(() => this.activeSection() === 'companies'
+    ? 'Компания, телефон, город'
+    : 'Заказ, компания, филиал'
+  );
 
   constructor() {
     const routeSection = this.routeManagerSection();
@@ -267,6 +291,9 @@ export class ManagerBoardComponent implements OnDestroy {
     } else {
       this.replaceCurrentHistoryState();
     }
+
+    this.applyInitialMobileNavIntent();
+    effect(() => this.handleMobileNavIntent());
 
     this.loadBoard();
     this.loadDailyOverdueReminder();
@@ -489,6 +516,64 @@ export class ManagerBoardComponent implements OnDestroy {
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update((open) => !open);
+  }
+
+  openMobileStatusSheet(): void {
+    this.mobileStatusSheetOpen.set(true);
+  }
+
+  closeMobileStatusSheet(): void {
+    this.mobileStatusSheetOpen.set(false);
+  }
+
+  selectMobileStatus(status: string): void {
+    this.closeMobileStatusSheet();
+    if (status === this.activeStatus()) {
+      return;
+    }
+    this.setStatus(status);
+  }
+
+  private handleMobileNavIntent(): void {
+    const intent = this.mobileNavIntent.intent();
+    if (!intent || intent.stamp === this.lastMobileNavIntentStamp || intent.tab !== this.activeSection()) {
+      return;
+    }
+
+    this.lastMobileNavIntentStamp = intent.stamp;
+    untracked(() => {
+      if (intent.mode === 'menu') {
+        this.openMobileStatusSheet();
+      } else {
+        this.closeMobileStatusSheet();
+        this.setStatus('Все');
+      }
+      this.mobileNavIntent.clear(intent.stamp);
+    });
+  }
+
+  private applyInitialMobileNavIntent(): void {
+    const intent = this.mobileNavIntent.intent();
+    if (!intent || intent.tab !== this.activeSection()) {
+      return;
+    }
+
+    this.lastMobileNavIntentStamp = intent.stamp;
+    if (intent.mode === 'menu') {
+      this.openMobileStatusSheet();
+      this.mobileNavIntent.clear(intent.stamp);
+      return;
+    }
+
+    if (this.activeSection() === 'companies') {
+      this.companyStatus.set('Все');
+    } else {
+      this.orderStatus.set('Все');
+    }
+    this.selectedCompany.set(null);
+    this.pageNumber.set(0);
+    this.replaceCurrentHistoryState();
+    this.mobileNavIntent.clear(intent.stamp);
   }
 
   async copyPromo(item: PromoItem): Promise<void> {

@@ -189,6 +189,7 @@
                       } @else {
                         <div
                           class="review-display-field review-display-field--text"
+                          appReviewTextOverflow
                           role="button"
                           tabindex="0"
                           [class.review-display-field--empty]="!reviewFieldValue(review, 'text').trim()"
@@ -196,19 +197,21 @@
                           (click)="onReviewTextDisplayClick(review)"
                           (keydown.enter)="onReviewTextDisplayClick(review)"
                           (keydown.space)="$event.preventDefault(); onReviewTextDisplayClick(review)"
+                          (reviewTextOverflowChange)="setReviewTextOverflow(review, $event)"
                           aria-label="Текст отзыва"
                         >
                           {{ reviewFieldValue(review, 'text').trim() || 'Текст отзыва' }}
                         </div>
                       }
 
-                      @if (shouldShowReviewTextToggle(review) || (details.permissions.canSave && isMobileReviewLayout())) {
+                      @if (isMobileReviewLayout() || shouldShowReviewTextToggle(review)) {
                         <div class="review-text-actions">
-                          @if (shouldShowReviewTextToggle(review)) {
+                          @if (isMobileReviewLayout() || shouldShowReviewTextToggle(review)) {
                             <button
                               type="button"
                               class="review-text-action-button review-text-toggle"
                               [attr.aria-expanded]="isReviewTextExpanded(review)"
+                              [disabled]="!isReviewTextToggleEnabled(review)"
                               (click)="toggleReviewText(review)"
                             >
                               {{ isReviewTextExpanded(review) ? 'свернуть' : 'развернуть' }}
@@ -368,7 +371,7 @@
                   <span class="material-icons-sharp">chevron_left</span>
                 </button>
                 <label>
-                  <span>Отзыв</span>
+                  <span class="review-navigation-label">{{ activeReviewSlide() >= reviewCheckReviews().length ? 'Действие' : 'Отзыв' }}</span>
                   <input
                     type="text"
                     inputmode="numeric"
@@ -380,8 +383,8 @@
                     aria-label="Номер или ID отзыва"
                   >
                 </label>
-                <span>{{ activeReviewSlide() + 1 }} из {{ reviewCheckReviews().length }}</span>
-                <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= reviewCheckReviews().length - 1" title="Следующий отзыв">
+                <span>{{ activeReviewSlide() + 1 }} из {{ reviewCarouselItemCount(details) }}</span>
+                <button type="button" (click)="nextReview()" [disabled]="activeReviewSlide() >= reviewCarouselItemCount(details) - 1" title="Следующий отзыв">
                   <span class="material-icons-sharp">chevron_right</span>
                 </button>
               </nav>
@@ -415,6 +418,11 @@
                       @for (reviewIndex of reviewQuickFilterIndexes(); track reviewIndex) {
                         <option [ngValue]="reviewIndex">{{ reviewQuickOptionLabel(reviewIndex) }}</option>
                       }
+                      @if (details.permissions.canApprovePublication) {
+                        <option [ngValue]="reviewApproveSlideIndex(details)">
+                          {{ isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Разрешить публикацию' }}
+                        </option>
+                      }
                     </select>
                   </label>
                 </div>
@@ -426,6 +434,14 @@
                       [class.active]="activeReviewSlide() === i"
                       (click)="goToReviewIndex(i)"
                       [attr.aria-label]="'Перейти к отзыву ' + (i + 1)"
+                    ></button>
+                  }
+                  @if (details.permissions.canApprovePublication) {
+                    <button
+                      type="button"
+                      [class.active]="activeReviewSlide() === reviewApproveSlideIndex(details)"
+                      (click)="goToReviewIndex(reviewApproveSlideIndex(details))"
+                      [attr.aria-label]="isReviewWindowApproved(details) ? 'Публикация разрешена' : 'Перейти к разрешению публикации'"
                     ></button>
                   }
                 </div>

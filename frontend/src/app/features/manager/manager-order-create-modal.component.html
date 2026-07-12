@@ -27,7 +27,8 @@
     @if (payload; as orderCreate) {
       @if (draft; as draft) {
         <form class="lead-edit-form order-create-form" #orderCreateForm="ngForm" (ngSubmit)="submitted.emit()">
-          <section class="order-create-section order-create-product-section">
+          <div class="order-create-scroll">
+            <section class="order-create-section order-create-product-section">
             <div class="order-create-section-title">
               <span>Продукт</span>
               @if (selectedProduct; as selectedProduct) {
@@ -60,10 +61,10 @@
                 <p class="empty">Продуктов нет</p>
               }
             </div>
-          </section>
+            </section>
 
-          <div class="order-create-main">
-            <div class="lead-edit-grid order-create-grid">
+            <div class="order-create-main">
+              <div class="lead-edit-grid order-create-grid">
               <label class="lead-edit-field">
                 <span>Количество в месяц</span>
                 <select
@@ -105,15 +106,16 @@
                   }
                 </select>
               </label>
-            </div>
+              </div>
 
-            <aside class="order-create-summary">
-              <span>Сумма заказа</span>
-              <strong>{{ total | number:'1.0-0' }} руб.</strong>
-              @if (selectedProduct; as selectedProduct) {
-                <small>{{ draft.amount }} x {{ (selectedProduct.price ?? 0) | number:'1.0-0' }} руб/шт</small>
-              }
-            </aside>
+              <aside class="order-create-summary">
+                <span>Сумма заказа</span>
+                <strong>{{ total | number:'1.0-0' }} руб.</strong>
+                @if (selectedProduct; as selectedProduct) {
+                  <small>{{ draft.amount }} x {{ (selectedProduct.price ?? 0) | number:'1.0-0' }} руб/шт</small>
+                }
+              </aside>
+            </div>
           </div>
 
           <div class="lead-edit-actions">

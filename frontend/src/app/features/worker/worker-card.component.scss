@@ -491,9 +491,24 @@
 
 @media (max-width: 860px) {
   .worker-card {
+    box-sizing: border-box;
+    display: flex;
     flex: 0 0 min(21rem, calc(100vw - 4rem));
+    height: clamp(20rem, calc(100dvh - 17.5rem), 38rem);
     min-height: 0;
+    max-height: clamp(20rem, calc(100dvh - 17.5rem), 38rem);
+    flex-direction: column;
+    justify-content: space-between;
+    gap: clamp(0.28rem, 0.7dvh, 0.5rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     scroll-snap-align: center;
+    scrollbar-width: none;
+  }
+
+  .worker-card::-webkit-scrollbar {
+    display: none;
   }
 
   .phone-row a,
@@ -533,5 +548,85 @@
 @media (max-width: 540px) {
   .worker-card {
     flex-basis: min(20.5rem, calc(100vw - 3.25rem));
+  }
+}
+
+// Mobile browsers leave considerably less vertical room when their address
+// and tab bars are visible. Keep the complete order card (including details
+// and footer) inside the space above the fixed pager on those viewports.
+@media (max-width: 860px) and (max-height: 790px) {
+  .worker-card {
+    gap: 0.26rem;
+    padding: 0.52rem;
+  }
+
+  .worker-card header {
+    gap: 0.3rem;
+  }
+
+  .worker-card header a {
+    font-size: 0.98rem;
+  }
+
+  .phone-row,
+  .meta-row,
+  .worker-card footer {
+    gap: 0.3rem;
+  }
+
+  .phone-row a,
+  .phone-row span,
+  .phone-row button,
+  .meta-row span,
+  .meta-row a,
+  .worker-chip,
+  .category-row .category-chip {
+    min-height: 2rem;
+    font-size: 0.74rem;
+  }
+
+  .phone-row a {
+    min-height: 2.1rem;
+    font-size: 1.25rem;
+  }
+
+  .phone-row button {
+    flex-basis: 2.1rem;
+  }
+
+  .card-actions {
+    gap: 0.26rem;
+  }
+
+  .card-actions button,
+  .card-actions a,
+  .details-button {
+    min-height: 2rem;
+    padding-inline: 0.3rem;
+    font-size: 0.68rem;
+  }
+
+  .order-note-view {
+    min-height: 3.25rem;
+    max-height: 3.25rem;
+  }
+
+  .order-note-view,
+  .order-note-editor textarea {
+    padding: 0.5rem 0.62rem;
+    font-size: 0.78rem;
+  }
+
+  .worker-card footer span,
+  .worker-card footer a {
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 860px) and (max-height: 680px) {
+  .worker-card {
+    height: auto;
+    min-height: 24rem;
+    max-height: none;
   }
 }

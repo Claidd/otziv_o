@@ -114,6 +114,7 @@ class ManagerBoardEditAssemblerTest {
         Authentication worker = authentication("ROLE_WORKER");
         OrderDTO order = OrderDTO.builder()
                 .id(12L)
+                .sum(BigDecimal.valueOf(2500))
                 .company(CompanyDTO.builder().id(3L).title("Company").build())
                 .manager(ManagerDTO.builder().managerId(9L).build())
                 .status(OrderStatusDTO.builder().title("Новый").build())
@@ -124,6 +125,7 @@ class ManagerBoardEditAssemblerTest {
         assertEquals(List.of(new OptionResponse(9L, "Менеджер #9")), response.managers());
         assertFalse(response.canComplete());
         assertFalse(response.canDelete());
+        assertEquals(null, response.sum());
     }
 
     @Test
@@ -265,7 +267,7 @@ class ManagerBoardEditAssemblerTest {
                 .build();
         OrderDTO order = OrderDTO.builder()
                 .id(12L)
-                .sum(BigDecimal.ZERO)
+                .sum(BigDecimal.valueOf(2500))
                 .status(OrderStatusDTO.builder().title("Публикация").build())
                 .build();
 
@@ -282,6 +284,11 @@ class ManagerBoardEditAssemblerTest {
         assertFalse(response.canEditReviewDates());
         assertFalse(response.canEditReviewPublish());
         assertTrue(response.canDeleteReviews());
+        assertEquals(null, response.sum());
+        assertEquals(null, response.totalSumWithBadReviews());
+        assertEquals(null, response.badReviewSummary().doneSum());
+        assertEquals(null, response.badReviewSummary().pendingSum());
+        assertEquals(null, response.badReviewSummary().totalSumWithBadReviews());
     }
 
     @Test

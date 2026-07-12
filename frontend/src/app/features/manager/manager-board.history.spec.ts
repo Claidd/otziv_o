@@ -65,7 +65,9 @@ describe('manager-board history helpers', () => {
       pageNumber: 0,
       pageSize: 15,
       sortDirection: 'asc',
-      selectedCompany: { id: 9, title: 'Компания #9' }
+      selectedCompany: { id: 9, title: 'Компания #9' },
+      managerId: null,
+      control: null
     });
   });
 
@@ -102,7 +104,9 @@ describe('manager-board history helpers', () => {
       pageNumber: 0,
       pageSize: 10,
       sortDirection: 'asc',
-      selectedCompany: null
+      selectedCompany: null,
+      managerId: null,
+      control: null
     });
   });
 
@@ -126,7 +130,9 @@ describe('manager-board history helpers', () => {
       pageNumber: 2,
       pageSize: 15,
       sortDirection: 'desc',
-      selectedCompany: { id: 4, title: 'Компания #4' }
+      selectedCompany: { id: 4, title: 'Компания #4' },
+      managerId: null,
+      control: null
     });
   });
 
@@ -184,7 +190,9 @@ describe('manager-board history helpers', () => {
       pageNumber: 0,
       pageSize: 10,
       sortDirection: 'desc',
-      selectedCompany: { id: 6, title: 'Acme' }
+      selectedCompany: { id: 6, title: 'Acme' },
+      managerId: null,
+      control: null
     });
   });
 });

@@ -84,6 +84,10 @@ function createFacade(section: WorkerSection = 'publish') {
         calls.push(`change:${reviewId}`);
         return of({ oldBotId: 11, newBotId: 44 });
       },
+      updateReviewBotName: (reviewId: number, botName: string) => {
+        calls.push(`bot-name:${reviewId}:${botName}`);
+        return of(void 0);
+      },
       deactivateReviewBot: (reviewId: number, botId: number) => {
         calls.push(`deactivate:${reviewId}:${botId}`);
         return of(void 0);
@@ -187,6 +191,24 @@ describe('WorkerBoardActionFacade', () => {
     expect(calls).toContain('change:7');
     expect(calls).toContain('bad-change:90');
     expect(toastMessages.filter((message) => message.startsWith('success:Аккаунт изменен'))).toHaveLength(2);
+  });
+
+  it('updates an account name during walk', () => {
+    const { facade, calls, toastMessages } = createFacade('nagul');
+
+    facade.updateReviewBotName(review({ id: 9, botFio: 'Old Name', botCounter: 4 }), '  New Name  ');
+
+    expect(calls).toEqual(['bot-name:9:New Name', 'load-board']);
+    expect(toastMessages).toContain('success:Имя аккаунта сохранено:New Name');
+  });
+
+  it('rejects an empty inline account name without an API call', () => {
+    const { facade, calls, toastMessages } = createFacade('nagul');
+
+    facade.updateReviewBotName(review(), '   ');
+
+    expect(calls).toEqual([]);
+    expect(toastMessages).toContain('error:Имя аккаунта не сохранено:Введите имя и фамилию');
   });
 
   it('deactivates a bot only after confirmation', () => {

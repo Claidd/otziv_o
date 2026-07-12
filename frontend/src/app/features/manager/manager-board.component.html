@@ -112,6 +112,45 @@
       </section>
     </div>
 
+    <section class="mobile-manager-controls" aria-label="Фильтры менеджера">
+      <app-mobile-status-slider
+        [items]="mobileStatusItems()"
+        [activeKey]="activeStatus()"
+        [ariaLabel]="'Статусы: ' + (activeSection() === 'companies' ? 'Компании' : 'Заказы')"
+        (select)="selectMobileStatus($event)"
+      />
+
+      <div class="mobile-manager-search" [class.has-clear]="keyword()">
+        <label>
+          <span class="material-icons-sharp" aria-hidden="true">search</span>
+          <input
+            type="search"
+            [placeholder]="mobileSearchPlaceholder()"
+            [ngModel]="keyword()"
+            (ngModelChange)="onKeywordChange($event)"
+            (keyup.enter)="search()"
+            aria-label="Поиск"
+          >
+        </label>
+
+        @if (keyword()) {
+          <button type="button" (click)="clearSearch()" aria-label="Сбросить поиск">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        }
+
+        <a routerLink="/manager/archive" aria-label="Открыть архив">
+          <span class="material-icons-sharp">archive</span>
+        </a>
+
+        @if (activeSection() === 'companies') {
+          <button type="button" (click)="openManualCompanyCreate()" aria-label="Добавить компанию">
+            <span class="material-icons-sharp">add</span>
+          </button>
+        }
+      </div>
+    </section>
+
     @if (error()) {
       <app-load-error-card
         [title]="activeSection() === 'companies' ? 'Компании не загрузились' : 'Заказы не загрузились'"
@@ -175,7 +214,7 @@
       </section>
     }
 
-    <footer class="pager">
+    <footer class="pager desktop-manager-pager">
       <button
         type="button"
         class="icon-button sort-toggle"
@@ -194,6 +233,27 @@
         <span class="material-icons-sharp">chevron_right</span>
       </button>
     </footer>
+
+    <app-mobile-bottom-pager
+      class="mobile-manager-pager"
+      [pageIndex]="currentPage().number"
+      [totalPages]="currentPage().totalPages || 1"
+      [disabled]="loading()"
+      (previous)="previousPage()"
+      (next)="nextPage()"
+    >
+      <button
+        mobilePagerActions
+        type="button"
+        class="mobile-sort-action active"
+        (click)="toggleSortDirection()"
+        [disabled]="loading()"
+        [title]="sortTitle()"
+        [attr.aria-label]="sortTitle()"
+      >
+        <span class="material-icons-sharp">{{ sortDirection() === 'desc' ? 'south' : 'north' }}</span>
+      </button>
+    </app-mobile-bottom-pager>
 
     <section class="mobile-lead-stats mobile-manager-stats" aria-label="Статистика менеджера">
       @for (metric of metrics(); track trackMetric($index, metric)) {
@@ -216,6 +276,16 @@
 
     <app-personal-reminders class="mobile-personal-reminders" mode="full" />
   </section>
+
+  <app-mobile-status-sheet
+    [open]="mobileStatusSheetOpen()"
+    [kicker]="activeSection() === 'companies' ? 'КОМПАНИИ' : 'ЗАКАЗЫ'"
+    title="Выберите статус"
+    [items]="mobileStatusItems()"
+    [activeKey]="activeStatus()"
+    (selected)="selectMobileStatus($event)"
+    (closed)="closeMobileStatusSheet()"
+  />
 
   <section admin-right-content class="lead-stats manager-stats">
     <app-personal-reminders mode="alert" />

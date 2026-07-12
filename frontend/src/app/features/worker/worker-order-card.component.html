@@ -38,7 +38,9 @@
   @if (showBadReviewSummary()) {
     <div class="meta-row">
       <span>Плохие: {{ order.badReviewTasksDone || 0 }}/{{ order.badReviewTasksTotal || 0 }}</span>
-      <span>+{{ order.badReviewTasksSum || 0 }} руб.</span>
+      @if (permissions.canSeeMoney) {
+        <span>+{{ order.badReviewTasksSum || 0 }} руб.</span>
+      }
     </div>
   }
 

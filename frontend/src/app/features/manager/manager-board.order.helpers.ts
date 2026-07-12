@@ -50,7 +50,8 @@ export function managerOrderEditDraft(payload: OrderEditPayload): OrderUpdateReq
     counter: payload.counter ?? 0,
     orderComments: payload.orderComments,
     commentsCompany: payload.commentsCompany,
-    complete: payload.complete
+    complete: payload.complete,
+    removePreviousWorkerFromCompany: false
   };
 }
 

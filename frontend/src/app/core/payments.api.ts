@@ -2,7 +2,7 @@ import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
-import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
+import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
 
 export interface PublicPaymentLink {
   token: string;
@@ -372,7 +372,9 @@ export interface TbankPaymentStatus {
 
 @Injectable({ providedIn: 'root' })
 export class PaymentsApi {
-  private readonly publicContext = new HttpContext().set(SKIP_AUTH_REDIRECT_ON_401, true);
+  private readonly publicContext = new HttpContext()
+    .set(SKIP_AUTH_REDIRECT_ON_401, true)
+    .set(SKIP_AUTH_TOKEN, true);
 
   constructor(private readonly http: HttpClient) {}
 

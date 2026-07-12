@@ -1,27 +1,24 @@
 <div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
   <section
     class="lead-edit-modal review-edit-modal"
-    [class.review-edit-modal--deletable]="canDelete"
     role="dialog"
     aria-modal="true"
     aria-labelledby="review-edit-title"
     (click)="$event.stopPropagation()"
   >
-    @if (canDelete) {
-      <button
-        type="button"
-        class="danger review-delete-action"
-        (click)="deleted.emit()"
-        [disabled]="busy"
-        [title]="deleting ? 'Удаляю...' : 'Удалить'"
-        [attr.aria-label]="deleting ? 'Удаляю отзыв' : 'Удалить отзыв'"
-      >
-        <span class="material-icons-sharp">delete</span>
-        <span class="review-delete-label">{{ deleting ? 'Удаляю...' : 'Удалить' }}</span>
-      </button>
-    }
-
     <header class="lead-edit-head">
+      @if (canDelete) {
+        <button
+          type="button"
+          class="lead-edit-delete review-delete-action"
+          (click)="deleted.emit()"
+          [disabled]="busy"
+          [title]="deleting ? 'Удаляю...' : 'Удалить отзыв'"
+          [attr.aria-label]="deleting ? 'Удаляю отзыв' : 'Удалить отзыв'"
+        >
+          <span class="material-icons-sharp">close</span>
+        </button>
+      }
       <div>
         <small>Отзыв #{{ review?.id }}</small>
         <h2 id="review-edit-title">Редактирование отзыва</h2>

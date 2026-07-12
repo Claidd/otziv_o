@@ -12,6 +12,7 @@ import {
   managerErrorMessage,
   managerHasMeaningfulNote,
   managerLayoutTitle,
+  managerMobileStatusItems,
   managerOptionLabel,
   managerOrderActions,
   managerOrderChatBindingWarning,
@@ -119,6 +120,46 @@ describe('manager-board config helpers', () => {
     expect(managerOrderActions(order({ status: 'Бан' }), false).map((action) => action.status)).toEqual(['Оплачено']);
     expect(managerOrderActions(order({ status: 'Новый' }), true).map((action) => action.status)).not.toContain('Бан');
     expect(managerOrderActions(order({ commonInvoice: true, status: 'Требует внимания' }), true)).toEqual([]);
+  });
+
+  it('builds mobile status items with counts, fallback totals and badges', () => {
+    const metrics: ManagerMetric[] = [{
+      section: 'companies',
+      status: 'Новая',
+      label: 'Новая',
+      value: 3,
+      delta: 2,
+      icon: 'new_releases',
+      tone: 'yellow'
+    }];
+
+    expect(managerMobileStatusItems('companies', ['Все', 'Новая', 'Бан'], metrics, 12)).toEqual([
+      {
+        key: 'Все',
+        title: 'Все',
+        value: 12,
+        icon: 'dashboard',
+        tone: 'blue',
+        ariaLabel: 'Все: 12'
+      },
+      {
+        key: 'Новая',
+        title: 'Новая',
+        value: 3,
+        icon: 'new_releases',
+        tone: 'yellow',
+        badge: '+2',
+        ariaLabel: 'Новая: 3, новых 2'
+      },
+      {
+        key: 'Бан',
+        title: 'Бан',
+        value: 0,
+        icon: 'block',
+        tone: 'blue',
+        ariaLabel: 'Бан: 0'
+      }
+    ]);
   });
 
   it('calculates order labels, amounts, progress and review links', () => {

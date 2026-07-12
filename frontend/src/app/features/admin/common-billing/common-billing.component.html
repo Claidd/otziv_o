@@ -50,7 +50,12 @@
           <p class="empty-text">Загружаю состав счета...</p>
         } @else if (currentInvoice()) {
           <div class="invoice-detail-layout">
-            <section class="invoice-order-cards" aria-label="Заказы внутри общего счета">
+            <section
+              #invoiceOrderCardsViewport
+              class="invoice-order-cards"
+              aria-label="Заказы внутри общего счета"
+              (scroll)="syncInvoiceCardIndex($event)"
+            >
             @for (order of invoiceOrderCards(); track trackOrderCard($index, order)) {
               @let invoiceOrder = invoiceOrderInfo(order);
               <article
@@ -107,6 +112,18 @@
         }
       </section>
     </section>
+
+    @if (invoiceOrderCards().length) {
+      <app-mobile-bottom-pager
+        class="mobile-invoice-pager"
+        [pageIndex]="invoiceCardPageIndex()"
+        [totalPages]="invoiceOrderCards().length"
+        [disabled]="invoiceLoading()"
+        fallbackUrl="/orders"
+        (previous)="previousInvoiceCard()"
+        (next)="nextInvoiceCard()"
+      />
+    }
 
   </section>
 

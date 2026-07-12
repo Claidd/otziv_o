@@ -1660,6 +1660,25 @@ tr.selected td:first-child {
 
   .dictionary-search {
     flex-basis: 100%;
+    min-height: 2.8rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.45rem;
+    border-radius: 1rem;
+    padding: 0 0.75rem;
+  }
+
+  .dictionary-search > .material-icons-sharp {
+    display: inline-block;
+    color: var(--otziv-info);
+    font-size: 1.15rem;
+  }
+
+  .dictionary-search input {
+    min-height: 2.65rem;
+    height: 100%;
+    font-size: 0.82rem;
+    font-weight: 400;
+    line-height: 2.65rem;
   }
 
   .panel-heading,

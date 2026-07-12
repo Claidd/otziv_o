@@ -586,9 +586,64 @@ tr.unlinked td {
 }
 
 @media (max-width: 860px) {
-  .users-toolbar,
-  .users-search {
+  .users-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .users-search {
+    grid-template-columns: minmax(0, 1fr) 2.75rem;
+    gap: 0.4rem;
+  }
+
+  .users-search label {
+    display: grid;
+    min-width: 0;
+    min-height: 2.8rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid rgba(103, 116, 131, 0.24);
+    border-radius: 1rem;
+    padding: 0 0.75rem;
+    background: var(--otziv-white);
+  }
+
+  .users-search label > span {
+    position: static;
+    display: inline-block;
+    transform: none;
+    font-size: 1.15rem;
+  }
+
+  .users-search input {
+    min-height: 2.65rem;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    outline: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 400;
+    line-height: 2.65rem;
+  }
+
+  .users-search select {
+    grid-column: 1 / -1;
+    min-height: 2.75rem;
+    border-radius: 0.9rem;
+    font-size: 0.82rem;
+  }
+
+  .users-search .icon-button {
+    grid-column: 2;
+    grid-row: 1;
+    width: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.9rem;
   }
 
   .user-tabs,

@@ -466,6 +466,7 @@ export interface OrderUpdateRequest {
   orderComments: string;
   commentsCompany: string;
   complete: boolean;
+  removePreviousWorkerFromCompany: boolean;
 }
 
 export interface OrderReviewItem {

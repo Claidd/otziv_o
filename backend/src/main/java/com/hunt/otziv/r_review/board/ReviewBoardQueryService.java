@@ -95,7 +95,6 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
                 conditions.add("r.vigul = false");
-                conditions.add("(b IS NULL OR b.counter <= 2)");
                 addReadyReviewTextConditions(conditions);
             }
         }
@@ -168,7 +167,6 @@ public class ReviewBoardQueryService {
                 conditions.add("r.publishedDate <= :localDate");
                 conditions.add("r.publish = false");
                 conditions.add("r.vigul = false");
-                conditions.add("(b IS NULL OR b.counter <= 2)");
                 addReadyReviewTextConditions(conditions);
             }
         }

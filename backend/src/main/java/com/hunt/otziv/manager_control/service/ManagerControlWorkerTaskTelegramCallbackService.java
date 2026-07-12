@@ -171,7 +171,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         telegramService.sendMessage(chatId,
                 "Пояснение принято. Менеджер увидит его в карточке контроля."
                         + "\n\nСтатус: ответ получен"
-                        + "\nКарточка: " + safe(item.getTitle()));
+                        + "\nКарточка: " + withoutFinancialInfo(item.getTitle()));
         return true;
     }
 
@@ -254,8 +254,8 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
             telegramService.sendForceReplyMessage(chatId,
                     "Принято, нужен комментарий."
                             + "\nНапишите пояснение следующим сообщением в эту группу."
-                            + "\nКарточка: " + safe(item.getTitle())
-                            + "\nПричина: " + safe(item.getReason()));
+                            + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
+                            + "\nПричина: " + withoutFinancialInfo(item.getReason()));
         }
 
         return Optional.of("Напишите пояснение следующим сообщением");
@@ -271,9 +271,9 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         }
         String text = "Менеджер запросил пояснение."
                 + "\nСтатус: принято, нужен комментарий"
-                + "\nКарточка: " + safe(item.getTitle())
-                + "\n" + safe(item.getSubtitle())
-                + "\n" + safe(item.getReason())
+                + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
+                + "\n" + withoutFinancialInfo(item.getSubtitle())
+                + "\n" + withoutFinancialInfo(item.getReason())
                 + "\n\nНапишите пояснение следующим сообщением в эту группу.";
         telegramService.editMessageText(chatId, messageId, text, null, null);
     }
@@ -347,9 +347,9 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         }
         String text = "Менеджер запросил действие: проверьте открытый риск."
                 + "\nСтатус: принято, нужен комментарий"
-                + "\nКарточка: " + safe(item.getTitle())
-                + "\n" + safe(item.getSubtitle())
-                + "\n" + safe(item.getReason())
+                + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
+                + "\n" + withoutFinancialInfo(item.getSubtitle())
+                + "\n" + withoutFinancialInfo(item.getReason())
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                 + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
                 + "\n\nНапишите пояснение следующим сообщением в эту группу.";
@@ -433,6 +433,16 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
 
     private String safe(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private String withoutFinancialInfo(String value) {
+        return safe(value)
+                .replaceAll("(?iu)(?:сумма|стоимость|цена|к\\s+оплате|остаток)\\s*:?\\s*[+−-]?\\s*\\d[\\d\\s.,]*\\s*(?:руб(?:\\.|лей|ля)?|₽)?", "")
+                .replaceAll("(?iu)[+−-]?\\s*\\d[\\d\\s.,]*\\s*(?:руб(?:\\.|лей|ля)?|₽)", "")
+                .replaceAll("\\s*[·|]\\s*(?=[·|]|$)", "")
+                .replaceAll("\\s{2,}", " ")
+                .replaceAll("^[\\s·|,;:-]+|[\\s·|,;:-]+$", "")
+                .trim();
     }
 
     private String limit(String value, int maxLength) {

@@ -33,3 +33,14 @@ test('keeps landscape or keyboard-shrunk viewports dense', () => {
   assert.equal(mobileViewportMode(430, 760).roomyPhone, false);
   assert.equal(mobileViewportMode(430, 760).shortPhone, true);
 });
+
+test('covers Galaxy S25 and the full supported phone width range', () => {
+  const galaxyS25 = mobileViewportMode(384, 700);
+  assert.equal(galaxyS25.compactPhone, true);
+  assert.equal(galaxyS25.roomyPhone, false);
+  assert.equal(galaxyS25.shortPhone, true);
+  assert.equal(mobileViewportMode(320, 568).shortPhone, true);
+  assert.equal(mobileViewportMode(414, 896).roomyPhone, true);
+  assert.equal(mobileViewportMode(600, 960).roomyPhone, true);
+  assert.equal(mobileViewportMode(800, 1000).roomyPhone, true);
+});

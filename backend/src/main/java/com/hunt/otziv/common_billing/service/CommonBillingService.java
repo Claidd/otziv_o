@@ -411,7 +411,12 @@ public class CommonBillingService {
         invoices.stream()
                 .filter(invoice -> visibleToManager(invoice, itemsByInvoice.getOrDefault(invoice.getId(), List.of()), visibleManagerIds))
                 .map(invoice -> boardStatus(invoice, itemsByInvoice.getOrDefault(invoice.getId(), List.of())))
-                .forEach(status -> counts.merge(status, 1, Integer::sum));
+                .forEach(status -> {
+                    counts.merge(status, 1, Integer::sum);
+                    if (STATUS_WAITING_COMMON_INVOICE.equals(status)) {
+                        counts.merge("Новый", 1, Integer::sum);
+                    }
+                });
         return counts;
     }
 
@@ -3205,7 +3210,11 @@ public class CommonBillingService {
     }
 
     private boolean matchesBoardStatus(CommonInvoice invoice, List<CommonInvoiceOrder> items, String boardStatus) {
-        return boardStatus.isBlank() || "Все".equals(boardStatus) || boardStatus(invoice, items).equals(boardStatus);
+        String invoiceBoardStatus = boardStatus(invoice, items);
+        return boardStatus.isBlank()
+                || "Все".equals(boardStatus)
+                || invoiceBoardStatus.equals(boardStatus)
+                || ("Новый".equals(boardStatus) && STATUS_WAITING_COMMON_INVOICE.equals(invoiceBoardStatus));
     }
 
     private boolean matchesBoardCompany(List<CommonInvoiceOrder> items, Long companyId) {

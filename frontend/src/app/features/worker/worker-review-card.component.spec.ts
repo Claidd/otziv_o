@@ -67,6 +67,87 @@ describe('WorkerReviewCardComponent', () => {
     expect(element.querySelector('.publish-button')?.textContent?.trim()).toBe('Сменил');
   });
 
+  it('edits the account name inline during walk with explicit save and without hiding its counter', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ botFio: 'Old Name', botCounter: 3 });
+    component.activeSection = 'nagul';
+    component.canInlineEditBotName = true;
+    let savedName = '';
+    component.botNameSaveRequested.subscribe((value) => {
+      savedName = value;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('.bot-counter')?.textContent?.trim()).toBe('3');
+    element.querySelector<HTMLButtonElement>('.bot-name-button')?.click();
+    fixture.detectChanges();
+
+    const input = element.querySelector<HTMLInputElement>('.bot-name-input');
+    expect(input?.value).toBe('Old Name');
+    expect(element.querySelector('.bot-name-actions')).not.toBeNull();
+    input!.value = 'New Name';
+    input!.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    element.querySelector<HTMLButtonElement>('.bot-name-action--save')?.click();
+    fixture.detectChanges();
+
+    expect(savedName).toBe('New Name');
+    expect(element.querySelector('.bot-counter')?.textContent?.trim()).toBe('3');
+  });
+
+  it('cancels inline account name editing without saving', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ botFio: 'Old Name', botCounter: 3 });
+    component.activeSection = 'nagul';
+    component.canInlineEditBotName = true;
+    let savedName = '';
+    component.botNameSaveRequested.subscribe((value) => {
+      savedName = value;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    element.querySelector<HTMLButtonElement>('.bot-name-button')?.click();
+    fixture.detectChanges();
+
+    const input = element.querySelector<HTMLInputElement>('.bot-name-input');
+    input!.value = 'New Name';
+    input!.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    element.querySelector<HTMLButtonElement>('.bot-name-action--cancel')?.click();
+    fixture.detectChanges();
+
+    expect(savedName).toBe('');
+    expect(element.querySelector('.bot-name-button')?.textContent?.trim()).toBe('Old Name');
+    expect(element.querySelector('.bot-counter')?.textContent?.trim()).toBe('3');
+  });
+
+  it('groups everything after the review text into the adaptive card footer', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    fixture.componentInstance.review = review();
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const card = element.querySelector('.review-card');
+    const cardFooter = card?.querySelector('.review-card-footer');
+
+    expect(card?.children.item(1)?.classList.contains('review-field-editor--text')).toBe(true);
+    expect(card?.children.item(2)).toBe(cardFooter);
+    expect(cardFooter?.querySelector('.review-field-editor--answer')).not.toBeNull();
+    expect(cardFooter?.querySelector('.bot-line')).not.toBeNull();
+    expect(cardFooter?.querySelector('.review-actions')).not.toBeNull();
+    expect(cardFooter?.querySelector('.publish-button')).not.toBeNull();
+    expect(cardFooter?.lastElementChild?.tagName).toBe('FOOTER');
+  });
+
   it('adds soft section tones for review work cards', () => {
     const render = (
       activeSection: WorkerReviewCardComponent['activeSection'],
@@ -418,6 +499,8 @@ describe('WorkerReviewCardComponent', () => {
     element.querySelector<HTMLButtonElement>('.publish-button')?.click();
     element.querySelector<HTMLAnchorElement>('footer a')?.click();
 
+    const editLink = element.querySelector<HTMLAnchorElement>('.review-edit-link');
+    expect(editLink?.getAttribute('aria-label')).toBe('Редактировать отзыв: Worker');
     expect(copied).toBe('url');
     expect(botChanged).toBe(true);
     expect(botDeactivated).toBe(true);

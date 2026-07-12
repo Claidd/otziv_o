@@ -73,6 +73,21 @@
               <h2>{{ block.title }}</h2>
             </div>
 
+            @if (block.images?.length) {
+              <div class="training-card__images">
+                @for (trainingImage of block.images; track trainingImage.src) {
+                  <figure>
+                    <img
+                      [src]="trainingImage.src"
+                      [alt]="trainingImage.alt"
+                      loading="lazy"
+                    >
+                    <figcaption>{{ trainingImage.caption }}</figcaption>
+                  </figure>
+                }
+              </div>
+            }
+
             <ul>
               @for (item of block.items; track trackItem($index, item)) {
                 <li>{{ item }}</li>

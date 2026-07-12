@@ -23,6 +23,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
+import com.hunt.otziv.p_products.worker_flow.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -177,6 +178,9 @@ public class ApiWorkerBoardController {
             Page<OrderDTOList> orders = isOrderSection(normalizedSection)
                     ? loadOrders(principal, authentication, selectedWorker, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
                     : emptyPage(safePageNumber, safePageSize);
+            if (hasOnlyWorkerRole(authentication)) {
+                orders.forEach(this::removeFinancialData);
+            }
 
             PageResponse<WorkerReviewResponse> reviews = isReviewSection(normalizedSection)
                     ? loadReviewResponses(principal, authentication, selectedWorker, normalizedSection, trimmedKeyword, safePageNumber, safePageSize, normalizedSortDirection)
@@ -196,7 +200,8 @@ public class ApiWorkerBoardController {
                     workerSelection.available(),
                     message,
                     warning,
-                    activeCredentialPreparation(authentication, normalizedSection)
+                    activeCredentialPreparation(authentication, normalizedSection),
+                    workerPublicationGateService.sessionState(principal, authentication)
             );
         });
     }
@@ -210,30 +215,15 @@ public class ApiWorkerBoardController {
         return performanceMetrics.recordEndpoint("worker.overdue-orders", () -> {
             LocalDate today = LocalDate.now();
             LocalDate cutoff = today.minusDays(OVERDUE_NOTIFICATION_DAYS + 1L);
-            List<Object[]> summaryRows;
+            List<Object[]> orderRows = loadOverdueOrderSummary(principal, authentication, cutoff);
+            List<ManagerOverdueStatusResponse> statuses = new ArrayList<>();
+            addPositiveStatus(statuses, overdueOrderSection(orderRows, today, ORDER_STATUS_NEW, "Новые"));
+            addPositiveStatus(statuses, overdueOrderSection(orderRows, today, ORDER_STATUS_CORRECT, "Коррекция"));
+            addPositiveStatus(statuses, overdueReviewSection(principal, authentication, SECTION_NAGUL, "Выгул", today));
+            addPositiveStatus(statuses, overdueReviewSection(principal, authentication, SECTION_PUBLISH, "Публикация", today));
+            addPositiveStatus(statuses, overdueRecoverySection(principal, authentication, today));
+            addPositiveStatus(statuses, overdueBadSection(principal, authentication, today));
 
-            if (hasRole(authentication, "ADMIN")) {
-                summaryRows = orderRepository.summarizeOverdueOrders(cutoff, OVERDUE_IGNORED_STATUSES);
-            } else if (hasRole(authentication, "OWNER")) {
-                Set<Manager> managers = resolveOwnerManagers(principal);
-                summaryRows = managers.isEmpty()
-                        ? List.of()
-                        : orderRepository.summarizeOverdueOrdersByManagers(managers, cutoff, OVERDUE_IGNORED_STATUSES);
-            } else if (hasRole(authentication, "MANAGER")) {
-                summaryRows = orderRepository.summarizeOverdueOrdersByManager(
-                        resolveManager(principal),
-                        cutoff,
-                        OVERDUE_IGNORED_STATUSES
-                );
-            } else {
-                summaryRows = orderRepository.summarizeOverdueOrdersByWorker(
-                        resolveWorker(principal),
-                        cutoff,
-                        OVERDUE_IGNORED_STATUSES
-                );
-            }
-
-            List<ManagerOverdueStatusResponse> statuses = toOverdueStatuses(summaryRows, today);
             long total = statuses.stream()
                     .mapToLong(ManagerOverdueStatusResponse::count)
                     .sum();
@@ -362,8 +352,11 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotChangeResponse changeReviewBot(
             @PathVariable Long reviewId,
-            @RequestBody(required = false) WorkerActivitySourceRequest source
+            @RequestBody(required = false) WorkerActivitySourceRequest source,
+            Principal principal,
+            Authentication authentication
     ) {
+        enforcePublicationSessionIfNeeded(source, principal, authentication);
         Review review = reviewService.getReviewById(reviewId);
         Long oldBotId = botId(review);
         reviewService.changeBot(reviewId, isSourceSection(source, SECTION_PUBLISH));
@@ -377,6 +370,7 @@ public class ApiWorkerBoardController {
                 "review",
                 withSource(botChangeDetails(oldBotId, newBotId), source)
         );
+        recordPublicationActivityIfNeeded(source, principal, authentication);
         return new BotChangeResponse(oldBotId, newBotId);
     }
 
@@ -386,8 +380,11 @@ public class ApiWorkerBoardController {
     public void deactivateReviewBot(
             @PathVariable Long reviewId,
             @PathVariable Long botId,
-            @RequestBody(required = false) WorkerActivitySourceRequest source
+            @RequestBody(required = false) WorkerActivitySourceRequest source,
+            Principal principal,
+            Authentication authentication
     ) {
+        enforcePublicationSessionIfNeeded(source, principal, authentication);
         Review review = reviewService.getReviewById(reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId, isSourceSection(source, SECTION_PUBLISH));
         workerActivityService.recordCurrentAuthenticationSafely(
@@ -399,6 +396,7 @@ public class ApiWorkerBoardController {
                 "review",
                 withSource("botId=" + valueOrDash(botId) + ";", source)
         );
+        recordPublicationActivityIfNeeded(source, principal, authentication);
     }
 
     @PostMapping("/reviews/{reviewId}/copy-click")
@@ -410,6 +408,7 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
+        enforcePublicationSessionIfNeeded(request, principal, authentication);
         String field = normalizeReviewCopyField(request);
         Review review = reviewService.getReviewById(reviewId);
         if (review == null) {
@@ -446,6 +445,7 @@ public class ApiWorkerBoardController {
                 request == null ? null : request.sourceEntry(),
                 request == null ? null : request.sourceSection()
         );
+        recordPublicationActivityIfNeeded(request, principal, authentication);
     }
 
     @PostMapping("/reviews/{reviewId}/publish")
@@ -486,6 +486,7 @@ public class ApiWorkerBoardController {
                     botDetails(review == null ? null : review.getBot())
             );
             credentialPreparationService.clear(authentication, WorkerCredentialPreparationScope.PUBLISH);
+            workerPublicationGateService.recordPublicationActivity(principal, authentication);
         } catch (ResponseStatusException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -761,6 +762,42 @@ public class ApiWorkerBoardController {
                 reviewId,
                 "review_text",
                 null
+        );
+    }
+
+    @PutMapping("/reviews/{reviewId}/bot-name")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void updateReviewBotName(
+            @PathVariable Long reviewId,
+            @RequestBody ReviewBotNameUpdateRequest request
+    ) {
+        String botName = request == null || request.botName() == null
+                ? ""
+                : request.botName().trim();
+        if (botName.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Имя аккаунта не указано");
+        }
+        if (botName.length() > 255) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Имя аккаунта слишком длинное");
+        }
+
+        Review review = reviewService.getReviewById(reviewId);
+        Bot bot = review == null ? null : review.getBot();
+        if (bot == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У отзыва нет назначенного аккаунта");
+        }
+
+        bot.setFio(botName);
+        botService.save(bot);
+        workerActivityService.recordCurrentAuthenticationSafely(
+                WorkerActivityAction.REVIEW_BOT_NAME_UPDATE,
+                "review",
+                reviewId,
+                orderId(review),
+                reviewId,
+                SECTION_NAGUL,
+                botDetails(bot)
         );
     }
 
@@ -1264,6 +1301,75 @@ public class ApiWorkerBoardController {
         );
     }
 
+    private boolean hasOnlyWorkerRole(Authentication authentication) {
+        return hasRole(authentication, "WORKER")
+                && !hasRole(authentication, "ADMIN")
+                && !hasRole(authentication, "OWNER")
+                && !hasRole(authentication, "MANAGER");
+    }
+
+    private void recordPublicationActivityIfNeeded(
+            WorkerActivitySourceRequest source,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (isSourceSection(source, SECTION_PUBLISH)) {
+            workerPublicationGateService.recordPublicationActivity(principal, authentication);
+        }
+    }
+
+    private void enforcePublicationSessionIfNeeded(
+            WorkerActivitySourceRequest source,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (isSourceSection(source, SECTION_PUBLISH)) {
+            enforcePublicationSession(principal, authentication);
+        }
+    }
+
+    private void recordPublicationActivityIfNeeded(
+            ReviewCopyClickRequest source,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (source != null && SECTION_PUBLISH.equalsIgnoreCase(safe(source.sourceSection()).trim())) {
+            workerPublicationGateService.recordPublicationActivity(principal, authentication);
+        }
+    }
+
+    private void enforcePublicationSessionIfNeeded(
+            ReviewCopyClickRequest source,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (source != null && SECTION_PUBLISH.equalsIgnoreCase(safe(source.sourceSection()).trim())) {
+            enforcePublicationSession(principal, authentication);
+        }
+    }
+
+    private void enforcePublicationSession(Principal principal, Authentication authentication) {
+        workerPublicationGateService.blockForPublication(principal, authentication)
+                .ifPresent(block -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, block.message());
+                });
+    }
+
+    private void removeFinancialData(OrderDTOList order) {
+        if (order == null) {
+            return;
+        }
+        order.setSum(null);
+        order.setTotalSumWithBadReviews(null);
+        order.setBadReviewTasksSum(null);
+        order.setManagerPayText(null);
+        order.setCommonInvoiceAmount(null);
+        order.setCommonInvoicePaid(null);
+        order.setCommonInvoiceRemaining(null);
+        order.setCommonInvoicePublicUrl(null);
+        order.setCommonInvoiceLastError(null);
+    }
+
     private WorkerCredentialPreparationResponse activeCredentialPreparation(Authentication authentication, String section) {
         if (SECTION_PUBLISH.equals(section)) {
             return credentialPreparationService.active(authentication, WorkerCredentialPreparationScope.PUBLISH);
@@ -1702,6 +1808,88 @@ public class ApiWorkerBoardController {
             return user.getUsername().trim();
         }
         return worker != null && worker.getId() != null ? "Специалист #" + worker.getId() : "Специалист";
+    }
+
+    private List<Object[]> loadOverdueOrderSummary(Principal principal, Authentication authentication, LocalDate cutoff) {
+        if (hasRole(authentication, "ADMIN")) {
+            return orderRepository.summarizeOverdueOrders(cutoff, OVERDUE_IGNORED_STATUSES);
+        }
+        if (hasRole(authentication, "OWNER")) {
+            Set<Manager> managers = resolveOwnerManagers(principal);
+            return managers.isEmpty()
+                    ? List.of()
+                    : orderRepository.summarizeOverdueOrdersByManagers(managers, cutoff, OVERDUE_IGNORED_STATUSES);
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            return orderRepository.summarizeOverdueOrdersByManager(
+                    resolveManager(principal),
+                    cutoff,
+                    OVERDUE_IGNORED_STATUSES
+            );
+        }
+        return orderRepository.summarizeOverdueOrdersByWorker(
+                resolveWorker(principal),
+                cutoff,
+                OVERDUE_IGNORED_STATUSES
+        );
+    }
+
+    private ManagerOverdueStatusResponse overdueOrderSection(
+            List<Object[]> rows,
+            LocalDate today,
+            String orderStatus,
+            String sectionLabel
+    ) {
+        long count = 0;
+        long maxDays = 0;
+        if (rows != null) {
+            for (Object[] row : rows) {
+                if (!orderStatus.equals(rowString(row, 0, ""))) {
+                    continue;
+                }
+                count += rowLong(row, 1);
+                maxDays = Math.max(maxDays, daysSince(rowDate(row, 2), today));
+            }
+        }
+        return new ManagerOverdueStatusResponse(sectionLabel, count, maxDays);
+    }
+
+    private ManagerOverdueStatusResponse overdueReviewSection(
+            Principal principal,
+            Authentication authentication,
+            String section,
+            String sectionLabel,
+            LocalDate today
+    ) {
+        Page<ReviewDTOOne> page = loadReviewPage(principal, authentication, null, section, 0, 1, "asc", "");
+        LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getPublishedDate();
+        return new ManagerOverdueStatusResponse(sectionLabel, page.getTotalElements(), daysSince(oldestDate, today));
+    }
+
+    private ManagerOverdueStatusResponse overdueRecoverySection(
+            Principal principal,
+            Authentication authentication,
+            LocalDate today
+    ) {
+        Page<ReviewRecoveryTask> page = loadRecoveryTasks(principal, authentication, null, "", 0, 1, "asc");
+        LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getScheduledDate();
+        return new ManagerOverdueStatusResponse("Восстановление", page.getTotalElements(), daysSince(oldestDate, today));
+    }
+
+    private ManagerOverdueStatusResponse overdueBadSection(
+            Principal principal,
+            Authentication authentication,
+            LocalDate today
+    ) {
+        Page<BadReviewTask> page = loadBadReviewTasks(principal, authentication, null, "", 0, 1, "asc");
+        LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getScheduledDate();
+        return new ManagerOverdueStatusResponse("Плохие", page.getTotalElements(), daysSince(oldestDate, today));
+    }
+
+    private void addPositiveStatus(List<ManagerOverdueStatusResponse> statuses, ManagerOverdueStatusResponse status) {
+        if (status.count() > 0) {
+            statuses.add(status);
+        }
     }
 
     private Manager resolveManager(Principal principal) {
@@ -2228,7 +2416,8 @@ public class ApiWorkerBoardController {
             boolean workerFilterAvailable,
             String message,
             boolean warning,
-            WorkerCredentialPreparationResponse credentialPreparation
+            WorkerCredentialPreparationResponse credentialPreparation,
+            WorkerPublicationSessionService.SessionState publicationSession
     ) {
     }
 
@@ -2385,6 +2574,9 @@ public class ApiWorkerBoardController {
     }
 
     public record ReviewTextUpdateRequest(Long orderId, String text) {
+    }
+
+    public record ReviewBotNameUpdateRequest(String botName) {
     }
 
     public record BadTaskUpdateRequest(String taskText, LocalDate scheduledDate) {

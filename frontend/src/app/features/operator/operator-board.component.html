@@ -1,31 +1,14 @@
 <app-admin-layout title="Оператор" active="operator" rightPanelMode="custom">
-  <section class="lead-workspace" [class.menu-open]="mobileMenuOpen()">
-    <button
-      type="button"
-      class="mobile-menu-toggle"
-      [class.active]="mobileMenuOpen()"
-      [attr.aria-expanded]="mobileMenuOpen()"
-      aria-controls="lead-menu-panel"
-      (click)="toggleMobileMenu()"
-    >
-      Меню
-      <span aria-hidden="true">{{ mobileMenuOpen() ? '▲' : '▼' }}</span>
-    </button>
+  <section class="lead-workspace">
+    <app-mobile-status-slider
+      class="mobile-board-status"
+      [items]="mobileStatusItems()"
+      [activeKey]="activeSection()"
+      ariaLabel="Состояние оператора"
+      (select)="selectMobileSection($event)"
+    />
 
-    <div id="lead-menu-panel" class="lead-menu-panel" [class.open]="mobileMenuOpen()">
-      <div class="mobile-menu-heading">
-        <h1>Оператор</h1>
-        <nav class="mobile-role-links" aria-label="Разделы">
-          @for (link of mobileNavLinks; track trackMobileLink($index, link)) {
-            @if (link.routerLink) {
-              <a [routerLink]="link.routerLink">{{ link.label }}</a>
-            } @else {
-              <a [href]="link.href">{{ link.label }}</a>
-            }
-          }
-        </nav>
-      </div>
-
+    <div class="lead-controls">
       <header class="lead-toolbar">
         <nav class="status-tabs" aria-label="Состояние оператора">
           @for (tab of sectionTabs(); track trackSection($index, tab)) {
@@ -43,7 +26,7 @@
         </nav>
 
         @if (canManagePhones()) {
-          <div class="quick-links">
+          <div class="quick-links desktop-quick-links">
             <a [routerLink]="phonesRoute">
               <span class="material-icons-sharp">settings_cell</span>
               Телефон
@@ -67,26 +50,37 @@
             <span class="material-icons-sharp">search</span>
             <input
               type="text"
-              placeholder="Найти"
+              placeholder="Телефон, город, комментарий"
               [ngModel]="keyword()"
               (ngModelChange)="keyword.set($event)"
               (keyup.enter)="search()"
             >
           </label>
 
-          <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+          <select class="desktop-page-size" [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
             @for (size of pageSizeOptions; track size) {
               <option [value]="size">{{ size }}</option>
             }
           </select>
 
-          <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Обновить">
+          <button type="button" class="icon-button search-refresh" (click)="search()" [disabled]="loading()" title="Обновить">
             <span class="material-icons-sharp">refresh</span>
           </button>
 
           @if (keyword()) {
             <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
               <span class="material-icons-sharp">close</span>
+            </button>
+          }
+        </div>
+
+        <div class="mobile-board-actions" aria-label="Действия оператора">
+          <button type="button" (click)="search()" [disabled]="loading()" aria-label="Обновить список" title="Обновить">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+          @if (canManagePhones()) {
+            <button type="button" (click)="openBindModal()" aria-label="Настроить телефон" title="Телефон">
+              <span class="material-icons-sharp">settings_cell</span>
             </button>
           }
         </div>
@@ -169,7 +163,7 @@
       }
     </section>
 
-    <footer class="pager">
+    <footer class="pager desktop-pager">
       <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
         <span class="material-icons-sharp">chevron_left</span>
       </button>
@@ -178,6 +172,16 @@
         <span class="material-icons-sharp">chevron_right</span>
       </button>
     </footer>
+
+    <app-mobile-bottom-pager
+      class="mobile-page-bottom-pager"
+      [pageIndex]="currentPage().pageNumber"
+      [totalPages]="currentPage().totalPages || 1"
+      [disabled]="loading()"
+      fallbackUrl="/"
+      (previous)="previousPage()"
+      (next)="nextPage()"
+    />
 
     <section class="mobile-lead-stats mobile-operator-stats" aria-label="Статистика оператора">
       @for (metric of metrics(); track trackMetric($index, metric)) {
@@ -191,6 +195,16 @@
       }
     </section>
   </section>
+
+  <app-mobile-status-sheet
+    [open]="mobileStatusSheetOpen()"
+    kicker="Оператор"
+    title="Выберите раздел"
+    [items]="mobileStatusItems()"
+    [activeKey]="activeSection()"
+    (selected)="selectMobileSection($event)"
+    (closed)="closeMobileStatusSheet()"
+  />
 
   <section admin-right-content class="lead-stats operator-stats">
     @for (metric of metrics(); track trackMetric($index, metric)) {

@@ -198,7 +198,7 @@
               [class.expanded]="isReviewTextOpen(review)"
             >
               <div class="review-text-box">
-                @if (isReviewFieldEditing(review, 'text')) {
+                @if (isReviewFieldEditing(review, 'text') && !isMobileReviewLayout()) {
                   <textarea
                     [name]="'text-' + review.id"
                     [ngModel]="reviewFieldValue(review, 'text')"
@@ -244,7 +244,7 @@
                 }
               </div>
 
-              @if (isReviewFieldEditing(review, 'text')) {
+              @if (isReviewFieldEditing(review, 'text') && !isMobileReviewLayout()) {
                 <div class="review-field-edit-actions">
                   <span class="field-save-actions">
                     <button
@@ -272,6 +272,7 @@
               }
             </div>
 
+            <div class="review-card-footer">
             <div class="review-field-editor review-field-editor--answer" [class.editing]="isReviewFieldEditing(review, 'answer')">
               @if (isReviewFieldEditing(review, 'answer')) {
                 <textarea
@@ -455,6 +456,7 @@
                 </button>
               }
             </footer>
+            </div>
             </article>
           } @empty {
             <div class="empty-state">
@@ -562,9 +564,22 @@
           Проверка отзывов
         </a>
         <button type="button" (click)="addReview()" [disabled]="isMutating('add-review')">
-          {{ isMutating('add-review') ? 'Добавляю...' : 'Добавить новый отзыв' }}
+          <span class="desktop-add-review-label">{{ isMutating('add-review') ? 'Добавляю...' : 'Добавить новый отзыв' }}</span>
+          <span class="mobile-add-review-label">{{ isMutating('add-review') ? 'Добавляю...' : '+1 отзыв' }}</span>
         </button>
       </footer>
+
+      @if (reviews().length > 0) {
+        <app-mobile-bottom-pager
+          class="mobile-order-details-pager"
+          [pageIndex]="activeReviewSlide()"
+          [totalPages]="reviews().length"
+          [disabled]="busy()"
+          fallbackUrl="/orders"
+          (previous)="previousReview()"
+          (next)="nextReview()"
+        />
+      }
 
       @if (companyReportVisible()) {
         <section class="side-note-card company-report-stage">
@@ -616,29 +631,93 @@
       }
 
       @if (activeReviewFieldEdit(); as edit) {
-        <section
-          class="mobile-review-save-bar"
-          [style.bottom]="mobileReviewActionBottom()"
-          role="group"
-          [attr.aria-label]="edit.title + ': действия редактирования'"
-        >
-          <button
-            type="button"
-            class="cancel"
-            (click)="cancelReviewFieldEdit(edit.review, edit.field)"
-            [disabled]="isMutating(edit.mutationKey)"
+        @if (isMobileReviewLayout() && edit.field === 'text') {
+          <section
+            class="mobile-review-text-modal"
+            [style.--mobile-editor-keyboard-bottom]="mobileReviewActionBottom()"
+            role="dialog"
+            aria-modal="true"
+            [attr.aria-labelledby]="'mobile-review-editor-title-' + edit.review.id"
           >
-            Отменить
-          </button>
-          <button
-            type="button"
-            class="save"
-            (click)="saveReviewField(edit.review, edit.field)"
-            [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+            <header class="mobile-review-text-modal__header">
+              <div>
+                <small>Отзыв #{{ edit.review.id }}</small>
+                <h2 [id]="'mobile-review-editor-title-' + edit.review.id">Редактирование текста</h2>
+              </div>
+              <button
+                type="button"
+                class="mobile-review-text-modal__close"
+                (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+                [disabled]="isMutating(edit.mutationKey)"
+                aria-label="Закрыть редактор"
+              >
+                <span class="material-icons-sharp">close</span>
+              </button>
+            </header>
+
+            <label class="mobile-review-text-modal__field">
+              <span>{{ edit.review.companyTitle || 'Текст отзыва' }}</span>
+              <textarea
+                [name]="'mobile-text-' + edit.review.id"
+                [ngModel]="reviewFieldValue(edit.review, edit.field)"
+                (ngModelChange)="setReviewFieldDraft(edit.review, edit.field, $event)"
+                [disabled]="isMutating(edit.mutationKey)"
+                aria-label="Текст отзыва"
+                placeholder="Введите текст отзыва"
+              ></textarea>
+            </label>
+
+            <section
+              class="mobile-review-save-bar mobile-review-save-bar--telegram"
+              [style.bottom]="mobileReviewActionBottom()"
+              role="group"
+              aria-label="Действия редактора текста"
+            >
+              <button
+                type="button"
+                class="cancel"
+                (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+                [disabled]="isMutating(edit.mutationKey)"
+              >
+                <span class="material-icons-sharp">close</span>
+                Отменить
+              </button>
+              <button
+                type="button"
+                class="save"
+                (click)="saveReviewField(edit.review, edit.field)"
+                [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || !reviewFieldValue(edit.review, edit.field).trim()"
+              >
+                <span class="material-icons-sharp">{{ isMutating(edit.mutationKey) ? 'hourglass_top' : 'send' }}</span>
+                {{ isMutating(edit.mutationKey) ? 'Сохраняю' : 'Сохранить' }}
+              </button>
+            </section>
+          </section>
+        } @else {
+          <section
+            class="mobile-review-save-bar"
+            [style.bottom]="mobileReviewActionBottom()"
+            role="group"
+            [attr.aria-label]="edit.title + ': действия редактирования'"
           >
-            Сохранить
-          </button>
-        </section>
+            <button
+              type="button"
+              class="cancel"
+              (click)="cancelReviewFieldEdit(edit.review, edit.field)"
+              [disabled]="isMutating(edit.mutationKey)"
+            >
+              Отменить
+            </button>
+            <button
+              type="button"
+              class="save"
+              (click)="saveReviewField(edit.review, edit.field)"
+              [disabled]="isMutating(edit.mutationKey) || !isReviewFieldChanged(edit.review, edit.field) || (edit.field === 'text' && !reviewFieldValue(edit.review, edit.field).trim())"
+            >
+              Сохранить
+            </button>
+          </section>
+        }
       }
 
       <section class="mobile-order-details-side" aria-label="Сводка заказа">
@@ -750,7 +829,9 @@
                   </button>
                 </div>
                 <footer class="bad-review-task-footer">
-                  <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
+                  @if (task.price != null) {
+                    <strong>+{{ task.price | number:'1.0-0' }} руб.</strong>
+                  }
                   @if (canCompleteBadReviewTask(task)) {
                     <button
                       type="button"
@@ -942,7 +1023,9 @@
             <article class="stat-card yellow">
               <div>
                 <span>Итого к оплате</span>
-                <strong>{{ details.badReviewSummary?.totalSumWithBadReviews || details.sum || 0 | number:'1.0-0' }}</strong>
+                @if (details.sum != null) {
+                  <strong>{{ details.badReviewSummary?.totalSumWithBadReviews || details.sum | number:'1.0-0' }}</strong>
+                }
               </div>
               <i class="material-icons-sharp">receipt_long</i>
             </article>
@@ -1062,7 +1145,9 @@
                 </button>
               </div>
               <footer class="bad-review-task-footer">
-                <strong>+{{ task.price || 0 | number:'1.0-0' }} руб.</strong>
+                @if (task.price != null) {
+                  <strong>+{{ task.price | number:'1.0-0' }} руб.</strong>
+                }
                 @if (canCompleteBadReviewTask(task)) {
                   <button
                     type="button"
@@ -1253,7 +1338,9 @@
         <article class="stat-card yellow">
           <div>
             <span>Итого к оплате</span>
-            <strong>{{ details.badReviewSummary?.totalSumWithBadReviews || details.sum || 0 | number:'1.0-0' }}</strong>
+            @if (details.sum != null) {
+              <strong>{{ details.badReviewSummary?.totalSumWithBadReviews || details.sum | number:'1.0-0' }}</strong>
+            }
           </div>
           <i class="material-icons-sharp">receipt_long</i>
         </article>
@@ -1272,6 +1359,18 @@
           (click)="$event.stopPropagation()"
         >
           <header class="lead-edit-head">
+            @if (canDeleteReviews()) {
+              <button
+                type="button"
+                class="lead-edit-delete review-delete-action"
+                (click)="deleteReviewEdit()"
+                [disabled]="reviewEditBusy()"
+                [title]="reviewEditDeleting() ? 'Удаляю...' : 'Удалить отзыв'"
+                [attr.aria-label]="reviewEditDeleting() ? 'Удаляю отзыв' : 'Удалить отзыв'"
+              >
+                <span class="material-icons-sharp">close</span>
+              </button>
+            }
             <div>
               <small>Отзыв #{{ review.id }}</small>
               <h2 id="review-edit-title">Редактирование отзыва</h2>
@@ -1452,12 +1551,6 @@
             </div>
 
             <div class="lead-edit-actions" [class.lead-edit-actions--split]="canDeleteReviews()">
-              @if (canDeleteReviews()) {
-                <button type="button" class="danger review-delete-action" (click)="deleteReviewEdit()" [disabled]="reviewEditBusy()">
-                  {{ reviewEditDeleting() ? 'Удаляю...' : 'Удалить' }}
-                </button>
-              }
-
               <div class="lead-edit-actions-group">
                 @if (!hideReviewNewAccountAction()) {
                   <button

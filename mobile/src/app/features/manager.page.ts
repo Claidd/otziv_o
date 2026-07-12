@@ -1114,6 +1114,18 @@ type CompanyPreservedFields = Pick<
           <ng-template>
             <form class="sheet-body sheet-form" (ngSubmit)="saveOrderEdit()">
               <div class="sheet-head">
+                @if (orderEdit()?.canDelete) {
+                  <button
+                    class="icon-button sheet-delete-button order-delete-action"
+                    type="button"
+                    (pointerdown)="$event.stopPropagation()"
+                    (click)="deleteOrderEdit($event)"
+                    [disabled]="orderEditLoading() || orderEditSaving() || orderEditDeleting()"
+                    [attr.aria-label]="orderEditDeleting() ? 'Удаляю заказ' : 'Удалить заказ'"
+                  >
+                    <span class="material-icons-sharp">close</span>
+                  </button>
+                }
                 <div>
                   <p class="sheet-note">Заказ #{{ orderEdit()?.id || '' }}</p>
                   <h2>Редактор заказа</h2>
@@ -1255,18 +1267,7 @@ type CompanyPreservedFields = Pick<
                 }
               </section>
 
-              <div class="sheet-actions" [class.edit-actions]="!!orderEdit()?.canDelete">
-                @if (orderEdit()?.canDelete) {
-                  <button
-                    class="danger order-delete-action"
-                    type="button"
-                    (pointerdown)="$event.stopPropagation()"
-                    (click)="deleteOrderEdit($event)"
-                    [disabled]="orderEditLoading() || orderEditSaving() || orderEditDeleting()"
-                  >
-                    {{ orderEditDeleting() ? 'Удаляю' : 'Удалить' }}
-                  </button>
-                }
+              <div class="sheet-actions">
                 <button class="secondary" type="button" (click)="closeOrderEdit()" [disabled]="orderEditSaving() || orderEditDeleting()">Отмена</button>
                 <button type="submit" [disabled]="orderEditLoading() || orderEditSaving() || orderEditDeleting() || !canSaveOrderEdit()">
                   {{ orderEditSaving() ? 'Сохраняю' : 'Сохранить' }}

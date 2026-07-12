@@ -156,7 +156,8 @@ describe('manager-board order helpers', () => {
       counter: 0,
       orderComments: 'order note',
       commentsCompany: 'company note',
-      complete: false
+      complete: false,
+      removePreviousWorkerFromCompany: false
     });
 
     expect(managerOrderEditDraft(orderPayload({
@@ -172,7 +173,8 @@ describe('manager-board order helpers', () => {
       counter: 3,
       orderComments: 'order note',
       commentsCompany: 'company note',
-      complete: true
+      complete: true,
+      removePreviousWorkerFromCompany: false
     });
   });
 });

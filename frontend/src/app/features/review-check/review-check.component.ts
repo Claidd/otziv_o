@@ -1,4 +1,18 @@
-import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  DestroyRef,
+  Directive,
+  ElementRef,
+  EventEmitter,
+  HostListener,
+  OnDestroy,
+  Output,
+  computed,
+  inject,
+  signal
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -52,15 +66,90 @@ type ActiveReviewFieldEdit = {
   mutationKey: string;
 };
 
+@Directive({
+  selector: '[appReviewTextOverflow]',
+  standalone: true
+})
+export class ReviewTextOverflowDirective implements AfterViewInit, OnDestroy {
+  private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
+  private resizeObserver: ResizeObserver | null = null;
+  private mutationObserver: MutationObserver | null = null;
+  private animationFrame: number | null = null;
+  private readonly settleTimers: number[] = [];
+  private lastValue: boolean | null = null;
+
+  @Output() readonly reviewTextOverflowChange = new EventEmitter<boolean>();
+
+  ngAfterViewInit(): void {
+    if (typeof ResizeObserver !== 'undefined') {
+      this.resizeObserver = new ResizeObserver(() => this.scheduleMeasurement());
+      this.resizeObserver.observe(this.element.nativeElement);
+    }
+
+    if (typeof MutationObserver !== 'undefined') {
+      this.mutationObserver = new MutationObserver(() => this.scheduleMeasurement());
+      this.mutationObserver.observe(this.element.nativeElement, {
+        characterData: true,
+        childList: true,
+        subtree: true
+      });
+    }
+
+    this.scheduleMeasurement();
+    if (typeof document !== 'undefined' && document.fonts) {
+      void document.fonts.ready.then(() => this.scheduleMeasurement());
+    }
+    if (typeof window !== 'undefined') {
+      for (const delay of [250, 600, 1000, 1600]) {
+        this.settleTimers.push(window.setTimeout(() => this.scheduleMeasurement(), delay));
+      }
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+    this.mutationObserver?.disconnect();
+    if (this.animationFrame !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.animationFrame);
+    }
+    if (typeof window !== 'undefined') {
+      for (const timer of this.settleTimers) {
+        window.clearTimeout(timer);
+      }
+    }
+  }
+
+  private scheduleMeasurement(): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.animationFrame !== null) {
+      window.cancelAnimationFrame(this.animationFrame);
+    }
+
+    this.animationFrame = window.requestAnimationFrame(() => {
+      this.animationFrame = null;
+      const element = this.element.nativeElement;
+      const value = element.scrollHeight > element.clientHeight + 1;
+      if (value !== this.lastValue) {
+        this.lastValue = value;
+        this.reviewTextOverflowChange.emit(value);
+      }
+    });
+  }
+}
+
 @Component({
   selector: 'app-review-check',
-  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, ReviewTextOverflowDirective, RouterLink],
   templateUrl: './review-check.component.html',
   styleUrl: './review-check.component.scss'
 })
 export class ReviewCheckComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly reviewCheckApi = inject(ReviewCheckApi);
   private readonly toastService = inject(ToastService);
   readonly auth = inject(AuthService);
@@ -85,6 +174,7 @@ export class ReviewCheckComponent {
   readonly reviewJumpValue = signal('1');
   readonly reviewQuickFilter = signal<ReviewQuickFilter>('all');
   readonly mobileReviewLayout = signal(false);
+  readonly reviewTextOverflowById = signal<Record<number, boolean>>({});
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   readonly busy = computed(() => this.actionKey() !== null);
@@ -124,7 +214,10 @@ export class ReviewCheckComponent {
   readonly reviewCheckReviews = computed(() => sortReviewsById(this.details()?.reviews));
   readonly visibleReviews = computed(() => this.reviewCheckReviews());
   readonly showReviewFastSelect = computed(() => this.reviewCheckReviews().length > 20);
-  readonly showReviewNavigation = computed(() => this.mobileReviewLayout() && this.reviewCheckReviews().length > 1);
+  readonly showReviewNavigation = computed(() => {
+    const details = this.details();
+    return this.mobileReviewLayout() && !!details && this.reviewCarouselItemCount(details) > 1;
+  });
   readonly reviewQuickFilterIndexes = computed(() => this.reviewCheckReviews()
     .map((review, index) => ({ review, index }))
     .filter(({ review }) => this.reviewMatchesQuickFilter(review, this.reviewQuickFilter()))
@@ -280,6 +373,32 @@ export class ReviewCheckComponent {
     return value.length > 190 || value.split(/\r?\n/).length > 5;
   }
 
+  setReviewTextOverflow(review: ReviewCheckReview, overflowing: boolean): void {
+    if (this.isReviewTextExpanded(review)) {
+      return;
+    }
+
+    if (this.reviewTextOverflowById()[review.id] === overflowing) {
+      return;
+    }
+
+    this.reviewTextOverflowById.update((current) => ({ ...current, [review.id]: overflowing }));
+    this.changeDetectorRef.detectChanges();
+  }
+
+  isReviewTextToggleEnabled(review: ReviewCheckReview): boolean {
+    if (this.isReviewTextExpanded(review)) {
+      return true;
+    }
+
+    const measured = this.reviewTextOverflowById()[review.id];
+    if (measured !== undefined) {
+      return measured;
+    }
+
+    return this.isMobileReviewLayout() ? false : this.shouldShowReviewTextToggle(review);
+  }
+
   isReviewTextOpen(review: ReviewCheckReview): boolean {
     return this.isExpanded(review) || this.isReviewFieldEditing(review, 'text');
   }
@@ -430,7 +549,10 @@ export class ReviewCheckComponent {
       return;
     }
 
-    const maxIndex = Math.max(this.reviewCheckReviews().length - 1, 0);
+    const details = this.details();
+    const maxIndex = details
+      ? Math.max(this.reviewCarouselItemCount(details) - 1, 0)
+      : Math.max(this.reviewCheckReviews().length - 1, 0);
     const index = Math.round(track.scrollLeft / step);
     this.setActiveReviewIndex(Math.min(maxIndex, Math.max(0, index)), false);
   }
@@ -459,6 +581,12 @@ export class ReviewCheckComponent {
     if (Number.isInteger(numericValue)) {
       const byPosition = numericValue - 1;
       if (byPosition >= 0 && byPosition < reviews.length) {
+        this.setActiveReviewIndex(byPosition);
+        return;
+      }
+
+      const details = this.details();
+      if (details?.permissions.canApprovePublication && byPosition === this.reviewApproveSlideIndex(details)) {
         this.setActiveReviewIndex(byPosition);
         return;
       }
@@ -1090,24 +1218,54 @@ export class ReviewCheckComponent {
       return;
     }
 
+    const details = this.details();
+    const maxIndex = details
+      ? Math.max(this.reviewCarouselItemCount(details) - 1, 0)
+      : reviews.length - 1;
     const previousIndex = this.activeReviewSlide();
-    const nextIndex = Math.max(0, Math.min(index, reviews.length - 1));
+    const nextIndex = Math.max(0, Math.min(index, maxIndex));
     this.activeReviewSlide.set(nextIndex);
     this.syncReviewJumpValue(nextIndex);
 
     if (scroll) {
-      this.scrollReviewIntoView(reviews[nextIndex]?.id, Math.abs(nextIndex - previousIndex) <= 2);
+      const smooth = Math.abs(nextIndex - previousIndex) <= 2;
+      if (nextIndex < reviews.length) {
+        this.scrollReviewIntoView(reviews[nextIndex]?.id, smooth);
+      } else {
+        this.scrollApproveCardIntoView(smooth);
+      }
     }
   }
 
   private scrollReviewIntoView(reviewId?: number, smooth = true): void {
-    if (!reviewId || typeof window === 'undefined') {
+    if (!reviewId) {
+      return;
+    }
+
+    this.scrollCarouselItemIntoView(`.review-card[data-review-id="${reviewId}"]`, smooth);
+  }
+
+  private scrollApproveCardIntoView(smooth = true): void {
+    this.scrollCarouselItemIntoView('.review-card.review-approve-card', smooth);
+  }
+
+  private scrollCarouselItemIntoView(selector: string, smooth: boolean): void {
+    if (typeof window === 'undefined') {
       return;
     }
 
     window.requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(`.review-card[data-review-id="${reviewId}"]`)
-        ?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'nearest', inline: 'center' });
+      const track = document.querySelector<HTMLElement>('.review-cards');
+      const card = track?.querySelector<HTMLElement>(selector);
+      if (!track || !card) {
+        return;
+      }
+
+      const centeredLeft = card.offsetLeft - Math.max(0, (track.clientWidth - card.offsetWidth) / 2);
+      track.scrollTo({
+        left: Math.max(0, centeredLeft),
+        behavior: smooth ? 'smooth' : 'auto'
+      });
     });
   }
 
@@ -1204,7 +1362,11 @@ export class ReviewCheckComponent {
     }
 
     const indexById = reviewId == null ? -1 : reviews.findIndex((review) => review.id === reviewId);
-    const fallbackIndex = Math.min(this.activeReviewSlide(), reviews.length - 1);
+    const details = this.details();
+    const maxIndex = details
+      ? Math.max(this.reviewCarouselItemCount(details) - 1, 0)
+      : reviews.length - 1;
+    const fallbackIndex = Math.min(this.activeReviewSlide(), maxIndex);
     this.setActiveReviewIndex(indexById >= 0 ? indexById : fallbackIndex, false);
   }
 

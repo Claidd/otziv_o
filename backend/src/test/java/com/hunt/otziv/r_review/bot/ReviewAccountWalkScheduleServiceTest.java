@@ -34,6 +34,16 @@ class ReviewAccountWalkScheduleServiceTest {
     private AppSettingService appSettingService;
 
     @Test
+    void counterTwoIsWalkedAndCounterOneIsNotWalked() {
+        ReviewAccountWalkScheduleService service = service();
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(2);
+
+        assertFalse(service.isWalkedAccount(bot(1)));
+        assertTrue(service.isWalkedAccount(bot(2)));
+    }
+
+    @Test
     void walkedToUnwalkedShiftsOnlyFollowingReviewsThatBecomeTooClose() {
         ReviewAccountWalkScheduleService service = service();
         OrderDetails details = details(100L);
@@ -43,7 +53,7 @@ class ReviewAccountWalkScheduleServiceTest {
         Review farFollowing = review(4L, details, LocalDate.of(2026, 6, 8), false);
         trigger.setBot(bot(1));
 
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
         when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(100L))
                 .thenReturn(List.of(previous, trigger, closeFollowing, farFollowing));
@@ -74,7 +84,7 @@ class ReviewAccountWalkScheduleServiceTest {
         following.setAccountWalkDelayDays(2);
         trigger.setBot(bot(3));
 
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
         when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(200L))
                 .thenReturn(List.of(trigger, following, untouched));
@@ -100,7 +110,7 @@ class ReviewAccountWalkScheduleServiceTest {
         trigger.setAccountWalkDelayDays(2);
         trigger.setBot(bot(6));
 
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
         when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(250L))
                 .thenReturn(List.of(trigger));
@@ -120,7 +130,7 @@ class ReviewAccountWalkScheduleServiceTest {
         Review trigger = review(20L, details, LocalDate.of(2026, 6, 8), false);
         trigger.setBot(bot(4));
 
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
 
         service.synchronizeAfterAccountChange(trigger, true);
 
@@ -139,7 +149,7 @@ class ReviewAccountWalkScheduleServiceTest {
         Review following = review(31L, details, LocalDate.of(2026, 7, 8), false);
         trigger.setBot(bot(0));
 
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
         when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(400L))
                 .thenReturn(List.of(trigger, following));

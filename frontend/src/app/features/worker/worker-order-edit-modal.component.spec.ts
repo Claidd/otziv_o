@@ -41,6 +41,7 @@ function draft(overrides: Partial<OrderUpdateRequest> = {}): OrderUpdateRequest 
     orderComments: 'order note',
     commentsCompany: 'company note',
     complete: false,
+    removePreviousWorkerFromCompany: false,
     ...overrides
   };
 }
@@ -62,7 +63,7 @@ describe('WorkerOrderEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('#order-edit-title')?.textContent?.trim()).toBe('Редактирование заказа');
     expect(element.querySelector<HTMLInputElement>('input[readonly]')?.value).toBe('Company');
-    expect(element.textContent).toContain('Удалить');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-delete.order-delete-action')).not.toBeNull();
   });
 
   it('emits form actions', async () => {
@@ -88,7 +89,7 @@ describe('WorkerOrderEditModalComponent', () => {
 
     const element = fixture.nativeElement as HTMLElement;
     element.querySelector<HTMLButtonElement>('.lead-edit-close')?.click();
-    element.querySelector<HTMLButtonElement>('button.danger')?.click();
+    element.querySelector<HTMLButtonElement>('.lead-edit-delete.order-delete-action')?.click();
     element.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     expect(closed).toBe(true);
@@ -107,5 +108,25 @@ describe('WorkerOrderEditModalComponent', () => {
     component.setField('counter', 7);
 
     expect(change).toEqual({ field: 'counter', value: 7 });
+  });
+
+  it('shows the unchecked previous-worker removal option after changing worker', () => {
+    const fixture = TestBed.createComponent(WorkerOrderEditModalComponent);
+    fixture.componentInstance.order = order({
+      worker: option(41, 'Previous worker'),
+      workers: [option(41, 'Previous worker'), option(42, 'New worker')]
+    });
+    fixture.componentInstance.draft = draft({
+      workerId: 42,
+      removePreviousWorkerFromCompany: false
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const checkbox = element.querySelector<HTMLInputElement>('.worker-transfer-option input');
+    expect(checkbox).not.toBeNull();
+    expect(checkbox?.checked).toBe(false);
+    expect(element.querySelector('.worker-transfer-option')?.textContent).toContain('Удалить прежнего специалиста');
   });
 });

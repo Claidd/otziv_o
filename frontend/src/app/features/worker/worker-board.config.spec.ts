@@ -11,6 +11,7 @@ import {
   workerErrorMessage,
   workerOrderPaymentCopyText,
   workerOrderReviewCopyText,
+  workerMobileSections,
   workerReviewCopyLabel,
   workerSectionLabel
 } from './worker-board.config';
@@ -22,6 +23,20 @@ describe('worker-board config helpers', () => {
     expect(workerReviewCopyLabel('password')).toBe('Пароль');
     expect(trackWorkerSection(0, WORKER_SECTIONS[0])).toBe('new');
     expect(trackWorkerAction(0, WORKER_ORDER_STATUS_ACTIONS[0])).toBe('На проверке');
+  });
+
+  it('keeps the mobile section picker focused on the seven work queues', () => {
+    const mobileSections = workerMobileSections(WORKER_SECTIONS);
+
+    expect(mobileSections.map((section) => section.key)).toEqual([
+      'new',
+      'correct',
+      'nagul',
+      'recovery',
+      'publish',
+      'bad',
+      'all'
+    ]);
   });
 
   it('builds readable bot change messages for missing and assigned bots', () => {

@@ -1,18 +1,14 @@
 <app-admin-layout title="Лид кабинет" active="leads" rightPanelMode="custom">
-  <section class="lead-workspace" [class.menu-open]="mobileMenuOpen()">
-    <button
-      type="button"
-      class="mobile-menu-toggle"
-      [class.active]="mobileMenuOpen()"
-      [attr.aria-expanded]="mobileMenuOpen()"
-      aria-controls="lead-menu-panel"
-      (click)="toggleMobileMenu()"
-    >
-      Меню
-      <span aria-hidden="true">{{ mobileMenuOpen() ? '▲' : '▼' }}</span>
-    </button>
+  <section class="lead-workspace">
+    <app-mobile-status-slider
+      class="mobile-board-status"
+      [items]="mobileStatusItems()"
+      [activeKey]="activeBucket()"
+      ariaLabel="Статусы лидов"
+      (select)="selectMobileBucket($event)"
+    />
 
-    <div id="lead-menu-panel" class="lead-menu-panel" [class.open]="mobileMenuOpen()">
+    <div class="lead-controls">
       <header class="lead-toolbar">
         <nav class="status-tabs" aria-label="Статусы лидов">
           @for (bucket of visibleBuckets(); track trackBucket($index, bucket)) {
@@ -28,7 +24,7 @@
           }
         </nav>
 
-        <div class="quick-links">
+        <div class="quick-links desktop-quick-links">
           <button type="button" (click)="openCreateModal()">Новый лид</button>
           <a routerLink="/admin/dictionaries">Категории</a>
           <a routerLink="/companies">Компании</a>
@@ -50,26 +46,26 @@
             <span class="material-icons-sharp">search</span>
             <input
               type="text"
-              placeholder="Найти"
+              placeholder="Телефон, город, комментарий"
               [ngModel]="keyword()"
               (ngModelChange)="onKeywordChange($event)"
               (keyup.enter)="search()"
             >
           </label>
 
-          <select [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
+          <select class="desktop-page-size" [ngModel]="pageSize()" (ngModelChange)="changePageSize($event)" aria-label="Размер страницы">
             @for (size of pageSizeOptions; track size) {
               <option [value]="size">{{ size }}</option>
             }
           </select>
 
-          <button type="button" class="icon-button" (click)="search()" [disabled]="loading()" title="Обновить">
+          <button type="button" class="icon-button search-refresh" (click)="search()" [disabled]="loading()" title="Обновить">
             <span class="material-icons-sharp">refresh</span>
           </button>
 
           <button
             type="button"
-            class="icon-button sort-toggle"
+            class="icon-button sort-toggle search-sort"
             (click)="toggleSortDirection()"
             [disabled]="loading()"
             [title]="sortTitle()"
@@ -83,6 +79,20 @@
               <span class="material-icons-sharp">close</span>
             </button>
           }
+        </div>
+
+        <div class="mobile-board-actions" aria-label="Действия с лидами">
+          <button type="button" (click)="setBucket('archive')" aria-label="Открыть архив" title="Архив">
+            <span class="material-icons-sharp">archive</span>
+          </button>
+          @if (canImportLeads()) {
+            <button type="button" (click)="openLeadImport()" aria-label="Импортировать лиды" title="Импорт">
+              <span class="material-icons-sharp">upload_file</span>
+            </button>
+          }
+          <button type="button" (click)="openCreateModal()" aria-label="Добавить лид" title="Добавить лид">
+            <span class="material-icons-sharp">add</span>
+          </button>
         </div>
       </section>
     </div>
@@ -213,7 +223,7 @@
       }
     </section>
 
-    <footer class="pager">
+    <footer class="pager desktop-pager">
       <button type="button" class="icon-button" (click)="previousPage()" [disabled]="currentPage().first || loading()" title="Предыдущая">
         <span class="material-icons-sharp">chevron_left</span>
       </button>
@@ -222,6 +232,27 @@
         <span class="material-icons-sharp">chevron_right</span>
       </button>
     </footer>
+
+    <app-mobile-bottom-pager
+      class="mobile-page-bottom-pager"
+      [pageIndex]="currentPage().pageNumber"
+      [totalPages]="currentPage().totalPages || 1"
+      [disabled]="loading()"
+      fallbackUrl="/"
+      (previous)="previousPage()"
+      (next)="nextPage()"
+    >
+      <button
+        mobilePagerActions
+        type="button"
+        class="mobile-pager-action"
+        [class.active]="sortDirection() === 'asc'"
+        (click)="toggleSortDirection()"
+        [attr.aria-label]="sortTitle()"
+      >
+        <span class="material-icons-sharp">swap_vert</span>
+      </button>
+    </app-mobile-bottom-pager>
 
     <section class="mobile-lead-stats" aria-label="Статистика лидов">
       @for (metric of metrics(); track trackMetric($index, metric)) {
@@ -235,6 +266,16 @@
       }
     </section>
   </section>
+
+  <app-mobile-status-sheet
+    [open]="mobileStatusSheetOpen()"
+    kicker="Лиды"
+    title="Выберите раздел"
+    [items]="mobileStatusItems()"
+    [activeKey]="activeBucket()"
+    (selected)="selectMobileBucket($event)"
+    (closed)="closeMobileStatusSheet()"
+  />
 
   <section admin-right-content class="lead-stats">
     @if (canCreateCompany()) {

@@ -29,6 +29,8 @@ import com.hunt.otziv.l_lead.repository.PromoTextAssignmentRepository;
 import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
+import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsRequest;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.t_telegrambot.service.TelegramReportScheduleSettingsService;
@@ -93,6 +95,8 @@ public class ApiAdminDictionaryController {
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
     private final ScheduledClientMessageService scheduledClientMessageService;
+    private final BotAssignmentService botAssignmentService;
+    private final ReviewRepository reviewRepository;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -378,7 +382,9 @@ public class ApiAdminDictionaryController {
         bot.setCounter(requiredCounter(request.counter()));
         bot.setActive(request.active());
 
-        return toBotResponse(botsRepository.save(bot));
+        Bot saved = botsRepository.save(bot);
+        botAssignmentService.promoteUnpublishedReviewsForBot(saved);
+        return toBotResponse(saved);
     }
 
     @DeleteMapping("/bots/{id}")
@@ -571,6 +577,9 @@ public class ApiAdminDictionaryController {
         int savedAccountWalkDelayDays = appSettingService.setInt(
                 AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS,
                 accountWalkDelayDays
+        );
+        botAssignmentService.promoteReviewsWithWalkedAccounts(
+                reviewRepository.findByPublishFalseAndBotIsNotNull()
         );
         return new NagulSettingsResponse(
                 savedCooldownMinutes,
@@ -1077,7 +1086,7 @@ public class ApiAdminDictionaryController {
     }
 
     private int accountWalkedCounterThreshold() {
-        return appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 3);
+        return appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2);
     }
 
     private int accountWalkDelayDays() {

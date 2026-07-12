@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -16,6 +16,7 @@ import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
+import { MobileBottomPagerComponent } from '../../../shared/mobile/mobile-bottom-pager.component';
 import { ToastService } from '../../../shared/toast.service';
 import { ManagerBoardOrderFacade } from '../../manager/manager-board-order.facade';
 import { ManagerOrderCardComponent } from '../../manager/manager-order-card.component';
@@ -52,12 +53,15 @@ type DraftCompany = {
     LoadErrorCardComponent,
     ManagerOrderCardComponent,
     ManagerOrderEditModalComponent,
+    MobileBottomPagerComponent,
     RouterLink
   ],
   templateUrl: './common-billing.component.html',
   styleUrl: './common-billing.component.scss'
 })
 export class CommonBillingComponent implements OnDestroy {
+  @ViewChild('invoiceOrderCardsViewport') private invoiceOrderCardsElement?: ElementRef<HTMLElement>;
+
   private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly managerApi = inject(ManagerApi);
   private readonly auth = inject(AuthService);
@@ -111,6 +115,11 @@ export class CommonBillingComponent implements OnDestroy {
   readonly currentInvoice = computed(() => this.invoiceDetails()?.summary ?? this.selectedAccount()?.currentInvoice ?? null);
   readonly invoiceOrders = computed(() => this.invoiceDetails()?.orders ?? []);
   readonly invoiceOrderCards = computed(() => this.invoiceDetails()?.orderCards ?? []);
+  readonly invoiceCardIndex = signal(0);
+  readonly invoiceCardPageIndex = computed(() => Math.min(
+    this.invoiceCardIndex(),
+    Math.max(0, this.invoiceOrderCards().length - 1)
+  ));
   readonly invoiceNeedsAttention = computed(() => this.currentInvoice()?.status === 'NEEDS_ATTENTION');
   readonly reviewApprovalCount = computed(() => this.invoiceOrders()
     .filter(order => order.orderStatus === 'В проверку' || order.orderStatus === 'На проверке')
@@ -895,6 +904,55 @@ export class CommonBillingComponent implements OnDestroy {
     return order.id;
   }
 
+  previousInvoiceCard(): void {
+    this.showInvoiceCard(this.invoiceCardPageIndex() - 1);
+  }
+
+  nextInvoiceCard(): void {
+    this.showInvoiceCard(this.invoiceCardPageIndex() + 1);
+  }
+
+  syncInvoiceCardIndex(event: Event): void {
+    const container = event.currentTarget as HTMLElement | null;
+    if (!container) {
+      return;
+    }
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('.invoice-order-card-wrap'));
+    if (!cards.length) {
+      this.invoiceCardIndex.set(0);
+      return;
+    }
+
+    const containerBounds = container.getBoundingClientRect();
+    const center = containerBounds.left + containerBounds.width / 2;
+    let closestIndex = 0;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    cards.forEach((card, index) => {
+      const bounds = card.getBoundingClientRect();
+      const distance = Math.abs(bounds.left + bounds.width / 2 - center);
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestIndex = index;
+      }
+    });
+    if (this.invoiceCardIndex() !== closestIndex) {
+      this.invoiceCardIndex.set(closestIndex);
+    }
+  }
+
+  private showInvoiceCard(index: number): void {
+    const cards = Array.from(
+      this.invoiceOrderCardsElement?.nativeElement.querySelectorAll<HTMLElement>('.invoice-order-card-wrap') ?? []
+    );
+    if (!cards.length) {
+      this.invoiceCardIndex.set(0);
+      return;
+    }
+    const targetIndex = Math.max(0, Math.min(index, cards.length - 1));
+    this.invoiceCardIndex.set(targetIndex);
+    cards[targetIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
   invoiceOrderInfo(order: OrderCardItem): CommonInvoiceOrderResponse | null {
     return this.invoiceOrders().find((item) => item.orderId === order.id) ?? null;
   }
@@ -1024,6 +1082,7 @@ export class CommonBillingComponent implements OnDestroy {
     this.commonBillingApi.invoice(invoiceId).subscribe({
       next: (details) => {
         this.invoiceDetails.set(details);
+        this.invoiceCardIndex.set(0);
         this.invoiceLoading.set(false);
       },
       error: (err) => {
@@ -1044,6 +1103,7 @@ export class CommonBillingComponent implements OnDestroy {
     this.commonBillingApi.invoice(invoiceId).subscribe({
       next: (details) => {
         this.invoiceDetails.set(details);
+        this.invoiceCardIndex.set(0);
         this.selectedAccountId.set(details.summary.accountId);
         this.accounts.update((accounts) => accounts.map((account) =>
           account.id === details.summary.accountId

@@ -25,6 +25,7 @@ public class WorkerPublicationGateService {
 
     public static final String SECTION_NEW = "new";
     public static final String SECTION_CORRECT = "correct";
+    public static final String SECTION_NAGUL = "nagul";
     public static final String SECTION_RECOVERY = "recovery";
     public static final String SECTION_PUBLISH = "publish";
     public static final String SECTION_BAD = "bad";
@@ -52,13 +53,14 @@ public class WorkerPublicationGateService {
     private final WorkerService workerService;
     private final WorkerFlowLockService workerFlowLockService;
     private final AppSettingService appSettingService;
+    private final WorkerPublicationSessionService publicationSessionService;
 
     public Optional<PublicationBlock> redirectFor(Principal principal, Authentication authentication, String requestedSection) {
         if (!isWorkerFlowRestricted(authentication) || !isPublishOrAll(requestedSection)) {
             return Optional.empty();
         }
 
-        return evaluateWorker(principal);
+        return evaluateWorker(principal, SECTION_PUBLISH.equals(requestedSection));
     }
 
     public Optional<PublicationBlock> blockForPublication(Principal principal, Authentication authentication) {
@@ -66,7 +68,7 @@ public class WorkerPublicationGateService {
             return Optional.empty();
         }
 
-        return evaluateWorker(principal);
+        return evaluateWorker(principal, true);
     }
 
     public void syncFromMetrics(Principal principal, Authentication authentication, int flowOrders) {
@@ -84,7 +86,27 @@ public class WorkerPublicationGateService {
         );
     }
 
-    private Optional<PublicationBlock> evaluateWorker(Principal principal) {
+    public WorkerPublicationSessionService.SessionState sessionState(
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (!isWorkerFlowRestricted(authentication)) {
+            return WorkerPublicationSessionService.SessionState.disabled();
+        }
+        return publicationSessionService.currentState(resolveWorker(principal));
+    }
+
+    public WorkerPublicationSessionService.SessionState recordPublicationActivity(
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (!isWorkerFlowRestricted(authentication)) {
+            return WorkerPublicationSessionService.SessionState.disabled();
+        }
+        return publicationSessionService.recordActivityAndReevaluate(resolveWorker(principal));
+    }
+
+    private Optional<PublicationBlock> evaluateWorker(Principal principal, boolean startPublicationSession) {
         Worker worker = resolveWorker(principal);
         Map<String, Integer> orderCounts = orderService.countActionableOrdersByStatusToWorker(worker);
         int newOrders = countStatus(orderCounts, ORDER_STATUS_NEW);
@@ -106,7 +128,17 @@ public class WorkerPublicationGateService {
             ));
         }
 
-        return specialTaskBlock(worker, principal);
+        Optional<PublicationBlock> specialTaskBlock = specialTaskBlock(worker, principal);
+        if (specialTaskBlock.isPresent()) {
+            return specialTaskBlock;
+        }
+
+        WorkerPublicationSessionService.SessionDecision sessionDecision =
+                publicationSessionService.evaluateEntry(worker, startPublicationSession);
+        if (!sessionDecision.allowed()) {
+            return Optional.of(new PublicationBlock(SECTION_NAGUL, sessionDecision.message()));
+        }
+        return Optional.empty();
     }
 
     private boolean hasStaleWorkerFlowOrders(Worker worker) {

@@ -68,6 +68,10 @@ public class OrderBotLifecycleService {
             }
 
             botAssignmentService.checkAndNotifyAboutStubBots(reviews, forceWalkDelayIfUnwalked);
+            int promoted = botAssignmentService.promoteReviewsWithWalkedAccounts(reviews);
+            if (promoted > 0) {
+                log.info("Синхронизирована готовность {} отзывов заказа ID {}", promoted, order.getId());
+            }
 
         } catch (Exception e) {
             log.error("Ошибка при проверке/назначении ботов: {}", e.getMessage(), e);
@@ -125,6 +129,7 @@ public class OrderBotLifecycleService {
             }
 
             botService.save(bot);
+            botAssignmentService.promoteUnpublishedReviewsForBot(bot);
         } catch (Exception e) {
             log.error("Ошибка при обновлении бота id={}", bot != null ? bot.getId() : null, e);
             throw e;

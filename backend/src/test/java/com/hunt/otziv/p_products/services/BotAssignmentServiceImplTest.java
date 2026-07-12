@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.services;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -30,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -39,6 +41,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,10 +69,75 @@ class BotAssignmentServiceImplTest {
     @Mock
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
+    @Mock
+    private BusinessAuditService businessAuditService;
+
     @BeforeEach
     void allowCompanyLocks() {
         lenient().when(companyRepository.findByIdForBotAssignmentLock(anyLong()))
                 .thenAnswer(invocation -> Optional.of(company(invocation.getArgument(0))));
+    }
+
+    @Test
+    void assignBotsToNewReviewsUsesSelectedAccountReadiness() {
+        BotAssignmentServiceImpl service = service();
+        Company company = company(10L);
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company, city);
+        Bot walkedBot = bot(101L, "Готовый аккаунт", 2);
+        Bot unwalkedBot = bot(102L, "Новый аккаунт", 1);
+        Order order = new Order();
+        order.setCompany(company);
+        order.setFilial(filial);
+        OrderDetails details = OrderDetails.builder()
+                .order(order)
+                .product(Product.builder().id(1L).build())
+                .build();
+
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(walkedBot, unwalkedBot));
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+        when(accountWalkScheduleService.isWalkedAccount(walkedBot)).thenReturn(true);
+        when(accountWalkScheduleService.isWalkedAccount(unwalkedBot)).thenReturn(false);
+
+        List<Review> reviews = service.assignBotsToNewReviews(
+                OrderDTO.builder().amount(2).build(),
+                details
+        );
+
+        assertEquals(2, reviews.size());
+        assertTrue(reviews.stream().filter(review -> review.getBot() == walkedBot).findFirst().orElseThrow().isVigul());
+        assertFalse(reviews.stream().filter(review -> review.getBot() == unwalkedBot).findFirst().orElseThrow().isVigul());
+    }
+
+    @Test
+    void promotionOnlyMovesFalseToTrueAndPreservesManualWalkConfirmation() {
+        BotAssignmentServiceImpl service = service();
+        Bot bot = bot(101L, "Готовый аккаунт", 2);
+        Review pending = new Review();
+        pending.setId(1L);
+        pending.setBot(bot);
+        Review manuallyWalked = new Review();
+        manuallyWalked.setId(2L);
+        manuallyWalked.setBot(bot);
+        manuallyWalked.setVigul(true);
+
+        when(accountWalkScheduleService.isWalkedAccount(bot)).thenReturn(true);
+        doAnswer(invocation -> {
+            Review review = invocation.getArgument(0);
+            review.setVigul(true);
+            return null;
+        }).when(accountWalkScheduleService).synchronizeAfterAccountChange(pending, false, false);
+
+        int promoted = service.promoteReviewsWithWalkedAccounts(List.of(pending, manuallyWalked));
+
+        assertEquals(1, promoted);
+        assertTrue(pending.isVigul());
+        assertTrue(manuallyWalked.isVigul());
+        verify(reviewRepository).saveAll(List.of(pending));
+        verify(accountWalkScheduleService, never())
+                .synchronizeAfterAccountChange(manuallyWalked, false, false);
     }
 
     @Test
@@ -293,7 +361,8 @@ class BotAssignmentServiceImplTest {
                 reviewRepository,
                 telegramService,
                 botCooldownService,
-                accountWalkScheduleService
+                accountWalkScheduleService,
+                businessAuditService
         );
     }
 

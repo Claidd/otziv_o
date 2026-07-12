@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ReviewAccountWalkScheduleService {
 
-    private static final int DEFAULT_WALKED_COUNTER_THRESHOLD = 3;
+    private static final int DEFAULT_WALKED_COUNTER_THRESHOLD = 2;
     private static final int DEFAULT_WALK_DELAY_DAYS = 2;
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
 

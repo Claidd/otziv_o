@@ -226,7 +226,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                 WHERE r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
             """,
             countQuery = """
                 SELECT COUNT(r.id)
@@ -235,7 +234,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                 WHERE r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
             """
     )
     Page<Long> findPageIdsByPublishedDateAndPublishToVigul(@Param("localDate") LocalDate localDate,
@@ -250,7 +248,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                   AND r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
             """,
             countQuery = """
                 SELECT COUNT(r.id)
@@ -260,7 +257,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                   AND r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
             """
     )
     Page<Long> findPageIdsByWorkerAndPublishedDateAndPublishToVigul(@Param("worker") Worker worker,
@@ -276,7 +272,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                   AND r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
             """,
             countQuery = """
                 SELECT COUNT(r.id)
@@ -286,7 +281,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                   AND r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
             """
     )
     Page<Long> findPageIdsByWorkersAndPublishedDateAndPublishToVigul(@Param("workers") Set<Worker> workers,
@@ -304,7 +298,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                   AND r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
                   AND (o IS NULL OR o.manager IS NULL OR o.manager = :manager)
             """,
             countQuery = """
@@ -317,7 +310,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
                   AND r.publishedDate <= :localDate
                   AND r.publish = false
                   AND r.vigul = false
-                  AND (b IS NULL OR b.counter <= 2)
                   AND (o IS NULL OR o.manager IS NULL OR o.manager = :manager)
             """
     )
@@ -491,7 +483,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate = :publishedDate
           AND r.publish = false
           AND r.vigul = false
-          AND (r.bot IS NULL OR r.bot.counter <= 2)
     """)
     Page<Review> findReviewsForWorkerVigul(@Param("worker") Worker worker,
                                            @Param("publishedDate") LocalDate publishedDate,
@@ -673,7 +664,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :localDate
           AND r.publish = false
           AND r.vigul = false
-          AND (b IS NULL OR b.counter <= 2)
     """)
     int countByWorkerAndStatusVigul(@Param("worker") Worker worker,
                                     @Param("localDate") LocalDate localDate);
@@ -732,7 +722,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :localDate
           AND r.publish = false
           AND r.vigul = false
-          AND (r.bot IS NULL OR r.bot.counter <= 2)
         GROUP BY r.worker.id
     """)
     List<Object[]> countByWorkerIdsAndStatusVigul(@Param("workerIds") Collection<Long> workerIds,
@@ -746,7 +735,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :localDate
           AND r.publish = false
           AND r.vigul = false
-          AND (b IS NULL OR b.counter <= 2)
           AND r.text IS NOT NULL
           AND TRIM(r.text) <> ''
           AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
@@ -775,7 +763,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :localDate
           AND r.publish = false
           AND r.vigul = false
-          AND (b IS NULL OR b.counter <= 2)
           AND r.text IS NOT NULL
           AND TRIM(r.text) <> ''
           AND LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'
@@ -796,7 +783,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :date
           AND r.publish = false
           AND r.vigul = false
-          AND (r.bot IS NULL OR r.bot.counter <= 2)
     """)
     boolean existsActiveNagulReviews(@Param("worker") Worker worker,
                                      @Param("date") LocalDate date);
@@ -814,15 +800,32 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
             FROM (
                 SELECT
                     r.review_worker AS worker_id,
-                    COUNT(CASE WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS total_reviews,
+                    COUNT(CASE
+                        WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate
+                         AND r.review_vigul = 1
+                         AND r.review_text IS NOT NULL
+                         AND TRIM(r.review_text) <> ''
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'текст отзыва%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подставить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
+                        THEN 1 ELSE NULL
+                    END) AS total_reviews,
                     COUNT(CASE
                         WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
                          AND r.review_vigul = 0
-                         AND b.bot_counter <= 2
+                         AND r.review_text IS NOT NULL
+                         AND TRIM(r.review_text) <> ''
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'текст отзыва%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подставить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
                         THEN 1 ELSE NULL
                     END) AS vigul_count
                 FROM reviews r
-                JOIN bots b ON b.bot_id = r.review_bot
+                LEFT JOIN bots b ON b.bot_id = r.review_bot
                 WHERE r.review_publish = 0
                   AND r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
                   AND r.review_worker IS NOT NULL
@@ -841,15 +844,32 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
             FROM (
                 SELECT
                     o.order_manager AS manager_id,
-                    COUNT(CASE WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate THEN 1 ELSE NULL END) AS total_reviews,
+                    COUNT(CASE
+                        WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate
+                         AND r.review_vigul = 1
+                         AND r.review_text IS NOT NULL
+                         AND TRIM(r.review_text) <> ''
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'текст отзыва%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подставить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
+                        THEN 1 ELSE NULL
+                    END) AS total_reviews,
                     COUNT(CASE
                         WHEN r.review_publish_date BETWEEN :firstDayOfMonth AND :localDate2
                          AND r.review_vigul = 0
-                         AND b.bot_counter <= 2
+                         AND r.review_text IS NOT NULL
+                         AND TRIM(r.review_text) <> ''
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'текст отзыва%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подставить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
+                         AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
                         THEN 1 ELSE NULL
                     END) AS vigul_count
                 FROM reviews r
-                JOIN bots b ON b.bot_id = r.review_bot
+                LEFT JOIN bots b ON b.bot_id = r.review_bot
                 JOIN order_details od ON od.order_detail_id = r.review_order_details
                 JOIN orders o ON o.order_id = od.order_detail_order
                 WHERE r.review_publish = 0
@@ -912,7 +932,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :localDate
           AND r.publish = false
           AND r.vigul = false
-          AND (b IS NULL OR b.counter <= 2)
         GROUP BY r.worker.id
     """)
     List<Object[]> countByWorkerIdsAndStatusVigul(@Param("workerIds") List<Long> workerIds,
@@ -968,7 +987,6 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         WHERE r.publish = false
           AND r.vigul = false
           AND r.publishedDate <= :date
-          AND (b IS NULL OR b.counter <= 2)
     """)
     long countDueToWalk(@Param("date") LocalDate date);
 }

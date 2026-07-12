@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -24,16 +24,22 @@ import { apiErrorMessage } from '../../shared/api-error-message';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
+import { MobileNavIntentService } from '../../shared/mobile/mobile-nav-intent.service';
+import { MobileStatusSheetComponent } from '../../shared/mobile/mobile-status-sheet.component';
+import {
+  MobileStatusItem,
+  MobileStatusSliderComponent
+} from '../../shared/mobile/mobile-status-slider.component';
 import { phoneDigitsWithoutCountryCode } from '../../shared/phone-format';
 import { ToastService } from '../../shared/toast.service';
+import {
+  defaultLeadMobileBucket,
+  LEAD_MOBILE_BUCKETS
+} from './leads-board.mobile';
+import type { LeadMobileBucket } from './leads-board.mobile';
 
 type LeadMutation = 'send' | 'resend' | 'archive' | 'new' | 'toWork';
-
-type LeadBucket = {
-  key: LeadBucketKey;
-  label: string;
-  icon: string;
-};
 
 type PromoItem = {
   label: string;
@@ -63,7 +69,17 @@ type CompanyCreateContext = {
 
 @Component({
   selector: 'app-leads-board',
-  imports: [AdminLayoutComponent, CompanyCreateModalComponent, DatePipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [
+    AdminLayoutComponent,
+    CompanyCreateModalComponent,
+    DatePipe,
+    FormsModule,
+    LoadErrorCardComponent,
+    MobileBottomPagerComponent,
+    MobileStatusSheetComponent,
+    MobileStatusSliderComponent,
+    RouterLink
+  ],
   templateUrl: './leads-board.component.html',
   styleUrl: './leads-board.component.scss'
 })
@@ -73,9 +89,11 @@ export class LeadsBoardComponent implements OnDestroy {
   private readonly toastService = inject(ToastService);
   private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
   private readonly router = inject(Router);
+  private readonly mobileNavIntent = inject(MobileNavIntentService);
   private readonly searchDelayMs = 500;
   private searchTimer: number | null = null;
   private copiedTimer: number | null = null;
+  private lastMobileNavIntentStamp = 0;
   private readonly emptyPage: LeadPage = {
     content: [],
     pageNumber: 0,
@@ -86,13 +104,14 @@ export class LeadsBoardComponent implements OnDestroy {
     last: true
   };
 
-  readonly buckets: LeadBucket[] = [
-    { key: 'toWork', label: 'В работу', icon: 'assignment_ind' },
-    { key: 'newLeads', label: 'Новые', icon: 'fiber_new' },
-    { key: 'send', label: 'Напомнить', icon: 'outgoing_mail' },
-    { key: 'inWork', label: 'В работе', icon: 'work_history' },
-    { key: 'all', label: 'Все', icon: 'dataset' }
+  readonly buckets: readonly LeadMobileBucket[] = [
+    LEAD_MOBILE_BUCKETS[1],
+    LEAD_MOBILE_BUCKETS[0],
+    LEAD_MOBILE_BUCKETS[3],
+    LEAD_MOBILE_BUCKETS[2],
+    LEAD_MOBILE_BUCKETS[5]
   ];
+  readonly mobileBuckets = LEAD_MOBILE_BUCKETS;
 
   readonly pageSizeOptions = [5, 10, 15];
   readonly board = signal<LeadBoard | null>(null);
@@ -106,7 +125,7 @@ export class LeadsBoardComponent implements OnDestroy {
   readonly copied = signal<string | null>(null);
   readonly mutationKey = signal<string | null>(null);
   readonly commentDrafts = signal<Record<number, string>>({});
-  readonly mobileMenuOpen = signal(false);
+  readonly mobileStatusSheetOpen = signal(false);
   readonly createDraft = signal<LeadCreateRequest | null>(null);
   readonly createSaving = signal(false);
   readonly createError = signal<string | null>(null);
@@ -161,6 +180,17 @@ export class LeadsBoardComponent implements OnDestroy {
     ? this.buckets
     : this.buckets.filter((bucket) => bucket.key !== 'all')
   );
+  readonly visibleMobileBuckets = computed(() => this.canSeeAllBucket()
+    ? this.mobileBuckets
+    : this.mobileBuckets.filter((bucket) => bucket.key !== 'all')
+  );
+  readonly mobileStatusItems = computed<MobileStatusItem[]>(() => this.visibleMobileBuckets().map((bucket) => ({
+    key: bucket.key,
+    label: bucket.label,
+    value: this.bucketTotal(bucket.key),
+    icon: bucket.icon,
+    tone: bucket.tone
+  })));
   readonly operatorOptions = computed(() => this.editOptions()?.operators ?? []);
   readonly managerOptions = computed(() => this.editOptions()?.managers ?? []);
   readonly marketologOptions = computed(() => this.editOptions()?.marketologs ?? []);
@@ -193,6 +223,34 @@ export class LeadsBoardComponent implements OnDestroy {
   });
 
   constructor() {
+    const initialIntent = this.mobileNavIntent.intent();
+    if (initialIntent?.tab === 'leads') {
+      this.lastMobileNavIntentStamp = initialIntent.stamp;
+      if (initialIntent.mode === 'menu') {
+        this.mobileStatusSheetOpen.set(true);
+      } else {
+        this.activeBucket.set(defaultLeadMobileBucket(this.canSeeAllBucket(), this.visibleMobileBuckets()));
+        this.pageNumber.set(0);
+      }
+      this.mobileNavIntent.clear(initialIntent.stamp);
+    }
+
+    effect(() => {
+      const intent = this.mobileNavIntent.intent();
+      if (!intent || intent.tab !== 'leads' || intent.stamp === this.lastMobileNavIntentStamp) {
+        return;
+      }
+      this.lastMobileNavIntentStamp = intent.stamp;
+
+      untracked(() => {
+        if (intent.mode === 'menu') {
+          this.mobileStatusSheetOpen.set(true);
+        } else {
+          this.openDefaultMobileBucket();
+        }
+        this.mobileNavIntent.clear(intent.stamp);
+      });
+    });
     this.loadBoard();
   }
 
@@ -264,6 +322,19 @@ export class LeadsBoardComponent implements OnDestroy {
     this.loadBoard();
   }
 
+  selectMobileBucket(key: string): void {
+    if (!this.visibleMobileBuckets().some((bucket) => bucket.key === key)) {
+      return;
+    }
+
+    this.mobileStatusSheetOpen.set(false);
+    this.setBucket(key as LeadBucketKey);
+  }
+
+  closeMobileStatusSheet(): void {
+    this.mobileStatusSheetOpen.set(false);
+  }
+
   changePageSize(value: string | number): void {
     this.pageSize.set(Number(value));
     this.pageNumber.set(0);
@@ -274,10 +345,6 @@ export class LeadsBoardComponent implements OnDestroy {
     this.sortDirection.update((direction) => direction === 'desc' ? 'asc' : 'desc');
     this.pageNumber.set(0);
     this.loadBoard();
-  }
-
-  toggleMobileMenu(): void {
-    this.mobileMenuOpen.update((open) => !open);
   }
 
   previousPage(): void {
@@ -843,12 +910,18 @@ export class LeadsBoardComponent implements OnDestroy {
     return lead.id;
   }
 
-  trackBucket(_index: number, bucket: LeadBucket): LeadBucketKey {
+  trackBucket(_index: number, bucket: LeadMobileBucket): LeadBucketKey {
     return bucket.key;
   }
 
   trackMetric(_index: number, metric: LeadMetric): string {
     return metric.label;
+  }
+
+  private openDefaultMobileBucket(): void {
+    const bucket = defaultLeadMobileBucket(this.canSeeAllBucket(), this.visibleMobileBuckets());
+    this.mobileStatusSheetOpen.set(false);
+    this.setBucket(bucket);
   }
 
   trackOption(_index: number, option: LeadPersonOption): number {

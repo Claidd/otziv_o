@@ -127,6 +127,52 @@ describe('ReviewCheckComponent', () => {
     expect(component.reviewedCount(payload)).toBe(2);
   });
 
+  it('keeps the publication action as the final mobile carousel card', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    const payload = details({
+      approved: false,
+      reviews: [review({ id: 1 }), review({ id: 2 })],
+      permissions: {
+        ...details().permissions,
+        canApprovePublication: true
+      }
+    });
+
+    component.details.set(payload);
+    component.mobileReviewLayout.set(true);
+    fixture.detectChanges();
+
+    expect(component.reviewCarouselItemCount(payload)).toBe(3);
+    expect(component.showReviewNavigation()).toBe(true);
+    expect((fixture.nativeElement as HTMLElement).querySelector('.review-approve-card')).not.toBeNull();
+
+    component.goToReviewIndex(1);
+    component.nextReview();
+    fixture.detectChanges();
+
+    expect(component.activeReviewSlide()).toBe(2);
+    expect(component.reviewJumpValue()).toBe('3');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.review-navigation')?.textContent).toContain('3 из 3');
+  });
+
+  it('disables expansion when the rendered review text fits its box', () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    const item = review({ text: 'Длинный по символам, но полностью видимый текст. '.repeat(4) });
+
+    component.details.set(details({ reviews: [item] }));
+    component.mobileReviewLayout.set(true);
+
+    expect(component.shouldShowReviewTextToggle(item)).toBe(true);
+    component.setReviewTextOverflow(item, false);
+    expect(component.isReviewTextToggleEnabled(item)).toBe(false);
+
+    component.setReviewTextOverflow(item, true);
+    expect(component.isReviewTextToggleEnabled(item)).toBe(true);
+  });
+
   it('sends review remarks and correction comment when returning to correction', () => {
     const api = TestBed.inject(ReviewCheckApi) as unknown as {
       sendToCorrection: ReturnType<typeof vi.fn>;

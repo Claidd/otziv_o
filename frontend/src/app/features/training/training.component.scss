@@ -168,6 +168,39 @@ ul {
   padding-left: 1.15rem;
 }
 
+.training-card__images {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.training-card__images figure {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(103, 116, 131, 0.18);
+  border-radius: var(--otziv-small-radius);
+  background: var(--otziv-light);
+}
+
+.training-card__images img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid rgba(103, 116, 131, 0.14);
+  background: white;
+}
+
+.training-card__images figcaption {
+  padding: 0 0.75rem 0.75rem;
+  color: var(--otziv-info);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .training-card li::marker {
   color: var(--otziv-primary);
 }
@@ -243,6 +276,10 @@ ul {
   .training-tabs button,
   .training-shortcuts a {
     width: 100%;
+  }
+
+  .training-card__images {
+    grid-template-columns: 1fr;
   }
 
   .training-flow,

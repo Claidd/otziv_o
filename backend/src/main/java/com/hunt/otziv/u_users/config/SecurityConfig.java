@@ -25,6 +25,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
@@ -83,6 +85,7 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, accessDeniedException) -> writeAuthError(response, HttpServletResponse.SC_FORBIDDEN, "У вас нет доступа к этому действию."))
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(publicPaymentAwareBearerTokenResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtAuthenticationConverter()))
                 )
                 .cors(AbstractHttpConfigurer::disable);
@@ -144,6 +147,7 @@ public class SecurityConfig {
                         })
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(publicPaymentAwareBearerTokenResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtAuthenticationConverter()))
                 )
 
@@ -273,6 +277,15 @@ public class SecurityConfig {
         response.setStatus(status);
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write("{\"message\":\"" + message + "\"}");
+    }
+
+    private BearerTokenResolver publicPaymentAwareBearerTokenResolver() {
+        DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
+        return request -> isPublicPaymentPath(request.getServletPath()) ? null : delegate.resolve(request);
+    }
+
+    private boolean isPublicPaymentPath(String path) {
+        return path != null && path.startsWith("/api/payments/public");
     }
 
 

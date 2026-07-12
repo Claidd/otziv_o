@@ -71,6 +71,10 @@
   white-space: nowrap;
 }
 
+:host .company-edit-modal .mobile-company-edit-title {
+  display: none;
+}
+
 :host .company-edit-modal .lead-edit-close {
   border-radius: var(--otziv-small-radius, 0.55rem);
   color: var(--otziv-primary, #6c9bcf);
@@ -813,8 +817,143 @@
 }
 
 @media (max-width: 760px) {
+  :host .company-edit-backdrop {
+    display: block;
+    padding: 0;
+    background: var(--otziv-muted-surface, #f6f8fc);
+    backdrop-filter: none;
+  }
+
+  :host .company-edit-modal {
+    display: flex;
+    width: 100vw;
+    min-width: 0;
+    max-width: 100dvw;
+    height: 100dvh;
+    max-height: none;
+    flex-direction: column;
+    border: 0;
+    border-radius: 0;
+    background: var(--otziv-muted-surface, #f6f8fc);
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  :host .company-edit-modal .lead-edit-head {
+    position: relative;
+    flex: 0 0 auto;
+    min-height: 6.15rem;
+    padding: calc(1rem + env(safe-area-inset-top)) 1.35rem 1rem;
+    background: color-mix(in srgb, var(--otziv-muted-surface, #f6f8fc) 95%, transparent);
+  }
+
+  :host .company-edit-modal .lead-edit-head > div {
+    display: block;
+  }
+
+  :host .company-edit-modal .lead-edit-head > div::before {
+    display: none;
+  }
+
+  :host .company-edit-modal .lead-edit-head small {
+    font-size: 0.76rem;
+    letter-spacing: 0.02em;
+  }
+
+  :host .company-edit-modal .lead-edit-head h2 {
+    margin-top: 0.55rem;
+    font-size: clamp(1.55rem, 7vw, 2rem);
+    white-space: normal;
+  }
+
+  :host .company-edit-modal .desktop-company-edit-title {
+    display: none;
+  }
+
+  :host .company-edit-modal .mobile-company-edit-title {
+    display: inline;
+  }
+
+  :host .company-edit-modal .lead-edit-close {
+    align-self: start;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    color: var(--otziv-dark, #363949);
+    background: transparent;
+  }
+
+  :host .company-edit-modal .lead-edit-form {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    gap: 1.15rem;
+    overflow: hidden;
+    padding: 1rem 1.35rem 0;
+  }
+
+  :host .company-edit-modal .lead-edit-grid {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 0.15rem;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :host .company-edit-modal .lead-edit-grid,
   .company-extra-grid {
     grid-template-columns: 1fr;
+  }
+
+  :host .company-edit-modal .lead-edit-field > span {
+    font-size: 0.78rem;
+  }
+
+  :host .company-edit-modal .lead-edit-field input,
+  :host .company-edit-modal .lead-edit-field select {
+    min-height: 3.6rem;
+    border-radius: 1rem;
+    padding-inline: 1rem;
+    font-size: max(1rem, 16px);
+  }
+
+  :host .company-edit-modal .lead-edit-field textarea {
+    min-height: 5.6rem;
+    border-radius: 1rem;
+    padding: 0.85rem 1rem;
+    font-size: max(1rem, 16px);
+  }
+
+  :host .company-edit-modal .company-edit-section {
+    border-radius: 1rem;
+    padding: 0.9rem;
+  }
+
+  :host .company-edit-modal .lead-edit-actions {
+    position: relative;
+    bottom: auto;
+    flex: 0 0 auto;
+    min-width: 0;
+    z-index: 3;
+    min-height: calc(4.5rem + env(safe-area-inset-bottom));
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--otziv-muted-surface, #f6f8fc) 96%, transparent);
+  }
+
+  :host .company-edit-modal .lead-edit-actions button {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 3.2rem;
+    border-radius: 1rem;
+    font-size: 0.9rem;
   }
 
   .company-billing-title,

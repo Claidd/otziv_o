@@ -113,9 +113,9 @@ import { Router } from '@angular/router';
       min-width: 0;
       height: var(--otziv-pager-button-size, 2.08rem);
       place-items: center;
-      border: 0;
+      border: 1px solid rgba(116, 154, 207, 0.14);
       border-radius: 0.62rem;
-      background: linear-gradient(135deg, #f9fbff, #eef4ff);
+      background: transparent;
       color: var(--otziv-primary);
       font: inherit;
       font-weight: 900;
@@ -163,11 +163,15 @@ import { Router } from '@angular/router';
     }
 
     :host-context(.otziv-dark-theme) .mobile-pager-actions ::ng-deep button,
-    :host-context(body.otziv-dark-theme) .mobile-pager-actions ::ng-deep button,
-    :host-context(.otziv-dark-theme) .mobile-pager-nav button,
-    :host-context(body.otziv-dark-theme) .mobile-pager-nav button {
+    :host-context(body.otziv-dark-theme) .mobile-pager-actions ::ng-deep button {
       border-color: rgba(151, 169, 183, 0.18);
       background: #1f282c;
+    }
+
+    :host-context(.otziv-dark-theme) .mobile-pager-nav button,
+    :host-context(body.otziv-dark-theme) .mobile-pager-nav button {
+      border-color: rgba(151, 169, 183, 0.16);
+      background: transparent;
     }
   `]
 })

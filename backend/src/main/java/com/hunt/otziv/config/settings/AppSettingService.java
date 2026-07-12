@@ -21,6 +21,10 @@ public class AppSettingService {
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ENABLED = "worker.publication.special-task-gate.enabled";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ROLLOUT_STARTED_ON = "worker.publication.special-task-gate.rollout-started-on";
     public static final String WORKER_PUBLICATION_SPECIAL_TASK_GATE_ACTIVATE_ON = "worker.publication.special-task-gate.activate-on";
+    public static final String WORKER_PUBLICATION_SESSION_ENABLED = "worker.publication-session.enabled";
+    public static final String WORKER_PUBLICATION_SESSION_INACTIVITY_MINUTES = "worker.publication-session.inactivity-minutes";
+    public static final String WORKER_PUBLICATION_SESSION_BUSINESS_ZONE = "worker.publication-session.business-zone";
+    public static final String WORKER_PUBLICATION_SESSION_DAY_END_TIME = "worker.publication-session.day-end-time";
     public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
     public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
     public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";

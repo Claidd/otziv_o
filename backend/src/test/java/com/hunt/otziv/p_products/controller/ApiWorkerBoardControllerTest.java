@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.controller;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -10,6 +11,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
+import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -19,6 +21,7 @@ import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
+import com.hunt.otziv.p_products.worker_flow.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -63,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -125,6 +129,9 @@ class ApiWorkerBoardControllerTest {
     private WorkerFlowLockService workerFlowLockService;
 
     @Mock
+    private WorkerPublicationSessionService publicationSessionService;
+
+    @Mock
     private WorkerActivityService workerActivityService;
 
     @Mock
@@ -173,7 +180,8 @@ class ApiWorkerBoardControllerTest {
                         userService,
                         workerService,
                         workerFlowLockService,
-                        appSettingService
+                        appSettingService,
+                        publicationSessionService
                 ),
                 workerActivityService,
                 credentialPreparationService
@@ -181,6 +189,14 @@ class ApiWorkerBoardControllerTest {
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
         lenient().when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
+        lenient().when(publicationSessionService.evaluateEntry(any(Worker.class), anyBoolean())).thenReturn(
+                WorkerPublicationSessionService.SessionDecision.allowed(
+                        WorkerPublicationSessionService.SessionState.disabled()
+                )
+        );
+        lenient().when(publicationSessionService.currentState(any(Worker.class))).thenReturn(
+                WorkerPublicationSessionService.SessionState.disabled()
+        );
         lenient().when(credentialPreparationService.blockUntilReady(any(), any(), any(), any(), anyInt()))
                 .thenReturn(Optional.empty());
         lenient().when(orderService.countActionableOrdersByStatusToWorker(worker)).thenReturn(Map.of());
@@ -262,6 +278,60 @@ class ApiWorkerBoardControllerTest {
                 eq(""),
                 any(Pageable.class)
         )).thenReturn(Page.empty());
+    }
+
+    @Test
+    void workerOverdueReminderUsesWorkerSectionsInsteadOfManagerOrderStatuses() {
+        LocalDate today = LocalDate.now();
+        when(orderRepository.summarizeOverdueOrdersByWorker(eq(worker), any(LocalDate.class), anySet()))
+                .thenReturn(List.of(
+                        new Object[] { "Новый", 2L, today.minusDays(8) },
+                        new Object[] { "Не оплачено", 5L, today.minusDays(30) }
+                ));
+        when(reviewService.getAllReviewDTOByWorkerByPublishToVigul(
+                any(LocalDate.class),
+                eq(principal),
+                eq(0),
+                eq(1),
+                eq("asc"),
+                eq("")
+        )).thenReturn(reviewPageWithOldestDate(today.minusDays(6), 3));
+        when(reviewService.getAllReviewDTOByWorkerByPublish(
+                any(LocalDate.class),
+                eq(principal),
+                eq(0),
+                eq(1),
+                eq("asc"),
+                eq("")
+        )).thenReturn(reviewPageWithOldestDate(today.minusDays(5), 4));
+
+        ReviewRecoveryTask recoveryTask = new ReviewRecoveryTask();
+        recoveryTask.setScheduledDate(today.minusDays(7));
+        when(reviewRecoveryTaskService.getDueTasksToWorker(
+                eq(worker),
+                any(LocalDate.class),
+                eq(""),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(recoveryTask), PageRequest.of(0, 1), 1));
+
+        BadReviewTask badTask = new BadReviewTask();
+        badTask.setScheduledDate(today.minusDays(9));
+        when(badReviewTaskService.getDueTasksToWorker(
+                eq(worker),
+                any(LocalDate.class),
+                eq(""),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(badTask), PageRequest.of(0, 1), 1));
+
+        ManagerOverdueOrdersResponse response = controller.getOverdueOrders(principal, workerAuth);
+
+        assertEquals(11, response.total());
+        assertTrue(hasOverdueStatus(response, "Новые", 2, 8));
+        assertTrue(hasOverdueStatus(response, "Выгул", 3, 6));
+        assertTrue(hasOverdueStatus(response, "Публикация", 4, 5));
+        assertTrue(hasOverdueStatus(response, "Восстановление", 1, 7));
+        assertTrue(hasOverdueStatus(response, "Плохие", 1, 9));
+        assertFalse(response.statuses().stream().anyMatch(status -> "Не оплачено".equals(status.status())));
     }
 
     @Test
@@ -676,6 +746,39 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void updateReviewBotNameTrimsAndSavesAssignedBot() {
+        Bot bot = new Bot();
+        bot.setId(31L);
+        bot.setFio("Old Name");
+        Review review = new Review();
+        review.setId(15L);
+        review.setBot(bot);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+
+        controller.updateReviewBotName(
+                15L,
+                new ApiWorkerBoardController.ReviewBotNameUpdateRequest("  New Name  ")
+        );
+
+        assertEquals("New Name", bot.getFio());
+        verify(botService).save(bot);
+    }
+
+    @Test
+    void updateReviewBotNameRejectsBlankValue() {
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.updateReviewBotName(
+                        15L,
+                        new ApiWorkerBoardController.ReviewBotNameUpdateRequest("   ")
+                )
+        );
+
+        assertEquals(400, error.getStatusCode().value());
+        verify(botService, never()).save(any());
+    }
+
+    @Test
     void workerCannotChangeBadTaskScheduledDate() {
         LocalDate currentDate = LocalDate.now();
         BadReviewTask task = BadReviewTask.builder()
@@ -921,6 +1024,26 @@ class ApiWorkerBoardControllerTest {
 
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section, String sortDirection) {
         return controller.getBoard(section, "", 0, 10, sortDirection, null, principal, workerAuth);
+    }
+
+    private Page<ReviewDTOOne> reviewPageWithOldestDate(LocalDate oldestDate, long total) {
+        ReviewDTOOne review = ReviewDTOOne.builder()
+                .id(1L)
+                .publishedDate(oldestDate)
+                .build();
+        return new PageImpl<>(List.of(review), PageRequest.of(0, 1), total);
+    }
+
+    private boolean hasOverdueStatus(
+            ManagerOverdueOrdersResponse response,
+            String label,
+            long count,
+            long maxDays
+    ) {
+        return response.statuses().stream()
+                .anyMatch(status -> label.equals(status.status())
+                        && status.count() == count
+                        && status.maxDays() == maxDays);
     }
 
     private Authentication auth(String role) {

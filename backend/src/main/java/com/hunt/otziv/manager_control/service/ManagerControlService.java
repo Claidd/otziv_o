@@ -3882,9 +3882,6 @@ public class ManagerControlService {
         if (order != null && order.getAmount() > 0) {
             parts.add(order.getAmount() + " шт.");
         }
-        if (order != null && order.getSum() != null) {
-            parts.add(order.getSum() + " руб.");
-        }
         return String.join(" · ", parts);
     }
 

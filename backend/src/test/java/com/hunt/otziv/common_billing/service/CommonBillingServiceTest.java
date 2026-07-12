@@ -726,6 +726,28 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void managerBoardShowsCollectingCommonInvoiceInNewOrders() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order order = order(101L);
+        order.setStatus(status("Публикация"));
+        order.setAmount(5);
+        order.setCounter(4);
+        CommonInvoiceOrder item = item(invoice, order);
+        item.setReady(false);
+
+        when(invoiceRepository.findBoardInvoices(any())).thenReturn(List.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L))).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+
+        List<OrderDTOList> cards = service.managerBoardCards("Новый", "", null, null, "desc");
+
+        assertEquals(1, cards.size());
+        assertEquals("Ожидает общего счета", cards.get(0).getStatus());
+    }
+
+    @Test
     void managerBoardCardsMergeDuplicateAttachableInvoicesBeforeRendering() {
         CommonBillingAccount account = account();
         CommonInvoice target = invoice(account);

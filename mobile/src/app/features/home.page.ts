@@ -1652,6 +1652,110 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       white-space: nowrap;
     }
 
+    :host-context(body.otziv-dark-theme) .home-section-scroll .metric-tile {
+      background: linear-gradient(155deg, rgba(37, 43, 47, 0.98) 0%, rgba(24, 29, 33, 0.96) 100%);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .home-toolbar,
+    :host-context(body.otziv-dark-theme) .period-row,
+    :host-context(body.otziv-dark-theme) .identity-card,
+    :host-context(body.otziv-dark-theme) .manual-payment-card,
+    :host-context(body.otziv-dark-theme) .manual-task-item,
+    :host-context(body.otziv-dark-theme) .data-card,
+    :host-context(body.otziv-dark-theme) .group-block,
+    :host-context(body.otziv-dark-theme) .notice,
+    :host-context(body.otziv-dark-theme) .inline-alert {
+      border-color: rgba(163, 189, 204, 0.18);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(37, 43, 47, 0.96) 100%);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .data-card {
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(38, 45, 52, 0.96) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .data-card.tone-green {
+      border-color: rgba(74, 198, 177, 0.24);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(28, 47, 43, 0.94) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .data-card.tone-blue {
+      border-color: rgba(122, 167, 220, 0.28);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(30, 43, 58, 0.94) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .data-card.tone-yellow {
+      border-color: rgba(215, 189, 120, 0.24);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(48, 42, 28, 0.94) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .data-card.tone-red {
+      border-color: rgba(255, 91, 143, 0.24);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(50, 32, 43, 0.94) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .metric-delta {
+      color: var(--otziv-info);
+      background: rgba(14, 18, 22, 0.44);
+    }
+
+    :host-context(body.otziv-dark-theme) .mobile-chart-card,
+    :host-context(body.otziv-dark-theme) .mobile-chart-card--salary {
+      border-color: rgba(163, 189, 204, 0.18);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(38, 43, 50, 0.96) 100%);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .line-chart-scroll {
+      border-color: rgba(163, 189, 204, 0.16);
+      background: rgba(21, 26, 30, 0.74);
+    }
+
+    :host-context(body.otziv-dark-theme) .bar-chart {
+      border-color: rgba(163, 189, 204, 0.16);
+      background:
+        linear-gradient(180deg, transparent 0, transparent 24%, rgba(163, 189, 204, 0.1) 25%, transparent 26%, transparent 49%, rgba(163, 189, 204, 0.1) 50%, transparent 51%, transparent 74%, rgba(163, 189, 204, 0.1) 75%, transparent 76%),
+        rgba(21, 26, 30, 0.74);
+    }
+
+    :host-context(body.otziv-dark-theme) .grid-line {
+      stroke: rgba(163, 189, 204, 0.14);
+    }
+
+    :host-context(body.otziv-dark-theme) .chart-dot {
+      border-color: #202528;
+    }
+
+    :host-context(body.otziv-dark-theme) .date-control input,
+    :host-context(body.otziv-dark-theme) .period-row button,
+    :host-context(body.otziv-dark-theme) .period-row label,
+    :host-context(body.otziv-dark-theme) .manual-mode-toggle button,
+    :host-context(body.otziv-dark-theme) .manual-task-item footer button,
+    :host-context(body.otziv-dark-theme) .section-choice-list button,
+    :host-context(body.otziv-dark-theme) .person-card dl div,
+    :host-context(body.otziv-dark-theme) .manual-payment-card input,
+    :host-context(body.otziv-dark-theme) .manual-task-edit-form input,
+    :host-context(body.otziv-dark-theme) .manual-payment-save {
+      border-color: rgba(163, 189, 204, 0.18);
+      background: rgba(21, 26, 30, 0.72);
+    }
+
+    :host-context(body.otziv-dark-theme) .role-pill,
+    :host-context(body.otziv-dark-theme) .pill-button,
+    :host-context(body.otziv-dark-theme) .icon-button,
+    :host-context(body.otziv-dark-theme) .period-row button.active,
+    :host-context(body.otziv-dark-theme) .section-choice-list button.active {
+      border-color: rgba(122, 167, 220, 0.32);
+      background: rgba(122, 167, 220, 0.14);
+      color: var(--otziv-primary);
+    }
+
+    :host-context(body.otziv-dark-theme) .person-card {
+      border-color: rgba(163, 189, 204, 0.18);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(37, 43, 47, 0.96) 100%);
+    }
+
     :host-context(body.otziv-compact-phone) .bar-chart,
     :host-context(body.otziv-short-phone) .bar-chart {
       height: 11.7rem;

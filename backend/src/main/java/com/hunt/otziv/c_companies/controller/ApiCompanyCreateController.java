@@ -77,6 +77,7 @@ public class ApiCompanyCreateController {
     private static final String SOURCE_MANUAL = "manual";
     private static final String FALLBACK_CITY = "Не задан";
     private static final int COMPANY_COMMENTS_MAX_LENGTH = 2000;
+    private static final int COMPANY_PHONE_MAX_LENGTH = 12;
     private static final String COMPANY_DATA_SOURCE_MANUAL = "MANUAL";
 
     private final CompanyService companyService;
@@ -122,8 +123,25 @@ public class ApiCompanyCreateController {
             Principal principal,
             Authentication authentication
     ) {
+        try {
+            return createCompanyInternal(request, principal, authentication);
+        } catch (ResponseStatusException exception) {
+            throw humanize(exception);
+        } catch (Exception exception) {
+            log.error("Unexpected company creation failure", exception);
+            throw problem(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "компанию не удалось создать из-за внутреннего сбоя",
+                    "повторите попытку через минуту; если ошибка сохранится, отправьте администратору время попытки");
+        }
+    }
+
+    private CompanyCreateResultResponse createCompanyInternal(
+            CompanyCreateRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
         if (request == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Данные компании не переданы");
+            throw problem(HttpStatus.BAD_REQUEST, "данные компании не получены", "обновите страницу, снова откройте форму и заполните её");
         }
 
         String source = normalizeSource(request.source());
@@ -132,7 +150,7 @@ public class ApiCompanyCreateController {
         validateCreateRequest(company, request);
 
         Company savedCompany = companyService.saveAndReturn(company)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Компания не создана"));
+                .orElseThrow(() -> problem(HttpStatus.BAD_REQUEST, "компания не была сохранена", "проверьте поля формы и повторите сохранение"));
 
         if (request.leadId() != null) {
             leadService.changeStatusLeadOnInWork(request.leadId());
@@ -231,7 +249,7 @@ public class ApiCompanyCreateController {
 
     private void requireLeadId(Long leadId) {
         if (leadId == null || leadId <= 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Лид не указан");
+            throw problem(HttpStatus.BAD_REQUEST, "не указан лид, из которого создаётся компания", "вернитесь к списку лидов и снова откройте создание компании у нужного лида");
         }
     }
 
@@ -266,14 +284,14 @@ public class ApiCompanyCreateController {
                 return managers.stream()
                         .filter(manager -> Objects.equals(manager.getId(), managerId))
                         .findFirst()
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Менеджер недоступен"));
+                        .orElseThrow(() -> problem(HttpStatus.FORBIDDEN, "выбранный менеджер недоступен", "выберите доступного менеджера или попросите владельца проверить состав команды"));
             }
             return firstManager(managers);
         }
 
         Manager manager = managerService.getManagerByUserId(currentUser(principal).getId());
         if (manager == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для пользователя не найден менеджер");
+            throw problem(HttpStatus.BAD_REQUEST, "ваша учётная запись не связана с менеджером", "попросите администратора назначить вашей учётной записи профиль менеджера");
         }
         return manager;
     }
@@ -282,23 +300,24 @@ public class ApiCompanyCreateController {
         return managers.stream()
                 .filter(Objects::nonNull)
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Нет доступных менеджеров"));
+                .orElseThrow(() -> problem(HttpStatus.BAD_REQUEST, "нет доступных менеджеров", "попросите владельца добавить менеджера в команду или проверить назначения"));
     }
 
     private User currentUser(Principal principal) {
         if (principal == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Пользователь не авторизован");
+            throw problem(HttpStatus.UNAUTHORIZED, "сессия пользователя не найдена", "войдите в систему заново и повторите действие");
         }
 
         return userService.findByUserName(principal.getName())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+                .orElseThrow(() -> problem(HttpStatus.NOT_FOUND, "учётная запись пользователя не найдена", "войдите заново; если ошибка повторится, обратитесь к администратору"));
     }
 
     private CompanyDTO toCompanyDto(CompanyDTO base, CompanyCreateRequest request) {
         boolean manualSource = SOURCE_MANUAL.equals(normalizeSource(request.source()));
         String telephone = manualSource
-                ? normalize(request.telephone())
+                ? normalizeCompanyPhone(request.telephone())
                 : firstNonBlank(request.telephone(), base.getTelephone());
+        telephone = normalizeCompanyPhone(telephone);
         String title = manualSource
                 ? normalize(request.title())
                 : firstNonBlank(request.title(), base.getTitle(), fallbackTitle(telephone));
@@ -333,52 +352,101 @@ public class ApiCompanyCreateController {
         boolean manualSource = SOURCE_MANUAL.equals(normalizeSource(request.source()));
 
         if (isBlank(company.getTitle())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Название компании не может быть пустым");
+            throw invalid("Название компании не заполнено", "Введите название компании и повторите сохранение");
         }
 
         if (isBlank(company.getTelephone())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Телефон компании не может быть пустым");
+            throw invalid("Телефон компании не заполнен", "Введите номер телефона; пробелы, скобки и дефисы можно использовать");
+        }
+
+        if (!company.getTelephone().matches("\\d{7," + COMPANY_PHONE_MAX_LENGTH + "}")) {
+            throw invalid(
+                    "Телефон компании имеет неверный формат",
+                    "Введите от 7 до 12 цифр, например +7 982 276-65-65"
+            );
         }
 
         if (isBlank(company.getCity())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Город компании не может быть пустым");
+            throw invalid("Город компании не заполнен", "Укажите город и повторите сохранение");
         }
 
         if (manualSource && !validId(request.categoryId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Категория не выбрана");
+            throw invalid("категория не выбрана", "выберите категорию компании");
         }
 
         if (manualSource && !validId(request.subCategoryId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Подкатегория не выбрана");
+            throw invalid("подкатегория не выбрана", "выберите подкатегорию после выбора категории");
         }
 
         if (manualSource && !validId(request.workerId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не выбран");
+            throw invalid("специалист не выбран", "выберите специалиста, который будет работать с компанией");
         }
 
         if (manualSource && !validId(request.filialCityId())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Город филиала не выбран");
+            throw invalid("город филиала не выбран", "выберите город филиала из списка");
         }
 
         if (manualSource && isBlank(request.filialTitle())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Адрес филиала не может быть пустым");
+            throw invalid("адрес филиала не заполнен", "введите адрес филиала");
         }
 
         if (manualSource && isBlank(request.filialUrl())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ссылка 2ГИС не может быть пустой");
+            throw invalid("ссылка 2ГИС не заполнена", "вставьте ссылку на карточку филиала в 2ГИС");
         }
 
         if (!isBlank(company.getEmail()) && !company.getEmail().contains("@")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный email");
+            throw invalid("Email указан неверно", "Введите адрес в формате name@example.ru или очистите поле");
         }
 
         if (!isBlank(request.filialUrl()) && filialService.findFilialByUrl(normalize(request.filialUrl())) != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Такой url филиала уже есть в базе");
+            throw problem(HttpStatus.CONFLICT, "филиал с такой ссылкой 2ГИС уже существует", "найдите существующую компанию по ссылке и добавьте заказ в неё вместо создания дубликата");
         }
 
         if (companyService.getCompanyByTelephonAndTitle(storagePhone(company.getTelephone()), company.getTitle()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Компания с таким названием или телефоном уже есть");
+            throw problem(HttpStatus.CONFLICT, "компания с таким названием или телефоном уже существует", "найдите существующую компанию и создайте заказ в ней либо проверьте название и телефон");
         }
+    }
+
+    private String normalizeCompanyPhone(String phone) {
+        return LeadPhoneNormalizer.normalize(phone);
+    }
+
+    private ResponseStatusException invalid(String problem, String solution) {
+        return problem(HttpStatus.BAD_REQUEST, problem, solution);
+    }
+
+    private ResponseStatusException problem(HttpStatus status, String problem, String solution) {
+        return new ResponseStatusException(status, humanMessage(problem, solution));
+    }
+
+    private ResponseStatusException humanize(ResponseStatusException exception) {
+        String reason = normalize(exception.getReason());
+        if (reason.startsWith("Ошибка:") && reason.contains("Как исправить:")) {
+            return exception;
+        }
+        String description = reason.isBlank() ? "операцию не удалось выполнить" : reason;
+        return new ResponseStatusException(
+                exception.getStatusCode(),
+                humanMessage(description, defaultSolution(exception.getStatusCode().value())),
+                exception
+        );
+    }
+
+    private String defaultSolution(int status) {
+        if (status == 401) return "войдите в систему заново и повторите действие";
+        if (status == 403) return "обновите страницу; если доступ действительно нужен, попросите администратора проверить вашу роль";
+        if (status == 404) return "обновите страницу и выберите данные заново";
+        if (status == 409) return "обновите данные, проверьте существующие компании и повторите действие";
+        if (status >= 500) return "повторите попытку через минуту; если ошибка сохранится, сообщите администратору время попытки";
+        return "проверьте заполненные поля и повторите действие";
+    }
+
+    private String humanMessage(String problem, String solution) {
+        return "Ошибка: " + stripFinalPunctuation(problem) + ". Как исправить: " + stripFinalPunctuation(solution) + ".";
+    }
+
+    private String stripFinalPunctuation(String value) {
+        return normalize(value).replaceFirst("[.!?]+$", "");
     }
 
     private CompanyCreatePayloadResponse toPayload(

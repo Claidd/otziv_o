@@ -148,9 +148,7 @@ export class WorkerOrderCardComponent {
   }
 
   canOpenInlineEdit(): boolean {
-    return (this.activeSection === 'new' || this.activeSection === 'correct')
-      && this.canOpenEditModal
-      && !this.order.waitingForClient;
+    return this.canOpenEditModal;
   }
 
   canManageClientWaiting(): boolean {

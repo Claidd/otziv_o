@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
 public class ReviewBotChangeService {
 
     private static final Long STUB_BOT_ID = 1L;
-    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
     private static final Set<Long> OWN_CITY_NEW_ACCOUNT_CITY_IDS = Set.of(320L, 326L);
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
@@ -90,7 +89,7 @@ public class ReviewBotChangeService {
             }
 
             boolean wasVigul = review.isVigul();
-            boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
+            boolean oldWalked = review.isVigul();
 
             Bot currentBot = review.getBot();
             Long currentBotId = currentBot != null ? currentBot.getId() : null;
@@ -134,7 +133,7 @@ public class ReviewBotChangeService {
     public void assignNewAccount(Long reviewId, boolean forceWalkDelayIfUnwalked) {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
-        boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
+        boolean oldWalked = review.isVigul();
 
         Filial filial = review.getFilial();
         lockCompanyForBotAssignment(filial);
@@ -247,7 +246,7 @@ public class ReviewBotChangeService {
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
         boolean wasVigul = review.isVigul();
-        boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
+        boolean oldWalked = review.isVigul();
 
         Bot oldBot = review.getBot();
         assignBotUsingSharedRules(review, Set.of());
@@ -312,7 +311,7 @@ public class ReviewBotChangeService {
                 continue;
             }
 
-            boolean oldWalked = accountWalkScheduleService.isWalkedAccount(affectedReview.getBot());
+            boolean oldWalked = affectedReview.isVigul();
             Bot oldBot = affectedReview.getBot();
             assignBotUsingSharedRules(affectedReview, excludedBotIds);
             markReleasedIfChanged(oldBot, affectedReview.getBot(), "blocked bot reassigned in unpublished review");
@@ -485,7 +484,7 @@ public class ReviewBotChangeService {
         }
 
         List<Bot> strictFiltered = baseBots.stream()
-                .filter(bot -> safeBotCounter(bot) >= 3)
+                .filter(accountWalkScheduleService::isWalkedAccount)
                 .collect(Collectors.toList());
 
         if (!strictFiltered.isEmpty()) {
@@ -493,10 +492,7 @@ public class ReviewBotChangeService {
         }
 
         List<Bot> fallbackFiltered = baseBots.stream()
-                .filter(bot -> {
-                    int counter = safeBotCounter(bot);
-                    return counter >= 0 && counter <= 2;
-                })
+                .filter(bot -> !accountWalkScheduleService.isWalkedAccount(bot))
                 .collect(Collectors.toList());
 
         if (!fallbackFiltered.isEmpty()) {
@@ -517,14 +513,7 @@ public class ReviewBotChangeService {
             return;
         }
 
-        int botCounter = safeBotCounter(bot);
-        boolean currentVigul = review.isVigul();
-
-        if (currentVigul && botCounter < MAX_ACTIVE_REVIEWS_PER_BOT) {
-            review.setVigul(false);
-        } else if (!currentVigul && botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT) {
-            review.setVigul(true);
-        }
+        review.setVigul(accountWalkScheduleService.isWalkedAccount(bot));
     }
 
     private boolean hasNewStatus(Bot bot) {
@@ -533,10 +522,6 @@ public class ReviewBotChangeService {
         }
         String statusTitle = bot.getStatus().getBotStatusTitle();
         return statusTitle != null && "Новый".equals(statusTitle.trim());
-    }
-
-    private int safeBotCounter(Bot bot) {
-        return bot != null ? bot.getCounter() : 0;
     }
 
     private boolean isTemplateBotName(Bot bot) {

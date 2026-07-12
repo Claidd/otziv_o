@@ -46,4 +46,12 @@ public interface BotAssignmentService {
      * Обновление isVigul отзыва на основе counter бота
      */
     void updateReviewVigulBasedOnBotCounter(Review review, Bot bot);
+
+    /**
+     * Promotes unpublished reviews that still have vigul=false but now use a walked account.
+     * Manual vigul=true confirmations are never demoted by this synchronization.
+     */
+    int promoteReviewsWithWalkedAccounts(Collection<Review> reviews);
+
+    int promoteUnpublishedReviewsForBot(Bot bot);
 }

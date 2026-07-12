@@ -608,7 +608,9 @@
 
 .category-row .category-chip {
   appearance: none;
+  display: inline-flex;
   flex: 1 1 0;
+  align-items: center;
   justify-content: center;
   overflow: hidden;
   color: var(--otziv-dark);
@@ -632,11 +634,14 @@
 }
 
 .category-row .category-chip__label {
-  display: block;
+  display: inline-flex;
   flex: initial;
   min-width: 0;
   min-height: 0;
   width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 0;
   padding: 0;
@@ -644,6 +649,7 @@
   color: inherit;
   background: transparent;
   font: inherit;
+  line-height: 1;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -749,6 +755,10 @@
 .comment-details,
 .card-more {
   min-width: 0;
+}
+
+.mobile-company-more {
+  display: none;
 }
 
 .comment-details summary {
@@ -869,21 +879,88 @@
 
 @media (max-width: 860px) {
   .manager-card {
-    flex: 0 0 min(21rem, calc(100vw - 4rem));
-    min-height: clamp(21.5rem, 48svh, 27rem);
+    box-sizing: border-box;
+    display: flex;
+    flex: 0 0 var(--otziv-board-card-width, min(15.4rem, 76vw));
+    width: var(--otziv-board-card-width, min(15.4rem, 76vw));
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--otziv-card-gap, 0.34rem);
+    padding: var(--otziv-card-padding, 0.62rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     scroll-snap-align: center;
+    scroll-snap-stop: always;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    background: var(--otziv-white);
+  }
+
+  .manager-card::-webkit-scrollbar {
+    display: none;
   }
 
   .order-card {
-    min-height: clamp(30rem, 67svh, 34rem);
+    min-height: 0;
   }
 
-  :host-context(.manager-workspace.menu-open) .manager-card {
-    min-height: clamp(18.5rem, 39svh, 20.5rem);
+  .manager-card.waiting-client,
+  .manager-card.card-tone--wait {
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-wait-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
   }
 
-  :host-context(.manager-workspace.menu-open) .order-card {
-    min-height: clamp(29rem, 61svh, 32rem);
+  .manager-card.card-tone--walk {
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-walk-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
+  }
+
+  .manager-card.card-tone--correction {
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-correction-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
+  }
+
+  .manager-card.card-tone--publication {
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-publication-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
+  }
+
+  .manager-card.card-tone--success {
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-success-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
+  }
+
+  .manager-card.card-tone--bad {
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-bad-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
   }
 
   .phone-row a,
@@ -891,50 +968,107 @@
   .meta-row span,
   .meta-row a,
   .meta-row button {
-    min-height: 2.45rem;
-    font-size: 0.82rem;
+    box-sizing: border-box;
+    min-height: var(--otziv-card-pill-height, 1.7rem);
+    height: var(--otziv-card-pill-height, 1.7rem);
+    max-height: var(--otziv-card-pill-height, 1.7rem);
+    padding-inline: 0.55rem;
+    font-size: var(--otziv-card-pill-font-size, 0.72rem);
+    line-height: 1;
+  }
+
+  .phone-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--otziv-card-pill-height, 1.7rem);
+    gap: var(--otziv-card-gap, 0.34rem);
+  }
+
+  .phone-row a {
+    font-size: 1.45rem !important;
   }
 
   .phone-row button {
-    flex-basis: 2.65rem;
+    width: var(--otziv-card-pill-height, 1.7rem);
+    min-width: var(--otziv-card-pill-height, 1.7rem);
+    max-width: var(--otziv-card-pill-height, 1.7rem);
+    padding-inline: 0;
+  }
+
+  .meta-row,
+  .manager-card footer {
+    gap: var(--otziv-card-gap, 0.34rem);
   }
 
   .card-actions button,
-  .card-actions a {
-    min-height: 2.85rem;
-    padding: 0 0.45rem;
-    font-size: 0.82rem;
+  .card-actions a,
+  .details-button {
+    box-sizing: border-box;
+    min-height: var(--otziv-card-control-height, 1.6rem);
+    height: var(--otziv-card-control-height, 1.6rem);
+    max-height: var(--otziv-card-control-height, 1.6rem);
+    padding: 0 var(--otziv-card-control-padding-x, 0.46rem);
+    font-family: var(--otziv-card-title-font);
+    font-size: var(--otziv-card-control-font-size, 0.63rem);
+    font-weight: 900;
+    line-height: 1;
   }
 
   .order-links button,
   .order-links a {
-    min-height: 2.5rem;
+    min-height: var(--otziv-card-control-height, 1.6rem);
+    height: var(--otziv-card-control-height, 1.6rem);
+    max-height: var(--otziv-card-control-height, 1.6rem);
   }
 
   .order-status-actions button {
-    min-height: 2.5rem;
-    font-size: 0.72rem;
+    min-height: var(--otziv-card-control-height, 1.6rem);
+    height: var(--otziv-card-control-height, 1.6rem);
+    max-height: var(--otziv-card-control-height, 1.6rem);
+    font-size: var(--otziv-card-control-font-size, 0.63rem);
   }
 
   .comment-details summary {
-    min-height: 3.75rem;
-    padding: 0.7rem 0.8rem;
+    box-sizing: border-box;
+    min-height: var(--otziv-lead-comment-height, 4.45rem);
+    height: var(--otziv-lead-comment-height, 4.45rem);
+    max-height: var(--otziv-lead-comment-height, 4.45rem);
+    padding: 0.58rem;
     font-size: 0.86rem;
   }
 
+  .next-order-alert,
   .chat-link-warning {
-    min-height: 2.1rem;
-    font-size: 0.76rem;
+    min-height: var(--otziv-card-pill-height, 2.35rem);
+    padding-inline: 0.7rem;
+    font-size: var(--otziv-card-pill-font-size, 0.82rem);
+  }
+
+  .company-card .card-more {
+    display: none;
+  }
+
+  .mobile-company-more {
+    display: grid;
+    gap: var(--otziv-card-gap, 0.34rem);
+  }
+
+  .mobile-company-more .card-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobile-company-more .meta-row {
+    display: flex;
+  }
+
+  .comment-details summary::after {
+    display: none;
   }
 }
 
 @media (max-width: 540px) {
   .manager-card {
-    flex-basis: min(20.5rem, calc(100vw - 3.25rem));
-    min-height: clamp(22rem, 52svh, 27rem);
-  }
-
-  :host-context(.manager-workspace.menu-open) .manager-card {
-    min-height: clamp(18.25rem, 38svh, 20rem);
+    flex-basis: var(--otziv-board-card-width, min(15.4rem, 76vw));
+    width: var(--otziv-board-card-width, min(15.4rem, 76vw));
+    min-height: 0;
   }
 }

@@ -77,7 +77,7 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
-    void changeBotAssignsNewBotAndUpdatesVigulByCounter() {
+    void changeBotKeepsPublicationReadyWhenNewAccountIsWalked() {
         ReviewBotChangeService service = service();
         Review review = new Review();
         review.setVigul(true);
@@ -86,11 +86,13 @@ class ReviewBotChangeServiceTest {
         when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
         when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of())))
                 .thenReturn(selectedBot);
+        when(accountWalkScheduleService.isWalkedAccount(selectedBot)).thenReturn(true);
 
         service.changeBot(15L);
 
         assertSame(selectedBot, review.getBot());
-        assertFalse(review.isVigul());
+        assertTrue(review.isVigul());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, true, false);
         verify(reviewRepository).save(review);
     }
 
@@ -112,6 +114,7 @@ class ReviewBotChangeServiceTest {
         when(botService.findBotById(5L)).thenReturn(currentBot);
         when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of(5L))))
                 .thenReturn(selectedBot);
+        when(accountWalkScheduleService.isWalkedAccount(selectedBot)).thenReturn(true);
 
         service.deActivateAndChangeBot(21L, null);
 
@@ -267,7 +270,7 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
-    void assignNewAccountClaimsAccountAndClearsVigulForRegularFilialCity() {
+    void assignNewAccountUsesManualVigulAsPreviousReadiness() {
         ReviewBotChangeService service = service();
         City city = city(9L, "Иркутск");
         Filial filial = filial(11L, city);
@@ -286,7 +289,7 @@ class ReviewBotChangeServiceTest {
         service.assignNewAccount(44L);
 
         assertSame(selectedBot, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, false);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, true, false);
         verify(reviewRepository).save(review);
     }
 

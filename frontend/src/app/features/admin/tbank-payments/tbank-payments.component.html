@@ -59,7 +59,8 @@
           (click)="setPaymentSource('LIVE')"
         >
           <span class="material-icons-sharp" aria-hidden="true">bolt</span>
-          Live
+          <strong>{{ paymentSource() === 'LIVE' ? paymentTotalElements() : '' }}</strong>
+          <small>активные</small>
         </button>
         <button
           type="button"
@@ -67,7 +68,8 @@
           (click)="setPaymentSource('ARCHIVE')"
         >
           <span class="material-icons-sharp" aria-hidden="true">archive</span>
-          Архив
+          <strong>{{ paymentSource() === 'ARCHIVE' ? paymentTotalElements() : '' }}</strong>
+          <small>архив</small>
         </button>
       </div>
 
@@ -80,12 +82,14 @@
             [title]="option.label"
           >
             <span class="material-icons-sharp" aria-hidden="true">{{ option.icon }}</span>
-            <span>{{ option.label }}</span>
+            <strong>{{ statusTotal(option.key) }}</strong>
+            <small>{{ option.label }}</small>
           </button>
         }
       </div>
 
       <label class="search-field">
+        <span class="material-icons-sharp" aria-hidden="true">search</span>
         <input
           type="search"
           aria-label="Поиск платежей"
@@ -159,16 +163,16 @@
         <tbody>
           @for (item of recipientSummaryItems(); track item.manualRecipientName + item.manualPhone + item.manualPaymentUrl + item.paymentProfileName) {
             <tr>
-              <td>
+              <td data-label="Получатель">
                 <strong>{{ item.manualRecipientName || 'Получатель не указан' }}</strong>
                 <small>{{ recipientSummarySourceLabel(item) }}</small>
               </td>
-              <td>
+              <td data-label="Реквизиты">
                 <span>{{ recipientSummaryPaymentTarget(item) }}</span>
               </td>
-              <td>{{ item.paymentCount }}</td>
-              <td><strong>{{ formatKopecks(item.amountKopecks) }}</strong></td>
-              <td>
+              <td data-label="Платежи">{{ item.paymentCount }}</td>
+              <td data-label="Сумма"><strong>{{ formatKopecks(item.amountKopecks) }}</strong></td>
+              <td data-label="Сверка">
                 <span>{{ item.firstConfirmedAt | date:'dd.MM HH:mm' }}</span>
                 @if (item.lastConfirmedAt && item.lastConfirmedAt !== item.firstConfirmedAt) {
                   <small>до {{ item.lastConfirmedAt | date:'dd.MM HH:mm' }}</small>
@@ -250,12 +254,12 @@
         <tbody>
           @for (link of filteredLinks(); track trackLink($index, link)) {
             <tr [class]="rowMode(link)">
-              <td class="order-cell">
+              <td class="order-cell" data-label="Заказ">
                 <strong class="order-title">{{ paymentTitle(link) }}</strong>
                 <span>{{ paymentSubtitle(link) }}</span>
                 <small>Заказ №{{ link.orderId || '-' }}</small>
               </td>
-              <td class="payment-cell">
+              <td class="payment-cell" data-label="Платёж">
                 @if (isManualPayment(link)) {
                   @if (isExternalManualPayment(link)) {
                     <a
@@ -304,11 +308,11 @@
                 }
                 }
               </td>
-              <td class="amount-cell">
+              <td class="amount-cell" data-label="Сумма">
                 <strong>{{ link.amount | number:'1.2-2' }} руб.</strong>
                 <small>{{ link.amountKopecks }} коп.</small>
               </td>
-              <td class="status-cell">
+              <td class="status-cell" data-label="Статус">
                 <span [class]="statusClass(link.status)">{{ statusLabel(link.status) }}</span>
                 @if (link.lastError) {
                   <small class="error-text">{{ link.lastError }}</small>
@@ -324,7 +328,7 @@
                 }
                 <small [class]="clientChatClass(link)">{{ clientChatInfo(link) }}</small>
               </td>
-              <td class="date-cell">
+              <td class="date-cell" data-label="Даты">
                 <span>Создана: {{ link.createdAt | date:'dd.MM HH:mm' }}</span>
                 @if (link.initiatedAt) {
                   <span>Init: {{ link.initiatedAt | date:'dd.MM HH:mm' }}</span>
@@ -343,7 +347,7 @@
                 }
                 <span>Истекает: {{ link.expiresAt | date:'dd.MM HH:mm' }}</span>
               </td>
-              <td class="action-cell">
+              <td class="action-cell" data-label="Действия">
                 <div class="row-actions">
                   @if (link.archived) {
                     <span class="archive-label" [title]="link.archiveReason || 'Архивная запись'">
@@ -410,6 +414,16 @@
         </tbody>
       </table>
     </div>
+
+    <app-mobile-bottom-pager
+      class="mobile-tbank-pager"
+      [pageIndex]="paymentPage()"
+      [totalPages]="paymentTotalPages()"
+      [disabled]="loading()"
+      fallbackUrl="/"
+      (previous)="setPaymentPage(paymentPage() - 1)"
+      (next)="setPaymentPage(paymentPage() + 1)"
+    />
 
     <div class="pagination-row">
       <p>{{ paymentPageLabel() }}</p>

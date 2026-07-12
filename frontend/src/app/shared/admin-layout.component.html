@@ -3,8 +3,104 @@
   [class.sidebar-hidden]="!displaySidebar()"
   [class.right-panel-default]="rightPanelMode === 'default'"
   [class.right-panel-custom]="rightPanelMode === 'custom'"
+  [class.mobile-viewport]="viewport.mobile()"
+  [class.mobile-staff-shell]="viewport.mobile() && showMobileStaffShell()"
 >
-  @if (displaySidebar()) {
+  @if (viewport.mobile()) {
+    <header class="mobile-shell-header">
+      <a class="mobile-shell-brand" routerLink="/" (click)="closeMobileOverlays()">
+        Компания&nbsp;<strong>О!</strong>
+      </a>
+
+      <span class="mobile-shell-title">{{ title }}</span>
+
+      <div class="mobile-shell-controls">
+        <div class="mobile-shell-theme" aria-label="Смена темы день ночь">
+          <button
+            type="button"
+            aria-label="Светлая тема"
+            [class.active]="theme() === 'light'"
+            (click)="setTheme('light')"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">light_mode</span>
+          </button>
+          <button
+            type="button"
+            aria-label="Темная тема"
+            [class.active]="theme() === 'dark'"
+            (click)="setTheme('dark')"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">dark_mode</span>
+          </button>
+        </div>
+
+        @if (showMobileStaffShell()) {
+          <button
+            type="button"
+            class="mobile-shell-menu-trigger"
+            [attr.aria-expanded]="mobileMenuOpen()"
+            [attr.aria-label]="mobileMenuOpen() ? 'Закрыть меню' : 'Открыть меню'"
+            (click)="toggleMobileMenu()"
+          >
+            <span class="material-icons-sharp" aria-hidden="true">{{ mobileMenuOpen() ? 'close' : 'menu' }}</span>
+          </button>
+        } @else if (authenticated()) {
+          <button type="button" class="mobile-shell-account" aria-label="Выйти из аккаунта" (click)="logout()">
+            <span class="material-icons-sharp" aria-hidden="true">logout</span>
+          </button>
+        } @else {
+          <button type="button" class="mobile-shell-login" (click)="login()">Вход</button>
+        }
+      </div>
+    </header>
+
+    @if (mobileMenuOpen() && showMobileStaffShell()) {
+      <div class="mobile-shell-menu-backdrop" (pointerdown)="closeMobileOverlays()">
+        <section class="mobile-shell-menu" role="dialog" aria-modal="true" aria-label="Разделы приложения" (pointerdown)="$event.stopPropagation()">
+          <div class="mobile-shell-user">
+            @let mobileHeaderPhotoUrl = headerProfileImageUrl();
+            @if (mobileHeaderPhotoUrl) {
+              <img [src]="mobileHeaderPhotoUrl" [alt]="headerProfileImageAlt()">
+            } @else {
+              <span>{{ initials() }}</span>
+            }
+            <div>
+              <strong>{{ username() }}</strong>
+              <small>{{ primaryRole() }}</small>
+            </div>
+          </div>
+
+          <nav class="mobile-shell-menu-links" aria-label="Все доступные разделы">
+            @for (link of mobileMenuLinks(); track link.id) {
+              @if (link.routerLink) {
+                <a [routerLink]="routerLinkFor(link)" [class.active]="isActive(link)" (click)="handleMobileMenuLinkClick(link)">
+                  <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
+                  <strong>{{ link.label }}</strong>
+                </a>
+              } @else if (link.href) {
+                <a
+                  [href]="link.href"
+                  [attr.target]="link.openInNewTab ? '_blank' : null"
+                  [attr.rel]="link.openInNewTab ? 'noopener' : null"
+                  (click)="mobileMenuOpen.set(false)"
+                >
+                  <span class="material-icons-sharp" aria-hidden="true">{{ link.icon }}</span>
+                  <strong>{{ link.label }}</strong>
+                </a>
+              }
+            }
+          </nav>
+
+          <button type="button" class="mobile-shell-logout" (click)="logout()">
+            <span class="material-icons-sharp" aria-hidden="true">logout</span>
+            <strong>Выход</strong>
+          </button>
+        </section>
+      </div>
+    }
+  }
+
+  @if (!viewport.mobile() && displaySidebar()) {
   <aside class="admin-sidebar">
     <a class="brand" routerLink="/">
       <img [src]="brandLogoUrl" alt="">
@@ -39,6 +135,7 @@
   </aside>
   }
 
+  @if (!viewport.mobile()) {
   <div class="mobile-start-nav" aria-label="Theme and account controls">
     <div class="mode-switch" aria-label="Theme mode">
       <button
@@ -67,6 +164,7 @@
       <button type="button" class="login-pill" (click)="login()">Вход</button>
     }
   </div>
+  }
 
   <main class="admin-content">
     <header class="page-heading">
@@ -91,7 +189,9 @@
     <ng-content></ng-content>
   </main>
 
+  @if (!viewport.mobile() || rightPanelMode === 'custom') {
   <section class="admin-right" aria-label="Account summary">
+    @if (!viewport.mobile()) {
     <div class="right-nav">
       <div class="mode-switch" aria-label="Theme mode">
         <button
@@ -132,6 +232,7 @@
         <button type="button" class="login-pill" (click)="login()">ЛОГИН</button>
       }
     </div>
+    }
 
     @if (rightPanelMode === 'custom') {
       <ng-content select="[admin-right-content]"></ng-content>
@@ -272,4 +373,25 @@
       </section>
     }
   </section>
+  }
+
+  @if (viewport.mobile() && showMobileStaffShell()) {
+    <app-mobile-bottom-nav
+      [items]="mobilePrimaryLinks()"
+      [activeTab]="activeMobileTab()"
+      (navigate)="handleMobileNavigation($event)"
+    />
+  }
 </div>
+
+@if (viewport.mobile() && showMobileStaffShell()) {
+  <app-mobile-status-sheet
+    [open]="mobileSectionPickerOpen()"
+    kicker="Главная"
+    title="Выберите раздел"
+    [items]="mobileHomeSectionItems()"
+    [activeKey]="activeMobileSectionKey()"
+    (selected)="selectMobileHomeSection($event)"
+    (closed)="mobileSectionPickerOpen.set(false)"
+  />
+}

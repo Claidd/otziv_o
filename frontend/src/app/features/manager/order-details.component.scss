@@ -80,6 +80,11 @@
   font-size: 1rem;
 }
 
+.mobile-order-details-pager,
+.mobile-add-review-label {
+  display: none;
+}
+
 .review-card:hover {
   box-shadow: none;
 }
@@ -362,6 +367,10 @@
 .review-card--fluid {
   height: auto;
   min-height: fit-content;
+}
+
+.review-card-footer {
+  display: contents;
 }
 
 .review-card header {
@@ -1412,14 +1421,22 @@
 
 @media (max-width: 860px) {
   .order-details-workspace {
+    --otziv-list-gap: 0.56rem;
+    --otziv-detail-card-width: min(15.4rem, 79vw);
+    --otziv-card-padding: 0.62rem;
+    --otziv-card-gap: 0.34rem;
+    --otziv-pager-button-size: 2.32rem;
+    --otziv-pager-height: 3.24rem;
+    --otziv-pager-back-width: 3rem;
+
     display: block;
     min-height: auto;
     overflow: hidden;
+    padding-bottom: calc(var(--otziv-pager-height, 3.24rem) + 0.65rem);
   }
 
   .details-topbar {
-    display: flex;
-    justify-content: center;
+    display: none;
   }
 
   .details-title {
@@ -1440,19 +1457,36 @@
     align-items: flex-start;
     overflow-x: auto;
     overflow-y: hidden;
-    gap: 1rem;
-    margin-top: 0.85rem;
-    padding: 0.25rem 2.1rem 0.75rem 0.25rem;
-    scroll-padding: 0.25rem;
+    gap: var(--otziv-list-gap, 0.56rem);
+    margin-top: 0.35rem;
+    padding: 0.2rem 0.12rem 0.55rem;
+    scroll-padding-inline: 0.12rem;
     scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .review-cards::-webkit-scrollbar {
+    display: none;
   }
 
   .review-card {
-    flex: 0 0 min(21rem, calc(100% - 2.35rem));
-    height: auto;
+    box-sizing: border-box;
+    flex: 0 0 var(--otziv-detail-card-width, min(15.4rem, 79vw));
+    width: var(--otziv-detail-card-width, min(15.4rem, 79vw));
+    height: clamp(31rem, calc(100dvh - 17.5rem), 44rem);
     min-height: 0;
+    grid-template-rows: auto minmax(6.5rem, 1fr) auto;
+    align-content: stretch;
+    gap: var(--otziv-card-gap, 0.34rem);
+    padding: var(--otziv-card-padding, 0.62rem);
     scroll-snap-align: center;
     scroll-snap-stop: always;
+    background: linear-gradient(
+      180deg,
+      var(--otziv-tone-wait-surface) 0%,
+      var(--otziv-white) 42%,
+      var(--otziv-white) 100%
+    );
   }
 
   .mobile-swipe-hint {
@@ -1471,7 +1505,7 @@
   }
 
   .review-carousel-dots {
-    display: flex;
+    display: none;
     justify-content: center;
     gap: 0.3rem;
   }
@@ -1498,12 +1532,35 @@
     font-size: 0.82rem;
   }
 
-  .review-field-editor--text :is(textarea, .review-display-field--text) {
-    height: 19rem;
+  .review-field-editor--text {
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
+  .review-text-box {
+    display: grid;
+    min-height: 0;
+  }
+
+  .review-field-editor--text :is(textarea, .review-display-field--text),
   .review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
-    height: 19rem;
+    height: 100%;
+    min-height: 5.5rem;
+    field-sizing: fixed;
+  }
+
+  .review-field-editor--text.expanded :is(textarea, .review-display-field--text),
+  .review-field-editor--text.editing textarea {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .review-card-footer {
+    display: grid;
+    min-width: 0;
+    align-content: end;
+    gap: var(--otziv-card-gap, 0.34rem);
   }
 
   .review-field-editor textarea {
@@ -1516,9 +1573,66 @@
   }
 
   .details-actions {
-    grid-template-columns: 1fr;
-    gap: 0.6rem;
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0.42rem;
     margin-top: 0.75rem;
+    padding: 0.12rem 0.12rem 0.35rem;
+    scroll-padding-inline: 0.12rem;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .details-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .details-actions > :is(button, a) {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: max-content;
+    min-height: 2.85rem;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.76rem;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .mobile-order-details-pager {
+    display: block;
+    position: fixed;
+    z-index: 75;
+    right: max(var(--otziv-page-padding-x, 0.62rem), env(safe-area-inset-right));
+    bottom: calc(var(--otziv-mobile-nav-height, 2.56rem) + env(safe-area-inset-bottom) + 0.4rem);
+    left: max(var(--otziv-page-padding-x, 0.62rem), env(safe-area-inset-left));
+    width: auto;
+    margin: 0;
+  }
+
+  .review-navigation {
+    display: none;
+  }
+
+  .mobile-swipe-hint {
+    display: none;
+  }
+
+  .desktop-add-review-label {
+    display: none;
+  }
+
+  .mobile-add-review-label {
+    display: inline;
   }
 
   .mobile-order-details-side {
@@ -1559,6 +1673,10 @@
     max-height: 6.2rem;
   }
 
+  .order-details-side[admin-right-content] {
+    display: none !important;
+  }
+
 }
 
 @media (max-width: 540px) {
@@ -1567,16 +1685,96 @@
   }
 
   .review-card {
-    flex-basis: calc(100% - 2rem);
-    padding: 0.58rem;
+    flex-basis: var(--otziv-detail-card-width, min(15.4rem, 79vw));
+    width: var(--otziv-detail-card-width, min(15.4rem, 79vw));
+    padding: var(--otziv-card-padding, 0.62rem);
   }
 
   .review-note-popover {
-    right: -0.4rem;
-    width: min(16rem, calc(100vw - 2.75rem));
+    position: fixed;
+    top: clamp(9rem, 30dvh, 14rem);
+    right: max(0.75rem, env(safe-area-inset-right)) !important;
+    left: max(0.75rem, env(safe-area-inset-left)) !important;
+    z-index: 80;
+    width: auto;
+    max-height: min(58dvh, 24rem);
+    border-radius: 1rem;
+    padding: 0.72rem;
+    box-shadow: 0 1rem 2.4rem rgba(42, 57, 82, 0.24);
+  }
+
+  .review-note-popover textarea {
+    min-height: 6.2rem;
+    font-size: max(0.9rem, 16px);
   }
 
   .mobile-stats-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 380px),
+  (max-width: 860px) and (max-height: 830px),
+  (max-width: 390px) and (max-height: 840px) {
+  .order-details-workspace {
+    --otziv-list-gap: 0.34rem;
+    --otziv-detail-card-width: min(14.9rem, 80vw);
+    --otziv-card-padding: 0.42rem;
+    --otziv-card-gap: 0.16rem;
+    --otziv-pager-button-size: 2.06rem;
+    --otziv-pager-height: 2.84rem;
+    --otziv-pager-back-width: 2.72rem;
+  }
+}
+
+@media (max-width: 860px) and (max-height: 790px),
+  (max-width: 380px) and (max-height: 810px) {
+  .order-details-workspace {
+    --otziv-list-gap: 0.38rem;
+    --otziv-detail-card-width: min(14.45rem, 82vw);
+    --otziv-card-padding: 0.44rem;
+    --otziv-card-gap: 0.18rem;
+    --otziv-pager-button-size: 2.16rem;
+    --otziv-pager-height: 3rem;
+    --otziv-pager-back-width: 2.85rem;
+  }
+
+  .review-card {
+    height: clamp(25rem, calc(100dvh - 17.5rem), 34rem);
+    grid-template-rows: auto minmax(4.5rem, 1fr) auto;
+  }
+
+  .review-field-editor--text :is(textarea, .review-display-field--text),
+  .review-field-editor--text.expanded :is(textarea, .review-display-field--text) {
+    min-height: 4rem;
+  }
+
+  .review-field-editor--answer :is(textarea, .review-display-field--answer) {
+    height: 2.8rem;
+  }
+
+  .review-actions button,
+  .review-actions a {
+    min-height: 2rem;
+    font-size: 0.72rem;
+  }
+}
+
+// On very short or landscape phones the fixed pager would overlap the card.
+// Switch to a naturally flowing card and pager so all actions remain reachable.
+@media (max-width: 860px) and (max-height: 680px) {
+  .review-card {
+    height: auto;
+    min-height: 22rem;
+    grid-template-rows: auto minmax(4rem, auto) auto;
+  }
+
+  .mobile-order-details-pager {
+    position: static;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: 100%;
+    margin: 0.5rem 0 0;
   }
 }

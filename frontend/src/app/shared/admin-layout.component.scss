@@ -1169,3 +1169,415 @@ body.otziv-dark-theme .manager-performance-factor em {
     -webkit-line-clamp: 2;
   }
 }
+
+@media (max-width: 860px) {
+  app-admin-layout {
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
+  }
+
+  app-admin-layout .admin-layout.admin-layout.mobile-viewport {
+    --otziv-page-padding-x: 0.62rem;
+    --otziv-page-padding-y: 0.55rem;
+    --otziv-page-padding-bottom: 0.45rem;
+    --otziv-page-gap: 0.46rem;
+    --otziv-list-gap: 0.56rem;
+    --otziv-card-radius: 1.35rem;
+    --otziv-small-radius: 0.55rem;
+    --otziv-card-padding: 0.62rem;
+    --otziv-card-gap: 0.34rem;
+    --otziv-status-tile-min: 6.82rem;
+    --otziv-status-tile-height: 3.08rem;
+    --otziv-pager-button-size: 2.32rem;
+    --otziv-pager-height: 3.24rem;
+    --otziv-pager-back-width: 2.72rem;
+    --otziv-mobile-nav-height: 2.56rem;
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .mobile-shell-header {
+    display: grid;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    min-height: calc(3.28rem + env(safe-area-inset-top));
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid rgba(103, 116, 131, 0.16);
+    padding: env(safe-area-inset-top) max(0.73rem, env(safe-area-inset-right)) 0 max(0.73rem, env(safe-area-inset-left));
+    background: var(--otziv-background);
+    box-shadow: 0 0.35rem 0.85rem rgba(132, 139, 200, 0.1);
+  }
+
+  .mobile-shell-brand {
+    align-self: center;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--otziv-dark);
+    font-family: 'laptev_brush', var(--otziv-font-family);
+    font-size: clamp(0.96rem, 4.2vw, 1.16rem);
+    font-weight: 900;
+    line-height: 1;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-shell-brand strong {
+    color: var(--otziv-danger);
+    font: inherit;
+  }
+
+  .mobile-shell-title {
+    align-self: center;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--otziv-info);
+    font-size: 0.68rem;
+    font-weight: 900;
+    line-height: 1.1;
+    text-align: center;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .mobile-shell-controls {
+    display: inline-flex;
+    min-width: 0;
+    align-self: center;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.32rem;
+  }
+
+  .mobile-shell-theme {
+    display: inline-flex;
+    width: 3.28rem;
+    height: 1.42rem;
+    align-items: center;
+    border-radius: var(--otziv-small-radius);
+    background: var(--otziv-light);
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .mobile-shell-theme.mobile-shell-theme button {
+    display: grid;
+    width: 50%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    place-items: center;
+    border: 0;
+    border-radius: var(--otziv-small-radius);
+    padding: 0;
+    color: var(--otziv-dark);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .mobile-shell-theme.mobile-shell-theme button.active {
+    color: #fff;
+    background: var(--otziv-primary);
+  }
+
+  .mobile-shell-theme .material-icons-sharp {
+    font-size: 1rem;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-menu-trigger.mobile-shell-menu-trigger,
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-account.mobile-shell-account,
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-login.mobile-shell-login {
+    display: grid;
+    width: 2.08rem;
+    min-width: 2.08rem;
+    min-height: 0;
+    height: 2.08rem;
+    place-items: center;
+    border: 1px solid rgba(108, 155, 207, 0.22);
+    border-radius: 0.75rem;
+    padding: 0;
+    color: var(--otziv-primary);
+    background: var(--otziv-white);
+    box-shadow: none;
+    font: inherit;
+    font-size: 0.64rem;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .mobile-shell-menu-trigger .material-icons-sharp,
+  .mobile-shell-account .material-icons-sharp {
+    font-size: 1.6rem;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .admin-content {
+    order: 2;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.58rem max(0.62rem, env(safe-area-inset-right)) 0.8rem max(0.62rem, env(safe-area-inset-left));
+    overflow-x: clip;
+  }
+
+  app-admin-layout .admin-layout.mobile-staff-shell .admin-content {
+    padding-bottom: calc(var(--otziv-mobile-nav-height, 2.56rem) + env(safe-area-inset-bottom) + 0.85rem);
+  }
+
+  app-admin-layout .admin-layout.mobile-staff-shell.right-panel-custom .admin-content {
+    padding-bottom: 0.8rem;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .page-heading {
+    display: none;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport.right-panel-custom .admin-right {
+    display: block;
+    position: static;
+    order: 3;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    padding: 0 max(0.62rem, env(safe-area-inset-right)) 0.8rem max(0.62rem, env(safe-area-inset-left));
+  }
+
+  app-admin-layout .admin-layout.mobile-staff-shell.right-panel-custom .admin-right {
+    padding-bottom: calc(var(--otziv-mobile-nav-height, 2.56rem) + env(safe-area-inset-bottom) + 0.85rem);
+  }
+
+  .mobile-shell-menu-backdrop {
+    position: fixed;
+    z-index: 85;
+    inset: 0;
+    display: grid;
+    align-items: start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: calc(3.28rem + env(safe-area-inset-top) + 0.45rem) max(0.45rem, env(safe-area-inset-right)) calc(var(--otziv-mobile-nav-height, 2.56rem) + env(safe-area-inset-bottom) + 0.55rem) max(0.45rem, env(safe-area-inset-left));
+    background: rgba(31, 36, 48, 0.42);
+    backdrop-filter: blur(3px);
+  }
+
+  .mobile-shell-menu {
+    display: grid;
+    width: min(100%, 34rem);
+    justify-self: center;
+    gap: 0.65rem;
+    border: 1px solid rgba(103, 116, 131, 0.16);
+    border-radius: 1rem;
+    padding: 0.7rem;
+    color: var(--otziv-dark);
+    background: linear-gradient(155deg, var(--otziv-white) 0%, var(--otziv-tone-walk-surface) 100%);
+    box-shadow: 0 0.95rem 1.9rem rgba(132, 139, 200, 0.16);
+  }
+
+  .mobile-shell-user {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+  }
+
+  .mobile-shell-user > img,
+  .mobile-shell-user > span {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    place-items: center;
+    border: 2px solid var(--otziv-danger);
+    border-radius: 50%;
+    color: var(--otziv-danger);
+    background: var(--otziv-white);
+    object-fit: cover;
+    font-size: 0.9rem;
+    font-weight: 900;
+  }
+
+  .mobile-shell-user > div {
+    min-width: 0;
+  }
+
+  .mobile-shell-user strong,
+  .mobile-shell-user small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-shell-user strong {
+    font-size: 0.9rem;
+    font-weight: 900;
+  }
+
+  .mobile-shell-user small {
+    margin-top: 0;
+    color: var(--otziv-info);
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+
+  .mobile-shell-menu-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    min-width: 0;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .mobile-shell-menu-links a,
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-logout.mobile-shell-logout {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 2.15rem;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.42rem;
+    border: 1px solid rgba(108, 155, 207, 0.2);
+    border-radius: 999px;
+    padding: 0 0.65rem;
+    color: var(--otziv-primary);
+    background: var(--otziv-white);
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 900;
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .mobile-shell-menu-links a.active {
+    background: var(--otziv-light);
+  }
+
+  .mobile-shell-menu-links strong,
+  .mobile-shell-logout strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-shell-menu-links .material-icons-sharp,
+  .mobile-shell-logout .material-icons-sharp {
+    flex: 0 0 auto;
+    font-size: 1.05rem;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-logout.mobile-shell-logout {
+    width: 100%;
+    color: var(--otziv-danger);
+    cursor: pointer;
+  }
+
+  body.otziv-dark-theme app-admin-layout .admin-layout.mobile-viewport .mobile-shell-header {
+    border-color: rgba(159, 184, 215, 0.15);
+    background: rgba(25, 30, 36, 0.95);
+  }
+
+  body.otziv-dark-theme .mobile-shell-menu {
+    border-color: rgba(159, 184, 215, 0.18);
+    background: #1b2027;
+  }
+
+  body.otziv-dark-theme app-admin-layout .admin-layout.mobile-viewport .mobile-shell-menu-links a,
+  body.otziv-dark-theme app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-logout.mobile-shell-logout,
+  body.otziv-dark-theme app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-menu-trigger.mobile-shell-menu-trigger,
+  body.otziv-dark-theme app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-account.mobile-shell-account {
+    border-color: rgba(159, 184, 215, 0.18);
+    background: #242b35;
+  }
+}
+
+@media (max-width: 380px) {
+  app-admin-layout .admin-layout.mobile-viewport .mobile-shell-header {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    gap: 0.35rem;
+    padding-inline: max(0.6rem, env(safe-area-inset-left));
+  }
+
+  .mobile-shell-theme {
+    width: 3.15rem;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-menu-trigger.mobile-shell-menu-trigger,
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-account.mobile-shell-account,
+  app-admin-layout .admin-layout.mobile-viewport button.mobile-shell-login.mobile-shell-login {
+    width: 2.1rem;
+    min-width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .mobile-shell-brand {
+    font-size: 0.98rem;
+  }
+
+  .mobile-shell-title {
+    font-size: 0.62rem;
+  }
+
+  .mobile-shell-menu-links {
+    gap: 0.42rem;
+  }
+
+  .mobile-shell-menu-links a {
+    min-height: 2.15rem;
+    font-size: 0.72rem;
+  }
+}
+
+/* Mobile-native viewport tokens. The conditions mirror mobileViewportMode so
+   boards and shared controls use the same density as the Capacitor app. */
+@media (max-width: 380px), (max-height: 830px), (max-width: 390px) and (max-height: 840px) {
+  app-admin-layout .admin-layout.admin-layout.mobile-viewport {
+    --otziv-page-padding-x: 0.5rem;
+    --otziv-page-padding-y: 0.34rem;
+    --otziv-page-padding-bottom: 0.24rem;
+    --otziv-page-gap: 0.24rem;
+    --otziv-list-gap: 0.34rem;
+    --otziv-card-padding: 0.42rem;
+    --otziv-card-gap: 0.16rem;
+    --otziv-status-tile-min: 6.04rem;
+    --otziv-status-tile-height: 2.58rem;
+    --otziv-pager-button-size: 2.06rem;
+    --otziv-pager-height: 2.84rem;
+    --otziv-mobile-nav-height: 2.48rem;
+  }
+
+  app-admin-layout .admin-layout.mobile-viewport .mobile-shell-header {
+    min-height: calc(3rem + env(safe-area-inset-top));
+  }
+}
+
+@media (max-height: 790px), (max-width: 380px) and (max-height: 810px) {
+  app-admin-layout .admin-layout.admin-layout.mobile-viewport {
+    --otziv-page-padding-x: 0.42rem;
+    --otziv-page-padding-y: 0.34rem;
+    --otziv-page-padding-bottom: 0.28rem;
+    --otziv-page-gap: 0.28rem;
+    --otziv-list-gap: 0.38rem;
+    --otziv-card-padding: 0.44rem;
+    --otziv-card-gap: 0.18rem;
+    --otziv-status-tile-min: 6.04rem;
+    --otziv-status-tile-height: 2.66rem;
+    --otziv-pager-button-size: 2.16rem;
+    --otziv-pager-height: 3rem;
+    --otziv-mobile-nav-height: 2.42rem;
+  }
+}

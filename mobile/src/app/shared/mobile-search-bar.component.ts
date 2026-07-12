@@ -69,8 +69,14 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       outline: 0;
       background: transparent;
       color: var(--otziv-dark);
-      font-size: 0.7rem;
-      font-weight: 900;
+      font-size: clamp(0.6rem, 1.9vw, 0.7rem);
+      font-weight: 800;
+    }
+
+    input::placeholder {
+      color: var(--otziv-info);
+      font: inherit;
+      opacity: 1;
     }
 
     .material-icons-sharp {

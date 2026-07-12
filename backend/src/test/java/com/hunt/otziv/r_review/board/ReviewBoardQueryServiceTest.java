@@ -151,6 +151,7 @@ class ReviewBoardQueryServiceTest {
         assertTrue(queryCaptor.getValue().contains("TRIM(r.text) <> ''"));
         assertTrue(queryCaptor.getValue().contains("LOWER(TRIM(r.text)) NOT LIKE 'текст отзыва%'"));
         assertTrue(queryCaptor.getValue().contains("LOWER(TRIM(r.text)) NOT LIKE 'нужно подставить%'"));
+        assertTrue(!queryCaptor.getValue().contains("b.counter"));
         verify(countQuery).setParameter(eq("localDate"), eq(localDate));
         verify(countQuery).setParameter(eq("workers"), same(workers));
         verify(countQuery).setParameter(eq("manager"), same(manager));

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, HostListener, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { CommonBillingAccountResponse } from '../../core/common-billing.api';
 import type {
@@ -49,7 +49,7 @@ type CompanyFilialEditDraft = CompanyFilialUpdateRequest & {
   templateUrl: './manager-company-edit-modal.component.html',
   styleUrl: './manager-company-edit-modal.component.scss'
 })
-export class ManagerCompanyEditModalComponent {
+export class ManagerCompanyEditModalComponent implements OnInit, OnDestroy {
   @Input() loading = false;
   @Input() company: CompanyEditPayload | null = null;
   @Input() draft: CompanyUpdateRequest | null = null;
@@ -84,6 +84,28 @@ export class ManagerCompanyEditModalComponent {
   @Output() readonly billingCompanyAdded = new EventEmitter<CompanyCardItem>();
 
   filialDraft: CompanyFilialEditDraft | null = null;
+  private previousBodyOverflow = '';
+
+  ngOnInit(): void {
+    this.previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+
+  ngOnDestroy(): void {
+    document.body.style.overflow = this.previousBodyOverflow;
+  }
+
+  @HostListener('window:keydown.escape')
+  closeFromKeyboard(): void {
+    this.requestClose();
+  }
+
+  requestClose(): void {
+    if (this.saving || this.deleteKey || this.billingMutating) {
+      return;
+    }
+    this.closed.emit();
+  }
 
   setField<K extends keyof CompanyUpdateRequest>(field: K, value: CompanyUpdateRequest[K]): void {
     this.draftChange.emit({ field, value } as ManagerCompanyEditDraftChange);

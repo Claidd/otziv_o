@@ -178,7 +178,12 @@ public class CompanyServiceImpl implements CompanyService{
             return Optional.of(company1);
         } catch (Exception e) {
             log.error("ОШИБКА при сохранении компании: {}", e.getMessage(), e);
-            return Optional.empty();
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Ошибка: компания не сохранена из-за некорректных или слишком длинных данных. "
+                            + "Как исправить: проверьте заполненные поля и повторите сохранение.",
+                    e
+            );
         }
     } // Создание нового пользователя "Клиент" - конец
 //      =====================================CREATE USERS - START=======================================================

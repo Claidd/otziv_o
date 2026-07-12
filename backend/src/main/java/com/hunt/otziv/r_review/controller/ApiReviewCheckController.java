@@ -77,7 +77,7 @@ public class ApiReviewCheckController {
             @RequestBody ReviewCheckUpdateRequest request,
             Authentication authentication
     ) {
-        OrderDetails orderDetails = reviewCheckDetails(orderDetailId);
+        OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
         updateReviews(orderDetails, request, permissions(authentication).canSeeInternalInfo());
         return buildResponse(orderDetailId, authentication);
@@ -695,7 +695,7 @@ public class ApiReviewCheckController {
     private boolean clientMutationAllowed(Order order) {
         String status = order != null && order.getStatus() != null ? safe(order.getStatus().getTitle()) : "";
         String normalizedStatus = status.trim().toLowerCase().replace('ё', 'е');
-        return Set.of("в проверку", "на проверке", "коррекция").contains(normalizedStatus);
+        return Set.of("в проверку", "на проверке", "коррекция", "архив").contains(normalizedStatus);
     }
 
     private void requireCanEditNotes(Authentication authentication) {

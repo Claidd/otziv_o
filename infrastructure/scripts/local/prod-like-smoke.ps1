@@ -22,7 +22,10 @@
     [string]$VpsUser = "hunt",
     [int]$VpsPort = 22022,
     [string]$SshKey = "C:\Users\Hunt\.ssh\otziv_vps_ed25519",
-    [switch]$AllowLocalMessengerSending
+    [switch]$AllowLocalMessengerSending,
+    [string]$LocalLoginUsername = "hunt",
+    [string]$LocalLoginPassword = "passd",
+    [switch]$SkipLocalLoginCredentialSync
 )
 
 Set-StrictMode -Version Latest
@@ -575,6 +578,132 @@ function Update-KeycloakFrontendLoopbackRedirects {
 
     $body = $client | ConvertTo-Json -Depth 20
     Invoke-RestMethod -Uri "$apiRoot/clients/$frontendClientUuid" -Method Put -Headers $adminHeaders -Body $body -ContentType "application/json" -TimeoutSec 30 | Out-Null
+}
+
+function Sync-LocalKeycloakLoginCredential {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string]$Username,
+        [Parameter(Mandatory = $true)][string]$Password
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Username) -or [string]::IsNullOrWhiteSpace($Password)) {
+        throw "LocalLoginUsername and LocalLoginPassword must not be empty when local credential sync is enabled."
+    }
+
+    try {
+        $rootUri = [Uri]$RootUrl
+    } catch {
+        throw "Local Keycloak credential sync requires a valid loopback BaseUrl, got '$RootUrl'."
+    }
+
+    if (-not $rootUri.IsLoopback) {
+        throw "Refusing to reset a Keycloak password through non-loopback BaseUrl '$RootUrl'. Use -SkipLocalLoginCredentialSync when checking a remote environment."
+    }
+
+    $realm = Get-KeycloakRealm -EnvPath $EnvPath
+    $adminToken = Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath
+    $headers = @{ Authorization = "Bearer $adminToken" }
+    $apiRoot = "$($RootUrl.TrimEnd('/'))/keycloak/admin/realms/$realm"
+    $encodedUsername = [Uri]::EscapeDataString($Username)
+    $response = Invoke-RestMethod -Uri "$apiRoot/users?username=$encodedUsername&exact=true" -Headers $headers -TimeoutSec 30
+    $users = @(ConvertTo-SmokeArray -Value $response) |
+        Where-Object { $_.username -and $_.username.Equals($Username, [System.StringComparison]::OrdinalIgnoreCase) }
+
+    if ($users.Count -eq 0) {
+        throw "Local Keycloak user '$Username' was not found in realm '$realm'. Create the local identity or use -SkipLocalLoginCredentialSync."
+    }
+    if ($users.Count -gt 1) {
+        throw "Local Keycloak contains more than one exact '$Username' identity in realm '$realm'."
+    }
+    if ($users[0].enabled -eq $false) {
+        throw "Local Keycloak user '$Username' is disabled in realm '$realm'."
+    }
+
+    $credential = @{
+        type = "password"
+        value = $Password
+        temporary = $false
+    } | ConvertTo-Json -Compress
+    Invoke-RestMethod `
+        -Uri "$apiRoot/users/$($users[0].id)/reset-password" `
+        -Method Put `
+        -Headers $headers `
+        -Body $credential `
+        -ContentType "application/json" `
+        -TimeoutSec 30 | Out-Null
+
+    try {
+        Invoke-RestMethod `
+            -Uri "$apiRoot/attack-detection/brute-force/users/$($users[0].id)" `
+            -Method Delete `
+            -Headers $headers `
+            -TimeoutSec 30 | Out-Null
+    } catch {
+        Write-Warning "Password was reset, but the Keycloak brute-force state for '$Username' could not be cleared: $($_.Exception.Message)"
+    }
+
+    $credentials = @(ConvertTo-SmokeArray -Value (Invoke-RestMethod -Uri "$apiRoot/users/$($users[0].id)/credentials" -Headers $headers -TimeoutSec 30))
+    if (-not ($credentials | Where-Object { $_.type -eq "password" } | Select-Object -First 1)) {
+        throw "Keycloak did not retain a password credential for local user '$Username'."
+    }
+
+    $loginClientId = "otziv-local-login-smoke-$([guid]::NewGuid().ToString('N').Substring(0, 12))"
+    $loginClientCreated = $false
+    try {
+        $loginClient = @{
+            clientId = $loginClientId
+            name = "Temporary local login smoke"
+            enabled = $true
+            publicClient = $true
+            bearerOnly = $false
+            standardFlowEnabled = $false
+            implicitFlowEnabled = $false
+            directAccessGrantsEnabled = $true
+            serviceAccountsEnabled = $false
+        } | ConvertTo-Json -Compress
+        Invoke-RestMethod `
+            -Uri "$apiRoot/clients" `
+            -Method Post `
+            -Headers $headers `
+            -Body $loginClient `
+            -ContentType "application/json" `
+            -TimeoutSec 30 | Out-Null
+        $loginClientCreated = $true
+
+        $token = Invoke-RestMethod `
+            -Uri "$($RootUrl.TrimEnd('/'))/keycloak/realms/$realm/protocol/openid-connect/token" `
+            -Method Post `
+            -Body @{
+                grant_type = "password"
+                client_id = $loginClientId
+                username = $Username
+                password = $Password
+                scope = "openid"
+            } `
+            -ContentType "application/x-www-form-urlencoded" `
+            -TimeoutSec 30
+        if ([string]::IsNullOrWhiteSpace($token.access_token)) {
+            throw "Keycloak did not issue an access token for local user '$Username'."
+        }
+    } finally {
+        if ($loginClientCreated) {
+            try {
+                $encodedClientId = [Uri]::EscapeDataString($loginClientId)
+                $clientResponse = Invoke-RestMethod -Uri "$apiRoot/clients?clientId=$encodedClientId" -Headers $headers -TimeoutSec 30
+                $clients = @(ConvertTo-SmokeArray -Value $clientResponse) |
+                    Where-Object { $_.clientId -eq $loginClientId }
+                foreach ($client in $clients) {
+                    Invoke-RestMethod -Uri "$apiRoot/clients/$($client.id)" -Method Delete -Headers $headers -TimeoutSec 30 | Out-Null
+                }
+            } catch {
+                Write-Warning "Could not remove temporary Keycloak login client '$loginClientId': $($_.Exception.Message)"
+            }
+        }
+    }
+
+    Write-Host "Local Keycloak login credential synchronized and verified for '$Username' in realm '$realm'."
 }
 
 function Get-KeycloakClientCredentialsToken {
@@ -1406,6 +1535,13 @@ try {
         Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health after local safety reload" -Deadline $deadline
     }
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
+    if (-not $SkipProdDbRestore -and -not $SkipLocalLoginCredentialSync) {
+        Sync-LocalKeycloakLoginCredential `
+            -RootUrl $BaseUrl `
+            -EnvPath $envPath `
+            -Username $LocalLoginUsername `
+            -Password $LocalLoginPassword
+    }
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
     Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl

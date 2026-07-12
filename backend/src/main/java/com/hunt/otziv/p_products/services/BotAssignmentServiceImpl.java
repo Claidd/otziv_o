@@ -5,6 +5,7 @@ package com.hunt.otziv.p_products.services;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
@@ -37,9 +38,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final TelegramService telegramService;
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final BusinessAuditService businessAuditService;
 
     private static final Long STUB_BOT_ID = 1L;
-    private static final int MAX_ACTIVE_REVIEWS_PER_BOT = 3;
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",
@@ -58,8 +59,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
         lockCompanyForBotAssignment(defaultFilial);
 
-        // 2. Получаем значение vigul (здесь нужно получить из orderDTO, если есть)
-        boolean vigul = false; // TODO: получить из orderDTO, если есть
+        // New orders prefer accounts that still need walking. Readiness is
+        // calculated separately for every selected account.
+        boolean vigul = false;
         int neededForOrder = orderDTO.getAmount();
 
         log.info("Назначение ботов для новых отзывов: vigul={}, требуется {} ботов", vigul, neededForOrder);
@@ -74,7 +76,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 List<Bot> availableBots = getAvailableBotsByRules(reviewFilial, vigul, 1, usedBotIdsInThisOrder);
                 Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, reviewFilial);
 
-                Review review = createReviewWithBot(orderDTO, orderDetails, reviewFilial, assignedBot, vigul);
+                Review review = createReviewWithBot(orderDTO, orderDetails, reviewFilial, assignedBot);
                 reviewList.add(review);
             }
 
@@ -89,7 +91,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsInThisOrder, i, defaultFilial);
 
             // Создаем отзыв
-            Review review = createReviewWithBot(orderDTO, orderDetails, defaultFilial, assignedBot, vigul);
+            Review review = createReviewWithBot(orderDTO, orderDetails, defaultFilial, assignedBot);
             reviewList.add(review);
         }
 
@@ -479,18 +481,60 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             return;
         }
 
-        // Получаем counter бота
-        Integer botCounter = bot.getCounter();
-        if (botCounter == null) {
-            botCounter = 0;
-        }
-
-        boolean shouldBeVigul = botCounter >= MAX_ACTIVE_REVIEWS_PER_BOT;
+        boolean shouldBeVigul = accountWalkScheduleService.isWalkedAccount(bot);
         if (review.isVigul() != shouldBeVigul) {
             review.setVigul(shouldBeVigul);
             log.info("Обновлен отзыв ID {}: isVigul изменен на {} (бот ID {} имеет counter={})",
-                    review.getId(), shouldBeVigul, bot.getId(), botCounter);
+                    review.getId(), shouldBeVigul, bot.getId(), bot.getCounter());
         }
+    }
+
+    @Override
+    @Transactional
+    public int promoteReviewsWithWalkedAccounts(Collection<Review> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return 0;
+        }
+
+        List<Review> promoted = new ArrayList<>();
+        for (Review review : reviews) {
+            if (review == null || review.isPublish() || review.isVigul()) {
+                continue;
+            }
+            if (!accountWalkScheduleService.isWalkedAccount(review.getBot())) {
+                continue;
+            }
+
+            accountWalkScheduleService.synchronizeAfterAccountChange(review, false, false);
+            promoted.add(review);
+            businessAuditService.recordSafely(
+                    "review_walk_readiness_promoted",
+                    "review",
+                    review.getId(),
+                    review.getOrderDetails() != null && review.getOrderDetails().getOrder() != null
+                            ? review.getOrderDetails().getOrder().getId()
+                            : null,
+                    review.getId(),
+                    false,
+                    true,
+                    "assigned account reached configured walk threshold"
+            );
+        }
+
+        if (!promoted.isEmpty()) {
+            reviewRepository.saveAll(promoted);
+            log.info("Отмечено готовыми к публикации отзывов: {}", promoted.size());
+        }
+        return promoted.size();
+    }
+
+    @Override
+    @Transactional
+    public int promoteUnpublishedReviewsForBot(Bot bot) {
+        if (bot == null || bot.getId() == null) {
+            return 0;
+        }
+        return promoteReviewsWithWalkedAccounts(reviewRepository.findByBotAndPublishFalse(bot));
     }
 
     // ============ ПРИВАТНЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
@@ -541,7 +585,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     }
 
     private Review createReviewWithBot(OrderDTO orderDTO, OrderDetails orderDetails,
-                                       Filial filial, Bot bot, boolean vigul) {
+                                       Filial filial, Bot bot) {
         // Здесь нужно создать отзыв. В зависимости от вашей структуры,
         // может потребоваться дополнительные сервисы (CategoryService, SubCategoryService)
         // Для простоты оставим заглушку, которую вы заполните в соответствии с вашей логикой
@@ -555,7 +599,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 .worker(orderDetails.getOrder().getWorker())
                 .product(orderDetails.getProduct())
                 .price(orderDetails.getProduct().getPrice())
-                .vigul(vigul)
+                .vigul(accountWalkScheduleService.isWalkedAccount(bot))
                 .orderDetails(orderDetails)
                 .category(orderDetails.getOrder().getCompany().getCategoryCompany())
                 .subCategory(orderDetails.getOrder().getCompany().getSubCategory())
@@ -689,42 +733,34 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 return priority1;
             }
 
-            // 2. Если не хватает, добавляем боты с counter >= 3
+            // 2. Если не хватает, добавляем уже выгулянные аккаунты.
             List<Bot> result = new ArrayList<>(priority1);
             List<Bot> priority2 = baseBots.stream()
                     .filter(bot -> !priority1.contains(bot))
-                    .filter(bot -> {
-                        Integer counter = bot.getCounter();
-                        if (counter == null) counter = 0;
-                        return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
-                    })
+                    .filter(accountWalkScheduleService::isWalkedAccount)
                     .collect(Collectors.toList());
 
             result.addAll(priority2);
-            log.info("Приоритет 2 - Боты с counter >= 3: {}", priority2.size());
+            log.info("Приоритет 2 - выгулянные аккаунты: {}", priority2.size());
             log.info("Всего после приоритета 2: {}", result.size());
 
             if (result.size() >= neededForOrder) {
-                log.info("Ботов с именем и counter >= 3 достаточно");
+                log.info("Шаблонных и выгулянных аккаунтов достаточно");
                 return result;
             }
 
-            // 3. Если все еще не хватает, добавляем боты с counter 0-2
+            // 3. Если все еще не хватает, добавляем невыгулянные аккаунты.
             List<Bot> priority3 = baseBots.stream()
                     .filter(bot -> !priority1.contains(bot) && !priority2.contains(bot))
-                    .filter(bot -> {
-                        Integer counter = bot.getCounter();
-                        if (counter == null) counter = 0;
-                        return counter >= 0 && counter <= 2;
-                    })
+                    .filter(bot -> !accountWalkScheduleService.isWalkedAccount(bot))
                     .collect(Collectors.toList());
 
             result.addAll(priority3);
-            log.info("Приоритет 3 - Боты с counter 0-2: {}", priority3.size());
+            log.info("Приоритет 3 - невыгулянные аккаунты: {}", priority3.size());
             log.info("Всего после приоритета 3: {}", result.size());
 
             if (result.size() >= neededForOrder) {
-                log.info("Ботов достаточно после добавления counter 0-2");
+                log.info("Ботов достаточно после добавления невыгулянных аккаунтов");
                 return result;
             }
 
@@ -742,34 +778,26 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         } else {
             log.info("Фильтрация для vigul=true, требуется {} ботов", neededForOrder);
 
-            // 1. Приоритет: боты с counter >= 3
+            // 1. Приоритет: уже выгулянные аккаунты.
             List<Bot> priority1 = baseBots.stream()
-                    .filter(bot -> {
-                        Integer counter = bot.getCounter();
-                        if (counter == null) counter = 0;
-                        return counter >= MAX_ACTIVE_REVIEWS_PER_BOT;
-                    })
+                    .filter(accountWalkScheduleService::isWalkedAccount)
                     .collect(Collectors.toList());
 
-            log.info("Приоритет 1 - Боты с counter >= 3: {}", priority1.size());
+            log.info("Приоритет 1 - выгулянные аккаунты: {}", priority1.size());
 
             if (priority1.size() >= neededForOrder) {
                 return priority1;
             }
 
-            // 2. Если не хватает, добавляем боты с counter 0-2
+            // 2. Если не хватает, добавляем невыгулянные аккаунты.
             List<Bot> result = new ArrayList<>(priority1);
             List<Bot> priority2 = baseBots.stream()
                     .filter(bot -> !priority1.contains(bot))
-                    .filter(bot -> {
-                        Integer counter = bot.getCounter();
-                        if (counter == null) counter = 0;
-                        return counter >= 0 && counter <= 2;
-                    })
+                    .filter(bot -> !accountWalkScheduleService.isWalkedAccount(bot))
                     .collect(Collectors.toList());
 
             result.addAll(priority2);
-            log.info("Приоритет 2 - Боты с counter 0-2: {}", priority2.size());
+            log.info("Приоритет 2 - невыгулянные аккаунты: {}", priority2.size());
             log.info("Всего после приоритета 2: {}", result.size());
 
             if (result.size() >= neededForOrder) {
@@ -834,11 +862,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                     if (isTemplateBotName(bot)) {
                         return "Шаблонное имя";
                     }
-                    Integer counter = bot.getCounter();
-                    if (counter == null) counter = 0;
-                    if (counter >= 3) return "Counter >= 3";
-                    if (counter >= 0 && counter <= 2) return "Counter 0-2";
-                    return "Counter < 0 или null";
+                    return accountWalkScheduleService.isWalkedAccount(bot)
+                            ? "Выгулянный аккаунт"
+                            : "Невыгулянный аккаунт";
                 }, Collectors.counting()));
 
         log.info("=== СТАТИСТИКА ВЫБОРА БОТОВ (vigul={}) ===", vigul);

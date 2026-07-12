@@ -1938,9 +1938,12 @@ button.review-action.request-action {
     grid-row: auto;
   }
 
-  .manager-details-chip {
-    justify-self: start;
-    width: auto;
+  .manager-card-head .manager-details-chip.manager-details-chip,
+  .personal-remark-head .manager-details-chip.manager-details-chip {
+    justify-self: center;
+    width: min(12rem, 70%);
+    min-width: 9rem;
+    min-height: 2.35rem;
   }
 
   .manager-numbers,

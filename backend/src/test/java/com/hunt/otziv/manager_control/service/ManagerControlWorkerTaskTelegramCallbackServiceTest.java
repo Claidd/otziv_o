@@ -5,10 +5,12 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
@@ -28,6 +30,7 @@ import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -116,6 +119,31 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertEquals("Закрыла, потому что карточка была ошибочная.", captor.getValue().getWorkerExplanation());
         assertEquals(2L, captor.getValue().getWorkerExplanationByUserId());
         verify(telegramService).sendMessage(eq(-100123L), any(String.class));
+    }
+
+    @Test
+    void explanationMessageRemovesMoneyFromPreviouslyStoredTaskSubtitle() {
+        User workerUser = worker();
+        Worker worker = new Worker();
+        worker.setId(9L);
+        worker.setUser(workerUser);
+        Review review = new Review();
+        review.setId(88L);
+        review.setWorker(worker);
+        ManagerDailyControlConcreteItem item = generalConcreteItem();
+        item.setSubtitle("Варначка · без изменений 2 дн. · 1 шт. · 2500.00 руб.");
+        item.setReason("Заказ без изменений");
+
+        when(concreteItemRepository.findById(31L)).thenReturn(Optional.of(item));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(444L)).thenReturn(Optional.empty());
+
+        service.handle(callbackFromGroup(-100123L, 444L, "mc-task-explain:31"));
+
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).editMessageText(eq(-100123L), eq(12), textCaptor.capture(), eq(null), eq(null));
+        assertFalse(textCaptor.getValue().contains("2500"));
+        assertFalse(textCaptor.getValue().contains("руб"));
     }
 
     @Test

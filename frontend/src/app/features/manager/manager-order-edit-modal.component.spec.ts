@@ -41,6 +41,7 @@ function draft(overrides: Partial<OrderUpdateRequest> = {}): OrderUpdateRequest 
     orderComments: 'order note',
     commentsCompany: 'company note',
     complete: false,
+    removePreviousWorkerFromCompany: false,
     ...overrides
   };
 }
@@ -62,7 +63,10 @@ describe('ManagerOrderEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('#order-edit-title')?.textContent?.trim()).toBe('Редактирование заказа');
     expect(element.querySelector<HTMLInputElement>('input[readonly]')?.value).toBe('Company');
-    expect(element.textContent).toContain('Удалить');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-delete.order-delete-action')?.textContent).toContain('Удалить заказ');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-close')?.getAttribute('aria-label')).toBe('Закрыть окно без сохранения');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-close .material-icons-sharp')?.textContent?.trim()).toBe('close');
+    expect(element.querySelector<SVGElement>('.lead-edit-delete .order-delete-icon')).not.toBeNull();
   });
 
   it('emits form actions', async () => {
@@ -88,7 +92,7 @@ describe('ManagerOrderEditModalComponent', () => {
 
     const element = fixture.nativeElement as HTMLElement;
     element.querySelector<HTMLButtonElement>('.lead-edit-close')?.click();
-    element.querySelector<HTMLButtonElement>('button.danger')?.click();
+    element.querySelector<HTMLButtonElement>('.lead-edit-delete.order-delete-action')?.click();
     element.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     expect(closed).toBe(true);
@@ -128,5 +132,21 @@ describe('ManagerOrderEditModalComponent', () => {
     component.setField('counter', 7);
 
     expect(change).toEqual({ field: 'counter', value: 7 });
+  });
+
+  it('offers removing the previous company worker after selecting another worker', () => {
+    const fixture = TestBed.createComponent(ManagerOrderEditModalComponent);
+    const component = fixture.componentInstance;
+    component.order = order({
+      worker: option(41, 'Previous worker'),
+      workers: [option(41, 'Previous worker'), option(42, 'New worker')]
+    });
+    component.draft = draft({ workerId: 42 });
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const checkbox = element.querySelector<HTMLInputElement>('.worker-transfer-option input');
+    expect(checkbox).not.toBeNull();
+    expect(element.querySelector('.worker-transfer-option')?.textContent).toContain('Удалить прежнего специалиста');
   });
 });

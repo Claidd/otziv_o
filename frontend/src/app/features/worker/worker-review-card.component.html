@@ -269,10 +269,11 @@
     }
   </div>
 
-  <div
-    class="review-field-editor review-field-editor--answer"
-    [class.editing]="isReviewFieldEditing('answer')"
-  >
+  <div class="review-card-footer">
+    <div
+      class="review-field-editor review-field-editor--answer"
+      [class.editing]="isReviewFieldEditing('answer')"
+    >
     <textarea
       [name]="'review-answer-' + review.id"
       [readonly]="!isReviewFieldEditing('answer')"
@@ -344,11 +345,65 @@
 
   <div
     class="bot-line"
+    [class.bot-line--editable]="canEditBotNameInline()"
+    [class.bot-line--editing]="isBotNameEditing"
     [class.bot-line--empty]="hasUnavailablePlaceholderBot()"
     [class.bot-line--template]="hasTemplatePublicationBot()"
     [class.bot-line--inactive]="hasInactiveRealPublicationBot()"
   >
-    <span>{{ botLabel() }}</span>
+    @if (canEditBotNameInline()) {
+      @if (isBotNameEditing) {
+        <input
+          class="bot-name-input"
+          type="text"
+          maxlength="255"
+          autocomplete="name"
+          [value]="botNameDraft"
+          (input)="setBotNameDraft($any($event.target).value)"
+          (keydown.enter)="$event.preventDefault(); finishBotNameEdit()"
+          (keydown.escape)="$event.preventDefault(); cancelBotNameEdit()"
+          [disabled]="isBotNameSaving()"
+          aria-label="Имя аккаунта"
+        >
+        <span class="bot-name-actions" aria-label="Действия с именем аккаунта">
+          <button
+            type="button"
+            class="bot-name-action bot-name-action--cancel"
+            (click)="cancelBotNameEdit()"
+            [disabled]="isBotNameSaving()"
+            title="Отменить"
+            aria-label="Отменить изменение имени аккаунта"
+          >
+            <span class="material-icons-sharp">close</span>
+          </button>
+          <button
+            type="button"
+            class="bot-name-action bot-name-action--save"
+            (click)="finishBotNameEdit()"
+            [disabled]="isBotNameSaving() || !canSaveBotNameEdit()"
+            title="Сохранить"
+            aria-label="Сохранить имя аккаунта"
+          >
+            <span class="material-icons-sharp">check</span>
+          </button>
+        </span>
+      } @else {
+        <button
+          type="button"
+          class="bot-name-button"
+          (click)="startBotNameEdit($event)"
+          [disabled]="isBotNameSaving()"
+          title="Изменить имя аккаунта"
+        >
+          {{ botNameLabel() }}
+        </button>
+      }
+      @if (!isBotNameEditing) {
+        <span class="bot-counter" title="Счетчик аккаунта">{{ review.botCounter || 0 }}</span>
+      }
+    } @else {
+      <span>{{ botLabel() }}</span>
+    }
   </div>
 
   <div class="review-actions">
@@ -462,11 +517,19 @@
   <footer>
     <span [class.review-date--overdue]="isPublicationDateOverdue()">{{ reviewDate() }}</span>
     @if (canOpenEditModal) {
-      <a href="" (click)="$event.preventDefault(); editOpened.emit()" [title]="footerLabel()">{{
-        footerLabel()
-      }}</a>
+      <a
+        class="review-edit-link"
+        href=""
+        (click)="$event.preventDefault(); editOpened.emit()"
+        [attr.aria-label]="'Редактировать отзыв: ' + footerLabel()"
+        [title]="'Редактировать отзыв: ' + footerLabel()"
+      >
+        <span>{{ footerLabel() }}</span>
+        <span class="material-icons-sharp" aria-hidden="true">edit</span>
+      </a>
     } @else {
       <a [href]="reviewEditUrl()" [title]="footerLabel()">{{ footerLabel() }}</a>
     }
   </footer>
+  </div>
 </article>

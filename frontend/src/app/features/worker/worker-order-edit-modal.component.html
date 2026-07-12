@@ -7,12 +7,27 @@
     (click)="$event.stopPropagation()"
   >
     <header class="lead-edit-head">
+      @if (order?.canDelete) {
+        <button
+          type="button"
+          class="lead-edit-delete order-delete-action"
+          (click)="deleted.emit()"
+          [disabled]="saving || deleting"
+          [title]="deleting ? 'Удаляю...' : 'Удалить заказ'"
+          [attr.aria-label]="deleting ? 'Удаляю заказ' : 'Удалить заказ'"
+        >
+          <svg class="order-delete-icon" aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-2 6h10l-1 11H8L7 9Zm3 2v7h2v-7h-2Zm4 0v7h2v-7h-2Z"/>
+          </svg>
+          <span class="order-delete-label">{{ deleting ? 'Удаляю...' : 'Удалить заказ' }}</span>
+        </button>
+      }
       <div>
         <small>Заказ #{{ order?.id }}</small>
         <h2 id="order-edit-title">Редактирование заказа</h2>
       </div>
-      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || deleting" title="Закрыть">
-        <span class="material-icons-sharp">close</span>
+      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || deleting" title="Закрыть окно" aria-label="Закрыть окно без сохранения">
+        <span class="material-icons-sharp" aria-hidden="true">close</span>
       </button>
     </header>
 
@@ -64,6 +79,18 @@
               </select>
             </label>
 
+            @if (draft.workerId && order.worker?.id && draft.workerId !== order.worker?.id) {
+              <label class="lead-edit-field worker-transfer-option">
+                <input
+                  name="removePreviousWorkerFromCompany"
+                  type="checkbox"
+                  [ngModel]="draft.removePreviousWorkerFromCompany"
+                  (ngModelChange)="setField('removePreviousWorkerFromCompany', $event)"
+                >
+                <span>Удалить прежнего специалиста из компании</span>
+              </label>
+            }
+
             <label class="lead-edit-field">
               <span>Менеджер</span>
               <select
@@ -93,10 +120,12 @@
               <input type="text" [value]="order.amount ?? 0" readonly>
             </label>
 
-            <label class="lead-edit-field">
-              <span>Сумма</span>
-              <input type="text" [value]="(order.sum ?? 0) + ' руб.'" readonly>
-            </label>
+            @if (order.sum != null) {
+              <label class="lead-edit-field">
+                <span>Сумма</span>
+                <input type="text" [value]="order.sum + ' руб.'" readonly>
+              </label>
+            }
 
             <label class="lead-edit-field lead-edit-field--wide">
               <span>Комментарий заказа</span>
@@ -147,12 +176,6 @@
           </div>
 
           <div class="lead-edit-actions" [class.lead-edit-actions--split]="order.canDelete">
-            @if (order.canDelete) {
-              <button type="button" class="danger" (click)="deleted.emit()" [disabled]="saving || deleting">
-                {{ deleting ? 'Удаляю...' : 'Удалить' }}
-              </button>
-            }
-
             <div class="lead-edit-actions-group">
               <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || deleting">Отмена</button>
               <button type="submit" [disabled]="saving || deleting || orderEditForm.invalid">

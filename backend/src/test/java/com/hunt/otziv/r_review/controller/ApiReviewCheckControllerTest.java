@@ -226,6 +226,21 @@ class ApiReviewCheckControllerTest {
     }
 
     @Test
+    void anonymousLiveArchiveOrderKeepsClientReviewActions() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "Архив"));
+
+        ApiReviewCheckController.ReviewCheckResponse response = controller()
+                .getReviewCheck(orderDetailId, null);
+
+        assertThat(response.status()).isEqualTo("Архив");
+        assertThat(response.permissions().canSave()).isTrue();
+        assertThat(response.permissions().canApprovePublication()).isTrue();
+        assertThat(response.permissions().canSendCorrection()).isTrue();
+    }
+
+    @Test
     void anonymousArchivedResponseAllowsClientTextEditing() {
         UUID orderDetailId = UUID.randomUUID();
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
@@ -239,6 +254,44 @@ class ApiReviewCheckControllerTest {
         assertThat(response.status()).isEqualTo("Архив");
         assertThat(response.permissions().canSave()).isTrue();
         assertThat(response.permissions().canSendCorrection()).isTrue();
+    }
+
+    @Test
+    void saveArchivedReviewCheckRestoresOrderToCorrectionAndPersistsChanges() {
+        UUID orderDetailId = UUID.randomUUID();
+        OrderDetails restoredDetails = orderDetails(orderDetailId, "Коррекция");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"))
+                .thenReturn(restoredDetails)
+                .thenReturn(restoredDetails);
+
+        ApiReviewCheckController.ReviewCheckResponse response = controller()
+                .saveReviews(
+                        orderDetailId,
+                        new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                                "client comment",
+                                List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                                        501L,
+                                        "client text",
+                                        "client answer",
+                                        false,
+                                        null,
+                                        ""
+                                ))
+                        ),
+                        null
+                );
+
+        verify(reviewCheckArchiveService).restoreByOrderDetailId(
+                orderDetailId,
+                "Коррекция",
+                "anonymous-review-check"
+        );
+        ArgumentCaptor<ReviewDTO> reviewCaptor = ArgumentCaptor.forClass(ReviewDTO.class);
+        verify(reviewService).updateOrderDetailAndReview(any(OrderDetailsDTO.class), reviewCaptor.capture(), eq(501L));
+        assertThat(reviewCaptor.getValue().getText()).isEqualTo("client text");
+        assertThat(reviewCaptor.getValue().getAnswer()).isEqualTo("client answer");
+        assertThat(response.status()).isEqualTo("Коррекция");
     }
 
     @Test

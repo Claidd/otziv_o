@@ -29,6 +29,7 @@ import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../../shared/api-error-message';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
+import { MobileBottomPagerComponent } from '../../../shared/mobile/mobile-bottom-pager.component';
 import { ToastService } from '../../../shared/toast.service';
 
 type PaymentMetric = {
@@ -59,7 +60,7 @@ type StatusFilterOption = {
 
 @Component({
   selector: 'app-tbank-payments',
-  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, MobileBottomPagerComponent, RouterLink],
   templateUrl: './tbank-payments.component.html',
   styleUrl: './tbank-payments.component.scss'
 })
@@ -495,6 +496,28 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.statusFilter.set(filter);
     this.paymentPage.set(0);
     this.loadPaymentLinks();
+  }
+
+  statusTotal(filter: PaymentStatusFilter): number {
+    const summary = this.paymentSummary();
+    if (summary && this.statusFilter() === 'all') {
+      switch (filter) {
+        case 'all':
+          return summary.totalElements;
+        case 'paid':
+          return summary.paid;
+        case 'manual':
+          return summary.manualPending;
+        case 'refunded':
+          return summary.refunded;
+        case 'failed':
+          return summary.rejected;
+      }
+    }
+    if (filter === this.statusFilter() && this.paymentTotalElements()) {
+      return this.paymentTotalElements();
+    }
+    return this.links().filter((link) => this.matchesStatusFilter(link, filter)).length;
   }
 
   setDateFrom(value: string): void {

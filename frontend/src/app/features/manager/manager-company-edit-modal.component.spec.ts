@@ -116,7 +116,8 @@ describe('ManagerCompanyEditModalComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement as HTMLElement;
-    expect(element.querySelector('#company-edit-title')?.textContent?.trim()).toBe('Редактирование компании');
+    expect(element.querySelector('.desktop-company-edit-title')?.textContent?.trim()).toBe('Редактирование компании');
+    expect(element.querySelector('.mobile-company-edit-title')?.textContent?.trim()).toBe('Редактор компании');
     expect(element.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Company');
     expect(element.querySelector<HTMLInputElement>('input[name="urlSite"]')?.value).toBe('https://company.example.test');
     expect(element.textContent).toContain('Worker 6');
@@ -185,5 +186,27 @@ describe('ManagerCompanyEditModalComponent', () => {
     component.setField('title', 'New company');
 
     expect(change).toEqual({ field: 'title', value: 'New company' });
+  });
+
+  it('locks background scrolling and ignores close while a mutation is running', () => {
+    const previousOverflow = document.body.style.overflow;
+    const fixture = TestBed.createComponent(ManagerCompanyEditModalComponent);
+    const component = fixture.componentInstance;
+    let closeCount = 0;
+    component.closed.subscribe(() => closeCount++);
+
+    fixture.detectChanges();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    component.saving = true;
+    component.requestClose();
+    expect(closeCount).toBe(0);
+
+    component.saving = false;
+    component.requestClose();
+    expect(closeCount).toBe(1);
+
+    fixture.destroy();
+    expect(document.body.style.overflow).toBe(previousOverflow);
   });
 });

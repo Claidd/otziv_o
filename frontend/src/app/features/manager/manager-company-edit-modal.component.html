@@ -1,4 +1,4 @@
-<div class="lead-edit-backdrop" role="presentation" (click)="closed.emit()">
+<div class="lead-edit-backdrop company-edit-backdrop" role="presentation" (click)="requestClose()">
   <section
     class="lead-edit-modal company-edit-modal"
     role="dialog"
@@ -9,9 +9,12 @@
     <header class="lead-edit-head">
       <div>
         <small>Компания #{{ company?.id }}</small>
-        <h2 id="company-edit-title">Редактирование компании</h2>
+        <h2 id="company-edit-title">
+          <span class="desktop-company-edit-title">Редактирование компании</span>
+          <span class="mobile-company-edit-title">Редактор компании</span>
+        </h2>
       </div>
-      <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="saving || !!deleteKey" title="Закрыть">
+      <button type="button" class="lead-edit-close" (click)="requestClose()" [disabled]="saving || !!deleteKey || !!billingMutating" title="Закрыть">
         <span class="material-icons-sharp">close</span>
       </button>
     </header>
@@ -678,7 +681,7 @@
           </div>
 
           <div class="lead-edit-actions">
-            <button type="button" class="secondary" (click)="closed.emit()" [disabled]="saving || !!deleteKey || !!billingMutating">Отмена</button>
+            <button type="button" class="secondary" (click)="requestClose()" [disabled]="saving || !!deleteKey || !!billingMutating">Отмена</button>
             <button type="submit" [disabled]="saving || !!deleteKey || !!billingMutating || companyEditForm.invalid">
               {{ saving ? 'Сохраняю...' : 'Сохранить' }}
             </button>

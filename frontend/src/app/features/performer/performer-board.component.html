@@ -1,4 +1,12 @@
 <app-admin-layout title="Кабинет исполнителя" active="performer">
+  <app-mobile-status-slider
+    class="mobile-performer-status"
+    [items]="mobileStatusItems()"
+    [activeKey]="activeSection()"
+    ariaLabel="Разделы кабинета исполнителя"
+    (select)="selectMobileSection($event)"
+  />
+
   <section class="toolbar">
     @for (section of sections(); track section.key) {
       <button type="button" [class.active]="activeSection() === section.key" (click)="setSection(section.key)">
@@ -103,4 +111,14 @@
       }
     </section>
   }
+
+  <app-mobile-status-sheet
+    [open]="mobileStatusSheetOpen()"
+    kicker="Исполнитель"
+    title="Выберите раздел"
+    [items]="mobileStatusItems()"
+    [activeKey]="activeSection()"
+    (selected)="selectMobileSection($event)"
+    (closed)="closeMobileStatusSheet()"
+  />
 </app-admin-layout>

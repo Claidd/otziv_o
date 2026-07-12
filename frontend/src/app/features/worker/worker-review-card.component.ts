@@ -50,6 +50,7 @@ export class WorkerReviewCardComponent {
   @Input() copied: string | null = null;
   @Input() mutationKey: string | null = null;
   @Input() canOpenEditModal = false;
+  @Input() canInlineEditBotName = false;
   @Input() canOpenTitleLink = true;
   @Input() canEditRecoveryTaskDate = false;
   @Input() showFilialCityInFooter = false;
@@ -71,6 +72,8 @@ export class WorkerReviewCardComponent {
   @Input() publishLockedByCredentialWait = false;
   @Input() publishCredentialWaitTitle = 'Действие с отзывом';
   isReviewTitleExpanded = false;
+  isBotNameEditing = false;
+  botNameDraft = '';
   readonly mobileReviewActionBottom = mobileKeyboardActionBottom(this.destroyRef);
 
   @Output() readonly reviewFieldEditStarted = new EventEmitter<ReviewEditableField>();
@@ -93,6 +96,7 @@ export class WorkerReviewCardComponent {
   @Output() readonly copyRequested = new EventEmitter<ReviewCopyKind>();
   @Output() readonly titleCopyRequested = new EventEmitter<string>();
   @Output() readonly botChangeRequested = new EventEmitter<void>();
+  @Output() readonly botNameSaveRequested = new EventEmitter<string>();
   @Output() readonly botDeactivateRequested = new EventEmitter<void>();
   @Output() readonly accountRepairRequested = new EventEmitter<string>();
   @Output() readonly doneRequested = new EventEmitter<void>();
@@ -100,6 +104,67 @@ export class WorkerReviewCardComponent {
 
   isBadTask(): boolean {
     return !!this.review.badTask;
+  }
+
+  canEditBotNameInline(): boolean {
+    return this.canInlineEditBotName
+      && this.activeSection === 'nagul'
+      && !!this.review.botId
+      && !this.hasUnavailableBot();
+  }
+
+  startBotNameEdit(event: Event): void {
+    if (!this.canEditBotNameInline() || this.isBotNameSaving()) {
+      return;
+    }
+
+    this.botNameDraft = (this.review.botFio ?? '').trim();
+    this.isBotNameEditing = true;
+    const host = (event.currentTarget as HTMLElement | null)?.closest('.bot-line');
+    window.requestAnimationFrame(() => {
+      const input = host?.querySelector<HTMLInputElement>('.bot-name-input');
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  finishBotNameEdit(): void {
+    if (!this.isBotNameEditing) {
+      return;
+    }
+
+    const botName = this.botNameDraft.trim();
+    if (!botName) {
+      return;
+    }
+
+    this.isBotNameEditing = false;
+    if (botName === (this.review.botFio ?? '').trim()) {
+      return;
+    }
+    this.botNameSaveRequested.emit(botName);
+  }
+
+  canSaveBotNameEdit(): boolean {
+    const botName = this.botNameDraft.trim();
+    return !!botName && botName !== (this.review.botFio ?? '').trim();
+  }
+
+  setBotNameDraft(value: string): void {
+    this.botNameDraft = value;
+  }
+
+  cancelBotNameEdit(): void {
+    this.isBotNameEditing = false;
+    this.botNameDraft = (this.review.botFio ?? '').trim();
+  }
+
+  isBotNameSaving(): boolean {
+    return this.mutationKey === `review-${this.review.id}-bot-name`;
+  }
+
+  botNameLabel(): string {
+    return (this.review.botFio ?? '').trim() || 'Впиши Имя Фамилию';
   }
 
   isRecoveryTask(): boolean {

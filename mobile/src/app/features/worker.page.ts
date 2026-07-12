@@ -173,7 +173,7 @@ type CredentialWaitSection = 'publish' | 'nagul';
                   [statusLabel]="order.waitingForClient ? 'Ждем' : (order.status || '-')"
                   [amountLabel]="orderAmountLabel(order)"
                   [badReviewSummary]="showBadReviewSummary(order) ? 'Плохие: ' + (order.badReviewTasksDone || 0) + '/' + (order.badReviewTasksTotal || 0) : ''"
-                  [badReviewAmount]="showBadReviewSummary(order) ? '+' + money(order.badReviewTasksSum || 0) : ''"
+                  [badReviewAmount]="showBadReviewSummary(order) && permissions().canSeeMoney ? '+' + money(order.badReviewTasksSum || 0) : ''"
                   [phoneLabel]="formatPhone(order.companyTelephone)"
                   [phoneHref]="orderChatUrl(order)"
                   [reviewHref]="order.orderDetailsId ? '/' + order.orderDetailsId : orderDetailsHref(order)"
@@ -500,11 +500,11 @@ type CredentialWaitSection = 'publish' | 'nagul';
         @if (overdueModalOpen()) {
           @if (overdueOrders(); as overdue) {
             <button class="worker-section-backdrop" type="button" aria-label="Закрыть просрочки" (click)="closeOverdueModal()"></button>
-            <section class="worker-section-sheet overdue-sheet" role="dialog" aria-modal="true" aria-label="Просроченные заказы">
+            <section class="worker-section-sheet overdue-sheet" role="dialog" aria-modal="true" aria-label="Просрочки специалиста">
               <header>
                 <div>
-                  <small>Без изменений больше {{ overdue.thresholdDays }} дн.</small>
-                  <h2>Нужна рассылка</h2>
+                  <small>Требуют действий</small>
+                  <h2>Просрочки по разделам</h2>
                 </div>
                 <button type="button" class="icon-button" (click)="closeOverdueModal()" aria-label="Закрыть">
                   <span class="material-icons-sharp">close</span>
@@ -3186,13 +3186,24 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   private workerSectionForOrderStatus(status: string): WorkerBoardSection {
-    if (status === 'Новый') {
-      return 'new';
+    switch (status) {
+      case 'Новый':
+      case 'Новые':
+        return 'new';
+      case 'Коррекция':
+      case 'Коррекции':
+        return 'correct';
+      case 'Выгул':
+        return 'nagul';
+      case 'Публикация':
+        return 'publish';
+      case 'Восстановление':
+        return 'recovery';
+      case 'Плохие':
+        return 'bad';
+      default:
+        return 'all';
     }
-    if (status === 'Коррекция') {
-      return 'correct';
-    }
-    return 'all';
   }
 
   private apiErrorMessage(error: unknown, fallback: string): string {

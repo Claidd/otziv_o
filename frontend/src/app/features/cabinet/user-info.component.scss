@@ -205,4 +205,242 @@ input[type='date'] {
   .toolbar-actions button .material-icons-sharp {
     font-size: 1.35rem;
   }
+
+  .profile-toolbar,
+  .person-head,
+  .metric-card {
+    border-radius: 1rem;
+    box-shadow: 0 0.55rem 1.35rem rgba(31, 44, 71, 0.06);
+  }
+
+  .profile-toolbar,
+  .person-head {
+    padding: 0.7rem;
+  }
+
+  .person-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 0.6rem;
+  }
+
+  .person-head img {
+    width: 3.8rem;
+    height: 3.8rem;
+  }
+
+  .metric-grid {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    overflow-x: auto;
+    padding: 0.1rem 0.1rem 0.35rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .metric-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .metric-card {
+    flex: 0 0 min(12.5rem, 74vw);
+    min-height: 5rem;
+    padding: 0.72rem;
+    scroll-snap-align: start;
+  }
+
+  .metric-card strong {
+    margin-top: 0.2rem;
+    font-size: 1.08rem;
+  }
+
+  .percent-ring {
+    width: 2.9rem;
+    height: 2.9rem;
+    border-width: 5px;
+    font-size: 0.7rem;
+  }
+
+  .chart-grid {
+    gap: 0.55rem;
+    margin-top: 0.6rem;
+  }
+}
+
+@media (max-width: 860px) {
+  .profile-toolbar,
+  .person-head,
+  .empty-state {
+    border: 1px solid rgba(103, 116, 131, 0.16);
+    border-radius: 1rem;
+    background: var(--otziv-white);
+    box-shadow: 0 0.8rem 1.6rem rgba(132, 139, 200, 0.1);
+  }
+
+  .profile-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.6rem 0.65rem;
+  }
+
+  .back-link {
+    width: 2.35rem;
+    height: 2.35rem;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 0.78rem;
+    color: var(--otziv-primary);
+    background: var(--otziv-light);
+    font-size: 0;
+  }
+
+  .back-link .material-icons-sharp {
+    font-size: 1.2rem;
+  }
+
+  .toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 2.35rem;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .toolbar-actions label {
+    min-width: 0;
+    width: auto;
+  }
+
+  input[type='date'] {
+    width: 100%;
+    min-width: 0;
+    min-height: 2.35rem;
+    border-color: rgba(103, 116, 131, 0.16);
+    border-radius: 0.78rem;
+    padding: 0 0.5rem;
+    background: var(--otziv-white);
+    font-size: 0.72rem;
+    font-weight: 900;
+  }
+
+  .toolbar-actions button {
+    display: grid;
+    width: 2.35rem;
+    min-width: 2.35rem;
+    min-height: 2.35rem;
+    height: 2.35rem;
+    place-items: center;
+    border: 0;
+    border-radius: 0.78rem;
+    padding: 0;
+    color: var(--otziv-primary);
+    background: var(--otziv-light);
+    box-shadow: none;
+    font-size: 0;
+  }
+
+  .toolbar-actions button .material-icons-sharp {
+    font-size: 1.2rem;
+  }
+
+  .person-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.52rem;
+    padding: 0.7rem;
+    background: var(--otziv-surface-gradient-neutral);
+  }
+
+  .person-head img {
+    width: 2.9rem;
+    height: 2.9rem;
+    border: 0;
+    border-radius: 0.8rem;
+  }
+
+  .person-head .eyebrow {
+    font-size: 0.62rem;
+  }
+
+  .person-head h2 {
+    margin-top: 0.08rem;
+    font-size: 1rem;
+  }
+
+  .person-head p:not(.eyebrow) {
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+    margin-top: 0.52rem;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .metric-card {
+    display: flex;
+    min-width: 0;
+    min-height: 4.6rem;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--otziv-surface-border-neutral);
+    border-radius: 1rem;
+    padding: 0.7rem;
+    background: var(--otziv-surface-gradient-neutral);
+    box-shadow: none;
+  }
+
+  .metric-card.green {
+    border-color: var(--otziv-surface-border-green);
+    background: var(--otziv-surface-gradient-green);
+  }
+
+  .metric-card.blue {
+    border-color: var(--otziv-surface-border-blue);
+    background: var(--otziv-surface-gradient-blue);
+  }
+
+  .metric-card.yellow {
+    border-color: var(--otziv-surface-border-yellow);
+    background: var(--otziv-surface-gradient-yellow);
+  }
+
+  .metric-card.red {
+    border-color: var(--otziv-surface-border-red);
+    background: var(--otziv-surface-gradient-red);
+  }
+
+  .metric-card h3 {
+    color: var(--otziv-info);
+    font-size: 0.72rem;
+  }
+
+  .metric-card strong {
+    margin-top: 0.2rem;
+    font-size: 1.06rem;
+  }
+
+  .percent-ring {
+    width: 2.55rem;
+    height: 2.55rem;
+    border-width: 4px;
+    font-size: 0.65rem;
+  }
+
+  .chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.55rem;
+    margin-top: 0.52rem;
+  }
 }

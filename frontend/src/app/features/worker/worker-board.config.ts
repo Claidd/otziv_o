@@ -95,6 +95,10 @@ export function workerSectionLabel(section: WorkerBoardTabKey): string {
   return WORKER_SECTIONS.find((item) => item.key === section)?.label ?? 'Новые';
 }
 
+export function workerMobileSections(sections: readonly SectionTab[]): SectionTab[] {
+  return sections.filter((section) => section.key !== 'risk');
+}
+
 export function workerReviewCopyLabel(kind: ReviewCopyKind): string {
   return {
     url: 'Ссылка',

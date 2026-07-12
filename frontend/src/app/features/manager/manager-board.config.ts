@@ -42,6 +42,16 @@ export type SelectedCompany = {
   title: string;
 };
 
+export type ManagerMobileStatusItem = {
+  key: string;
+  title: string;
+  value: number;
+  icon: string;
+  tone: ManagerMetric['tone'];
+  badge?: string;
+  ariaLabel: string;
+};
+
 export type ManagerChatBotInviteKind = 'telegram' | 'max' | null;
 export type ManagerChatPlatform = 'whatsapp' | 'telegram' | 'max' | 'unknown';
 
@@ -208,6 +218,65 @@ export function managerStatusOptionLabel(status: string, count: number | null, d
 
 export function managerStatusDisplayLabel(status: string): string {
   return status === ALL_STATUS ? WORKING_STATUS_LABEL : status;
+}
+
+export function managerMobileStatusItems(
+  section: ManagerSection,
+  statuses: readonly string[],
+  metrics: readonly ManagerMetric[],
+  totalElements: number
+): ManagerMobileStatusItem[] {
+  return statuses.map((status) => {
+    const normalizedStatus = status.trim().toLocaleLowerCase('ru-RU');
+    const metric = metrics.find((item) =>
+      item.section === section
+      && item.status.trim().toLocaleLowerCase('ru-RU') === normalizedStatus
+    );
+    const value = metric?.value ?? (normalizedStatus === ALL_STATUS.toLocaleLowerCase('ru-RU') ? totalElements : 0);
+    const delta = Math.max(0, metric?.delta ?? 0);
+    const title = managerStatusDisplayLabel(status);
+
+    return {
+      key: status,
+      title,
+      value,
+      icon: metric?.icon || managerMobileStatusIcon(status),
+      tone: metric?.tone || 'blue',
+      ...(delta > 0 ? { badge: `+${delta}` } : {}),
+      ariaLabel: `${title}: ${value}${delta > 0 ? `, новых ${delta}` : ''}`
+    };
+  });
+}
+
+function managerMobileStatusIcon(status: string): string {
+  switch (status.trim().toLocaleLowerCase('ru-RU')) {
+    case 'новая':
+    case 'новый':
+      return 'new_releases';
+    case 'в работе':
+      return 'business_center';
+    case 'новый заказ':
+      return 'work';
+    case 'в проверку':
+    case 'на проверке':
+      return 'fact_check';
+    case 'коррекция':
+      return 'build_circle';
+    case 'публикация':
+    case 'опубликовано':
+      return 'published_with_changes';
+    case 'выставлен счет':
+      return 'receipt_long';
+    case 'напоминание':
+      return 'notifications_active';
+    case 'ожидание':
+    case 'ожидает общего счета':
+      return 'hourglass_empty';
+    case 'бан':
+      return 'block';
+    default:
+      return 'dashboard';
+  }
 }
 
 export function managerPayableOrderSum(order: OrderCardItem): number {

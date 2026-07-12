@@ -26,6 +26,7 @@ import { apiErrorMessage } from '../../shared/api-error-message';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
+import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
 import {
   PersonalRemindersService,
   RecoveryClientNotifiedDetail
@@ -98,7 +99,15 @@ function formatDateInputValue(date: Date): string {
 
 @Component({
   selector: 'app-order-details',
-  imports: [AdminLayoutComponent, DecimalPipe, DeepResearchReportViewComponent, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [
+    AdminLayoutComponent,
+    DecimalPipe,
+    DeepResearchReportViewComponent,
+    FormsModule,
+    LoadErrorCardComponent,
+    MobileBottomPagerComponent,
+    RouterLink
+  ],
   templateUrl: './order-details.component.html',
   styleUrl: './order-details.component.scss'
 })
@@ -272,6 +281,11 @@ export class OrderDetailsComponent {
 
   @HostListener('window:keydown.escape')
   closeReviewEditFromKeyboard(): void {
+    const activeField = this.activeReviewFieldEdit();
+    if (this.isMobileReviewLayout() && activeField?.field === 'text') {
+      this.cancelReviewFieldEdit(activeField.review, activeField.field);
+      return;
+    }
     this.closeReviewEdit();
   }
 
@@ -497,7 +511,6 @@ export class OrderDetailsComponent {
     if (field === 'text' && this.mobilePreviewReviewTextId() === review.id) {
       this.mobilePreviewReviewTextId.set(null);
     }
-    this.focusReviewFieldInput(review, field);
     this.reviewFieldDrafts.update((drafts) => {
       if (key in drafts) {
         return drafts;
@@ -508,6 +521,7 @@ export class OrderDetailsComponent {
         [key]: this.reviewFieldSourceValue(review, field)
       };
     });
+    this.focusReviewFieldInput(review, field);
   }
 
   openCompanyReport(): void {
@@ -800,6 +814,11 @@ export class OrderDetailsComponent {
             : `Ответ отзыва #${review.id} записан в БД`
         );
 
+        if (this.isMobileReviewLayout() && field === 'text') {
+          this.editingReviewFieldKey.set(null);
+          this.clearReviewFieldDraft(review, field);
+        }
+
         window.setTimeout(() => {
           if (this.savedReviewFieldKey() === fieldKey) {
             this.savedReviewFieldKey.set(null);
@@ -891,11 +910,6 @@ export class OrderDetailsComponent {
 
   onReviewTextDisplayClick(review: OrderReviewItem): void {
     if (this.isMobileReviewLayout()) {
-      if (!this.isMobileReviewTextPreview(review)) {
-        this.activateMobileReviewTextPreview(review);
-        return;
-      }
-
       this.startReviewFieldEdit(review, 'text');
       return;
     }
@@ -951,10 +965,19 @@ export class OrderDetailsComponent {
       return;
     }
 
+    const focus = (): boolean => {
+      const selector = this.isMobileReviewLayout() && field === 'text'
+        ? `.mobile-review-text-modal textarea[name="mobile-text-${review.id}"]`
+        : `.review-card[data-review-id="${review.id}"] textarea[name="${field}-${review.id}"]`;
+      const textarea = document.querySelector<HTMLTextAreaElement>(selector);
+      textarea?.focus({ preventScroll: true });
+      return document.activeElement === textarea;
+    };
+
     window.requestAnimationFrame(() => {
-      document
-        .querySelector<HTMLTextAreaElement>(`.review-card[data-review-id="${review.id}"] textarea[name="${field}-${review.id}"]`)
-        ?.focus({ preventScroll: true });
+      if (!focus()) {
+        window.requestAnimationFrame(focus);
+      }
     });
   }
 

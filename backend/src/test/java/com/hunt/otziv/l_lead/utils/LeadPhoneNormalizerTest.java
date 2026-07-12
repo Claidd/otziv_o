@@ -12,6 +12,7 @@ class LeadPhoneNormalizerTest {
     void normalizeConvertsRussianMobileFormatsToCanonicalSevenPrefix() {
         assertEquals("79021234567", LeadPhoneNormalizer.normalize("8 (902) 123-45-67"));
         assertEquals("79021234567", LeadPhoneNormalizer.normalize("+7 902 123 45 67"));
+        assertEquals("79822766565", LeadPhoneNormalizer.normalize("+7\u00A0982\u00A0276 65 65"));
         assertEquals("79021234567", LeadPhoneNormalizer.normalize("9021234567"));
     }
 

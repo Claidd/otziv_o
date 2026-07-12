@@ -88,7 +88,7 @@ describe('WorkerReviewEditModalComponent', () => {
     expect(element.querySelector('#review-edit-title')?.textContent?.trim()).toBe('Редактирование отзыва');
     expect(element.querySelector<HTMLTextAreaElement>('textarea[name="reviewText"]')?.value).toBe('Review text');
     expect(element.querySelector<HTMLInputElement>('input[name="reviewBotPassword"]')?.value).toBe('bot-password');
-    expect(element.textContent).toContain('Удалить');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-delete.review-delete-action')).not.toBeNull();
     expect(element.querySelector<HTMLInputElement>('input[type="file"]')).not.toBeNull();
   });
 
@@ -135,7 +135,7 @@ describe('WorkerReviewEditModalComponent', () => {
     const element = fixture.nativeElement as HTMLElement;
     element.querySelector<HTMLButtonElement>('.lead-edit-close')?.click();
     element.querySelector<HTMLButtonElement>('button.review-new-account')?.click();
-    element.querySelector<HTMLButtonElement>('button.danger')?.click();
+    element.querySelector<HTMLButtonElement>('.lead-edit-delete.review-delete-action')?.click();
     element.querySelector<HTMLFormElement>('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
     expect(closed).toBe(true);

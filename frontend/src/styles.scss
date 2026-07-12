@@ -46,6 +46,16 @@
   --otziv-background: #f6f6f9;
   --otziv-field-background: #ffffff;
   --otziv-muted-surface: #f8fafc;
+  --otziv-surface-gradient-neutral: linear-gradient(155deg, var(--otziv-white) 0%, #f6faff 100%);
+  --otziv-surface-gradient-green: linear-gradient(155deg, var(--otziv-white) 0%, rgba(225, 247, 239, 0.92) 100%);
+  --otziv-surface-gradient-blue: linear-gradient(155deg, var(--otziv-white) 0%, #eef6ff 100%);
+  --otziv-surface-gradient-yellow: linear-gradient(155deg, var(--otziv-white) 0%, #fff7dc 100%);
+  --otziv-surface-gradient-red: linear-gradient(155deg, var(--otziv-white) 0%, #fff0f5 100%);
+  --otziv-surface-border-neutral: rgba(108, 155, 207, 0.2);
+  --otziv-surface-border-green: rgba(27, 156, 133, 0.22);
+  --otziv-surface-border-blue: rgba(108, 155, 207, 0.24);
+  --otziv-surface-border-yellow: rgba(198, 142, 30, 0.28);
+  --otziv-surface-border-red: rgba(234, 51, 98, 0.24);
   --otziv-tone-wait-border: rgba(214, 159, 43, 0.42);
   --otziv-tone-wait-surface: #fffdf7;
   --otziv-tone-correction-border: rgba(232, 64, 112, 0.34);
@@ -78,6 +88,16 @@ body.otziv-dark-theme {
   --otziv-background: #181a1e;
   --otziv-field-background: #202528;
   --otziv-muted-surface: #252b2f;
+  --otziv-surface-gradient-neutral: linear-gradient(135deg, rgba(44, 52, 64, 0.98), rgba(37, 45, 56, 0.98));
+  --otziv-surface-gradient-green: linear-gradient(135deg, rgba(74, 198, 177, 0.18), rgba(34, 39, 51, 0.86));
+  --otziv-surface-gradient-blue: linear-gradient(135deg, rgba(122, 167, 220, 0.18), rgba(34, 39, 51, 0.86));
+  --otziv-surface-gradient-yellow: linear-gradient(135deg, rgba(248, 217, 117, 0.17), rgba(34, 39, 51, 0.86));
+  --otziv-surface-gradient-red: linear-gradient(135deg, rgba(255, 91, 143, 0.18), rgba(34, 39, 51, 0.86));
+  --otziv-surface-border-neutral: rgba(159, 184, 215, 0.18);
+  --otziv-surface-border-green: rgba(74, 198, 177, 0.3);
+  --otziv-surface-border-blue: rgba(122, 167, 220, 0.3);
+  --otziv-surface-border-yellow: rgba(248, 217, 117, 0.3);
+  --otziv-surface-border-red: rgba(255, 91, 143, 0.3);
   --otziv-tone-wait-border: rgba(215, 189, 120, 0.18);
   --otziv-tone-wait-surface: #252621;
   --otziv-tone-correction-border: rgba(255, 91, 143, 0.24);
@@ -134,6 +154,156 @@ body.otziv-dark-theme select option:checked {
 
 * {
   box-sizing: border-box;
+}
+
+@media (max-width: 860px) {
+  app-order-details .mobile-review-text-modal {
+    position: fixed;
+    z-index: 88;
+    inset: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    overflow: hidden;
+    padding:
+      max(0.75rem, env(safe-area-inset-top))
+      max(0.75rem, env(safe-area-inset-right))
+      calc(var(--mobile-editor-keyboard-bottom, 0px) + 5.25rem)
+      max(0.75rem, env(safe-area-inset-left));
+    color: var(--otziv-dark);
+    background:
+      radial-gradient(circle at 88% 8%, rgba(51, 144, 236, 0.12), transparent 34%),
+      var(--otziv-white);
+    overscroll-behavior: contain;
+  }
+
+  app-order-details .mobile-review-text-modal__header {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid rgba(103, 116, 131, 0.18);
+    padding: 0.2rem 0 0.75rem;
+  }
+
+  app-order-details .mobile-review-text-modal__header > div {
+    min-width: 0;
+  }
+
+  app-order-details .mobile-review-text-modal__header small {
+    display: block;
+    color: var(--otziv-info);
+    font: 900 0.72rem/1.2 var(--otziv-font-family);
+  }
+
+  app-order-details .mobile-review-text-modal__header h2 {
+    margin: 0.18rem 0 0;
+    overflow: hidden;
+    color: var(--otziv-dark);
+    font: 900 1.18rem/1.12 var(--otziv-font-family);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  app-order-details .mobile-review-text-modal__close {
+    display: inline-grid;
+    flex: 0 0 2.75rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    place-items: center;
+    border: 1px solid rgba(103, 116, 131, 0.2);
+    border-radius: 50%;
+    padding: 0;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+  }
+
+  app-order-details .mobile-review-text-modal__close .material-icons-sharp {
+    font-size: 1.25rem;
+  }
+
+  app-order-details .mobile-review-text-modal__field {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  app-order-details .mobile-review-text-modal__field > span {
+    overflow: hidden;
+    color: var(--otziv-info);
+    font: 900 0.76rem/1.2 var(--otziv-font-family);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  app-order-details .mobile-review-text-modal__field textarea {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    min-height: 10rem;
+    resize: none;
+    overflow-y: auto;
+    border: 1px solid rgba(51, 144, 236, 0.36);
+    border-radius: 1rem;
+    outline: 0;
+    padding: 1rem;
+    color: var(--otziv-dark);
+    background: var(--otziv-field-background);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    font: 750 1rem/1.48 var(--otziv-font-family);
+    caret-color: #3390ec;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  app-order-details .mobile-review-text-modal__field textarea:focus {
+    border-color: #3390ec;
+    box-shadow: 0 0 0 0.18rem rgba(51, 144, 236, 0.14);
+  }
+
+  app-order-details .mobile-review-text-modal .mobile-review-save-bar.mobile-review-save-bar--telegram {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-radius: 1.2rem;
+    padding: 0.45rem;
+    background: rgba(23, 33, 43, 0.96);
+    box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.34);
+    backdrop-filter: blur(18px);
+  }
+
+  app-order-details .mobile-review-text-modal .mobile-review-save-bar--telegram button {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border: 0;
+    border-radius: 999px;
+    padding: 0 0.8rem;
+    color: #eaf3ff;
+    background: rgba(43, 55, 67, 0.98);
+    font: 900 0.86rem/1.2 var(--otziv-font-family);
+  }
+
+  app-order-details .mobile-review-text-modal .mobile-review-save-bar--telegram button .material-icons-sharp {
+    font-size: 1.1rem;
+  }
+
+  app-order-details .mobile-review-text-modal .mobile-review-save-bar--telegram button.save:not(:disabled) {
+    color: white;
+    background: linear-gradient(135deg, #3390ec, #5b6ee1);
+    box-shadow: 0 0.45rem 1rem rgba(51, 144, 236, 0.26);
+  }
+
+  app-order-details .mobile-review-text-modal .mobile-review-save-bar--telegram button:disabled {
+    color: rgba(234, 243, 255, 0.42);
+    background: rgba(43, 55, 67, 0.72);
+    box-shadow: none;
+  }
 }
 
 .manager-performance-card {
@@ -583,8 +753,12 @@ app-review-check .approve-publication-hint .material-icons-sharp {
   gap: 0.7rem;
 }
 
-.admin-layout button:not(.login-pill):not(.theme-button),
-.admin-layout .button {
+/* Keep the legacy button baseline authoritative on desktop. In the mobile shell
+   it is deliberately low-specificity so feature and shared component styles can
+   reproduce the native app instead of being painted solid primary blue. */
+.admin-layout:where(:not(.mobile-viewport)) button:not(.login-pill):not(.theme-button),
+.admin-layout:where(:not(.mobile-viewport)) .button,
+.admin-layout:where(.mobile-viewport) :where(button:not(.login-pill):not(.theme-button), .button) {
   contain-intrinsic-block-size: auto 100px;
   display: inline-flex;
   min-height: 2.2rem;
@@ -1025,6 +1199,11 @@ app-review-check .review-card.review-approve-card {
   margin-bottom: 1rem;
 }
 
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head small {
   color: var(--otziv-info);
   font-weight: 900;
@@ -1041,6 +1220,30 @@ app-review-check .review-card.review-approve-card {
   min-height: 2.25rem;
   padding: 0;
   border-radius: 50%;
+}
+
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-delete {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  border: 1px solid rgba(255, 0, 96, 0.28);
+  border-radius: 50%;
+  color: #a6003f;
+  background: rgba(255, 0, 96, 0.07);
+  box-shadow: none;
+}
+
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-delete:not(:disabled):hover,
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-delete:not(:disabled):focus-visible {
+  border-color: rgba(255, 0, 96, 0.44);
+  color: #8d0036;
+  background: rgba(255, 0, 96, 0.12);
+}
+
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-delete .material-icons-sharp {
+  font-size: 1.35rem;
 }
 
 :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-form {
@@ -1150,6 +1353,10 @@ app-order-details .review-idea-readonly {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
+}
+
+:is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions > .lead-edit-actions-group:only-child {
+  flex: 1 1 auto;
 }
 
 :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) app-admin-layout .admin-layout .lead-edit-actions button.danger {
@@ -2377,6 +2584,10 @@ app-order-details .review-edit-modal .review-save-action {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.75rem;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions > .lead-edit-actions-group:only-child {
+    grid-column: 1 / -1;
   }
 
   :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions--split > div:first-child {
@@ -4984,4 +5195,174 @@ body.otziv-dark-theme app-manager-control .manager-performance-factor em {
   color: #f3f7ff !important;
   background: #242b35 !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05) !important;
+}
+
+body.otziv-mobile-overlay-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+@media (max-width: 860px) {
+  app-admin-layout .admin-layout.mobile-viewport.right-panel-custom > .admin-right {
+    grid-column: auto !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding-right: max(0.62rem, env(safe-area-inset-right)) !important;
+    padding-bottom: calc(var(--otziv-mobile-nav-height, 4.65rem) + env(safe-area-inset-bottom) + 0.85rem) !important;
+    padding-left: max(0.62rem, env(safe-area-inset-left)) !important;
+  }
+
+  /* Mobile boards expose their counters and reminders through the status rail
+     and pager modal. Do not keep the now-empty projected desktop side panel in
+     document flow; T-Bank and other custom mobile panels remain available. */
+  :is(app-leads-board, app-manager-board, app-order-details, app-worker-board, app-operator-board)
+    app-admin-layout .admin-layout.mobile-viewport.right-panel-custom > .admin-right {
+    display: none !important;
+    padding: 0 !important;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
+    z-index: 120;
+    inset: 0;
+    display: block;
+    width: 100vw;
+    width: 100dvw;
+    max-width: 100dvw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding: 0;
+    background: var(--otziv-background);
+    backdrop-filter: none;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal,
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal--compact {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    box-shadow: none;
+    scrollbar-gutter: auto;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board)
+    .lead-edit-modal :is(.lead-edit-form, .lead-edit-grid, .lead-edit-field, .lead-edit-actions, .lead-edit-actions-group) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board)
+    .lead-edit-modal .lead-edit-field :is(input, select, textarea) {
+    max-width: 100%;
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal .lead-edit-head {
+    position: relative;
+    top: auto;
+    flex: 0 0 auto;
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal .lead-edit-form {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal .lead-edit-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 0.2rem 0.75rem 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal :is(input, select, textarea) {
+    min-height: 3.35rem;
+    border-radius: 0.9rem;
+    font-size: max(1rem, 16px);
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-modal textarea {
+    min-height: 7rem;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head {
+    position: sticky;
+    top: calc(-1 * max(1rem, env(safe-area-inset-top)));
+    z-index: 3;
+    min-height: 4.25rem;
+    margin: calc(-1 * max(1rem, env(safe-area-inset-top))) calc(-1 * max(1rem, env(safe-area-inset-right))) 1rem calc(-1 * max(1rem, env(safe-area-inset-left)));
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.75rem max(1rem, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--otziv-background) 96%, transparent);
+    box-shadow: 0 0.35rem 0.9rem rgba(78, 91, 124, 0.08);
+    backdrop-filter: blur(14px);
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head h2 {
+    font-family: var(--otziv-font-family);
+    font-size: clamp(1.55rem, 7vw, 2rem);
+    font-weight: 1000;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-head > button {
+    flex: 0 0 auto;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-actions {
+    position: sticky;
+    z-index: 3;
+    bottom: calc(-1 * max(1rem, env(safe-area-inset-bottom)));
+    margin: 1rem calc(-1 * max(1rem, env(safe-area-inset-right))) calc(-1 * max(1rem, env(safe-area-inset-bottom))) calc(-1 * max(1rem, env(safe-area-inset-left)));
+    padding: 0.75rem max(1rem, env(safe-area-inset-right)) max(0.85rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--otziv-background) 96%, transparent);
+    box-shadow: 0 -0.35rem 0.9rem rgba(78, 91, 124, 0.08);
+    backdrop-filter: blur(14px);
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal .lead-edit-actions {
+    position: relative;
+    bottom: auto;
+    flex: 0 0 auto;
+    width: 100%;
+    margin: 0;
+    border-top: 1px solid rgba(103, 116, 131, 0.16);
+    padding: 0.65rem 0 max(0.2rem, env(safe-area-inset-bottom));
+    background: var(--otziv-white);
+    box-shadow: 0 -0.35rem 0.9rem rgba(78, 91, 124, 0.08);
+  }
+
+  :is(app-order-details, app-worker-board) .review-edit-modal .lead-edit-actions button {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body.otziv-dark-theme :is(app-leads-board, app-operator-board, app-manager-board, app-order-details, app-worker-board) .lead-edit-backdrop {
+    background: #1b2027;
+  }
 }

@@ -121,6 +121,15 @@ export interface WorkerCredentialPreparation {
   waitSeconds?: number;
 }
 
+export interface WorkerPublicationSession {
+  enabled: boolean;
+  active: boolean;
+  startedAt?: string | null;
+  expiresAt?: string | null;
+  nagulBlockingCount: number;
+  closeReason?: string | null;
+}
+
 export interface WorkerBoard {
   section: WorkerSection;
   title: string;
@@ -136,6 +145,7 @@ export interface WorkerBoard {
   message: string;
   warning: boolean;
   credentialPreparation?: WorkerCredentialPreparation | null;
+  publicationSession?: WorkerPublicationSession | null;
 }
 
 export interface WorkerActionResponse {
@@ -279,6 +289,10 @@ export class WorkerApi {
 
   updateReviewText(reviewId: number, orderId: number, text: string): Observable<void> {
     return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/text`, { orderId, text });
+  }
+
+  updateReviewBotName(reviewId: number, botName: string): Observable<void> {
+    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bot-name`, { botName });
   }
 
   updateReviewAnswer(reviewId: number, orderId: number, answer: string): Observable<void> {

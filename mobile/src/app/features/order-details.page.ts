@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, OnDestroy, OnInit, ViewChild, computed, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -712,6 +712,17 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
           <ng-template>
             <form class="sheet-body sheet-form" (ngSubmit)="saveReviewEdit()">
               <div class="sheet-head">
+                @if (details()?.canDeleteReviews) {
+                  <button
+                    class="icon-button sheet-delete-button review-delete-action"
+                    type="button"
+                    (click)="deleteReviewEdit()"
+                    [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()"
+                    [attr.aria-label]="reviewEditDeleting() ? 'Удаляю отзыв' : 'Удалить отзыв'"
+                  >
+                    <span class="material-icons-sharp">close</span>
+                  </button>
+                }
                 <div>
                   <p class="sheet-note">Отзыв #{{ reviewEdit()?.id || '' }}</p>
                   <h2>Редактор отзыва</h2>
@@ -919,12 +930,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                 }
               </section>
 
-              <div class="sheet-actions" [class.edit-actions]="!!details()?.canDeleteReviews">
-                @if (details()?.canDeleteReviews) {
-                  <button class="danger" type="button" (click)="deleteReviewEdit()" [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()">
-                    {{ reviewEditDeleting() ? 'Удаляю' : 'Удалить' }}
-                  </button>
-                }
+              <div class="sheet-actions">
                 <button class="secondary" type="button" (click)="closeReviewEdit()" [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading()">Отмена</button>
                 <button type="submit" [disabled]="reviewEditSaving() || reviewEditDeleting() || reviewEditUploading() || !canSaveReviewEdit()">
                   {{ reviewEditSaving() ? 'Сохраняю' : 'Сохранить' }}
@@ -2079,6 +2085,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   private readonly reviewPublishCredentialMaxAgeMs = 60 * 60 * 1000;
   private readonly publishCredentialWaitMs = 150_000;
   private readonly publishCredentialWaitSafetyBufferMs = 2_000;
+  private errorHideTimer: ReturnType<typeof setTimeout> | null = null;
   private reviewDrag: {
     pointerId: number;
     startX: number;
@@ -2176,7 +2183,22 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     private readonly router: Router,
     private readonly confirm: MobileConfirmService,
     private readonly media: MobileMediaService
-  ) {}
+  ) {
+    effect(() => {
+      const message = this.error();
+      this.clearErrorHideTimer();
+      if (!message) {
+        return;
+      }
+
+      this.errorHideTimer = setTimeout(() => {
+        if (this.error() === message) {
+          this.error.set(null);
+        }
+        this.errorHideTimer = null;
+      }, 5000);
+    });
+  }
 
   @HostListener('window:review-recovery-client-notified', ['$event'])
   onRecoveryClientNotified(event: Event): void {
@@ -2225,6 +2247,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.reviewStripCleanup?.();
     this.reviewStripCleanup = undefined;
     this.clearReviewPublishWaitTimer();
+    this.clearErrorHideTimer();
   }
 
   refresh(event: RefresherCustomEvent): void {
@@ -4612,6 +4635,13 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.mutationKey.set(null);
       }
     });
+  }
+
+  private clearErrorHideTimer(): void {
+    if (this.errorHideTimer) {
+      clearTimeout(this.errorHideTimer);
+      this.errorHideTimer = null;
+    }
   }
 
   private applyUpdatedReview(updatedReview: OrderReviewItem): void {

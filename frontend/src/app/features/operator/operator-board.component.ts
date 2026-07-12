@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -13,7 +13,18 @@ import { apiErrorMessage } from '../../shared/api-error-message';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
+import { MobileNavIntentService } from '../../shared/mobile/mobile-nav-intent.service';
+import { MobileStatusSheetComponent } from '../../shared/mobile/mobile-status-sheet.component';
+import {
+  MobileStatusItem,
+  MobileStatusSliderComponent
+} from '../../shared/mobile/mobile-status-slider.component';
 import { ToastService } from '../../shared/toast.service';
+import {
+  DEFAULT_OPERATOR_MOBILE_SECTION,
+  OPERATOR_MOBILE_SECTIONS
+} from './operator-board.mobile';
 
 type OperatorAction = 'send' | 'toWork';
 
@@ -37,17 +48,22 @@ type OperatorSectionTab = {
   label: string;
   value: string;
   icon: string;
-};
-
-type MobileNavLink = {
-  label: string;
-  routerLink?: string;
-  href?: string;
+  tone: 'green' | 'blue';
 };
 
 @Component({
   selector: 'app-operator-board',
-  imports: [AdminLayoutComponent, CompanyCreateModalComponent, DatePipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [
+    AdminLayoutComponent,
+    CompanyCreateModalComponent,
+    DatePipe,
+    FormsModule,
+    LoadErrorCardComponent,
+    MobileBottomPagerComponent,
+    MobileStatusSheetComponent,
+    MobileStatusSliderComponent,
+    RouterLink
+  ],
   templateUrl: './operator-board.component.html',
   styleUrl: '../leads/leads-board.component.scss'
 })
@@ -57,6 +73,8 @@ export class OperatorBoardComponent {
   private readonly toastService = inject(ToastService);
   private readonly companyDeepReportLaunch = inject(CompanyDeepReportLaunchService);
   private readonly router = inject(Router);
+  private readonly mobileNavIntent = inject(MobileNavIntentService);
+  private lastMobileNavIntentStamp = 0;
   private readonly emptyPage: LeadPage = {
     content: [],
     pageNumber: 0,
@@ -69,16 +87,6 @@ export class OperatorBoardComponent {
 
   readonly pageSizeOptions = [1, 5, 10];
   readonly phonesRoute = '/admin/dictionaries/phones';
-  readonly mobileNavLinks: MobileNavLink[] = [
-    { label: 'Главная', routerLink: '/' },
-    { label: 'Лиды', routerLink: '/leads' },
-    { label: 'Оператор', routerLink: '/operator' },
-    { label: 'Компании', routerLink: '/companies' },
-    { label: 'Заказы', routerLink: '/orders' },
-    { label: 'Специалист', routerLink: '/worker' },
-    { label: 'Личный кабинет', routerLink: '/' }
-  ];
-
   readonly board = signal<OperatorBoard | null>(null);
   readonly activeSection = signal<OperatorBoardSection>('queue');
   readonly keyword = signal('');
@@ -89,7 +97,7 @@ export class OperatorBoardComponent {
   readonly copied = signal<string | null>(null);
   readonly mutationKey = signal<string | null>(null);
   readonly commentDrafts = signal<Record<number, string>>({});
-  readonly mobileMenuOpen = signal(false);
+  readonly mobileStatusSheetOpen = signal(false);
   readonly bindModalOpen = signal(false);
   readonly telephoneIdDraft = signal('');
   readonly bindSaving = signal(false);
@@ -173,23 +181,51 @@ export class OperatorBoardComponent {
   });
   readonly sectionTabs = computed<OperatorSectionTab[]>(() => {
     const board = this.board();
-    return [
-      {
-        key: 'queue',
-        label: 'К выдаче',
-        value: String(board?.queueTotal ?? 0),
-        icon: 'support_agent'
-      },
-      {
-        key: 'sent',
-        label: 'Отправленные',
-        value: String(board?.sentTotal ?? 0),
-        icon: 'outgoing_mail'
-      }
-    ];
+    return OPERATOR_MOBILE_SECTIONS.map((section) => ({
+      ...section,
+      value: String(section.key === 'queue' ? board?.queueTotal ?? 0 : board?.sentTotal ?? 0)
+    }));
   });
+  readonly mobileStatusItems = computed<MobileStatusItem[]>(() => this.sectionTabs().map((tab) => ({
+    key: tab.key,
+    label: tab.label,
+    value: tab.value,
+    icon: tab.icon,
+    tone: tab.tone
+  })));
 
   constructor() {
+    const initialIntent = this.mobileNavIntent.intent();
+    if (initialIntent?.tab === 'operator') {
+      this.lastMobileNavIntentStamp = initialIntent.stamp;
+      if (initialIntent.mode === 'menu') {
+        this.mobileStatusSheetOpen.set(true);
+      } else {
+        this.activeSection.set(DEFAULT_OPERATOR_MOBILE_SECTION);
+        this.pageNumber.set(0);
+      }
+      this.mobileNavIntent.clear(initialIntent.stamp);
+    }
+
+    effect(() => {
+      const intent = this.mobileNavIntent.intent();
+      if (!intent || intent.tab !== 'operator' || intent.stamp === this.lastMobileNavIntentStamp) {
+        return;
+      }
+      this.lastMobileNavIntentStamp = intent.stamp;
+
+      untracked(() => {
+        if (intent.mode === 'menu') {
+          this.mobileStatusSheetOpen.set(true);
+        } else {
+          this.mobileStatusSheetOpen.set(false);
+          this.activeSection.set(DEFAULT_OPERATOR_MOBILE_SECTION);
+          this.pageNumber.set(0);
+          this.loadBoard();
+        }
+        this.mobileNavIntent.clear(intent.stamp);
+      });
+    });
     this.loadBoard();
   }
 
@@ -239,6 +275,19 @@ export class OperatorBoardComponent {
     this.loadBoard();
   }
 
+  selectMobileSection(key: string): void {
+    if (!this.sectionTabs().some((section) => section.key === key)) {
+      return;
+    }
+
+    this.mobileStatusSheetOpen.set(false);
+    this.setSection(key as OperatorBoardSection);
+  }
+
+  closeMobileStatusSheet(): void {
+    this.mobileStatusSheetOpen.set(false);
+  }
+
   changePageSize(value: string | number): void {
     const parsed = Number(value);
     this.pageSize.set(Number.isFinite(parsed) && parsed > 0 ? parsed : 10);
@@ -262,10 +311,6 @@ export class OperatorBoardComponent {
 
     this.pageNumber.update((page) => page + 1);
     this.loadBoard();
-  }
-
-  toggleMobileMenu(): void {
-    this.mobileMenuOpen.update((open) => !open);
   }
 
   openBindModal(): void {
@@ -423,10 +468,6 @@ export class OperatorBoardComponent {
 
   trackSection(_index: number, tab: OperatorSectionTab): string {
     return tab.key;
-  }
-
-  trackMobileLink(_index: number, link: MobileNavLink): string {
-    return link.label;
   }
 
   private requestForAction(lead: LeadItem, action: OperatorAction): Observable<void> {

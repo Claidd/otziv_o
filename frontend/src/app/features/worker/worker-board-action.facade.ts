@@ -16,6 +16,7 @@ type WorkerBoardActionApi = Pick<
   | 'updateOrderStatus'
   | 'updateOrderClientWaiting'
   | 'changeReviewBot'
+  | 'updateReviewBotName'
   | 'deactivateReviewBot'
   | 'publishReview'
   | 'completeRecoveryTask'
@@ -112,6 +113,38 @@ export class WorkerBoardActionFacade {
       error: (err) => {
         this.deps.mutationKey.set(null);
         this.deps.toastService.error('Бот не заменен', this.deps.errorMessage(err, 'Не удалось заменить бота'));
+      }
+    });
+  }
+
+  updateReviewBotName(review: WorkerReviewItem, value: string): void {
+    const botName = value.trim();
+    if (!botName) {
+      this.deps.toastService.error('Имя аккаунта не сохранено', 'Введите имя и фамилию');
+      return;
+    }
+
+    if (this.deps.activeSection() !== 'nagul') {
+      this.deps.toastService.error('Имя аккаунта не сохранено', 'Редактирование доступно в разделе «Выгул»');
+      return;
+    }
+
+    const key = `review-${review.id}-bot-name`;
+    this.deps.mutationKey.set(key);
+
+    this.deps.workerApi.updateReviewBotName(review.id, botName).subscribe({
+      next: () => {
+        this.patchReview(review.id, { botFio: botName });
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.success('Имя аккаунта сохранено', botName);
+        this.deps.loadBoard();
+      },
+      error: (err) => {
+        this.deps.mutationKey.set(null);
+        this.deps.toastService.error(
+          'Имя аккаунта не сохранено',
+          this.deps.errorMessage(err, 'Не удалось обновить имя аккаунта')
+        );
       }
     });
   }
@@ -293,6 +326,19 @@ export class WorkerBoardActionFacade {
         content: board.orders.content.map((order) => order.id === orderId
           ? { ...order, ...patch }
           : order
+        )
+      }
+    }));
+  }
+
+  private patchReview(reviewId: number, patch: Partial<WorkerReviewItem>): void {
+    this.deps.patchBoard?.((board) => ({
+      ...board,
+      reviews: {
+        ...board.reviews,
+        content: board.reviews.content.map((review) => review.id === reviewId
+          ? { ...review, ...patch }
+          : review
         )
       }
     }));

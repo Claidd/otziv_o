@@ -1,8 +1,14 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { MobileNavIntentService } from '../../shared/mobile/mobile-nav-intent.service';
+import { MobileStatusSheetComponent } from '../../shared/mobile/mobile-status-sheet.component';
+import {
+  MobileStatusItem,
+  MobileStatusSliderComponent
+} from '../../shared/mobile/mobile-status-slider.component';
 import { ToastService } from '../../shared/toast.service';
 import { PerformerApi, PerformerAssignment, PerformerBoard } from '../../core/performer.api';
 
@@ -10,7 +16,13 @@ type SectionKey = 'offers' | 'active' | 'waitingPublication' | 'published' | 'pa
 
 @Component({
   selector: 'app-performer-board',
-  imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule],
+  imports: [
+    AdminLayoutComponent,
+    LoadErrorCardComponent,
+    MobileStatusSheetComponent,
+    MobileStatusSliderComponent,
+    ReactiveFormsModule
+  ],
   templateUrl: './performer-board.component.html',
   styleUrl: './performer-board.component.scss'
 })
@@ -18,6 +30,8 @@ export class PerformerBoardComponent implements OnInit {
   private readonly api = inject(PerformerApi);
   private readonly fb = inject(FormBuilder);
   private readonly toast = inject(ToastService);
+  private readonly mobileNavIntent = inject(MobileNavIntentService);
+  private lastMobileNavIntentStamp = 0;
 
   readonly loading = signal(false);
   readonly actionSaving = signal<string | null>(null);
@@ -31,6 +45,7 @@ export class PerformerBoardComponent implements OnInit {
   });
   readonly activeSection = signal<SectionKey>('offers');
   readonly selectedAssignment = signal<PerformerAssignment | null>(null);
+  readonly mobileStatusSheetOpen = signal(false);
 
   readonly publishForm = this.fb.nonNullable.group({
     finalText: ['', [Validators.required, Validators.minLength(10)]],
@@ -50,7 +65,46 @@ export class PerformerBoardComponent implements OnInit {
     { key: 'paid' as const, label: 'Оплачены', icon: 'payments', count: this.board().paid.length }
   ]);
 
+  readonly mobileStatusItems = computed<MobileStatusItem[]>(() => this.sections().map((section) => ({
+    key: section.key,
+    label: section.label,
+    value: section.count,
+    icon: section.icon,
+    tone: this.mobileSectionTone(section.key)
+  })));
+
   readonly currentItems = computed(() => this.board()[this.activeSection()]);
+
+  constructor() {
+    const initialIntent = this.mobileNavIntent.intent();
+    if (initialIntent?.tab === 'worker') {
+      this.lastMobileNavIntentStamp = initialIntent.stamp;
+      if (initialIntent.mode === 'menu') {
+        this.mobileStatusSheetOpen.set(true);
+      } else {
+        this.setSection('offers');
+      }
+      this.mobileNavIntent.clear(initialIntent.stamp);
+    }
+
+    effect(() => {
+      const intent = this.mobileNavIntent.intent();
+      if (!intent || intent.tab !== 'worker' || intent.stamp === this.lastMobileNavIntentStamp) {
+        return;
+      }
+      this.lastMobileNavIntentStamp = intent.stamp;
+
+      untracked(() => {
+        if (intent.mode === 'menu') {
+          this.mobileStatusSheetOpen.set(true);
+        } else {
+          this.mobileStatusSheetOpen.set(false);
+          this.setSection('offers');
+        }
+        this.mobileNavIntent.clear(intent.stamp);
+      });
+    });
+  }
 
   ngOnInit(): void {
     this.load();
@@ -74,6 +128,18 @@ export class PerformerBoardComponent implements OnInit {
   setSection(section: SectionKey): void {
     this.activeSection.set(section);
     this.selectedAssignment.set(null);
+  }
+
+  selectMobileSection(section: string): void {
+    if (!this.sections().some((item) => item.key === section)) {
+      return;
+    }
+    this.mobileStatusSheetOpen.set(false);
+    this.setSection(section as SectionKey);
+  }
+
+  closeMobileStatusSheet(): void {
+    this.mobileStatusSheetOpen.set(false);
   }
 
   accept(item: PerformerAssignment): void {
@@ -139,6 +205,16 @@ export class PerformerBoardComponent implements OnInit {
       return true;
     }
     return new Date(item.publishAvailableAt).getTime() <= Date.now();
+  }
+
+  private mobileSectionTone(section: SectionKey): MobileStatusItem['tone'] {
+    return {
+      offers: 'yellow',
+      active: 'teal',
+      waitingPublication: 'violet',
+      published: 'green',
+      paid: 'blue'
+    }[section] as MobileStatusItem['tone'];
   }
 
   private runAction<T>(key: string, request: { subscribe: Function }, success: string): void {
