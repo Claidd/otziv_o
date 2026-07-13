@@ -276,7 +276,7 @@
                   }
                   <div class="personal-remark-total">
                     <strong>
-                      {{ manager.totalAttentionCount }} к действию
+                      {{ manager.totalAttentionCount }} сейчас к действию
                       @if (personalManagerPerformance(manager); as performance) {
                         <span class="manager-score-badge {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}">{{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</span>
                       }
@@ -292,10 +292,17 @@
                 </button>
               </header>
 
-              <div class="daily-task-progress" role="progressbar" [attr.aria-valuenow]="dailyTaskProgress(manager)" aria-valuemin="0" aria-valuemax="100">
+              <div
+                class="daily-task-progress"
+                role="progressbar"
+                [attr.aria-valuenow]="dailyTaskProgress(manager)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.title]="dailyTaskProgressExplanation(manager)"
+              >
                 <div class="daily-task-progress-head">
-                  <span>Прогресс задач на день</span>
-                  <strong>{{ dailyTaskCompleted(manager) }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+                  <span>Обработано за день</span>
+                  <strong>{{ dailyTaskCompleted(manager) }} из {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
                 </div>
                 <div class="daily-task-progress-track">
                   <span [style.width.%]="dailyTaskProgress(manager)"></span>
@@ -397,7 +404,7 @@
 
               <div class="manager-status">
                 <span class="status-badge">{{ statusLabel(manager.status) }}</span>
-                <strong>{{ manager.totalAttentionCount }} к действию</strong>
+                <strong>{{ manager.totalAttentionCount }} сейчас к действию</strong>
                 <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
               </div>
 
@@ -407,10 +414,17 @@
               </button>
             </header>
 
-            <div class="daily-task-progress" role="progressbar" [attr.aria-valuenow]="dailyTaskProgress(manager)" aria-valuemin="0" aria-valuemax="100">
+            <div
+              class="daily-task-progress"
+              role="progressbar"
+              [attr.aria-valuenow]="dailyTaskProgress(manager)"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.title]="dailyTaskProgressExplanation(manager)"
+            >
               <div class="daily-task-progress-head">
-                <span>Прогресс задач на день</span>
-                <strong>{{ dailyTaskCompleted(manager) }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+                <span>Обработано за день</span>
+                <strong>{{ dailyTaskCompleted(manager) }} из {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
               </div>
               <div class="daily-task-progress-track">
                 <span [style.width.%]="dailyTaskProgress(manager)"></span>

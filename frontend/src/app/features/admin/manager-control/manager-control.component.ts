@@ -301,6 +301,13 @@ export class ManagerControlComponent implements OnInit {
     return Math.max(0, manager.actionCompletedCount ?? 0);
   }
 
+  dailyTaskProgressExplanation(manager: ManagerControlManager): string {
+    const total = this.dailyTaskTotal(manager);
+    const completed = this.dailyTaskCompleted(manager);
+    const remaining = Math.max(0, total - completed);
+    return `За день поступило: ${total}. Обработано: ${completed}. Остаётся к действию: ${remaining}.`;
+  }
+
   queueDuration(seconds: number): string {
     const hours = Math.floor(Math.max(0, seconds) / 3600);
     const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60);
