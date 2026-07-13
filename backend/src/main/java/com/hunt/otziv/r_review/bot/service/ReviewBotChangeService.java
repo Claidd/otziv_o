@@ -13,8 +13,10 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -48,12 +50,12 @@ public class ReviewBotChangeService {
     private final BusinessAuditService businessAuditService;
     private final ReviewBotAssignmentExclusionService assignmentExclusionService;
 
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId) {
         changeBot(reviewId, false);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId, boolean forceWalkDelayIfUnwalked) {
         try {
             log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
@@ -70,6 +72,8 @@ public class ReviewBotChangeService {
             reviewRepository.save(review);
             log.info("3. Сохранили отзыв в БД");
 
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Ошибка при замене бота для отзыва ID {}: {}", reviewId, e.getMessage(), e);
             throw new RuntimeException("Не удалось заменить бота: " + e.getMessage(), e);
@@ -255,7 +259,11 @@ public class ReviewBotChangeService {
 
         Bot oldBot = review.getBot();
         assignmentExclusionService.rejectCurrentBot(review, "CHANGE");
-        assignBotUsingSharedRules(review, assignmentExclusions(review));
+        Bot selectedBot = selectBotUsingSharedRules(review, assignmentExclusions(review));
+        if (!hasRealBot(selectedBot)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Нет доступных аккаунтов");
+        }
+        applySelectedBot(review, selectedBot);
         markReleasedIfChanged(oldBot, review.getBot(), "review bot changed");
         accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
 
@@ -350,10 +358,18 @@ public class ReviewBotChangeService {
     }
 
     private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
-        Bot selectedBot = botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
+        Bot selectedBot = selectBotUsingSharedRules(review, excludedBotIds);
+        applySelectedBot(review, selectedBot);
+    }
+
+    private Bot selectBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
+        return botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
+    }
+
+    private void applySelectedBot(Review review, Bot selectedBot) {
         review.setBot(selectedBot);
 
-        if (selectedBot == null || STUB_BOT_ID.equals(selectedBot.getId())) {
+        if (!hasRealBot(selectedBot)) {
             if (review.isVigul()) {
                 review.setVigul(false);
             }
@@ -361,6 +377,10 @@ public class ReviewBotChangeService {
         }
 
         updateVigulBasedOnBotCounter(review);
+    }
+
+    private boolean hasRealBot(Bot bot) {
+        return bot != null && bot.getId() != null && !STUB_BOT_ID.equals(bot.getId());
     }
 
     private Set<Long> assignmentExclusions(Review review) {

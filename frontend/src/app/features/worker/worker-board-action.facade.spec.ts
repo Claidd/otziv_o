@@ -65,7 +65,7 @@ function bot(overrides: Partial<WorkerBotItem> = {}): WorkerBotItem {
   };
 }
 
-function createFacade(section: WorkerSection = 'publish') {
+function createFacade(section: WorkerSection = 'publish', replacementFound = true) {
   const activeSection = signal<WorkerSection>(section);
   const mutationKey = signal<string | null>(null);
   const calls: string[] = [];
@@ -90,7 +90,7 @@ function createFacade(section: WorkerSection = 'publish') {
       },
       deactivateReviewBot: (reviewId: number, botId: number) => {
         calls.push(`deactivate:${reviewId}:${botId}`);
-        return of(void 0);
+        return of({ blockedBotId: botId, newBotId: replacementFound ? 44 : 1, replacementFound });
       },
       publishReview: (reviewId: number) => {
         calls.push(`publish:${reviewId}`);
@@ -136,6 +136,10 @@ function createFacade(section: WorkerSection = 'publish') {
       },
       error: (title: string, message?: string) => {
         toastMessages.push(`error:${title}:${message ?? ''}`);
+        return toastMessages.length;
+      },
+      warning: (title: string, message?: string) => {
+        toastMessages.push(`warning:${title}:${message ?? ''}`);
         return toastMessages.length;
       }
     },
@@ -222,6 +226,17 @@ describe('WorkerBoardActionFacade', () => {
     expect(calls).not.toContain('deactivate:7:11');
     expect(calls).toContain('bad-deactivate:90:12');
     expect(calls).toContain('load-board');
+  });
+
+  it('warns when a blocked regular review account has no replacement', () => {
+    const { facade, calls, toastMessages } = createFacade('nagul', false);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    facade.deactivateReviewBot(review({ id: 7, botId: 11 }));
+
+    expect(calls).toContain('deactivate:7:11');
+    expect(calls).toContain('load-board');
+    expect(toastMessages.some((message) => message.startsWith('warning:Аккаунт заблокирован без замены'))).toBe(true);
   });
 
   it('routes done action by review type and active section', () => {

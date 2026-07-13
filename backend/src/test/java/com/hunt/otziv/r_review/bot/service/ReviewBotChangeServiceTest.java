@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -259,18 +260,72 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
-    void changeBotClearsVigulWhenAssignmentReturnsNull() {
+    void changeBotWithoutRealReplacementKeepsCurrentAccountAndReturnsConflict() {
         ReviewBotChangeService service = service();
         Review review = new Review();
         review.setVigul(true);
+        Bot currentBot = bot(12L, "Текущий аккаунт", 2);
+        review.setBot(currentBot);
 
         when(reviewRepository.findById(16L)).thenReturn(Optional.of(review));
         when(botAssignmentService.assignBotForReviewChange(same(review), anyCollection()))
                 .thenReturn(null);
 
-        service.changeBot(16L);
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeBot(16L)
+        );
 
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals("Нет доступных аккаунтов", exception.getReason());
+        assertSame(currentBot, review.getBot());
+        assertTrue(review.isVigul());
+        verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void changeBotDoesNotReportStubToStubAsSuccessfulReplacement() {
+        ReviewBotChangeService service = service();
+        Bot stubBot = bot(1L, "Нет доступных аккаунтов", 0);
+        Review review = new Review();
+        review.setId(16L);
+        review.setBot(stubBot);
+        review.setVigul(false);
+
+        when(reviewRepository.findById(16L)).thenReturn(Optional.of(review));
+        when(botAssignmentService.assignBotForReviewChange(same(review), anyCollection()))
+                .thenReturn(stubBot);
+
+        assertThrows(ResponseStatusException.class, () -> service.changeBot(16L));
+
+        assertSame(stubBot, review.getBot());
+        verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void blockWithoutReplacementDeactivatesCurrentAccountAndKeepsStub() {
+        ReviewBotChangeService service = service();
+        City city = city(9L, "Иркутск");
+        Filial filial = filial(3L, city);
+        Bot currentBot = bot(5L, "Старый Бот", 1);
+        Bot stubBot = bot(1L, "Нет доступных аккаунтов", 0);
+        Review review = new Review();
+        review.setId(21L);
+        review.setFilial(filial);
+        review.setBot(currentBot);
+        review.setVigul(false);
+
+        when(reviewRepository.findById(21L)).thenReturn(Optional.of(review));
+        when(botService.getFindAllByFilialCityId(9L)).thenReturn(List.of(currentBot));
+        when(botService.findBotById(5L)).thenReturn(currentBot);
+        when(botAssignmentService.assignBotForReviewChange(same(review), anyCollection())).thenReturn(stubBot);
+
+        service.deActivateAndChangeBot(21L, 5L);
+
+        assertFalse(currentBot.isActive());
+        assertSame(stubBot, review.getBot());
         assertFalse(review.isVigul());
+        verify(botService).save(currentBot);
         verify(reviewRepository).save(review);
     }
 

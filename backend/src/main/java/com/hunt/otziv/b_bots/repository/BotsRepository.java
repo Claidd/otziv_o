@@ -10,6 +10,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -260,5 +261,29 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
           AND b.status.botStatusTitle = :status
     """)
     long countActiveByStatus(@Param("status") String status);
+
+    @Query("""
+        SELECT COUNT(b.id)
+        FROM Bot b
+        WHERE b.botCity.id = :cityId
+          AND b.fio = :fio
+          AND b.active = true
+          AND b.counter BETWEEN :minCounter AND :maxCounter
+          AND b.login IS NOT NULL
+          AND TRIM(b.login) <> ''
+          AND b.password IS NOT NULL
+          AND TRIM(b.password) <> ''
+          AND b.status IS NOT NULL
+          AND TRIM(b.status.botStatusTitle) = :status
+          AND (b.cooldownUntil IS NULL OR b.cooldownUntil <= :today)
+    """)
+    long countAvailableAccountPool(
+            @Param("cityId") Long cityId,
+            @Param("fio") String fio,
+            @Param("status") String status,
+            @Param("minCounter") int minCounter,
+            @Param("maxCounter") int maxCounter,
+            @Param("today") LocalDate today
+    );
 
 }

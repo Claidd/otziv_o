@@ -375,9 +375,8 @@ public class ApiWorkerBoardController {
     }
 
     @PostMapping("/reviews/{reviewId}/bots/{botId}/deactivate")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void deactivateReviewBot(
+    public BotDeactivateResponse deactivateReviewBot(
             @PathVariable Long reviewId,
             @PathVariable Long botId,
             @RequestBody(required = false) WorkerActivitySourceRequest source,
@@ -397,6 +396,13 @@ public class ApiWorkerBoardController {
                 withSource("botId=" + valueOrDash(botId) + ";", source)
         );
         recordPublicationActivityIfNeeded(source, principal, authentication);
+        Review updatedReview = reviewService.getReviewById(reviewId);
+        Long newBotId = botId(updatedReview);
+        return new BotDeactivateResponse(
+                botId,
+                newBotId,
+                newBotId != null && newBotId > 0 && newBotId != 1L
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/copy-click")
@@ -2595,6 +2601,9 @@ public class ApiWorkerBoardController {
     }
 
     public record BotChangeResponse(Long oldBotId, Long newBotId) {
+    }
+
+    public record BotDeactivateResponse(Long blockedBotId, Long newBotId, boolean replacementFound) {
     }
 
     private record WorkerFlowRedirect(String section, String message) {

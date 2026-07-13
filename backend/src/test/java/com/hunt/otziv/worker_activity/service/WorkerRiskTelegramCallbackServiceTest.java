@@ -3,6 +3,9 @@ package com.hunt.otziv.worker_activity.service;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Role;
@@ -55,6 +58,9 @@ class WorkerRiskTelegramCallbackServiceTest {
     @Mock
     private ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
 
+    @Mock
+    private OrderRepository orderRepository;
+
     private WorkerRiskTelegramCallbackService service;
 
     @BeforeEach
@@ -65,7 +71,8 @@ class WorkerRiskTelegramCallbackServiceTest {
                 userService,
                 personalReminderService,
                 telegramService,
-                managerControlConcreteItemRepository
+                managerControlConcreteItemRepository,
+                orderRepository
         );
     }
 
@@ -82,6 +89,12 @@ class WorkerRiskTelegramCallbackServiceTest {
         when(personalReminderService.hasOpenSystemReminder(worker, "WORKER_RISK_MANAGER_WARNING", 77L))
                 .thenReturn(false);
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Order riskOrder = new Order();
+        riskOrder.setId(100L);
+        Company riskCompany = new Company();
+        riskCompany.setTitle("Арком");
+        riskOrder.setCompany(riskCompany);
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(riskOrder));
 
         Optional<String> answer = service.handle(callbackFromGroup(-100123L, 777L, "worker-risk:77:e"));
 
@@ -95,12 +108,14 @@ class WorkerRiskTelegramCallbackServiceTest {
                 eq(77L),
                 eq(100L)
         );
+        ArgumentCaptor<String> telegramText = ArgumentCaptor.forClass(String.class);
         verify(telegramService).sendMessageWithInlineKeyboard(
                 eq(-100456L),
-                any(),
+                telegramText.capture(),
                 eq(null),
                 any()
         );
+        assertEquals(true, telegramText.getValue().contains("Компания: Арком"));
 
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
         verify(incidentRepository).save(captor.capture());

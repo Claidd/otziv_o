@@ -29,7 +29,7 @@ type WorkerBoardActionApi = Pick<
   | 'deleteBot'
 >;
 
-type WorkerBoardActionToast = Pick<ToastService, 'success' | 'error'>;
+type WorkerBoardActionToast = Pick<ToastService, 'success' | 'warning' | 'error'>;
 
 export type WorkerBoardActionFacadeDeps = {
   workerApi: WorkerBoardActionApi;
@@ -162,11 +162,33 @@ export class WorkerBoardActionFacade {
     const key = `review-${review.id}-block-bot`;
     this.deps.mutationKey.set(key);
 
+    if (!this.isRecoveryTask(review) && !this.isBadTask(review)) {
+      this.deps.workerApi
+        .deactivateReviewBot(review.id, review.botId, this.deps.reviewActionSource?.())
+        .subscribe({
+          next: (response) => {
+            this.deps.mutationKey.set(null);
+            if (response.replacementFound) {
+              this.deps.toastService.success('Бот заблокирован', this.reviewActionTitle(review));
+            } else {
+              this.deps.toastService.warning(
+                'Аккаунт заблокирован без замены',
+                'Свободных аккаунтов нет. Карточка останется в «Выгуле» до пополнения пула аккаунтов 0–1.'
+              );
+            }
+            this.deps.loadBoard();
+          },
+          error: (err) => {
+            this.deps.mutationKey.set(null);
+            this.deps.toastService.error('Бот не заблокирован', this.deps.errorMessage(err, 'Не удалось заблокировать бота'));
+          }
+        });
+      return;
+    }
+
     const request = this.isRecoveryTask(review) && review.recoveryTaskId
       ? this.deps.workerApi.deactivateRecoveryTaskBot(review.recoveryTaskId, review.botId)
-      : this.isBadTask(review) && review.badTaskId
-      ? this.deps.workerApi.deactivateBadReviewTaskBot(review.badTaskId, review.botId)
-      : this.deps.workerApi.deactivateReviewBot(review.id, review.botId, this.deps.reviewActionSource?.());
+      : this.deps.workerApi.deactivateBadReviewTaskBot(review.badTaskId!, review.botId);
 
     request.subscribe({
       next: () => {

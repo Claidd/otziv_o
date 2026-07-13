@@ -158,6 +158,12 @@ export interface BotChangeResponse {
   newBotId?: number | null;
 }
 
+export interface BotDeactivateResponse {
+  blockedBotId?: number | null;
+  newBotId?: number | null;
+  replacementFound: boolean;
+}
+
 export interface WorkerActivitySource {
   sourcePage?: string;
   sourceEntry?: string;
@@ -217,8 +223,8 @@ export class WorkerApi {
     return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/change-bot`, source ?? {});
   }
 
-  deactivateReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`, source ?? {});
+  deactivateReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<BotDeactivateResponse> {
+    return this.http.post<BotDeactivateResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`, source ?? {});
   }
 
   publishReview(reviewId: number): Observable<void> {
