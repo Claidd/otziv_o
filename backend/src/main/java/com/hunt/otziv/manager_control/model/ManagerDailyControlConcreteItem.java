@@ -138,7 +138,9 @@ public class ManagerDailyControlConcreteItem {
     @PrePersist
     void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        createdAt = now;
+        if (createdAt == null) {
+            createdAt = now;
+        }
         updatedAt = now;
         if (status == null) {
             status = ManagerDailyControlItemStatus.OPEN;

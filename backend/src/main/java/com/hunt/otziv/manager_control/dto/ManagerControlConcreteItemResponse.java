@@ -34,7 +34,11 @@ public record ManagerControlConcreteItemResponse(
         String rollbackStatus,
         String rollbackMessage,
         Boolean canRollback,
-        String specialistName
+        String specialistName,
+        LocalDateTime firstObservedAt,
+        LocalDateTime targetDeadlineAt,
+        LocalDateTime hardDeadlineAt,
+        String slaState
 ) {
     public ManagerControlConcreteItemResponse(
             Long controlEntityId,
@@ -82,6 +86,10 @@ public record ManagerControlConcreteItemResponse(
                 null,
                 null,
                 contactText,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -152,7 +160,11 @@ public record ManagerControlConcreteItemResponse(
                 null,
                 null,
                 null,
-                specialistName
+                specialistName,
+                null,
+                null,
+                null,
+                null
         );
     }
 
@@ -207,6 +219,10 @@ public record ManagerControlConcreteItemResponse(
                 workerNotificationAcceptedByUserId,
                 workerNotificationFailureReason,
                 contactText,
+                null,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -279,7 +295,28 @@ public record ManagerControlConcreteItemResponse(
                 rollbackStatus,
                 rollbackMessage,
                 canRollback,
-                specialistName
+                specialistName,
+                null,
+                null,
+                null,
+                null
+        );
+    }
+
+    public ManagerControlConcreteItemResponse withSla(
+            LocalDateTime firstObservedAt,
+            LocalDateTime targetDeadlineAt,
+            LocalDateTime hardDeadlineAt,
+            String slaState
+    ) {
+        return new ManagerControlConcreteItemResponse(
+                controlEntityId, type, entityId, title, subtitle, status, ageDays, reason, targetUrl,
+                orderDetailsId, chatUrl, followUpAt, lastManualTouchAt, itemStatus, actionType, comment,
+                updatedAt, resolvedAt, workerNotificationAttemptedAt, workerNotificationSentAt,
+                workerNotificationAcceptedAt, workerNotificationAcceptedByUserId, workerNotificationFailureReason,
+                contactText, riskResolutionAction, workerExplanation, workerExplanationAt, penaltyPoints,
+                rollbackStatus, rollbackMessage, canRollback, specialistName, firstObservedAt,
+                targetDeadlineAt, hardDeadlineAt, slaState
         );
     }
 }

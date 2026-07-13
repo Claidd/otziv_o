@@ -177,6 +177,34 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void concreteMessageSlaUsesActualFirstObservedTime() throws Exception {
+        LocalDateTime firstObservedAt = LocalDateTime.of(2026, 7, 13, 18, 0);
+        ManagerDailyControlItem parent = new ManagerDailyControlItem();
+        parent.setReasonCode("UNANSWERED_CLIENT_MESSAGES");
+        parent.setCreatedAt(firstObservedAt.plusHours(1));
+        ManagerControlConcreteItemResponse concrete = new ManagerControlConcreteItemResponse(
+                1L, "CLIENT_CHAT_UNANSWERED", 2L, "Клиент", null, null, 0L, null,
+                "/chat", null, null, null, null, "OPEN", null, null,
+                firstObservedAt.plusHours(1), null, null
+        ).withSla(firstObservedAt, null, null, null);
+        when(appSettingService.getBoolean("manager.sla.enabled", false)).thenReturn(true);
+        when(appSettingService.getInt("manager.sla.target.message-minutes", 30)).thenReturn(30);
+        when(appSettingService.getInt("manager.sla.hard.message-minutes", 480)).thenReturn(480);
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "decorateConcreteSla",
+                ManagerDailyControlItem.class,
+                ManagerControlConcreteItemResponse.class
+        );
+        method.setAccessible(true);
+        ManagerControlConcreteItemResponse response = (ManagerControlConcreteItemResponse) method.invoke(service, parent, concrete);
+
+        assertEquals(firstObservedAt, response.firstObservedAt());
+        assertEquals(firstObservedAt.plusMinutes(30), response.targetDeadlineAt());
+        assertEquals(firstObservedAt.plusMinutes(480), response.hardDeadlineAt());
+    }
+
+    @Test
     void commonInvoiceControlPassesPartiallyPaidStatusForPendingOrderFilter() throws Exception {
         Manager manager = new Manager();
         when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any()))

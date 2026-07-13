@@ -2485,6 +2485,9 @@ public class ManagerControlService {
         List<ManagerControlConcreteItemResponse> examples = syncConcrete
                 ? syncConcreteExamples(item, freshExamples)
                 : readConcreteExamples(item, freshExamples);
+        examples = examples.stream()
+                .map(example -> decorateConcreteSla(item, example))
+                .toList();
         return new ManagerControlItemDetailResponse(
                 item.getId(),
                 item.getItemKey(),
@@ -2712,6 +2715,11 @@ public class ManagerControlService {
             ManagerControlConcreteItemResponse example
     ) {
         boolean changed = false;
+        LocalDateTime firstObservedAt = example.firstObservedAt();
+        if (firstObservedAt != null && (item.getCreatedAt() == null || firstObservedAt.isBefore(item.getCreatedAt()))) {
+            item.setCreatedAt(firstObservedAt);
+            changed = true;
+        }
         String entityType = limit(safe(example.type()).isBlank() ? "UNKNOWN" : example.type(), 40);
         String title = limit(safe(example.title()).isBlank() ? "Карточка контроля" : example.title(), 220);
         String subtitle = limit(example.subtitle(), 500);
@@ -2854,7 +2862,7 @@ public class ManagerControlService {
         if (isChatBindingIssueConcrete(item)) {
             targetUrl = companyBoardUrlByKeyword(item.getTitle(), targetUrl);
         }
-        return new ManagerControlConcreteItemResponse(
+        ManagerControlConcreteItemResponse response = new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
                 item.getEntityId(),
@@ -2886,8 +2894,13 @@ public class ManagerControlService {
                 null,
                 null,
                 null,
-                specialistName
+                specialistName,
+                null,
+                null,
+                null,
+                null
         );
+        return decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null));
     }
 
     private String companyBoardUrlByKeyword(String keyword, String fallbackUrl) {
@@ -2958,7 +2971,7 @@ public class ManagerControlService {
                 || workerExplanationAt != null
                 ? null
                 : item.getWorkerNotificationFailureReason();
-        return new ManagerControlConcreteItemResponse(
+        ManagerControlConcreteItemResponse response = new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
                 item.getEntityId(),
@@ -2990,7 +3003,38 @@ public class ManagerControlService {
                 incident == null || incident.getRollbackStatus() == null ? null : incident.getRollbackStatus().name(),
                 incident == null ? null : incident.getRollbackMessage(),
                 incident == null ? null : canRollbackRiskIncident(incident),
-                specialistName
+                specialistName,
+                null,
+                null,
+                null,
+                null
+        );
+        return decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null));
+    }
+
+    private ManagerControlConcreteItemResponse decorateConcreteSla(
+            ManagerDailyControlItem parentItem,
+            ManagerControlConcreteItemResponse response
+    ) {
+        if (response == null) {
+            return null;
+        }
+        LocalDateTime firstObservedAt = firstNonNullTime(
+                response.firstObservedAt(),
+                parentItem == null ? null : parentItem.getCreatedAt(),
+                LocalDateTime.now()
+        );
+        String code = firstNonBlank(
+                parentItem == null ? null : parentItem.getReasonCode(),
+                parentItem == null ? null : parentItem.getSectionCode(),
+                response.type()
+        );
+        SlaWindow sla = slaWindow(code, firstObservedAt, response.resolvedAt());
+        return response.withSla(
+                sla.firstObservedAt(),
+                sla.targetDeadlineAt(),
+                sla.hardDeadlineAt(),
+                sla.state()
         );
     }
 
@@ -4597,8 +4641,12 @@ public class ManagerControlService {
                 incident.getRollbackStatus() == null ? null : incident.getRollbackStatus().name(),
                 incident.getRollbackMessage(),
                 canRollbackRiskIncident(incident),
-                safe(incident.getWorkerName()).isBlank() ? incident.getWorkerUsername() : incident.getWorkerName()
-        );
+                safe(incident.getWorkerName()).isBlank() ? incident.getWorkerUsername() : incident.getWorkerName(),
+                null,
+                null,
+                null,
+                null
+        ).withSla(incident.getCreatedAt(), null, null, null);
     }
 
     private boolean canRollbackRiskIncident(WorkerRiskIncident incident) {
@@ -4693,6 +4741,7 @@ public class ManagerControlService {
                 : example.companyTitle();
         String sender = safe(example.senderName()).isBlank() ? "Клиент" : example.senderName();
         String waiting = waitingLabel(example.waitingMinutes());
+        LocalDateTime firstObservedAt = LocalDateTime.now().minusMinutes(Math.max(0, example.waitingMinutes()));
         return new ManagerControlConcreteItemResponse(
                 null,
                 ENTITY_CLIENT_CHAT_UNANSWERED,
@@ -4719,7 +4768,7 @@ public class ManagerControlService {
                 null,
                 compact(example.lastMessageText(), 1000),
                 example.specialistName()
-        );
+        ).withSla(firstObservedAt, null, null, null);
     }
 
     private String platformLabel(com.hunt.otziv.client_chat_control.model.ClientChatPlatform platform) {
@@ -4797,7 +4846,7 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        );
+        ).withSla(invoice.getUpdatedAt(), null, null, null);
     }
 
     private String commonInvoiceSubtitle(String accountName, long amountKopecks, long remainingKopecks) {

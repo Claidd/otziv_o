@@ -105,6 +105,10 @@ export interface ManagerControlConcreteItem {
   rollbackMessage?: string | null;
   canRollback?: boolean | null;
   specialistName?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: 'TARGET' | 'LATE' | 'OVERDUE' | 'COMPLETED_TARGET' | 'COMPLETED_LATE' | 'COMPLETED_OVERDUE' | null;
   companyId?: number | null;
   companyTitle?: string | null;
 }

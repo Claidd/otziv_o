@@ -318,22 +318,28 @@ export class ManagerControlComponent implements OnInit {
     this.api.myQueueState().subscribe({ next: (state) => this.queueState.set(state), error: () => this.queueState.set(null) });
   }
 
-  slaTimer(problem: ManagerControlProblem): string {
+  slaTimer(item: ManagerControlProblem | ManagerControlConcreteItem): string {
     this.clock();
-    if (!problem.targetDeadlineAt || (problem.itemStatus && problem.itemStatus !== 'OPEN')) {
+    if (!item.targetDeadlineAt || (item.itemStatus && item.itemStatus !== 'OPEN')) {
       return '';
     }
-    const target = new Date(problem.targetDeadlineAt).getTime();
-    const hard = problem.hardDeadlineAt ? new Date(problem.hardDeadlineAt).getTime() : target;
+    const target = new Date(item.targetDeadlineAt).getTime();
+    const hard = item.hardDeadlineAt ? new Date(item.hardDeadlineAt).getTime() : target;
     const now = Date.now();
     if (!Number.isFinite(target)) return '';
-    if (now <= target) return `цель через ${this.durationShort(target - now)}`;
-    if (Number.isFinite(hard) && now <= hard) return `цель просрочена на ${this.durationShort(now - target)}`;
-    return `критично ${this.durationShort(now - hard)}`;
+    if (now <= target) return `До цели ${this.durationShort(target - now)}`;
+    if (Number.isFinite(hard) && now <= hard) return `Цель пропущена · до просрочки ${this.durationShort(hard - now)}`;
+    return `Просрочено на ${this.durationShort(now - hard)}`;
   }
 
-  slaTimerClass(problem: ManagerControlProblem): string {
-    return problem.slaState === 'OVERDUE' ? 'sla-overdue' : problem.slaState === 'LATE' ? 'sla-late' : 'sla-target';
+  slaTimerClass(item: ManagerControlProblem | ManagerControlConcreteItem): string {
+    this.clock();
+    const now = Date.now();
+    const target = item.targetDeadlineAt ? new Date(item.targetDeadlineAt).getTime() : Number.NaN;
+    const hard = item.hardDeadlineAt ? new Date(item.hardDeadlineAt).getTime() : target;
+    if (Number.isFinite(hard) && now > hard) return 'sla-overdue';
+    if (Number.isFinite(target) && now > target) return 'sla-late';
+    return 'sla-target';
   }
 
   private durationShort(milliseconds: number): string {

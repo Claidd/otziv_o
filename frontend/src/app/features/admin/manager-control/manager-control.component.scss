@@ -791,6 +791,44 @@ p {
   opacity: 0.75;
 }
 
+.sla-timer,
+.detail-sla-timer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 1;
+}
+
+.sla-timer.sla-target,
+.detail-sla-timer.sla-target {
+  color: #287767;
+  background: #f2fbf6;
+}
+
+.sla-timer.sla-late,
+.detail-sla-timer.sla-late {
+  color: #9a6400;
+  background: #fff7df;
+}
+
+.sla-timer.sla-overdue,
+.detail-sla-timer.sla-overdue {
+  color: #d62f59;
+  background: #fff1f4;
+}
+
+.detail-sla-timer .material-icons-sharp {
+  font-size: 1rem;
+}
+
 .control-chip em {
   flex: 0 0 auto;
   border-radius: 999px;
