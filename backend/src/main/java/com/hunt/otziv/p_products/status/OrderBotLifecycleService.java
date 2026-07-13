@@ -5,7 +5,7 @@ import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import lombok.RequiredArgsConstructor;

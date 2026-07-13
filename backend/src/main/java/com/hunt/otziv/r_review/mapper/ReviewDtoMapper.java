@@ -433,6 +433,7 @@ public class ReviewDtoMapper {
         return CompanyDTO.builder()
                 .id(company.getId())
                 .title(company.getTitle())
+                .ignoreWorkerPublicationDateRisk(company.isIgnoreWorkerPublicationDateRisk())
                 .build();
     }
 

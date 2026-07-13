@@ -179,6 +179,16 @@ export class WorkerReviewCardComponent {
     return this.activeSection === 'publish' && !this.isBadTask();
   }
 
+  reviewTextCopyDisabled(): boolean {
+    return this.activeSection === 'nagul';
+  }
+
+  reviewTextCopyTitle(): string {
+    return this.reviewTextCopyDisabled()
+      ? 'Копирование текста недоступно в разделе «Выгул»'
+      : 'Скопировать текст отзыва';
+  }
+
   isRecoveryTone(): boolean {
     return this.activeSection === 'recovery' || this.isRecoveryTask();
   }

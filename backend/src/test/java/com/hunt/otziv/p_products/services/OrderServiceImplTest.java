@@ -25,6 +25,8 @@ import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -112,6 +114,12 @@ class OrderServiceImplTest {
 
     @Mock
     private GamificationEventService gamificationEventService;
+
+    @Mock
+    private ReviewBotCooldownService botCooldownService;
+
+    @Mock
+    private ReviewBotAssignmentExclusionService botAssignmentExclusionService;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -361,6 +369,7 @@ class OrderServiceImplTest {
 
         assertTrue(reviewToPublish.isPublish());
         verify(reviewRepository).save(reviewToPublish);
+        verify(botAssignmentExclusionService).clearForReview(2L);
         verify(orderBotLifecycleService).updateBotCounterAndStatus(reviewToPublish.getBot());
     }
 

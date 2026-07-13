@@ -174,6 +174,39 @@ describe('WorkerReviewCardComponent', () => {
     expect(article.classList.contains('card-tone--publication')).toBe(false);
   });
 
+  it('disables review text copying only in the walk section', () => {
+    const renderTextButton = (activeSection: WorkerReviewCardComponent['activeSection']) => {
+      const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+      const component = fixture.componentInstance;
+      component.review = review();
+      component.activeSection = activeSection;
+      let copiedKind = '';
+      component.copyRequested.subscribe((kind) => {
+        copiedKind = kind;
+      });
+
+      fixture.detectChanges();
+
+      return {
+        button: (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+          '.review-action--text',
+        )!,
+        copiedKind: () => copiedKind,
+      };
+    };
+
+    const walk = renderTextButton('nagul');
+    expect(walk.button.disabled).toBe(true);
+    expect(walk.button.title).toBe('Копирование текста недоступно в разделе «Выгул»');
+    walk.button.click();
+    expect(walk.copiedKind()).toBe('');
+
+    const publication = renderTextButton('publish');
+    expect(publication.button.disabled).toBe(false);
+    publication.button.click();
+    expect(publication.copiedKind()).toBe('text');
+  });
+
   it('keeps filial title link in walk and publication titles when title links are allowed', () => {
     const renderTitle = (
       activeSection: WorkerReviewCardComponent['activeSection'],

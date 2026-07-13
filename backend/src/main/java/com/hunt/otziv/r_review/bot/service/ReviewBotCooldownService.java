@@ -1,4 +1,4 @@
-package com.hunt.otziv.r_review.bot;
+package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.config.settings.AppSettingService;

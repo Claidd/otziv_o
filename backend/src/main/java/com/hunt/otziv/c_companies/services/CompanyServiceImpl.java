@@ -134,6 +134,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .subCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()))
                 .active(true)
                 .publicationProgressReportsEnabled(companyDTO.isPublicationProgressReportsEnabled())
+                .ignoreWorkerPublicationDateRisk(companyDTO.isIgnoreWorkerPublicationDateRisk())
                 .commentsCompany(companyDTO.getCommentsCompany())
                 .counterNoPay(0)
                 .counterPay(0)
@@ -967,6 +968,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setMaxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company));
             companyDTO.setMaxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company));
             companyDTO.setPublicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled());
+            companyDTO.setIgnoreWorkerPublicationDateRisk(company.isIgnoreWorkerPublicationDateRisk());
             // Convert related entities to DTOs
             companyDTO.setUser(convertToUserDto(company.getUser()));
             companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -1177,6 +1179,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company))
                 .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
                 .publicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled())
+                .ignoreWorkerPublicationDateRisk(company.isIgnoreWorkerPublicationDateRisk())
                 .build();
     }
 
@@ -1421,6 +1424,11 @@ public class CompanyServiceImpl implements CompanyService{
             boolean enabled = companyDTO.isPublicationProgressReportsEnabled();
             saveCompany.setPublicationProgressReportsEnabled(enabled);
             publicationProgressPreferenceService.setCompanyPreference(companyId, enabled);
+            isChanged = true;
+        }
+        if (!Objects.equals(companyDTO.isIgnoreWorkerPublicationDateRisk(), saveCompany.isIgnoreWorkerPublicationDateRisk())){
+            log.info("Обновляем исключение риска ручной смены даты публикации специалистом");
+            saveCompany.setIgnoreWorkerPublicationDateRisk(companyDTO.isIgnoreWorkerPublicationDateRisk());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany())){ /*Проверка комментарий*/

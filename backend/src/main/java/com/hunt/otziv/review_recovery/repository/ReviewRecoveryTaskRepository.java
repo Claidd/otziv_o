@@ -7,16 +7,38 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecoveryTask, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM ReviewRecoveryTask t WHERE t.id = :taskId")
+    Optional<ReviewRecoveryTask> findByIdForMutation(@Param("taskId") Long taskId);
+
+    @Query("""
+        SELECT DISTINCT t.bot.id
+        FROM ReviewRecoveryTask t
+        WHERE t.status = :status
+          AND t.bot IS NOT NULL
+          AND t.bot.id IS NOT NULL
+          AND t.bot.id <> 1
+          AND (:excludedTaskId IS NULL OR t.id <> :excludedTaskId)
+    """)
+    Set<Long> findBotIdsByStatus(
+            @Param("status") ReviewRecoveryTaskStatus status,
+            @Param("excludedTaskId") Long excludedTaskId
+    );
 
     @Query("""
         SELECT COUNT(t.id)

@@ -28,7 +28,8 @@ import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -87,6 +88,7 @@ public class OrderServiceImpl implements OrderService {
     private final BusinessAuditService businessAuditService;
     private final GamificationEventService gamificationEventService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewBotAssignmentExclusionService botAssignmentExclusionService;
     private final PlatformTransactionManager transactionManager;
 
     public static final String ADMIN = "ROLE_ADMIN";
@@ -562,9 +564,12 @@ public class OrderServiceImpl implements OrderService {
             log.info("Счётчик заказа после синхронизации: {}", order.getCounter());
             schedulePublishedReviewClientUpdates(order, actualPublished);
 
+            botAssignmentExclusionService.clearForReview(reviewId);
+
             return true;
         } catch (ReviewAlreadyPublishedException e) {
             log.info("Публикация отзыва id={} пропущена: отзыв уже опубликован", reviewId);
+            botAssignmentExclusionService.clearForReview(reviewId);
             return true;
         } catch (ResponseStatusException e) {
             log.warn("Публикация отзыва id={} отклонена: {}", reviewId, e.getReason());

@@ -427,7 +427,13 @@
       {{ copied === 'password-' + review.id ? 'готово' : 'пароль' }}
     </button>
     <a [href]="botBrowserUrl()" target="_blank" rel="noopener">вк</a>
-    <button type="button" (click)="copyRequested.emit('text')">
+    <button
+      type="button"
+      class="review-action--text"
+      (click)="copyRequested.emit('text')"
+      [disabled]="reviewTextCopyDisabled()"
+      [title]="reviewTextCopyTitle()"
+    >
       {{ copied === 'text-' + review.id ? 'готово' : 'текст' }}
     </button>
     <button type="button" (click)="copyRequested.emit('answer')">

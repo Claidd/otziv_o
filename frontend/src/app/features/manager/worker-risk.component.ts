@@ -133,6 +133,7 @@ export class WorkerRiskComponent {
       REVIEW_BOT_CHANGE: 'смена аккаунта',
       REVIEW_BOT_DEACTIVATE: 'деактивация аккаунта',
       REVIEW_TEXT_UPDATE: 'правка текста',
+      REVIEW_PUBLISH_DATE_UPDATE: 'изменение даты публикации',
       REVIEW_ANSWER_UPDATE: 'правка ответа',
       REVIEW_NOTE_UPDATE: 'правка заметки',
       ORDER_NOTE_UPDATE: 'заметка заказа',

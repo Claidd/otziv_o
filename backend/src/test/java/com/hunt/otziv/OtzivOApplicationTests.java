@@ -60,6 +60,9 @@ class OtzivOApplicationTests {
 	private com.hunt.otziv.r_review.repository.ReviewRepository reviewRepository;
 
 	@Autowired
+	private com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionService botAssignmentExclusionService;
+
+	@Autowired
 	private com.hunt.otziv.b_bots.repository.BotsRepository botsRepository;
 
 	@Autowired
@@ -78,6 +81,12 @@ class OtzivOApplicationTests {
 	@Test
 	void flywayMigrationsApplyOnMySql() {
 		assertThat(flyway.info().applied()).isNotEmpty();
+	}
+
+	@Test
+	void reviewBotAssignmentExclusionCleanupQueryExecutesOnMySql() {
+		assertThat(botAssignmentExclusionService.clearPublishedBefore(java.time.LocalDateTime.now()))
+				.isGreaterThanOrEqualTo(0);
 	}
 
 	@Test

@@ -44,6 +44,17 @@ type DraftCompany = {
   status?: string;
 };
 
+export function isIncompletePartiallyPaidInvoice(
+  invoice: Pick<CommonInvoiceSummaryResponse, 'status' | 'readyOrders' | 'totalOrders'> | null
+): boolean {
+  return Boolean(
+    invoice
+      && invoice.status === 'PARTIALLY_PAID'
+      && invoice.totalOrders > 0
+      && invoice.readyOrders < invoice.totalOrders
+  );
+}
+
 @Component({
   selector: 'app-common-billing',
   imports: [
@@ -179,6 +190,9 @@ export class CommonBillingComponent implements OnDestroy {
     const notificationError = this.invoicePaymentNotificationError();
     if (notificationError) {
       return this.humanPaymentNotificationError(notificationError);
+    }
+    if (isIncompletePartiallyPaidInvoice(invoice)) {
+      return '';
     }
     switch (invoice.status) {
       case 'NEEDS_ATTENTION':

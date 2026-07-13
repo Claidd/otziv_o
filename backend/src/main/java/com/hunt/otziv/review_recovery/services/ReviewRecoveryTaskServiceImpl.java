@@ -3,6 +3,8 @@ package com.hunt.otziv.review_recovery.services;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
+import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
+import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
@@ -16,9 +18,10 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
@@ -37,6 +40,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -67,10 +71,14 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             EnumSet.of(ReviewRecoveryTaskStatus.PLANNED, ReviewRecoveryTaskStatus.DONE);
     private static final EnumSet<ReviewRecoveryBatchStatus> VISIBLE_BATCH_STATUSES =
             EnumSet.of(ReviewRecoveryBatchStatus.OPEN, ReviewRecoveryBatchStatus.COMPLETED);
+    private static final int WALKED_ACCOUNT_COUNTER = 3;
+    private static final int PREFERRED_CROSS_CITY_COUNTER_MAX = 5;
     private final SecureRandom random = new SecureRandom();
 
     private final ReviewRecoveryBatchRepository batchRepository;
     private final ReviewRecoveryTaskRepository taskRepository;
+    private final ReviewRecoveryBotExclusionService botExclusionService;
+    private final BadReviewTaskRepository badReviewTaskRepository;
     private final ReviewRepository reviewRepository;
     private final PersonalReminderService personalReminderService;
     private final BotService botService;
@@ -130,6 +138,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 .build();
 
         ReviewRecoveryTask savedTask = taskRepository.save(task);
+        reserveTaskBot(savedTask, "review recovery task created");
         log.info("Создана задача восстановления {} для отзыва {}, заказа {}, дата {}",
                 savedTask.getId(), review.getId(), order.getId(), scheduledDate);
         return savedTask;
@@ -198,6 +207,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 .build();
 
         ReviewRecoveryTask savedTask = taskRepository.save(task);
+        reserveTaskBot(savedTask, "archive review recovery task created");
         log.info("Создана архивная задача восстановления {} для архивного отзыва {}, заказа {}, дата {}",
                 savedTask.getId(), source.reviewId(), source.orderId(), scheduledDate);
         return savedTask;
@@ -250,6 +260,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         task.setCompletedDate(LocalDate.now());
         task.setCompletedBy(completedBy);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
+        releaseTaskBotIfUnused(savedTask, "review recovery task completed");
+        botExclusionService.clearForTask(savedTask.getId());
         gamificationEventService.recordReviewRecoveryTaskDone(savedTask);
         completeBatchIfReady(savedTask.getBatch());
         resumeOrderAfterRecoveryIfReady(savedTask.getOrder());
@@ -273,6 +285,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
         task.setStatus(ReviewRecoveryTaskStatus.CANCELLED);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
+        releaseTaskBotIfUnused(savedTask, "review recovery task cancelled");
+        botExclusionService.clearForTask(savedTask.getId());
         completeBatchIfReady(savedTask.getBatch());
         resumeOrderAfterRecoveryIfReady(savedTask.getOrder());
 
@@ -282,7 +296,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public ReviewRecoveryTask changeTaskBot(Long taskId) {
         ReviewRecoveryTask task = requireTask(taskId);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
@@ -290,39 +304,50 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         Bot oldBot = task.getBot();
+        botExclusionService.reject(task.getId(), oldBot, "CHANGE");
         Bot nextBot = pickReplacementBot(task);
         if (nextBot == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Нет доступных аккаунтов для восстановления");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Нет свободных выгулянных аккаунтов для восстановления"
+            );
         }
 
-        markReleasedIfChanged(oldBot, nextBot, "review recovery task bot changed");
-        task.setBot(nextBot);
-        task.setBotLoginSnapshot(botLogin(nextBot));
-        task.setBotPasswordSnapshot(botPassword(nextBot));
-        task.setBotFioSnapshot(botFio(nextBot));
-        syncSourceReviewBot(task, nextBot);
-        return taskRepository.save(task);
+        return assignTaskBot(task, oldBot, nextBot, "review recovery task bot changed");
     }
 
     @Override
     @Transactional
     public ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId) {
         ReviewRecoveryTask task = requireTask(taskId);
-        Long currentBotId = botId != null && botId > 0
-                ? botId
-                : task.getBot() != null ? task.getBot().getId() : null;
-
-        if (currentBotId != null && currentBotId > 0) {
-            Bot bot = botService.findBotById(currentBotId);
-            if (bot != null) {
-                boolean oldActive = bot.isActive();
-                bot.setActive(false);
-                auditActiveChange(bot, oldActive, false, "review recovery task block button");
-                botService.save(bot);
-            }
+        if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Аккаунт можно блокировать только у активной задачи восстановления");
         }
 
-        return changeTaskBot(taskId);
+        Bot currentBot = task.getBot();
+        Long currentBotId = currentBot != null && currentBot.getId() != null
+                ? currentBot.getId()
+                : botId != null && botId > 0 ? botId : null;
+        if (currentBot == null && currentBotId != null) {
+            currentBot = botService.findBotById(currentBotId);
+        }
+
+        botExclusionService.reject(task.getId(), currentBot, "BLOCK");
+
+        if (currentBot != null) {
+            boolean oldActive = currentBot.isActive();
+            currentBot.setActive(false);
+            auditActiveChange(currentBot, oldActive, false, "review recovery task block button");
+            botService.save(currentBot);
+        }
+
+        Bot nextBot = pickReplacementBot(task);
+        if (nextBot == null) {
+            clearTaskBot(task);
+            return taskRepository.save(task);
+        }
+
+        return assignTaskBot(task, currentBot, nextBot, "review recovery blocked bot replaced");
     }
 
     @Override
@@ -837,7 +862,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             throw new EntityNotFoundException("Задача восстановления не найдена");
         }
 
-        return taskRepository.findById(taskId)
+        return taskRepository.findByIdForMutation(taskId)
+                .or(() -> taskRepository.findById(taskId))
                 .orElseThrow(() -> new EntityNotFoundException("Задача восстановления не найдена: " + taskId));
     }
 
@@ -923,19 +949,126 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             return null;
         }
 
-        Long currentBotId = task.getBot() != null ? task.getBot().getId() : null;
-        List<Bot> candidates = botService.getFindAllByFilialCityId(city.getId()).stream()
-                .filter(bot -> bot != null && bot.isActive() && bot.getId() != null)
+        Set<Long> excludedBotIds = replacementExcludedBotIds(task);
+        List<Bot> sameCityCandidates = botService.getFindAllByFilialCityId(city.getId()).stream()
+                .filter(bot -> ReviewBotPolicy.isWalkedAccount(bot, WALKED_ACCOUNT_COUNTER))
                 .filter(botCooldownService::isAvailableForAssignment)
-                .filter(bot -> !Objects.equals(bot.getId(), currentBotId))
+                .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .toList();
 
-        if (!candidates.isEmpty()) {
-            return candidates.get(random.nextInt(candidates.size()));
+        if (!sameCityCandidates.isEmpty()) {
+            return randomBot(sameCityCandidates);
         }
 
-        return botService.claimReserveBotForCity(city, currentBotId == null ? Set.of() : Set.of(currentBotId))
-                .orElse(null);
+        List<Bot> crossCityCandidates = botService
+                .getActiveBotsOutsideCityWithCounterAtLeast(city.getId(), WALKED_ACCOUNT_COUNTER)
+                .stream()
+                .filter(bot -> ReviewBotPolicy.isWalkedAccount(bot, WALKED_ACCOUNT_COUNTER))
+                .filter(botCooldownService::isAvailableForAssignment)
+                .filter(bot -> !excludedBotIds.contains(bot.getId()))
+                .toList();
+
+        List<Bot> preferredCrossCityCandidates = crossCityCandidates.stream()
+                .filter(bot -> bot.getCounter() <= PREFERRED_CROSS_CITY_COUNTER_MAX)
+                .toList();
+        if (!preferredCrossCityCandidates.isEmpty()) {
+            return randomBot(preferredCrossCityCandidates);
+        }
+
+        return crossCityCandidates.isEmpty() ? null : randomBot(crossCityCandidates);
+    }
+
+    private Set<Long> replacementExcludedBotIds(ReviewRecoveryTask task) {
+        Set<Long> excludedBotIds = new HashSet<>(botExclusionService.excludedBotIds(task != null ? task.getId() : null));
+        if (task != null && task.getBot() != null && task.getBot().getId() != null) {
+            excludedBotIds.add(task.getBot().getId());
+        }
+
+        Long sourceReviewId = task != null && task.getSourceReview() != null
+                ? task.getSourceReview().getId()
+                : null;
+        addAll(excludedBotIds, reviewRepository.findReservedBotIdsByUnpublishedReviews(sourceReviewId));
+        addAll(excludedBotIds, taskRepository.findBotIdsByStatus(
+                ReviewRecoveryTaskStatus.PLANNED,
+                task != null ? task.getId() : null
+        ));
+        addAll(excludedBotIds, badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, null));
+        excludedBotIds.remove(null);
+        return excludedBotIds;
+    }
+
+    private void addAll(Set<Long> target, Collection<Long> values) {
+        if (values != null) {
+            target.addAll(values);
+        }
+    }
+
+    private Bot randomBot(List<Bot> bots) {
+        return bots.get(random.nextInt(bots.size()));
+    }
+
+    private ReviewRecoveryTask assignTaskBot(ReviewRecoveryTask task, Bot oldBot, Bot nextBot, String reason) {
+        releaseBotIfUnused(oldBot, task, reason);
+        task.setBot(nextBot);
+        task.setBotLoginSnapshot(botLogin(nextBot));
+        task.setBotPasswordSnapshot(botPassword(nextBot));
+        task.setBotFioSnapshot(botFio(nextBot));
+        reserveTaskBot(task, "review recovery task " + task.getId());
+        syncSourceReviewBot(task, nextBot);
+        return taskRepository.save(task);
+    }
+
+    private void clearTaskBot(ReviewRecoveryTask task) {
+        if (task == null) {
+            return;
+        }
+        task.setBot(null);
+        task.setBotLoginSnapshot(null);
+        task.setBotPasswordSnapshot(null);
+        task.setBotFioSnapshot(null);
+        Review sourceReview = task.getSourceReview();
+        if (sourceReview != null && sourceReview.getId() != null) {
+            sourceReview.setBot(null);
+            reviewRepository.save(sourceReview);
+        }
+    }
+
+    private void reserveTaskBot(ReviewRecoveryTask task, String reason) {
+        if (task != null && task.getBot() != null) {
+            botCooldownService.markReservedUntilTaskCompletion(task.getBot(), reason);
+        }
+    }
+
+    private void releaseTaskBotIfUnused(ReviewRecoveryTask task, String reason) {
+        if (task != null) {
+            releaseBotIfUnused(task.getBot(), task, reason);
+        }
+    }
+
+    private void releaseBotIfUnused(Bot bot, ReviewRecoveryTask task, String reason) {
+        if (bot == null || bot.getId() == null || botUsedElsewhere(bot.getId(), task)) {
+            return;
+        }
+        botCooldownService.markReleased(bot, reason);
+    }
+
+    private boolean botUsedElsewhere(Long botId, ReviewRecoveryTask task) {
+        Long taskId = task != null ? task.getId() : null;
+        Set<Long> recoveryBotIds = taskRepository.findBotIdsByStatus(ReviewRecoveryTaskStatus.PLANNED, taskId);
+        if (recoveryBotIds != null && recoveryBotIds.contains(botId)) {
+            return true;
+        }
+
+        Set<Long> badTaskBotIds = badReviewTaskRepository.findBotIdsByStatus(BadReviewTaskStatus.NEW, null);
+        if (badTaskBotIds != null && badTaskBotIds.contains(botId)) {
+            return true;
+        }
+
+        Long sourceReviewId = task != null && task.getSourceReview() != null
+                ? task.getSourceReview().getId()
+                : null;
+        Set<Long> reviewBotIds = reviewRepository.findReservedBotIdsByUnpublishedReviews(sourceReviewId);
+        return reviewBotIds != null && reviewBotIds.contains(botId);
     }
 
     private void syncSourceReviewBot(ReviewRecoveryTask task, Bot bot) {
@@ -944,17 +1077,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             return;
         }
 
-        markReleasedIfChanged(review.getBot(), bot, "review recovery source review bot changed");
         review.setBot(bot);
         reviewRepository.save(review);
-    }
-
-    private void markReleasedIfChanged(Bot oldBot, Bot newBot, String reason) {
-        Long oldBotId = oldBot != null ? oldBot.getId() : null;
-        Long newBotId = newBot != null ? newBot.getId() : null;
-        if (oldBotId != null && !Objects.equals(oldBotId, newBotId)) {
-            botCooldownService.markReleased(oldBot, reason);
-        }
     }
 
     private LocalDate safeDate(LocalDate date) {

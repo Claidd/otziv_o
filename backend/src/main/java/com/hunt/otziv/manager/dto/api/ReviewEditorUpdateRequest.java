@@ -15,6 +15,9 @@ public record ReviewEditorUpdateRequest(
         String botPassword,
         Long productId,
         Long filialId,
-        String url
+        String url,
+        String sourcePage,
+        String sourceEntry,
+        String sourceSection
 ) {
 }

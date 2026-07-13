@@ -252,7 +252,8 @@ describe('WorkerBoardEditFacade', () => {
       counter: 4,
       orderComments: 'order note',
       commentsCompany: 'company note',
-      complete: false
+      complete: false,
+      removePreviousWorkerFromCompany: false
     });
 
     facade.closeOrderEdit();

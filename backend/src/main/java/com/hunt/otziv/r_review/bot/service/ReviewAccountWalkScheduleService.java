@@ -1,4 +1,4 @@
-package com.hunt.otziv.r_review.bot;
+package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.config.settings.AppSettingService;
@@ -31,6 +31,10 @@ public class ReviewAccountWalkScheduleService {
 
     public boolean isWalkedAccount(Bot bot) {
         return ReviewBotPolicy.isWalkedAccount(bot, walkedCounterThreshold());
+    }
+
+    public boolean isEligibleForNagul(Bot bot) {
+        return ReviewBotPolicy.isEligibleForNagul(bot, walkedCounterThreshold());
     }
 
     public void synchronizeAfterAccountChange(Review review, boolean oldWalked) {

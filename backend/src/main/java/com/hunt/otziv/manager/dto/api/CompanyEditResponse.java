@@ -27,6 +27,7 @@ public record CompanyEditResponse(
         String commentsCompany,
         boolean active,
         boolean publicationProgressReportsEnabled,
+        boolean ignoreWorkerPublicationDateRisk,
         String createDate,
         String updateStatus,
         String dateNewTry,

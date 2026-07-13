@@ -18,7 +18,7 @@ import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.board.ReviewBoardMode;
 import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
 import com.hunt.otziv.r_review.board.ReviewBoardScope;
-import com.hunt.otziv.r_review.bot.ReviewBotChangeService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotChangeService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.edit.ReviewEditService;

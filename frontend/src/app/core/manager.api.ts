@@ -356,6 +356,7 @@ export interface CompanyEditPayload {
   commentsCompany: string;
   active: boolean;
   publicationProgressReportsEnabled: boolean;
+  ignoreWorkerPublicationDateRisk: boolean;
   createDate: string;
   updateStatus: string;
   dateNewTry: string;
@@ -399,6 +400,7 @@ export interface CompanyUpdateRequest {
   commentsCompany: string;
   active: boolean;
   publicationProgressReportsEnabled: boolean;
+  ignoreWorkerPublicationDateRisk: boolean;
   newWorkerId: number | null;
   newFilialCityId: number | null;
   newFilialTitle: string;
@@ -1112,7 +1114,11 @@ export class ManagerApi {
     );
   }
 
-  updateOrderReview(orderId: number, reviewId: number, request: ReviewUpdateRequest): Observable<OrderReviewItem> {
+  updateOrderReview(
+    orderId: number,
+    reviewId: number,
+    request: ReviewUpdateRequest & Partial<ReviewActivitySource>
+  ): Observable<OrderReviewItem> {
     return this.http.put<OrderReviewItem>(
       `${appEnvironment.apiBaseUrl}/api/manager/orders/${orderId}/reviews/${reviewId}`,
       request

@@ -3,6 +3,8 @@ package com.hunt.otziv.review_recovery.services;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.archive.dto.ArchiveReviewRecoverySource;
+import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
+import com.hunt.otziv.bad_reviews.repository.BadReviewTaskRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -16,7 +18,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -32,6 +34,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -42,11 +45,14 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +65,12 @@ class ReviewRecoveryTaskServiceImplTest {
 
     @Mock
     private ReviewRecoveryTaskRepository taskRepository;
+
+    @Mock
+    private ReviewRecoveryBotExclusionService botExclusionService;
+
+    @Mock
+    private BadReviewTaskRepository badReviewTaskRepository;
 
     @Mock
     private ReviewRepository reviewRepository;
@@ -244,6 +256,7 @@ class ReviewRecoveryTaskServiceImplTest {
         Bot oldBot = bot(20L);
         Bot nextBot = bot(21L);
         nextBot.setActive(true);
+        nextBot.setCounter(3);
         Review review = review(100L, "текст", order(10L), oldBot);
         review.setFilial(filial);
         ReviewRecoveryTask task = ReviewRecoveryTask.builder()
@@ -267,6 +280,128 @@ class ReviewRecoveryTaskServiceImplTest {
         assertEquals("password", updated.getBotPasswordSnapshot());
         assertEquals("Бот Ф.", updated.getBotFioSnapshot());
         verify(reviewRepository).save(review);
+        verify(botCooldownService).markReservedUntilTaskCompletion(nextBot, "review recovery task 40");
+    }
+
+    @Test
+    void changeTaskBotUsesFreeWalkedSameCityAccountOnly() {
+        City city = new City();
+        city.setId(3L);
+        Filial filial = new Filial();
+        filial.setCity(city);
+        Bot oldBot = activeWalkedBot(20L, 4);
+        Bot underWalkedThreshold = activeWalkedBot(21L, 2);
+        Bot rejected = activeWalkedBot(22L, 4);
+        Bot occupiedByPublication = activeWalkedBot(23L, 4);
+        Bot occupiedByRecovery = activeWalkedBot(24L, 4);
+        Bot occupiedByBadTask = activeWalkedBot(25L, 4);
+        Bot free = activeWalkedBot(26L, 3);
+        Review review = review(100L, "текст", order(10L), oldBot);
+        review.setFilial(filial);
+        ReviewRecoveryTask task = recoveryTask(40L, review, oldBot);
+
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+        when(botExclusionService.excludedBotIds(40L)).thenReturn(Set.of(rejected.getId()));
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(100L))
+                .thenReturn(Set.of(occupiedByPublication.getId()));
+        when(taskRepository.findBotIdsByStatus(ReviewRecoveryTaskStatus.PLANNED, 40L))
+                .thenReturn(Set.of(occupiedByRecovery.getId()));
+        when(badReviewTaskRepository.findBotIdsByStatus(eq(BadReviewTaskStatus.NEW), isNull()))
+                .thenReturn(Set.of(occupiedByBadTask.getId()));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(
+                underWalkedThreshold,
+                rejected,
+                occupiedByPublication,
+                occupiedByRecovery,
+                occupiedByBadTask,
+                free
+        ));
+        when(botCooldownService.isAvailableForAssignment(any(Bot.class))).thenReturn(true);
+        when(taskRepository.save(task)).thenReturn(task);
+
+        ReviewRecoveryTask updated = service.changeTaskBot(40L);
+
+        assertSame(free, updated.getBot());
+        verify(botExclusionService).reject(40L, oldBot, "CHANGE");
+        verify(botService, never()).claimReserveBotForCity(any(), anyCollection());
+    }
+
+    @Test
+    void changeTaskBotPrefersCrossCityCounterThreeToFive() {
+        City city = new City();
+        city.setId(3L);
+        Filial filial = new Filial();
+        filial.setCity(city);
+        Bot oldBot = activeWalkedBot(20L, 4);
+        Bot preferred = activeWalkedBot(21L, 4);
+        Bot higherCounter = activeWalkedBot(22L, 8);
+        Review review = review(100L, "текст", order(10L), oldBot);
+        review.setFilial(filial);
+        ReviewRecoveryTask task = recoveryTask(40L, review, oldBot);
+
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of());
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 3))
+                .thenReturn(List.of(higherCounter, preferred));
+        when(botCooldownService.isAvailableForAssignment(any(Bot.class))).thenReturn(true);
+        when(taskRepository.save(task)).thenReturn(task);
+
+        ReviewRecoveryTask updated = service.changeTaskBot(40L);
+
+        assertSame(preferred, updated.getBot());
+    }
+
+    @Test
+    void changeTaskBotKeepsCurrentAccountAndDoesNotUseReservePoolWhenNoWalkedAccountExists() {
+        City city = new City();
+        city.setId(3L);
+        Filial filial = new Filial();
+        filial.setCity(city);
+        Bot oldBot = activeWalkedBot(20L, 4);
+        Review review = review(100L, "текст", order(10L), oldBot);
+        review.setFilial(filial);
+        ReviewRecoveryTask task = recoveryTask(40L, review, oldBot);
+
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of());
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 3)).thenReturn(List.of());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeTaskBot(40L)
+        );
+
+        assertEquals("Нет свободных выгулянных аккаунтов для восстановления", exception.getReason());
+        assertSame(oldBot, task.getBot());
+        verify(botExclusionService).reject(40L, oldBot, "CHANGE");
+        verify(botService, never()).claimReserveBotForCity(any(), anyCollection());
+    }
+
+    @Test
+    void blockTaskBotLeavesTaskWithoutAccountWhenNoWalkedReplacementExists() {
+        City city = new City();
+        city.setId(3L);
+        Filial filial = new Filial();
+        filial.setCity(city);
+        Bot oldBot = activeWalkedBot(20L, 4);
+        Review review = review(100L, "текст", order(10L), oldBot);
+        review.setFilial(filial);
+        ReviewRecoveryTask task = recoveryTask(40L, review, oldBot);
+
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of());
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 3)).thenReturn(List.of());
+        when(taskRepository.save(task)).thenReturn(task);
+
+        ReviewRecoveryTask updated = service.deactivateAndChangeTaskBot(40L, 20L);
+
+        assertNull(updated.getBot());
+        assertNull(review.getBot());
+        assertFalse(oldBot.isActive());
+        verify(botExclusionService).reject(40L, oldBot, "BLOCK");
+        verify(botService).save(oldBot);
+        verify(reviewRepository).save(review);
+        verify(botService, never()).claimReserveBotForCity(any(), anyCollection());
     }
 
     @Test
@@ -295,6 +430,7 @@ class ReviewRecoveryTaskServiceImplTest {
         assertEquals(LocalDate.now(), completed.getCompletedDate());
         assertSame(actor, completed.getCompletedBy());
         assertEquals(ReviewRecoveryBatchStatus.COMPLETED, batch.getStatus());
+        verify(botExclusionService).clearForTask(40L);
         verify(batchRepository).save(batch);
         verify(personalReminderService).createSystemReminderDueNow(
                 batch.getManager().getUser(),
@@ -325,6 +461,7 @@ class ReviewRecoveryTaskServiceImplTest {
         ReviewRecoveryTask cancelled = service.cancelTask(40L);
 
         assertEquals(ReviewRecoveryTaskStatus.CANCELLED, cancelled.getStatus());
+        verify(botExclusionService).clearForTask(40L);
         verify(batchRepository, never()).save(batch);
     }
 
@@ -530,6 +667,23 @@ class ReviewRecoveryTaskServiceImplTest {
         bot.setPassword("password");
         bot.setFio("Бот Ф.");
         return bot;
+    }
+
+    private Bot activeWalkedBot(Long id, int counter) {
+        Bot bot = bot(id);
+        bot.setActive(true);
+        bot.setCounter(counter);
+        return bot;
+    }
+
+    private ReviewRecoveryTask recoveryTask(Long id, Review review, Bot bot) {
+        return ReviewRecoveryTask.builder()
+                .id(id)
+                .order(review.getOrderDetails().getOrder())
+                .sourceReview(review)
+                .bot(bot)
+                .status(ReviewRecoveryTaskStatus.PLANNED)
+                .build();
     }
 
     private User user(Long id) {

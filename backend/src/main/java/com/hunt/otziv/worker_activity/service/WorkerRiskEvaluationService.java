@@ -218,6 +218,15 @@ public class WorkerRiskEvaluationService {
             addReviewTextSameCardFinding(result, event, now);
         }
 
+        if (event.getAction() == WorkerActivityAction.REVIEW_PUBLISH_DATE_UPDATE) {
+            result.add(new RiskFinding(
+                    "WORKER_PUBLICATION_DATE_CHANGED",
+                    50,
+                    "Специалист изменил дату публикации",
+                    publicationDateChangeDetails(event)
+            ));
+        }
+
         if (closesWorkAfterAccountSelection(event)) {
             addAccountChangedWithoutUseFinding(result, event, now);
             addFastCloseAfterAccountCopySeriesFinding(result, event, now);
@@ -620,7 +629,8 @@ public class WorkerRiskEvaluationService {
     }
 
     private void createIncidentIfNeeded(WorkerActivityEvent event, User workerUser, RiskFinding finding) {
-        if (duplicateOpenIncidentExists(event, finding)) {
+        if (event.getAction() != WorkerActivityAction.REVIEW_PUBLISH_DATE_UPDATE
+                && duplicateOpenIncidentExists(event, finding)) {
             return;
         }
 
@@ -707,6 +717,8 @@ public class WorkerRiskEvaluationService {
     }
 
     private void notifyWorkerGroup(User workerUser, WorkerRiskIncident incident) {
+        notifyWorkerAboutPublicationDateRisk(workerUser, incident);
+
         Long groupChatId = workerUser == null ? null : workerUser.getWorkerTelegramGroupChatId();
         if (groupChatId == null) {
             return;
@@ -731,6 +743,44 @@ public class WorkerRiskEvaluationService {
             incident.setTelegramNotificationMessageId(messageId);
             incidentRepository.save(incident);
         });
+    }
+
+    private void notifyWorkerAboutPublicationDateRisk(User workerUser, WorkerRiskIncident incident) {
+        if (workerUser == null
+                || workerUser.getId() == null
+                || incident == null
+                || !WorkerActivityAction.REVIEW_PUBLISH_DATE_UPDATE.name().equals(incident.getAction())) {
+            return;
+        }
+        try {
+            if (!personalReminderService.hasOpenSystemReminder(
+                    workerUser,
+                    SOURCE_WORKER_RISK_INCIDENT,
+                    incident.getId()
+            )) {
+                personalReminderService.createSystemReminderDueNow(
+                        workerUser,
+                        "Изменение даты попало в риски",
+                        limit("Причина: " + clean(incident.getTitle()) + incidentContext(incident), 1000),
+                        SOURCE_WORKER_RISK_INCIDENT,
+                        incident.getId(),
+                        incident.getOrderId()
+                );
+            }
+        } catch (RuntimeException e) {
+            log.warn("Не удалось создать уведомление специалисту о смене даты userId={}, incidentId={}",
+                    workerUser.getId(), incident.getId(), e);
+        }
+    }
+
+    private String publicationDateChangeDetails(WorkerActivityEvent event) {
+        String previousDate = detailValue(event == null ? null : event.getDetails(), "previousPublishedDate");
+        String nextDate = detailValue(event == null ? null : event.getDetails(), "newPublishedDate");
+        return "Дата публикации вручную изменена с "
+                + (previousDate.isBlank() ? "-" : previousDate)
+                + " на "
+                + (nextDate.isBlank() ? "-" : nextDate)
+                + ".";
     }
 
     private String managerNotificationText(User workerUser, WorkerRiskIncident incident, boolean includeLogin) {

@@ -165,7 +165,19 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         )
           AND (
             invoice.status IN :criticalStatuses
-            OR (invoice.status IN :staleStatuses AND invoice.updatedAt <= :staleBefore)
+            OR (
+              invoice.status IN :staleStatuses
+              AND invoice.updatedAt <= :staleBefore
+              AND (
+                invoice.status <> :partiallyPaidStatus
+                OR NOT EXISTS (
+                  SELECT pendingInvoiceOrder.id
+                  FROM CommonInvoiceOrder pendingInvoiceOrder
+                  WHERE pendingInvoiceOrder.invoice = invoice
+                    AND pendingInvoiceOrder.ready = false
+                )
+              )
+            )
             OR COALESCE(invoice.lastError, '') <> ''
             OR COALESCE(invoice.paymentSuccessNotificationError, '') <> ''
           )
@@ -174,6 +186,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("manager") Manager manager,
             @Param("criticalStatuses") Collection<CommonInvoiceStatus> criticalStatuses,
             @Param("staleStatuses") Collection<CommonInvoiceStatus> staleStatuses,
+            @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
             @Param("staleBefore") LocalDateTime staleBefore
     );
 
@@ -199,7 +212,19 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         )
           AND (
             invoice.status IN :criticalStatuses
-            OR (invoice.status IN :staleStatuses AND invoice.updatedAt <= :staleBefore)
+            OR (
+              invoice.status IN :staleStatuses
+              AND invoice.updatedAt <= :staleBefore
+              AND (
+                invoice.status <> :partiallyPaidStatus
+                OR NOT EXISTS (
+                  SELECT pendingInvoiceOrder.id
+                  FROM CommonInvoiceOrder pendingInvoiceOrder
+                  WHERE pendingInvoiceOrder.invoice = invoice
+                    AND pendingInvoiceOrder.ready = false
+                )
+              )
+            )
             OR COALESCE(invoice.lastError, '') <> ''
             OR COALESCE(invoice.paymentSuccessNotificationError, '') <> ''
           )
@@ -209,6 +234,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("manager") Manager manager,
             @Param("criticalStatuses") Collection<CommonInvoiceStatus> criticalStatuses,
             @Param("staleStatuses") Collection<CommonInvoiceStatus> staleStatuses,
+            @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
             @Param("staleBefore") LocalDateTime staleBefore,
             Pageable pageable
     );

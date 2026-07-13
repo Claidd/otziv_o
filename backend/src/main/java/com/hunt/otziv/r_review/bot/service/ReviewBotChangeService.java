@@ -1,4 +1,4 @@
-package com.hunt.otziv.r_review.bot;
+package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
@@ -46,6 +46,7 @@ public class ReviewBotChangeService {
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final ReviewBotCooldownService botCooldownService;
     private final BusinessAuditService businessAuditService;
+    private final ReviewBotAssignmentExclusionService assignmentExclusionService;
 
     @Transactional
     public void changeBot(Long reviewId) {
@@ -109,6 +110,8 @@ public class ReviewBotChangeService {
             if (botId != null && botId > 0) {
                 excludedBotIds.add(botId);
             }
+            assignmentExclusionService.rejectCurrentBot(review, "BLOCK");
+            excludedBotIds.addAll(assignmentExclusions(review));
             assignBotUsingSharedRules(review, excludedBotIds);
             markReleasedIfChanged(currentBot, review.getBot(), "review bot blocked and changed");
             accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
@@ -146,6 +149,8 @@ public class ReviewBotChangeService {
 
         Set<Long> excludedBotIds = getUsedBotIdsInCompany(filial, review.getId());
         excludedBotIds.addAll(getReservedBotIdsByUnpublishedReviews(review.getId()));
+        assignmentExclusionService.rejectCurrentBot(review, "NEW_ACCOUNT");
+        excludedBotIds.addAll(assignmentExclusions(review));
         if (review.getBot() != null && review.getBot().getId() != null) {
             excludedBotIds.add(review.getBot().getId());
         }
@@ -249,7 +254,8 @@ public class ReviewBotChangeService {
         boolean oldWalked = review.isVigul();
 
         Bot oldBot = review.getBot();
-        assignBotUsingSharedRules(review, Set.of());
+        assignmentExclusionService.rejectCurrentBot(review, "CHANGE");
+        assignBotUsingSharedRules(review, assignmentExclusions(review));
         markReleasedIfChanged(oldBot, review.getBot(), "review bot changed");
         accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
 
@@ -313,7 +319,10 @@ public class ReviewBotChangeService {
 
             boolean oldWalked = affectedReview.isVigul();
             Bot oldBot = affectedReview.getBot();
-            assignBotUsingSharedRules(affectedReview, excludedBotIds);
+            assignmentExclusionService.reject(affectedReview.getId(), oldBot, "BLOCK_CASCADE");
+            Set<Long> affectedExcludedBotIds = assignmentExclusions(affectedReview);
+            affectedExcludedBotIds.addAll(excludedBotIds);
+            assignBotUsingSharedRules(affectedReview, affectedExcludedBotIds);
             markReleasedIfChanged(oldBot, affectedReview.getBot(), "blocked bot reassigned in unpublished review");
             accountWalkScheduleService.synchronizeAfterAccountChange(
                     affectedReview,
@@ -352,6 +361,11 @@ public class ReviewBotChangeService {
         }
 
         updateVigulBasedOnBotCounter(review);
+    }
+
+    private Set<Long> assignmentExclusions(Review review) {
+        Set<Long> excluded = assignmentExclusionService.excludedBotIds(review);
+        return excluded == null ? new HashSet<>() : new HashSet<>(excluded);
     }
 
     private Set<Long> getReservedBotIdsByUnpublishedReviews(Long excludedReviewId) {

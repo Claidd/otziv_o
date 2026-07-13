@@ -4496,6 +4496,7 @@ public class ManagerControlService {
                 manager,
                 COMMON_INVOICE_CRITICAL_STATUSES,
                 COMMON_INVOICE_STALE_STATUSES,
+                CommonInvoiceStatus.PARTIALLY_PAID,
                 LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS)
         );
     }
@@ -4645,6 +4646,7 @@ public class ManagerControlService {
                         manager,
                         COMMON_INVOICE_CRITICAL_STATUSES,
                         COMMON_INVOICE_STALE_STATUSES,
+                        CommonInvoiceStatus.PARTIALLY_PAID,
                         LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
                         PageRequest.of(0, limit)
                 ).stream()

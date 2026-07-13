@@ -125,6 +125,7 @@ public class ManagerBoardEditAssembler {
                 safe(company.getCommentsCompany()),
                 company.isActive(),
                 company.isPublicationProgressReportsEnabled(),
+                company.isIgnoreWorkerPublicationDateRisk(),
                 dateValue(company.getCreateDate()),
                 dateValue(company.getUpdateStatus()),
                 dateValue(company.getDateNewTry()),

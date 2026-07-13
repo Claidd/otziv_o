@@ -389,9 +389,16 @@ export class WorkerBoardComponent implements OnDestroy {
         this.selectedWorkerId.set(board.selectedWorkerId ?? null);
         this.loading.set(false);
 
+        let reloadRedirectedSectionWithoutSearch = false;
         if (!this.isRiskSection() && board.section !== this.activeSection()) {
           this.activeSection.set(board.section);
           this.pageNumber.set(board.reviews.number || board.orders.number || 0);
+          if (this.keyword().trim()) {
+            this.clearSearchTimer();
+            this.keyword.set('');
+            this.pageNumber.set(0);
+            reloadRedirectedSectionWithoutSearch = true;
+          }
         }
         this.storeActiveSection(this.activeSection());
         this.storeBoardState();
@@ -402,6 +409,9 @@ export class WorkerBoardComponent implements OnDestroy {
           this.showBoardNotice();
           const title = board.warning ? 'Раздел закрыт' : 'Специалист';
           board.warning ? this.toastService.error(title, board.message) : this.toastService.success(title, board.message);
+        }
+        if (reloadRedirectedSectionWithoutSearch) {
+          this.loadBoard(board.section);
         }
       },
       error: (err) => {
@@ -415,8 +425,13 @@ export class WorkerBoardComponent implements OnDestroy {
 
   setSection(section: WorkerBoardTabKey): void {
     const metric = this.findMetric(section);
+    const sectionChanged = this.activeSection() !== section;
     this.activeSection.set(section);
     this.storeActiveSection(section);
+    if (sectionChanged) {
+      this.clearSearchTimer();
+      this.keyword.set('');
+    }
     this.pageNumber.set(0);
     this.mobileStatusSheetOpen.set(false);
     if (this.isRiskSection(section)) {
@@ -777,6 +792,10 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   async copyReviewValue(review: WorkerReviewItem, kind: ReviewCopyKind): Promise<void> {
+    if (kind === 'text' && this.activeWorkerSection() === 'nagul') {
+      return;
+    }
+
     const value = {
       url: review.filialUrl,
       login: review.botLogin,

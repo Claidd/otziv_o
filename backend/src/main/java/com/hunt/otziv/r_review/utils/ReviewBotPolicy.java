@@ -26,6 +26,13 @@ public final class ReviewBotPolicy {
         return bot != null && bot.isActive() && hasRealPublicationBot(bot);
     }
 
+    public static boolean hasUsableNagulBot(Bot bot) {
+        if (bot == null || bot.getId() == null || STUB_BOT_ID == bot.getId() || !bot.isActive()) {
+            return false;
+        }
+        return hasText(bot.getLogin()) && hasText(bot.getPassword());
+    }
+
     public static boolean hasRealPublicationBot(Review review) {
         return review != null && hasRealPublicationBot(review.getBot());
     }
@@ -41,6 +48,12 @@ public final class ReviewBotPolicy {
 
     public static boolean isWalkedAccount(Bot bot, int counterThreshold) {
         return hasUsablePublicationBot(bot) && bot.getCounter() >= counterThreshold;
+    }
+
+    public static boolean isEligibleForNagul(Bot bot, int counterThreshold) {
+        return hasUsableNagulBot(bot)
+                && bot.getCounter() >= 0
+                && bot.getCounter() < counterThreshold;
     }
 
     public static boolean isTemplateBotName(String fio) {

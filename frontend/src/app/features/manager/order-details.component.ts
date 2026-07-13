@@ -2620,14 +2620,20 @@ export class OrderDetailsComponent {
       && !details.canEditReviewPublish;
   }
 
-  private reviewEditRequest(review: OrderReviewItem, draft: ReviewEditDraft): ReviewEditDraft {
-    if (!this.canOnlyUnsetReviewVigul()) {
-      return draft;
-    }
+  private reviewEditRequest(
+    review: OrderReviewItem,
+    draft: ReviewEditDraft
+  ): ReviewEditDraft & { sourcePage: string; sourceEntry?: string; sourceSection?: string } {
+    const request = this.canOnlyUnsetReviewVigul()
+      ? {
+          ...draft,
+          vigul: !!review.vigul && !!draft.vigul
+        }
+      : draft;
 
     return {
-      ...draft,
-      vigul: !!review.vigul && !!draft.vigul
+      ...request,
+      ...this.orderDetailsActivitySource()
     };
   }
 

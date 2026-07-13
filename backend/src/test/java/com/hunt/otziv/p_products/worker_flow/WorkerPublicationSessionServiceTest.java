@@ -1,7 +1,9 @@
 package com.hunt.otziv.p_products.worker_flow;
 
 import com.hunt.otziv.config.settings.AppSettingService;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.r_review.board.ReviewBoardMode;
+import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
+import com.hunt.otziv.r_review.board.ReviewBoardScope;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +31,7 @@ class WorkerPublicationSessionServiceTest {
     @Mock
     private WorkerPublicationSessionRepository repository;
     @Mock
-    private ReviewRepository reviewRepository;
+    private ReviewBoardQueryService reviewBoardQueryService;
     @Mock
     private AppSettingService appSettingService;
     @Mock
@@ -40,7 +42,7 @@ class WorkerPublicationSessionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new WorkerPublicationSessionService(repository, reviewRepository, appSettingService, entityManager);
+        service = new WorkerPublicationSessionService(repository, reviewBoardQueryService, appSettingService, entityManager);
         worker = new Worker();
         worker.setId(42L);
 
@@ -65,7 +67,7 @@ class WorkerPublicationSessionServiceTest {
     void blocksPublicationWhenNagulExistsBeforeSession() {
         LocalDate lookahead = LocalDate.now(ZoneId.of("Asia/Irkutsk")).plusDays(60);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.empty());
-        when(reviewRepository.countByWorkerAndStatusVigul(worker, lookahead)).thenReturn(2);
+        when(boardCount(ReviewBoardMode.VIGUL, lookahead)).thenReturn(2L);
 
         WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
 
@@ -79,8 +81,8 @@ class WorkerPublicationSessionServiceTest {
     void opensSessionWhenNagulIsEmptyAndPublicationIsAvailable() {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.empty());
-        when(reviewRepository.countByWorkerAndStatusVigul(worker, today.plusDays(60))).thenReturn(0);
-        when(reviewRepository.countByWorkerAndStatusPublish(worker, today)).thenReturn(3);
+        when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(0L);
+        when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(3L);
         when(repository.save(any(WorkerPublicationSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
@@ -95,8 +97,8 @@ class WorkerPublicationSessionServiceTest {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
         WorkerPublicationSession session = activeSession(today);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
-        when(reviewRepository.countByWorkerAndStatusPublish(worker, today)).thenReturn(1);
-        when(reviewRepository.countByWorkerAndStatusVigul(worker, today.plusDays(60))).thenReturn(1);
+        when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(1L);
+        when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
 
         WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
 
@@ -110,8 +112,8 @@ class WorkerPublicationSessionServiceTest {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
         WorkerPublicationSession session = activeSession(today);
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
-        when(reviewRepository.countByWorkerAndStatusPublish(worker, today)).thenReturn(0);
-        when(reviewRepository.countByWorkerAndStatusVigul(worker, today.plusDays(60))).thenReturn(2);
+        when(boardCount(ReviewBoardMode.PUBLISH, today)).thenReturn(0L);
+        when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(2L);
         when(repository.save(session)).thenReturn(session);
 
         WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
@@ -127,7 +129,7 @@ class WorkerPublicationSessionServiceTest {
         WorkerPublicationSession session = activeSession(today);
         session.setLastActivityAt(LocalDateTime.now().minusMinutes(46));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
-        when(reviewRepository.countByWorkerAndStatusVigul(worker, today.plusDays(60))).thenReturn(1);
+        when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
         when(repository.save(session)).thenReturn(session);
 
         WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
@@ -142,7 +144,7 @@ class WorkerPublicationSessionServiceTest {
         LocalDate today = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
         WorkerPublicationSession session = activeSession(today.minusDays(1));
         when(repository.findByWorkerIdForUpdate(42L)).thenReturn(Optional.of(session));
-        when(reviewRepository.countByWorkerAndStatusVigul(worker, today.plusDays(60))).thenReturn(1);
+        when(boardCount(ReviewBoardMode.VIGUL, today.plusDays(60))).thenReturn(1L);
         when(repository.save(session)).thenReturn(session);
 
         WorkerPublicationSessionService.SessionDecision decision = service.evaluateEntry(worker, true);
@@ -159,5 +161,17 @@ class WorkerPublicationSessionServiceTest {
         session.setStartedAt(LocalDateTime.now().minusMinutes(5));
         session.setLastActivityAt(LocalDateTime.now().minusMinutes(1));
         return session;
+    }
+
+    private long boardCount(ReviewBoardMode mode, LocalDate date) {
+        return reviewBoardQueryService.countReviewIdsForBoard(
+                mode,
+                ReviewBoardScope.WORKER,
+                date,
+                null,
+                worker,
+                null,
+                java.util.Set.of()
+        );
     }
 }

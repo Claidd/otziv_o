@@ -13,9 +13,10 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.r_review.bot.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import org.junit.jupiter.api.BeforeEach;
@@ -200,7 +201,7 @@ class BotAssignmentServiceImplTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void assignBotForReviewChangeExcludesCompanyUsedBotsWhenClaimingReserveBot() {
+    void assignBotForReviewChangeExcludesCompanyUsedBotsWhenClaimingNewAccount() {
         BotAssignmentServiceImpl service = service();
         City city = city(5L, "Иркутск");
         Filial filial = filial(20L, company(10L), city);
@@ -212,15 +213,101 @@ class BotAssignmentServiceImplTest {
         when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(777L));
         when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(888L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
-        when(botService.claimReserveBotForCity(eq(city), anyCollection())).thenReturn(Optional.empty());
+        when(botService.claimNewAccountForCity(eq(city), anyCollection())).thenReturn(Optional.empty());
         when(botService.findBotById(1L)).thenReturn(stubBot);
 
         Bot assigned = service.assignBotForReviewChange(review, Set.of(9L));
 
         ArgumentCaptor<Collection<Long>> excludedIdsCaptor = ArgumentCaptor.forClass(Collection.class);
-        verify(botService).claimReserveBotForCity(eq(city), excludedIdsCaptor.capture());
+        verify(botService).claimNewAccountForCity(eq(city), excludedIdsCaptor.capture());
         assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 888L, 9L)));
         assertSame(stubBot, assigned);
+    }
+
+    @Test
+    void nagulChangeAssignsOnlyCounterZeroOrOneAccount() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot walked = bot(101L, "Иван Петров", 2);
+        Bot needsWalk = bot(102L, "Петр Иванов", 1);
+        Review review = new Review();
+        review.setId(50L);
+        review.setFilial(filial);
+        review.setVigul(false);
+
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(walked, needsWalk));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(50L)).thenReturn(Set.of());
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+        when(accountWalkScheduleService.isEligibleForNagul(walked)).thenReturn(false);
+        when(accountWalkScheduleService.isEligibleForNagul(needsWalk)).thenReturn(true);
+
+        Bot assigned = service.assignBotForReviewChange(
+                review,
+                Set.of(),
+                ReviewBotAssignmentMode.NAGUL_ONLY
+        );
+
+        assertSame(needsWalk, assigned);
+    }
+
+    @Test
+    void publicationFallsBackToUnwalkedAfterRejectedWalkedAccountsAreExhausted() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot rejectedWalked = bot(101L, "Иван Петров", 2);
+        Bot needsWalk = bot(102L, "Петр Иванов", 1);
+        Review review = new Review();
+        review.setId(51L);
+        review.setFilial(filial);
+        review.setVigul(true);
+
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(rejectedWalked, needsWalk));
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(51L)).thenReturn(Set.of());
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
+        when(accountWalkScheduleService.isEligibleForNagul(needsWalk)).thenReturn(true);
+
+        Bot assigned = service.assignBotForReviewChange(
+                review,
+                Set.of(101L),
+                ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED
+        );
+
+        assertSame(needsWalk, assigned);
+    }
+
+    @Test
+    void publicationClaimsNewAccountAfterAllCityCandidatesAreRejected() {
+        BotAssignmentServiceImpl service = service();
+        City city = city(5L, "Иркутск");
+        Filial filial = filial(20L, company(10L), city);
+        Bot freshAccount = bot(900L, "Впиши Имя Фамилию", 0);
+        Review review = new Review();
+        review.setId(52L);
+        review.setFilial(filial);
+        review.setVigul(true);
+
+        when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of());
+        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
+        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(52L)).thenReturn(Set.of());
+        when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
+        when(botService.claimNewAccountForCity(eq(city), anyCollection()))
+                .thenReturn(Optional.of(freshAccount));
+        when(accountWalkScheduleService.isEligibleForNagul(freshAccount)).thenReturn(true);
+
+        Bot assigned = service.assignBotForReviewChange(
+                review,
+                Set.of(101L, 102L),
+                ReviewBotAssignmentMode.PUBLISH_PREFER_WALKED
+        );
+
+        assertSame(freshAccount, assigned);
+        verify(botService).claimNewAccountForCity(eq(city), anyCollection());
     }
 
     @Test

@@ -1,7 +1,9 @@
 package com.hunt.otziv.p_products.worker_flow;
 
 import com.hunt.otziv.config.settings.AppSettingService;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
+import com.hunt.otziv.r_review.board.ReviewBoardMode;
+import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
+import com.hunt.otziv.r_review.board.ReviewBoardScope;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -17,6 +19,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +34,7 @@ public class WorkerPublicationSessionService {
             + "Публикация и раздел \"Все\" откроются после выполнения выгула";
 
     private final WorkerPublicationSessionRepository repository;
-    private final ReviewRepository reviewRepository;
+    private final ReviewBoardQueryService reviewBoardQueryService;
     private final AppSettingService appSettingService;
     private final EntityManager entityManager;
 
@@ -198,11 +201,27 @@ public class WorkerPublicationSessionService {
                 AppSettingService.NAGUL_LOOKAHEAD_DAYS,
                 DEFAULT_NAGUL_LOOKAHEAD_DAYS
         )));
-        return reviewRepository.countByWorkerAndStatusVigul(worker, lookahead);
+        return Math.toIntExact(reviewBoardQueryService.countReviewIdsForBoard(
+                ReviewBoardMode.VIGUL,
+                ReviewBoardScope.WORKER,
+                lookahead,
+                null,
+                worker,
+                null,
+                Set.of()
+        ));
     }
 
     private int availablePublicationCount(Worker worker, LocalDate today) {
-        return reviewRepository.countByWorkerAndStatusPublish(worker, today);
+        return Math.toIntExact(reviewBoardQueryService.countReviewIdsForBoard(
+                ReviewBoardMode.PUBLISH,
+                ReviewBoardScope.WORKER,
+                today,
+                null,
+                worker,
+                null,
+                Set.of()
+        ));
     }
 
     private SessionState toState(

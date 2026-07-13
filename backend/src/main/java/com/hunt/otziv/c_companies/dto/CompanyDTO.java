@@ -125,6 +125,8 @@ public class CompanyDTO {
     @Builder.Default
     private boolean publicationProgressReportsEnabled = true;
 
+    private boolean ignoreWorkerPublicationDateRisk;
+
     private Set<CompanyContactDTO> contacts;
 
     private CompanyInfoDTO info;

@@ -391,6 +391,43 @@ class WorkerRiskEvaluationServiceTest {
     }
 
     @Test
+    void manualPublicationDateChangeCreatesManagerReviewAndWorkerNotification() {
+        WorkerRiskEvaluationService service = service();
+        WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_PUBLISH_DATE_UPDATE);
+        event.setDetails(
+                "previousPublishedDate=2026-07-15;newPublishedDate=2026-07-22;companyId=12;"
+                        + "sourcePage=order-details;sourceEntry=worker-all;sourceSection=all;"
+        );
+        User worker = user(1L, "worker", "Иван Работник", 101L);
+
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> {
+            WorkerRiskIncident incident = invocation.getArgument(0);
+            incident.setId(91L);
+            return incident;
+        });
+
+        service.evaluateSafely(event, worker);
+
+        ArgumentCaptor<WorkerRiskIncident> incidentCaptor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
+        verify(incidentRepository).save(incidentCaptor.capture());
+        WorkerRiskIncident incident = incidentCaptor.getValue();
+        assertEquals("WORKER_PUBLICATION_DATE_CHANGED", incident.getRuleCode());
+        assertEquals(50, incident.getScore());
+        assertEquals("Специалист изменил дату публикации", incident.getTitle());
+        assertEquals(true, incident.getDetails().contains("2026-07-15"));
+        assertEquals(true, incident.getDetails().contains("2026-07-22"));
+        assertEquals(true, incident.getDetails().contains("Место: Детали заказа, вход: Специалист -> Все, раздел: Все"));
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(worker),
+                eq("Изменение даты попало в риски"),
+                anyString(),
+                eq(WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT),
+                eq(91L),
+                eq(100L)
+        );
+    }
+
+    @Test
     void botDeactivationWithoutCredentialCopyCreatesIncident() {
         WorkerRiskEvaluationService service = service();
         WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_BOT_DEACTIVATE);

@@ -6,7 +6,7 @@ import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -245,6 +245,7 @@ public class BotServiceImpl implements BotService {
         Bot reserveBot = botsRepository.findReserveBots(RESERVE_BOT_NAMES, RESERVE_BOT_CITY_IDS, READY_STATUS).stream()
                 .filter(bot -> bot.getId() != null)
                 .filter(bot -> !excludedIds.contains(bot.getId()))
+                .filter(this::isFreshWalkCandidate)
                 .filter(botCooldownService::isAvailableForAssignment)
                 .findFirst()
                 .orElse(null);
@@ -282,7 +283,11 @@ public class BotServiceImpl implements BotService {
                 NEW_ACCOUNT_NAME,
                 NEW_ACCOUNT_SOURCE_CITY_ID
         ));
-        candidates.removeIf(bot -> bot.getId() == null || !bot.isActive() || excludedIds.contains(bot.getId()));
+        candidates.removeIf(bot -> bot.getId() == null
+                || !bot.isActive()
+                || excludedIds.contains(bot.getId())
+                || !isFreshWalkCandidate(bot)
+                || !hasReadyStatus(bot));
         candidates.removeIf(bot -> !botCooldownService.isAvailableForAssignment(bot));
 
         if (candidates.isEmpty()) {
@@ -324,9 +329,8 @@ public class BotServiceImpl implements BotService {
                 || !bot.isActive()
                 || excludedIds.contains(bot.getId())
                 || !botCooldownService.isAvailableForAssignment(bot)
-                || bot.getStatus() == null
-                || bot.getStatus().getBotStatusTitle() == null
-                || !READY_STATUS.equals(bot.getStatus().getBotStatusTitle().trim()));
+                || !isFreshWalkCandidate(bot)
+                || !hasReadyStatus(bot));
 
         if (candidates.isEmpty()) {
             log.warn("Нет доступных аккаунтов '{}' со статусом '{}' в городе {} ({})",
@@ -338,6 +342,24 @@ public class BotServiceImpl implements BotService {
         log.info("Новый аккаунт ID {} выбран из города {} ({}) без переноса города",
                 selectedBot.getId(), targetCity.getTitle(), targetCity.getId());
         return Optional.of(selectedBot);
+    }
+
+    private boolean isFreshWalkCandidate(Bot bot) {
+        return bot != null
+                && bot.isActive()
+                && bot.getCounter() >= 0
+                && bot.getCounter() <= 1
+                && bot.getLogin() != null
+                && !bot.getLogin().isBlank()
+                && bot.getPassword() != null
+                && !bot.getPassword().isBlank();
+    }
+
+    private boolean hasReadyStatus(Bot bot) {
+        return bot != null
+                && bot.getStatus() != null
+                && bot.getStatus().getBotStatusTitle() != null
+                && READY_STATUS.equals(bot.getStatus().getBotStatusTitle().trim());
     }
 
 

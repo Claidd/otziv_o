@@ -362,6 +362,11 @@ public class ApiManagerCompanyController {
                                 ? current.isPublicationProgressReportsEnabled()
                                 : request.publicationProgressReportsEnabled()
                 )
+                .ignoreWorkerPublicationDateRisk(
+                        request.ignoreWorkerPublicationDateRisk() == null
+                                ? current.isIgnoreWorkerPublicationDateRisk()
+                                : request.ignoreWorkerPublicationDateRisk()
+                )
                 .status(CompanyStatusDTO.builder().id(firstId(request.statusId(), idOf(current.getStatus()))).build())
                 .categoryCompany(CategoryDTO.builder().id(firstId(request.categoryId(), idOf(current.getCategoryCompany()))).build())
                 .subCategory(SubCategoryDTO.builder().id(firstId(request.subCategoryId(), idOf(current.getSubCategory()))).build())

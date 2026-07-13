@@ -14,8 +14,9 @@ import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.bot.ReviewAccountWalkScheduleService;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final BusinessAuditService businessAuditService;
 
     private static final Long STUB_BOT_ID = 1L;
+    private static final Set<Long> OWN_CITY_NEW_ACCOUNT_CITY_IDS = Set.of(320L, 326L);
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
             "Впиши Имя Фамилию",
@@ -231,6 +233,20 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     @Override
     @Transactional
     public Bot assignBotForReviewChange(Review review, Collection<Long> excludedBotIds) {
+        return assignBotForReviewChange(
+                review,
+                excludedBotIds,
+                ReviewBotAssignmentMode.forReviewChange(review)
+        );
+    }
+
+    @Override
+    @Transactional
+    public Bot assignBotForReviewChange(
+            Review review,
+            Collection<Long> excludedBotIds,
+            ReviewBotAssignmentMode mode
+    ) {
         if (review == null) {
             throw new IllegalArgumentException("Отзыв не может быть null");
         }
@@ -257,9 +273,16 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 review.isVigul(),
                 1,
                 usedBotIdsForThisChange,
-                review.getId()
+                review.getId(),
+                mode
         );
-        Bot assignedBot = findAndAssignUniqueBot(availableBots, usedBotIdsForThisChange, 0, filial);
+        Bot assignedBot = findAndAssignUniqueBot(
+                availableBots,
+                usedBotIdsForThisChange,
+                0,
+                filial,
+                mode
+        );
 
         log.info("Бот ID {} ({}) выбран по общим правилам для замены в отзыве ID {}",
                 assignedBot != null ? assignedBot.getId() : null,
@@ -286,6 +309,22 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                                               int neededForOrder,
                                               Set<Long> blockedBotIds,
                                               Long excludedReviewId) {
+        return getAvailableBotsByRules(
+                filial,
+                vigul,
+                neededForOrder,
+                blockedBotIds,
+                excludedReviewId,
+                ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+        );
+    }
+
+    private List<Bot> getAvailableBotsByRules(Filial filial,
+                                              boolean vigul,
+                                              int neededForOrder,
+                                              Set<Long> blockedBotIds,
+                                              Long excludedReviewId,
+                                              ReviewBotAssignmentMode mode) {
         log.info("Получение доступных ботов для филиала ID {}, vigul={}, требуется={}",
                 filial.getId(), vigul, neededForOrder);
 
@@ -324,7 +363,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         log.info("Идеальных ботов (не в этой компании, не заняты в других): {}", idealBots.size());
 
         // 5. Применяем фильтры vigul к идеальным ботам
-        List<Bot> filteredIdealBots = applyVigulFilters(idealBots, vigul, neededForOrder);
+        List<Bot> filteredIdealBots = applyAssignmentFilters(idealBots, vigul, neededForOrder, mode);
         log.info("Идеальных ботов после фильтра vigul: {}", filteredIdealBots.size());
 
         List<Bot> availableBots = new ArrayList<>(filteredIdealBots);
@@ -349,7 +388,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                     fallbackBots.size());
 
             int remainingNeeded = neededForOrder - availableBots.size();
-            List<Bot> filteredFallbackBots = applyVigulFilters(fallbackBots, vigul, remainingNeeded);
+            List<Bot> filteredFallbackBots = applyAssignmentFilters(fallbackBots, vigul, remainingNeeded, mode);
             log.info("Запасных ботов после фильтра vigul: {}", filteredFallbackBots.size());
 
             int toAdd = Math.min(remainingNeeded, filteredFallbackBots.size());
@@ -540,6 +579,22 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     // ============ ПРИВАТНЫЕ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
 
     private Bot findAndAssignUniqueBot(List<Bot> availableBots, Set<Long> usedBotIdsInThisOrder, int reviewIndex, Filial filial) {
+        return findAndAssignUniqueBot(
+                availableBots,
+                usedBotIdsInThisOrder,
+                reviewIndex,
+                filial,
+                ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+        );
+    }
+
+    private Bot findAndAssignUniqueBot(
+            List<Bot> availableBots,
+            Set<Long> usedBotIdsInThisOrder,
+            int reviewIndex,
+            Filial filial,
+            ReviewBotAssignmentMode mode
+    ) {
         Bot assignedBot = null;
 
         // Ищем первого доступного бота, который еще не использован в этом заказе
@@ -555,7 +610,14 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         if (assignedBot == null) {
-            assignedBot = claimReserveBot(filial, usedBotIdsInThisOrder, reviewIndex);
+            assignedBot = mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+                    ? claimReserveBot(filial, usedBotIdsInThisOrder, reviewIndex)
+                    : claimFreshWalkAccount(filial, usedBotIdsInThisOrder, reviewIndex);
+            if (assignedBot != null && !eligibleForMode(assignedBot, mode)) {
+                log.warn("Резервный бот ID {} не подходит режиму {}, используется заглушка",
+                        assignedBot.getId(), mode);
+                assignedBot = null;
+            }
         }
 
         if (assignedBot == null) {
@@ -564,6 +626,31 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         return assignedBot;
+    }
+
+    private Bot claimFreshWalkAccount(
+            Filial filial,
+            Set<Long> excludedBotIds,
+            int reviewIndex
+    ) {
+        if (filial == null || filial.getCity() == null || filial.getCity().getId() == null) {
+            log.warn("Новый аккаунт не назначен для отзыва {}: у филиала нет города", reviewIndex + 1);
+            return null;
+        }
+
+        City city = filial.getCity();
+        Optional<Bot> claimed = OWN_CITY_NEW_ACCOUNT_CITY_IDS.contains(city.getId())
+                ? botService.claimNewAccountFromOwnCity(city, excludedBotIds)
+                : botService.claimNewAccountForCity(city, excludedBotIds);
+        if (claimed.isEmpty()) {
+            return null;
+        }
+
+        Bot bot = claimed.get();
+        excludedBotIds.add(bot.getId());
+        log.warn("Назначен новый аккаунт ID {} ({}) для отзыва {} и города {}",
+                bot.getId(), bot.getFio(), reviewIndex + 1, city.getTitle());
+        return bot;
     }
 
     private Bot claimReserveBot(Filial filial, Set<Long> usedBotIdsInThisOrder, int reviewIndex) {
@@ -815,6 +902,44 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
             return result;
         }
+    }
+
+    private List<Bot> applyAssignmentFilters(
+            List<Bot> baseBots,
+            boolean vigul,
+            int neededForOrder,
+            ReviewBotAssignmentMode mode
+    ) {
+        if (mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT) {
+            return applyVigulFilters(baseBots, vigul, neededForOrder);
+        }
+
+        if (mode == ReviewBotAssignmentMode.NAGUL_ONLY) {
+            return baseBots.stream()
+                    .filter(accountWalkScheduleService::isEligibleForNagul)
+                    .collect(Collectors.toList());
+        }
+
+        List<Bot> walked = baseBots.stream()
+                .filter(accountWalkScheduleService::isWalkedAccount)
+                .collect(Collectors.toList());
+        List<Bot> result = new ArrayList<>(walked);
+        baseBots.stream()
+                .filter(bot -> !walked.contains(bot))
+                .filter(accountWalkScheduleService::isEligibleForNagul)
+                .forEach(result::add);
+        return result;
+    }
+
+    private boolean eligibleForMode(Bot bot, ReviewBotAssignmentMode mode) {
+        if (mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT) {
+            return true;
+        }
+        if (mode == ReviewBotAssignmentMode.NAGUL_ONLY) {
+            return accountWalkScheduleService.isEligibleForNagul(bot);
+        }
+        return accountWalkScheduleService.isWalkedAccount(bot)
+                || accountWalkScheduleService.isEligibleForNagul(bot);
     }
 
     private Bot getStubBot() {

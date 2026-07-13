@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager.controller;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
@@ -148,6 +149,12 @@ public class ApiManagerReviewController {
         }
 
         ReviewDTO current = requireReviewForOrder(orderId, reviewId);
+        LocalDate previousPublishedDate = current.getPublishedDate();
+        ReviewActivitySourceRequest activitySource = new ReviewActivitySourceRequest(
+                request.sourcePage(),
+                request.sourceEntry(),
+                request.sourceSection()
+        );
         if (request.productId() != null && productService.findById(request.productId()) == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Продукт не найден");
         }
@@ -181,7 +188,54 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не сохранен: " + exception.getMessage(), exception);
         }
 
+        recordWorkerPublicationDateChange(
+                authentication,
+                current,
+                orderId,
+                reviewId,
+                previousPublishedDate,
+                request.publishedDate(),
+                activitySource
+        );
+
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
+    }
+
+    private void recordWorkerPublicationDateChange(
+            Authentication authentication,
+            ReviewDTO review,
+            Long orderId,
+            Long reviewId,
+            LocalDate previousDate,
+            LocalDate nextDate,
+            ReviewActivitySourceRequest source
+    ) {
+        if (Objects.equals(previousDate, nextDate) || !isWorkerAllSource(source)) {
+            return;
+        }
+
+        CompanyDTO company = review != null
+                && review.getOrderDetails() != null
+                && review.getOrderDetails().getOrder() != null
+                ? review.getOrderDetails().getOrder().getCompany()
+                : null;
+        if (company != null && company.isIgnoreWorkerPublicationDateRisk()) {
+            return;
+        }
+
+        String details = "previousPublishedDate=" + valueOrDash(previousDate) + ";"
+                + "newPublishedDate=" + valueOrDash(nextDate) + ";"
+                + "companyId=" + valueOrDash(company == null ? null : company.getId()) + ";";
+        workerActivityService.recordSafely(
+                authentication,
+                WorkerActivityAction.REVIEW_PUBLISH_DATE_UPDATE,
+                "review",
+                reviewId,
+                orderId,
+                reviewId,
+                "all",
+                withSource(details, source)
+        );
     }
 
     @PostMapping("/orders/{orderId}/reviews/{reviewId}/photo")

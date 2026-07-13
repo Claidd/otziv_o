@@ -125,6 +125,7 @@ class CompanyServiceImplTest {
                 .email("bars@example.test")
                 .active(true)
                 .publicationProgressReportsEnabled(true)
+                .ignoreWorkerPublicationDateRisk(false)
                 .filial(new LinkedHashSet<>())
                 .contacts(new LinkedHashSet<>())
                 .build();
@@ -139,6 +140,7 @@ class CompanyServiceImplTest {
                 .email("bars@example.test")
                 .active(true)
                 .publicationProgressReportsEnabled(false)
+                .ignoreWorkerPublicationDateRisk(true)
                 .filial(FilialDTO.builder().title("").build())
                 .contacts(Set.of())
                 .build();
@@ -147,6 +149,7 @@ class CompanyServiceImplTest {
 
         verify(publicationProgressPreferenceService).setCompanyPreference(1293L, false);
         verify(companyRepository).save(company);
+        assertTrue(company.isIgnoreWorkerPublicationDateRisk());
     }
 
     private CompanyServiceImpl service() {

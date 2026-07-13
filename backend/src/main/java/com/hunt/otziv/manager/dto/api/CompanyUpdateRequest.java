@@ -25,6 +25,7 @@ public record CompanyUpdateRequest(
         String commentsCompany,
         Boolean active,
         Boolean publicationProgressReportsEnabled,
+        Boolean ignoreWorkerPublicationDateRisk,
         Long newWorkerId,
         Long newFilialCityId,
         String newFilialTitle,

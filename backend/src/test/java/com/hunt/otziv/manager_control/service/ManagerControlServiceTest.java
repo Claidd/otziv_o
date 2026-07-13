@@ -165,6 +165,25 @@ class ManagerControlServiceTest {
     private ManagerControlService service;
 
     @Test
+    void commonInvoiceControlPassesPartiallyPaidStatusForPendingOrderFilter() throws Exception {
+        Manager manager = new Manager();
+        when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any()))
+                .thenReturn(0L);
+
+        Method method = ManagerControlService.class.getDeclaredMethod("commonInvoiceActionCount", Manager.class);
+        method.setAccessible(true);
+
+        assertEquals(0L, method.invoke(service, manager));
+        verify(commonInvoiceRepository).countManagerControlInvoices(
+                eq(manager),
+                any(),
+                any(),
+                eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.PARTIALLY_PAID),
+                any()
+        );
+    }
+
+    @Test
     void manualWorkerActionSendsTelegramAndSnoozesForThreeHoursWhenDelivered() {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);

@@ -348,6 +348,19 @@
                     (ngModelChange)="setField('publicationProgressReportsEnabled', $event)"
                   >
                 </label>
+
+                <label class="company-switch-field">
+                  <span>
+                    <strong>Изменение дат по просьбе клиента</strong>
+                    <small>Не считать ручную смену даты специалистом риском</small>
+                  </span>
+                  <input
+                    name="ignoreWorkerPublicationDateRisk"
+                    type="checkbox"
+                    [ngModel]="draft.ignoreWorkerPublicationDateRisk"
+                    (ngModelChange)="setField('ignoreWorkerPublicationDateRisk', $event)"
+                  >
+                </label>
               </div>
             </section>
 

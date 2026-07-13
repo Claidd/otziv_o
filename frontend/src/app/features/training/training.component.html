@@ -19,10 +19,8 @@
             [class.active]="activeTabKey() === tabKey"
             (click)="selectTab(tabKey)"
           >
-            <span class="material-icons-sharp">{{
-              tabKey === 'manager' ? 'groups' : 'engineering'
-            }}</span>
-            {{ tabKey === 'manager' ? 'Для менеджера' : 'Для специалиста' }}
+            <span class="material-icons-sharp">{{ tabIcon(tabKey) }}</span>
+            {{ tabLabel(tabKey) }}
           </button>
         }
       </nav>

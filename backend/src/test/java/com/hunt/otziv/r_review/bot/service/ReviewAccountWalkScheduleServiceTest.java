@@ -1,4 +1,4 @@
-package com.hunt.otziv.r_review.bot;
+package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.config.settings.AppSettingService;
@@ -41,6 +41,20 @@ class ReviewAccountWalkScheduleServiceTest {
 
         assertFalse(service.isWalkedAccount(bot(1)));
         assertTrue(service.isWalkedAccount(bot(2)));
+    }
+
+    @Test
+    void onlyCounterZeroOrOneIsEligibleForNagul() {
+        ReviewAccountWalkScheduleService service = service();
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(2);
+
+        assertTrue(service.isEligibleForNagul(bot(0)));
+        assertTrue(service.isEligibleForNagul(bot(1)));
+        assertFalse(service.isEligibleForNagul(bot(2)));
+
+        Bot withoutPassword = bot(1);
+        withoutPassword.setPassword(" ");
+        assertFalse(service.isEligibleForNagul(withoutPassword));
     }
 
     @Test
@@ -198,7 +212,8 @@ class ReviewAccountWalkScheduleServiceTest {
 
     private LocalDate futureBusinessDate(int daysAhead) {
         LocalDate date = LocalDate.now(BUSINESS_ZONE).plusDays(daysAhead);
-        while (date.getDayOfWeek() == DayOfWeek.SATURDAY) {
+        while (date.getDayOfWeek() == DayOfWeek.SATURDAY
+                || date.plusDays(2).getDayOfWeek() == DayOfWeek.SATURDAY) {
             date = date.plusDays(1);
         }
         return date;

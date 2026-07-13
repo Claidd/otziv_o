@@ -45,6 +45,7 @@ function company(overrides: Partial<CompanyEditPayload> = {}): CompanyEditPayloa
     commentsCompany: 'note',
     active: true,
     publicationProgressReportsEnabled: true,
+    ignoreWorkerPublicationDateRisk: false,
     createDate: '2026-05-01',
     updateStatus: '2026-05-02',
     dateNewTry: '2026-05-03',
@@ -91,6 +92,7 @@ function draft(overrides: Partial<CompanyUpdateRequest> = {}): CompanyUpdateRequ
     commentsCompany: 'note',
     active: true,
     publicationProgressReportsEnabled: true,
+    ignoreWorkerPublicationDateRisk: false,
     newWorkerId: null,
     newFilialCityId: null,
     newFilialTitle: '',
@@ -120,6 +122,8 @@ describe('ManagerCompanyEditModalComponent', () => {
     expect(element.querySelector('.mobile-company-edit-title')?.textContent?.trim()).toBe('Редактор компании');
     expect(element.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Company');
     expect(element.querySelector<HTMLInputElement>('input[name="urlSite"]')?.value).toBe('https://company.example.test');
+    expect(element.querySelector<HTMLInputElement>('input[name="ignoreWorkerPublicationDateRisk"]')?.checked).toBe(false);
+    expect(element.textContent).toContain('Изменение дат по просьбе клиента');
     expect(element.textContent).toContain('Worker 6');
     expect(element.textContent).toContain('City: Filial 7');
   });
@@ -186,6 +190,10 @@ describe('ManagerCompanyEditModalComponent', () => {
     component.setField('title', 'New company');
 
     expect(change).toEqual({ field: 'title', value: 'New company' });
+
+    component.setField('ignoreWorkerPublicationDateRisk', true);
+
+    expect(change).toEqual({ field: 'ignoreWorkerPublicationDateRisk', value: true });
   });
 
   it('locks background scrolling and ignores close while a mutation is running', () => {

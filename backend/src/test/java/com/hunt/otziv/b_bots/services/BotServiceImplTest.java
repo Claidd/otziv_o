@@ -5,7 +5,7 @@ import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_cities.model.City;
-import com.hunt.otziv.r_review.bot.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import org.junit.jupiter.api.Test;
@@ -81,6 +81,9 @@ class BotServiceImplTest {
         Bot bot = new Bot();
         bot.setId(id);
         bot.setFio(fio);
+        bot.setLogin("login-" + id);
+        bot.setPassword("password-" + id);
+        bot.setCounter(0);
         bot.setActive(active);
         bot.setBotCity(city(320L, "Город 320"));
         StatusBot status = new StatusBot();

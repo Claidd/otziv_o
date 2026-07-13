@@ -1,4 +1,4 @@
-package com.hunt.otziv.r_review.bot;
+package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;

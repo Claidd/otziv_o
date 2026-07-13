@@ -1,4 +1,4 @@
-package com.hunt.otziv.r_review.bot;
+package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
@@ -70,10 +70,14 @@ class ReviewBotChangeServiceTest {
     @Mock
     private BusinessAuditService businessAuditService;
 
+    @Mock
+    private ReviewBotAssignmentExclusionService assignmentExclusionService;
+
     @BeforeEach
     void allowCompanyLocks() {
         lenient().when(companyRepository.findByIdForBotAssignmentLock(anyLong()))
                 .thenAnswer(invocation -> Optional.of(company(invocation.getArgument(0))));
+        lenient().when(assignmentExclusionService.excludedBotIds(any())).thenReturn(Set.of());
     }
 
     @Test
@@ -97,13 +101,35 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
-    void deActivateAndChangeBotUsesCurrentBotWhenRequestBotIdIsMissing() {
+    void changeBotPersistsAndUsesAllPreviouslyRejectedAccounts() {
+        ReviewBotChangeService service = service();
+        Review review = new Review();
+        review.setId(15L);
+        review.setVigul(true);
+        Bot currentBot = bot(6L, "Текущий аккаунт", 2);
+        Bot selectedBot = bot(9L, "Новый вариант", 1);
+        review.setBot(currentBot);
+
+        when(reviewRepository.findById(15L)).thenReturn(Optional.of(review));
+        when(assignmentExclusionService.excludedBotIds(review)).thenReturn(Set.of(6L, 7L, 8L));
+        when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of(6L, 7L, 8L))))
+                .thenReturn(selectedBot);
+
+        service.changeBot(15L, true);
+
+        verify(assignmentExclusionService).rejectCurrentBot(review, "CHANGE");
+        assertSame(selectedBot, review.getBot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, true, true);
+    }
+
+    @Test
+    void deActivateAndChangeBotUsesCurrentBotAndKeepsNagulAssignmentUnwalked() {
         ReviewBotChangeService service = service();
         City city = city(9L, "Иркутск");
         Filial filial = filial(3L, city);
         Bot currentBot = bot(5L, "Старый Бот", 0);
         currentBot.setActive(true);
-        Bot selectedBot = bot(8L, "Иван Петров", 4);
+        Bot selectedBot = bot(8L, "Иван Петров", 1);
         Review review = new Review();
         review.setFilial(filial);
         review.setBot(currentBot);
@@ -114,13 +140,12 @@ class ReviewBotChangeServiceTest {
         when(botService.findBotById(5L)).thenReturn(currentBot);
         when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of(5L))))
                 .thenReturn(selectedBot);
-        when(accountWalkScheduleService.isWalkedAccount(selectedBot)).thenReturn(true);
 
         service.deActivateAndChangeBot(21L, null);
 
         assertFalse(currentBot.isActive());
         assertSame(selectedBot, review.getBot());
-        assertTrue(review.isVigul());
+        assertFalse(review.isVigul());
         verify(botService).save(currentBot);
         verify(emailService).sendSimpleEmail(
                 eq("o-company-server@mail.ru"),
@@ -356,7 +381,8 @@ class ReviewBotChangeServiceTest {
                 filialService,
                 accountWalkScheduleService,
                 botCooldownService,
-                businessAuditService
+                businessAuditService,
+                assignmentExclusionService
         );
     }
 
