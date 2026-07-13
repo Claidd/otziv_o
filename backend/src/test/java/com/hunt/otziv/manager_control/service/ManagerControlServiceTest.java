@@ -171,6 +171,12 @@ class ManagerControlServiceTest {
     private ManagerControlService service;
 
     @Test
+    void actionProgressTotalEqualsCompletedPlusCurrentlyPendingActions() {
+        assertEquals(20L, ManagerControlService.calculateActionTotalCount(16L, 4L));
+        assertEquals(22L, ManagerControlService.calculateActionTotalCount(22L, 0L));
+    }
+
+    @Test
     void commonInvoiceControlPassesPartiallyPaidStatusForPendingOrderFilter() throws Exception {
         Manager manager = new Manager();
         when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any()))

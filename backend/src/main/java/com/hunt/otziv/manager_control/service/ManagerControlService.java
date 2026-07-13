@@ -1946,18 +1946,20 @@ public class ManagerControlService {
         List<ManagerDailyControlItem> actionItems = controlSync.items().stream()
                 .filter(item -> item.getGroup() == ManagerDailyControlGroup.ACTION)
                 .toList();
-        long actionTotalCount = actionItems.stream().mapToLong(item -> Math.max(0, item.getCount())).sum();
         long actionCompletedCount = actionItems.stream()
                 .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN)
                 .mapToLong(item -> Math.max(0, item.getCount()))
                 .sum();
+        long currentActionCount = problems.stream().filter(problem -> "ACTION".equals(problem.group()))
+                .mapToLong(ManagerControlProblemResponse::count).sum()
+                + sections.stream().filter(section -> "ACTION".equals(section.group()))
+                .mapToLong(ManagerControlSectionResponse::count).sum();
         if (actionItems.isEmpty()) {
-            actionTotalCount = problems.stream().filter(problem -> "ACTION".equals(problem.group()))
-                    .mapToLong(ManagerControlProblemResponse::count).sum()
-                    + sections.stream().filter(section -> "ACTION".equals(section.group()))
-                    .mapToLong(ManagerControlSectionResponse::count).sum();
             actionCompletedCount = 0;
         }
+        // Keep the counters explainable in the UI: total for the day is always
+        // what has already been completed plus what currently remains to be done.
+        long actionTotalCount = calculateActionTotalCount(currentActionCount, actionCompletedCount);
         int actionProgressPercent = actionTotalCount <= 0
                 ? 100
                 : (int) Math.max(0, Math.min(100, Math.round(actionCompletedCount * 100D / actionTotalCount)));
@@ -2002,6 +2004,10 @@ public class ManagerControlService {
                 workerExplanationStats,
                 managerPerformance
         );
+    }
+
+    static long calculateActionTotalCount(long currentActionCount, long actionCompletedCount) {
+        return Math.max(0, currentActionCount) + Math.max(0, actionCompletedCount);
     }
 
     private List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats(ManagerDailyControl control) {
