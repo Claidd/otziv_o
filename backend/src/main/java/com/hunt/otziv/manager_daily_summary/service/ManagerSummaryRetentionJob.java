@@ -7,6 +7,7 @@ import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerPerformanceDailyRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerSiteActivityEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerSummaryDeliveryLogRepository;
+import com.hunt.otziv.manager_control.repository.ManagerQueueStateEventRepository;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ public class ManagerSummaryRetentionJob {
     private final ManagerPerformanceDailyRepository dailyRepository;
     private final ClientChatMessageRepository messageRepository;
     private final ClientChatUnansweredItemRepository unansweredRepository;
+    private final ManagerQueueStateEventRepository queueStateEventRepository;
 
     @Scheduled(cron = "${manager.summary.cleanup-cron:0 45 3 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
     @Transactional
@@ -55,10 +57,11 @@ public class ManagerSummaryRetentionJob {
             deletedMessages += batch;
         } while (batch == 5000);
         long deletedActivity = activityRepository.deleteByCreatedAtBefore(rawCutoff);
+        long deletedQueueStates = queueStateEventRepository.deleteByCreatedAtBefore(rawCutoff);
         long deletedDelivery = deliveryRepository.deleteByCreatedAtBefore(now.minusDays(deliveryDays));
         log.info(
-                "Manager summary retention complete: anonymizedMessages={}, deletedMessages={}, deletedClosedWaits={}, deletedActivity={}, deletedDelivery={}",
-                anonymized, deletedMessages, deletedClosedWaits, deletedActivity, deletedDelivery
+                "Manager summary retention complete: anonymizedMessages={}, deletedMessages={}, deletedClosedWaits={}, deletedActivity={}, deletedQueueStates={}, deletedDelivery={}",
+                anonymized, deletedMessages, deletedClosedWaits, deletedActivity, deletedQueueStates, deletedDelivery
         );
     }
 }

@@ -13,6 +13,10 @@ import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
+import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
@@ -48,6 +52,9 @@ class ManagerDailySummaryServiceTest {
     @Mock private ManagerPerformanceDailyRepository dailyRepository;
     @Mock private AppSettingService appSettingService;
     @Mock private JdbcTemplate jdbcTemplate;
+    @Mock private ManagerQueueStateService queueStateService;
+    @Mock private GamificationScoreLedgerRepository scoreLedgerRepository;
+    @Mock private GamificationEventService gamificationEventService;
 
     private ManagerDailySummaryService service;
 
@@ -55,12 +62,14 @@ class ManagerDailySummaryServiceTest {
     void setUp() {
         service = new ManagerDailySummaryService(
                 managerRepository, performanceService, controlRepository, itemRepository, concreteItemRepository,
-                messageRepository, unansweredRepository, activityRepository, dailyRepository, appSettingService, jdbcTemplate
+                messageRepository, unansweredRepository, activityRepository, dailyRepository, appSettingService, jdbcTemplate,
+                queueStateService, scoreLedgerRepository, gamificationEventService
         );
-        when(appSettingService.getString(anyString(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         when(appSettingService.getInt(anyString(), anyInt())).thenAnswer(invocation -> invocation.getArgument(1));
         when(dailyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(dailyRepository.findBySummaryDateBetweenOrderByManager_IdAscSummaryDateAsc(any(), any())).thenReturn(List.of());
+        when(queueStateService.aggregate(any(), any(), any())).thenAnswer(invocation -> new ManagerQueueStateResponse(
+                false, invocation.getArgument(1), "NOT_OBSERVED", 0, 0, 0, 0, 0, 0, 0, 0, 14, 0, null));
     }
 
     @Test

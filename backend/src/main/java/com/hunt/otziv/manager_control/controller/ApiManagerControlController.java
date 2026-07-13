@@ -10,6 +10,8 @@ import com.hunt.otziv.manager_control.dto.ManagerControlManagerDetailResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlStageRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlSummaryResponse;
 import com.hunt.otziv.manager_control.service.ManagerControlService;
+import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
+import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -29,6 +31,13 @@ public class ApiManagerControlController {
 
     private final ManagerControlService managerControlService;
     private final PerformanceMetrics performanceMetrics;
+    private final ManagerQueueStateService queueStateService;
+
+    @GetMapping("/queue-state/me")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ManagerQueueStateResponse myQueueState(Principal principal) {
+        return queueStateService.current(principal);
+    }
 
     @GetMapping("/today")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

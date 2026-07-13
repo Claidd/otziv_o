@@ -11,6 +11,8 @@ import com.hunt.otziv.gamification.dto.GamificationScorePreviewResponse;
 import com.hunt.otziv.gamification.model.GamificationEvent;
 import com.hunt.otziv.gamification.model.GamificationRule;
 import com.hunt.otziv.gamification.repository.GamificationEventRepository;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
+import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
@@ -20,10 +22,12 @@ import com.hunt.otziv.u_users.model.Worker;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -44,6 +48,12 @@ public class GamificationEventService {
     public static final String ORDER_PAID = "ORDER_PAID";
     public static final String BAD_REVIEW_TASK_DONE = "BAD_REVIEW_TASK_DONE";
     public static final String REVIEW_RECOVERY_TASK_DONE = "REVIEW_RECOVERY_TASK_DONE";
+    public static final String MANAGER_CLIENT_REPLY = "MANAGER_CLIENT_REPLY";
+    public static final String MANAGER_LEAD_HANDLED = "MANAGER_LEAD_HANDLED";
+    public static final String MANAGER_CONTROL_ACTION = "MANAGER_CONTROL_ACTION";
+    public static final String MANAGER_QUEUE_CLEARED = "MANAGER_QUEUE_CLEARED";
+    public static final String MANAGER_DAY_COMPLETED = "MANAGER_DAY_COMPLETED";
+    public static final String MANAGER_IDEAL_DAY = "MANAGER_IDEAL_DAY";
 
     private final GamificationEventRepository repository;
     private final GamificationSettingsService settingsService;
@@ -144,6 +154,81 @@ public class GamificationEventService {
         saveSafely(reviewRecoveryTaskDoneEvent(task, null));
     }
 
+    public void recordManagerClientReply(
+            ClientChatUnansweredItem item,
+            LocalDateTime completedAt,
+            int targetMinutes,
+            int hardMinutes
+    ) {
+        if (item == null || item.getId() == null || item.getManager() == null) return;
+        LocalDateTime startedAt = item.getFirstOpenedAt() != null ? item.getFirstOpenedAt() : item.getCreatedAt();
+        saveSafely(managerTimedEvent(
+                MANAGER_CLIENT_REPLY,
+                item.getManager(),
+                "client-reply:" + item.getId(),
+                "client-chat.reply",
+                startedAt,
+                completedAt,
+                targetMinutes,
+                hardMinutes,
+                "platform=" + item.getPlatform() + ";chat=" + item.getChatId()
+        ));
+    }
+
+    public void recordManagerLeadHandled(Lead lead, LocalDateTime startedAt, LocalDateTime completedAt, int targetMinutes, int hardMinutes) {
+        if (lead == null || lead.getId() == null || lead.getManager() == null) return;
+        saveSafely(managerTimedEvent(
+                MANAGER_LEAD_HANDLED,
+                lead.getManager(),
+                "lead-handled:" + lead.getId(),
+                "lead.status",
+                startedAt,
+                completedAt,
+                targetMinutes,
+                hardMinutes,
+                "status=" + lead.getLidStatus()
+        ));
+    }
+
+    public void recordManagerControlAction(
+            Manager manager,
+            String uniqueKey,
+            LocalDateTime startedAt,
+            LocalDateTime completedAt,
+            int targetMinutes,
+            int hardMinutes,
+            String payload
+    ) {
+        if (manager == null || uniqueKey == null || uniqueKey.isBlank()) return;
+        saveSafely(managerTimedEvent(
+                MANAGER_CONTROL_ACTION,
+                manager,
+                "manager-control:" + uniqueKey,
+                "manager-control.resolve",
+                startedAt,
+                completedAt,
+                targetMinutes,
+                hardMinutes,
+                payload
+        ));
+    }
+
+    public void recordManagerMilestone(
+            String eventType,
+            Manager manager,
+            String uniqueKey,
+            LocalDateTime occurredAt,
+            String payload
+    ) {
+        if (!Set.of(MANAGER_QUEUE_CLEARED, MANAGER_DAY_COMPLETED, MANAGER_IDEAL_DAY).contains(eventType)
+                || manager == null || uniqueKey == null || uniqueKey.isBlank()) return;
+        GamificationEvent event = baseManagerEvent(eventType, manager, uniqueKey, "manager-daily-summary", occurredAt, payload);
+        event.setTimelinessBucket("ON_TIME");
+        event.setTimelinessMultiplier(BigDecimal.ONE);
+        event.setDelayDays(0);
+        saveSafely(event);
+    }
+
     public boolean backfillReviewPublished(Review review) {
         return saveBackfilled(reviewPublishedEvent(review, sourceDateTime(review == null ? null : review.getPublishedDate())));
     }
@@ -187,6 +272,74 @@ public class GamificationEventService {
                 .build();
         timelinessService.apply(event, review.getPublishedDate(), actualDate(createdAt));
         return event;
+    }
+
+    private GamificationEvent managerTimedEvent(
+            String eventType,
+            Manager manager,
+            String uniqueKey,
+            String source,
+            LocalDateTime startedAt,
+            LocalDateTime completedAt,
+            int targetMinutes,
+            int hardMinutes,
+            String payload
+    ) {
+        LocalDateTime safeCompleted = completedAt == null ? LocalDateTime.now() : completedAt;
+        LocalDateTime safeStarted = startedAt == null ? safeCompleted : startedAt;
+        long seconds = Math.max(0, Duration.between(safeStarted, safeCompleted).getSeconds());
+        long targetSeconds = Math.max(60L, targetMinutes * 60L);
+        long hardSeconds = Math.max(targetSeconds, hardMinutes * 60L);
+        BigDecimal multiplier;
+        String bucket;
+        if (seconds <= targetSeconds) {
+            multiplier = BigDecimal.ONE;
+            bucket = "TARGET";
+        } else if (seconds <= hardSeconds / 2L) {
+            multiplier = new BigDecimal("0.80");
+            bucket = "DELAYED";
+        } else if (seconds <= hardSeconds) {
+            multiplier = new BigDecimal("0.40");
+            bucket = "LATE";
+        } else {
+            multiplier = BigDecimal.ZERO;
+            bucket = "OVERDUE";
+        }
+        GamificationEvent event = baseManagerEvent(
+                eventType,
+                manager,
+                uniqueKey,
+                source,
+                safeCompleted,
+                (payload == null ? "" : payload + ";") + "durationSeconds=" + seconds
+        );
+        event.setTimelinessBucket(bucket);
+        event.setTimelinessMultiplier(multiplier);
+        event.setDelayDays(seconds <= targetSeconds ? 0 : 1);
+        event.setPlannedDate(safeStarted.toLocalDate());
+        event.setActualDate(safeCompleted.toLocalDate());
+        return event;
+    }
+
+    private GamificationEvent baseManagerEvent(
+            String eventType,
+            Manager manager,
+            String uniqueKey,
+            String source,
+            LocalDateTime createdAt,
+            String payload
+    ) {
+        return GamificationEvent.builder()
+                .eventType(eventType)
+                .actorRole(ROLE_MANAGER)
+                .actorUserId(userId(manager))
+                .actorName(userName(manager))
+                .managerId(id(manager))
+                .source(source)
+                .uniqueEventKey(eventType + ":" + uniqueKey)
+                .payload(payload)
+                .createdAt(createdAt)
+                .build();
     }
 
     private GamificationEvent orderPaidEvent(Order order, LocalDateTime createdAt) {
@@ -369,6 +522,12 @@ public class GamificationEventService {
         counts.put(ORDER_PAID, 0L);
         counts.put(BAD_REVIEW_TASK_DONE, 0L);
         counts.put(REVIEW_RECOVERY_TASK_DONE, 0L);
+        counts.put(MANAGER_CLIENT_REPLY, 0L);
+        counts.put(MANAGER_LEAD_HANDLED, 0L);
+        counts.put(MANAGER_CONTROL_ACTION, 0L);
+        counts.put(MANAGER_QUEUE_CLEARED, 0L);
+        counts.put(MANAGER_DAY_COMPLETED, 0L);
+        counts.put(MANAGER_IDEAL_DAY, 0L);
         for (Object[] row : repository.countByEventType(fromInclusive, toExclusive)) {
             if (row == null || row.length < 2) {
                 continue;

@@ -143,6 +143,7 @@ export interface ManagerControlWorkerExplanationStats {
   requestCount: number;
   unansweredCount: number;
   overdueCount: number;
+  hardBreachCount: number;
   averageResponseMinutes: number;
 }
 
@@ -158,6 +159,10 @@ export interface ManagerControlProblem {
   itemStatus?: ManagerControlItemStatus | null;
   actionType?: ManagerControlActionType | null;
   comment?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: 'TARGET' | 'LATE' | 'OVERDUE' | 'COMPLETED_TARGET' | 'COMPLETED_LATE' | 'COMPLETED_OVERDUE' | null;
 }
 
 export interface ManagerControlSection {
@@ -205,6 +210,10 @@ export interface ManagerControlManager {
   canCloseDay: boolean;
   openItemCount: number;
   handledItemCount: number;
+  actionTotalCount: number;
+  actionCompletedCount: number;
+  actionProgressPercent: number;
+  leadActionCount: number;
   status: ManagerControlStatus;
   criticalCount: number;
   warningCount: number;
@@ -237,6 +246,22 @@ export interface ManagerControlSummary {
   managers: ManagerControlManager[];
 }
 
+export interface ManagerQueueState {
+  enabled: boolean;
+  date: string;
+  state: string;
+  openActionCount: number;
+  withinTargetCount: number;
+  targetMissedCount: number;
+  overdueCount: number;
+  controlledSeconds: number;
+  cleanQueueSeconds: number;
+  currentControlledStreakSeconds: number;
+  controlTargetHours: number;
+  controlPercent: number;
+  observedAt?: string | null;
+}
+
 export interface ManagerDailySummaryRow {
   date: string;
   managerId: number;
@@ -264,6 +289,15 @@ export interface ManagerDailySummaryRow {
   siteActiveSeconds: number;
   messengerActiveSeconds: number;
   confirmedActiveSeconds: number;
+  leadActionCount: number;
+  targetSlaCount: number;
+  targetSlaMetCount: number;
+  hardSlaBreachCount: number;
+  controlledSeconds: number;
+  cleanQueueSeconds: number;
+  dayStars: number;
+  dayStatus: string;
+  xpEarned: number;
   aggregationStatus: string;
 }
 
@@ -281,6 +315,10 @@ export class ManagerControlApi {
     return this.http.get<ManagerControlSummary>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/today`
     );
+  }
+
+  myQueueState(): Observable<ManagerQueueState> {
+    return this.http.get<ManagerQueueState>(`${appEnvironment.apiBaseUrl}/api/admin/manager-control/queue-state/me`);
   }
 
   syncToday(): Observable<ManagerControlSummary> {

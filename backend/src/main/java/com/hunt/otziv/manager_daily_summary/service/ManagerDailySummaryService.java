@@ -6,6 +6,10 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
+import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlGroup;
@@ -63,6 +67,9 @@ public class ManagerDailySummaryService {
     private final ManagerPerformanceDailyRepository dailyRepository;
     private final AppSettingService appSettingService;
     private final JdbcTemplate jdbcTemplate;
+    private final ManagerQueueStateService queueStateService;
+    private final GamificationScoreLedgerRepository scoreLedgerRepository;
+    private final GamificationEventService gamificationEventService;
 
     @Transactional
     public List<ManagerDailySummaryResponse> calculate(LocalDate requestedDate, boolean finalizeDay) {
@@ -157,9 +164,34 @@ public class ManagerDailySummaryService {
         daily.setSiteActiveSeconds(activity.siteSeconds());
         daily.setMessengerActiveSeconds(activity.messengerOutsideSiteSeconds());
         daily.setConfirmedActiveSeconds(activity.confirmedSeconds());
+        daily.setLeadActionCount(items.stream().filter(item -> "LEADS".equals(item.getReasonCode())).mapToLong(ManagerDailyControlItem::getCount).sum());
+        daily.setTargetSlaCount(replies.all().count());
+        daily.setTargetSlaMetCount(replies.all().inSla());
+        LocalDateTime queueUntil = date.equals(LocalDate.now()) && LocalDateTime.now().isBefore(to) ? LocalDateTime.now() : to;
+        ManagerQueueStateResponse queue = queueStateService.aggregate(manager, date, queueUntil);
+        daily.setHardSlaBreachCount(queue.hardBreachCount());
+        daily.setControlledSeconds(queue.controlledSeconds());
+        daily.setCleanQueueSeconds(queue.cleanQueueSeconds());
+        long xp = manager.getUser() == null ? 0 : number(scoreLedgerRepository.pointsForActorBetween(manager.getUser().getId(), from, to));
+        daily.setXpEarned(xp);
+        int targetPercent = Math.max(1, Math.min(100, appSettingService.getInt("manager.sla.day-target-percent", 90)));
+        int controlPercent = queue.controlPercent();
+        long slaPercent = replies.all().count() == 0 ? 100 : Math.round(replies.all().inSla() * 100.0 / replies.all().count());
+        int stars = queue.hardBreachCount() == 0 ? 1 : 0;
+        if (stars > 0 && slaPercent >= targetPercent) stars++;
+        if (stars > 1 && controlPercent >= targetPercent && queue.cleanQueueSeconds() > 0) stars++;
+        daily.setDayStars(stars);
+        daily.setDayStatus(stars >= 3 ? "IDEAL" : stars >= 2 ? "COMPLETED" : "NOT_COMPLETED");
         daily.setAggregationStatus(finalizeDay ? "VERIFIED" : "CALCULATED");
         daily.setFinalizedAt(finalizeDay ? LocalDateTime.now() : null);
-        return dailyRepository.save(daily);
+        ManagerPerformanceDaily saved = dailyRepository.save(daily);
+        if (finalizeDay && stars >= 2) {
+            gamificationEventService.recordManagerMilestone(GamificationEventService.MANAGER_DAY_COMPLETED, manager,
+                    date + ":completed", queueUntil, "{\"stars\":" + stars + "}");
+            if (stars >= 3) gamificationEventService.recordManagerMilestone(GamificationEventService.MANAGER_IDEAL_DAY, manager,
+                    date + ":ideal", queueUntil, "{\"stars\":3}");
+        }
+        return saved;
     }
 
     private TaskStats taskStats(List<ManagerDailyControlItem> items, List<ManagerDailyControlConcreteItem> concrete) {
@@ -311,26 +343,9 @@ public class ManagerDailySummaryService {
 
     private long businessSeconds(LocalDateTime from, LocalDateTime to) {
         if (from == null || to == null || !to.isAfter(from)) return 0;
-        LocalTime start = parseTime(appSettingService.getString("manager.summary.workday-start", "09:00"), LocalTime.of(9, 0));
-        LocalTime end = parseTime(appSettingService.getString("manager.summary.workday-end", "23:00"), LocalTime.of(23, 0));
-        java.util.Set<Integer> workingDays = java.util.Arrays.stream(
-                        appSettingService.getString("manager.summary.working-days", "1,2,3,4,5,6").split(","))
-                .map(String::trim)
-                .flatMap(value -> {
-                    try { return java.util.stream.Stream.of(Integer.parseInt(value)); }
-                    catch (NumberFormatException ignored) { return java.util.stream.Stream.empty(); }
-                }).collect(Collectors.toSet());
-        long seconds = 0;
-        for (LocalDate day = from.toLocalDate(); !day.isAfter(to.toLocalDate()); day = day.plusDays(1)) {
-            if (!workingDays.contains(day.getDayOfWeek().getValue())) continue;
-            LocalDateTime windowStart = day.atTime(start);
-            LocalDateTime windowEnd = day.atTime(end);
-            if (!windowEnd.isAfter(windowStart)) windowEnd = windowEnd.plusDays(1);
-            LocalDateTime effectiveStart = max(from, windowStart);
-            LocalDateTime effectiveEnd = min(to, windowEnd);
-            if (effectiveEnd.isAfter(effectiveStart)) seconds += Duration.between(effectiveStart, effectiveEnd).toSeconds();
-        }
-        return Math.max(0, seconds);
+        // При свободном графике SLA идёт по реальному времени; отдых учитывается
+        // отдельным резервом в суточном нормативе контроля очереди.
+        return Duration.between(from, to).toSeconds();
     }
 
     private LocalTime parseTime(String value, LocalTime fallback) {
@@ -346,6 +361,7 @@ public class ManagerDailySummaryService {
                 closing_score, closing_grade, task_total, task_completed, reply_count, reply_total_seconds,
                 replies_in_sla, problem_count, problem_resolved_count, problem_resolution_total_seconds,
                 site_active_seconds, messenger_active_seconds, confirmed_active_seconds, strong_days,
+                controlled_seconds, clean_queue_seconds, completed_days, ideal_days, xp_earned,
                 formula_version, closed_period
             )
             SELECT ?, d.manager_id, MAX(d.manager_user_id), COUNT(*), SUM(d.adjusted_score), AVG(d.adjusted_score),
@@ -356,6 +372,9 @@ public class ManagerDailySummaryService {
                    SUM(d.problem_resolution_total_seconds), SUM(d.site_active_seconds),
                    SUM(d.messenger_active_seconds), SUM(d.confirmed_active_seconds),
                    SUM(CASE WHEN d.adjusted_score >= 80 AND d.task_open = 0 THEN 1 ELSE 0 END),
+                   SUM(d.controlled_seconds), SUM(d.clean_queue_seconds),
+                   SUM(CASE WHEN d.day_status IN ('COMPLETED', 'IDEAL') THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN d.day_status = 'IDEAL' THEN 1 ELSE 0 END), SUM(d.xp_earned),
                    MAX(d.formula_version), ?
             FROM manager_performance_daily d
             WHERE d.summary_date >= ? AND d.summary_date < ?
@@ -369,6 +388,8 @@ public class ManagerDailySummaryService {
                 problem_resolution_total_seconds=VALUES(problem_resolution_total_seconds),
                 site_active_seconds=VALUES(site_active_seconds), messenger_active_seconds=VALUES(messenger_active_seconds),
                 confirmed_active_seconds=VALUES(confirmed_active_seconds), strong_days=VALUES(strong_days),
+                controlled_seconds=VALUES(controlled_seconds), clean_queue_seconds=VALUES(clean_queue_seconds),
+                completed_days=VALUES(completed_days), ideal_days=VALUES(ideal_days), xp_earned=VALUES(xp_earned),
                 formula_version=VALUES(formula_version), closed_period=VALUES(closed_period)
         """, month, closed, month, next);
         mergeHistograms(month, next, "manager_performance_monthly", "month_start", month);
@@ -382,6 +403,7 @@ public class ManagerDailySummaryService {
                 closing_score, closing_grade, task_total, task_completed, reply_count, reply_total_seconds,
                 replies_in_sla, problem_count, problem_resolved_count, problem_resolution_total_seconds,
                 site_active_seconds, messenger_active_seconds, confirmed_active_seconds, strong_days,
+                controlled_seconds, clean_queue_seconds, completed_days, ideal_days, xp_earned,
                 formula_version, closed_period
             )
             SELECT ?, d.manager_id, MAX(d.manager_user_id), COUNT(*), SUM(d.adjusted_score), AVG(d.adjusted_score),
@@ -392,6 +414,9 @@ public class ManagerDailySummaryService {
                    SUM(d.problem_resolution_total_seconds), SUM(d.site_active_seconds),
                    SUM(d.messenger_active_seconds), SUM(d.confirmed_active_seconds),
                    SUM(CASE WHEN d.adjusted_score >= 80 AND d.task_open = 0 THEN 1 ELSE 0 END),
+                   SUM(d.controlled_seconds), SUM(d.clean_queue_seconds),
+                   SUM(CASE WHEN d.day_status IN ('COMPLETED', 'IDEAL') THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN d.day_status = 'IDEAL' THEN 1 ELSE 0 END), SUM(d.xp_earned),
                    MAX(d.formula_version), ?
             FROM manager_performance_daily d
             WHERE d.summary_date >= ? AND d.summary_date < ?
@@ -405,6 +430,8 @@ public class ManagerDailySummaryService {
                 problem_resolution_total_seconds=VALUES(problem_resolution_total_seconds),
                 site_active_seconds=VALUES(site_active_seconds), messenger_active_seconds=VALUES(messenger_active_seconds),
                 confirmed_active_seconds=VALUES(confirmed_active_seconds), strong_days=VALUES(strong_days),
+                controlled_seconds=VALUES(controlled_seconds), clean_queue_seconds=VALUES(clean_queue_seconds),
+                completed_days=VALUES(completed_days), ideal_days=VALUES(ideal_days), xp_earned=VALUES(xp_earned),
                 formula_version=VALUES(formula_version), closed_period=VALUES(closed_period)
         """, year, closed, year, next);
         mergeHistograms(year, next, "manager_performance_yearly", "year_start", year);
@@ -440,11 +467,14 @@ public class ManagerDailySummaryService {
                 daily.getAllReplyMedianSeconds(), daily.getAllReplyP90Seconds(), daily.getAllReplyCount(), daily.getRepliesInSla(),
                 daily.getProblemCount(), daily.getProblemResolvedCount(), daily.getProblemResolutionAverageSeconds(),
                 daily.getSiteActiveSeconds(), daily.getMessengerActiveSeconds(), daily.getConfirmedActiveSeconds(),
+                daily.getLeadActionCount(), daily.getTargetSlaCount(), daily.getTargetSlaMetCount(), daily.getHardSlaBreachCount(),
+                daily.getControlledSeconds(), daily.getCleanQueueSeconds(), daily.getDayStars(), daily.getDayStatus(), daily.getXpEarned(),
                 daily.getAggregationStatus());
     }
 
     private LocalDateTime min(LocalDateTime left, LocalDateTime right) { return left.isBefore(right) ? left : right; }
     private LocalDateTime max(LocalDateTime left, LocalDateTime right) { return left.isAfter(right) ? left : right; }
+    private long number(Long value) { return value == null ? 0L : value; }
 
     private record TaskStats(long total, long completed, long open) {}
     private record ReplyStats(Distribution first, Distribution all) {}

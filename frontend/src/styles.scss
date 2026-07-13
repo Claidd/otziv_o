@@ -5366,3 +5366,5 @@ body.otziv-mobile-overlay-open {
     background: #1b2027;
   }
 }
+.sla-timer{border-radius:999px;padding:.15rem .42rem;font-size:.68rem;white-space:nowrap}.sla-target{color:var(--otziv-success);background:rgba(27,156,133,.1)}.sla-late{color:#a96a00;background:rgba(245,166,35,.14)}.sla-overdue{color:var(--otziv-danger);background:rgba(239,73,102,.12)}
+.queue-control-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}.queue-control-stats span{display:grid;gap:.12rem;border-radius:.5rem;padding:.65rem;background:rgba(27,156,133,.07)}.queue-control-stats small{color:var(--otziv-info);font-weight:800}.queue-control-stats b{color:var(--otziv-dark)}@media(max-width:42rem){.queue-control-stats{grid-template-columns:1fr}}

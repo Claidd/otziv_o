@@ -31,6 +31,12 @@ public interface GamificationScoreLedgerRepository extends JpaRepository<Gamific
             """)
     Long sumPoints(LocalDateTime fromInclusive, LocalDateTime toExclusive);
 
+    @Query("SELECT COALESCE(SUM(l.points), 0) FROM GamificationScoreLedger l WHERE l.actorUserId = :actorUserId")
+    Long lifetimePointsForActor(Long actorUserId);
+
+    @Query("SELECT COALESCE(SUM(l.points), 0) FROM GamificationScoreLedger l WHERE l.actorUserId = :actorUserId AND l.sourceEventCreatedAt >= :fromInclusive AND l.sourceEventCreatedAt < :toExclusive")
+    Long pointsForActorBetween(Long actorUserId, LocalDateTime fromInclusive, LocalDateTime toExclusive);
+
     @Query("""
             SELECT l.actorUserId, l.actorName, l.actorRole, COUNT(l), COALESCE(SUM(l.points), 0)
             FROM GamificationScoreLedger l

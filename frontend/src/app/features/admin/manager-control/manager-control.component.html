@@ -295,12 +295,22 @@
               <div class="daily-task-progress" role="progressbar" [attr.aria-valuenow]="dailyTaskProgress(manager)" aria-valuemin="0" aria-valuemax="100">
                 <div class="daily-task-progress-head">
                   <span>Прогресс задач на день</span>
-                  <strong>{{ manager.handledItemCount }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+                  <strong>{{ dailyTaskCompleted(manager) }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
                 </div>
                 <div class="daily-task-progress-track">
                   <span [style.width.%]="dailyTaskProgress(manager)"></span>
                 </div>
               </div>
+
+              @if (queueState(); as queue) {
+                @if (queue.enabled) {
+                  <div class="queue-control-stats">
+                    <span><small>Под контролем</small><b>{{ queueDuration(queue.controlledSeconds) }} из {{ queue.controlTargetHours }} ч · {{ queue.controlPercent }}%</b></span>
+                    <span><small>Серия без критической просрочки</small><b>{{ queueDuration(queue.currentControlledStreakSeconds) }}</b></span>
+                    <span><small>Чистая очередь</small><b>{{ queueDuration(queue.cleanQueueSeconds) }}</b></span>
+                  </div>
+                }
+              }
 
               <div class="personal-remark-metrics">
                 <article class="personal-metric overdue {{ countToneClass(manager.overdueOrderCount) }}">
@@ -334,6 +344,9 @@
                         <strong>{{ problem.count }}</strong>
                         @if (problem.code === 'OVERDUE_ORDERS' && overdueBreakdown(manager)) {
                           <small>{{ overdueBreakdown(manager) }}</small>
+                        }
+                        @if (slaTimer(problem)) {
+                          <small class="sla-timer {{ slaTimerClass(problem) }}">{{ slaTimer(problem) }}</small>
                         }
                         @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
                           <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
@@ -397,7 +410,7 @@
             <div class="daily-task-progress" role="progressbar" [attr.aria-valuenow]="dailyTaskProgress(manager)" aria-valuemin="0" aria-valuemax="100">
               <div class="daily-task-progress-head">
                 <span>Прогресс задач на день</span>
-                <strong>{{ manager.handledItemCount }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+                <strong>{{ dailyTaskCompleted(manager) }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
               </div>
               <div class="daily-task-progress-track">
                 <span [style.width.%]="dailyTaskProgress(manager)"></span>
@@ -428,6 +441,9 @@
                       <strong>{{ problem.count }}</strong>
                       @if (problem.code === 'OVERDUE_ORDERS' && overdueBreakdown(manager)) {
                         <small>{{ overdueBreakdown(manager) }}</small>
+                      }
+                      @if (slaTimer(problem)) {
+                        <small class="sla-timer {{ slaTimerClass(problem) }}">{{ slaTimer(problem) }}</small>
                       }
                       @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
                         <em>{{ itemStatusLabel(problem.itemStatus) }}</em>

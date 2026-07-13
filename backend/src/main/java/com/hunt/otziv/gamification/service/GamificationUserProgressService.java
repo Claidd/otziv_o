@@ -3,6 +3,7 @@ package com.hunt.otziv.gamification.service;
 import com.hunt.otziv.gamification.dto.GamificationMyBreakdownResponse;
 import com.hunt.otziv.gamification.dto.GamificationMyMissionResponse;
 import com.hunt.otziv.gamification.dto.GamificationMyProgressResponse;
+import com.hunt.otziv.gamification.dto.GamificationWalletResponse;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -28,6 +29,7 @@ public class GamificationUserProgressService {
     private final GamificationScoreLedgerRepository ledgerRepository;
     private final GamificationSettingsService settingsService;
     private final UserService userService;
+    private final GamificationRewardService rewardService;
 
     @Transactional(readOnly = true)
     public GamificationMyProgressResponse myProgress(Principal principal, int days) {
@@ -87,7 +89,10 @@ public class GamificationUserProgressService {
         }
         long dailyGoal = dailyGoal(role);
         int dailyGoalPercent = percent(todayEvents, dailyGoal);
-        LevelInfo levelInfo = levelInfo(totalPoints);
+        GamificationWalletResponse wallet = enabled
+                ? rewardService.wallet(new UserPrincipal(user.getUsername()))
+                : new GamificationWalletResponse(0, 1, 0, 5);
+        LevelInfo levelInfo = levelInfo(wallet.lifetimeXp(), rewardService.settings().levelXp());
         int timelinessPercent = percent(onTimeEvents, Math.max(1L, onTimeEvents + delayedEvents));
         List<GamificationMyMissionResponse> missions = enabled
                 ? missions(role, breakdown, todayEvents, dailyGoal, onTimeEvents, delayedEvents)
@@ -102,6 +107,9 @@ public class GamificationUserProgressService {
                 shortRole(role),
                 totalEvents,
                 totalPoints,
+                wallet.lifetimeXp(),
+                wallet.tokens(),
+                wallet.nextTokenLevel(),
                 dailyGoal,
                 todayEvents,
                 dailyGoalPercent,
@@ -222,10 +230,11 @@ public class GamificationUserProgressService {
         return (int) Math.max(0, Math.min(100, Math.round((double) value * 100D / (double) target)));
     }
 
-    private LevelInfo levelInfo(long points) {
-        int level = (int) (points / 500L) + 1;
-        long current = (long) (level - 1) * 500L;
-        long next = (long) level * 500L;
+    private LevelInfo levelInfo(long points, int configuredLevelXp) {
+        long levelXp = Math.max(100, configuredLevelXp);
+        int level = (int) (points / levelXp) + 1;
+        long current = (long) (level - 1) * levelXp;
+        long next = (long) level * levelXp;
         return new LevelInfo(level, current, next, Math.max(0, next - points));
     }
 
@@ -299,6 +308,13 @@ public class GamificationUserProgressService {
     }
 
     private record LevelInfo(int level, long currentLevelPoints, long nextLevelPoints, long pointsToNextLevel) {
+    }
+
+    private record UserPrincipal(String name) implements Principal {
+        @Override
+        public String getName() {
+            return name;
+        }
     }
 
     private static class BreakdownAccumulator {

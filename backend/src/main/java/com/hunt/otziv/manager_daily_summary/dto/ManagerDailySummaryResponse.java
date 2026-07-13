@@ -30,6 +30,15 @@ public record ManagerDailySummaryResponse(
         long siteActiveSeconds,
         long messengerActiveSeconds,
         long confirmedActiveSeconds,
+        long leadActionCount,
+        long targetSlaCount,
+        long targetSlaMetCount,
+        long hardSlaBreachCount,
+        long controlledSeconds,
+        long cleanQueueSeconds,
+        int dayStars,
+        String dayStatus,
+        long xpEarned,
         String aggregationStatus
 ) {
 }

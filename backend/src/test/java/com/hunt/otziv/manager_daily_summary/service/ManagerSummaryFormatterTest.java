@@ -38,7 +38,9 @@ class ManagerSummaryFormatterTest {
                 LocalDate.of(2026, 7, 13), 1L, 10L, "Анжелика <Б>", 86, "B",
                 34, 29, 5, BigDecimal.valueOf(85.29), 2, 2, 2,
                 540, 360, 840, 480, 1800, 46, 40,
-                8, 7, 5040, 23040, 2820, 25860, "VERIFIED"
+                8, 7, 5040, 23040, 2820, 25860,
+                3, 46, 40, 0, 57600, 3600, 3, "IDEAL", 180,
+                "VERIFIED"
         );
 
         String message = formatter.format(List.of(row), true);

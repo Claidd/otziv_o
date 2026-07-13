@@ -367,6 +367,13 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/gamification/rewards',
+    loadComponent: () => import('./features/admin/gamification-rewards/gamification-rewards.component')
+      .then((m) => m.GamificationRewardsComponent),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
+  },
+  {
     path: 'admin/performers',
     loadComponent: () => import('./features/admin/performers/admin-performers.component')
       .then((m) => m.AdminPerformersComponent),

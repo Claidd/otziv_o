@@ -13,6 +13,7 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -45,6 +46,7 @@ public class ClientChatMessageTrackerService {
     private final ClientChatAutoIgnoreService autoIgnoreService;
     private final CompanyRepository companyRepository;
     private final AppSettingService appSettingService;
+    private final GamificationEventService gamificationEventService;
 
     @Transactional
     public void track(ClientChatMessageCommand command) {
@@ -213,10 +215,19 @@ public class ClientChatMessageTrackerService {
     }
 
     private void close(ClientChatUnansweredItem item, ClientChatUnansweredStatus status, String reason) {
+        LocalDateTime closedAt = LocalDateTime.now();
         item.setStatus(status);
-        item.setClosedAt(LocalDateTime.now());
+        item.setClosedAt(closedAt);
         item.setCloseReason(limit(reason, 255));
         unansweredRepository.save(item);
+        if (status == ClientChatUnansweredStatus.ANSWERED) {
+            gamificationEventService.recordManagerClientReply(
+                    item,
+                    closedAt,
+                    Math.max(1, appSettingService.getInt("manager.sla.target.message-minutes", 30)),
+                    Math.max(1, appSettingService.getInt("manager.sla.hard.message-minutes", 480))
+            );
+        }
     }
 
     private ClientChatUnansweredExample example(ClientChatUnansweredItem item, LocalDateTime now) {

@@ -59,6 +59,8 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemReposito
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
@@ -264,6 +266,8 @@ public class ManagerControlService {
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     private final ManagerDailyControlEventRepository dailyControlEventRepository;
     private final ManagerPerformanceService managerPerformanceService;
+    private final GamificationEventService gamificationEventService;
+    private final LeadsRepository leadsRepository;
 
     @Transactional(readOnly = true)
     public ManagerControlSummaryResponse today(Principal principal, Authentication authentication) {
@@ -350,6 +354,10 @@ public class ManagerControlService {
                 manager.canCloseDay(),
                 manager.openItemCount(),
                 manager.handledItemCount(),
+                manager.actionTotalCount(),
+                manager.actionCompletedCount(),
+                manager.actionProgressPercent(),
+                manager.leadActionCount(),
                 manager.status(),
                 manager.criticalCount(),
                 manager.warningCount(),
@@ -576,6 +584,16 @@ public class ManagerControlService {
                 actionType,
                 item.getComment()
         );
+        if (status == ManagerDailyControlItemStatus.RESOLVED) {
+            recordGamificationControlAction(
+                    control,
+                    "item:" + item.getId(),
+                    item.getReasonCode(),
+                    item.getCreatedAt(),
+                    item.getResolvedAt(),
+                    item.getLabel()
+            );
+        }
     }
 
     @Transactional
@@ -705,11 +723,52 @@ public class ManagerControlService {
                 eventComment
         );
 
+        if (status == ManagerDailyControlItemStatus.RESOLVED && !clientChatUnansweredConcrete) {
+            recordGamificationControlAction(
+                    control,
+                    "concrete:" + savedConcreteItem.getId(),
+                    savedConcreteItem.getParentItem() == null ? null : savedConcreteItem.getParentItem().getReasonCode(),
+                    savedConcreteItem.getCreatedAt(),
+                    savedConcreteItem.getResolvedAt(),
+                    savedConcreteItem.getTitle()
+            );
+        }
+
         if (actionType == ManagerDailyControlActionType.DEFERRED) {
             notifyOwnersAboutDeferredConcreteItem(control, savedConcreteItem, principal);
         }
 
         return concreteItemResponse(savedConcreteItem);
+    }
+
+    private void recordGamificationControlAction(
+            ManagerDailyControl control,
+            String uniqueKey,
+            String reasonCode,
+            LocalDateTime startedAt,
+            LocalDateTime completedAt,
+            String label
+    ) {
+        Manager manager = control == null ? null : control.getManager();
+        String normalized = safe(reasonCode).toUpperCase(Locale.ROOT);
+        boolean risk = normalized.contains("RISK");
+        int target = Math.max(1, appSettingService.getInt(
+                risk ? "manager.sla.target.risk-minutes" : "manager.sla.target.default-minutes",
+                risk ? 30 : 120
+        ));
+        int hard = Math.max(target, appSettingService.getInt(
+                risk ? "manager.sla.hard.risk-minutes" : "manager.sla.hard.default-minutes",
+                risk ? 240 : 720
+        ));
+        gamificationEventService.recordManagerControlAction(
+                manager,
+                uniqueKey,
+                startedAt,
+                completedAt,
+                target,
+                hard,
+                "reason=" + safe(reasonCode) + ";label=" + safe(label)
+        );
     }
 
     @Transactional
@@ -1824,6 +1883,10 @@ public class ManagerControlService {
         );
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
+        long leadActionCount = leadsRepository.countByLidStatusAndManager("Новый", manager)
+                + leadsRepository.countByLidStatusAndManager("В работу", manager)
+                + leadsRepository.countByLidStatusAndManagerAndDateNewTryLessThanEqual("Напоминание", manager, today);
+        long leadsInWork = leadsRepository.countByLidStatusAndManager("В работе", manager);
 
         List<ManagerControlProblemResponse> problems = new ArrayList<>();
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
@@ -1833,14 +1896,16 @@ public class ManagerControlService {
         addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
+        addProblem(problems, "LEADS", "Лиды требуют действия", leadActionCount, "WARNING", "ACTION", "person_search", "/leads");
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
+        addProblem(problems, "LEADS_WORKLOAD", "Лиды в работе", leadsInWork, "INFO", "WORKLOAD", "groups", "/leads");
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
         long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + chatBindingIssueCount
                 + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
-        long warningCount = 0;
-        long workloadCount = orderAttention + workerWorkloadCount;
+        long warningCount = leadActionCount;
+        long workloadCount = orderAttention + workerWorkloadCount + leadsInWork;
         DailyControlSyncResult controlSync = persist
                 ? syncDailyControl(manager, today, problems, sections, overdueStatuses)
                 : readDailyControl(manager, today);
@@ -1878,6 +1943,24 @@ public class ManagerControlService {
         List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats = controlSync.control().getId() == null
                 ? List.of()
                 : workerExplanationStats(controlSync.control());
+        List<ManagerDailyControlItem> actionItems = controlSync.items().stream()
+                .filter(item -> item.getGroup() == ManagerDailyControlGroup.ACTION)
+                .toList();
+        long actionTotalCount = actionItems.stream().mapToLong(item -> Math.max(0, item.getCount())).sum();
+        long actionCompletedCount = actionItems.stream()
+                .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN)
+                .mapToLong(item -> Math.max(0, item.getCount()))
+                .sum();
+        if (actionItems.isEmpty()) {
+            actionTotalCount = problems.stream().filter(problem -> "ACTION".equals(problem.group()))
+                    .mapToLong(ManagerControlProblemResponse::count).sum()
+                    + sections.stream().filter(section -> "ACTION".equals(section.group()))
+                    .mapToLong(ManagerControlSectionResponse::count).sum();
+            actionCompletedCount = 0;
+        }
+        int actionProgressPercent = actionTotalCount <= 0
+                ? 100
+                : (int) Math.max(0, Math.min(100, Math.round(actionCompletedCount * 100D / actionTotalCount)));
 
         return new ManagerControlManagerResponse(
                 manager.getId(),
@@ -1900,6 +1983,10 @@ public class ManagerControlService {
                 blockers.isEmpty(),
                 openItemCount,
                 handledItemCount,
+                actionTotalCount,
+                actionCompletedCount,
+                actionProgressPercent,
+                leadActionCount,
                 status,
                 criticalCount,
                 warningCount,
@@ -2306,6 +2393,7 @@ public class ManagerControlService {
         if (item == null) {
             return response;
         }
+        SlaWindow sla = slaWindow(response.code(), item.getCreatedAt(), item.getResolvedAt());
         return new ManagerControlProblemResponse(
                 response.code(),
                 response.label(),
@@ -2317,8 +2405,34 @@ public class ManagerControlService {
                 item.getId(),
                 item.getStatus().name(),
                 item.getActionType() == null ? null : item.getActionType().name(),
-                item.getComment()
+                item.getComment(),
+                sla.firstObservedAt(),
+                sla.targetDeadlineAt(),
+                sla.hardDeadlineAt(),
+                sla.state()
         );
+    }
+
+    private SlaWindow slaWindow(String code, LocalDateTime firstObservedAt, LocalDateTime completedAt) {
+        if (!appSettingService.getBoolean("manager.sla.enabled", false)) {
+            return new SlaWindow(null, null, null, null);
+        }
+        LocalDateTime started = firstObservedAt == null ? LocalDateTime.now() : firstObservedAt;
+        String normalized = safe(code).toUpperCase(Locale.ROOT);
+        String suffix = normalized.contains("UNANSWERED") ? "message"
+                : normalized.contains("LEAD") ? "lead"
+                : normalized.contains("RISK") ? "risk"
+                : "default";
+        int defaultTarget = "message".equals(suffix) || "risk".equals(suffix) ? 30 : "lead".equals(suffix) ? 60 : 120;
+        int defaultHard = "risk".equals(suffix) ? 240 : "message".equals(suffix) || "lead".equals(suffix) ? 480 : 720;
+        int targetMinutes = Math.max(1, appSettingService.getInt("manager.sla.target." + suffix + "-minutes", defaultTarget));
+        int hardMinutes = Math.max(targetMinutes, appSettingService.getInt("manager.sla.hard." + suffix + "-minutes", defaultHard));
+        LocalDateTime target = started.plusMinutes(targetMinutes);
+        LocalDateTime hard = started.plusMinutes(hardMinutes);
+        LocalDateTime reference = completedAt == null ? LocalDateTime.now() : completedAt;
+        String state = reference.isAfter(hard) ? "OVERDUE" : reference.isAfter(target) ? "LATE" : "TARGET";
+        if (completedAt != null) state = "COMPLETED_" + state;
+        return new SlaWindow(started, target, hard, state);
     }
 
     private ManagerControlSectionResponse decorate(ManagerControlSectionResponse response, ManagerDailyControlItem item) {
@@ -5796,6 +5910,14 @@ public class ManagerControlService {
             ManagerDailyControl control,
             List<ManagerDailyControlItem> items,
             Map<String, ManagerDailyControlItem> itemsByKey
+    ) {
+    }
+
+    private record SlaWindow(
+            LocalDateTime firstObservedAt,
+            LocalDateTime targetDeadlineAt,
+            LocalDateTime hardDeadlineAt,
+            String state
     ) {
     }
 

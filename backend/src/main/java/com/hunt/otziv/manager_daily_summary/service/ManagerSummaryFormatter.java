@@ -61,6 +61,8 @@ public class ManagerSummaryFormatter {
                 + "🛠 Проблемы: <b>" + row.problemResolvedCount() + " из " + row.problemCount() + "</b>, среднее решение "
                 + duration(row.problemResolutionAverageSeconds()) + "\n"
                 + "⚠️ Просрочки: " + row.overdueCount() + " · риски: " + row.riskCount() + " · без ответа: " + row.unansweredCount() + "\n"
+                + "🎮 Итог дня: <b>" + stars(row.dayStars()) + "</b> · под контролем " + duration(row.controlledSeconds())
+                + " · чистая очередь " + duration(row.cleanQueueSeconds()) + " · +" + row.xpEarned() + " XP\n"
                 + "⏱ Подтверждённая активность: <b>" + duration(row.confirmedActiveSeconds()) + "</b>\n"
                 + "├ сайт: " + duration(row.siteActiveSeconds()) + "\n"
                 + "└ мессенджеры вне сайта: " + duration(row.messengerActiveSeconds());
@@ -74,6 +76,10 @@ public class ManagerSummaryFormatter {
 
     private String signed(int value) {
         return value > 0 ? "+" + value : String.valueOf(value);
+    }
+
+    private String stars(int count) {
+        return "★".repeat(Math.max(0, Math.min(3, count))) + "☆".repeat(Math.max(0, 3 - count));
     }
 
     private String duration(long seconds) {

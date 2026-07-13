@@ -8,6 +8,8 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
@@ -160,6 +162,10 @@ class ManagerControlServiceTest {
     private ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     @Mock
     private ManagerDailyControlEventRepository dailyControlEventRepository;
+    @Mock
+    private LeadsRepository leadsRepository;
+    @Mock
+    private GamificationEventService gamificationEventService;
 
     @InjectMocks
     private ManagerControlService service;

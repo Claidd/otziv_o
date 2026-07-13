@@ -72,6 +72,15 @@ public class ManagerPerformanceDaily {
     @Column(name = "site_active_seconds", nullable = false) private long siteActiveSeconds;
     @Column(name = "messenger_active_seconds", nullable = false) private long messengerActiveSeconds;
     @Column(name = "confirmed_active_seconds", nullable = false) private long confirmedActiveSeconds;
+    @Column(name = "lead_action_count", nullable = false) private long leadActionCount;
+    @Column(name = "target_sla_count", nullable = false) private long targetSlaCount;
+    @Column(name = "target_sla_met_count", nullable = false) private long targetSlaMetCount;
+    @Column(name = "hard_sla_breach_count", nullable = false) private long hardSlaBreachCount;
+    @Column(name = "controlled_seconds", nullable = false) private long controlledSeconds;
+    @Column(name = "clean_queue_seconds", nullable = false) private long cleanQueueSeconds;
+    @Column(name = "day_stars", nullable = false) private int dayStars;
+    @Column(name = "day_status", nullable = false, length = 32) private String dayStatus;
+    @Column(name = "xp_earned", nullable = false) private long xpEarned;
     @Column(name = "aggregation_status", nullable = false, length = 24) private String aggregationStatus;
     @Column(name = "finalized_at") private LocalDateTime finalizedAt;
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
@@ -86,6 +95,7 @@ public class ManagerPerformanceDaily {
         if (formulaVersion == null) formulaVersion = "manager-v2";
         if (aggregationStatus == null) aggregationStatus = "CALCULATED";
         if (taskProgressPercent == null) taskProgressPercent = BigDecimal.ZERO;
+        if (dayStatus == null) dayStatus = "IN_PROGRESS";
     }
 
     @PreUpdate

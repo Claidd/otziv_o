@@ -1,5 +1,5 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -23,6 +23,7 @@ import {
   ManagerControlSection,
   ManagerControlSummary,
   ManagerControlStatus,
+  ManagerQueueState,
   ManagerControlWorkerExplanationStats
 } from '../../../core/manager-control.api';
 import { apiErrorMessage } from '../../../shared/api-error-message';
@@ -79,6 +80,7 @@ export class ManagerControlComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly routePersonalControl = this.route.snapshot.data['personalControl'] === true;
   private detailRequestSeq = 0;
   private autoSyncingDetailManagerIds = new Set<number>();
@@ -106,6 +108,8 @@ export class ManagerControlComponent implements OnInit {
   readonly dailySummaryPreview = signal<ManagerDailySummaryPreview | null>(null);
   readonly dailySummaryPreviewLoading = signal(false);
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
+  readonly clock = signal(Date.now());
+  readonly queueState = signal<ManagerQueueState | null>(null);
 
   readonly managers = computed(() => {
     return this.summary()?.managers ?? [];
@@ -130,6 +134,8 @@ export class ManagerControlComponent implements OnInit {
   });
 
   constructor() {
+    const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
+    this.destroyRef.onDestroy(() => window.clearInterval(clockTimer));
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const rawManagerId = params.get('managerId');
       const managerId = rawManagerId ? Number(rawManagerId) : null;
@@ -164,6 +170,7 @@ export class ManagerControlComponent implements OnInit {
           if (!personalManagerId) {
             this.clearDetails();
           }
+          this.loadQueueState();
         } else if (this.detailPageManagerId()) {
           this.selectedManagerId.set(this.detailPageManagerId());
         } else if (!selectedId || !summary.managers.some((manager) => manager.managerId === selectedId)) {
@@ -279,7 +286,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   dailyTaskTotal(manager: ManagerControlManager): number {
-    return Math.max(0, (manager.openItemCount ?? 0) + (manager.handledItemCount ?? 0));
+    return Math.max(0, manager.actionTotalCount ?? 0);
   }
 
   dailyTaskProgress(manager: ManagerControlManager): number {
@@ -287,7 +294,47 @@ export class ManagerControlComponent implements OnInit {
     if (total === 0) {
       return 100;
     }
-    return Math.max(0, Math.min(100, Math.round(manager.handledItemCount * 100 / total)));
+    return Math.max(0, Math.min(100, manager.actionProgressPercent ?? Math.round((manager.actionCompletedCount ?? 0) * 100 / total)));
+  }
+
+  dailyTaskCompleted(manager: ManagerControlManager): number {
+    return Math.max(0, manager.actionCompletedCount ?? 0);
+  }
+
+  queueDuration(seconds: number): string {
+    const hours = Math.floor(Math.max(0, seconds) / 3600);
+    const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60);
+    return `${hours} ч ${minutes} мин`;
+  }
+
+  private loadQueueState(): void {
+    this.api.myQueueState().subscribe({ next: (state) => this.queueState.set(state), error: () => this.queueState.set(null) });
+  }
+
+  slaTimer(problem: ManagerControlProblem): string {
+    this.clock();
+    if (!problem.targetDeadlineAt || (problem.itemStatus && problem.itemStatus !== 'OPEN')) {
+      return '';
+    }
+    const target = new Date(problem.targetDeadlineAt).getTime();
+    const hard = problem.hardDeadlineAt ? new Date(problem.hardDeadlineAt).getTime() : target;
+    const now = Date.now();
+    if (!Number.isFinite(target)) return '';
+    if (now <= target) return `цель через ${this.durationShort(target - now)}`;
+    if (Number.isFinite(hard) && now <= hard) return `цель просрочена на ${this.durationShort(now - target)}`;
+    return `критично ${this.durationShort(now - hard)}`;
+  }
+
+  slaTimerClass(problem: ManagerControlProblem): string {
+    return problem.slaState === 'OVERDUE' ? 'sla-overdue' : problem.slaState === 'LATE' ? 'sla-late' : 'sla-target';
+  }
+
+  private durationShort(milliseconds: number): string {
+    const minutes = Math.max(0, Math.ceil(milliseconds / 60_000));
+    if (minutes < 60) return `${minutes} мин`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest > 0 ? `${hours} ч ${rest} мин` : `${hours} ч`;
   }
 
   countToneClass(count: number | null | undefined): string {

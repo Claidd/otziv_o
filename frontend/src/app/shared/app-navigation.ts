@@ -152,8 +152,17 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     active: 'gamification-progress',
     group: 'home',
     routerLink: '/gamification/progress',
-    adminOnly: true,
     roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
+  },
+  {
+    id: 'gamification-rewards',
+    label: 'Награды',
+    description: 'Каталог и заявки сотрудников',
+    icon: 'redeem',
+    active: 'gamification-rewards',
+    group: 'home',
+    routerLink: '/admin/gamification/rewards',
+    roles: ['ADMIN', 'OWNER']
   },
   {
     id: 'dictionaries',
