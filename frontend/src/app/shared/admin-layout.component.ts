@@ -393,10 +393,10 @@ export class AdminLayoutComponent {
     if (value >= 90) {
       return 'excellent';
     }
-    if (value >= 75) {
+    if (value >= 80) {
       return 'good';
     }
-    if (value >= 55) {
+    if (value >= 40) {
       return 'warning';
     }
     return 'risk';

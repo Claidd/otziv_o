@@ -237,6 +237,42 @@ export interface ManagerControlSummary {
   managers: ManagerControlManager[];
 }
 
+export interface ManagerDailySummaryRow {
+  date: string;
+  managerId: number;
+  managerUserId?: number | null;
+  managerName?: string | null;
+  score: number;
+  grade: string;
+  taskTotal: number;
+  taskCompleted: number;
+  taskOpen: number;
+  taskProgressPercent: number;
+  overdueCount: number;
+  riskCount: number;
+  unansweredCount: number;
+  firstReplyAverageSeconds: number;
+  firstReplyMedianSeconds: number;
+  allReplyAverageSeconds: number;
+  allReplyMedianSeconds: number;
+  allReplyP90Seconds: number;
+  replyCount: number;
+  repliesInSla: number;
+  problemCount: number;
+  problemResolvedCount: number;
+  problemResolutionAverageSeconds: number;
+  siteActiveSeconds: number;
+  messengerActiveSeconds: number;
+  confirmedActiveSeconds: number;
+  aggregationStatus: string;
+}
+
+export interface ManagerDailySummaryPreview {
+  date: string;
+  message: string;
+  managers: ManagerDailySummaryRow[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ManagerControlApi {
   constructor(private readonly http: HttpClient) {}
@@ -251,6 +287,21 @@ export class ManagerControlApi {
     return this.http.post<ManagerControlSummary>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/today/sync`,
       {}
+    );
+  }
+
+  calculateDailySummary(date?: string): Observable<ManagerDailySummaryRow[]> {
+    return this.http.post<ManagerDailySummaryRow[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/calculate`,
+      {},
+      { params: date ? { date } : {} }
+    );
+  }
+
+  dailySummaryPreview(date?: string): Observable<ManagerDailySummaryPreview> {
+    return this.http.get<ManagerDailySummaryPreview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/preview`,
+      { params: date ? { date } : {} }
     );
   }
 

@@ -200,6 +200,12 @@
         <span>Состояние</span>
         <strong>{{ summary()?.testMode ? 'наблюдение' : 'рабочий контур' }}</strong>
       </div>
+      @if (canManageDailySummary()) {
+        <button type="button" class="summary-preview-button" (click)="buildDailySummaryPreview()" [disabled]="dailySummaryPreviewLoading()">
+          <span class="material-icons-sharp">preview</span>
+          {{ dailySummaryPreviewLoading() ? 'Формирую…' : 'Предпросмотр сводки 23:00' }}
+        </button>
+      }
       @for (manager of topManagers(); track trackManager($index, manager)) {
         <article class="side-manager" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
           <span class="material-icons-sharp">{{ statusIcon(manager.status) }}</span>
@@ -285,6 +291,16 @@
                   Детали
                 </button>
               </header>
+
+              <div class="daily-task-progress" role="progressbar" [attr.aria-valuenow]="dailyTaskProgress(manager)" aria-valuemin="0" aria-valuemax="100">
+                <div class="daily-task-progress-head">
+                  <span>Прогресс задач на день</span>
+                  <strong>{{ manager.handledItemCount }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+                </div>
+                <div class="daily-task-progress-track">
+                  <span [style.width.%]="dailyTaskProgress(manager)"></span>
+                </div>
+              </div>
 
               <div class="personal-remark-metrics">
                 <article class="personal-metric overdue {{ countToneClass(manager.overdueOrderCount) }}">
@@ -378,6 +394,16 @@
               </button>
             </header>
 
+            <div class="daily-task-progress" role="progressbar" [attr.aria-valuenow]="dailyTaskProgress(manager)" aria-valuemin="0" aria-valuemax="100">
+              <div class="daily-task-progress-head">
+                <span>Прогресс задач на день</span>
+                <strong>{{ manager.handledItemCount }} / {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+              </div>
+              <div class="daily-task-progress-track">
+                <span [style.width.%]="dailyTaskProgress(manager)"></span>
+              </div>
+            </div>
+
             <div class="manager-numbers">
               <span class="metric urgent {{ countToneClass(manager.overdueOrderCount) }}"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
               <span class="metric urgent {{ countToneClass(manager.openRiskCount) }}"><b>{{ manager.openRiskCount }}</b><small>риски</small></span>
@@ -437,6 +463,23 @@
       </div>
     </section>
   </section>
+
+  @if (dailySummaryPreview(); as preview) {
+    <div class="summary-preview-backdrop" (click)="closeDailySummaryPreview()">
+      <section class="summary-preview-dialog" role="dialog" aria-modal="true" aria-label="Предпросмотр дневной сводки" (click)="$event.stopPropagation()">
+        <header>
+          <div>
+            <small>Тестовый режим</small>
+            <h2>Сводка за {{ preview.date | date: 'dd.MM.yyyy' }}</h2>
+          </div>
+          <button type="button" (click)="closeDailySummaryPreview()" aria-label="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+        <div class="summary-preview-message" [innerHTML]="preview.message"></div>
+      </section>
+    </div>
+  }
 
   <ng-template #managerControlRight>
     @if (!isDetailPage()) {

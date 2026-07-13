@@ -17,6 +17,7 @@ import {
   ManagerControlItemStatus,
   ManagerControlManagerDetail,
   ManagerControlManager,
+  ManagerDailySummaryPreview,
   ManagerControlOverdueStatus,
   ManagerControlProblem,
   ManagerControlSection,
@@ -102,6 +103,8 @@ export class ManagerControlComponent implements OnInit {
   readonly selectedManagerId = signal<number | null>(null);
   readonly detailPageManagerId = signal<number | null>(null);
   readonly activePerformanceTip = signal<string | null>(null);
+  readonly dailySummaryPreview = signal<ManagerDailySummaryPreview | null>(null);
+  readonly dailySummaryPreviewLoading = signal(false);
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
 
   readonly managers = computed(() => {
@@ -190,6 +193,37 @@ export class ManagerControlComponent implements OnInit {
     this.load({ sync: true });
   }
 
+  canManageDailySummary(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  buildDailySummaryPreview(): void {
+    if (this.dailySummaryPreviewLoading()) return;
+    this.dailySummaryPreviewLoading.set(true);
+    this.api.calculateDailySummary(this.summaryDate() || undefined).subscribe({
+      next: () => {
+        this.api.dailySummaryPreview(this.summaryDate() || undefined).subscribe({
+          next: (preview) => {
+            this.dailySummaryPreview.set(preview);
+            this.dailySummaryPreviewLoading.set(false);
+          },
+          error: (err) => {
+            this.dailySummaryPreviewLoading.set(false);
+            this.toast.error('Предпросмотр не сформирован', apiErrorMessage(err, 'Не удалось загрузить текст сводки'));
+          }
+        });
+      },
+      error: (err) => {
+        this.dailySummaryPreviewLoading.set(false);
+        this.toast.error('Сводка не рассчитана', apiErrorMessage(err, 'Не удалось рассчитать дневные показатели'));
+      }
+    });
+  }
+
+  closeDailySummaryPreview(): void {
+    this.dailySummaryPreview.set(null);
+  }
+
   statusLabel(status: ManagerControlStatus): string {
     switch (status) {
       case 'RED':
@@ -242,6 +276,18 @@ export class ManagerControlComponent implements OnInit {
 
   otherCriticalCount(manager: ManagerControlManager): number {
     return Math.max(0, manager.criticalCount - manager.overdueOrderCount - manager.openRiskCount);
+  }
+
+  dailyTaskTotal(manager: ManagerControlManager): number {
+    return Math.max(0, (manager.openItemCount ?? 0) + (manager.handledItemCount ?? 0));
+  }
+
+  dailyTaskProgress(manager: ManagerControlManager): number {
+    const total = this.dailyTaskTotal(manager);
+    if (total === 0) {
+      return 100;
+    }
+    return Math.max(0, Math.min(100, Math.round(manager.handledItemCount * 100 / total)));
   }
 
   countToneClass(count: number | null | undefined): string {
@@ -455,10 +501,10 @@ export class ManagerControlComponent implements OnInit {
     if (value >= 90) {
       return 'excellent';
     }
-    if (value >= 75) {
+    if (value >= 80) {
       return 'good';
     }
-    if (value >= 55) {
+    if (value >= 40) {
       return 'warning';
     }
     return 'risk';

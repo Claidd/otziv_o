@@ -158,6 +158,7 @@ public class SecurityConfig {
         auth.requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll();
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
+        auth.requestMatchers("/api/manager-activity/**").authenticated();
         auth.requestMatchers("/api/mobile/**").authenticated();
         auth.requestMatchers("/api/gamification/me").authenticated();
         auth.requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated();

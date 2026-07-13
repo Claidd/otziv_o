@@ -208,10 +208,10 @@ export class ScoreComponent {
     if (score >= 90) {
       return 'excellent';
     }
-    if (score >= 75) {
+    if (score >= 80) {
       return 'good';
     }
-    if (score >= 55) {
+    if (score >= 40) {
       return 'warning';
     }
     return 'risk';
