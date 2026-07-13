@@ -345,7 +345,12 @@
                   </div>
                   <div class="chip-list">
                     @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
-                      <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                      <a
+                        [href]="problem.targetUrl"
+                        class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}"
+                        [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
+                        [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
+                      >
                         <span class="material-icons-sharp">{{ problem.icon }}</span>
                         <span>{{ problem.label }}</span>
                         <strong>{{ problem.count }}</strong>
@@ -449,7 +454,12 @@
                 </div>
                 <div class="chip-list">
                   @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
-                    <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                    <a
+                      [href]="problem.targetUrl"
+                      class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}"
+                      [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
+                      [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
+                    >
                       <span class="material-icons-sharp">{{ problem.icon }}</span>
                       <span>{{ problem.label }}</span>
                       <strong>{{ problem.count }}</strong>

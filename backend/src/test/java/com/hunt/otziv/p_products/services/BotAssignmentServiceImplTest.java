@@ -16,6 +16,7 @@ import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -71,12 +72,21 @@ class BotAssignmentServiceImplTest {
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @Mock
+    private ReviewBotAssignmentGuardService assignmentGuardService;
+
+    @Mock
     private BusinessAuditService businessAuditService;
 
     @BeforeEach
     void allowCompanyLocks() {
         lenient().when(companyRepository.findByIdForBotAssignmentLock(anyLong()))
                 .thenAnswer(invocation -> Optional.of(company(invocation.getArgument(0))));
+        lenient().when(assignmentGuardService.scope(anyLong(), any()))
+                .thenAnswer(invocation -> new ReviewBotAssignmentGuardService.AssignmentScope(
+                        invocation.getArgument(0), invocation.getArgument(1), null, null));
+        lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
+        lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
+                .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
     }
 
     @Test
@@ -95,7 +105,6 @@ class BotAssignmentServiceImplTest {
                 .product(Product.builder().id(1L).build())
                 .build();
 
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(walkedBot, unwalkedBot));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
@@ -150,7 +159,7 @@ class BotAssignmentServiceImplTest {
         Bot free = bot(102L, "Впишите Имя Фамилию", 0);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(usedInCompany, free));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(101L));
+        when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(101L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
 
@@ -170,8 +179,7 @@ class BotAssignmentServiceImplTest {
         Bot free = bot(103L, "Впишите Имя Фамилию", 0);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(inactive, reserved, free));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(102L));
+        when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(102L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
 
@@ -189,7 +197,6 @@ class BotAssignmentServiceImplTest {
         Bot free = bot(102L, "Впишите Имя Фамилию", 0);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(coolingDown, free));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
         when(botCooldownService.isAvailableForAssignment(coolingDown)).thenReturn(false);
@@ -210,8 +217,7 @@ class BotAssignmentServiceImplTest {
         Bot stubBot = bot(1L, "Нет доступных аккаунтов", 0);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of());
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(777L));
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(null)).thenReturn(Set.of(888L));
+        when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(777L, 888L));
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botService.claimNewAccountForCity(eq(city), anyCollection())).thenReturn(Optional.empty());
         when(botService.findBotById(1L)).thenReturn(stubBot);
@@ -237,8 +243,6 @@ class BotAssignmentServiceImplTest {
         review.setVigul(false);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(walked, needsWalk));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(50L)).thenReturn(Set.of());
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
         when(accountWalkScheduleService.isEligibleForNagul(walked)).thenReturn(false);
@@ -266,8 +270,6 @@ class BotAssignmentServiceImplTest {
         review.setVigul(true);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(rejectedWalked, needsWalk));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(51L)).thenReturn(Set.of());
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
         when(accountWalkScheduleService.isEligibleForNagul(needsWalk)).thenReturn(true);
@@ -293,8 +295,6 @@ class BotAssignmentServiceImplTest {
         review.setVigul(true);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of());
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(52L)).thenReturn(Set.of());
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botService.claimNewAccountForCity(eq(city), anyCollection()))
                 .thenReturn(Optional.of(freshAccount));
@@ -333,8 +333,7 @@ class BotAssignmentServiceImplTest {
 
         when(botService.claimReserveBotForCity(eq(city), anyCollection()))
                 .thenReturn(Optional.of(reserveBot));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of(777L));
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(2L)).thenReturn(Set.of(888L));
+        when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(777L, 888L));
         when(accountWalkScheduleService.isWalkedAccount(stubBot)).thenReturn(true);
 
         service.checkAndNotifyAboutStubBots(List.of(existingReview, stubReview));
@@ -365,8 +364,6 @@ class BotAssignmentServiceImplTest {
 
         when(botService.claimReserveBotForCity(eq(city), anyCollection()))
                 .thenReturn(Optional.of(reserveBot));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
-        when(reviewRepository.findReservedBotIdsByUnpublishedReviews(2L)).thenReturn(Set.of());
 
         service.checkAndNotifyAboutStubBots(List.of(stubReview), true);
 
@@ -386,7 +383,6 @@ class BotAssignmentServiceImplTest {
         review.setFilial(filial);
 
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(candidate));
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
         when(filialService.findByCityId(5L)).thenReturn(List.of(filial));
         when(botCooldownService.isAvailableForAssignment(candidate)).thenReturn(true);
 
@@ -422,7 +418,6 @@ class BotAssignmentServiceImplTest {
                 .reviewFilialIds(List.of(20L, 21L))
                 .build();
 
-        when(reviewRepository.findUsedBotIdsByCompanyId(10L)).thenReturn(Set.of());
         when(filialService.getFilial(20L)).thenReturn(filialA);
         when(filialService.getFilial(21L)).thenReturn(filialB);
         when(botService.getFindAllByFilialCityId(5L)).thenReturn(List.of(botA));
@@ -449,6 +444,7 @@ class BotAssignmentServiceImplTest {
                 telegramService,
                 botCooldownService,
                 accountWalkScheduleService,
+                assignmentGuardService,
                 businessAuditService
         );
     }

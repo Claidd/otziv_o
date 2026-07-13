@@ -1,7 +1,6 @@
 package com.hunt.otziv.p_products.review;
 
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.Company;
@@ -12,6 +11,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Worker;
@@ -46,7 +46,7 @@ class OrderReviewMutationServiceTest {
     private OrderDetailsService orderDetailsService;
 
     @Mock
-    private BotService botService;
+    private BotAssignmentService botAssignmentService;
 
     @Mock
     private ReviewService reviewService;
@@ -68,7 +68,7 @@ class OrderReviewMutationServiceTest {
         Bot bot = bot(100L);
 
         when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
-        when(botService.getAllBotsByWorkerIdActiveIsTrue(9L)).thenReturn(List.of(bot));
+        when(botAssignmentService.assignBotForReviewChange(any(), any(), any())).thenReturn(bot);
         when(reviewService.save(any(Review.class))).thenAnswer(invocation -> {
             Review review = invocation.getArgument(0);
             review.setId(2L);
@@ -112,7 +112,7 @@ class OrderReviewMutationServiceTest {
 
         assertFalse(service.addNewReview(11L));
 
-        verifyNoInteractions(orderDetailsService, botService, reviewService, companyService);
+        verifyNoInteractions(orderDetailsService, botAssignmentService, reviewService, companyService);
     }
 
     @Test
@@ -156,14 +156,14 @@ class OrderReviewMutationServiceTest {
         assertFalse(service.deleteNewReview(13L, 99L));
 
         verify(reviewService, never()).deleteReview(99L);
-        verifyNoInteractions(orderDetailsService, botService, companyService);
+        verifyNoInteractions(orderDetailsService, botAssignmentService, companyService);
     }
 
     private OrderReviewMutationService service() {
         return new OrderReviewMutationService(
                 orderRepository,
                 orderDetailsService,
-                botService,
+                botAssignmentService,
                 reviewService,
                 companyService
         );

@@ -22,6 +22,7 @@ import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -96,6 +98,9 @@ class BadReviewTaskServiceImplTest {
     @Mock
     private ReviewBotCooldownService botCooldownService;
 
+    @Mock
+    private ReviewBotAssignmentGuardService assignmentGuardService;
+
     @InjectMocks
     private BadReviewTaskServiceImpl service;
 
@@ -105,6 +110,13 @@ class BadReviewTaskServiceImplTest {
         ReflectionTestUtils.setField(service, "commonBillingServiceProvider", commonBillingServiceProvider);
         lenient().when(botCooldownService.isAvailableForAssignment(any())).thenReturn(true);
         lenient().when(botService.getActiveBotsOutsideCityWithCounterAtLeast(any(), eq(5))).thenReturn(List.of());
+        lenient().when(assignmentGuardService.scopeForBadTask(
+                        nullable(Long.class), nullable(Long.class)))
+                .thenAnswer(invocation -> new ReviewBotAssignmentGuardService.AssignmentScope(
+                        invocation.getArgument(0), null, invocation.getArgument(1), null));
+        lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
+        lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
+                .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
     }
 
     @Test

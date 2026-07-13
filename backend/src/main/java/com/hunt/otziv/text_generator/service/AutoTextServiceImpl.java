@@ -1,7 +1,6 @@
 package com.hunt.otziv.text_generator.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.dto.CategoryDTO;
 import com.hunt.otziv.c_categories.dto.SubCategoryDTO;
 import com.hunt.otziv.c_categories.model.Category;
@@ -14,7 +13,9 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.text_generator.config.PromptFactory;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
@@ -27,7 +28,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.net.SocketTimeoutException;
-import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
@@ -41,7 +41,7 @@ public class AutoTextServiceImpl implements AutoTextService{
 
     private final ReviewService reviewService;
     private final ReviewGeneratorService reviewGeneratorService;
-    private final BotService botService;
+    private final BotAssignmentService botAssignmentService;
     private final CategoryService categoryService;
     private final SubCategoryService subCategoryService;
     private final FilialService filialService;
@@ -221,7 +221,6 @@ public class AutoTextServiceImpl implements AutoTextService{
 
     public List<Review> toEntityListReviewsFromDTO(OrderDTO orderDTO, OrderDetails orderDetails) {
         List<Review> reviewList = new ArrayList<>();
-        List<Bot> bots = findAllBotsMinusFilial(orderDTO, convertFilialDTOToFilial(orderDTO.getFilial()));
         String site = parfum;
         String category = orderDetails.getOrder().getCompany().getSubCategory().getSubCategoryTitle();
         int totalAmount = orderDTO.getAmount();
@@ -258,9 +257,15 @@ public class AutoTextServiceImpl implements AutoTextService{
                     orderDTO.getCompany(),
                     orderDetails,
                     orderDTO.getFilial(),
-                    bots,
                     text
             );
+            Bot selectedBot = botAssignmentService.assignBotForReviewChange(
+                    review,
+                    Set.of(),
+                    ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
+            );
+            review.setBot(selectedBot);
+            botAssignmentService.updateReviewVigulBasedOnBotCounter(review, selectedBot);
             Review saved = reviewService.save(review);
             if (saved != null) {
                 reviewList.add(saved);
@@ -353,18 +358,15 @@ public class AutoTextServiceImpl implements AutoTextService{
             CompanyDTO companyDTO,
             OrderDetails orderDetails,
             FilialDTO filialDTO,
-            List<Bot> bots,
             String textReview // <-- передаём уже готовый текст
     ) {
-        var random = new SecureRandom();
-
         return Review.builder()
                 .category(convertCategoryDTOToCompany(companyDTO.getCategoryCompany()))
                 .subCategory(convertSubCompanyDTOToSubCompany(companyDTO.getSubCategory()))
                 .text(textReview != null ? textReview : "Текст отзыва")
                 .answer("")
                 .orderDetails(orderDetails)
-                .bot(!bots.isEmpty() ? bots.get(random.nextInt(bots.size())) : null)
+                .bot(null)
                 .filial(convertFilialDTOToFilial(filialDTO))
                 .publish(false)
                 .worker(orderDetails.getOrder().getWorker())
@@ -375,15 +377,6 @@ public class AutoTextServiceImpl implements AutoTextService{
 
 
 
-
-    private List<Bot> findAllBotsMinusFilial(OrderDTO orderDTO, Filial filial){
-        List<Bot> bots = botService.getFindAllByFilialCityId(filial.getCity().getId());
-        List<Review> reviewListFilial = reviewService.findAllByFilial(filial);
-
-        List<Bot> botsCompany = reviewListFilial.stream().map(Review::getBot).toList();
-        bots.removeAll(botsCompany);
-        return bots;
-    }
 
     private Category convertCategoryDTOToCompany(CategoryDTO categoryDTO){ // Конвертер из DTO для категории
         return categoryService.getCategoryByIdCategory(categoryDTO.getId());

@@ -19,9 +19,10 @@ import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
-import com.hunt.otziv.r_review.utils.ReviewBotPolicy;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
@@ -71,7 +72,6 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             EnumSet.of(ReviewRecoveryTaskStatus.PLANNED, ReviewRecoveryTaskStatus.DONE);
     private static final EnumSet<ReviewRecoveryBatchStatus> VISIBLE_BATCH_STATUSES =
             EnumSet.of(ReviewRecoveryBatchStatus.OPEN, ReviewRecoveryBatchStatus.COMPLETED);
-    private static final int WALKED_ACCOUNT_COUNTER = 3;
     private static final int PREFERRED_CROSS_CITY_COUNTER_MAX = 5;
     private final SecureRandom random = new SecureRandom();
 
@@ -88,6 +88,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final GamificationEventService gamificationEventService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewBotAssignmentGuardService assignmentGuardService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final OrderRepository orderRepository;
     private final ManagerRepository managerRepository;
     private final WorkerRepository workerRepository;
@@ -124,19 +126,20 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 .sourceReview(review)
                 .worker(resolveWorker(order, review))
                 .manager(order.getManager())
-                .bot(review.getBot())
+                .bot(null)
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .originalText(review.getText())
                 .recoveryText(safeText(review.getText()))
                 .originalAnswer(review.getAnswer())
                 .recoveryAnswer(review.getAnswer())
-                .botLoginSnapshot(botLogin(review.getBot()))
-                .botPasswordSnapshot(botPassword(review.getBot()))
-                .botFioSnapshot(botFio(review.getBot()))
+                .botLoginSnapshot(null)
+                .botPasswordSnapshot(null)
+                .botFioSnapshot(null)
                 .scheduledDate(scheduledDate)
                 .createdBy(createdBy)
                 .build();
 
+        applyInitialEligibleBot(task);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         reserveTaskBot(savedTask, "review recovery task created");
         log.info("Создана задача восстановления {} для отзыва {}, заказа {}, дата {}",
@@ -160,9 +163,6 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         Worker worker = source.workerId() == null
                 ? null
                 : workerRepository.findById(source.workerId()).orElse(null);
-        Bot bot = source.botId() == null
-                ? null
-                : botService.findBotById(source.botId());
         ReviewRecoveryBatch batch = getOrCreateActiveArchiveBatch(source, manager, createdBy);
         LocalDate scheduledDate = nextArchiveScheduledDate(source);
 
@@ -193,19 +193,20 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 .archiveReviewUrl(source.url())
                 .worker(worker)
                 .manager(manager)
-                .bot(bot)
+                .bot(null)
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .originalText(source.text())
                 .recoveryText(safeText(source.text()))
                 .originalAnswer(source.answer())
                 .recoveryAnswer(source.answer())
-                .botLoginSnapshot(firstNonBlank(botLogin(bot), source.botLogin()))
-                .botPasswordSnapshot(firstNonBlank(botPassword(bot), source.botPassword()))
-                .botFioSnapshot(firstNonBlank(botFio(bot), source.botFio()))
+                .botLoginSnapshot(null)
+                .botPasswordSnapshot(null)
+                .botFioSnapshot(null)
                 .scheduledDate(scheduledDate)
                 .createdBy(createdBy)
                 .build();
 
+        applyInitialEligibleBot(task);
         ReviewRecoveryTask savedTask = taskRepository.save(task);
         reserveTaskBot(savedTask, "archive review recovery task created");
         log.info("Создана архивная задача восстановления {} для архивного отзыва {}, заказа {}, дата {}",
@@ -896,18 +897,6 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         return text == null ? "" : text;
     }
 
-    private String firstNonBlank(String... values) {
-        if (values == null) {
-            return "";
-        }
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return "";
-    }
-
     private Long orderId(ReviewRecoveryTask task) {
         if (task == null) {
             return null;
@@ -950,20 +939,28 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         Set<Long> excludedBotIds = replacementExcludedBotIds(task);
+        ReviewBotAssignmentGuardService.AssignmentScope assignmentScope = assignmentScope(task);
+        excludedBotIds.addAll(assignmentGuardService.blockedBotIds(assignmentScope));
         List<Bot> sameCityCandidates = botService.getFindAllByFilialCityId(city.getId()).stream()
-                .filter(bot -> ReviewBotPolicy.isWalkedAccount(bot, WALKED_ACCOUNT_COUNTER))
+                .filter(accountWalkScheduleService::isWalkedAccount)
                 .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .toList();
 
         if (!sameCityCandidates.isEmpty()) {
-            return randomBot(sameCityCandidates);
+            Bot selected = lockRandomEligible(sameCityCandidates, assignmentScope);
+            if (selected != null) {
+                return selected;
+            }
         }
 
         List<Bot> crossCityCandidates = botService
-                .getActiveBotsOutsideCityWithCounterAtLeast(city.getId(), WALKED_ACCOUNT_COUNTER)
+                .getActiveBotsOutsideCityWithCounterAtLeast(
+                        city.getId(),
+                        accountWalkScheduleService.walkedCounterThreshold()
+                )
                 .stream()
-                .filter(bot -> ReviewBotPolicy.isWalkedAccount(bot, WALKED_ACCOUNT_COUNTER))
+                .filter(accountWalkScheduleService::isWalkedAccount)
                 .filter(botCooldownService::isAvailableForAssignment)
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .toList();
@@ -972,10 +969,62 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
                 .filter(bot -> bot.getCounter() <= PREFERRED_CROSS_CITY_COUNTER_MAX)
                 .toList();
         if (!preferredCrossCityCandidates.isEmpty()) {
-            return randomBot(preferredCrossCityCandidates);
+            Bot selected = lockRandomEligible(preferredCrossCityCandidates, assignmentScope);
+            if (selected != null) {
+                return selected;
+            }
         }
 
-        return crossCityCandidates.isEmpty() ? null : randomBot(crossCityCandidates);
+        return crossCityCandidates.isEmpty()
+                ? null
+                : lockRandomEligible(crossCityCandidates, assignmentScope);
+    }
+
+    private void applyInitialEligibleBot(ReviewRecoveryTask task) {
+        Bot selectedBot = pickReplacementBot(task);
+        if (selectedBot == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Нет свободного выгулянного аккаунта для восстановления"
+            );
+        }
+        task.setBot(selectedBot);
+        task.setBotLoginSnapshot(botLogin(selectedBot));
+        task.setBotPasswordSnapshot(botPassword(selectedBot));
+        task.setBotFioSnapshot(botFio(selectedBot));
+    }
+
+    private Bot lockRandomEligible(
+            List<Bot> candidates,
+            ReviewBotAssignmentGuardService.AssignmentScope scope
+    ) {
+        List<Bot> remaining = new java.util.ArrayList<>(candidates);
+        while (!remaining.isEmpty()) {
+            Bot selected = remaining.remove(random.nextInt(remaining.size()));
+            Bot locked = assignmentGuardService.lockIfEligible(selected, scope).orElse(null);
+            if (locked != null) {
+                return locked;
+            }
+        }
+        return null;
+    }
+
+    private ReviewBotAssignmentGuardService.AssignmentScope assignmentScope(ReviewRecoveryTask task) {
+        Long companyId = null;
+        if (task != null && task.getOrder() != null && task.getOrder().getCompany() != null) {
+            companyId = task.getOrder().getCompany().getId();
+        }
+        if (companyId == null && task != null) {
+            companyId = task.getArchiveCompanyId();
+        }
+        Long sourceReviewId = task != null && task.getSourceReview() != null
+                ? task.getSourceReview().getId()
+                : null;
+        return assignmentGuardService.scopeForRecoveryTask(
+                companyId,
+                task != null ? task.getId() : null,
+                sourceReviewId
+        );
     }
 
     private Set<Long> replacementExcludedBotIds(ReviewRecoveryTask task) {
@@ -1001,10 +1050,6 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (values != null) {
             target.addAll(values);
         }
-    }
-
-    private Bot randomBot(List<Bot> bots) {
-        return bots.get(random.nextInt(bots.size()));
     }
 
     private ReviewRecoveryTask assignTaskBot(ReviewRecoveryTask task, Bot oldBot, Bot nextBot, String reason) {

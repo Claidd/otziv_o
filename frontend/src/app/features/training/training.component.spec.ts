@@ -16,6 +16,16 @@ describe('training account assignment tab', () => {
     expect(blockText).toContain('Назначение аккаунтов новым заказам');
     expect(blockText).toContain('счетчик не меньше 2');
     expect(blockText).toContain('счетчиком 0 или 1');
+    expect(blockText).toContain('ручном добавлении новых отзывов');
+    expect(blockText).toContain('общего пула проходит те же проверки');
+  });
+
+  it('documents the shared guard for every assignment path', () => {
+    expect(blockText).toContain('Единая проверка при любом назначении');
+    expect(blockText).toContain('live-таблице или физическом архиве');
+    expect(blockText).toContain('активной задачей плохого отзыва');
+    expect(blockText).toContain('повторно блокирует строку аккаунта');
+    expect(blockText).toContain('назначение завершается ошибкой');
   });
 
   it('documents change and block actions in walk and publication sections', () => {
@@ -33,5 +43,14 @@ describe('training account assignment tab', () => {
   it('explains that rejection history is isolated and cleaned up', () => {
     expect(blockText).toContain('История хранится по ключу «карточка отзыва + аккаунт»');
     expect(blockText).toContain('После успешной публикации вся история этой карточки удаляется');
+  });
+
+  it('documents bad reviews, recovery and safe owner troubleshooting', () => {
+    expect(blockText).toContain('Плохие отзывы и восстановление');
+    expect(blockText).toContain('Первичная задача плохого отзыва продолжает работу');
+    expect(blockText).toContain('отдельный свободный подготовленный аккаунт');
+    expect(blockText).toContain('Что проверять владельцу и администратору');
+    expect(blockText).toContain('автоматически не переназначает');
+    expect(blockText).toContain('Не исправляйте назначения прямым редактированием таблиц');
   });
 });

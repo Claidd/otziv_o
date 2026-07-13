@@ -69,6 +69,9 @@ class ReviewBotChangeServiceTest {
     private ReviewBotCooldownService botCooldownService;
 
     @Mock
+    private ReviewBotAssignmentGuardService assignmentGuardService;
+
+    @Mock
     private BusinessAuditService businessAuditService;
 
     @Mock
@@ -79,6 +82,12 @@ class ReviewBotChangeServiceTest {
         lenient().when(companyRepository.findByIdForBotAssignmentLock(anyLong()))
                 .thenAnswer(invocation -> Optional.of(company(invocation.getArgument(0))));
         lenient().when(assignmentExclusionService.excludedBotIds(any())).thenReturn(Set.of());
+        lenient().when(assignmentGuardService.scope(anyLong(), any()))
+                .thenAnswer(invocation -> new ReviewBotAssignmentGuardService.AssignmentScope(
+                        invocation.getArgument(0), invocation.getArgument(1), null, null));
+        lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
+        lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
+                .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
     }
 
     @Test
@@ -240,6 +249,7 @@ class ReviewBotChangeServiceTest {
         ReviewBotChangeService service = service();
         City city = city(4L, "Иркутск");
         Filial filial = filial(11L, city);
+        filial.setCompany(company(22L));
         Review review = new Review();
         review.setId(100L);
         review.setFilial(filial);
@@ -251,7 +261,6 @@ class ReviewBotChangeServiceTest {
 
         when(botService.getFindAllByFilialCityId(4L))
                 .thenReturn(List.of(templateBot, regularBot, usedBot));
-        when(reviewRepository.findBotIdsByFilialIdExcludingReview(11L, 100L)).thenReturn(Set.of(33L));
         when(filialService.findByCityId(4L)).thenReturn(List.of(filial));
 
         List<Bot> bots = service.findAllBotsMinusFilial(review);
@@ -363,7 +372,7 @@ class ReviewBotChangeServiceTest {
         review.setVigul(true);
 
         when(reviewRepository.findByIdForBotChange(44L)).thenReturn(Optional.of(review));
-        when(reviewRepository.findUsedBotIdsByCompanyId(22L)).thenReturn(Set.of(77L));
+        when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(77L));
         when(botService.claimNewAccountForCity(same(city), eq(Set.of(77L, 5L)))).thenReturn(Optional.of(selectedBot));
 
         service.assignNewAccount(44L);
@@ -387,7 +396,7 @@ class ReviewBotChangeServiceTest {
         review.setVigul(false);
 
         when(reviewRepository.findByIdForBotChange(44L)).thenReturn(Optional.of(review));
-        when(reviewRepository.findUsedBotIdsByCompanyId(22L)).thenReturn(Set.of(77L));
+        when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(77L));
         when(botService.claimNewAccountForCity(same(city), eq(Set.of(77L, 5L)))).thenReturn(Optional.of(selectedBot));
 
         service.assignNewAccount(44L, true);
@@ -414,7 +423,7 @@ class ReviewBotChangeServiceTest {
             review.setBot(currentBot);
 
             when(reviewRepository.findByIdForBotChange(reviewId)).thenReturn(Optional.of(review));
-            when(reviewRepository.findUsedBotIdsByCompanyId(90L + cityId)).thenReturn(Set.of(77L + cityId));
+            when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(77L + cityId));
             when(botService.claimNewAccountFromOwnCity(same(city), eq(Set.of(77L + cityId, 5L + cityId))))
                     .thenReturn(Optional.of(selectedBot));
 
@@ -436,6 +445,7 @@ class ReviewBotChangeServiceTest {
                 filialService,
                 accountWalkScheduleService,
                 botCooldownService,
+                assignmentGuardService,
                 businessAuditService,
                 assignmentExclusionService
         );

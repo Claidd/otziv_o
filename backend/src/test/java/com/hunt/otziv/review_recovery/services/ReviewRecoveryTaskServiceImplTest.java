@@ -19,6 +19,8 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -53,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -100,6 +103,12 @@ class ReviewRecoveryTaskServiceImplTest {
     private ReviewBotCooldownService botCooldownService;
 
     @Mock
+    private ReviewBotAssignmentGuardService assignmentGuardService;
+
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
+    @Mock
     private OrderRepository orderRepository;
 
     @Mock
@@ -114,10 +123,29 @@ class ReviewRecoveryTaskServiceImplTest {
     @InjectMocks
     private ReviewRecoveryTaskServiceImpl service;
 
+    @org.junit.jupiter.api.BeforeEach
+    void allowSafeAssignments() {
+        org.mockito.Mockito.lenient().when(accountWalkScheduleService.walkedCounterThreshold()).thenReturn(2);
+        org.mockito.Mockito.lenient().when(accountWalkScheduleService.isWalkedAccount(any()))
+                .thenAnswer(invocation -> {
+                    Bot bot = invocation.getArgument(0);
+                    return bot != null && bot.isActive() && bot.getCounter() >= 2;
+                });
+        org.mockito.Mockito.lenient().when(assignmentGuardService.scopeForRecoveryTask(
+                        nullable(Long.class), nullable(Long.class), nullable(Long.class)))
+                .thenAnswer(invocation -> new ReviewBotAssignmentGuardService.AssignmentScope(
+                        invocation.getArgument(0), invocation.getArgument(2), null, invocation.getArgument(1)));
+        org.mockito.Mockito.lenient().when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of());
+        org.mockito.Mockito.lenient().when(assignmentGuardService.lockIfEligible(any(), any()))
+                .thenAnswer(invocation -> Optional.of(invocation.getArgument(0)));
+    }
+
     @Test
-    void createTaskCreatesBatchCopiesTextBotAndUsesNextRecoveryDate() {
+    void createTaskCreatesBatchCopiesTextAndAssignsFreshEligibleBot() {
         User actor = user(1L);
-        Review review = review(100L, "старый текст", order(10L), bot(20L));
+        Bot sourceBot = bot(20L);
+        Review review = review(100L, "старый текст", order(10L), sourceBot);
+        Bot recoveryBot = prepareRecoveryCandidate(review, 21L);
 
         when(reviewRepository.findById(100L)).thenReturn(Optional.of(review));
         when(batchRepository.findFirstByOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
@@ -145,7 +173,8 @@ class ReviewRecoveryTaskServiceImplTest {
         assertEquals("password", task.getBotPasswordSnapshot());
         assertEquals("Бот Ф.", task.getBotFioSnapshot());
         assertSame(actor, task.getCreatedBy());
-        assertSame(review.getBot(), task.getBot());
+        assertSame(recoveryBot, task.getBot());
+        assertFalse(sourceBot == task.getBot());
 
         ArgumentCaptor<ReviewRecoveryBatch> batchCaptor = ArgumentCaptor.forClass(ReviewRecoveryBatch.class);
         verify(batchRepository).save(batchCaptor.capture());
@@ -157,6 +186,7 @@ class ReviewRecoveryTaskServiceImplTest {
     void createTaskSchedulesNextTaskFromOrderRecoveryTail() {
         ReviewRecoveryBatch batch = batch(30L, order(10L), ReviewRecoveryBatchStatus.OPEN);
         Review review = review(101L, "следующий текст", batch.getOrder(), null);
+        prepareRecoveryCandidate(review, 21L);
         LocalDate previousDate = LocalDate.of(2026, 5, 14);
 
         when(reviewRepository.findById(101L)).thenReturn(Optional.of(review));
@@ -181,6 +211,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 today.minusMonths(7),
                 today.minusMonths(6)
         );
+        Bot recoveryBot = activeWalkedBot(21L, 2);
 
         when(batchRepository.findFirstByArchiveOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
                 .thenReturn(Optional.empty());
@@ -190,6 +221,8 @@ class ReviewRecoveryTaskServiceImplTest {
             return batch;
         });
         when(taskRepository.save(any(ReviewRecoveryTask.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(recoveryBot));
+        when(botCooldownService.isAvailableForAssignment(recoveryBot)).thenReturn(true);
 
         ReviewRecoveryTask task = service.createArchiveTask(source, user(2L));
 
@@ -201,6 +234,7 @@ class ReviewRecoveryTaskServiceImplTest {
         ReviewRecoveryBatch batch = batch(30L, order(10L), ReviewRecoveryBatchStatus.COMPLETED);
         batch.setCompletedAt(Instant.parse("2026-05-31T06:09:00Z"));
         Review review = review(101L, "следующий текст", batch.getOrder(), null);
+        prepareRecoveryCandidate(review, 21L);
 
         when(reviewRepository.findById(101L)).thenReturn(Optional.of(review));
         when(batchRepository.findFirstByOrderIdAndStatusInOrderByCreatedAtDesc(eq(10L), anyCollection()))
@@ -290,7 +324,7 @@ class ReviewRecoveryTaskServiceImplTest {
         Filial filial = new Filial();
         filial.setCity(city);
         Bot oldBot = activeWalkedBot(20L, 4);
-        Bot underWalkedThreshold = activeWalkedBot(21L, 2);
+        Bot underWalkedThreshold = activeWalkedBot(21L, 1);
         Bot rejected = activeWalkedBot(22L, 4);
         Bot occupiedByPublication = activeWalkedBot(23L, 4);
         Bot occupiedByRecovery = activeWalkedBot(24L, 4);
@@ -341,7 +375,7 @@ class ReviewRecoveryTaskServiceImplTest {
 
         when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of());
-        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 3))
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 2))
                 .thenReturn(List.of(higherCounter, preferred));
         when(botCooldownService.isAvailableForAssignment(any(Bot.class))).thenReturn(true);
         when(taskRepository.save(task)).thenReturn(task);
@@ -364,7 +398,7 @@ class ReviewRecoveryTaskServiceImplTest {
 
         when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of());
-        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 3)).thenReturn(List.of());
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 2)).thenReturn(List.of());
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -390,7 +424,7 @@ class ReviewRecoveryTaskServiceImplTest {
 
         when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of());
-        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 3)).thenReturn(List.of());
+        when(botService.getActiveBotsOutsideCityWithCounterAtLeast(3L, 2)).thenReturn(List.of());
         when(taskRepository.save(task)).thenReturn(task);
 
         ReviewRecoveryTask updated = service.deactivateAndChangeTaskBot(40L, 20L);
@@ -640,7 +674,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 "",
                 "",
                 "",
-                null,
+                3L,
                 "Иркутск",
                 "Филиал",
                 "",
@@ -674,6 +708,19 @@ class ReviewRecoveryTaskServiceImplTest {
         bot.setActive(true);
         bot.setCounter(counter);
         return bot;
+    }
+
+    private Bot prepareRecoveryCandidate(Review review, Long botId) {
+        City city = new City();
+        city.setId(3L);
+        Filial filial = new Filial();
+        filial.setCity(city);
+        review.setFilial(filial);
+
+        Bot candidate = activeWalkedBot(botId, 2);
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(candidate));
+        when(botCooldownService.isAvailableForAssignment(candidate)).thenReturn(true);
+        return candidate;
     }
 
     private ReviewRecoveryTask recoveryTask(Long id, Review review, Bot bot) {

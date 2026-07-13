@@ -462,6 +462,7 @@ p {
 
 .summary-preview-dialog {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   width: min(44rem, 100%);
   max-height: min(52rem, calc(100vh - 2rem));
   overflow: hidden;
@@ -498,6 +499,7 @@ p {
 }
 
 .summary-preview-message {
+  min-height: 0;
   overflow: auto;
   padding: 1.2rem;
   color: var(--otziv-dark);

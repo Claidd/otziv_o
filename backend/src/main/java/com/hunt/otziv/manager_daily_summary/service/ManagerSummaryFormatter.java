@@ -48,7 +48,9 @@ public class ManagerSummaryFormatter {
         var week = dailyRepository.findByManager_IdAndSummaryDateBetween(row.managerId(), row.date().minusDays(7), row.date().minusDays(1));
         int weekAverage = (int) Math.round(week.stream().mapToInt(item -> item.getAdjustedScore()).average().orElse(row.score()));
         int weekDelta = row.score() - weekAverage;
-        long slaPercent = row.replyCount() == 0 ? 100 : Math.round(row.repliesInSla() * 100.0 / row.replyCount());
+        String slaResult = row.replyCount() == 0
+                ? "нет данных"
+                : Math.round(row.repliesInSla() * 100.0 / row.replyCount()) + "%";
         return "👤 <b>" + escape(row.managerName()) + "</b>\n"
                 + "🏅 " + row.grade() + " — <b>" + row.score() + "/100</b> " + delta(delta) + "\n"
                 + "📈 К среднему за 7 дней: <b>" + signed(weekDelta) + "</b>\n"
@@ -57,7 +59,7 @@ public class ManagerSummaryFormatter {
                 + "💬 Первый ответ: <b>" + duration(row.firstReplyAverageSeconds()) + "</b>, медиана "
                 + duration(row.firstReplyMedianSeconds()) + "\n"
                 + "↩️ Все ответы: <b>" + duration(row.allReplyAverageSeconds()) + "</b>, медиана "
-                + duration(row.allReplyMedianSeconds()) + ", в нормативе " + slaPercent + "%\n"
+                + duration(row.allReplyMedianSeconds()) + ", в нормативе " + slaResult + "\n"
                 + "🛠 Проблемы: <b>" + row.problemResolvedCount() + " из " + row.problemCount() + "</b>, среднее решение "
                 + duration(row.problemResolutionAverageSeconds()) + "\n"
                 + "⚠️ Просрочки: " + row.overdueCount() + " · риски: " + row.riskCount() + " · без ответа: " + row.unansweredCount() + "\n"

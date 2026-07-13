@@ -41,6 +41,23 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
     );
 
     @Query("""
+        SELECT DISTINCT t.bot.id
+        FROM ReviewRecoveryTask t
+        LEFT JOIN t.order o
+        WHERE (o.company.id = :companyId OR t.archiveCompanyId = :companyId)
+          AND t.status IN :statuses
+          AND t.bot IS NOT NULL
+          AND t.bot.id IS NOT NULL
+          AND t.bot.id <> 1
+          AND (:excludedTaskId IS NULL OR t.id <> :excludedTaskId)
+    """)
+    Set<Long> findBotIdsByCompanyIdAndStatusIn(
+            @Param("companyId") Long companyId,
+            @Param("statuses") Collection<ReviewRecoveryTaskStatus> statuses,
+            @Param("excludedTaskId") Long excludedTaskId
+    );
+
+    @Query("""
         SELECT COUNT(t.id)
         FROM ReviewRecoveryTask t
         WHERE t.sourceReview.id = :reviewId

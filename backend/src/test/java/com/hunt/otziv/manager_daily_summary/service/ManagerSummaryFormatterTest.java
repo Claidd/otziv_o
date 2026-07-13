@@ -52,4 +52,21 @@ class ManagerSummaryFormatterTest {
         assertTrue(message.contains("сайт: 6 ч 24 мин"));
         assertTrue(message.contains("мессенджеры вне сайта: 47 мин"));
     }
+
+    @Test
+    void rendersNoSlaDataWhenThereWereNoReplies() {
+        ManagerDailySummaryResponse row = new ManagerDailySummaryResponse(
+                LocalDate.of(2026, 7, 14), 1L, 10L, "Вика", 42, "F",
+                70, 0, 70, BigDecimal.ZERO, 7, 9, 6,
+                0, 0, 0, 0, 0, 0, 0,
+                55, 0, 0, 0, 60, 60,
+                0, 0, 0, 0, 480, 0, 3, "CONTROLLED", 0,
+                "VERIFIED"
+        );
+
+        String message = formatter.format(List.of(row), true);
+
+        assertTrue(message.contains("в нормативе нет данных"));
+        assertTrue(message.contains("Среднее время всех ответов: <b>—</b>"));
+    }
 }

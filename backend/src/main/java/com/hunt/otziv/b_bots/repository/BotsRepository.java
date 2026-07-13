@@ -5,6 +5,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +15,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface BotsRepository extends CrudRepository<Bot, Long> {
@@ -35,6 +37,16 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     }
 
     Optional<Bot> findByLogin(String username);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        WHERE b.id = :id
+    """)
+    Optional<Bot> findByIdForAssignmentLock(@Param("id") Long id);
 
     @Query("SELECT b.login FROM Bot b WHERE b.login IN :logins")
     Set<String> findExistingLogins(@Param("logins") List<String> logins);

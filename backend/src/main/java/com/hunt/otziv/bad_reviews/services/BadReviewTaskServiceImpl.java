@@ -28,6 +28,7 @@ import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -79,6 +80,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final GamificationEventService gamificationEventService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -817,6 +819,8 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
         Long currentBotId = currentBotId(task);
         Set<Long> excludedBotIds = replacementExcludedBotIds(task, currentBotId);
+        ReviewBotAssignmentGuardService.AssignmentScope assignmentScope = assignmentScope(task);
+        excludedBotIds.addAll(assignmentGuardService.blockedBotIds(assignmentScope));
         List<Bot> candidates = botService.getFindAllByFilialCityId(city.getId()).stream()
                 .filter(Objects::nonNull)
                 .filter(Bot::isActive)
@@ -829,7 +833,10 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 .filter(bot -> bot.getCounter() >= BAD_REVIEW_PREFERRED_COUNTER)
                 .toList();
         if (!preferredCityBots.isEmpty()) {
-            return new BotSelection(randomBot(preferredCityBots), false);
+            Bot selected = lockRandomEligible(preferredCityBots, assignmentScope);
+            if (selected != null) {
+                return new BotSelection(selected, false);
+            }
         }
 
         List<Bot> crossCityBots = botService
@@ -841,20 +848,52 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
                 .filter(bot -> !excludedBotIds.contains(bot.getId()))
                 .toList();
         if (!crossCityBots.isEmpty()) {
-            return new BotSelection(randomBot(crossCityBots), true);
+            Bot selected = lockRandomEligible(crossCityBots, assignmentScope);
+            if (selected != null) {
+                return new BotSelection(selected, true);
+            }
         }
 
         if (!candidates.isEmpty()) {
-            return new BotSelection(randomBot(candidates), false);
+            Bot selected = lockRandomEligible(candidates, assignmentScope);
+            if (selected != null) {
+                return new BotSelection(selected, false);
+            }
         }
 
-        return botService.claimReserveBotForCity(city, excludedBotIds)
-                .map(bot -> new BotSelection(bot, false))
-                .orElse(null);
+        Bot claimed = botService.claimReserveBotForCity(city, excludedBotIds).orElse(null);
+        if (claimed == null) {
+            return null;
+        }
+        Bot lockedClaimed = assignmentGuardService.lockIfEligible(claimed, assignmentScope)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Резервный аккаунт уже использовался компанией или занят другой карточкой"
+                ));
+        return new BotSelection(lockedClaimed, false);
     }
 
-    private Bot randomBot(List<Bot> bots) {
-        return bots.get(random.nextInt(bots.size()));
+    private Bot lockRandomEligible(
+            List<Bot> candidates,
+            ReviewBotAssignmentGuardService.AssignmentScope scope
+    ) {
+        List<Bot> remaining = new java.util.ArrayList<>(candidates);
+        while (!remaining.isEmpty()) {
+            Bot selected = remaining.remove(random.nextInt(remaining.size()));
+            Bot locked = assignmentGuardService.lockIfEligible(selected, scope).orElse(null);
+            if (locked != null) {
+                return locked;
+            }
+        }
+        return null;
+    }
+
+    private ReviewBotAssignmentGuardService.AssignmentScope assignmentScope(BadReviewTask task) {
+        Long companyId = task != null
+                && task.getOrder() != null
+                && task.getOrder().getCompany() != null
+                ? task.getOrder().getCompany().getId()
+                : null;
+        return assignmentGuardService.scopeForBadTask(companyId, task != null ? task.getId() : null);
     }
 
     private Set<Long> replacementExcludedBotIds(BadReviewTask task, Long currentBotId) {

@@ -47,6 +47,7 @@ public class ReviewBotChangeService {
     private final FilialService filialService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotAssignmentExclusionService assignmentExclusionService;
 
@@ -160,6 +161,13 @@ public class ReviewBotChangeService {
         }
 
         Bot selectedBot = claimNewAccount(city, cityId, excludedBotIds);
+        selectedBot = assignmentGuardService.lockIfEligible(
+                        selectedBot,
+                        assignmentGuardService.scope(filial.getCompany().getId(), review.getId())
+                )
+                .orElseThrow(() -> new RuntimeException(
+                        "Выбранный аккаунт уже использовался компанией или занят другой карточкой"
+                ));
 
         Bot oldBot = review.getBot();
         review.setBot(selectedBot);
@@ -278,23 +286,11 @@ public class ReviewBotChangeService {
 
     private Set<Long> getUsedBotIdsInCompany(Filial filial, Long currentReviewId) {
         if (filial == null || filial.getCompany() == null || filial.getCompany().getId() == null) {
-            return getUsedBotIdsInFilial(filial, currentReviewId);
+            throw new IllegalStateException("Невозможно проверить аккаунт: у филиала не указана компания");
         }
-
-        try {
-            Set<Long> botIds = reviewRepository.findUsedBotIdsByCompanyId(filial.getCompany().getId());
-            if (botIds == null) {
-                return new HashSet<>();
-            }
-
-            return botIds.stream()
-                    .filter(Objects::nonNull)
-                    .filter(botId -> !STUB_BOT_ID.equals(botId))
-                    .collect(Collectors.toCollection(HashSet::new));
-        } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для компании филиала {}", filial.getId(), e);
-            return getUsedBotIdsInFilial(filial, currentReviewId);
-        }
+        return new HashSet<>(assignmentGuardService.blockedBotIds(
+                assignmentGuardService.scope(filial.getCompany().getId(), currentReviewId)
+        ));
     }
 
     private void reassignUnpublishedReviewsForBlockedBot(
@@ -401,7 +397,7 @@ public class ReviewBotChangeService {
                     .collect(Collectors.toCollection(HashSet::new));
         } catch (Exception e) {
             log.error("Ошибка при получении занятых ботов по неопубликованным отзывам", e);
-            return new HashSet<>();
+            throw new IllegalStateException("Не удалось проверить занятые аккаунты", e);
         }
     }
 
@@ -441,27 +437,6 @@ public class ReviewBotChangeService {
             log.error("3. Ошибка при деактивации бота {}: ", botId, e);
             return false;
         }
-    }
-
-    private Set<Long> getUsedBotIdsInFilial(Filial filial, Long currentReviewId) {
-        Set<Long> usedBotIds = new HashSet<>();
-
-        try {
-            if (filial == null || filial.getId() == null) {
-                return usedBotIds;
-            }
-
-            Set<Long> botIds = reviewRepository.findBotIdsByFilialIdExcludingReview(filial.getId(), currentReviewId);
-            if (botIds != null) {
-                botIds.stream()
-                        .filter(Objects::nonNull)
-                        .forEach(usedBotIds::add);
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
-        }
-
-        return usedBotIds;
     }
 
     private Set<Long> getUsedBotIdsGlobally(Filial currentFilial, Long currentReviewId) {
