@@ -19,4 +19,18 @@ export interface DailyWorkProgress {
   activityEvents: number;
   loadScore: number;
   efficiencyScore: number;
+  openedCount?: number;
+  orderCompletedCount?: number;
+  nagulCompletedCount?: number;
+  publishCompletedCount?: number;
+  badCompletedCount?: number;
+  recoveryCompletedCount?: number;
+  recoveryCreatedCount?: number;
+  orderOverdueCount?: number;
+  totalOverdueCount?: number;
+  speedScore?: number;
+  disciplineScore?: number;
+  workloadScore?: number;
+  botChangeCount?: number;
+  botBlockCount?: number;
 }

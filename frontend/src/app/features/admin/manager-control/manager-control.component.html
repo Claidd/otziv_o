@@ -763,6 +763,24 @@
                                 } @else {
                                   <b>{{ example.status || severityLabel(item.severity) }}</b>
                                 }
+                                <span class="detail-example-status" [class]="itemStatusClass(example.itemStatus)">
+                                  {{ itemStatusLabel(example.itemStatus || 'OPEN') }}
+                                </span>
+                                @if (canRequestWorkerTask(example)) {
+                                  <span
+                                    class="worker-notification-badge"
+                                    [class]="workerNotificationBadgeClass(example)"
+                                    [title]="workerNotificationTitle(example)"
+                                  >
+                                    {{ workerNotificationBadgeLabel(example) }}
+                                  </span>
+                                }
+                                @if (slaTimer(example)) {
+                                  <span class="detail-sla-timer {{ slaTimerClass(example) }}">
+                                    <span class="material-icons-sharp">timer</span>
+                                    {{ slaTimer(example) }}
+                                  </span>
+                                }
                               </span>
                             </header>
 
@@ -825,26 +843,6 @@
                                   </span>
                                   <span>{{ example.workerExplanation }}</span>
                                 </em>
-                              }
-                            </span>
-                            <span class="detail-example-flags">
-                              <span class="detail-example-status" [class]="itemStatusClass(example.itemStatus)">
-                                {{ itemStatusLabel(example.itemStatus || 'OPEN') }}
-                              </span>
-                              @if (slaTimer(example)) {
-                                <span class="detail-sla-timer {{ slaTimerClass(example) }}">
-                                  <span class="material-icons-sharp">timer</span>
-                                  {{ slaTimer(example) }}
-                                </span>
-                              }
-                              @if (canRequestWorkerTask(example)) {
-                                <span
-                                  class="worker-notification-badge"
-                                  [class]="workerNotificationBadgeClass(example)"
-                                  [title]="workerNotificationTitle(example)"
-                                >
-                                  {{ workerNotificationBadgeLabel(example) }}
-                                </span>
                               }
                             </span>
                           </a>

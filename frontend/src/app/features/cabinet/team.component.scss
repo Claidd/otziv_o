@@ -90,10 +90,43 @@ input[type='date'] {
 
 .person-card {
   display: grid;
+  position: relative;
   gap: 0.85rem;
   border: 1px solid rgba(103, 116, 131, 0.14);
   border-radius: 1.15rem;
   padding: 1rem;
+}
+
+.efficiency-badge {
+  --efficiency-color: var(--otziv-primary);
+  position: absolute;
+  top: 0.78rem;
+  right: 0.78rem;
+  z-index: 2;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 2px solid color-mix(in srgb, var(--efficiency-color) 58%, var(--otziv-white));
+  border-radius: 50%;
+  color: var(--otziv-dark);
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.96), transparent 34%),
+    linear-gradient(145deg, color-mix(in srgb, var(--efficiency-color) 22%, var(--otziv-white)), var(--otziv-white));
+  box-shadow:
+    0 0.55rem 1.1rem color-mix(in srgb, var(--efficiency-color) 18%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.42);
+  font-size: 0.78rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.efficiency-badge.good {
+  --efficiency-color: var(--otziv-success);
+}
+
+.efficiency-badge.warn {
+  --efficiency-color: var(--otziv-danger);
 }
 
 .avatar-link {
@@ -115,6 +148,7 @@ input[type='date'] {
 
 .person-main {
   min-width: 0;
+  padding-right: 2.45rem;
 }
 
 .person-main h3,

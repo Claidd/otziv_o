@@ -14,8 +14,6 @@ import com.hunt.otziv.manager.dto.api.ManagerMetricResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.manager.dto.api.PageResponse;
-import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
-import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -23,8 +21,10 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
@@ -105,6 +105,7 @@ public class ManagerBoardService {
     private final PromoTextService promoTextService;
     private final UserService userService;
     private final ManagerService managerService;
+    private final WorkerService workerService;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
@@ -113,7 +114,6 @@ public class ManagerBoardService {
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final StaffDailyProgressService staffDailyProgressService;
-    private final ManagerPerformanceService managerPerformanceService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -674,60 +674,40 @@ public class ManagerBoardService {
             Manager managerFilter
     ) {
         if (!staffDailyProgressService.progressEnabled()
-                || (!managerPermissionService.hasRole(authentication, "ADMIN") && !managerPermissionService.hasRole(authentication, "OWNER"))) {
+                || (!managerPermissionService.hasRole(authentication, "ADMIN")
+                && !managerPermissionService.hasRole(authentication, "OWNER")
+                && !managerPermissionService.hasRole(authentication, "MANAGER"))) {
             return null;
         }
 
-        List<Long> userIds = managerProgressUsers(principal, authentication, managerFilter);
-        if (userIds.isEmpty()) {
+        List<Worker> workers = managerProgressWorkers(principal, authentication, managerFilter);
+        if (workers.isEmpty()) {
             return null;
         }
 
-        LocalDate today = LocalDate.now();
-        List<ManagerPerformanceScoreResponse> performance = managerPerformanceService.score(today);
-        if (managerFilter != null && managerFilter.getUser() != null && managerFilter.getUser().getId() != null) {
-            return performance.stream()
-                    .filter(score -> Objects.equals(score.managerUserId(), managerFilter.getUser().getId()))
-                    .findFirst()
-                    .map(score -> staffDailyProgressService.managerProgressFromPerformance(score, today))
-                    .orElse(null);
-        }
-        Set<Long> visibleUserIds = Set.copyOf(userIds);
-        return staffDailyProgressService.aggregateManagerProgressFromPerformance(
-                performance.stream()
-                        .filter(score -> visibleUserIds.contains(score.managerUserId()))
-                        .toList(),
-                today
-        );
+        return staffDailyProgressService.aggregateWorkerProgress(workers, LocalDate.now());
     }
 
-    private List<Long> managerProgressUsers(
+    private List<Worker> managerProgressWorkers(
             Principal principal,
             Authentication authentication,
             Manager managerFilter
     ) {
         if (managerFilter != null) {
-            User managerUser = managerFilter.getUser();
-            return managerUser == null || managerUser.getId() == null
-                    ? List.of()
-                    : List.of(managerUser.getId());
+            return workerService.getAllWorkersToManager(managerFilter);
         }
 
-        List<Manager> managers;
         if (managerPermissionService.hasRole(authentication, "ADMIN")) {
-            managers = managerService.getAllManagers();
-        } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
-            managers = resolveOwnerManagers(principal).stream().toList();
-        } else {
-            managers = List.of();
+            return workerService.getAllWorkers();
         }
-        return managers.stream()
-                .map(Manager::getUser)
-                .filter(Objects::nonNull)
-                .map(User::getId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            List<Manager> managers = resolveOwnerManagers(principal).stream().toList();
+            return managers.isEmpty()
+                    ? List.of()
+                    : workerService.getAllWorkersToManagerList(managers).stream().toList();
+        }
+        Manager manager = resolveManager(principal);
+        return manager == null ? List.of() : workerService.getAllWorkersToManager(manager);
     }
 
     private Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {

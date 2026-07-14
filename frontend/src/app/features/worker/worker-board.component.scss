@@ -13,6 +13,7 @@
 }
 
 .toolbar-progress {
+  display: none;
   flex: 0 1 clamp(10rem, 18vw, 16rem);
   min-width: 8rem;
 }
@@ -345,6 +346,24 @@ select {
   box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
 }
 
+.worker-side-progress-card {
+  display: grid;
+  gap: 0.55rem;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 1rem;
+  padding: 0.85rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+.worker-side-progress-card .side-progress {
+  display: block;
+  width: 100%;
+}
+
 .worker-filter-card span {
   color: var(--otziv-info);
   font-family: var(--otziv-font-family);
@@ -631,7 +650,8 @@ select {
   }
 
   .worker-toolbar {
-    display: block;
+    display: grid;
+    gap: 0.32rem;
   }
 
   .toolbar-search {
@@ -648,9 +668,10 @@ select {
 
   .toolbar-progress {
     display: block;
-    width: 100%;
+    width: calc(100% - 0.15rem);
     min-width: 0;
-    margin: 0.08rem 0 0.1rem;
+    margin: 0.03rem auto 0;
+    justify-self: center;
   }
 
   .search-line {

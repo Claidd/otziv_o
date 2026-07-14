@@ -5,7 +5,13 @@ import { DailyWorkProgress } from '../core/daily-progress';
   selector: 'app-daily-progress-strip',
   template: `
     @if (progress?.visible) {
-      <section class="daily-progress-strip" [class.complete]="progress?.checked" [class.empty]="isEmpty()" aria-label="Дневной прогресс">
+      <section
+        class="daily-progress-strip"
+        [class.complete]="progress?.checked"
+        [class.empty]="isEmpty()"
+        [attr.aria-label]="tooltipText()"
+        [attr.title]="tooltipText()"
+      >
         <span class="daily-progress-label">{{ label || defaultLabel() }}</span>
         <div class="daily-progress-bar" aria-hidden="true">
           <i [style.width.%]="safePercent()"></i>
@@ -136,5 +142,29 @@ export class DailyProgressStripComponent {
 
   defaultLabel(): string {
     return this.progress?.roleType === 'MANAGER' ? 'Менеджер' : 'Специалист';
+  }
+
+  tooltipText(): string {
+    const progress = this.progress;
+    if (!progress?.visible) {
+      return 'Дневной прогресс пока недоступен.';
+    }
+
+    const completed = progress.completed || 0;
+    const active = progress.active || 0;
+    const total = progress.total || 0;
+    const percent = this.safePercent();
+    const name = this.label || this.defaultLabel();
+    const base = `${completed}/${total} — ${percent}%, осталось ${active}.`;
+
+    if (name === 'Команда' || progress.roleType === 'WORKER_TEAM') {
+      return `Прогресс команды за сегодня: закрытые задачи специалистов / все задачи специалистов (закрытые + активные). ${base}`;
+    }
+
+    if (progress.roleType === 'MANAGER') {
+      return `Прогресс менеджерского контроля: обработано / всего к действию. ${base}`;
+    }
+
+    return `Дневной прогресс специалиста: закрытые карточки / все карточки в работе. Карточки “Новые — ждёт клиента” не учитываются. ${base}`;
   }
 }

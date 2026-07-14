@@ -36,7 +36,11 @@ public class WorkerProgressRetentionJob {
         staffDailyProgressService.rebuildMonthlyAggregates(today, false);
 
         int deletedLifecycle = jdbcTemplate.update(
-                "DELETE FROM worker_work_item_lifecycle WHERE updated_at < ?",
+                """
+                DELETE FROM worker_work_item_lifecycle
+                WHERE updated_at < ?
+                  AND (active = 0 OR closed_at IS NOT NULL OR excluded = 1)
+                """,
                 rawCutoff
         );
         int deletedDaily = jdbcTemplate.update("""

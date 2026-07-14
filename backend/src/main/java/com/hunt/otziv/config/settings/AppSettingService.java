@@ -32,6 +32,12 @@ public class AppSettingService {
     public static final String WORKER_PROGRESS_CLEANUP_ENABLED = "worker.progress.cleanup-enabled";
     public static final String WORKER_PROGRESS_MONTHLY_AGGREGATE_ENABLED = "worker.progress.monthly-aggregate-enabled";
     public static final String WORKER_PROGRESS_ACTIVITY_SESSION_GAP_MINUTES = "worker.progress.activity-session-gap-minutes";
+    public static final String WORKER_PROGRESS_NIGHT_WINDOW_START_HOUR = "worker.progress.night-window-start-hour";
+    public static final String WORKER_PROGRESS_NIGHT_WINDOW_END_HOUR = "worker.progress.night-window-end-hour";
+    public static final String WORKER_PROGRESS_LATE_TASK_HOUR = "worker.progress.late-task-hour";
+    public static final String WORKER_PROGRESS_LATE_TASK_DEADLINE_HOUR = "worker.progress.late-task-deadline-hour";
+    public static final String WORKER_PROGRESS_SPEED_TARGET_MINUTES = "worker.progress.speed-target-minutes";
+    public static final String WORKER_PROGRESS_EXPECTED_DAILY_LOAD = "worker.progress.expected-daily-load";
     public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
     public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
     public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";

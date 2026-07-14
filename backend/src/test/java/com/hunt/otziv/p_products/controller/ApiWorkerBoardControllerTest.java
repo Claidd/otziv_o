@@ -20,6 +20,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
+import com.hunt.otziv.p_products.worker_access.WorkerCellularAccessService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -141,6 +142,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private StaffDailyProgressService staffDailyProgressService;
 
+    @Mock
+    private WorkerCellularAccessService workerCellularAccessService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -189,7 +193,8 @@ class ApiWorkerBoardControllerTest {
                 ),
                 workerActivityService,
                 credentialPreparationService,
-                staffDailyProgressService
+                staffDailyProgressService,
+                workerCellularAccessService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
@@ -420,6 +425,7 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals("nagul", response.section());
         assertFalse(response.warning());
+        verify(workerCellularAccessService).enforceSection("nagul");
         verify(reviewService).getAllReviewDTOByWorkerByPublishToVigul(
                 any(LocalDate.class),
                 eq(principal),
@@ -721,6 +727,7 @@ class ApiWorkerBoardControllerTest {
 
         controller.publishReview(15L, principal, workerAuth);
 
+        verify(workerCellularAccessService).enforceProtectedAccess("publish");
         verify(orderService).changeStatusAndOrderCounter(15L);
     }
 

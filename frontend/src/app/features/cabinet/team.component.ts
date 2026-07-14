@@ -13,6 +13,12 @@ type ProgressDetailRow = {
   label: string;
   value: string;
   tone: ProgressDetailTone;
+  hint: string;
+};
+
+type EfficiencyBadge = {
+  value: number;
+  hint: string;
 };
 
 type TeamSection = {
@@ -88,11 +94,10 @@ export class TeamComponent {
   }
 
   statRows(role: TeamRole, member: TeamMember): Array<{ label: string; value: string }> {
-    if (!this.hasStats(member)) {
-      return [];
-    }
-
     if (role === 'manager') {
+      if (!this.hasStats(member)) {
+        return [];
+      }
       return [
         { label: 'ЗП', value: this.money(member.sum1Month) },
         { label: 'Выручка', value: this.money(member.payment1Month) },
@@ -102,12 +107,32 @@ export class TeamComponent {
     }
 
     if (role === 'worker') {
-      return [
+      const rows = [
         { label: 'ЗП', value: this.money(member.sum1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) },
         { label: 'В работе', value: this.count((member.newOrder || 0) + (member.inCorrect || 0) + (member.intVigul || 0) + (member.publish || 0)) }
       ];
+      const progress = member.dailyProgress;
+      if (progress?.visible) {
+        if ((progress.recoveryCreatedCount || 0) > 0) {
+          rows.push({ label: 'Восст. создано', value: this.count(progress.recoveryCreatedCount) });
+        }
+        if ((progress.botChangeCount || 0) > 0 || (progress.botBlockCount || 0) > 0) {
+          rows.push({
+            label: 'Боты',
+            value: `смена ${this.formatNumber(progress.botChangeCount)} / блок ${this.formatNumber(progress.botBlockCount)}`
+          });
+        }
+        if ((progress.orderOverdueCount || 0) > 0) {
+          rows.push({ label: 'Просрочки заказов', value: this.count(progress.orderOverdueCount) });
+        }
+      }
+      return rows.filter((row) => row.label === 'ЗП' || row.value !== this.count(0));
+    }
+
+    if (!this.hasStats(member)) {
+      return [];
     }
 
     return [
@@ -145,7 +170,8 @@ export class TeamComponent {
       rows.push({
         label: 'Осталось',
         value: this.formatNumber(active),
-        tone: active > 0 ? 'warn' : 'good'
+        tone: active > 0 ? 'warn' : 'good',
+        hint: 'Сколько активных карточек ещё нужно закрыть, чтобы прогресс дошёл до 100%.'
       });
     }
 
@@ -153,41 +179,89 @@ export class TeamComponent {
       rows.push({
         label: 'Нагрузка',
         value: this.formatNumber(total),
-        tone: 'neutral'
-      });
-      rows.push({
-        label: 'Эффективность',
-        value: `${this.safePercent(progress.efficiencyScore || progress.percent)}%`,
-        tone: progress.checked ? 'good' : 'neutral'
+        tone: 'neutral',
+        hint: 'Всего карточек в расчёте за день: закрытые + активные сейчас.'
       });
     }
 
-    this.pushDurationRow(rows, 'Активно', progress.activeWorkSeconds);
+    this.pushCountRow(rows, 'Заказы закрыто', progress.orderCompletedCount, 'Сколько заказов выведено из «Новые/Коррекция» за выбранный день.');
+    this.pushCountRow(rows, 'Выгул закрыто', progress.nagulCompletedCount, 'Сколько карточек выгула выполнено за выбранный день.');
+    this.pushCountRow(rows, 'Публикаций', progress.publishCompletedCount, 'Сколько отзывов опубликовано за выбранный день.');
+    this.pushCountRow(rows, 'Плохие закрыто', progress.badCompletedCount, 'Сколько задач по плохим отзывам выполнено за выбранный день.');
+    this.pushCountRow(rows, 'Восст. закрыто', progress.recoveryCompletedCount, 'Сколько задач восстановления выполнено за выбранный день.');
+    this.pushCountRow(rows, 'Восст. создано', progress.recoveryCreatedCount, 'Сколько задач восстановления назначили специалисту за выбранный день.');
+    this.pushCountRow(rows, 'Проср. заказов', progress.orderOverdueCount, 'Заказы, которые не были выполнены день-в-день с учётом позднего дедлайна.');
+    this.pushCountRow(rows, 'Просрочек всего', progress.totalOverdueCount, 'Все просроченные карточки в дневном расчёте.');
+    this.pushCountRow(rows, 'Смена бота', progress.botChangeCount, 'Сколько раз специалист нажал «смена» у аккаунта.');
+    this.pushCountRow(rows, 'Блок бота', progress.botBlockCount, 'Сколько раз специалист увёл аккаунт в блок.');
+    this.pushScoreRow(rows, 'Скорость', progress.speedScore, 'Оценка 0–100 по скорости закрытия после появления карточки. Ночное окно 00:00–10:00 не увеличивает время.');
+    this.pushScoreRow(rows, 'Дисциплина', progress.disciplineScore, 'Оценка 0–100 по отсутствию просрочек.');
+    this.pushScoreRow(rows, 'Нагрузка', progress.workloadScore, 'Оценка 0–100 по объёму выполненных задач относительно дневного норматива.');
+
+    this.pushDurationRow(
+      rows,
+      'Активно',
+      progress.activeWorkSeconds,
+      'Примерное активное рабочее время: сумма сессий по действиям. Пауза больше 15 минут начинает новую сессию.'
+    );
 
     const activityWindow = this.formatTimeWindow(progress.firstActivityAt, progress.lastActivityAt);
     if (activityWindow) {
-      rows.push({ label: 'Окно', value: activityWindow, tone: 'neutral' });
+      rows.push({
+        label: 'Окно',
+        value: activityWindow,
+        tone: 'neutral',
+        hint: 'Промежуток между первым и последним действием за день. Это не равно фактическому рабочему времени.'
+      });
     }
 
     if ((progress.activityEvents || 0) > 0) {
-      rows.push({ label: 'Действий', value: this.formatNumber(progress.activityEvents), tone: 'neutral' });
+      rows.push({
+        label: 'Действий',
+        value: this.formatNumber(progress.activityEvents),
+        tone: 'neutral',
+        hint: 'Количество зафиксированных действий сотрудника в системе за день.'
+      });
     }
 
-    this.pushDurationRow(rows, 'Медиана', progress.medianCloseSeconds);
-    this.pushDurationRow(rows, 'Среднее', progress.averageCloseSeconds);
-    this.pushDurationRow(rows, 'P90', progress.p90CloseSeconds);
+    this.pushDurationRow(rows, 'Медиана', progress.medianCloseSeconds, 'Типичная скорость закрытия: половина задач закрыта быстрее этого времени.');
+    this.pushDurationRow(rows, 'Среднее', progress.averageCloseSeconds, 'Среднее время закрытия задачи за день.');
+    this.pushDurationRow(rows, 'P90', progress.p90CloseSeconds, '90% задач закрыты быстрее этого времени. Помогает увидеть длинные задержки.');
 
     const firstCompletedAt = this.formatTime(progress.firstCompletedAt);
     if (firstCompletedAt) {
-      rows.push({ label: 'Первое закрытие', value: firstCompletedAt, tone: 'neutral' });
+      rows.push({
+        label: 'Первое закрытие',
+        value: firstCompletedAt,
+        tone: 'neutral',
+        hint: 'Время первой закрытой карточки за день.'
+      });
     }
 
     const lastCompletedAt = this.formatTime(progress.lastCompletedAt);
     if (lastCompletedAt) {
-      rows.push({ label: 'Последнее', value: lastCompletedAt, tone: 'neutral' });
+      rows.push({
+        label: 'Последнее',
+        value: lastCompletedAt,
+        tone: 'neutral',
+        hint: 'Время последней закрытой карточки за день.'
+      });
     }
 
     return rows;
+  }
+
+  efficiencyBadge(member: TeamMember): EfficiencyBadge | null {
+    const progress = member.dailyProgress;
+    if (!progress?.visible || Number(progress.total || 0) <= 0) {
+      return null;
+    }
+
+    const value = this.safePercent(progress.efficiencyScore || progress.percent);
+    return {
+      value,
+      hint: `Эффективность ${value} из 100: 35% прогресс, 35% скорость закрытия после появления карточки, 20% дисциплина по просрочкам, 10% нагрузка. Ночное окно 00:00–10:00 не считается просрочкой.`
+    };
   }
 
   progressSummary(member: TeamMember): string {
@@ -205,6 +279,9 @@ export class TeamComponent {
       : 'День закрыт';
     const median = this.formatDuration(progress.medianCloseSeconds);
     const activeWork = this.formatDuration(progress.activeWorkSeconds);
+    if ((progress.orderOverdueCount || 0) > 0) {
+      return `${base} · проср. заказов ${this.formatNumber(progress.orderOverdueCount)}`;
+    }
     if (median) {
       return `${base} · медиана ${median}`;
     }
@@ -250,10 +327,34 @@ export class TeamComponent {
     return `${new Intl.NumberFormat('ru-RU').format(value || 0)} шт.`;
   }
 
-  private pushDurationRow(rows: ProgressDetailRow[], label: string, seconds?: number | null): void {
+  private pushDurationRow(rows: ProgressDetailRow[], label: string, seconds: number | null | undefined, hint: string): void {
     const value = this.formatDuration(seconds);
     if (value) {
-      rows.push({ label, value, tone: 'neutral' });
+      rows.push({ label, value, tone: 'neutral', hint });
+    }
+  }
+
+  private pushCountRow(rows: ProgressDetailRow[], label: string, count: number | null | undefined, hint: string): void {
+    const value = Number(count || 0);
+    if (value > 0) {
+      rows.push({
+        label,
+        value: this.formatNumber(value),
+        tone: label.toLowerCase().includes('проср') ? 'warn' : 'neutral',
+        hint
+      });
+    }
+  }
+
+  private pushScoreRow(rows: ProgressDetailRow[], label: string, score: number | null | undefined, hint: string): void {
+    const value = Number(score || 0);
+    if (value > 0) {
+      rows.push({
+        label,
+        value: `${this.safePercent(value)}`,
+        tone: value >= 90 ? 'good' : value < 60 ? 'warn' : 'neutral',
+        hint
+      });
     }
   }
 

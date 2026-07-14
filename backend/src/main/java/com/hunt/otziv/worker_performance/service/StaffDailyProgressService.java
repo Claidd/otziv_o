@@ -11,6 +11,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -34,6 +35,21 @@ public class StaffDailyProgressService {
     private static final long SINGLE_ACTION_SESSION_SECONDS = 60L;
     private static final String ROLE_MANAGER = "MANAGER";
     private static final String ROLE_WORKER = "WORKER";
+    private static final String TYPE_ORDER = "order";
+    private static final String TYPE_NAGUL = "review_nagul";
+    private static final String TYPE_PUBLISH = "review_publish";
+    private static final String TYPE_BAD = "bad_task";
+    private static final String TYPE_RECOVERY = "recovery_task";
+    private static final List<String> BOT_CHANGE_ACTIONS = List.of(
+            "REVIEW_BOT_CHANGE",
+            "BAD_TASK_BOT_CHANGE",
+            "RECOVERY_TASK_BOT_CHANGE"
+    );
+    private static final List<String> BOT_BLOCK_ACTIONS = List.of(
+            "REVIEW_BOT_DEACTIVATE",
+            "BAD_TASK_BOT_DEACTIVATE",
+            "RECOVERY_TASK_BOT_DEACTIVATE"
+    );
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AppSettingService appSettingService;
@@ -255,23 +271,29 @@ public class StaffDailyProgressService {
         }
 
         List<Long> workerIds = visibleWorkers.stream().map(WorkerProgressSubject::workerId).distinct().toList();
+        Map<Long, Long> workerUserIdByWorkerId = new HashMap<>();
+        visibleWorkers.forEach(worker -> workerUserIdByWorkerId.put(worker.workerId(), worker.workerUserId()));
         List<Long> workerUserIds = visibleWorkers.stream()
                 .map(WorkerProgressSubject::workerUserId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, Long> active = activeCounts(workerIds, safeDate);
+        List<ActiveWorkItem> activeItems = activeItems(workerIds, safeDate);
+        Map<Long, WorkerActiveStats> active = activeStats(activeItems, safeDate);
         Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate);
         Map<Long, WorkerActivityStats> activity = activityStats(workerUserIds, safeDate);
+        Map<Long, WorkerAuxStats> aux = auxStats(workerIds, workerUserIds, workerUserIdByWorkerId, safeDate);
+        syncLifecycle(activeItems, completed, workerUserIdByWorkerId);
 
         Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
         for (WorkerProgressSubject worker : visibleWorkers) {
-            long activeCount = active.getOrDefault(worker.workerId(), 0L);
+            WorkerActiveStats activeStats = active.getOrDefault(worker.workerId(), WorkerActiveStats.empty());
             WorkerCompletionStats stats = completed.getOrDefault(worker.workerId(), WorkerCompletionStats.empty());
             WorkerActivityStats activityStats = worker.workerUserId() == null
                     ? WorkerActivityStats.empty()
                     : activity.getOrDefault(worker.workerUserId(), WorkerActivityStats.empty());
-            DailyWorkProgressResponse response = responseForWorker(safeDate, activeCount, stats, activityStats);
+            WorkerAuxStats auxStats = aux.getOrDefault(worker.workerId(), WorkerAuxStats.empty());
+            DailyWorkProgressResponse response = responseForWorker(safeDate, activeStats, stats, activityStats, auxStats);
             result.put(worker.workerId(), response);
             saveDaily(worker, response);
         }
@@ -332,6 +354,9 @@ public class StaffDailyProgressService {
         int efficiency = visible.isEmpty()
                 ? 0
                 : (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::efficiencyScore).average().orElse(0));
+        int speedScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::speedScore).average().orElse(0));
+        int disciplineScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::disciplineScore).average().orElse(0));
+        int workloadScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::workloadScore).average().orElse(0));
 
         return new DailyWorkProgressResponse(
                 true,
@@ -361,29 +386,52 @@ public class StaffDailyProgressService {
                 workWindowSeconds,
                 activityEvents,
                 loadScore,
-                efficiency
+                efficiency,
+                total,
+                visible.stream().mapToLong(DailyWorkProgressResponse::orderCompletedCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::nagulCompletedCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::publishCompletedCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::badCompletedCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::recoveryCompletedCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::recoveryCreatedCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::orderOverdueCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::totalOverdueCount).sum(),
+                speedScore,
+                disciplineScore,
+                workloadScore,
+                visible.stream().mapToLong(DailyWorkProgressResponse::botChangeCount).sum(),
+                visible.stream().mapToLong(DailyWorkProgressResponse::botBlockCount).sum()
         );
     }
 
     private DailyWorkProgressResponse responseForWorker(
             LocalDate date,
-            long active,
+            WorkerActiveStats activeStats,
             WorkerCompletionStats stats,
-            WorkerActivityStats activityStats
+            WorkerActivityStats activityStats,
+            WorkerAuxStats auxStats
     ) {
+        WorkerActiveStats safeActiveStats = activeStats == null ? WorkerActiveStats.empty() : activeStats;
+        WorkerAuxStats safeAuxStats = auxStats == null ? WorkerAuxStats.empty() : auxStats;
         long completed = stats.completed();
-        long total = completed + Math.max(0, active);
+        long active = Math.max(0, safeActiveStats.active());
+        long total = completed + active;
         int percent = total == 0 ? 100 : percentInt(completed, total);
         boolean checked = total == 0 || active == 0;
-        int efficiencyScore = workerEfficiencyScore(percent, completed, active, stats.medianSeconds());
+        int speedScore = speedScore(stats);
+        int disciplineScore = disciplineScore(total, stats.totalOverdue() + safeActiveStats.totalOverdue());
+        int workloadScore = workloadScore(completed);
+        int efficiencyScore = workerEfficiencyScore(percent, speedScore, disciplineScore, workloadScore);
         WorkerActivityStats safeActivityStats = activityStats == null ? WorkerActivityStats.empty() : activityStats;
+        long orderOverdue = stats.orderOverdue() + safeActiveStats.orderOverdue();
+        long totalOverdue = stats.totalOverdue() + safeActiveStats.totalOverdue();
 
         return new DailyWorkProgressResponse(
                 true,
                 ROLE_WORKER,
                 date,
                 completed,
-                Math.max(0, active),
+                active,
                 total,
                 percent,
                 checked,
@@ -398,32 +446,51 @@ public class StaffDailyProgressService {
                 safeActivityStats.workWindowSeconds(),
                 safeActivityStats.activityEvents(),
                 total,
-                efficiencyScore
+                efficiencyScore,
+                total,
+                stats.orderCompleted(),
+                stats.nagulCompleted(),
+                stats.publishCompleted(),
+                stats.badCompleted(),
+                stats.recoveryCompleted(),
+                safeAuxStats.recoveryCreated(),
+                orderOverdue,
+                totalOverdue,
+                speedScore,
+                disciplineScore,
+                workloadScore,
+                safeAuxStats.botChange(),
+                safeAuxStats.botBlock()
         );
     }
 
-    private Map<Long, Long> activeCounts(List<Long> workerIds, LocalDate date) {
+    private List<ActiveWorkItem> activeItems(List<Long> workerIds, LocalDate date) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("workerIds", workerIds)
                 .addValue("today", date)
                 .addValue("nagulDate", date.plusDays(appSettingService.getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60)));
 
-        Map<Long, Long> result = new HashMap<>();
+        List<ActiveWorkItem> result = new ArrayList<>();
         jdbc.queryForList("""
-                SELECT worker_id, SUM(active_count) AS active_count
+                SELECT worker_id, item_type, item_id, opened_at
                 FROM (
-                    SELECT o.order_worker AS worker_id, COUNT(*) AS active_count
+                    SELECT o.order_worker AS worker_id,
+                           'order' AS item_type,
+                           o.order_id AS item_id,
+                           COALESCE(o.order_status_changed_at, TIMESTAMP(o.order_created) + INTERVAL 10 HOUR) AS opened_at
                     FROM orders o
                     JOIN order_statuses s ON s.order_status_id = o.order_status
                     WHERE o.order_worker IN (:workerIds)
                       AND COALESCE(o.order_complete, 0) = 0
                       AND s.order_status_title IN ('Новый', 'Коррекция')
                       AND COALESCE(o.order_waiting_for_client, 0) = 0
-                    GROUP BY o.order_worker
 
                     UNION ALL
 
-                    SELECT r.review_worker AS worker_id, COUNT(*) AS active_count
+                    SELECT r.review_worker AS worker_id,
+                           'review_nagul' AS item_type,
+                           r.review_id AS item_id,
+                           TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR AS opened_at
                     FROM reviews r
                     WHERE r.review_worker IN (:workerIds)
                       AND r.review_publish = 0
@@ -436,11 +503,13 @@ public class StaffDailyProgressService {
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
-                    GROUP BY r.review_worker
 
                     UNION ALL
 
-                    SELECT r.review_worker AS worker_id, COUNT(*) AS active_count
+                    SELECT r.review_worker AS worker_id,
+                           'review_publish' AS item_type,
+                           r.review_id AS item_id,
+                           TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR AS opened_at
                     FROM reviews r
                     WHERE r.review_worker IN (:workerIds)
                       AND r.review_publish = 0
@@ -453,34 +522,62 @@ public class StaffDailyProgressService {
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
-                    GROUP BY r.review_worker
 
                     UNION ALL
 
-                    SELECT t.bad_review_task_worker AS worker_id, COUNT(*) AS active_count
+                    SELECT t.bad_review_task_worker AS worker_id,
+                           'bad_task' AS item_type,
+                           t.bad_review_task_id AS item_id,
+                           TIMESTAMP(t.bad_review_task_scheduled_date) + INTERVAL 10 HOUR AS opened_at
                     FROM bad_review_tasks t
                     WHERE t.bad_review_task_worker IN (:workerIds)
                       AND t.bad_review_task_status = 'NEW'
                       AND t.bad_review_task_scheduled_date <= :today
-                    GROUP BY t.bad_review_task_worker
 
                     UNION ALL
 
-                    SELECT t.review_recovery_task_worker AS worker_id, COUNT(*) AS active_count
+                    SELECT t.review_recovery_task_worker AS worker_id,
+                           'recovery_task' AS item_type,
+                           t.review_recovery_task_id AS item_id,
+                           COALESCE(t.review_recovery_task_created_at, TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR) AS opened_at
                     FROM review_recovery_tasks t
                     JOIN review_recovery_batches b ON b.review_recovery_batch_id = t.review_recovery_task_batch
                     WHERE t.review_recovery_task_worker IN (:workerIds)
                       AND t.review_recovery_task_status = 'PLANNED'
                       AND b.review_recovery_batch_status = 'OPEN'
                       AND t.review_recovery_task_scheduled_date <= :today
-                    GROUP BY t.review_recovery_task_worker
                 ) active_items
                 WHERE worker_id IS NOT NULL
-                GROUP BY worker_id
-                """, params).forEach(row -> result.put(
+                """, params).forEach(row -> result.add(new ActiveWorkItem(
                 longValue(row.get("worker_id")),
-                longValue(row.get("active_count"))
-        ));
+                stringValue(row.get("item_type")),
+                longValue(row.get("item_id")),
+                toLocalDateTime(row.get("opened_at"))
+        )));
+        return result;
+    }
+
+    private Map<Long, WorkerActiveStats> activeStats(List<ActiveWorkItem> items, LocalDate date) {
+        Map<Long, WorkerActiveStats.Mutable> mutable = new HashMap<>();
+        LocalDateTime evaluationAt = evaluationTime(date);
+        if (items != null) {
+            for (ActiveWorkItem item : items) {
+                if (item == null || item.workerId() == null || item.workerId() <= 0) {
+                    continue;
+                }
+                WorkerActiveStats.Mutable stats = mutable.computeIfAbsent(item.workerId(), ignored -> new WorkerActiveStats.Mutable());
+                stats.active++;
+                LocalDateTime dueAt = dueAt(item.itemType(), item.openedAt());
+                if (dueAt != null && evaluationAt.isAfter(dueAt)) {
+                    stats.totalOverdue++;
+                    if (TYPE_ORDER.equals(item.itemType())) {
+                        stats.orderOverdue++;
+                    }
+                }
+            }
+        }
+        Map<Long, WorkerActiveStats> result = new HashMap<>();
+        mutable.forEach((workerId, stats) -> result.put(workerId, stats.toStats()));
         return result;
     }
 
@@ -493,11 +590,20 @@ public class StaffDailyProgressService {
 
         Map<Long, List<CompletedItem>> rowsByWorker = new HashMap<>();
         jdbc.queryForList("""
-                SELECT worker_id, done_at, duration_seconds
+                SELECT worker_id, item_type, item_id, opened_at, done_at
                 FROM (
                     SELECT o.order_worker AS worker_id,
-                           MAX(e.created_at) AS done_at,
-                           0 AS duration_seconds
+                           'order' AS item_type,
+                           e.order_id AS item_id,
+                           COALESCE((
+                               SELECT MAX(prev.created_at)
+                               FROM business_audit_events prev
+                               WHERE prev.order_id = e.order_id
+                                 AND prev.action = 'order_status_changed'
+                                 AND prev.new_value = e.old_value
+                                 AND prev.created_at < e.created_at
+                           ), TIMESTAMP(o.order_created) + INTERVAL 10 HOUR) AS opened_at,
+                           e.created_at AS done_at
                     FROM business_audit_events e
                     JOIN orders o ON o.order_id = e.order_id
                     WHERE o.order_worker IN (:workerIds)
@@ -506,13 +612,28 @@ public class StaffDailyProgressService {
                       AND e.created_at < :to
                       AND e.old_value IN ('Новый', 'Коррекция')
                       AND COALESCE(e.new_value, '') NOT IN ('Новый', 'Коррекция')
-                    GROUP BY o.order_worker, e.order_id
 
                     UNION ALL
 
                     SELECT r.review_worker AS worker_id,
-                           COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) AS done_at,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, TIMESTAMP(r.review_publish_date), COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)))) AS duration_seconds
+                           'review_nagul' AS item_type,
+                           r.review_id AS item_id,
+                           COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, e.created_at) AS opened_at,
+                           e.created_at AS done_at
+                    FROM worker_activity_events e
+                    JOIN reviews r ON r.review_id = e.review_id
+                    WHERE r.review_worker IN (:workerIds)
+                      AND e.action = 'REVIEW_NAGUL'
+                      AND e.created_at >= :from
+                      AND e.created_at < :to
+
+                    UNION ALL
+
+                    SELECT r.review_worker AS worker_id,
+                           'review_publish' AS item_type,
+                           r.review_id AS item_id,
+                           COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))) AS opened_at,
+                           COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) AS done_at
                     FROM reviews r
                     WHERE r.review_worker IN (:workerIds)
                       AND r.review_publish = 1
@@ -522,8 +643,18 @@ public class StaffDailyProgressService {
                     UNION ALL
 
                     SELECT t.bad_review_task_worker AS worker_id,
-                           TIMESTAMP(t.bad_review_task_completed_date) AS done_at,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, TIMESTAMP(t.bad_review_task_scheduled_date), TIMESTAMP(t.bad_review_task_completed_date))) AS duration_seconds
+                           'bad_task' AS item_type,
+                           t.bad_review_task_id AS item_id,
+                           TIMESTAMP(t.bad_review_task_scheduled_date) + INTERVAL 10 HOUR AS opened_at,
+                           COALESCE((
+                               SELECT MAX(e.created_at)
+                               FROM worker_activity_events e
+                               WHERE e.entity_type = 'bad_review_task'
+                                 AND e.entity_id = t.bad_review_task_id
+                                 AND e.action = 'BAD_TASK_COMPLETE'
+                                 AND e.created_at >= :from
+                                 AND e.created_at < :to
+                           ), TIMESTAMP(t.bad_review_task_completed_date) + INTERVAL 10 HOUR) AS done_at
                     FROM bad_review_tasks t
                     WHERE t.bad_review_task_worker IN (:workerIds)
                       AND t.bad_review_task_status = 'DONE'
@@ -532,8 +663,18 @@ public class StaffDailyProgressService {
                     UNION ALL
 
                     SELECT t.review_recovery_task_worker AS worker_id,
-                           TIMESTAMP(t.review_recovery_task_completed_date) AS done_at,
-                           GREATEST(0, TIMESTAMPDIFF(SECOND, TIMESTAMP(t.review_recovery_task_scheduled_date), TIMESTAMP(t.review_recovery_task_completed_date))) AS duration_seconds
+                           'recovery_task' AS item_type,
+                           t.review_recovery_task_id AS item_id,
+                           COALESCE(t.review_recovery_task_created_at, TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR) AS opened_at,
+                           COALESCE((
+                               SELECT MAX(e.created_at)
+                               FROM worker_activity_events e
+                               WHERE e.entity_type = 'recovery_task'
+                                 AND e.entity_id = t.review_recovery_task_id
+                                 AND e.action = 'RECOVERY_TASK_COMPLETE'
+                                 AND e.created_at >= :from
+                                 AND e.created_at < :to
+                           ), TIMESTAMP(t.review_recovery_task_completed_date) + INTERVAL 10 HOUR) AS done_at
                     FROM review_recovery_tasks t
                     WHERE t.review_recovery_task_worker IN (:workerIds)
                       AND t.review_recovery_task_status = 'DONE'
@@ -543,8 +684,13 @@ public class StaffDailyProgressService {
                 """, params).forEach(row -> rowsByWorker
                 .computeIfAbsent(longValue(row.get("worker_id")), ignored -> new ArrayList<>())
                 .add(new CompletedItem(
+                        longValue(row.get("worker_id")),
+                        stringValue(row.get("item_type")),
+                        longValue(row.get("item_id")),
+                        toLocalDateTime(row.get("opened_at")),
                         toLocalDateTime(row.get("done_at")),
-                        longValue(row.get("duration_seconds"))
+                        effectiveSeconds(toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at"))),
+                        isOverdue(stringValue(row.get("item_type")), toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at")))
                 )));
 
         Map<Long, WorkerCompletionStats> result = new HashMap<>();
@@ -581,13 +727,192 @@ public class StaffDailyProgressService {
 
         long sessionGapMinutes = Math.max(5, appSettingService.getInt(
                 AppSettingService.WORKER_PROGRESS_ACTIVITY_SESSION_GAP_MINUTES,
-                30
+                15
         ));
         Map<Long, WorkerActivityStats> result = new HashMap<>();
         for (Map.Entry<Long, List<LocalDateTime>> entry : rowsByWorker.entrySet()) {
             result.put(entry.getKey(), WorkerActivityStats.from(entry.getValue(), sessionGapMinutes));
         }
         return result;
+    }
+
+    private Map<Long, WorkerAuxStats> auxStats(
+            List<Long> workerIds,
+            List<Long> workerUserIds,
+            Map<Long, Long> workerUserIdByWorkerId,
+            LocalDate date
+    ) {
+        Map<Long, WorkerAuxStats.Mutable> mutable = new HashMap<>();
+        if (workerIds != null && !workerIds.isEmpty()) {
+            MapSqlParameterSource recoveryParams = new MapSqlParameterSource()
+                    .addValue("workerIds", workerIds)
+                    .addValue("from", date.atStartOfDay())
+                    .addValue("to", date.plusDays(1).atStartOfDay());
+            jdbc.queryForList("""
+                    SELECT review_recovery_task_worker AS worker_id, COUNT(*) AS created_count
+                    FROM review_recovery_tasks
+                    WHERE review_recovery_task_worker IN (:workerIds)
+                      AND review_recovery_task_created_at >= :from
+                      AND review_recovery_task_created_at < :to
+                    GROUP BY review_recovery_task_worker
+                    """, recoveryParams).forEach(row -> mutable
+                    .computeIfAbsent(longValue(row.get("worker_id")), ignored -> new WorkerAuxStats.Mutable())
+                    .recoveryCreated += longValue(row.get("created_count")));
+        }
+
+        if (workerUserIds != null && !workerUserIds.isEmpty()) {
+            Map<Long, Long> workerIdByUserId = new HashMap<>();
+            if (workerUserIdByWorkerId != null) {
+                workerUserIdByWorkerId.forEach((workerId, userId) -> {
+                    if (workerId != null && userId != null) {
+                        workerIdByUserId.put(userId, workerId);
+                    }
+                });
+            }
+            List<String> botActions = new ArrayList<>();
+            botActions.addAll(BOT_CHANGE_ACTIONS);
+            botActions.addAll(BOT_BLOCK_ACTIONS);
+            MapSqlParameterSource botParams = new MapSqlParameterSource()
+                    .addValue("workerUserIds", workerUserIds)
+                    .addValue("from", date.atStartOfDay())
+                    .addValue("to", date.plusDays(1).atStartOfDay())
+                    .addValue("changeActions", BOT_CHANGE_ACTIONS)
+                    .addValue("blockActions", BOT_BLOCK_ACTIONS)
+                    .addValue("botActions", botActions);
+            jdbc.queryForList("""
+                    SELECT worker_user_id,
+                           SUM(CASE WHEN action IN (:changeActions) THEN 1 ELSE 0 END) AS bot_change_count,
+                           SUM(CASE WHEN action IN (:blockActions) THEN 1 ELSE 0 END) AS bot_block_count
+                    FROM worker_activity_events
+                    WHERE worker_user_id IN (:workerUserIds)
+                      AND created_at >= :from
+                      AND created_at < :to
+                      AND action IN (:botActions)
+                    GROUP BY worker_user_id
+                    """, botParams).forEach(row -> {
+                Long workerUserId = longValue(row.get("worker_user_id"));
+                Long workerId = workerIdByUserId.get(workerUserId);
+                if (workerId == null) {
+                    return;
+                }
+                WorkerAuxStats.Mutable stats = mutable.computeIfAbsent(workerId, ignored -> new WorkerAuxStats.Mutable());
+                stats.botChange += longValue(row.get("bot_change_count"));
+                stats.botBlock += longValue(row.get("bot_block_count"));
+            });
+        }
+
+        Map<Long, WorkerAuxStats> result = new HashMap<>();
+        mutable.forEach((workerId, stats) -> result.put(workerId, stats.toStats()));
+        return result;
+    }
+
+    private void syncLifecycle(
+            List<ActiveWorkItem> activeItems,
+            Map<Long, WorkerCompletionStats> completionStats,
+            Map<Long, Long> workerUserIdByWorkerId
+    ) {
+        List<MapSqlParameterSource> batch = new ArrayList<>();
+        if (activeItems != null) {
+            for (ActiveWorkItem item : activeItems) {
+                if (item == null || item.workerId() == null || item.itemId() == null || item.itemId() <= 0) {
+                    continue;
+                }
+                batch.add(lifecycleParams(
+                        item.workerId(),
+                        workerUserIdByWorkerId.get(item.workerId()),
+                        item.itemType(),
+                        item.itemId(),
+                        item.openedAt(),
+                        null,
+                        true,
+                        0,
+                        false
+                ));
+            }
+        }
+        if (completionStats != null) {
+            completionStats.values().stream()
+                    .filter(Objects::nonNull)
+                    .flatMap(stats -> stats.items().stream())
+                    .filter(item -> item.workerId() != null && item.itemId() != null && item.itemId() > 0)
+                    .forEach(item -> batch.add(lifecycleParams(
+                            item.workerId(),
+                            workerUserIdByWorkerId.get(item.workerId()),
+                            item.itemType(),
+                            item.itemId(),
+                            item.openedAt(),
+                            item.doneAt(),
+                            false,
+                            item.durationSeconds(),
+                            item.overdue()
+                    )));
+        }
+        if (batch.isEmpty()) {
+            return;
+        }
+        jdbc.batchUpdate("""
+                INSERT INTO worker_work_item_lifecycle (
+                    work_item_key, worker_id, worker_user_id, section_code, item_type, item_id,
+                    opened_at, available_at, due_at, closed_at, effective_close_seconds,
+                    active, overdue, excluded, exclusion_reason
+                )
+                VALUES (
+                    :workItemKey, :workerId, :workerUserId, :sectionCode, :itemType, :itemId,
+                    :openedAt, :availableAt, :dueAt, :closedAt, :effectiveCloseSeconds,
+                    :active, :overdue, 0, NULL
+                )
+                ON DUPLICATE KEY UPDATE
+                    worker_id = VALUES(worker_id),
+                    worker_user_id = VALUES(worker_user_id),
+                    section_code = VALUES(section_code),
+                    opened_at = LEAST(opened_at, VALUES(opened_at)),
+                    available_at = COALESCE(available_at, VALUES(available_at)),
+                    due_at = VALUES(due_at),
+                    closed_at = VALUES(closed_at),
+                    effective_close_seconds = VALUES(effective_close_seconds),
+                    active = VALUES(active),
+                    overdue = VALUES(overdue),
+                    excluded = 0,
+                    exclusion_reason = NULL
+                """, batch.toArray(MapSqlParameterSource[]::new));
+    }
+
+    private MapSqlParameterSource lifecycleParams(
+            Long workerId,
+            Long workerUserId,
+            String itemType,
+            Long itemId,
+            LocalDateTime openedAt,
+            LocalDateTime closedAt,
+            boolean active,
+            long effectiveCloseSeconds,
+            boolean overdue
+    ) {
+        LocalDateTime safeOpenedAt = openedAt == null ? LocalDateTime.now() : openedAt;
+        return new MapSqlParameterSource()
+                .addValue("workItemKey", itemType + ":" + itemId)
+                .addValue("workerId", workerId)
+                .addValue("workerUserId", workerUserId)
+                .addValue("sectionCode", sectionCode(itemType))
+                .addValue("itemType", itemType)
+                .addValue("itemId", itemId)
+                .addValue("openedAt", safeOpenedAt)
+                .addValue("availableAt", safeOpenedAt)
+                .addValue("dueAt", dueAt(itemType, safeOpenedAt))
+                .addValue("closedAt", closedAt)
+                .addValue("effectiveCloseSeconds", Math.max(0, effectiveCloseSeconds))
+                .addValue("active", active)
+                .addValue("overdue", overdue);
+    }
+
+    private String sectionCode(String itemType) {
+        return switch (itemType) {
+            case TYPE_NAGUL -> "nagul";
+            case TYPE_PUBLISH -> "publish";
+            case TYPE_BAD -> "bad";
+            case TYPE_RECOVERY -> "recovery";
+            default -> "order";
+        };
     }
 
     private void saveDaily(WorkerProgressSubject worker, DailyWorkProgressResponse response) {
@@ -599,34 +924,58 @@ public class StaffDailyProgressService {
                 .addValue("active", response.active())
                 .addValue("completed", response.completed())
                 .addValue("total", response.total())
+                .addValue("openedCount", response.openedCount())
                 .addValue("percent", BigDecimal.valueOf(response.percent()).setScale(2, RoundingMode.HALF_UP))
                 .addValue("checked", response.checked())
+                .addValue("orderCompletedCount", response.orderCompletedCount())
+                .addValue("nagulCompletedCount", response.nagulCompletedCount())
+                .addValue("publishCompletedCount", response.publishCompletedCount())
+                .addValue("badCompletedCount", response.badCompletedCount())
+                .addValue("recoveryCompletedCount", response.recoveryCompletedCount())
+                .addValue("recoveryCreatedCount", response.recoveryCreatedCount())
+                .addValue("orderOverdueCount", response.orderOverdueCount())
+                .addValue("totalOverdueCount", response.totalOverdueCount())
                 .addValue("firstCompletedAt", response.firstCompletedAt())
                 .addValue("lastCompletedAt", response.lastCompletedAt())
                 .addValue("averageCloseSeconds", response.averageCloseSeconds())
                 .addValue("medianCloseSeconds", response.medianCloseSeconds())
                 .addValue("p90CloseSeconds", response.p90CloseSeconds())
+                .addValue("speedScore", response.speedScore())
+                .addValue("disciplineScore", response.disciplineScore())
+                .addValue("workloadScore", response.workloadScore())
                 .addValue("firstActivityAt", response.firstActivityAt())
                 .addValue("lastActivityAt", response.lastActivityAt())
                 .addValue("activeWorkSeconds", response.activeWorkSeconds())
                 .addValue("workWindowSeconds", response.workWindowSeconds())
                 .addValue("activityEvents", response.activityEvents())
+                .addValue("botChangeCount", response.botChangeCount())
+                .addValue("botBlockCount", response.botBlockCount())
                 .addValue("loadScore", response.loadScore())
                 .addValue("efficiencyScore", response.efficiencyScore());
         jdbc.update("""
                 INSERT INTO worker_daily_performance (
                     progress_date, worker_id, worker_user_id, worker_name,
-                    active_count, completed_count, total_count, progress_percent, checked,
+                    active_count, completed_count, total_count, opened_count, progress_percent, checked,
+                    order_completed_count, nagul_completed_count, publish_completed_count,
+                    bad_completed_count, recovery_completed_count, recovery_created_count,
+                    order_overdue_count, total_overdue_count,
                     first_completed_at, last_completed_at, average_close_seconds, median_close_seconds,
-                    p90_close_seconds, first_activity_at, last_activity_at, active_work_seconds,
-                    work_window_seconds, activity_events, load_score, efficiency_score, aggregation_status
+                    p90_close_seconds, speed_score, discipline_score, workload_score,
+                    first_activity_at, last_activity_at, active_work_seconds,
+                    work_window_seconds, activity_events, bot_change_count, bot_block_count,
+                    load_score, efficiency_score, aggregation_status
                 )
                 VALUES (
                     :date, :workerId, :workerUserId, :workerName,
-                    :active, :completed, :total, :percent, :checked,
+                    :active, :completed, :total, :openedCount, :percent, :checked,
+                    :orderCompletedCount, :nagulCompletedCount, :publishCompletedCount,
+                    :badCompletedCount, :recoveryCompletedCount, :recoveryCreatedCount,
+                    :orderOverdueCount, :totalOverdueCount,
                     :firstCompletedAt, :lastCompletedAt, :averageCloseSeconds, :medianCloseSeconds,
-                    :p90CloseSeconds, :firstActivityAt, :lastActivityAt, :activeWorkSeconds,
-                    :workWindowSeconds, :activityEvents, :loadScore, :efficiencyScore, 'CALCULATED'
+                    :p90CloseSeconds, :speedScore, :disciplineScore, :workloadScore,
+                    :firstActivityAt, :lastActivityAt, :activeWorkSeconds,
+                    :workWindowSeconds, :activityEvents, :botChangeCount, :botBlockCount,
+                    :loadScore, :efficiencyScore, 'CALCULATED'
                 )
                 ON DUPLICATE KEY UPDATE
                     worker_user_id = VALUES(worker_user_id),
@@ -634,18 +983,32 @@ public class StaffDailyProgressService {
                     active_count = VALUES(active_count),
                     completed_count = VALUES(completed_count),
                     total_count = VALUES(total_count),
+                    opened_count = VALUES(opened_count),
                     progress_percent = VALUES(progress_percent),
                     checked = VALUES(checked),
+                    order_completed_count = VALUES(order_completed_count),
+                    nagul_completed_count = VALUES(nagul_completed_count),
+                    publish_completed_count = VALUES(publish_completed_count),
+                    bad_completed_count = VALUES(bad_completed_count),
+                    recovery_completed_count = VALUES(recovery_completed_count),
+                    recovery_created_count = VALUES(recovery_created_count),
+                    order_overdue_count = VALUES(order_overdue_count),
+                    total_overdue_count = VALUES(total_overdue_count),
                     first_completed_at = VALUES(first_completed_at),
                     last_completed_at = VALUES(last_completed_at),
                     average_close_seconds = VALUES(average_close_seconds),
                     median_close_seconds = VALUES(median_close_seconds),
                     p90_close_seconds = VALUES(p90_close_seconds),
+                    speed_score = VALUES(speed_score),
+                    discipline_score = VALUES(discipline_score),
+                    workload_score = VALUES(workload_score),
                     first_activity_at = VALUES(first_activity_at),
                     last_activity_at = VALUES(last_activity_at),
                     active_work_seconds = VALUES(active_work_seconds),
                     work_window_seconds = VALUES(work_window_seconds),
                     activity_events = VALUES(activity_events),
+                    bot_change_count = VALUES(bot_change_count),
+                    bot_block_count = VALUES(bot_block_count),
                     load_score = VALUES(load_score),
                     efficiency_score = VALUES(efficiency_score),
                     aggregation_status = VALUES(aggregation_status)
@@ -663,9 +1026,15 @@ public class StaffDailyProgressService {
         jdbc.update("""
                 INSERT INTO worker_performance_monthly (
                     month_start, worker_id, worker_user_id, working_days, completed_count, active_count,
-                    total_count, average_progress_percent, checked_days, average_close_seconds,
-                    median_close_seconds, p90_close_seconds, active_work_seconds, average_work_window_seconds,
-                    activity_events, load_score, average_efficiency_score, closed_period
+                    total_count, opened_count, average_progress_percent, checked_days,
+                    order_completed_count, nagul_completed_count, publish_completed_count,
+                    bad_completed_count, recovery_completed_count, recovery_created_count,
+                    order_overdue_count, total_overdue_count,
+                    average_close_seconds, median_close_seconds, p90_close_seconds,
+                    average_speed_score, average_discipline_score, average_workload_score,
+                    active_work_seconds, average_work_window_seconds,
+                    activity_events, bot_change_count, bot_block_count,
+                    load_score, average_efficiency_score, closed_period
                 )
                 SELECT :monthStart,
                        d.worker_id,
@@ -674,14 +1043,28 @@ public class StaffDailyProgressService {
                        SUM(d.completed_count),
                        SUM(d.active_count),
                        SUM(d.total_count),
+                       SUM(d.opened_count),
                        AVG(d.progress_percent),
                        SUM(CASE WHEN d.checked = 1 THEN 1 ELSE 0 END),
+                       SUM(d.order_completed_count),
+                       SUM(d.nagul_completed_count),
+                       SUM(d.publish_completed_count),
+                       SUM(d.bad_completed_count),
+                       SUM(d.recovery_completed_count),
+                       SUM(d.recovery_created_count),
+                       SUM(d.order_overdue_count),
+                       SUM(d.total_overdue_count),
                        AVG(d.average_close_seconds),
                        AVG(d.median_close_seconds),
                        AVG(d.p90_close_seconds),
+                       AVG(d.speed_score),
+                       AVG(d.discipline_score),
+                       AVG(d.workload_score),
                        SUM(d.active_work_seconds),
                        AVG(d.work_window_seconds),
                        SUM(d.activity_events),
+                       SUM(d.bot_change_count),
+                       SUM(d.bot_block_count),
                        SUM(d.load_score),
                        AVG(d.efficiency_score),
                        :closed
@@ -695,26 +1078,174 @@ public class StaffDailyProgressService {
                     completed_count = VALUES(completed_count),
                     active_count = VALUES(active_count),
                     total_count = VALUES(total_count),
+                    opened_count = VALUES(opened_count),
                     average_progress_percent = VALUES(average_progress_percent),
                     checked_days = VALUES(checked_days),
+                    order_completed_count = VALUES(order_completed_count),
+                    nagul_completed_count = VALUES(nagul_completed_count),
+                    publish_completed_count = VALUES(publish_completed_count),
+                    bad_completed_count = VALUES(bad_completed_count),
+                    recovery_completed_count = VALUES(recovery_completed_count),
+                    recovery_created_count = VALUES(recovery_created_count),
+                    order_overdue_count = VALUES(order_overdue_count),
+                    total_overdue_count = VALUES(total_overdue_count),
                     average_close_seconds = VALUES(average_close_seconds),
                     median_close_seconds = VALUES(median_close_seconds),
                     p90_close_seconds = VALUES(p90_close_seconds),
+                    average_speed_score = VALUES(average_speed_score),
+                    average_discipline_score = VALUES(average_discipline_score),
+                    average_workload_score = VALUES(average_workload_score),
                     active_work_seconds = VALUES(active_work_seconds),
                     average_work_window_seconds = VALUES(average_work_window_seconds),
                     activity_events = VALUES(activity_events),
+                    bot_change_count = VALUES(bot_change_count),
+                    bot_block_count = VALUES(bot_block_count),
                     load_score = VALUES(load_score),
                     average_efficiency_score = VALUES(average_efficiency_score),
                     closed_period = VALUES(closed_period)
                 """, params);
     }
 
-    private int workerEfficiencyScore(int progressPercent, long completed, long active, long medianSeconds) {
-        int progressScore = Math.max(0, Math.min(100, progressPercent));
-        int loadBonus = (int) Math.min(20, completed / 5);
-        int cleanBonus = active == 0 ? 10 : 0;
-        int speedPenalty = medianSeconds > 0 && medianSeconds > 3L * 24L * 60L * 60L ? 10 : 0;
-        return Math.max(0, Math.min(100, progressScore + loadBonus + cleanBonus - speedPenalty));
+    private int workerEfficiencyScore(int progressPercent, int speedScore, int disciplineScore, int workloadScore) {
+        return clampPercent((int) Math.round(
+                clampPercent(progressPercent) * 0.35D
+                        + clampPercent(speedScore) * 0.35D
+                        + clampPercent(disciplineScore) * 0.20D
+                        + clampPercent(workloadScore) * 0.10D
+        ));
+    }
+
+    private int speedScore(WorkerCompletionStats stats) {
+        if (stats == null || stats.completed() <= 0) {
+            return 100;
+        }
+        long targetSeconds = Math.max(30, appSettingService.getInt(
+                AppSettingService.WORKER_PROGRESS_SPEED_TARGET_MINUTES,
+                240
+        )) * 60L;
+        int medianScore = durationScore(stats.medianSeconds(), targetSeconds);
+        int p90Score = stats.p90Seconds() > 0 ? durationScore(stats.p90Seconds(), targetSeconds * 2L) : medianScore;
+        return clampPercent((int) Math.round(medianScore * 0.70D + p90Score * 0.30D));
+    }
+
+    private int durationScore(long seconds, long targetSeconds) {
+        if (seconds <= 0) {
+            return 100;
+        }
+        if (seconds <= targetSeconds) {
+            return 100;
+        }
+        return clampPercent((int) Math.round(targetSeconds * 100D / seconds));
+    }
+
+    private int disciplineScore(long total, long overdue) {
+        if (total <= 0) {
+            return 100;
+        }
+        return clampPercent((int) Math.round(100D - Math.min(1D, overdue * 1D / total) * 100D));
+    }
+
+    private int workloadScore(long completed) {
+        long expectedDailyLoad = Math.max(1, appSettingService.getInt(
+                AppSettingService.WORKER_PROGRESS_EXPECTED_DAILY_LOAD,
+                15
+        ));
+        return clampPercent((int) Math.round(completed * 100D / expectedDailyLoad));
+    }
+
+    private long effectiveSeconds(LocalDateTime from, LocalDateTime to) {
+        if (from == null || to == null || !to.isAfter(from)) {
+            return 0;
+        }
+        LocalTime nightStart = nightStartTime();
+        LocalTime nightEnd = workStartTime();
+        long seconds = 0;
+        LocalDate currentDate = from.toLocalDate();
+        LocalDate endDate = to.toLocalDate();
+        while (!currentDate.isAfter(endDate)) {
+            LocalDateTime dayStart = currentDate.atStartOfDay();
+            LocalDateTime dayEnd = currentDate.plusDays(1).atStartOfDay();
+            LocalDateTime segmentStart = max(from, dayStart);
+            LocalDateTime segmentEnd = min(to, dayEnd);
+            if (segmentEnd.isAfter(segmentStart)) {
+                long segmentSeconds = Duration.between(segmentStart, segmentEnd).getSeconds();
+                LocalDateTime nightFrom = currentDate.atTime(nightStart);
+                LocalDateTime nightTo = nightEnd.isAfter(nightStart)
+                        ? currentDate.atTime(nightEnd)
+                        : currentDate.plusDays(1).atTime(nightEnd);
+                long ignoredSeconds = overlapSeconds(segmentStart, segmentEnd, nightFrom, nightTo);
+                seconds += Math.max(0, segmentSeconds - ignoredSeconds);
+            }
+            currentDate = currentDate.plusDays(1);
+        }
+        return Math.max(0, seconds);
+    }
+
+    private boolean isOverdue(String itemType, LocalDateTime openedAt, LocalDateTime checkedAt) {
+        LocalDateTime dueAt = dueAt(itemType, openedAt);
+        return dueAt != null && checkedAt != null && checkedAt.isAfter(dueAt);
+    }
+
+    private LocalDateTime dueAt(String itemType, LocalDateTime openedAt) {
+        if (openedAt == null) {
+            return null;
+        }
+        int lateTaskHour = clampHour(appSettingService.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_HOUR, 22));
+        int lateDeadlineHour = clampHour(appSettingService.getInt(AppSettingService.WORKER_PROGRESS_LATE_TASK_DEADLINE_HOUR, 12));
+        LocalDate dueDate = openedAt.toLocalDate();
+        if (TYPE_ORDER.equals(itemType) && openedAt.toLocalTime().getHour() >= lateTaskHour) {
+            dueDate = dueDate.plusDays(1);
+            return dueDate.atTime(lateDeadlineHour, 0);
+        }
+        return dueDate.plusDays(1).atStartOfDay().minusNanos(1);
+    }
+
+    private LocalDateTime evaluationTime(LocalDate date) {
+        LocalDate safeDate = safeDate(date);
+        LocalDate today = LocalDate.now();
+        if (safeDate.equals(today)) {
+            return LocalDateTime.now();
+        }
+        return safeDate.plusDays(1).atStartOfDay();
+    }
+
+    private LocalTime nightStartTime() {
+        return LocalTime.of(clampHour(appSettingService.getInt(
+                AppSettingService.WORKER_PROGRESS_NIGHT_WINDOW_START_HOUR,
+                0
+        )), 0);
+    }
+
+    private LocalTime workStartTime() {
+        return LocalTime.of(clampHour(appSettingService.getInt(
+                AppSettingService.WORKER_PROGRESS_NIGHT_WINDOW_END_HOUR,
+                10
+        )), 0);
+    }
+
+    private int clampHour(int hour) {
+        return Math.max(0, Math.min(23, hour));
+    }
+
+    private int clampPercent(int value) {
+        return Math.max(0, Math.min(100, value));
+    }
+
+    private LocalDateTime min(LocalDateTime first, LocalDateTime second) {
+        return first.isBefore(second) ? first : second;
+    }
+
+    private LocalDateTime max(LocalDateTime first, LocalDateTime second) {
+        return first.isAfter(second) ? first : second;
+    }
+
+    private long overlapSeconds(LocalDateTime firstStart, LocalDateTime firstEnd, LocalDateTime secondStart, LocalDateTime secondEnd) {
+        LocalDateTime start = max(firstStart, secondStart);
+        LocalDateTime end = min(firstEnd, secondEnd);
+        if (!end.isAfter(start)) {
+            return 0;
+        }
+        return Duration.between(start, end).getSeconds();
     }
 
     private long weightedAverage(Collection<DailyWorkProgressResponse> values, java.util.function.ToLongFunction<DailyWorkProgressResponse> getter) {
@@ -760,6 +1291,10 @@ public class StaffDailyProgressService {
         return value instanceof Number number ? number.longValue() : 0L;
     }
 
+    private static String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
     private static LocalDateTime toLocalDateTime(Object value) {
         if (value instanceof Timestamp timestamp) {
             return timestamp.toLocalDateTime();
@@ -770,10 +1305,53 @@ public class StaffDailyProgressService {
         return null;
     }
 
-    private record CompletedItem(LocalDateTime doneAt, long durationSeconds) {
+    private record ActiveWorkItem(Long workerId, String itemType, Long itemId, LocalDateTime openedAt) {
+    }
+
+    private record CompletedItem(
+            Long workerId,
+            String itemType,
+            Long itemId,
+            LocalDateTime openedAt,
+            LocalDateTime doneAt,
+            long durationSeconds,
+            boolean overdue
+    ) {
     }
 
     public record WorkerProgressSubject(Long workerId, Long workerUserId, String workerName) {
+    }
+
+    private record WorkerActiveStats(long active, long orderOverdue, long totalOverdue) {
+        static WorkerActiveStats empty() {
+            return new WorkerActiveStats(0, 0, 0);
+        }
+
+        private static final class Mutable {
+            private long active;
+            private long orderOverdue;
+            private long totalOverdue;
+
+            private WorkerActiveStats toStats() {
+                return new WorkerActiveStats(active, orderOverdue, totalOverdue);
+            }
+        }
+    }
+
+    private record WorkerAuxStats(long recoveryCreated, long botChange, long botBlock) {
+        static WorkerAuxStats empty() {
+            return new WorkerAuxStats(0, 0, 0);
+        }
+
+        private static final class Mutable {
+            private long recoveryCreated;
+            private long botChange;
+            private long botBlock;
+
+            private WorkerAuxStats toStats() {
+                return new WorkerAuxStats(recoveryCreated, botChange, botBlock);
+            }
+        }
     }
 
     private record WorkerActivityStats(
@@ -844,10 +1422,18 @@ public class StaffDailyProgressService {
             LocalDateTime lastCompletedAt,
             long averageSeconds,
             long medianSeconds,
-            long p90Seconds
+            long p90Seconds,
+            long orderCompleted,
+            long nagulCompleted,
+            long publishCompleted,
+            long badCompleted,
+            long recoveryCompleted,
+            long orderOverdue,
+            long totalOverdue,
+            List<CompletedItem> items
     ) {
         static WorkerCompletionStats empty() {
-            return new WorkerCompletionStats(0, null, null, 0, 0, 0);
+            return new WorkerCompletionStats(0, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, List.of());
         }
 
         static WorkerCompletionStats from(List<CompletedItem> items) {
@@ -868,8 +1454,20 @@ public class StaffDailyProgressService {
                     items.stream().map(CompletedItem::doneAt).filter(Objects::nonNull).max(LocalDateTime::compareTo).orElse(null),
                     average,
                     percentile(durations, 0.50),
-                    percentile(durations, 0.90)
+                    percentile(durations, 0.90),
+                    countType(items, TYPE_ORDER),
+                    countType(items, TYPE_NAGUL),
+                    countType(items, TYPE_PUBLISH),
+                    countType(items, TYPE_BAD),
+                    countType(items, TYPE_RECOVERY),
+                    items.stream().filter(item -> TYPE_ORDER.equals(item.itemType()) && item.overdue()).count(),
+                    items.stream().filter(CompletedItem::overdue).count(),
+                    List.copyOf(items)
             );
+        }
+
+        private static long countType(List<CompletedItem> items, String type) {
+            return items.stream().filter(item -> type.equals(item.itemType())).count();
         }
 
         private static long percentile(List<Long> values, double percentile) {

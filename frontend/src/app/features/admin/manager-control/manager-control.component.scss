@@ -1322,7 +1322,6 @@ p {
 .detail-badges,
 .detail-meta,
 .detail-actions,
-.detail-example-flags,
 .review-followup,
 .stage-actions,
 .close-blockers {
@@ -1449,15 +1448,15 @@ p {
 
 .detail-example-badges {
   display: flex;
-  flex-wrap: nowrap;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 6px;
   width: 100%;
 }
 
-.detail-example-badges span,
-.detail-example-badges b,
+.detail-example-badges > span,
+.detail-example-badges > b,
 .detail-example-status-link {
   justify-self: center;
   border: 1px solid #dce5f2;
@@ -1587,15 +1586,6 @@ p {
 .detail-example-text .worker-explanation-note span:first-child {
   color: #3b7a67;
   font-size: 12px;
-}
-
-.detail-example-flags {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  justify-content: stretch;
-  justify-items: center;
-  gap: 8px;
-  width: 100%;
 }
 
 .waiting-client-badge {
