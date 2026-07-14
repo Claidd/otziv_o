@@ -325,7 +325,7 @@
   overflow: hidden;
   height: 0.55rem;
   border-radius: 999px;
-  background: rgba(115, 128, 236, 0.16);
+  background: var(--otziv-progress-track);
 }
 
 .progress-bar {
@@ -335,8 +335,8 @@
   max-width: 100%;
   place-items: center;
   border-radius: inherit;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
+  color: var(--otziv-progress-text);
+  background: var(--otziv-progress-fill);
   font-size: 0.52rem;
   font-weight: 900;
 }

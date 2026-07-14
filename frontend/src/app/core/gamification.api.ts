@@ -29,6 +29,9 @@ export interface GamificationMyProgress {
   actorRole?: string | null;
   totalEvents: number;
   totalPoints: number;
+  lifetimeXp: number;
+  tokenBalance: number;
+  nextTokenLevel: number;
   dailyGoal: number;
   dailyProgress: number;
   dailyGoalPercent: number;
@@ -45,6 +48,68 @@ export interface GamificationMyProgress {
   breakdown: GamificationMyBreakdown[];
 }
 
+export interface GamificationLeaderboardEntry {
+  rank: number;
+  actorUserId?: number | null;
+  actorName: string;
+  actorRole: string;
+  events: number;
+  points: number;
+  timelinessPercent: number;
+  currentUser: boolean;
+}
+
+export interface GamificationLeaderboard {
+  enabled: boolean;
+  from: string;
+  to: string;
+  days: number;
+  actorRole: string;
+  ownRank?: number | null;
+  totalActors: number;
+  entries: GamificationLeaderboardEntry[];
+}
+
+export interface GamificationReward {
+  id: number;
+  code: string;
+  title: string;
+  description?: string | null;
+  rewardType: 'VIRTUAL' | 'MATERIAL' | 'PRIVILEGE' | 'CERTIFICATE' | string;
+  icon?: string | null;
+  imageUrl?: string | null;
+  tokenCost: number;
+  requiredLevel: number;
+  stockQuantity?: number | null;
+  active: boolean;
+  sortOrder: number;
+  claimable: boolean;
+  lockedReason?: string | null;
+}
+
+export interface GamificationWallet {
+  lifetimeXp: number;
+  level: number;
+  tokens: number;
+  nextTokenLevel: number;
+}
+
+export interface GamificationRewardClaim {
+  id: number;
+  rewardId: number;
+  rewardTitle: string;
+  rewardImageUrl?: string | null;
+  userId: number;
+  userName: string;
+  status: string;
+  tokenCost: number;
+  comment?: string | null;
+  adminComment?: string | null;
+  requestedAt: string;
+  updatedAt: string;
+  fulfilledAt?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class GamificationApi {
   constructor(private readonly http: HttpClient) {}
@@ -53,5 +118,30 @@ export class GamificationApi {
     return this.http.get<GamificationMyProgress>(`${appEnvironment.apiBaseUrl}/api/gamification/me`, {
       params: { days }
     });
+  }
+
+  getLeaderboard(days = 7): Observable<GamificationLeaderboard> {
+    return this.http.get<GamificationLeaderboard>(`${appEnvironment.apiBaseUrl}/api/gamification/leaderboard`, {
+      params: { days }
+    });
+  }
+
+  getWallet(): Observable<GamificationWallet> {
+    return this.http.get<GamificationWallet>(`${appEnvironment.apiBaseUrl}/api/gamification/wallet`);
+  }
+
+  getRewards(): Observable<GamificationReward[]> {
+    return this.http.get<GamificationReward[]>(`${appEnvironment.apiBaseUrl}/api/gamification/rewards`);
+  }
+
+  getMyClaims(): Observable<GamificationRewardClaim[]> {
+    return this.http.get<GamificationRewardClaim[]>(`${appEnvironment.apiBaseUrl}/api/gamification/reward-claims`);
+  }
+
+  claimReward(rewardId: number, comment = ''): Observable<GamificationRewardClaim> {
+    return this.http.post<GamificationRewardClaim>(
+      `${appEnvironment.apiBaseUrl}/api/gamification/rewards/${rewardId}/claim`,
+      { comment }
+    );
   }
 }

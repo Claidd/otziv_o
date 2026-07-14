@@ -12,6 +12,12 @@
   display: none;
 }
 
+.toolbar-progress {
+  display: none;
+  flex: 0 1 clamp(10rem, 18vw, 16rem);
+  min-width: 8rem;
+}
+
 .worker-controls {
   display: contents;
 }
@@ -140,7 +146,7 @@
 }
 
 .toolbar-search {
-  flex: 0 1 clamp(20rem, 29vw, 25.5rem);
+  flex: 0 1 clamp(15rem, 23vw, 20rem);
 }
 
 .search-line label {
@@ -338,6 +344,24 @@ select {
   color: var(--otziv-dark);
   background: var(--otziv-white);
   box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+.worker-side-progress-card {
+  display: grid;
+  gap: 0.55rem;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 1rem;
+  padding: 0.85rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-white);
+  box-shadow: 0 1rem 2rem rgba(132, 139, 200, 0.14);
+}
+
+.worker-side-progress-card .side-progress {
+  display: block;
+  width: 100%;
 }
 
 .worker-filter-card span {
@@ -626,7 +650,8 @@ select {
   }
 
   .worker-toolbar {
-    display: block;
+    display: grid;
+    gap: 0.32rem;
   }
 
   .toolbar-search {
@@ -641,6 +666,14 @@ select {
     font-size: 0.82rem;
   }
 
+  .toolbar-progress {
+    display: block;
+    width: calc(100% - 0.15rem);
+    min-width: 0;
+    margin: 0.03rem auto 0;
+    justify-self: center;
+  }
+
   .search-line {
     align-items: center;
     gap: 0.4rem;
@@ -653,7 +686,7 @@ select {
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
-    min-height: 2.8rem;
+    min-height: 2.45rem;
     grid-template-columns: auto minmax(0, 1fr);
     gap: 0.45rem;
     border-radius: 1rem;
@@ -667,18 +700,18 @@ select {
   }
 
   .search-line input {
-    min-height: 2.65rem;
+    min-height: 2.35rem;
     height: 100%;
-    line-height: 2.65rem;
+    line-height: 2.35rem;
     text-align: left;
   }
 
   .search-line .icon-button {
-    flex: 0 0 2.75rem;
-    width: 2.75rem;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    height: 2.75rem;
+    flex: 0 0 2.45rem;
+    width: 2.45rem;
+    min-width: 2.45rem;
+    min-height: 2.45rem;
+    height: 2.45rem;
     border-radius: 0.9rem;
   }
 
@@ -785,14 +818,5 @@ select {
 @media (max-width: 860px) and (max-height: 680px) {
   .worker-workspace {
     grid-template-rows: auto auto auto auto auto;
-  }
-
-  .mobile-page-bottom-pager {
-    position: static;
-    right: auto;
-    bottom: auto;
-    left: auto;
-    width: auto;
-    margin: 0.35rem 0 0;
   }
 }

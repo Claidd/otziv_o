@@ -819,7 +819,10 @@ public class WorkerRiskEvaluationService {
 
     private String entityLinksPlain(WorkerRiskIncident incident) {
         StringBuilder result = new StringBuilder();
-        companyId(incident).ifPresent(companyId -> result.append("Компания: №").append(companyId).append(" "));
+        companyId(incident).ifPresent(companyId -> result
+                .append("Компания: ")
+                .append(companyName(incident).filter(name -> !name.isBlank()).orElse("Без названия"))
+                .append(" (№").append(companyId).append(") "));
         result.append("Заказ: #").append(valueOrDash(incident == null ? null : incident.getOrderId()));
         result.append("\nОтзыв: #").append(valueOrDash(incident == null ? null : incident.getReviewId()));
         return result.toString();
@@ -829,7 +832,10 @@ public class WorkerRiskEvaluationService {
         StringBuilder result = new StringBuilder();
         companyId(incident).ifPresent(companyId -> result
                 .append("Компания: ")
-                .append(link("№" + companyId, managerBoardCompanyUrl(companyId)))
+                .append(link(
+                        companyName(incident).filter(name -> !name.isBlank()).orElse("Без названия") + " (№" + companyId + ")",
+                        managerBoardCompanyUrl(companyId)
+                ))
                 .append(" "));
         result.append("Заказ: ")
                 .append(incident != null && incident.getOrderId() != null
@@ -847,9 +853,28 @@ public class WorkerRiskEvaluationService {
             return Optional.empty();
         }
         try {
-            return orderRepository.findCompanyIdByOrderId(incident.getOrderId());
+            Optional<Long> companyId = orderRepository.findCompanyIdByOrderId(incident.getOrderId());
+            if (companyId.isPresent()) {
+                return companyId;
+            }
+            return orderRepository.findById(incident.getOrderId())
+                    .map(order -> order.getCompany() == null ? null : order.getCompany().getId());
         } catch (RuntimeException e) {
             log.warn("Не удалось получить companyId для risk incident orderId={}: {}", incident.getOrderId(), e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private Optional<String> companyName(WorkerRiskIncident incident) {
+        if (incident == null || incident.getOrderId() == null) {
+            return Optional.empty();
+        }
+        try {
+            return orderRepository.findById(incident.getOrderId())
+                    .map(order -> order.getCompany() == null ? "" : clean(order.getCompany().getTitle()))
+                    .filter(name -> !name.isBlank());
+        } catch (RuntimeException e) {
+            log.warn("Не удалось получить название компании для risk incident orderId={}: {}", incident.getOrderId(), e.getMessage());
             return Optional.empty();
         }
     }

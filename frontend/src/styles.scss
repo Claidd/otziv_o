@@ -68,6 +68,13 @@
   --otziv-tone-success-surface: #f5fff9;
   --otziv-tone-bad-border: rgba(232, 64, 112, 0.34);
   --otziv-tone-bad-surface: #fff7fb;
+  --otziv-progress-surface: rgba(255, 255, 255, 0.86);
+  --otziv-progress-border: rgba(108, 155, 207, 0.22);
+  --otziv-progress-track: #e9edf6;
+  --otziv-progress-fill: linear-gradient(90deg, #ff5b6e 0%, #f0bf4c 48%, #43b77a 100%);
+  --otziv-progress-fill-complete: linear-gradient(90deg, #1b9c85 0%, #55cda6 100%);
+  --otziv-progress-text: #363949;
+  --otziv-progress-label: #7d8da1;
   --otziv-shadow: 0 2rem 3rem var(--otziv-light);
   --otziv-shadow-hover: none;
   --otziv-card-radius: 2rem;
@@ -110,6 +117,13 @@ body.otziv-dark-theme {
   --otziv-tone-success-surface: #222b29;
   --otziv-tone-bad-border: rgba(255, 91, 143, 0.24);
   --otziv-tone-bad-surface: #28242b;
+  --otziv-progress-surface: rgba(32, 37, 40, 0.86);
+  --otziv-progress-border: rgba(122, 167, 220, 0.22);
+  --otziv-progress-track: rgba(232, 224, 244, 0.14);
+  --otziv-progress-fill: linear-gradient(90deg, #ff5b8f 0%, #d7bd78 48%, #4ac6b1 100%);
+  --otziv-progress-fill-complete: linear-gradient(90deg, #4ac6b1 0%, #7be0bd 100%);
+  --otziv-progress-text: #eef6ff;
+  --otziv-progress-label: #c5d9e6;
   --otziv-shadow: 0 2rem 3rem rgba(0, 0, 0, 0.4);
 }
 
@@ -150,6 +164,94 @@ body.otziv-dark-theme select optgroup {
 body.otziv-dark-theme select option:checked {
   color: #ffffff;
   background: #315f97;
+}
+
+@media (max-width: 860px) {
+  :is(
+    app-worker-board,
+    app-manager-board,
+    app-leads-board,
+    app-operator-board,
+    app-users-admin,
+    app-manager-archive,
+    app-operator-phones,
+    app-admin-dictionaries,
+    app-admin-cities
+  ) :is(
+    .search-line label,
+    .mobile-manager-search label,
+    .users-search label,
+    .archive-search label,
+    .phones-search label,
+    .dictionary-search,
+    .search-form
+  ) {
+    min-height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  :is(
+    app-worker-board,
+    app-manager-board,
+    app-leads-board,
+    app-operator-board,
+    app-users-admin,
+    app-manager-archive,
+    app-operator-phones,
+    app-admin-dictionaries,
+    app-admin-cities
+  ) :is(
+    .search-line input,
+    .mobile-manager-search input,
+    .users-search input,
+    .archive-search input,
+    .phones-search input,
+    .dictionary-search input,
+    .search-input
+  ) {
+    min-height: 2rem !important;
+    height: 100% !important;
+    line-height: 2rem !important;
+  }
+
+  :is(
+    app-worker-board,
+    app-manager-board,
+    app-leads-board,
+    app-operator-board,
+    app-users-admin,
+    app-manager-archive,
+    app-operator-phones,
+    app-admin-dictionaries,
+    app-admin-cities
+  ) :is(
+    .search-line > .icon-button,
+    .mobile-manager-search > button,
+    .mobile-manager-search > a,
+    .mobile-board-actions button,
+    .mobile-pager-action,
+    .users-search .icon-button,
+    .archive-search .icon-button,
+    .phones-search .icon-button,
+    .dictionary-icon-action
+  ) {
+    width: 2.15rem !important;
+    min-width: 2.15rem !important;
+    height: 2.15rem !important;
+    min-height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  :is(app-users-admin, app-manager-archive) :is(.users-search select, .archive-search select) {
+    min-height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  app-admin-cities .search-button {
+    min-height: 2.15rem !important;
+    height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
 }
 
 * {
@@ -4656,6 +4758,141 @@ body.otziv-dark-theme .personal-mode .personal-remark-head button.manager-detail
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
 }
 
+/* Manager control: stable card hierarchy and dedicated dark surfaces. */
+app-manager-control .manager-control .control-chip.has-sla,
+app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.has-sla {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-auto-rows: auto;
+  min-height: 6.7rem;
+  align-content: center;
+  align-items: center;
+  gap: .38rem .55rem;
+  padding: .72rem .78rem;
+  text-align: left;
+}
+app-manager-control .manager-control .control-chip.has-sla > .material-icons-sharp,
+app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.has-sla > .material-icons-sharp {
+  grid-row: auto;
+  align-self: center;
+  font-size: 1.2rem;
+}
+app-manager-control .manager-control .control-chip.has-sla > span:not(.material-icons-sharp),
+app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.has-sla > span:not(.material-icons-sharp) {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  line-height: 1.18;
+}
+app-manager-control .manager-control .control-chip.has-sla > strong,
+app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.has-sla > strong {
+  justify-self: end;
+}
+app-manager-control .manager-control .control-chip.has-sla > small,
+app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.has-sla > small {
+  grid-column: 1 / -1;
+  min-width: 0;
+  justify-self: stretch;
+  text-align: center;
+}
+app-manager-control .manager-control .control-chip.has-sla > .sla-timer,
+app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.has-sla > .sla-timer {
+  min-height: 1.65rem;
+  border-radius: .7rem;
+  white-space: normal;
+  line-height: 1.18;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
+}
+app-manager-control .manager-control .sla-timer.sla-target {
+  border-color: rgba(27,156,133,.38);
+  color: #176858;
+  background: linear-gradient(135deg, #f1fcf7, #dff5ec);
+}
+app-manager-control .manager-control .sla-timer.sla-late {
+  border-color: rgba(198,142,30,.42);
+  color: #805400;
+  background: linear-gradient(135deg, #fff9e8, #ffedba);
+}
+app-manager-control .manager-control .sla-timer.sla-overdue {
+  border-color: rgba(214,47,89,.38);
+  color: #ae2147;
+  background: linear-gradient(135deg, #fff3f6, #ffdee8);
+}
+
+body.otziv-dark-theme app-manager-control .manager-control .manager-row {
+  border-color: rgba(148,170,198,.18);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(122,167,220,.08), transparent 34%),
+    linear-gradient(180deg, rgba(30,36,43,.98), rgba(24,30,36,.99));
+  box-shadow: 0 1.15rem 2.4rem rgba(0,0,0,.24);
+}
+body.otziv-dark-theme app-manager-control .manager-control .manager-row.detail-tone-red { border-color: rgba(255,91,143,.48); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-row.detail-tone-yellow { border-color: rgba(215,189,120,.48); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-row.detail-tone-green { border-color: rgba(74,198,177,.44); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-card-head {
+  border: 1px solid rgba(255,255,255,.045);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.065), 0 .8rem 1.6rem rgba(0,0,0,.16);
+}
+body.otziv-dark-theme app-manager-control .manager-control .manager-card-head.tone-green { --manager-head-bg: linear-gradient(115deg, rgba(29,78,69,.92), rgba(37,43,52,.98) 72%); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-card-head.tone-blue { --manager-head-bg: linear-gradient(115deg, rgba(35,57,88,.94), rgba(37,43,52,.98) 72%); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-card-head.tone-yellow { --manager-head-bg: linear-gradient(115deg, rgba(76,65,35,.92), rgba(40,43,49,.98) 72%); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-card-head.tone-orange { --manager-head-bg: linear-gradient(115deg, rgba(82,53,29,.92), rgba(40,42,49,.98) 72%); }
+body.otziv-dark-theme app-manager-control .manager-control .manager-card-head.tone-red { --manager-head-bg: linear-gradient(115deg, rgba(78,38,55,.94), rgba(39,42,52,.98) 72%); }
+body.otziv-dark-theme app-manager-control .manager-control .metric {
+  border-color: rgba(159,184,215,.14);
+  background: linear-gradient(145deg, rgba(47,56,69,.96), rgba(35,42,51,.98));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
+}
+body.otziv-dark-theme app-manager-control .manager-control .metric.tone-green { background: linear-gradient(145deg, rgba(32,74,68,.92), rgba(35,42,51,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .metric.tone-blue { background: linear-gradient(145deg, rgba(38,58,84,.94), rgba(35,42,51,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .metric.tone-yellow { background: linear-gradient(145deg, rgba(67,60,40,.94), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .metric.tone-orange { background: linear-gradient(145deg, rgba(73,51,34,.94), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .metric.tone-red { background: linear-gradient(145deg, rgba(70,40,53,.94), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .control-group,
+body.otziv-dark-theme app-manager-control .manager-control .personal-remark-actions {
+  border-color: rgba(159,184,215,.11);
+  background: linear-gradient(145deg, rgba(43,49,61,.9), rgba(29,35,42,.96));
+}
+body.otziv-dark-theme app-manager-control .manager-control .control-group.tone-yellow,
+body.otziv-dark-theme app-manager-control .manager-control .personal-remark-actions.tone-yellow { background: linear-gradient(145deg, rgba(66,57,38,.72), rgba(29,35,42,.96) 48%); }
+body.otziv-dark-theme app-manager-control .manager-control .control-group.tone-red,
+body.otziv-dark-theme app-manager-control .manager-control .personal-remark-actions.tone-red { background: linear-gradient(145deg, rgba(68,37,51,.72), rgba(29,35,42,.96) 48%); }
+body.otziv-dark-theme app-manager-control .manager-control .control-chip,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.control-chip {
+  border-color: rgba(159,184,215,.17);
+  color: #f1f5ff;
+  background: linear-gradient(145deg, rgba(48,58,72,.98), rgba(35,42,52,.98));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 .45rem .95rem rgba(0,0,0,.12);
+}
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-green,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-green { background: linear-gradient(145deg, rgba(31,77,69,.96), rgba(34,42,51,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-blue,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-blue { background: linear-gradient(145deg, rgba(37,60,89,.96), rgba(34,42,51,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-yellow,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-yellow { background: linear-gradient(145deg, rgba(74,63,38,.96), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-orange,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-orange { background: linear-gradient(145deg, rgba(80,53,32,.96), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-red,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-red { background: linear-gradient(145deg, rgba(76,40,55,.96), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .sla-timer.sla-target {
+  border-color: rgba(97,224,194,.48);
+  color: #b3f5e5;
+  background: linear-gradient(135deg, rgba(31,94,80,.98), rgba(28,61,57,.98));
+  box-shadow: inset 0 1px 0 rgba(203,255,241,.13);
+}
+body.otziv-dark-theme app-manager-control .manager-control .sla-timer.sla-late {
+  border-color: rgba(244,203,101,.5);
+  color: #ffe3a0;
+  background: linear-gradient(135deg, rgba(101,78,31,.98), rgba(65,55,35,.98));
+  box-shadow: inset 0 1px 0 rgba(255,238,180,.12);
+}
+body.otziv-dark-theme app-manager-control .manager-control .sla-timer.sla-overdue {
+  border-color: rgba(255,112,155,.5);
+  color: #ffc0d3;
+  background: linear-gradient(135deg, rgba(105,39,63,.98), rgba(68,39,51,.98));
+  box-shadow: inset 0 1px 0 rgba(255,218,229,.12);
+}
+
 .themed-detail {
   --td-card: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.98)), linear-gradient(135deg, rgba(108,155,207,.12), rgba(255,0,96,.08));
   --td-head: linear-gradient(110deg, rgba(230,255,246,.96) 0%, rgba(244,252,255,.92) 43%, rgba(255,248,236,.9) 67%, rgba(255,235,244,.92) 100%);
@@ -5366,3 +5603,5 @@ body.otziv-mobile-overlay-open {
     background: #1b2027;
   }
 }
+.sla-timer{border-radius:999px;padding:.15rem .42rem;font-size:.68rem;white-space:nowrap}.sla-target{color:var(--otziv-success);background:rgba(27,156,133,.1)}.sla-late{color:#a96a00;background:rgba(245,166,35,.14)}.sla-overdue{color:var(--otziv-danger);background:rgba(239,73,102,.12)}
+.queue-control-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}.queue-control-stats span{display:grid;gap:.12rem;border-radius:.5rem;padding:.65rem;background:rgba(27,156,133,.07)}.queue-control-stats small{color:var(--otziv-info);font-weight:800}.queue-control-stats b{color:var(--otziv-dark)}@media(max-width:42rem){.queue-control-stats{grid-template-columns:1fr}}

@@ -81,6 +81,14 @@
           }
         </div>
 
+        @if (board()?.dailyProgress?.visible) {
+          <app-daily-progress-strip
+            class="copy-progress"
+            [progress]="board()?.dailyProgress"
+            label="Команда"
+          />
+        }
+
         <div class="search-line" [class.has-clear]="keyword()">
           <label>
             <span class="material-icons-sharp">search</span>
@@ -119,6 +127,14 @@
         [ariaLabel]="'Статусы: ' + (activeSection() === 'companies' ? 'Компании' : 'Заказы')"
         (select)="selectMobileStatus($event)"
       />
+
+      @if (board()?.dailyProgress?.visible) {
+        <app-daily-progress-strip
+          class="mobile-copy-progress"
+          [progress]="board()?.dailyProgress"
+          label="Команда"
+        />
+      }
 
       <div class="mobile-manager-search" [class.has-clear]="keyword()">
         <label>

@@ -8,6 +8,7 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCallbackService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -53,6 +54,7 @@ public class WorkerRiskTelegramCallbackService {
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
     private final ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
+    private final OrderRepository orderRepository;
 
     public static List<List<InlineKeyboardButton>> keyboard(Long incidentId) {
         return List.of(
@@ -230,6 +232,7 @@ public class WorkerRiskTelegramCallbackService {
                 + "\nПричина: " + html(clean(incident.getTitle()))
                 + "\nРиск: " + incident.getScore()
                 + "\nДействие: " + html(clean(incident.getAction()))
+                + companyLine(incident)
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                 + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
                 + "\nОбъект: " + html(clean(incident.getEntityType())) + " #" + valueOrDash(incident.getEntityId())
@@ -246,6 +249,24 @@ public class WorkerRiskTelegramCallbackService {
                 "HTML",
                 null
         );
+    }
+
+    private String companyLine(WorkerRiskIncident incident) {
+        if (incident == null || incident.getOrderId() == null) {
+            return "";
+        }
+        try {
+            return orderRepository.findById(incident.getOrderId())
+                    .filter(order -> order.getCompany() != null)
+                    .map(order -> "\nКомпания: " + html(firstNonBlank(
+                            order.getCompany().getTitle(),
+                            "Без названия"
+                    )))
+                    .orElse("");
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось получить компанию риска orderId={}: {}", incident.getOrderId(), exception.getMessage());
+            return "";
+        }
     }
 
     private Optional<WorkerRiskIncident> findPendingWorkerExplanation(User worker) {
@@ -449,6 +470,7 @@ public class WorkerRiskTelegramCallbackService {
                 + "\nСтатус: ждем пояснение"
                 + "\nПричина: " + clean(incident.getTitle())
                 + "\nДействие: " + clean(incident.getAction())
+                + companyLine(incident)
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                 + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
                 + "\n\nПожалуйста, напишите менеджеру, что произошло, и подтвердите фактическое выполнение. "

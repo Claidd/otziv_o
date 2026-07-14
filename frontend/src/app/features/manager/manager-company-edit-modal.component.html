@@ -351,14 +351,14 @@
 
                 <label class="company-switch-field">
                   <span>
-                    <strong>Изменение дат по просьбе клиента</strong>
-                    <small>Не считать ручную смену даты специалистом риском</small>
+                    <strong>Разрешить специалистам изменять даты публикации</strong>
+                    <small>Действует для отзывов во всех заказах этой компании. Все изменения сохраняются в журнале действий.</small>
                   </span>
                   <input
-                    name="ignoreWorkerPublicationDateRisk"
+                    name="allowWorkerPublicationDateEdit"
                     type="checkbox"
-                    [ngModel]="draft.ignoreWorkerPublicationDateRisk"
-                    (ngModelChange)="setField('ignoreWorkerPublicationDateRisk', $event)"
+                    [ngModel]="draft.allowWorkerPublicationDateEdit"
+                    (ngModelChange)="setField('allowWorkerPublicationDateEdit', $event)"
                   >
                 </label>
               </div>

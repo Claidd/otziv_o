@@ -59,6 +59,8 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemReposito
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
@@ -263,7 +265,10 @@ public class ManagerControlService {
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     private final ManagerDailyControlEventRepository dailyControlEventRepository;
+    private final ManagerActionBalanceService managerActionBalanceService;
     private final ManagerPerformanceService managerPerformanceService;
+    private final GamificationEventService gamificationEventService;
+    private final LeadsRepository leadsRepository;
 
     @Transactional(readOnly = true)
     public ManagerControlSummaryResponse today(Principal principal, Authentication authentication) {
@@ -274,7 +279,21 @@ public class ManagerControlService {
     public ManagerControlSummaryResponse syncToday(Principal principal, Authentication authentication) {
         reconcileClientMessagesForControl();
         invalidateManagerPerformance();
-        return today(principal, authentication, true);
+        ManagerControlSummaryResponse initial = today(principal, authentication, true);
+        for (ManagerControlManagerResponse row : initial.managers()) {
+            managerRepository.findById(row.managerId()).ifPresent(manager -> syncManagerActionConcreteItems(manager, LocalDate.now()));
+        }
+        return today(principal, authentication, false);
+    }
+
+    @Transactional
+    public void synchronizeDailySnapshot(LocalDate date) {
+        LocalDate snapshotDate = date == null ? LocalDate.now() : date;
+        reconcileClientMessagesForControl();
+        for (Manager manager : managerRepository.findAllWithUserAndImage()) {
+            managerControl(manager, snapshotDate, null, true);
+            syncManagerActionConcreteItems(manager, snapshotDate);
+        }
     }
 
     private ManagerControlSummaryResponse today(Principal principal, Authentication authentication, boolean persist) {
@@ -350,6 +369,20 @@ public class ManagerControlService {
                 manager.canCloseDay(),
                 manager.openItemCount(),
                 manager.handledItemCount(),
+                manager.actionTotalCount(),
+                manager.actionCompletedCount(),
+                manager.actionProgressPercent(),
+                manager.actionAutoClosedCount(),
+                manager.actionRemainingCount(),
+                manager.actionResolvedCount(),
+                manager.actionTakenCount(),
+                manager.actionDeferredCount(),
+                manager.actionAcknowledgedCount(),
+                manager.actionOverdueRemainingCount(),
+                manager.actionRiskRemainingCount(),
+                manager.actionUnansweredRemainingCount(),
+                manager.actionOtherRemainingCount(),
+                manager.leadActionCount(),
                 manager.status(),
                 manager.criticalCount(),
                 manager.warningCount(),
@@ -553,10 +586,12 @@ public class ManagerControlService {
         requireCommentIfNeeded(item, actionType, comment);
         ManagerDailyControlItemStatus status = itemStatusForAction(actionType);
         acceptControlIfCurrentManager(control, principal, "Контроль принят первым действием");
+        recordItemEpisode(item, status, false);
         item.setStatus(status);
         item.setActionType(actionType);
         item.setComment(comment);
         item.setResolvedAt(status == ManagerDailyControlItemStatus.RESOLVED ? LocalDateTime.now() : null);
+        item.setAutomaticResolution(false);
         dailyControlItemRepository.save(item);
 
         if (control.getStartedAt() == null) {
@@ -576,6 +611,16 @@ public class ManagerControlService {
                 actionType,
                 item.getComment()
         );
+        if (status == ManagerDailyControlItemStatus.RESOLVED) {
+            recordGamificationControlAction(
+                    control,
+                    "item:" + item.getId(),
+                    item.getReasonCode(),
+                    item.getCreatedAt(),
+                    item.getResolvedAt(),
+                    item.getLabel()
+            );
+        }
     }
 
     @Transactional
@@ -617,6 +662,7 @@ public class ManagerControlService {
             concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
             concreteItem.setActionType(null);
             concreteItem.setResolvedAt(null);
+            concreteItem.setAutomaticResolution(false);
             concreteItem.setFollowUpAt(null);
             concreteItem.setLastManualTouchAt(now);
             ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -647,9 +693,11 @@ public class ManagerControlService {
                     "Закрыть карточку можно после ответа специалиста или администратором/владельцем"
             );
         }
+        recordConcreteEpisode(concreteItem, status, false);
         concreteItem.setStatus(status);
         concreteItem.setActionType(actionType);
         concreteItem.setResolvedAt(status == ManagerDailyControlItemStatus.RESOLVED ? now : null);
+        concreteItem.setAutomaticResolution(false);
         boolean movedToReminder = false;
         if ("ORDER".equals(concreteItem.getEntityType()) && status != ManagerDailyControlItemStatus.RESOLVED) {
             concreteItem.setLastManualTouchAt(now);
@@ -705,11 +753,52 @@ public class ManagerControlService {
                 eventComment
         );
 
+        if (status == ManagerDailyControlItemStatus.RESOLVED && !clientChatUnansweredConcrete) {
+            recordGamificationControlAction(
+                    control,
+                    "concrete:" + savedConcreteItem.getId(),
+                    savedConcreteItem.getParentItem() == null ? null : savedConcreteItem.getParentItem().getReasonCode(),
+                    savedConcreteItem.getCreatedAt(),
+                    savedConcreteItem.getResolvedAt(),
+                    savedConcreteItem.getTitle()
+            );
+        }
+
         if (actionType == ManagerDailyControlActionType.DEFERRED) {
             notifyOwnersAboutDeferredConcreteItem(control, savedConcreteItem, principal);
         }
 
         return concreteItemResponse(savedConcreteItem);
+    }
+
+    private void recordGamificationControlAction(
+            ManagerDailyControl control,
+            String uniqueKey,
+            String reasonCode,
+            LocalDateTime startedAt,
+            LocalDateTime completedAt,
+            String label
+    ) {
+        Manager manager = control == null ? null : control.getManager();
+        String normalized = safe(reasonCode).toUpperCase(Locale.ROOT);
+        boolean risk = normalized.contains("RISK");
+        int target = Math.max(1, appSettingService.getInt(
+                risk ? "manager.sla.target.risk-minutes" : "manager.sla.target.default-minutes",
+                risk ? 30 : 120
+        ));
+        int hard = Math.max(target, appSettingService.getInt(
+                risk ? "manager.sla.hard.risk-minutes" : "manager.sla.hard.default-minutes",
+                risk ? 240 : 720
+        ));
+        gamificationEventService.recordManagerControlAction(
+                manager,
+                uniqueKey,
+                startedAt,
+                completedAt,
+                target,
+                hard,
+                "reason=" + safe(reasonCode) + ";label=" + safe(label)
+        );
     }
 
     @Transactional
@@ -752,11 +841,13 @@ public class ManagerControlService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.ACTION_TAKEN, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
         concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
         concreteItem.setLastManualTouchAt(now);
         concreteItem.setFollowUpAt(now.plusDays(MANUAL_FOLLOW_UP_DAYS));
         concreteItem.setResolvedAt(null);
+        concreteItem.setAutomaticResolution(false);
         String statusNote = applyOrderStatusAfterClientSend(concreteItem, order);
         concreteItem.setComment(limit("Сообщение клиенту отправлено через " + safe(result.channel()) + statusNote, 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -837,10 +928,12 @@ public class ManagerControlService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.ACTION_TAKEN, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
         concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
         concreteItem.setLastManualTouchAt(now);
         concreteItem.setResolvedAt(now);
+        concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setComment(limit("Ответ отправлен через " + safe(result.channel()) + ": " + message, 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -1188,10 +1281,12 @@ public class ManagerControlService {
             String eventComment
     ) {
         LocalDateTime now = LocalDateTime.now();
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
         concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
         concreteItem.setComment(limit(comment, 1000));
         concreteItem.setResolvedAt(now);
+        concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setLastManualTouchAt(now);
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -1824,6 +1919,10 @@ public class ManagerControlService {
         );
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
+        long leadActionCount = leadsRepository.countByLidStatusAndManager("Новый", manager)
+                + leadsRepository.countByLidStatusAndManager("В работу", manager)
+                + leadsRepository.countByLidStatusAndManagerAndDateNewTryLessThanEqual("Напоминание", manager, today);
+        long leadsInWork = leadsRepository.countByLidStatusAndManager("В работе", manager);
 
         List<ManagerControlProblemResponse> problems = new ArrayList<>();
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
@@ -1833,14 +1932,16 @@ public class ManagerControlService {
         addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
+        addProblem(problems, "LEADS", "Лиды требуют действия", leadActionCount, "WARNING", "ACTION", "person_search", "/leads");
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
+        addProblem(problems, "LEADS_WORKLOAD", "Лиды в работе", leadsInWork, "INFO", "WORKLOAD", "groups", "/leads");
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
         long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + chatBindingIssueCount
                 + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
-        long warningCount = 0;
-        long workloadCount = orderAttention + workerWorkloadCount;
+        long warningCount = leadActionCount;
+        long workloadCount = orderAttention + workerWorkloadCount + leadsInWork;
         DailyControlSyncResult controlSync = persist
                 ? syncDailyControl(manager, today, problems, sections, overdueStatuses)
                 : readDailyControl(manager, today);
@@ -1878,6 +1979,15 @@ public class ManagerControlService {
         List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats = controlSync.control().getId() == null
                 ? List.of()
                 : workerExplanationStats(controlSync.control());
+        List<ManagerDailyControlConcreteItem> balanceConcreteItems = controlSync.control().getId() == null
+                ? List.of()
+                : dailyControlConcreteItemRepository.findByControl(controlSync.control());
+        var actionBalance = managerActionBalanceService.calculate(controlSync.items(), balanceConcreteItems);
+        long actionCompletedCount = actionBalance.handledByManager();
+        long actionTotalCount = actionBalance.total();
+        int actionProgressPercent = actionTotalCount <= 0
+                ? 100
+                : (int) Math.max(0, Math.min(100, Math.round(actionCompletedCount * 100D / actionTotalCount)));
 
         return new ManagerControlManagerResponse(
                 manager.getId(),
@@ -1900,6 +2010,20 @@ public class ManagerControlService {
                 blockers.isEmpty(),
                 openItemCount,
                 handledItemCount,
+                actionTotalCount,
+                actionCompletedCount,
+                actionProgressPercent,
+                actionBalance.autoClosed(),
+                actionBalance.remaining(),
+                actionBalance.resolved(),
+                actionBalance.actionTaken(),
+                actionBalance.deferred(),
+                actionBalance.acknowledged(),
+                actionBalance.overdueRemaining(),
+                actionBalance.riskRemaining(),
+                actionBalance.unansweredRemaining(),
+                actionBalance.otherRemaining(),
+                leadActionCount,
                 status,
                 criticalCount,
                 warningCount,
@@ -1915,6 +2039,23 @@ public class ManagerControlService {
                 workerExplanationStats,
                 managerPerformance
         );
+    }
+
+    private void syncManagerActionConcreteItems(Manager manager, LocalDate today) {
+        ManagerDailyControl control = dailyControlRepository.findByControlDateAndManager(today, manager).orElse(null);
+        if (control == null) {
+            return;
+        }
+        List<ManagerDailyControlItem> items = dailyControlItemRepository.findByControl(control);
+        for (ManagerDailyControlItem item : items) {
+            if (item == null
+                    || item.getGroup() != ManagerDailyControlGroup.ACTION
+                    || item.getItemType() == ManagerDailyControlItemType.ORDER_STATUS
+                    || item.getCount() <= 0) {
+                continue;
+            }
+            syncConcreteExamples(item, detailExamples(manager, item, today));
+        }
     }
 
     private List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats(ManagerDailyControl control) {
@@ -2087,6 +2228,7 @@ public class ManagerControlService {
                 item.setControl(control);
                 item.setItemKey(input.itemKey());
                 item.setStatus(ManagerDailyControlItemStatus.OPEN);
+                item.setAutomaticResolution(false);
                 created = true;
             }
             long previousCount = item.getCount();
@@ -2108,6 +2250,7 @@ public class ManagerControlService {
             boolean changed = applyControlItemSnapshot(item, input);
             if (shouldReopen || shouldReopenFollowUp || shouldReopenConcrete) {
                 item.setStatus(ManagerDailyControlItemStatus.OPEN);
+                item.setAutomaticResolution(false);
                 item.setActionType(null);
                 item.setComment(null);
                 item.setResolvedAt(null);
@@ -2128,8 +2271,10 @@ public class ManagerControlService {
 
         for (ManagerDailyControlItem item : existing.values()) {
             if (!activeKeys.contains(item.getItemKey()) && isOpenActionItem(item)) {
+                recordItemEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
                 item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
                 item.setResolvedAt(LocalDateTime.now());
+                item.setAutomaticResolution(true);
                 currentItems.add(dailyControlItemRepository.save(item));
                 saveEvent(control, item, null, ManagerDailyControlEventType.ITEM_RESOLVED, ManagerDailyControlActionType.RESOLVED, "Автоматически закрыто: пункт больше не требует внимания");
             } else if (!currentItems.contains(item)) {
@@ -2306,6 +2451,7 @@ public class ManagerControlService {
         if (item == null) {
             return response;
         }
+        SlaWindow sla = slaWindow(response.code(), item.getCreatedAt(), item.getResolvedAt());
         return new ManagerControlProblemResponse(
                 response.code(),
                 response.label(),
@@ -2317,8 +2463,34 @@ public class ManagerControlService {
                 item.getId(),
                 item.getStatus().name(),
                 item.getActionType() == null ? null : item.getActionType().name(),
-                item.getComment()
+                item.getComment(),
+                sla.firstObservedAt(),
+                sla.targetDeadlineAt(),
+                sla.hardDeadlineAt(),
+                sla.state()
         );
+    }
+
+    private SlaWindow slaWindow(String code, LocalDateTime firstObservedAt, LocalDateTime completedAt) {
+        if (!appSettingService.getBoolean("manager.sla.enabled", false)) {
+            return new SlaWindow(null, null, null, null);
+        }
+        LocalDateTime started = firstObservedAt == null ? LocalDateTime.now() : firstObservedAt;
+        String normalized = safe(code).toUpperCase(Locale.ROOT);
+        String suffix = normalized.contains("UNANSWERED") ? "message"
+                : normalized.contains("LEAD") ? "lead"
+                : normalized.contains("RISK") ? "risk"
+                : "default";
+        int defaultTarget = "message".equals(suffix) || "risk".equals(suffix) ? 30 : "lead".equals(suffix) ? 60 : 120;
+        int defaultHard = "risk".equals(suffix) ? 240 : "message".equals(suffix) || "lead".equals(suffix) ? 480 : 720;
+        int targetMinutes = Math.max(1, appSettingService.getInt("manager.sla.target." + suffix + "-minutes", defaultTarget));
+        int hardMinutes = Math.max(targetMinutes, appSettingService.getInt("manager.sla.hard." + suffix + "-minutes", defaultHard));
+        LocalDateTime target = started.plusMinutes(targetMinutes);
+        LocalDateTime hard = started.plusMinutes(hardMinutes);
+        LocalDateTime reference = completedAt == null ? LocalDateTime.now() : completedAt;
+        String state = reference.isAfter(hard) ? "OVERDUE" : reference.isAfter(target) ? "LATE" : "TARGET";
+        if (completedAt != null) state = "COMPLETED_" + state;
+        return new SlaWindow(started, target, hard, state);
     }
 
     private ManagerControlSectionResponse decorate(ManagerControlSectionResponse response, ManagerDailyControlItem item) {
@@ -2365,6 +2537,9 @@ public class ManagerControlService {
         List<ManagerControlConcreteItemResponse> examples = syncConcrete
                 ? syncConcreteExamples(item, freshExamples)
                 : readConcreteExamples(item, freshExamples);
+        examples = examples.stream()
+                .map(example -> decorateConcreteSla(item, example))
+                .toList();
         return new ManagerControlItemDetailResponse(
                 item.getId(),
                 item.getItemKey(),
@@ -2577,10 +2752,12 @@ public class ManagerControlService {
                     || freshKeys.contains(item.getEntityKey())) {
                 continue;
             }
+            recordConcreteEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
             item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
             item.setActionType(ManagerDailyControlActionType.RESOLVED);
             item.setComment("Группа привязана или проблема больше не актуальна");
             item.setResolvedAt(now);
+            item.setAutomaticResolution(true);
             item.setFollowUpAt(null);
             item.setLastManualTouchAt(null);
             dailyControlConcreteItemRepository.save(item);
@@ -2592,6 +2769,11 @@ public class ManagerControlService {
             ManagerControlConcreteItemResponse example
     ) {
         boolean changed = false;
+        LocalDateTime firstObservedAt = example.firstObservedAt();
+        if (firstObservedAt != null && (item.getCreatedAt() == null || firstObservedAt.isBefore(item.getCreatedAt()))) {
+            item.setCreatedAt(firstObservedAt);
+            changed = true;
+        }
         String entityType = limit(safe(example.type()).isBlank() ? "UNKNOWN" : example.type(), 40);
         String title = limit(safe(example.title()).isBlank() ? "Карточка контроля" : example.title(), 220);
         String subtitle = limit(example.subtitle(), 500);
@@ -2697,6 +2879,7 @@ public class ManagerControlService {
         concreteItem.setActionType(null);
         concreteItem.setComment(null);
         concreteItem.setResolvedAt(null);
+        concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setLastManualTouchAt(null);
         clearWorkerTelegramState(concreteItem);
@@ -2734,7 +2917,7 @@ public class ManagerControlService {
         if (isChatBindingIssueConcrete(item)) {
             targetUrl = companyBoardUrlByKeyword(item.getTitle(), targetUrl);
         }
-        return new ManagerControlConcreteItemResponse(
+        ManagerControlConcreteItemResponse response = new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
                 item.getEntityId(),
@@ -2766,8 +2949,13 @@ public class ManagerControlService {
                 null,
                 null,
                 null,
-                specialistName
+                specialistName,
+                null,
+                null,
+                null,
+                null
         );
+        return decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null));
     }
 
     private String companyBoardUrlByKeyword(String keyword, String fallbackUrl) {
@@ -2838,7 +3026,7 @@ public class ManagerControlService {
                 || workerExplanationAt != null
                 ? null
                 : item.getWorkerNotificationFailureReason();
-        return new ManagerControlConcreteItemResponse(
+        ManagerControlConcreteItemResponse response = new ManagerControlConcreteItemResponse(
                 item.getId(),
                 item.getEntityType(),
                 item.getEntityId(),
@@ -2870,7 +3058,38 @@ public class ManagerControlService {
                 incident == null || incident.getRollbackStatus() == null ? null : incident.getRollbackStatus().name(),
                 incident == null ? null : incident.getRollbackMessage(),
                 incident == null ? null : canRollbackRiskIncident(incident),
-                specialistName
+                specialistName,
+                null,
+                null,
+                null,
+                null
+        );
+        return decorateConcreteSla(item.getParentItem(), response.withSla(item.getCreatedAt(), null, null, null));
+    }
+
+    private ManagerControlConcreteItemResponse decorateConcreteSla(
+            ManagerDailyControlItem parentItem,
+            ManagerControlConcreteItemResponse response
+    ) {
+        if (response == null) {
+            return null;
+        }
+        LocalDateTime firstObservedAt = firstNonNullTime(
+                response.firstObservedAt(),
+                parentItem == null ? null : parentItem.getCreatedAt(),
+                LocalDateTime.now()
+        );
+        String code = firstNonBlank(
+                parentItem == null ? null : parentItem.getReasonCode(),
+                parentItem == null ? null : parentItem.getSectionCode(),
+                response.type()
+        );
+        SlaWindow sla = slaWindow(code, firstObservedAt, response.resolvedAt());
+        return response.withSla(
+                sla.firstObservedAt(),
+                sla.targetDeadlineAt(),
+                sla.hardDeadlineAt(),
+                sla.state()
         );
     }
 
@@ -2893,6 +3112,49 @@ public class ManagerControlService {
         return true;
     }
 
+    private void recordItemEpisode(
+            ManagerDailyControlItem item,
+            ManagerDailyControlItemStatus outcome,
+            boolean automatic
+    ) {
+        if (item == null || item.getStatus() != ManagerDailyControlItemStatus.OPEN || outcome == null) {
+            return;
+        }
+        long count = Math.max(1, item.getCount());
+        if (automatic) {
+            item.setAutoClosedEpisodeCount(item.getAutoClosedEpisodeCount() + count);
+            return;
+        }
+        switch (outcome) {
+            case RESOLVED -> item.setResolvedEpisodeCount(item.getResolvedEpisodeCount() + count);
+            case ACTION_TAKEN -> item.setActionTakenEpisodeCount(item.getActionTakenEpisodeCount() + count);
+            case DEFERRED -> item.setDeferredEpisodeCount(item.getDeferredEpisodeCount() + count);
+            case ACKNOWLEDGED -> item.setAcknowledgedEpisodeCount(item.getAcknowledgedEpisodeCount() + count);
+            case OPEN -> { }
+        }
+    }
+
+    private void recordConcreteEpisode(
+            ManagerDailyControlConcreteItem item,
+            ManagerDailyControlItemStatus outcome,
+            boolean automatic
+    ) {
+        if (item == null || item.getStatus() != ManagerDailyControlItemStatus.OPEN || outcome == null) {
+            return;
+        }
+        if (automatic) {
+            item.setAutoClosedEpisodeCount(item.getAutoClosedEpisodeCount() + 1);
+            return;
+        }
+        switch (outcome) {
+            case RESOLVED -> item.setResolvedEpisodeCount(item.getResolvedEpisodeCount() + 1);
+            case ACTION_TAKEN -> item.setActionTakenEpisodeCount(item.getActionTakenEpisodeCount() + 1);
+            case DEFERRED -> item.setDeferredEpisodeCount(item.getDeferredEpisodeCount() + 1);
+            case ACKNOWLEDGED -> item.setAcknowledgedEpisodeCount(item.getAcknowledgedEpisodeCount() + 1);
+            case OPEN -> { }
+        }
+    }
+
     private void updateParentItemFromConcreteItems(ManagerDailyControlItem parentItem) {
         if (parentItem == null || parentItem.getGroup() != ManagerDailyControlGroup.ACTION) {
             return;
@@ -2912,11 +3174,13 @@ public class ManagerControlService {
             parentItem.setActionType(ManagerDailyControlActionType.RESOLVED);
             parentItem.setComment("Все конкретные карточки внутри пункта закрыты");
             parentItem.setResolvedAt(LocalDateTime.now());
+            parentItem.setAutomaticResolution(false);
         } else {
             parentItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
             parentItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
             parentItem.setComment("Все конкретные карточки внутри пункта обработаны");
             parentItem.setResolvedAt(null);
+            parentItem.setAutomaticResolution(false);
         }
         dailyControlItemRepository.save(parentItem);
     }
@@ -4477,8 +4741,12 @@ public class ManagerControlService {
                 incident.getRollbackStatus() == null ? null : incident.getRollbackStatus().name(),
                 incident.getRollbackMessage(),
                 canRollbackRiskIncident(incident),
-                safe(incident.getWorkerName()).isBlank() ? incident.getWorkerUsername() : incident.getWorkerName()
-        );
+                safe(incident.getWorkerName()).isBlank() ? incident.getWorkerUsername() : incident.getWorkerName(),
+                null,
+                null,
+                null,
+                null
+        ).withSla(incident.getCreatedAt(), null, null, null);
     }
 
     private boolean canRollbackRiskIncident(WorkerRiskIncident incident) {
@@ -4573,6 +4841,7 @@ public class ManagerControlService {
                 : example.companyTitle();
         String sender = safe(example.senderName()).isBlank() ? "Клиент" : example.senderName();
         String waiting = waitingLabel(example.waitingMinutes());
+        LocalDateTime firstObservedAt = LocalDateTime.now().minusMinutes(Math.max(0, example.waitingMinutes()));
         return new ManagerControlConcreteItemResponse(
                 null,
                 ENTITY_CLIENT_CHAT_UNANSWERED,
@@ -4599,7 +4868,7 @@ public class ManagerControlService {
                 null,
                 compact(example.lastMessageText(), 1000),
                 example.specialistName()
-        );
+        ).withSla(firstObservedAt, null, null, null);
     }
 
     private String platformLabel(com.hunt.otziv.client_chat_control.model.ClientChatPlatform platform) {
@@ -4677,7 +4946,7 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        );
+        ).withSla(invoice.getUpdatedAt(), null, null, null);
     }
 
     private String commonInvoiceSubtitle(String accountName, long amountKopecks, long remainingKopecks) {
@@ -5796,6 +6065,14 @@ public class ManagerControlService {
             ManagerDailyControl control,
             List<ManagerDailyControlItem> items,
             Map<String, ManagerDailyControlItem> itemsByKey
+    ) {
+    }
+
+    private record SlaWindow(
+            LocalDateTime firstObservedAt,
+            LocalDateTime targetDeadlineAt,
+            LocalDateTime hardDeadlineAt,
+            String state
     ) {
     }
 

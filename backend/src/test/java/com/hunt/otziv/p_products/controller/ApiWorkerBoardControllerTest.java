@@ -20,6 +20,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.WorkerFlowLockService;
+import com.hunt.otziv.p_products.worker_access.WorkerCellularAccessService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -37,6 +38,7 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -137,6 +139,12 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private WorkerCredentialPreparationService credentialPreparationService;
 
+    @Mock
+    private StaffDailyProgressService staffDailyProgressService;
+
+    @Mock
+    private WorkerCellularAccessService workerCellularAccessService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -184,7 +192,9 @@ class ApiWorkerBoardControllerTest {
                         publicationSessionService
                 ),
                 workerActivityService,
-                credentialPreparationService
+                credentialPreparationService,
+                staffDailyProgressService,
+                workerCellularAccessService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
@@ -415,6 +425,7 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals("nagul", response.section());
         assertFalse(response.warning());
+        verify(workerCellularAccessService).enforceSection("nagul");
         verify(reviewService).getAllReviewDTOByWorkerByPublishToVigul(
                 any(LocalDate.class),
                 eq(principal),
@@ -716,6 +727,7 @@ class ApiWorkerBoardControllerTest {
 
         controller.publishReview(15L, principal, workerAuth);
 
+        verify(workerCellularAccessService).enforceProtectedAccess("publish");
         verify(orderService).changeStatusAndOrderCounter(15L);
     }
 

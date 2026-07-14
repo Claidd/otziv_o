@@ -1,7 +1,6 @@
 package com.hunt.otziv.client_chat_control.service;
 
 import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.dto.ClientChatUnansweredExample;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
@@ -13,6 +12,7 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -23,7 +23,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -43,8 +42,9 @@ public class ClientChatMessageTrackerService {
     private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ClientChatParticipantClassifier participantClassifier;
     private final ClientChatAutoIgnoreService autoIgnoreService;
-    private final CompanyRepository companyRepository;
+    private final ClientChatCompanyResolutionService companyResolutionService;
     private final AppSettingService appSettingService;
+    private final GamificationEventService gamificationEventService;
 
     @Transactional
     public void track(ClientChatMessageCommand command) {
@@ -64,8 +64,12 @@ public class ClientChatMessageTrackerService {
             return;
         }
 
-        Company company = companyFor(command.platform(), command.chatId()).orElse(null);
-        Manager manager = company == null ? null : company.getManager();
+        ClientChatCompanyResolutionService.Resolution resolution = companyResolutionService.resolve(
+                command.platform(),
+                command.chatId()
+        );
+        Company company = resolution.primaryCompany();
+        Manager manager = resolution.manager();
         ClientChatDirection direction = command.direction() == null ? ClientChatDirection.INCOMING : command.direction();
         ClientChatSenderRole senderRole = normalizeSenderRole(command, participantClassifier.classify(
                 command.platform(),
@@ -87,6 +91,9 @@ public class ClientChatMessageTrackerService {
         message.setSenderExternalId(limit(command.senderExternalId(), 160));
         message.setSenderName(limit(command.senderName(), 255));
         message.setMessageText(messageText);
+        message.setMatchedCompanyCount(resolution.companyCount());
+        message.setMatchedCompanyTitles(limit(resolution.companyTitles(), 1000));
+        message.setRoutingAmbiguous(resolution.ambiguous());
         message.setMessageAt(command.messageAt() == null ? LocalDateTime.now() : command.messageAt());
         ClientChatMessage savedMessage = messageRepository.save(message);
 
@@ -101,7 +108,12 @@ public class ClientChatMessageTrackerService {
         }
 
         if (manager == null) {
-            log.debug("Client chat message tracked without manager: platform={}, chatId={}", command.platform(), command.chatId());
+            if (resolution.ambiguous()) {
+                log.warn("Client chat message requires manual company routing: platform={}, chatId={}, companyCount={}, companies={}",
+                        command.platform(), command.chatId(), resolution.companyCount(), resolution.companyTitles());
+            } else {
+                log.debug("Client chat message tracked without manager: platform={}, chatId={}", command.platform(), command.chatId());
+            }
             return;
         }
         if (autoIgnoreService.shouldIgnore(savedMessage.getMessageText())) {
@@ -213,15 +225,31 @@ public class ClientChatMessageTrackerService {
     }
 
     private void close(ClientChatUnansweredItem item, ClientChatUnansweredStatus status, String reason) {
+        LocalDateTime closedAt = LocalDateTime.now();
         item.setStatus(status);
-        item.setClosedAt(LocalDateTime.now());
+        item.setClosedAt(closedAt);
         item.setCloseReason(limit(reason, 255));
         unansweredRepository.save(item);
+        if (status == ClientChatUnansweredStatus.ANSWERED) {
+            gamificationEventService.recordManagerClientReply(
+                    item,
+                    closedAt,
+                    Math.max(1, appSettingService.getInt("manager.sla.target.message-minutes", 30)),
+                    Math.max(1, appSettingService.getInt("manager.sla.hard.message-minutes", 480))
+            );
+        }
     }
 
     private ClientChatUnansweredExample example(ClientChatUnansweredItem item, LocalDateTime now) {
         Company company = item.getCompany();
-        String title = hasText(item.getChatTitle()) ? item.getChatTitle() : company == null ? item.getChatId() : company.getTitle();
+        ClientChatMessage lastMessage = item.getLastClientMessage();
+        boolean shared = lastMessage != null && lastMessage.getMatchedCompanyCount() > 1;
+        String sharedTitle = shared
+                ? "Общий чат (" + lastMessage.getMatchedCompanyCount() + "): " + safe(lastMessage.getMatchedCompanyTitles())
+                : null;
+        String title = hasText(sharedTitle)
+                ? sharedTitle
+                : hasText(item.getChatTitle()) ? item.getChatTitle() : company == null ? item.getChatId() : company.getTitle();
         return new ClientChatUnansweredExample(
                 item.getId(),
                 item.getPlatform(),
@@ -237,14 +265,6 @@ public class ClientChatMessageTrackerService {
                 chatUrl(item),
                 specialistName(company)
         );
-    }
-
-    private Optional<Company> companyFor(ClientChatPlatform platform, String chatId) {
-        return switch (platform) {
-            case WHATSAPP -> companyRepository.findAllByGroupId(chatId).stream().findFirst();
-            case TELEGRAM -> parseLong(chatId).flatMap(id -> companyRepository.findAllByTelegramGroupChatIdOrderById(id).stream().findFirst());
-            case MAX -> parseLong(chatId).flatMap(id -> companyRepository.findAllByMaxGroupChatIdOrderById(id).stream().findFirst());
-        };
     }
 
     private LocalDateTime dueCutoff() {
@@ -320,14 +340,6 @@ public class ClientChatMessageTrackerService {
             return "https://t.me/c/" + encode(value.substring(4));
         }
         return "https://t.me/c/" + encode(value.replaceFirst("^-", ""));
-    }
-
-    private static Optional<Long> parseLong(String value) {
-        try {
-            return Optional.of(Long.parseLong(value));
-        } catch (Exception ignored) {
-            return Optional.empty();
-        }
     }
 
     private static String encode(String value) {

@@ -1,4 +1,4 @@
-<app-admin-layout title="Моя команда" active="team">
+<app-admin-layout [title]="'Моя команда'" active="team">
   <section class="team-toolbar">
     <div>
       <p class="eyebrow">PERSONAL</p>
@@ -38,6 +38,18 @@
         <div class="people-grid">
           @for (member of members(section); track memberTrack(member)) {
             <article class="person-card">
+              @if (efficiencyBadge(member); as badge) {
+                <span
+                  class="efficiency-badge"
+                  [class.good]="badge.value >= 90"
+                  [class.warn]="badge.value < 60"
+                  [attr.title]="badge.hint"
+                  [attr.aria-label]="badge.hint"
+                >
+                  {{ badge.value }}
+                </span>
+              }
+
               @if (team()?.canOpenUserInfo) {
                 <a class="avatar-link" [routerLink]="['/admin/user-info', member.userId]">
                   <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
@@ -53,10 +65,46 @@
                 <p>{{ member.login }}</p>
               </div>
 
+              @if (member.dailyProgress?.visible) {
+                <app-daily-progress-strip
+                  [progress]="member.dailyProgress"
+                  [label]="progressLabel(section.key)"
+                />
+              }
+
+              @if (progressDetails(member); as details) {
+                @if (details.length) {
+                  <details class="progress-details">
+                    <summary title="Детализация дневного прогресса: остаток, нагрузка, активное время, рабочее окно и скорость закрытия.">
+                      <span class="material-icons-sharp">query_stats</span>
+                      {{ progressSummary(member) }}
+                    </summary>
+                    <div class="progress-detail-grid">
+                      @for (row of details; track row.label) {
+                        <span
+                          [class.good]="row.tone === 'good'"
+                          [class.warn]="row.tone === 'warn'"
+                          [attr.title]="row.hint"
+                          [attr.aria-label]="row.label + ': ' + row.value + '. ' + row.hint"
+                        >
+                          <small>{{ row.label }}</small>
+                          <strong>{{ row.value }}</strong>
+                        </span>
+                      }
+                    </div>
+                  </details>
+                }
+              }
+
               @if (statRows(section.key, member).length) {
-                <dl>
+                <dl class="stats-grid">
                   @for (row of statRows(section.key, member); track row.label) {
-                    <div>
+                    <div
+                      class="stat-cell"
+                      [class.warn]="row.tone === 'warn'"
+                      [class.good]="row.tone === 'good'"
+                      [attr.title]="row.hint || row.label"
+                    >
                       <dt>{{ row.label }}</dt>
                       <dd>{{ row.value }}</dd>
                     </div>

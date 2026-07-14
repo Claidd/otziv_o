@@ -48,8 +48,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
 import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.requireAllowed;
 import static com.hunt.otziv.r_review.utils.ReviewPublicationDatePolicy.requireAllowedAfterPrevious;
@@ -888,6 +890,7 @@ public class ReviewServiceImpl implements ReviewService {
         }
 
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+            requireWorkerPublicationDatePermission(userRole, saveReview);
             validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
             log.info("Обновляем дату публикации отзыва");
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
@@ -906,6 +909,25 @@ public class ReviewServiceImpl implements ReviewService {
             if (saveReview.isPublish()) {
                 gamificationEventService.recordReviewPublished(saveReview);
             }
+        }
+    }
+
+    private void requireWorkerPublicationDatePermission(String userRole, Review review) {
+        if (!"ROLE_WORKER".equals(userRole)) {
+            return;
+        }
+
+        boolean allowed = Optional.ofNullable(review)
+                .map(Review::getOrderDetails)
+                .map(OrderDetails::getOrder)
+                .map(Order::getCompany)
+                .map(company -> company.isAllowWorkerPublicationDateEdit())
+                .orElse(false);
+        if (!allowed) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Для смены даты публикации обратитесь к менеджеру"
+            );
         }
     }
 

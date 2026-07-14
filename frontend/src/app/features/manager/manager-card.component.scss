@@ -335,6 +335,27 @@
   color: var(--otziv-info);
 }
 
+.publication-date-permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 999px;
+  background: rgba(219, 234, 254, 0.72);
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.publication-date-permission-badge .material-icons-sharp {
+  font-size: 0.9rem;
+}
+
 .order-card .card-id-line {
   position: absolute;
   top: 0.48rem;
@@ -869,12 +890,12 @@
 
 .order-card .progress {
   min-height: 0.36rem;
-  background: #f3ddf8;
+  background: var(--otziv-progress-track);
 }
 
 .order-card .progress-bar {
-  color: var(--otziv-dark);
-  background: #bdcfe5;
+  color: var(--otziv-progress-text);
+  background: var(--otziv-progress-fill);
 }
 
 @media (max-width: 860px) {

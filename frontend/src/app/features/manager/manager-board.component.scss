@@ -126,9 +126,18 @@
 
 .copy-search {
   display: grid;
-  grid-template-columns: minmax(18rem, 1fr) minmax(15rem, 0.85fr);
+  grid-template-columns: minmax(18rem, 1fr) minmax(13rem, 0.72fr);
   gap: 0.75rem 1rem;
   align-items: center;
+}
+
+.copy-search:has(.copy-progress) {
+  grid-template-columns: minmax(18rem, 1fr) minmax(10rem, 0.55fr) minmax(13rem, 0.72fr);
+}
+
+.copy-progress,
+.mobile-copy-progress {
+  min-width: 0;
 }
 
 .promo-strip {
@@ -498,7 +507,7 @@ select {
 
   .mobile-manager-controls {
     display: grid;
-    gap: 0.5rem;
+    gap: 0.38rem;
     min-width: 0;
   }
 
@@ -532,7 +541,7 @@ select {
   .mobile-manager-search input {
     width: 100%;
     min-width: 0;
-    min-height: 2.65rem;
+    min-height: 2.35rem;
     height: 100%;
     border: 0;
     outline: 0;
@@ -541,7 +550,7 @@ select {
     font-family: inherit;
     font-size: 0.82rem;
     font-weight: 400;
-    line-height: 2.65rem;
+    line-height: 2.35rem;
     text-align: left;
   }
 
@@ -554,9 +563,9 @@ select {
   .mobile-manager-search > button,
   .mobile-manager-search > a {
     display: grid;
-    flex: 0 0 var(--otziv-search-action-size);
-    width: var(--otziv-search-action-size);
-    min-height: var(--otziv-search-action-size);
+    flex: 0 0 2.45rem;
+    width: 2.45rem;
+    min-height: 2.45rem;
     place-items: center;
     border: 1px solid rgba(108, 155, 207, 0.22);
     border-radius: 0.9rem;

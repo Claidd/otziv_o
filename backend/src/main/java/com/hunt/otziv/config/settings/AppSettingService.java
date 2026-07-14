@@ -25,6 +25,19 @@ public class AppSettingService {
     public static final String WORKER_PUBLICATION_SESSION_INACTIVITY_MINUTES = "worker.publication-session.inactivity-minutes";
     public static final String WORKER_PUBLICATION_SESSION_BUSINESS_ZONE = "worker.publication-session.business-zone";
     public static final String WORKER_PUBLICATION_SESSION_DAY_END_TIME = "worker.publication-session.day-end-time";
+    public static final String WORKER_PROGRESS_ENABLED = "worker.progress.enabled";
+    public static final String WORKER_PROGRESS_VISIBLE_ROLES = "worker.progress.visible-roles";
+    public static final String WORKER_PROGRESS_RAW_RETENTION_DAYS = "worker.progress.raw-retention-days";
+    public static final String WORKER_PROGRESS_DAILY_RETENTION_DAYS = "worker.progress.daily-retention-days";
+    public static final String WORKER_PROGRESS_CLEANUP_ENABLED = "worker.progress.cleanup-enabled";
+    public static final String WORKER_PROGRESS_MONTHLY_AGGREGATE_ENABLED = "worker.progress.monthly-aggregate-enabled";
+    public static final String WORKER_PROGRESS_ACTIVITY_SESSION_GAP_MINUTES = "worker.progress.activity-session-gap-minutes";
+    public static final String WORKER_PROGRESS_NIGHT_WINDOW_START_HOUR = "worker.progress.night-window-start-hour";
+    public static final String WORKER_PROGRESS_NIGHT_WINDOW_END_HOUR = "worker.progress.night-window-end-hour";
+    public static final String WORKER_PROGRESS_LATE_TASK_HOUR = "worker.progress.late-task-hour";
+    public static final String WORKER_PROGRESS_LATE_TASK_DEADLINE_HOUR = "worker.progress.late-task-deadline-hour";
+    public static final String WORKER_PROGRESS_SPEED_TARGET_MINUTES = "worker.progress.speed-target-minutes";
+    public static final String WORKER_PROGRESS_EXPECTED_DAILY_LOAD = "worker.progress.expected-daily-load";
     public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
     public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
     public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";
@@ -130,6 +143,8 @@ public class AppSettingService {
     public static final String PERFORMERS_ROLLOUT_ENABLED = "performers.rollout.enabled";
     public static final String PERFORMERS_ROLLOUT_CITY_IDS = "performers.rollout.city-ids";
     public static final String PERFORMERS_ROLLOUT_PRODUCT_IDS = "performers.rollout.product-ids";
+    public static final String MONITORING_DISK_LAST_LEVEL = "monitoring.disk.last-level";
+    public static final String MONITORING_DISK_LAST_ALERT_AT = "monitoring.disk.last-alert-at";
 
     private final AppSettingRepository repository;
     private final Map<String, CachedSetting> cache = new ConcurrentHashMap<>();

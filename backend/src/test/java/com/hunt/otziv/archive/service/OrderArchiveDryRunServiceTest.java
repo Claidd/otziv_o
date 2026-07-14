@@ -8,6 +8,7 @@ import com.hunt.otziv.archive.dto.ArchiveOrdersSettingsResponse;
 import com.hunt.otziv.archive.dto.ArchiveRunResult;
 import com.hunt.otziv.archive.repository.OrderArchiveDryRunRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -41,6 +42,9 @@ class OrderArchiveDryRunServiceTest {
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Mock
+    private PaymentLinkArchiveService paymentLinkArchiveService;
 
     @Test
     void dryRunCountsCandidatesAndWritesBatchLog() {
@@ -201,6 +205,7 @@ class OrderArchiveDryRunServiceTest {
         assertEquals(9L, result.eligibleOrders());
         verify(repository).prepareCandidateOrders(cutoffDate, 50);
         verify(repository).copyPreparedCandidatesToArchive(eq(11L), any(LocalDateTime.class), eq("small-batch"));
+        verify(paymentLinkArchiveService).archiveForPreparedOrderArchiveCandidates(11L);
         verify(repository).completeArchiveBatch(eq(11L), any(LocalDateTime.class), eq(counts), eq(counts), contains("archive completed"));
     }
 
@@ -357,7 +362,12 @@ class OrderArchiveDryRunServiceTest {
     private OrderArchiveDryRunService serviceWithFixedClock() {
         ZoneId zone = ZoneId.of("Asia/Irkutsk");
         Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
-        OrderArchiveDryRunService service = new OrderArchiveDryRunService(repository, clock);
+        OrderArchiveDryRunService service = new OrderArchiveDryRunService(
+                repository,
+                null,
+                paymentLinkArchiveService,
+                clock
+        );
         service.setDefaultRetentionDays(90);
         service.setDefaultBatchLimit(500);
         service.setMaxBatchLimit(1000);
@@ -367,6 +377,6 @@ class OrderArchiveDryRunServiceTest {
     private OrderArchiveDryRunService serviceWithSettings() {
         ZoneId zone = ZoneId.of("Asia/Irkutsk");
         Clock clock = Clock.fixed(Instant.parse("2026-05-10T00:00:00Z"), zone);
-        return new OrderArchiveDryRunService(repository, appSettingService, clock);
+        return new OrderArchiveDryRunService(repository, appSettingService, paymentLinkArchiveService, clock);
     }
 }

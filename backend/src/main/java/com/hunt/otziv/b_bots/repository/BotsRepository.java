@@ -5,17 +5,28 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface BotsRepository extends CrudRepository<Bot, Long> {
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM reviews r
+        WHERE COALESCE(r.review_publish, 0) = 0
+          AND r.review_bot = 1
+        """, nativeQuery = true)
+    long countUnpublishedStubReviews();
 
     interface AdminBotRow {
         Long getId();
@@ -34,6 +45,16 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     }
 
     Optional<Bot> findByLogin(String username);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        WHERE b.id = :id
+    """)
+    Optional<Bot> findByIdForAssignmentLock(@Param("id") Long id);
 
     @Query("SELECT b.login FROM Bot b WHERE b.login IN :logins")
     Set<String> findExistingLogins(@Param("logins") List<String> logins);
@@ -260,5 +281,29 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
           AND b.status.botStatusTitle = :status
     """)
     long countActiveByStatus(@Param("status") String status);
+
+    @Query("""
+        SELECT COUNT(b.id)
+        FROM Bot b
+        WHERE b.botCity.id = :cityId
+          AND b.fio = :fio
+          AND b.active = true
+          AND b.counter BETWEEN :minCounter AND :maxCounter
+          AND b.login IS NOT NULL
+          AND TRIM(b.login) <> ''
+          AND b.password IS NOT NULL
+          AND TRIM(b.password) <> ''
+          AND b.status IS NOT NULL
+          AND TRIM(b.status.botStatusTitle) = :status
+          AND (b.cooldownUntil IS NULL OR b.cooldownUntil <= :today)
+    """)
+    long countAvailableAccountPool(
+            @Param("cityId") Long cityId,
+            @Param("fio") String fio,
+            @Param("status") String status,
+            @Param("minCounter") int minCounter,
+            @Param("maxCounter") int maxCounter,
+            @Param("today") LocalDate today
+    );
 
 }

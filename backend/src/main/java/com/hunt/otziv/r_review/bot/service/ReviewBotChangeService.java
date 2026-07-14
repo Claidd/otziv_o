@@ -13,8 +13,10 @@ import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -45,15 +47,16 @@ public class ReviewBotChangeService {
     private final FilialService filialService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotAssignmentExclusionService assignmentExclusionService;
 
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId) {
         changeBot(reviewId, false);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId, boolean forceWalkDelayIfUnwalked) {
         try {
             log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
@@ -70,6 +73,8 @@ public class ReviewBotChangeService {
             reviewRepository.save(review);
             log.info("3. Сохранили отзыв в БД");
 
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Ошибка при замене бота для отзыва ID {}: {}", reviewId, e.getMessage(), e);
             throw new RuntimeException("Не удалось заменить бота: " + e.getMessage(), e);
@@ -156,6 +161,13 @@ public class ReviewBotChangeService {
         }
 
         Bot selectedBot = claimNewAccount(city, cityId, excludedBotIds);
+        selectedBot = assignmentGuardService.lockIfEligible(
+                        selectedBot,
+                        assignmentGuardService.scope(filial.getCompany().getId(), review.getId())
+                )
+                .orElseThrow(() -> new RuntimeException(
+                        "Выбранный аккаунт уже использовался компанией или занят другой карточкой"
+                ));
 
         Bot oldBot = review.getBot();
         review.setBot(selectedBot);
@@ -255,7 +267,11 @@ public class ReviewBotChangeService {
 
         Bot oldBot = review.getBot();
         assignmentExclusionService.rejectCurrentBot(review, "CHANGE");
-        assignBotUsingSharedRules(review, assignmentExclusions(review));
+        Bot selectedBot = selectBotUsingSharedRules(review, assignmentExclusions(review));
+        if (!hasRealBot(selectedBot)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Нет доступных аккаунтов");
+        }
+        applySelectedBot(review, selectedBot);
         markReleasedIfChanged(oldBot, review.getBot(), "review bot changed");
         accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
 
@@ -270,23 +286,11 @@ public class ReviewBotChangeService {
 
     private Set<Long> getUsedBotIdsInCompany(Filial filial, Long currentReviewId) {
         if (filial == null || filial.getCompany() == null || filial.getCompany().getId() == null) {
-            return getUsedBotIdsInFilial(filial, currentReviewId);
+            throw new IllegalStateException("Невозможно проверить аккаунт: у филиала не указана компания");
         }
-
-        try {
-            Set<Long> botIds = reviewRepository.findUsedBotIdsByCompanyId(filial.getCompany().getId());
-            if (botIds == null) {
-                return new HashSet<>();
-            }
-
-            return botIds.stream()
-                    .filter(Objects::nonNull)
-                    .filter(botId -> !STUB_BOT_ID.equals(botId))
-                    .collect(Collectors.toCollection(HashSet::new));
-        } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для компании филиала {}", filial.getId(), e);
-            return getUsedBotIdsInFilial(filial, currentReviewId);
-        }
+        return new HashSet<>(assignmentGuardService.blockedBotIds(
+                assignmentGuardService.scope(filial.getCompany().getId(), currentReviewId)
+        ));
     }
 
     private void reassignUnpublishedReviewsForBlockedBot(
@@ -350,10 +354,18 @@ public class ReviewBotChangeService {
     }
 
     private void assignBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
-        Bot selectedBot = botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
+        Bot selectedBot = selectBotUsingSharedRules(review, excludedBotIds);
+        applySelectedBot(review, selectedBot);
+    }
+
+    private Bot selectBotUsingSharedRules(Review review, Collection<Long> excludedBotIds) {
+        return botAssignmentService.assignBotForReviewChange(review, excludedBotIds);
+    }
+
+    private void applySelectedBot(Review review, Bot selectedBot) {
         review.setBot(selectedBot);
 
-        if (selectedBot == null || STUB_BOT_ID.equals(selectedBot.getId())) {
+        if (!hasRealBot(selectedBot)) {
             if (review.isVigul()) {
                 review.setVigul(false);
             }
@@ -361,6 +373,10 @@ public class ReviewBotChangeService {
         }
 
         updateVigulBasedOnBotCounter(review);
+    }
+
+    private boolean hasRealBot(Bot bot) {
+        return bot != null && bot.getId() != null && !STUB_BOT_ID.equals(bot.getId());
     }
 
     private Set<Long> assignmentExclusions(Review review) {
@@ -381,7 +397,7 @@ public class ReviewBotChangeService {
                     .collect(Collectors.toCollection(HashSet::new));
         } catch (Exception e) {
             log.error("Ошибка при получении занятых ботов по неопубликованным отзывам", e);
-            return new HashSet<>();
+            throw new IllegalStateException("Не удалось проверить занятые аккаунты", e);
         }
     }
 
@@ -421,27 +437,6 @@ public class ReviewBotChangeService {
             log.error("3. Ошибка при деактивации бота {}: ", botId, e);
             return false;
         }
-    }
-
-    private Set<Long> getUsedBotIdsInFilial(Filial filial, Long currentReviewId) {
-        Set<Long> usedBotIds = new HashSet<>();
-
-        try {
-            if (filial == null || filial.getId() == null) {
-                return usedBotIds;
-            }
-
-            Set<Long> botIds = reviewRepository.findBotIdsByFilialIdExcludingReview(filial.getId(), currentReviewId);
-            if (botIds != null) {
-                botIds.stream()
-                        .filter(Objects::nonNull)
-                        .forEach(usedBotIds::add);
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для филиала {}", filial.getId(), e);
-        }
-
-        return usedBotIds;
     }
 
     private Set<Long> getUsedBotIdsGlobally(Filial currentFilial, Long currentReviewId) {

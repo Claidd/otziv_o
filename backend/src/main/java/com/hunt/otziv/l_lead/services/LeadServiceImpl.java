@@ -20,6 +20,8 @@ import com.hunt.otziv.u_users.services.service.MarketologService;
 import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import com.hunt.otziv.z_zp.services.ZpService;
 import jakarta.persistence.EntityNotFoundException;
@@ -56,8 +58,10 @@ public class LeadServiceImpl implements LeadService {
     private final LeadMapper leadMapper;
     private final LeadEventPublisher leadEventPublisher;
     private final WhatsAppService whatsAppService;
+    private final GamificationEventService gamificationEventService;
+    private final AppSettingService appSettingService;
 
-    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService) {
+    public LeadServiceImpl(LeadsRepository leadsRepository, UserRepository userRepository, ManagerService managerService, OperatorService operatorService, MarketologService marketologService, ZpService zpService, UserService userService, TelephoneService telephoneService, LeadMapper leadMapper, LeadEventPublisher leadEventPublisher, WhatsAppService whatsAppService, GamificationEventService gamificationEventService, AppSettingService appSettingService) {
         this.leadsRepository = leadsRepository;
         this.userRepository = userRepository;
         this.managerService = managerService;
@@ -69,6 +73,8 @@ public class LeadServiceImpl implements LeadService {
         this.leadMapper = leadMapper;
         this.leadEventPublisher = leadEventPublisher;
         this.whatsAppService = whatsAppService;
+        this.gamificationEventService = gamificationEventService;
+        this.appSettingService = appSettingService;
     }
 
     //    =============================== СОХРАНИТЬ ЮЗЕРА - НАЧАЛО =========================================
@@ -127,6 +133,8 @@ public class LeadServiceImpl implements LeadService {
         Lead saveLead = findByIdAndToUpdate(id).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель с номером '%s' не найден", leadDTO.getTelephoneLead())
         ));
+        String previousStatus = saveLead.getLidStatus();
+        LocalDateTime statusStartedAt = saveLead.getUpdateStatus();
         log.info("Достали лида по ид из дто");
         boolean isChanged = false;
         String normalizedPhone = changeNumberPhone(leadDTO.getTelephoneLead());
@@ -261,6 +269,7 @@ public class LeadServiceImpl implements LeadService {
         if  (isChanged){
             log.info("Начали сохранять обновленного лида в БД");
             leadsRepository.save(saveLead);
+            recordLeadHandledIfNeeded(saveLead, previousStatus, statusStartedAt);
             log.info("Сохранили обновленного лида в БД Теперь запускаем отправку на сервер");
             leadEventPublisher.publishUpdate(saveLead);
         }
@@ -1182,10 +1191,13 @@ public class LeadServiceImpl implements LeadService {
         Lead lead = findByLeadId(leadId).orElseThrow(() -> new UsernameNotFoundException(
                 String.format("Пользоваттель '%s' не найден", leadId)
         ));
+        String previousStatus = lead.getLidStatus();
+        LocalDateTime statusStartedAt = lead.getUpdateStatus();
         lead.setLidStatus("В работе");
         lead.setUpdateStatus(LocalDateTime.now());
         lead.setDateNewTry(LocalDate.now());
         leadsRepository.save(lead);
+        recordLeadHandledIfNeeded(lead, previousStatus, statusStartedAt);
         leadEventPublisher.publishUpdate(lead);
     } // меняем статус с К рассылке на В работе - конец
 
@@ -1200,6 +1212,20 @@ public class LeadServiceImpl implements LeadService {
         leadsRepository.save(lead);
         leadEventPublisher.publishUpdate(lead);
     } // меняем статус с любого на Новый - конец
+
+    private void recordLeadHandledIfNeeded(Lead lead, String previousStatus, LocalDateTime statusStartedAt) {
+        if (lead == null || !"В работе".equals(lead.getLidStatus()) || "В работе".equals(previousStatus)) {
+            return;
+        }
+        LocalDateTime completedAt = LocalDateTime.now();
+        gamificationEventService.recordManagerLeadHandled(
+                lead,
+                statusStartedAt == null ? completedAt : statusStartedAt,
+                completedAt,
+                Math.max(1, appSettingService.getInt("manager.sla.target.lead-minutes", 60)),
+                Math.max(1, appSettingService.getInt("manager.sla.hard.lead-minutes", 480))
+        );
+    }
 
 
     @Override

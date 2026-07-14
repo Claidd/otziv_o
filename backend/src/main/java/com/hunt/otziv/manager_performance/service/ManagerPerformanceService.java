@@ -618,16 +618,7 @@ public class ManagerPerformanceService {
         if (controls.isEmpty()) {
             return "-";
         }
-        if (score >= 90) {
-            return "A";
-        }
-        if (score >= 75) {
-            return "B";
-        }
-        if (score >= 55) {
-            return "C";
-        }
-        return "D";
+        return ManagerPerformanceGrade.of(score);
     }
 
     private String workloadLevel(double workloadIndex) {

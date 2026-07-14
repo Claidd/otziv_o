@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { DailyWorkProgress } from './daily-progress';
 import { ManagerOverdueOrders, OrderCardItem } from './manager.api';
 
 export type WorkerSection = 'new' | 'correct' | 'nagul' | 'recovery' | 'publish' | 'bad' | 'all';
@@ -146,6 +147,7 @@ export interface WorkerBoard {
   warning: boolean;
   credentialPreparation?: WorkerCredentialPreparation | null;
   publicationSession?: WorkerPublicationSession | null;
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface WorkerActionResponse {
@@ -156,6 +158,12 @@ export interface WorkerActionResponse {
 export interface BotChangeResponse {
   oldBotId?: number | null;
   newBotId?: number | null;
+}
+
+export interface BotDeactivateResponse {
+  blockedBotId?: number | null;
+  newBotId?: number | null;
+  replacementFound: boolean;
 }
 
 export interface WorkerActivitySource {
@@ -217,8 +225,8 @@ export class WorkerApi {
     return this.http.post<BotChangeResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/change-bot`, source ?? {});
   }
 
-  deactivateReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<void> {
-    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`, source ?? {});
+  deactivateReviewBot(reviewId: number, botId: number, source?: WorkerActivitySource): Observable<BotDeactivateResponse> {
+    return this.http.post<BotDeactivateResponse>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bots/${botId}/deactivate`, source ?? {});
   }
 
   publishReview(reviewId: number): Observable<void> {

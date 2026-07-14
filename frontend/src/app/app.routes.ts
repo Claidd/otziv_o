@@ -299,7 +299,7 @@ export const routes: Routes = [
       .then((m) => m.ScoreComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {
@@ -308,7 +308,7 @@ export const routes: Routes = [
       .then((m) => m.GamificationProgressComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {
@@ -365,6 +365,13 @@ export const routes: Routes = [
     data: {
       roles: ['ADMIN', 'OWNER']
     }
+  },
+  {
+    path: 'admin/gamification/rewards',
+    loadComponent: () => import('./features/admin/gamification-rewards/gamification-rewards.component')
+      .then((m) => m.GamificationRewardsComponent),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
   },
   {
     path: 'admin/performers',

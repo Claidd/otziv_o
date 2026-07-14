@@ -22,6 +22,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
+import com.hunt.otziv.p_products.worker_access.WorkerCellularAccessService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
 import com.hunt.otziv.p_products.worker_flow.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -40,6 +41,8 @@ import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -137,6 +140,8 @@ public class ApiWorkerBoardController {
     private final WorkerPublicationGateService workerPublicationGateService;
     private final WorkerActivityService workerActivityService;
     private final WorkerCredentialPreparationService credentialPreparationService;
+    private final StaffDailyProgressService staffDailyProgressService;
+    private final WorkerCellularAccessService workerCellularAccessService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -170,6 +175,8 @@ public class ApiWorkerBoardController {
                 }
             }
 
+            workerCellularAccessService.enforceSection(normalizedSection);
+
             int safePageNumber = Math.max(pageNumber, 0);
             int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
             String normalizedSortDirection = normalizeSortDirection(sortDirection);
@@ -201,7 +208,8 @@ public class ApiWorkerBoardController {
                     message,
                     warning,
                     activeCredentialPreparation(authentication, normalizedSection),
-                    workerPublicationGateService.sessionState(principal, authentication)
+                    workerPublicationGateService.sessionState(principal, authentication),
+                    workerDailyProgress(principal, authentication, selectedWorker)
             );
         });
     }
@@ -356,6 +364,7 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess("review");
         enforcePublicationSessionIfNeeded(source, principal, authentication);
         Review review = reviewService.getReviewById(reviewId);
         Long oldBotId = botId(review);
@@ -375,15 +384,15 @@ public class ApiWorkerBoardController {
     }
 
     @PostMapping("/reviews/{reviewId}/bots/{botId}/deactivate")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void deactivateReviewBot(
+    public BotDeactivateResponse deactivateReviewBot(
             @PathVariable Long reviewId,
             @PathVariable Long botId,
             @RequestBody(required = false) WorkerActivitySourceRequest source,
             Principal principal,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess("review");
         enforcePublicationSessionIfNeeded(source, principal, authentication);
         Review review = reviewService.getReviewById(reviewId);
         reviewService.deActivateAndChangeBot(reviewId, botId, isSourceSection(source, SECTION_PUBLISH));
@@ -397,6 +406,13 @@ public class ApiWorkerBoardController {
                 withSource("botId=" + valueOrDash(botId) + ";", source)
         );
         recordPublicationActivityIfNeeded(source, principal, authentication);
+        Review updatedReview = reviewService.getReviewById(reviewId);
+        Long newBotId = botId(updatedReview);
+        return new BotDeactivateResponse(
+                botId,
+                newBotId,
+                newBotId != null && newBotId > 0 && newBotId != 1L
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/copy-click")
@@ -408,6 +424,7 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess("review");
         enforcePublicationSessionIfNeeded(request, principal, authentication);
         String field = normalizeReviewCopyField(request);
         Review review = reviewService.getReviewById(reviewId);
@@ -456,6 +473,7 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_PUBLISH);
         workerPublicationGateService.blockForPublication(principal, authentication)
                 .ifPresent(block -> {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, block.message());
@@ -501,6 +519,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
         try {
             BadReviewTask task = badReviewTaskService.completeTask(taskId);
             workerActivityService.recordSafely(
@@ -526,6 +545,7 @@ public class ApiWorkerBoardController {
             @RequestBody BadTaskUpdateRequest request,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
         if (request == null || request.taskText() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст плохой задачи не указан");
         }
@@ -561,6 +581,7 @@ public class ApiWorkerBoardController {
             @RequestBody RecoveryTaskUpdateRequest request,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
         if (request == null || request.recoveryText() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст восстановления не указан");
         }
@@ -595,6 +616,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long taskId,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
             workerActivityService.recordSafely(
@@ -615,6 +637,7 @@ public class ApiWorkerBoardController {
     @PostMapping("/recovery-tasks/{taskId}/change-bot")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotChangeResponse changeRecoveryTaskBot(@PathVariable Long taskId) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.changeTaskBot(taskId);
             workerActivityService.recordCurrentAuthenticationSafely(
@@ -639,6 +662,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long taskId,
             @PathVariable Long botId
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
             reviewRecoveryTaskService.deactivateAndChangeTaskBot(taskId, botId);
@@ -659,6 +683,7 @@ public class ApiWorkerBoardController {
     @PostMapping("/bad-review-tasks/{taskId}/change-bot")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotChangeResponse changeBadReviewTaskBot(@PathVariable Long taskId) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
         try {
             BadReviewTask task = badReviewTaskService.changeTaskBot(taskId);
             workerActivityService.recordCurrentAuthenticationSafely(
@@ -683,6 +708,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long taskId,
             @PathVariable Long botId
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
         try {
             BadReviewTask task = badReviewTaskService.getTask(taskId);
             badReviewTaskService.deactivateAndChangeTaskBot(taskId, botId);
@@ -707,6 +733,7 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_NAGUL);
         try {
             Review review = reviewService.getReviewById(reviewId);
             credentialPreparationService.blockUntilReady(
@@ -746,6 +773,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewTextUpdateRequest request
     ) {
+        workerCellularAccessService.enforceProtectedAccess("review");
         if (request == null || request.text() == null || request.text().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
@@ -772,6 +800,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewBotNameUpdateRequest request
     ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_NAGUL);
         String botName = request == null || request.botName() == null
                 ? ""
                 : request.botName().trim();
@@ -808,6 +837,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewAnswerUpdateRequest request
     ) {
+        workerCellularAccessService.enforceProtectedAccess("review");
         if (request == null || request.answer() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ответ на отзыв не указан");
         }
@@ -834,6 +864,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewNoteUpdateRequest request
     ) {
+        workerCellularAccessService.enforceProtectedAccess("review");
         if (request == null || request.comment() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка отзыва не указана");
         }
@@ -1770,6 +1801,35 @@ public class ApiWorkerBoardController {
         return hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER");
     }
 
+    private DailyWorkProgressResponse workerDailyProgress(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker
+    ) {
+        if (!staffDailyProgressService.progressEnabled()) {
+            return null;
+        }
+
+        LocalDate today = LocalDate.now();
+        if (selectedWorker != null) {
+            return staffDailyProgressService.workerProgressByWorkers(List.of(selectedWorker), today)
+                    .get(selectedWorker.getId());
+        }
+
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER")) {
+            return staffDailyProgressService.aggregateWorkerProgress(workerFilterWorkers(principal, authentication), today);
+        }
+
+        if (hasRole(authentication, "WORKER")) {
+            Worker worker = resolveWorker(principal);
+            return worker == null
+                    ? null
+                    : staffDailyProgressService.workerProgressByWorkers(List.of(worker), today).get(worker.getId());
+        }
+
+        return null;
+    }
+
     private List<Worker> workerFilterWorkers(Principal principal, Authentication authentication) {
         if (hasRole(authentication, "ADMIN")) {
             return sortWorkerOptions(workerService.getAllWorkers());
@@ -2417,7 +2477,8 @@ public class ApiWorkerBoardController {
             String message,
             boolean warning,
             WorkerCredentialPreparationResponse credentialPreparation,
-            WorkerPublicationSessionService.SessionState publicationSession
+            WorkerPublicationSessionService.SessionState publicationSession,
+            DailyWorkProgressResponse dailyProgress
     ) {
     }
 
@@ -2595,6 +2656,9 @@ public class ApiWorkerBoardController {
     }
 
     public record BotChangeResponse(Long oldBotId, Long newBotId) {
+    }
+
+    public record BotDeactivateResponse(Long blockedBotId, Long newBotId, boolean replacementFound) {
     }
 
     private record WorkerFlowRedirect(String section, String message) {

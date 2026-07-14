@@ -15,6 +15,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
+import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -39,6 +40,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     private final TelegramService telegramService;
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final BusinessAuditService businessAuditService;
 
     private static final Long STUB_BOT_ID = 1L;
@@ -601,7 +603,13 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         for (int j = 0; j < availableBots.size(); j++) {
             Bot candidateBot = availableBots.get(j);
             if (!usedBotIdsInThisOrder.contains(candidateBot.getId())) {
-                assignedBot = availableBots.remove(j);
+                Bot lockedCandidate = lockEligibleCandidate(candidateBot, filial);
+                availableBots.remove(j);
+                if (lockedCandidate == null) {
+                    j--;
+                    continue;
+                }
+                assignedBot = lockedCandidate;
                 usedBotIdsInThisOrder.add(assignedBot.getId());
                 log.info("Назначен бот ID {} ({}) для отзыва {} (осталось доступных ботов: {})",
                         assignedBot.getId(), assignedBot.getFio(), reviewIndex + 1, availableBots.size());
@@ -613,6 +621,15 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
             assignedBot = mode == null || mode == ReviewBotAssignmentMode.DEFAULT_ORDER_ASSIGNMENT
                     ? claimReserveBot(filial, usedBotIdsInThisOrder, reviewIndex)
                     : claimFreshWalkAccount(filial, usedBotIdsInThisOrder, reviewIndex);
+            if (assignedBot != null) {
+                Bot lockedClaimedBot = lockEligibleCandidate(assignedBot, filial);
+                if (lockedClaimedBot == null) {
+                    throw new IllegalStateException(
+                            "Назначение аккаунта из общего пула остановлено повторной проверкой"
+                    );
+                }
+                assignedBot = lockedClaimedBot;
+            }
             if (assignedBot != null && !eligibleForMode(assignedBot, mode)) {
                 log.warn("Резервный бот ID {} не подходит режиму {}, используется заглушка",
                         assignedBot.getId(), mode);
@@ -626,6 +643,15 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
         }
 
         return assignedBot;
+    }
+
+    private Bot lockEligibleCandidate(Bot candidate, Filial filial) {
+        Long companyId = companyId(filial);
+        return assignmentGuardService.lockIfEligible(
+                        candidate,
+                        assignmentGuardService.scope(companyId, null)
+                )
+                .orElse(null);
     }
 
     private Bot claimFreshWalkAccount(
@@ -694,50 +720,19 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
     }
 
     private Set<Long> getUsedBotIdsInCompany(Filial filial) {
-        Set<Long> usedBotIds = new HashSet<>();
-
-        try {
-            if (filial.getCompany() == null || filial.getCompany().getId() == null) {
-                log.warn("У филиала ID {} не указана компания, используем проверку только по филиалу", filial.getId());
-                return getUsedBotIdsInFilialFallback(filial);
-            }
-
-            Set<Long> companyBotIds = reviewRepository.findUsedBotIdsByCompanyId(filial.getCompany().getId());
-            if (companyBotIds != null) {
-                usedBotIds.addAll(companyBotIds);
-            }
-            log.debug("Найдено использованных ботов в компании {}: {}",
-                    filial.getCompany().getId(), usedBotIds.size());
-
-        } catch (Exception e) {
-            log.error("Ошибка при получении использованных ботов для компании филиала {}", filial.getId(), e);
-        }
-
-        return usedBotIds;
+        Long companyId = companyId(filial);
+        Set<Long> usedBotIds = assignmentGuardService.blockedBotIds(
+                assignmentGuardService.scope(companyId, null)
+        );
+        log.debug("Найдено недоступных аккаунтов для компании {}: {}", companyId, usedBotIds.size());
+        return new HashSet<>(usedBotIds);
     }
 
-    private Set<Long> getUsedBotIdsInFilialFallback(Filial filial) {
-        Set<Long> usedBotIds = new HashSet<>();
-
-        try {
-            List<Review> allReviewsInFilial = reviewRepository.findAllByFilial(filial);
-
-            if (allReviewsInFilial != null) {
-                for (Review existingReview : allReviewsInFilial) {
-                    if (existingReview != null &&
-                            existingReview.getBot() != null &&
-                            existingReview.getBot().getId() != null &&
-                            !STUB_BOT_ID.equals(existingReview.getBot().getId())) {
-
-                        usedBotIds.add(existingReview.getBot().getId());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при резервной проверке использованных ботов для филиала {}", filial.getId(), e);
+    private Long companyId(Filial filial) {
+        if (filial == null || filial.getCompany() == null || filial.getCompany().getId() == null) {
+            throw new IllegalStateException("Невозможно назначить аккаунт: у филиала не указана компания");
         }
-
-        return usedBotIds;
+        return filial.getCompany().getId();
     }
 
     private Set<Long> getReservedBotIdsByUnpublishedReviews(Long excludedReviewId) {
@@ -753,7 +748,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                     .collect(Collectors.toCollection(HashSet::new));
         } catch (Exception e) {
             log.error("Ошибка при получении занятых ботов по неопубликованным отзывам", e);
-            return new HashSet<>();
+            throw new IllegalStateException("Не удалось проверить занятые аккаунты", e);
         }
     }
 

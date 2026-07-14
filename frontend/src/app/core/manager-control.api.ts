@@ -105,6 +105,10 @@ export interface ManagerControlConcreteItem {
   rollbackMessage?: string | null;
   canRollback?: boolean | null;
   specialistName?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: 'TARGET' | 'LATE' | 'OVERDUE' | 'COMPLETED_TARGET' | 'COMPLETED_LATE' | 'COMPLETED_OVERDUE' | null;
   companyId?: number | null;
   companyTitle?: string | null;
 }
@@ -143,6 +147,7 @@ export interface ManagerControlWorkerExplanationStats {
   requestCount: number;
   unansweredCount: number;
   overdueCount: number;
+  hardBreachCount: number;
   averageResponseMinutes: number;
 }
 
@@ -158,6 +163,10 @@ export interface ManagerControlProblem {
   itemStatus?: ManagerControlItemStatus | null;
   actionType?: ManagerControlActionType | null;
   comment?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: 'TARGET' | 'LATE' | 'OVERDUE' | 'COMPLETED_TARGET' | 'COMPLETED_LATE' | 'COMPLETED_OVERDUE' | null;
 }
 
 export interface ManagerControlSection {
@@ -205,6 +214,20 @@ export interface ManagerControlManager {
   canCloseDay: boolean;
   openItemCount: number;
   handledItemCount: number;
+  actionTotalCount: number;
+  actionCompletedCount: number;
+  actionProgressPercent: number;
+  actionAutoClosedCount?: number;
+  actionRemainingCount?: number;
+  actionResolvedCount?: number;
+  actionTakenCount?: number;
+  actionDeferredCount?: number;
+  actionAcknowledgedCount?: number;
+  actionOverdueRemainingCount?: number;
+  actionRiskRemainingCount?: number;
+  actionUnansweredRemainingCount?: number;
+  actionOtherRemainingCount?: number;
+  leadActionCount: number;
   status: ManagerControlStatus;
   criticalCount: number;
   warningCount: number;
@@ -237,6 +260,74 @@ export interface ManagerControlSummary {
   managers: ManagerControlManager[];
 }
 
+export interface ManagerQueueState {
+  enabled: boolean;
+  date: string;
+  state: string;
+  openActionCount: number;
+  withinTargetCount: number;
+  targetMissedCount: number;
+  overdueCount: number;
+  controlledSeconds: number;
+  cleanQueueSeconds: number;
+  currentControlledStreakSeconds: number;
+  controlTargetHours: number;
+  controlPercent: number;
+  observedAt?: string | null;
+}
+
+export interface ManagerDailySummaryRow {
+  date: string;
+  managerId: number;
+  managerUserId?: number | null;
+  managerName?: string | null;
+  score: number;
+  grade: string;
+  taskTotal: number;
+  taskCompleted: number;
+  taskOpen: number;
+  taskAutoClosed?: number;
+  taskResolved?: number;
+  taskActionTaken?: number;
+  taskDeferred?: number;
+  taskAcknowledged?: number;
+  taskProgressPercent: number;
+  overdueCount: number;
+  riskCount: number;
+  unansweredCount: number;
+  taskOtherOpen?: number;
+  firstReplyAverageSeconds: number;
+  firstReplyMedianSeconds: number;
+  allReplyAverageSeconds: number;
+  allReplyMedianSeconds: number;
+  allReplyP90Seconds: number;
+  replyCount: number;
+  repliesInSla: number;
+  problemCount: number;
+  problemResolvedCount: number;
+  problemResolutionAverageSeconds: number;
+  siteActiveSeconds: number;
+  messengerActiveSeconds: number;
+  confirmedActiveSeconds: number;
+  leadActionCount: number;
+  targetSlaCount: number;
+  targetSlaMetCount: number;
+  hardSlaBreachCount: number;
+  controlledSeconds: number;
+  cleanQueueSeconds: number;
+  dayStars: number;
+  dayStatus: string;
+  xpEarned: number;
+  aggregationStatus: string;
+  snapshotAt?: string | null;
+}
+
+export interface ManagerDailySummaryPreview {
+  date: string;
+  message: string;
+  managers: ManagerDailySummaryRow[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class ManagerControlApi {
   constructor(private readonly http: HttpClient) {}
@@ -247,10 +338,29 @@ export class ManagerControlApi {
     );
   }
 
+  myQueueState(): Observable<ManagerQueueState> {
+    return this.http.get<ManagerQueueState>(`${appEnvironment.apiBaseUrl}/api/admin/manager-control/queue-state/me`);
+  }
+
   syncToday(): Observable<ManagerControlSummary> {
     return this.http.post<ManagerControlSummary>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/today/sync`,
       {}
+    );
+  }
+
+  calculateDailySummary(date?: string): Observable<ManagerDailySummaryRow[]> {
+    return this.http.post<ManagerDailySummaryRow[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/calculate`,
+      {},
+      { params: date ? { date } : {} }
+    );
+  }
+
+  dailySummaryPreview(date?: string): Observable<ManagerDailySummaryPreview> {
+    return this.http.get<ManagerDailySummaryPreview>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/preview`,
+      { params: date ? { date } : {} }
     );
   }
 

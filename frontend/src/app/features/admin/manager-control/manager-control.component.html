@@ -200,6 +200,12 @@
         <span>Состояние</span>
         <strong>{{ summary()?.testMode ? 'наблюдение' : 'рабочий контур' }}</strong>
       </div>
+      @if (canManageDailySummary()) {
+        <button type="button" class="summary-preview-button" (click)="buildDailySummaryPreview()" [disabled]="dailySummaryPreviewLoading()">
+          <span class="material-icons-sharp">preview</span>
+          {{ dailySummaryPreviewLoading() ? 'Формирую…' : 'Предпросмотр сводки 23:00' }}
+        </button>
+      }
       @for (manager of topManagers(); track trackManager($index, manager)) {
         <article class="side-manager" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
           <span class="material-icons-sharp">{{ statusIcon(manager.status) }}</span>
@@ -270,7 +276,7 @@
                   }
                   <div class="personal-remark-total">
                     <strong>
-                      {{ manager.totalAttentionCount }} к действию
+                      {{ manager.totalAttentionCount }} сейчас к действию
                       @if (personalManagerPerformance(manager); as performance) {
                         <span class="manager-score-badge {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}">{{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</span>
                       }
@@ -285,6 +291,36 @@
                   Детали
                 </button>
               </header>
+
+              <div
+                class="daily-task-progress"
+                role="progressbar"
+                [attr.aria-valuenow]="dailyTaskProgress(manager)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.title]="dailyTaskProgressExplanation(manager)"
+              >
+                <div class="daily-task-progress-head">
+                  <span>Обработано за день</span>
+                  <strong>{{ dailyTaskCompleted(manager) }} из {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+                </div>
+                <small>{{ dailyTaskBalance(manager) }}</small>
+                <small>{{ dailyTaskHandledBreakdown(manager) }}</small>
+                <small>{{ dailyTaskRemainingBreakdown(manager) }}</small>
+                <div class="daily-task-progress-track">
+                  <span [style.width.%]="dailyTaskProgress(manager)"></span>
+                </div>
+              </div>
+
+              @if (queueState(); as queue) {
+                @if (queue.enabled) {
+                  <div class="queue-control-stats">
+                    <span><small>Под контролем</small><b>{{ queueDuration(queue.controlledSeconds) }} из {{ queue.controlTargetHours }} ч · {{ queue.controlPercent }}%</b></span>
+                    <span><small>Серия без критической просрочки</small><b>{{ queueDuration(queue.currentControlledStreakSeconds) }}</b></span>
+                    <span><small>Чистая очередь</small><b>{{ queueDuration(queue.cleanQueueSeconds) }}</b></span>
+                  </div>
+                }
+              }
 
               <div class="personal-remark-metrics">
                 <article class="personal-metric overdue {{ countToneClass(manager.overdueOrderCount) }}">
@@ -312,12 +348,20 @@
                   </div>
                   <div class="chip-list">
                     @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
-                      <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                      <a
+                        [href]="problem.targetUrl"
+                        class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}"
+                        [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
+                        [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
+                      >
                         <span class="material-icons-sharp">{{ problem.icon }}</span>
                         <span>{{ problem.label }}</span>
                         <strong>{{ problem.count }}</strong>
                         @if (problem.code === 'OVERDUE_ORDERS' && overdueBreakdown(manager)) {
                           <small>{{ overdueBreakdown(manager) }}</small>
+                        }
+                        @if (slaTimer(problem)) {
+                          <small class="sla-timer {{ slaTimerClass(problem) }}">{{ slaTimer(problem) }}</small>
                         }
                         @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
                           <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
@@ -368,7 +412,7 @@
 
               <div class="manager-status">
                 <span class="status-badge">{{ statusLabel(manager.status) }}</span>
-                <strong>{{ manager.totalAttentionCount }} к действию</strong>
+                <strong>{{ manager.totalAttentionCount }} сейчас к действию</strong>
                 <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
               </div>
 
@@ -377,6 +421,26 @@
                 Детали
               </button>
             </header>
+
+            <div
+              class="daily-task-progress"
+              role="progressbar"
+              [attr.aria-valuenow]="dailyTaskProgress(manager)"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.title]="dailyTaskProgressExplanation(manager)"
+            >
+              <div class="daily-task-progress-head">
+                <span>Обработано за день</span>
+                <strong>{{ dailyTaskCompleted(manager) }} из {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
+              </div>
+              <small>{{ dailyTaskBalance(manager) }}</small>
+              <small>{{ dailyTaskHandledBreakdown(manager) }}</small>
+              <small>{{ dailyTaskRemainingBreakdown(manager) }}</small>
+              <div class="daily-task-progress-track">
+                <span [style.width.%]="dailyTaskProgress(manager)"></span>
+              </div>
+            </div>
 
             <div class="manager-numbers">
               <span class="metric urgent {{ countToneClass(manager.overdueOrderCount) }}"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
@@ -396,12 +460,20 @@
                 </div>
                 <div class="chip-list">
                   @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
-                    <a [href]="problem.targetUrl" class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}" [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'">
+                    <a
+                      [href]="problem.targetUrl"
+                      class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}"
+                      [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
+                      [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
+                    >
                       <span class="material-icons-sharp">{{ problem.icon }}</span>
                       <span>{{ problem.label }}</span>
                       <strong>{{ problem.count }}</strong>
                       @if (problem.code === 'OVERDUE_ORDERS' && overdueBreakdown(manager)) {
                         <small>{{ overdueBreakdown(manager) }}</small>
+                      }
+                      @if (slaTimer(problem)) {
+                        <small class="sla-timer {{ slaTimerClass(problem) }}">{{ slaTimer(problem) }}</small>
                       }
                       @if (problem.itemStatus && problem.itemStatus !== 'OPEN') {
                         <em>{{ itemStatusLabel(problem.itemStatus) }}</em>
@@ -437,6 +509,23 @@
       </div>
     </section>
   </section>
+
+  @if (dailySummaryPreview(); as preview) {
+    <div class="summary-preview-backdrop" (click)="closeDailySummaryPreview()">
+      <section class="summary-preview-dialog" role="dialog" aria-modal="true" aria-label="Предпросмотр дневной сводки" (click)="$event.stopPropagation()">
+        <header>
+          <div>
+            <small>Тестовый режим</small>
+            <h2>Сводка за {{ preview.date | date: 'dd.MM.yyyy' }}</h2>
+          </div>
+          <button type="button" (click)="closeDailySummaryPreview()" aria-label="Закрыть">
+            <span class="material-icons-sharp">close</span>
+          </button>
+        </header>
+        <div class="summary-preview-message" [innerHTML]="preview.message"></div>
+      </section>
+    </div>
+  }
 
   <ng-template #managerControlRight>
     @if (!isDetailPage()) {
@@ -680,6 +769,24 @@
                                 } @else {
                                   <b>{{ example.status || severityLabel(item.severity) }}</b>
                                 }
+                                <span class="detail-example-status" [class]="itemStatusClass(example.itemStatus)">
+                                  {{ itemStatusLabel(example.itemStatus || 'OPEN') }}
+                                </span>
+                                @if (canRequestWorkerTask(example)) {
+                                  <span
+                                    class="worker-notification-badge"
+                                    [class]="workerNotificationBadgeClass(example)"
+                                    [title]="workerNotificationTitle(example)"
+                                  >
+                                    {{ workerNotificationBadgeLabel(example) }}
+                                  </span>
+                                }
+                                @if (slaTimer(example)) {
+                                  <span class="detail-sla-timer {{ slaTimerClass(example) }}">
+                                    <span class="material-icons-sharp">timer</span>
+                                    {{ slaTimer(example) }}
+                                  </span>
+                                }
                               </span>
                             </header>
 
@@ -742,20 +849,6 @@
                                   </span>
                                   <span>{{ example.workerExplanation }}</span>
                                 </em>
-                              }
-                            </span>
-                            <span class="detail-example-flags">
-                              <span class="detail-example-status" [class]="itemStatusClass(example.itemStatus)">
-                                {{ itemStatusLabel(example.itemStatus || 'OPEN') }}
-                              </span>
-                              @if (canRequestWorkerTask(example)) {
-                                <span
-                                  class="worker-notification-badge"
-                                  [class]="workerNotificationBadgeClass(example)"
-                                  [title]="workerNotificationTitle(example)"
-                                >
-                                  {{ workerNotificationBadgeLabel(example) }}
-                                </span>
                               }
                             </span>
                           </a>

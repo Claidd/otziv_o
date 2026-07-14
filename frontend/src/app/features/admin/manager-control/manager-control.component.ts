@@ -1,5 +1,5 @@
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -17,11 +17,13 @@ import {
   ManagerControlItemStatus,
   ManagerControlManagerDetail,
   ManagerControlManager,
+  ManagerDailySummaryPreview,
   ManagerControlOverdueStatus,
   ManagerControlProblem,
   ManagerControlSection,
   ManagerControlSummary,
   ManagerControlStatus,
+  ManagerQueueState,
   ManagerControlWorkerExplanationStats
 } from '../../../core/manager-control.api';
 import { apiErrorMessage } from '../../../shared/api-error-message';
@@ -31,6 +33,7 @@ import { ToastService } from '../../../shared/toast.service';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { AuthService } from '../../../core/auth.service';
 import { ManagerPerformanceScore } from '../../../core/cabinet.api';
+import { managerActionBalanceView } from './manager-action-balance';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -78,6 +81,7 @@ export class ManagerControlComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly routePersonalControl = this.route.snapshot.data['personalControl'] === true;
   private detailRequestSeq = 0;
   private autoSyncingDetailManagerIds = new Set<number>();
@@ -102,7 +106,11 @@ export class ManagerControlComponent implements OnInit {
   readonly selectedManagerId = signal<number | null>(null);
   readonly detailPageManagerId = signal<number | null>(null);
   readonly activePerformanceTip = signal<string | null>(null);
+  readonly dailySummaryPreview = signal<ManagerDailySummaryPreview | null>(null);
+  readonly dailySummaryPreviewLoading = signal(false);
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
+  readonly clock = signal(Date.now());
+  readonly queueState = signal<ManagerQueueState | null>(null);
 
   readonly managers = computed(() => {
     return this.summary()?.managers ?? [];
@@ -127,6 +135,8 @@ export class ManagerControlComponent implements OnInit {
   });
 
   constructor() {
+    const clockTimer = window.setInterval(() => this.clock.set(Date.now()), 1000);
+    this.destroyRef.onDestroy(() => window.clearInterval(clockTimer));
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const rawManagerId = params.get('managerId');
       const managerId = rawManagerId ? Number(rawManagerId) : null;
@@ -142,7 +152,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.load();
+    this.load({ sync: true });
   }
 
   load(options: { silent?: boolean; sync?: boolean } = {}): void {
@@ -161,6 +171,7 @@ export class ManagerControlComponent implements OnInit {
           if (!personalManagerId) {
             this.clearDetails();
           }
+          this.loadQueueState();
         } else if (this.detailPageManagerId()) {
           this.selectedManagerId.set(this.detailPageManagerId());
         } else if (!selectedId || !summary.managers.some((manager) => manager.managerId === selectedId)) {
@@ -188,6 +199,37 @@ export class ManagerControlComponent implements OnInit {
       return;
     }
     this.load({ sync: true });
+  }
+
+  canManageDailySummary(): boolean {
+    return this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
+  }
+
+  buildDailySummaryPreview(): void {
+    if (this.dailySummaryPreviewLoading()) return;
+    this.dailySummaryPreviewLoading.set(true);
+    this.api.calculateDailySummary(this.summaryDate() || undefined).subscribe({
+      next: () => {
+        this.api.dailySummaryPreview(this.summaryDate() || undefined).subscribe({
+          next: (preview) => {
+            this.dailySummaryPreview.set(preview);
+            this.dailySummaryPreviewLoading.set(false);
+          },
+          error: (err) => {
+            this.dailySummaryPreviewLoading.set(false);
+            this.toast.error('Предпросмотр не сформирован', apiErrorMessage(err, 'Не удалось загрузить текст сводки'));
+          }
+        });
+      },
+      error: (err) => {
+        this.dailySummaryPreviewLoading.set(false);
+        this.toast.error('Сводка не рассчитана', apiErrorMessage(err, 'Не удалось рассчитать дневные показатели'));
+      }
+    });
+  }
+
+  closeDailySummaryPreview(): void {
+    this.dailySummaryPreview.set(null);
   }
 
   statusLabel(status: ManagerControlStatus): string {
@@ -242,6 +284,84 @@ export class ManagerControlComponent implements OnInit {
 
   otherCriticalCount(manager: ManagerControlManager): number {
     return Math.max(0, manager.criticalCount - manager.overdueOrderCount - manager.openRiskCount);
+  }
+
+  dailyTaskTotal(manager: ManagerControlManager): number {
+    return managerActionBalanceView(manager).total;
+  }
+
+  dailyTaskProgress(manager: ManagerControlManager): number {
+    const total = this.dailyTaskTotal(manager);
+    if (total === 0) {
+      return 100;
+    }
+    return Math.max(0, Math.min(100, Math.round(managerActionBalanceView(manager).handled * 100 / total)));
+  }
+
+  dailyTaskCompleted(manager: ManagerControlManager): number {
+    return managerActionBalanceView(manager).handled;
+  }
+
+  dailyTaskProgressExplanation(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Всего к обработке: ${balance.total}. Обработано менеджером: ${balance.handled}. Снято автоматически: ${balance.autoClosed}. Остаётся к действию: ${balance.remaining}.`;
+  }
+
+  dailyTaskBalance(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Баланс: ${balance.total} = ${balance.handled} обработано + ${balance.autoClosed} автоматически + ${balance.remaining} осталось`;
+  }
+
+  dailyTaskHandledBreakdown(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Обработано: решено ${balance.resolved} · действие выполнено ${balance.actionTaken} · отложено ${balance.deferred} · принято ${balance.acknowledged}`;
+  }
+
+  dailyTaskRemainingBreakdown(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Осталось: просрочки ${balance.overdue} · риски ${balance.risks} · без ответа ${balance.unanswered} · прочее ${balance.other}`;
+  }
+
+  queueDuration(seconds: number): string {
+    const hours = Math.floor(Math.max(0, seconds) / 3600);
+    const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60);
+    return `${hours} ч ${minutes} мин`;
+  }
+
+  private loadQueueState(): void {
+    this.api.myQueueState().subscribe({ next: (state) => this.queueState.set(state), error: () => this.queueState.set(null) });
+  }
+
+  slaTimer(item: ManagerControlProblem | ManagerControlConcreteItem): string {
+    this.clock();
+    if (!item.targetDeadlineAt || (item.itemStatus && item.itemStatus !== 'OPEN')) {
+      return '';
+    }
+    const target = new Date(item.targetDeadlineAt).getTime();
+    const hard = item.hardDeadlineAt ? new Date(item.hardDeadlineAt).getTime() : target;
+    const now = Date.now();
+    if (!Number.isFinite(target)) return '';
+    if (now <= target) return `До цели ${this.durationShort(target - now)}`;
+    if (Number.isFinite(hard) && now <= hard) return `Цель пропущена · до просрочки ${this.durationShort(hard - now)}`;
+    return `Просрочено на ${this.durationShort(now - hard)}`;
+  }
+
+  slaTimerClass(item: ManagerControlProblem | ManagerControlConcreteItem): string {
+    this.clock();
+    const now = Date.now();
+    const target = item.targetDeadlineAt ? new Date(item.targetDeadlineAt).getTime() : Number.NaN;
+    const hard = item.hardDeadlineAt ? new Date(item.hardDeadlineAt).getTime() : target;
+    if (Number.isFinite(hard) && now > hard) return 'sla-overdue';
+    if (Number.isFinite(target) && now > target) return 'sla-late';
+    return 'sla-target';
+  }
+
+  private durationShort(milliseconds: number): string {
+    const minutes = Math.max(0, Math.ceil(milliseconds / 60_000));
+    if (minutes < 60) return `${minutes} мин`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest > 0 ? `${hours} ч ${rest} мин` : `${hours} ч`;
   }
 
   countToneClass(count: number | null | undefined): string {
@@ -455,10 +575,10 @@ export class ManagerControlComponent implements OnInit {
     if (value >= 90) {
       return 'excellent';
     }
-    if (value >= 75) {
+    if (value >= 80) {
       return 'good';
     }
-    if (value >= 55) {
+    if (value >= 40) {
       return 'warning';
     }
     return 'risk';

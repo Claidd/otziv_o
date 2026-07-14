@@ -350,6 +350,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                 + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
                 + "\n" + withoutFinancialInfo(item.getSubtitle())
                 + "\n" + withoutFinancialInfo(item.getReason())
+                + workerRiskCompanyLine(incident)
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                 + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
                 + "\n\nНапишите пояснение следующим сообщением в эту группу.";
@@ -443,6 +444,20 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                 .replaceAll("\\s{2,}", " ")
                 .replaceAll("^[\\s·|,;:-]+|[\\s·|,;:-]+$", "")
                 .trim();
+    }
+
+    private String workerRiskCompanyLine(WorkerRiskIncident incident) {
+        if (incident == null || incident.getOrderId() == null) {
+            return "";
+        }
+        try {
+            return orderRepository.findById(incident.getOrderId())
+                    .filter(order -> order.getCompany() != null)
+                    .map(order -> "\nКомпания: " + safe(order.getCompany().getTitle()))
+                    .orElse("");
+        } catch (RuntimeException exception) {
+            return "";
+        }
     }
 
     private String limit(String value, int maxLength) {

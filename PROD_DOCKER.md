@@ -10,6 +10,7 @@
 - `phpmyadmin` - выключен по умолчанию, включается только профилем `db-admin` и доступен через SSH-туннель `127.0.0.1:6571`.
 - `keycloak-postgres` и `keycloak` - отдельная БД и Keycloak realm `otziv`.
 - `app` - Spring Boot backend с `SPRING_PROFILES_ACTIVE=prod`.
+- `external-review-worker` - опциональная браузерная проверка публикации отзывов; запускается только профилем `external-review`.
 - `whatsapp_lika` и `whatsapp_vika` - внутренние WhatsApp Web шлюзы для менеджерских аккаунтов.
 - `nginx` - публичная точка входа на `80/443`, Angular SPA, backend, Keycloak и Grafana.
 - `prometheus`, `loki`, `alloy`, `grafana` - метрики, логи контейнеров и дашборды.
@@ -90,6 +91,14 @@ CERTBOT_DRY_RUN=false
 docker compose -f docker-compose.yaml --env-file .env.prod pull
 docker compose -f docker-compose.yaml --env-file .env.prod up -d
 ```
+
+Если включена внешняя проверка опубликованных отзывов, отдельно запусти её профиль:
+
+```sh
+docker compose -f docker-compose.yaml --env-file .env.prod --profile external-review up -d external-review-worker
+```
+
+При `EXTERNAL_REVIEW_CHECK_ENABLED=false` backend не зависит от worker и штатный запуск/self-heal не пытается загружать его образ.
 
 ## MAX webhook
 

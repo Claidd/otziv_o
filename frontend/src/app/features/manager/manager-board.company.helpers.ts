@@ -30,7 +30,7 @@ export function managerCompanyEditDraft(payload: CompanyEditPayload): CompanyUpd
     commentsCompany: payload.commentsCompany,
     active: payload.active,
     publicationProgressReportsEnabled: payload.publicationProgressReportsEnabled,
-    ignoreWorkerPublicationDateRisk: payload.ignoreWorkerPublicationDateRisk,
+    allowWorkerPublicationDateEdit: payload.allowWorkerPublicationDateEdit,
     newWorkerId: null,
     newFilialCityId: null,
     newFilialTitle: '',

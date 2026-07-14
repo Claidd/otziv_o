@@ -111,6 +111,36 @@ public class PaymentLinkArchiveService {
         return repository.deleteLiveIds(ids);
     }
 
+    /**
+     * Archives payment links that belong to the temporary order-archive candidate set.
+     * This must run before the live orders are deleted so financial history and its
+     * company/manager snapshots remain available independently of the order archive.
+     */
+    @Transactional
+    public int archiveForPreparedOrderArchiveCandidates(Long archiveBatchId) {
+        List<Long> ids = repository.findLiveIdsForPreparedOrderArchiveCandidates();
+        if (ids.isEmpty()) {
+            return 0;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        repository.archiveIds(ids, now, "ORDER_ARCHIVED", archiveBatchId);
+        int archived = repository.countArchivedIds(ids);
+        if (archived != ids.size()) {
+            throw new IllegalStateException(
+                    "Payment link archive verification failed: selected=" + ids.size() + ", archived=" + archived
+            );
+        }
+
+        int deleted = repository.deleteLiveIds(ids);
+        if (deleted != ids.size()) {
+            throw new IllegalStateException(
+                    "Payment link delete verification failed: selected=" + ids.size() + ", deleted=" + deleted
+            );
+        }
+        return deleted;
+    }
+
     @Scheduled(cron = "0 35 3 * * *", zone = "Asia/Irkutsk")
     @Transactional
     public void scheduledArchive() {

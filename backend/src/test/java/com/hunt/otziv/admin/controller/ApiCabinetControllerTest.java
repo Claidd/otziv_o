@@ -23,6 +23,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.security.Principal;
 import java.time.LocalDate;
@@ -81,6 +82,9 @@ class ApiCabinetControllerTest {
     @Mock
     private ManagerPerformanceService managerPerformanceService;
 
+    @Mock
+    private StaffDailyProgressService staffDailyProgressService;
+
     private ApiCabinetController controller;
     private Principal principal;
     private Authentication authentication;
@@ -99,7 +103,8 @@ class ApiCabinetControllerTest {
                 analyticsAggregateTeamService,
                 paymentProfileService,
                 manualPaymentTaskService,
-                managerPerformanceService
+                managerPerformanceService,
+                staffDailyProgressService
         );
         principal = () -> "alex";
         authentication = new UsernamePasswordAuthenticationToken(

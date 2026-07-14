@@ -27,6 +27,7 @@ import com.hunt.otziv.manager.dto.api.StatusChangeRequest;
 import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.manager.services.ManagerBoardEditAssembler;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
+import com.hunt.otziv.manager.services.CompanyPublicationDatePermissionNotificationService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderCreationService;
@@ -79,6 +80,7 @@ public class ApiManagerCompanyController {
     private final ManagerAccessService managerAccessService;
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
+    private final CompanyPublicationDatePermissionNotificationService publicationDatePermissionNotificationService;
 
     @PostMapping("/companies/{companyId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -169,6 +171,10 @@ public class ApiManagerCompanyController {
         String previousChatUrl = blankToNull(current == null ? null : current.getUrlChat());
         String nextChatUrl = blankToNull(request == null ? null : request.urlChat());
         boolean chatUrlChanged = !Objects.equals(previousChatUrl, nextChatUrl);
+        boolean permissionWasEnabled = current != null && current.isAllowWorkerPublicationDateEdit();
+        boolean permissionWillBeEnabled = request != null && request.allowWorkerPublicationDateEdit() != null
+                ? request.allowWorkerPublicationDateEdit()
+                : permissionWasEnabled;
 
         try {
             companyService.updateCompany(toCompanyUpdateDto(current, request, companyId, authentication), toWorkerDTO(request), companyId);
@@ -177,6 +183,14 @@ public class ApiManagerCompanyController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Телефон, email или филиал уже используется", exception);
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Компания не сохранена: " + exception.getMessage(), exception);
+        }
+
+        if (!permissionWasEnabled && permissionWillBeEnabled) {
+            publicationDatePermissionNotificationService.notifyEnabledByManager(
+                    companyId,
+                    current == null ? null : current.getTitle(),
+                    authentication
+            );
         }
 
         return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
@@ -362,10 +376,10 @@ public class ApiManagerCompanyController {
                                 ? current.isPublicationProgressReportsEnabled()
                                 : request.publicationProgressReportsEnabled()
                 )
-                .ignoreWorkerPublicationDateRisk(
-                        request.ignoreWorkerPublicationDateRisk() == null
-                                ? current.isIgnoreWorkerPublicationDateRisk()
-                                : request.ignoreWorkerPublicationDateRisk()
+                .allowWorkerPublicationDateEdit(
+                        request.allowWorkerPublicationDateEdit() == null
+                                ? current.isAllowWorkerPublicationDateEdit()
+                                : request.allowWorkerPublicationDateEdit()
                 )
                 .status(CompanyStatusDTO.builder().id(firstId(request.statusId(), idOf(current.getStatus()))).build())
                 .categoryCompany(CategoryDTO.builder().id(firstId(request.categoryId(), idOf(current.getCategoryCompany()))).build())

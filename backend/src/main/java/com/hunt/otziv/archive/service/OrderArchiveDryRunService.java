@@ -11,6 +11,7 @@ import com.hunt.otziv.archive.dto.ArchiveOrdersSettingsResponse;
 import com.hunt.otziv.archive.dto.ArchiveRunResult;
 import com.hunt.otziv.archive.repository.OrderArchiveDryRunRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.format.DateTimeFormatter;
@@ -43,6 +44,7 @@ public class OrderArchiveDryRunService {
 
     private final OrderArchiveDryRunRepository repository;
     private final AppSettingService appSettingService;
+    private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final Clock clock;
 
     @Value("${otziv.archive.orders.retention-days:90}")
@@ -70,17 +72,31 @@ public class OrderArchiveDryRunService {
     private String defaultScheduleZone;
 
     @Autowired
-    public OrderArchiveDryRunService(OrderArchiveDryRunRepository repository, AppSettingService appSettingService) {
-        this(repository, appSettingService, Clock.system(DEFAULT_ZONE));
+    public OrderArchiveDryRunService(
+            OrderArchiveDryRunRepository repository,
+            AppSettingService appSettingService,
+            PaymentLinkArchiveService paymentLinkArchiveService
+    ) {
+        this(repository, appSettingService, paymentLinkArchiveService, Clock.system(DEFAULT_ZONE));
     }
 
     OrderArchiveDryRunService(OrderArchiveDryRunRepository repository, Clock clock) {
-        this(repository, null, clock);
+        this(repository, null, null, clock);
     }
 
     OrderArchiveDryRunService(OrderArchiveDryRunRepository repository, AppSettingService appSettingService, Clock clock) {
+        this(repository, appSettingService, null, clock);
+    }
+
+    OrderArchiveDryRunService(
+            OrderArchiveDryRunRepository repository,
+            AppSettingService appSettingService,
+            PaymentLinkArchiveService paymentLinkArchiveService,
+            Clock clock
+    ) {
         this.repository = repository;
         this.appSettingService = appSettingService;
+        this.paymentLinkArchiveService = paymentLinkArchiveService;
         this.clock = clock;
     }
 
@@ -185,6 +201,7 @@ public class OrderArchiveDryRunService {
         repository.copyPreparedCandidatesToArchive(batchId, LocalDateTime.now(clock), archiveReason);
         ArchiveCandidateCounts archived = repository.countArchivedPreparedCandidates();
         verifyArchiveComplete(selected, archived);
+        requirePaymentLinkArchiveService().archiveForPreparedOrderArchiveCandidates(batchId);
         ArchiveCandidateCounts deleted = repository.deletePreparedCandidatesFromLive();
         verifyDeleteComplete(selected, deleted);
 
@@ -421,6 +438,13 @@ public class OrderArchiveDryRunService {
         if (!repository.tryAcquireArchiveLock(ARCHIVE_LOCK_NAME, 0)) {
             throw new IllegalStateException("Order archive is already running");
         }
+    }
+
+    private PaymentLinkArchiveService requirePaymentLinkArchiveService() {
+        if (paymentLinkArchiveService == null) {
+            throw new IllegalStateException("Payment link archive service is not available");
+        }
+        return paymentLinkArchiveService;
     }
 
     private int batchLimit(Integer value) {

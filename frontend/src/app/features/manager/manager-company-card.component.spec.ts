@@ -106,4 +106,17 @@ describe('ManagerCompanyCardComponent', () => {
     expect(render({ status: 'Бан' }).classList.contains('card-tone--bad')).toBe(true);
     expect(render({ status: 'Новая' }).className).not.toContain('card-tone--');
   });
+
+  it('shows publication date permission badge only when enabled', () => {
+    const enabledFixture = TestBed.createComponent(ManagerCompanyCardComponent);
+    enabledFixture.componentInstance.company = company({ allowWorkerPublicationDateEdit: true });
+    enabledFixture.detectChanges();
+
+    const disabledFixture = TestBed.createComponent(ManagerCompanyCardComponent);
+    disabledFixture.componentInstance.company = company({ allowWorkerPublicationDateEdit: false });
+    disabledFixture.detectChanges();
+
+    expect(enabledFixture.nativeElement.textContent).toContain('Специалистам разрешена смена дат');
+    expect(disabledFixture.nativeElement.textContent).not.toContain('Специалистам разрешена смена дат');
+  });
 });

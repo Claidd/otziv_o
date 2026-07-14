@@ -744,7 +744,8 @@ export class ManagerBoardCompanyFacade {
               dateNewTry: payload.dateNewTry,
               groupId: payload.groupId,
               telegramGroupChatId: payload.telegramGroupChatId,
-              maxGroupChatId: payload.maxGroupChatId
+              maxGroupChatId: payload.maxGroupChatId,
+              allowWorkerPublicationDateEdit: payload.allowWorkerPublicationDateEdit
             }
           : company
         )

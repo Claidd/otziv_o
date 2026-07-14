@@ -96,6 +96,22 @@ public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, L
     );
 
     @Query("""
+        SELECT DISTINCT t.bot.id
+        FROM BadReviewTask t
+        WHERE t.order.company.id = :companyId
+          AND t.status IN :statuses
+          AND t.bot IS NOT NULL
+          AND t.bot.id IS NOT NULL
+          AND t.bot.id <> 1
+          AND (:excludedTaskId IS NULL OR t.id <> :excludedTaskId)
+    """)
+    Set<Long> findBotIdsByCompanyIdAndStatusIn(
+            @Param("companyId") Long companyId,
+            @Param("statuses") Collection<BadReviewTaskStatus> statuses,
+            @Param("excludedTaskId") Long excludedTaskId
+    );
+
+    @Query("""
         SELECT t.order.id, t.status, COUNT(t.id), COALESCE(SUM(t.price), 0)
         FROM BadReviewTask t
         WHERE t.order.id IN :orderIds

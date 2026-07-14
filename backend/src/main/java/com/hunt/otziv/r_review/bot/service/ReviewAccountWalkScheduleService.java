@@ -188,7 +188,7 @@ public class ReviewAccountWalkScheduleService {
         return order != null ? order.getId() : null;
     }
 
-    private int walkedCounterThreshold() {
+    public int walkedCounterThreshold() {
         return Math.max(1, appSettingService.getInt(
                 AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD,
                 DEFAULT_WALKED_COUNTER_THRESHOLD

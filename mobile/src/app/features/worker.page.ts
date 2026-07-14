@@ -3208,8 +3208,10 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   private apiErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof HttpErrorResponse) {
-      const backendMessage = typeof error.error === 'object' && error.error && 'message' in error.error
-        ? String((error.error as { message?: unknown }).message ?? '')
+      const backendMessage = typeof error.error === 'object' && error.error
+        ? String((error.error as { message?: unknown; detail?: unknown }).message
+          ?? (error.error as { detail?: unknown }).detail
+          ?? '')
         : typeof error.error === 'string'
           ? error.error
           : '';

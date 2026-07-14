@@ -1,8 +1,11 @@
 package com.hunt.otziv.gamification.service;
 
 import com.hunt.otziv.gamification.dto.GamificationMyBreakdownResponse;
+import com.hunt.otziv.gamification.dto.GamificationLeaderboardEntryResponse;
+import com.hunt.otziv.gamification.dto.GamificationLeaderboardResponse;
 import com.hunt.otziv.gamification.dto.GamificationMyMissionResponse;
 import com.hunt.otziv.gamification.dto.GamificationMyProgressResponse;
+import com.hunt.otziv.gamification.dto.GamificationWalletResponse;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -28,6 +31,7 @@ public class GamificationUserProgressService {
     private final GamificationScoreLedgerRepository ledgerRepository;
     private final GamificationSettingsService settingsService;
     private final UserService userService;
+    private final GamificationRewardService rewardService;
 
     @Transactional(readOnly = true)
     public GamificationMyProgressResponse myProgress(Principal principal, int days) {
@@ -63,6 +67,67 @@ public class GamificationUserProgressService {
                 .toList());
     }
 
+    @Transactional(readOnly = true)
+    public GamificationLeaderboardResponse leaderboard(Principal principal, int days) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found");
+        }
+        User user = userService.findByUserName(principal.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+        String role = shortRole(primaryRole(user.getRoles()));
+        Period period = period(days);
+        boolean enabled = rewardService.settings().competitionEnabled()
+                && settingsService.isCabinetVisibleForRole(role);
+        if (!enabled) {
+            return new GamificationLeaderboardResponse(
+                    false, period.from(), period.to(), period.days(), role, null, 0, List.of()
+            );
+        }
+
+        List<Object[]> rows = ledgerRepository.competitionRowsForRole(
+                role,
+                period.fromInclusive(),
+                period.toExclusive()
+        );
+        List<GamificationLeaderboardEntryResponse> entries = new java.util.ArrayList<>();
+        Integer ownRank = null;
+        int rank = 0;
+        for (Object[] row : rows) {
+            rank++;
+            Long actorUserId = row[0] instanceof Number value ? value.longValue() : null;
+            long events = number(row[3]);
+            long points = number(row[4]);
+            long onTime = number(row[5]);
+            long delayed = number(row[6]);
+            boolean currentUser = java.util.Objects.equals(actorUserId, user.getId());
+            if (currentUser) {
+                ownRank = rank;
+            }
+            if (rank <= 20 || currentUser) {
+                entries.add(new GamificationLeaderboardEntryResponse(
+                        rank,
+                        actorUserId,
+                        row[1] == null ? "Участник" : String.valueOf(row[1]),
+                        row[2] == null ? role : String.valueOf(row[2]),
+                        events,
+                        points,
+                        percent(onTime, Math.max(1L, onTime + delayed)),
+                        currentUser
+                ));
+            }
+        }
+        return new GamificationLeaderboardResponse(
+                true,
+                period.from(),
+                period.to(),
+                period.days(),
+                role,
+                ownRank,
+                rows.size(),
+                List.copyOf(entries)
+        );
+    }
+
     private GamificationMyProgressResponse response(
             boolean enabled,
             Period period,
@@ -87,7 +152,10 @@ public class GamificationUserProgressService {
         }
         long dailyGoal = dailyGoal(role);
         int dailyGoalPercent = percent(todayEvents, dailyGoal);
-        LevelInfo levelInfo = levelInfo(totalPoints);
+        GamificationWalletResponse wallet = enabled
+                ? rewardService.wallet(new UserPrincipal(user.getUsername()))
+                : new GamificationWalletResponse(0, 1, 0, 5);
+        LevelInfo levelInfo = levelInfo(wallet.lifetimeXp(), rewardService.settings().levelXp());
         int timelinessPercent = percent(onTimeEvents, Math.max(1L, onTimeEvents + delayedEvents));
         List<GamificationMyMissionResponse> missions = enabled
                 ? missions(role, breakdown, todayEvents, dailyGoal, onTimeEvents, delayedEvents)
@@ -102,6 +170,9 @@ public class GamificationUserProgressService {
                 shortRole(role),
                 totalEvents,
                 totalPoints,
+                wallet.lifetimeXp(),
+                wallet.tokens(),
+                wallet.nextTokenLevel(),
                 dailyGoal,
                 todayEvents,
                 dailyGoalPercent,
@@ -222,10 +293,11 @@ public class GamificationUserProgressService {
         return (int) Math.max(0, Math.min(100, Math.round((double) value * 100D / (double) target)));
     }
 
-    private LevelInfo levelInfo(long points) {
-        int level = (int) (points / 500L) + 1;
-        long current = (long) (level - 1) * 500L;
-        long next = (long) level * 500L;
+    private LevelInfo levelInfo(long points, int configuredLevelXp) {
+        long levelXp = Math.max(100, configuredLevelXp);
+        int level = (int) (points / levelXp) + 1;
+        long current = (long) (level - 1) * levelXp;
+        long next = (long) level * levelXp;
         return new LevelInfo(level, current, next, Math.max(0, next - points));
     }
 
@@ -299,6 +371,13 @@ public class GamificationUserProgressService {
     }
 
     private record LevelInfo(int level, long currentLevelPoints, long nextLevelPoints, long pointsToNextLevel) {
+    }
+
+    private record UserPrincipal(String name) implements Principal {
+        @Override
+        public String getName() {
+            return name;
+        }
     }
 
     private static class BreakdownAccumulator {

@@ -98,7 +98,7 @@ class ReviewDtoMapperTest {
         assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000042"), dto.getOrderDetailsId());
         assertEquals("Продукт детали", dto.getOrderDetails().getProduct().getTitle());
         assertEquals("Компания", dto.getOrderDetails().getOrder().getCompany().getTitle());
-        assertTrue(dto.getOrderDetails().getOrder().getCompany().isIgnoreWorkerPublicationDateRisk());
+        assertTrue(dto.getOrderDetails().getOrder().getCompany().isAllowWorkerPublicationDateEdit());
         assertSame(review.getProduct(), dto.getProduct());
     }
 
@@ -117,7 +117,7 @@ class ReviewDtoMapperTest {
                 .id(5L)
                 .title("Компания")
                 .commentsCompany("Комментарий компании")
-                .ignoreWorkerPublicationDateRisk(true)
+                .allowWorkerPublicationDateEdit(true)
                 .build();
         OrderStatus orderStatus = OrderStatus.builder()
                 .title("В работе")

@@ -2,12 +2,17 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import {
   GamificationApi,
+  GamificationLeaderboard,
   GamificationMyBreakdown,
   GamificationMyMission,
-  GamificationMyProgress
+  GamificationMyProgress,
+  GamificationReward,
+  GamificationRewardClaim,
+  GamificationWallet
 } from '../../core/gamification.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { ToastService } from '../../shared/toast.service';
+import { forkJoin } from 'rxjs';
 
 type ProgressDays = 1 | 7 | 30;
 
@@ -77,10 +82,48 @@ type ProgressDays = 1 | 7 | 30;
             <section class="level-track" aria-label="Прогресс уровня">
               <div>
                 <span>{{ data.currentLevelPoints }}</span>
-                <strong>{{ data.totalPoints }}</strong>
+                <strong>{{ data.lifetimeXp }} XP</strong>
                 <span>{{ data.nextLevelPoints }}</span>
               </div>
               <i [style.width.%]="levelPercent(data)"></i>
+            </section>
+
+            <section class="rewards">
+              <div class="section-head reward-head">
+                <div>
+                  <h2>Награды</h2>
+                  <p>XP повышает уровень, жетоны тратятся на награды и не уменьшают уровень.</p>
+                </div>
+                <strong>{{ wallet()?.tokens ?? data.tokenBalance }} жет.</strong>
+              </div>
+              <div class="reward-grid">
+                @for (reward of rewards(); track reward.id) {
+                  <article class="reward-card" [class.locked]="!reward.claimable">
+                    @if (reward.imageUrl) {
+                      <img [src]="reward.imageUrl" [alt]="reward.title">
+                    } @else {
+                      <span class="material-icons-sharp reward-icon">{{ reward.icon || 'redeem' }}</span>
+                    }
+                    <div>
+                      <strong>{{ reward.title }}</strong>
+                      <p>{{ reward.description || 'Награда за накопленный прогресс' }}</p>
+                      <small>{{ reward.tokenCost }} жет. · уровень {{ reward.requiredLevel }}+</small>
+                    </div>
+                    <button type="button" [disabled]="!reward.claimable || claimingRewardId() === reward.id" (click)="claim(reward)">
+                      {{ reward.claimable ? 'Получить' : (reward.lockedReason || 'Недоступно') }}
+                    </button>
+                  </article>
+                } @empty {
+                  <p class="empty">Каталог появится после того, как администратор включит и добавит награды.</p>
+                }
+              </div>
+              @if (claims().length) {
+                <div class="claim-list">
+                  @for (claim of claims(); track claim.id) {
+                    <span><b>{{ claim.rewardTitle }}</b> · {{ claimStatus(claim.status) }}</span>
+                  }
+                </div>
+              }
             </section>
 
             <section class="missions">
@@ -104,6 +147,29 @@ type ProgressDays = 1 | 7 | 30;
                 }
               </div>
             </section>
+
+            @if (leaderboard()?.enabled) {
+              <section class="leaderboard">
+                <div class="section-head leaderboard-head">
+                  <div>
+                    <h2>Лига {{ roleLabel(leaderboard()?.actorRole) }}</h2>
+                    <p>Сравниваются только участники одной роли за выбранный период.</p>
+                  </div>
+                  <strong>Ваше место: {{ leaderboard()?.ownRank || '—' }} из {{ leaderboard()?.totalActors || 0 }}</strong>
+                </div>
+                <div class="leaderboard-list">
+                  @for (entry of leaderboard()?.entries || []; track entry.actorUserId || $index) {
+                    <article [class.current]="entry.currentUser">
+                      <b>#{{ entry.rank }}</b>
+                      <div><strong>{{ entry.actorName }}</strong><small>{{ entry.events }} действий · в срок {{ entry.timelinessPercent }}%</small></div>
+                      <em>{{ entry.points }} XP</em>
+                    </article>
+                  } @empty {
+                    <p class="empty">В этой лиге пока нет начислений.</p>
+                  }
+                </div>
+              </section>
+            }
 
             <section class="breakdown">
               <div class="section-head">
@@ -153,6 +219,8 @@ type ProgressDays = 1 | 7 | 30;
     .metric-card,
     .missions,
     .breakdown,
+    .rewards,
+    .leaderboard,
     .empty-state {
       border: 1px solid rgba(103, 116, 131, 0.12);
       border-radius: 0.5rem;
@@ -301,6 +369,8 @@ type ProgressDays = 1 | 7 | 30;
 
     .missions,
     .breakdown,
+    .rewards,
+    .leaderboard,
     .empty-state {
       display: grid;
       gap: 0.85rem;
@@ -353,6 +423,28 @@ type ProgressDays = 1 | 7 | 30;
       background: var(--otziv-field-background);
     }
 
+    .reward-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .reward-head > strong { color: var(--otziv-warning); font-size: 1.1rem; white-space: nowrap; }
+    .reward-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+    .reward-card { display: grid; grid-template-rows: 7rem 1fr auto; gap: 0.7rem; overflow: hidden; border: 1px solid rgba(103, 116, 131, 0.12); border-radius: 0.5rem; padding: 0.8rem; background: var(--otziv-field-background); }
+    .reward-card.locked { opacity: 0.72; }
+    .reward-card img { width: 100%; height: 7rem; border-radius: 0.4rem; object-fit: cover; }
+    .reward-icon { display: grid; height: 7rem; place-items: center; color: var(--otziv-warning); font-size: 3rem; }
+    .reward-card p, .reward-card small { margin: 0.25rem 0 0; color: var(--otziv-info); font-size: 0.76rem; font-weight: 700; }
+    .reward-card button { min-height: 2.3rem; border: 0; border-radius: 0.45rem; color: #fff; background: var(--otziv-primary); font: inherit; font-weight: 900; }
+    .reward-card button:disabled { color: var(--otziv-info); background: rgba(103, 116, 131, 0.14); }
+    .leaderboard-head { align-items: center; }
+    .leaderboard-head > strong { color: var(--otziv-primary); white-space: nowrap; }
+    .leaderboard-list { display: grid; gap: .55rem; }
+    .leaderboard-list article { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) auto; align-items: center; gap: .8rem; border: 1px solid rgba(103,116,131,.14); border-radius: .5rem; padding: .7rem .85rem; background: var(--otziv-field-background); }
+    .leaderboard-list article.current { border-color: color-mix(in srgb, var(--otziv-primary) 45%, transparent); background: color-mix(in srgb, var(--otziv-primary) 8%, var(--otziv-field-background)); }
+    .leaderboard-list article > b { color: var(--otziv-primary); font-size: 1.05rem; }
+    .leaderboard-list article div { display: grid; gap: .15rem; }
+    .leaderboard-list article small { color: var(--otziv-info); font-weight: 700; }
+    .leaderboard-list article em { color: var(--otziv-warning); font-style: normal; font-weight: 900; white-space: nowrap; }
+    .claim-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .claim-list span { border-radius: 999px; padding: 0.4rem 0.65rem; color: var(--otziv-info); background: rgba(103, 116, 131, 0.08); font-size: 0.74rem; }
+
     .empty-state {
       min-height: 18rem;
       place-items: center;
@@ -370,6 +462,7 @@ type ProgressDays = 1 | 7 | 30;
       .breakdown-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+      .reward-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 38rem) {
@@ -388,6 +481,7 @@ type ProgressDays = 1 | 7 | 30;
       .breakdown-grid {
         grid-template-columns: 1fr;
       }
+      .reward-grid { grid-template-columns: 1fr; }
     }
   `]
 })
@@ -402,7 +496,12 @@ export class GamificationProgressComponent {
   ];
   readonly days = signal<ProgressDays>(7);
   readonly progress = signal<GamificationMyProgress | null>(null);
+  readonly leaderboard = signal<GamificationLeaderboard | null>(null);
   readonly loading = signal(false);
+  readonly wallet = signal<GamificationWallet | null>(null);
+  readonly rewards = signal<GamificationReward[]>([]);
+  readonly claims = signal<GamificationRewardClaim[]>([]);
+  readonly claimingRewardId = signal<number | null>(null);
   readonly visibleBreakdown = computed(() => this.progress()?.breakdown.filter((item) => item.events > 0 || item.points > 0) ?? []);
 
   constructor() {
@@ -419,7 +518,7 @@ export class GamificationProgressComponent {
 
   levelPercent(progress: GamificationMyProgress): number {
     const range = Math.max(1, progress.nextLevelPoints - progress.currentLevelPoints);
-    return Math.max(0, Math.min(100, Math.round((progress.totalPoints - progress.currentLevelPoints) * 100 / range)));
+    return Math.max(0, Math.min(100, Math.round((progress.lifetimeXp - progress.currentLevelPoints) * 100 / range)));
   }
 
   roleLabel(role: string | null | undefined): string {
@@ -437,7 +536,13 @@ export class GamificationProgressComponent {
       ORDER_PAID: 'Заказы оплачены',
       BAD_REVIEW_TASK_DONE: 'Плохие отзывы',
       REVIEW_RECOVERY_TASK_DONE: 'Восстановления',
-      WORKER_RISK_PENALTY: 'Штрафы'
+      WORKER_RISK_PENALTY: 'Штрафы',
+      MANAGER_CLIENT_REPLY: 'Ответы клиентам',
+      MANAGER_LEAD_HANDLED: 'Обработанные лиды',
+      MANAGER_CONTROL_ACTION: 'Закрытые замечания',
+      MANAGER_QUEUE_CLEARED: 'Полностью закрытая очередь',
+      MANAGER_DAY_COMPLETED: 'Завершённые дни',
+      MANAGER_IDEAL_DAY: 'Идеальные дни'
     }[eventType] ?? (eventType || 'Событие');
   }
 
@@ -449,15 +554,45 @@ export class GamificationProgressComponent {
     return item.code;
   }
 
+  claim(reward: GamificationReward): void {
+    if (!reward.claimable || this.claimingRewardId() !== null) return;
+    this.claimingRewardId.set(reward.id);
+    this.api.claimReward(reward.id).subscribe({
+      next: () => {
+        this.claimingRewardId.set(null);
+        this.toastService.success('Заявка отправлена', `Награда «${reward.title}» передана администратору`);
+        this.load();
+      },
+      error: (err) => {
+        this.claimingRewardId.set(null);
+        this.toastService.error('Награда не оформлена', err?.error?.message || 'Проверьте уровень и баланс жетонов');
+      }
+    });
+  }
+
+  claimStatus(status: string): string {
+    return { REQUESTED: 'на рассмотрении', APPROVED: 'одобрено', FULFILLED: 'выдано', REJECTED: 'отклонено', CANCELLED: 'отменено' }[status] ?? status;
+  }
+
   private load(): void {
     this.loading.set(true);
-    this.api.getMyProgress(this.days()).subscribe({
-      next: (progress) => {
+    forkJoin({
+      progress: this.api.getMyProgress(this.days()),
+      leaderboard: this.api.getLeaderboard(this.days()),
+      wallet: this.api.getWallet(),
+      rewards: this.api.getRewards(),
+      claims: this.api.getMyClaims()
+    }).subscribe({
+      next: ({ progress, leaderboard, wallet, rewards, claims }) => {
         this.progress.set({
           ...progress,
           missions: progress.missions ?? [],
           breakdown: progress.breakdown ?? []
         });
+        this.wallet.set(wallet);
+        this.leaderboard.set({ ...leaderboard, entries: leaderboard.entries ?? [] });
+        this.rewards.set(rewards ?? []);
+        this.claims.set(claims ?? []);
         this.loading.set(false);
       },
       error: (err) => {

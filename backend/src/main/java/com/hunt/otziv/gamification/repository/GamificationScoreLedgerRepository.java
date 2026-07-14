@@ -31,6 +31,12 @@ public interface GamificationScoreLedgerRepository extends JpaRepository<Gamific
             """)
     Long sumPoints(LocalDateTime fromInclusive, LocalDateTime toExclusive);
 
+    @Query("SELECT COALESCE(SUM(l.points), 0) FROM GamificationScoreLedger l WHERE l.actorUserId = :actorUserId")
+    Long lifetimePointsForActor(Long actorUserId);
+
+    @Query("SELECT COALESCE(SUM(l.points), 0) FROM GamificationScoreLedger l WHERE l.actorUserId = :actorUserId AND l.sourceEventCreatedAt >= :fromInclusive AND l.sourceEventCreatedAt < :toExclusive")
+    Long pointsForActorBetween(Long actorUserId, LocalDateTime fromInclusive, LocalDateTime toExclusive);
+
     @Query("""
             SELECT l.actorUserId, l.actorName, l.actorRole, COUNT(l), COALESCE(SUM(l.points), 0)
             FROM GamificationScoreLedger l
@@ -40,6 +46,24 @@ public interface GamificationScoreLedgerRepository extends JpaRepository<Gamific
             ORDER BY COALESCE(SUM(l.points), 0) DESC
             """)
     List<Object[]> topActors(LocalDateTime fromInclusive, LocalDateTime toExclusive, Pageable pageable);
+
+    @Query("""
+            SELECT l.actorUserId, MAX(l.actorName), l.actorRole, COUNT(l), COALESCE(SUM(l.points), 0),
+                   COALESCE(SUM(CASE WHEN COALESCE(l.delayDays, 0) <= 0 THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN COALESCE(l.delayDays, 0) > 0 THEN 1 ELSE 0 END), 0)
+            FROM GamificationScoreLedger l
+            WHERE l.sourceEventCreatedAt >= :fromInclusive
+              AND l.sourceEventCreatedAt < :toExclusive
+              AND l.actorRole = :actorRole
+              AND l.actorUserId IS NOT NULL
+            GROUP BY l.actorUserId, l.actorRole
+            ORDER BY COALESCE(SUM(l.points), 0) DESC, COUNT(l) DESC, MAX(l.actorName) ASC
+            """)
+    List<Object[]> competitionRowsForRole(
+            String actorRole,
+            LocalDateTime fromInclusive,
+            LocalDateTime toExclusive
+    );
 
     @Query("""
             SELECT l.actorUserId, l.actorName, l.actorRole, l.eventType, COUNT(l), COALESCE(SUM(l.points), 0),

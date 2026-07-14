@@ -28,6 +28,14 @@
         </nav>
 
         @if (!isRiskSection()) {
+        @if (board()?.dailyProgress?.visible) {
+          <app-daily-progress-strip
+            class="toolbar-progress"
+            [progress]="board()?.dailyProgress"
+            label="Прогресс"
+          />
+        }
+
         <div class="search-line toolbar-search" [class.has-clear]="keyword()">
           <label>
             <span class="material-icons-sharp">search</span>
@@ -280,8 +288,6 @@
       }
     </section>
 
-    <app-gamification-me-card class="mobile-personal-gamification" />
-
     <app-personal-reminders class="mobile-personal-reminders" mode="full" />
   </section>
 
@@ -308,7 +314,15 @@
   <section admin-right-content class="lead-stats worker-stats">
     <app-personal-reminders mode="alert" />
 
-    <app-gamification-me-card />
+    @if (board()?.dailyProgress?.visible) {
+      <section class="worker-side-progress-card" aria-label="Дневной прогресс специалиста">
+        <app-daily-progress-strip
+          class="side-progress"
+          [progress]="board()?.dailyProgress"
+          label="Прогресс"
+        />
+      </section>
+    }
 
     @if (workerFilterAvailable()) {
       <label class="worker-filter-card">

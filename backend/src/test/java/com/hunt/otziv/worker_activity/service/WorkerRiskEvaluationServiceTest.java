@@ -1,6 +1,8 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -92,6 +94,13 @@ class WorkerRiskEvaluationServiceTest {
         when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of(ownerUser));
         when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of(adminUser));
         when(orderRepository.findCompanyIdByOrderId(100L)).thenReturn(Optional.of(15232L));
+        Order riskOrder = new Order();
+        riskOrder.setId(100L);
+        Company riskCompany = new Company();
+        riskCompany.setId(15232L);
+        riskCompany.setTitle("Арком");
+        riskOrder.setCompany(riskCompany);
+        when(orderRepository.findById(100L)).thenReturn(Optional.of(riskOrder));
 
         service.evaluateSafely(event, worker);
 
@@ -144,7 +153,7 @@ class WorkerRiskEvaluationServiceTest {
                 isNull()
         );
         assertEquals(true, textCaptor.getValue().contains("Логин: worker"));
-        assertEquals(true, textCaptor.getValue().contains("Компания: №15232 Заказ: #100"));
+        assertEquals(true, textCaptor.getValue().contains("Компания: Арком (№15232) Заказ: #100"));
         assertEquals(true, textCaptor.getValue().contains("Отзыв: #501"));
 
         verify(personalReminderService).createSystemReminderDueNow(
@@ -164,7 +173,7 @@ class WorkerRiskEvaluationServiceTest {
                 eq("HTML"),
                 any()
         );
-        assertEquals(true, telegramCaptor.getValue().contains("<a href=\"https://o-ogo.ru/manager?section=orders&amp;companyId=15232\">№15232</a>"));
+        assertEquals(true, telegramCaptor.getValue().contains("<a href=\"https://o-ogo.ru/manager?section=orders&amp;companyId=15232\">Арком (№15232)</a>"));
         assertEquals(true, telegramCaptor.getValue().contains("<a href=\"https://o-ogo.ru/manager/orders/0/100\">#100</a>"));
         assertEquals(true, telegramCaptor.getValue().contains("<a href=\"https://o-ogo.ru/manager/orders/0/100?reviewId=501\">#501</a>"));
 

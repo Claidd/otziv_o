@@ -46,14 +46,24 @@ public class BotServiceImpl implements BotService {
     private final WorkerService workerService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
+    private final ReviewAccountPoolAlertScheduler accountPoolAlertScheduler;
 
-    public BotServiceImpl(UserService userService, StatusBotService statusBotService, BotsRepository botsRepository, WorkerService workerService, BusinessAuditService businessAuditService, ReviewBotCooldownService botCooldownService) {
+    public BotServiceImpl(
+            UserService userService,
+            StatusBotService statusBotService,
+            BotsRepository botsRepository,
+            WorkerService workerService,
+            BusinessAuditService businessAuditService,
+            ReviewBotCooldownService botCooldownService,
+            ReviewAccountPoolAlertScheduler accountPoolAlertScheduler
+    ) {
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botsRepository = botsRepository;
         this.workerService = workerService;
         this.businessAuditService = businessAuditService;
         this.botCooldownService = botCooldownService;
+        this.accountPoolAlertScheduler = accountPoolAlertScheduler;
     }
 
     @Override
@@ -255,6 +265,7 @@ public class BotServiceImpl implements BotService {
             return Optional.empty();
         }
 
+        boolean monitoredPoolChanged = isMonitoredPoolAccount(reserveBot);
         boolean oldActive = reserveBot.isActive();
         reserveBot.setBotCity(targetCity);
         reserveBot.setActive(true);
@@ -262,6 +273,9 @@ public class BotServiceImpl implements BotService {
         Bot savedBot = botsRepository.save(reserveBot);
         log.info("Резервный бот ID {} закреплен за городом {} ({})",
                 savedBot.getId(), targetCity.getTitle(), targetCity.getId());
+        if (monitoredPoolChanged) {
+            accountPoolAlertScheduler.checkAfterPoolChange();
+        }
         return Optional.of(savedBot);
     }
 
@@ -304,6 +318,7 @@ public class BotServiceImpl implements BotService {
         Bot savedBot = botsRepository.save(selectedBot);
         log.info("Новый аккаунт ID {} закреплен за городом {} ({})",
                 savedBot.getId(), targetCity.getTitle(), targetCity.getId());
+        accountPoolAlertScheduler.checkAfterPoolChange();
         return Optional.of(savedBot);
     }
 
@@ -360,6 +375,13 @@ public class BotServiceImpl implements BotService {
                 && bot.getStatus() != null
                 && bot.getStatus().getBotStatusTitle() != null
                 && READY_STATUS.equals(bot.getStatus().getBotStatusTitle().trim());
+    }
+
+    private boolean isMonitoredPoolAccount(Bot bot) {
+        return bot != null
+                && bot.getBotCity() != null
+                && Objects.equals(NEW_ACCOUNT_SOURCE_CITY_ID, bot.getBotCity().getId())
+                && NEW_ACCOUNT_NAME.equals(bot.getFio());
     }
 
 

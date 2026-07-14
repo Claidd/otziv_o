@@ -8,6 +8,8 @@ import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepo
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
@@ -70,6 +72,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -160,9 +163,43 @@ class ManagerControlServiceTest {
     private ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     @Mock
     private ManagerDailyControlEventRepository dailyControlEventRepository;
+    @Spy
+    private ManagerActionBalanceService managerActionBalanceService = new ManagerActionBalanceService();
+    @Mock
+    private LeadsRepository leadsRepository;
+    @Mock
+    private GamificationEventService gamificationEventService;
 
     @InjectMocks
     private ManagerControlService service;
+
+    @Test
+    void concreteMessageSlaUsesActualFirstObservedTime() throws Exception {
+        LocalDateTime firstObservedAt = LocalDateTime.of(2026, 7, 13, 18, 0);
+        ManagerDailyControlItem parent = new ManagerDailyControlItem();
+        parent.setReasonCode("UNANSWERED_CLIENT_MESSAGES");
+        parent.setCreatedAt(firstObservedAt.plusHours(1));
+        ManagerControlConcreteItemResponse concrete = new ManagerControlConcreteItemResponse(
+                1L, "CLIENT_CHAT_UNANSWERED", 2L, "Клиент", null, null, 0L, null,
+                "/chat", null, null, null, null, "OPEN", null, null,
+                firstObservedAt.plusHours(1), null, null
+        ).withSla(firstObservedAt, null, null, null);
+        when(appSettingService.getBoolean("manager.sla.enabled", false)).thenReturn(true);
+        when(appSettingService.getInt("manager.sla.target.message-minutes", 30)).thenReturn(30);
+        when(appSettingService.getInt("manager.sla.hard.message-minutes", 480)).thenReturn(480);
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "decorateConcreteSla",
+                ManagerDailyControlItem.class,
+                ManagerControlConcreteItemResponse.class
+        );
+        method.setAccessible(true);
+        ManagerControlConcreteItemResponse response = (ManagerControlConcreteItemResponse) method.invoke(service, parent, concrete);
+
+        assertEquals(firstObservedAt, response.firstObservedAt());
+        assertEquals(firstObservedAt.plusMinutes(30), response.targetDeadlineAt());
+        assertEquals(firstObservedAt.plusMinutes(480), response.hardDeadlineAt());
+    }
 
     @Test
     void commonInvoiceControlPassesPartiallyPaidStatusForPendingOrderFilter() throws Exception {

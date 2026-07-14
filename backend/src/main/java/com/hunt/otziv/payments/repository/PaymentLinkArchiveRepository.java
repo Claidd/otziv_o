@@ -177,6 +177,27 @@ public class PaymentLinkArchiveRepository {
                 """, Map.of("orderId", orderId), Long.class);
     }
 
+    public List<Long> findLiveIdsForPreparedOrderArchiveCandidates() {
+        return jdbc.queryForList("""
+                SELECT pl.id
+                FROM payment_links pl
+                JOIN archive_candidate_orders co ON co.order_id = pl.order_id
+                ORDER BY pl.created_at ASC, pl.id ASC
+                """, Map.of(), Long.class);
+    }
+
+    public int countArchivedIds(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM archive_payment_links
+                WHERE id IN (:ids)
+                """, Map.of("ids", ids), Integer.class);
+        return count == null ? 0 : count;
+    }
+
     public int archiveIds(Collection<Long> ids, LocalDateTime archivedAt, String reason, Long batchId) {
         if (ids == null || ids.isEmpty()) {
             return 0;

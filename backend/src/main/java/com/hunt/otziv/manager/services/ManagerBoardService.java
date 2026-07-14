@@ -21,9 +21,13 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -42,6 +46,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -100,6 +105,7 @@ public class ManagerBoardService {
     private final PromoTextService promoTextService;
     private final UserService userService;
     private final ManagerService managerService;
+    private final WorkerService workerService;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ManagerPermissionService managerPermissionService;
@@ -107,6 +113,7 @@ public class ManagerBoardService {
     private final UserMetricSnapshotService metricSnapshotService;
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
+    private final StaffDailyProgressService staffDailyProgressService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -177,7 +184,8 @@ public class ManagerBoardService {
                 promoTextService.getPromoTextsForManager(
                         resolvePromoManagerId(principal, authentication),
                         promoSectionCode(normalizedSection)
-                )
+                ),
+                managerDailyProgress(principal, authentication, managerFilter)
         );
     }
 
@@ -658,6 +666,48 @@ public class ManagerBoardService {
             return visibleManagerIds(principal, authentication);
         }
         return Set.of(managerFilter.getId());
+    }
+
+    private DailyWorkProgressResponse managerDailyProgress(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter
+    ) {
+        if (!staffDailyProgressService.progressEnabled()
+                || (!managerPermissionService.hasRole(authentication, "ADMIN")
+                && !managerPermissionService.hasRole(authentication, "OWNER")
+                && !managerPermissionService.hasRole(authentication, "MANAGER"))) {
+            return null;
+        }
+
+        List<Worker> workers = managerProgressWorkers(principal, authentication, managerFilter);
+        if (workers.isEmpty()) {
+            return null;
+        }
+
+        return staffDailyProgressService.aggregateWorkerProgress(workers, LocalDate.now());
+    }
+
+    private List<Worker> managerProgressWorkers(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter
+    ) {
+        if (managerFilter != null) {
+            return workerService.getAllWorkersToManager(managerFilter);
+        }
+
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            return workerService.getAllWorkers();
+        }
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            List<Manager> managers = resolveOwnerManagers(principal).stream().toList();
+            return managers.isEmpty()
+                    ? List.of()
+                    : workerService.getAllWorkersToManagerList(managers).stream().toList();
+        }
+        Manager manager = resolveManager(principal);
+        return manager == null ? List.of() : workerService.getAllWorkersToManager(manager);
     }
 
     private Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {

@@ -161,8 +161,8 @@ public class Company {
     private boolean publicationProgressReportsEnabled = true;
 
     @Builder.Default
-    @Column(name = "company_ignore_worker_publication_date_risk", nullable = false)
-    private boolean ignoreWorkerPublicationDateRisk = false;
+    @Column(name = "company_allow_worker_publication_date_edit", nullable = false)
+    private boolean allowWorkerPublicationDateEdit = false;
 
     @Column(name = "company_last_payer_email", length = 320)
     @Email

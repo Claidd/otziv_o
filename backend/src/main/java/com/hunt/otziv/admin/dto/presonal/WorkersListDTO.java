@@ -1,6 +1,7 @@
 package com.hunt.otziv.admin.dto.presonal;
 
 
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,6 +27,7 @@ public class WorkersListDTO {
     private int inCorrect;
     private int intVigul;
     private int publish;
+    private DailyWorkProgressResponse dailyProgress;
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;
 //    private BigDecimal sum1Week;

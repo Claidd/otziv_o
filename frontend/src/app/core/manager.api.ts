@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { DailyWorkProgress } from './daily-progress';
 import type {
   DeepCompanyResearchJob,
   ReputationSingleReviewDraftRequest,
@@ -193,6 +194,7 @@ export interface CompanyCardItem {
   failedNextOrderRequestsCount?: number;
   nextOrderRequestFilialTitle?: string;
   nextOrderRequestError?: string;
+  allowWorkerPublicationDateEdit?: boolean;
 }
 
 export interface ClientMessageStatus {
@@ -285,6 +287,7 @@ export interface ManagerBoard {
   orderStatuses: string[];
   metrics: ManagerMetric[];
   promoTexts: string[];
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface ManagerOverdueStatus {
@@ -356,7 +359,7 @@ export interface CompanyEditPayload {
   commentsCompany: string;
   active: boolean;
   publicationProgressReportsEnabled: boolean;
-  ignoreWorkerPublicationDateRisk: boolean;
+  allowWorkerPublicationDateEdit: boolean;
   createDate: string;
   updateStatus: string;
   dateNewTry: string;
@@ -400,7 +403,7 @@ export interface CompanyUpdateRequest {
   commentsCompany: string;
   active: boolean;
   publicationProgressReportsEnabled: boolean;
-  ignoreWorkerPublicationDateRisk: boolean;
+  allowWorkerPublicationDateEdit: boolean;
   newWorkerId: number | null;
   newFilialCityId: number | null;
   newFilialTitle: string;

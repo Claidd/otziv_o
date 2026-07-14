@@ -68,4 +68,6 @@ public class CompanyListDTO {
     private String nextOrderRequestFilialTitle;
 
     private String nextOrderRequestError;
+
+    private boolean allowWorkerPublicationDateEdit;
 }

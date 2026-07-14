@@ -1,12 +1,12 @@
 package com.hunt.otziv.text_generator.service;
 
-import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.text_generator.config.PromptFactory;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
 import com.hunt.otziv.text_generator.service.config.ReviewGenerationManager;
@@ -39,7 +39,7 @@ class AutoTextServiceImplTest {
     private ReviewGeneratorService reviewGeneratorService;
 
     @Mock
-    private BotService botService;
+    private BotAssignmentService botAssignmentService;
 
     @Mock
     private CategoryService categoryService;
@@ -66,7 +66,7 @@ class AutoTextServiceImplTest {
         service = new AutoTextServiceImpl(
                 reviewService,
                 reviewGeneratorService,
-                botService,
+                botAssignmentService,
                 categoryService,
                 subCategoryService,
                 filialService,

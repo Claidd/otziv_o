@@ -44,6 +44,9 @@ class BotServiceImplTest {
     @Mock
     private ReviewBotCooldownService botCooldownService;
 
+    @Mock
+    private ReviewAccountPoolAlertScheduler accountPoolAlertScheduler;
+
     @Test
     void claimNewAccountFromOwnCityUsesOnlyReadyActiveAccountInTargetCity() {
         BotServiceImpl service = service();
@@ -73,7 +76,8 @@ class BotServiceImplTest {
                 botsRepository,
                 workerService,
                 businessAuditService,
-                botCooldownService
+                botCooldownService,
+                accountPoolAlertScheduler
         );
     }
 

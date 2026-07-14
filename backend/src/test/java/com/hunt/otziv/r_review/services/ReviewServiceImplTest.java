@@ -6,6 +6,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.services.FilialService;
+import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
@@ -41,6 +42,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -164,6 +166,80 @@ class ReviewServiceImplTest {
 
         assertEquals(false, review.isVigul());
         verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void workerCannotChangePublicationDateWithoutCompanyPermission() {
+        Review review = reviewForPublicationDatePermission(false);
+        ReviewDTO dto = publicationDateUpdate(review.getPublishedDate().plusDays(7));
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> reviewService.updateReview("ROLE_WORKER", dto, 17L)
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        assertEquals("Для смены даты публикации обратитесь к менеджеру", exception.getReason());
+        verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void workerCanChangePublicationDateWithCompanyPermission() {
+        Review review = reviewForPublicationDatePermission(true);
+        LocalDate nextDate = nextAllowedPublicationDate(review.getPublishedDate().plusDays(7));
+        ReviewDTO dto = publicationDateUpdate(nextDate);
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+
+        reviewService.updateReview("ROLE_WORKER", dto, 17L);
+
+        assertEquals(nextDate, review.getPublishedDate());
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void managerCanChangePublicationDateWithoutCompanyPermission() {
+        Review review = reviewForPublicationDatePermission(false);
+        LocalDate nextDate = nextAllowedPublicationDate(review.getPublishedDate().plusDays(7));
+        ReviewDTO dto = publicationDateUpdate(nextDate);
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+
+        reviewService.updateReview("ROLE_MANAGER", dto, 17L);
+
+        assertEquals(nextDate, review.getPublishedDate());
+        verify(reviewRepository).save(review);
+    }
+
+    private Review reviewForPublicationDatePermission(boolean allowed) {
+        Company company = new Company();
+        company.setAllowWorkerPublicationDateEdit(allowed);
+        Order order = new Order();
+        order.setCompany(company);
+        OrderDetails details = new OrderDetails();
+        details.setId(UUID.randomUUID());
+        details.setOrder(order);
+        Review review = new Review();
+        review.setId(17L);
+        review.setText("Текст отзыва");
+        review.setPublishedDate(nextAllowedPublicationDate(LocalDate.now().plusDays(7)));
+        review.setOrderDetails(details);
+        return review;
+    }
+
+    private ReviewDTO publicationDateUpdate(LocalDate date) {
+        return ReviewDTO.builder()
+                .id(17L)
+                .text("Текст отзыва")
+                .publishedDate(date)
+                .build();
+    }
+
+    private LocalDate nextAllowedPublicationDate(LocalDate date) {
+        LocalDate result = date;
+        while (result.getDayOfWeek() == DayOfWeek.SATURDAY || result.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            result = result.plusDays(1);
+        }
+        return result;
     }
 
     @Test

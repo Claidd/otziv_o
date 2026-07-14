@@ -1540,12 +1540,31 @@ export class OrderDetailsComponent {
       return;
     }
 
-    this.runReviewMutation(
-      `block-${review.id}`,
-      this.managerApi.deactivateOrderReviewBot(review.orderId, review.id, review.botId, this.orderDetailsActivitySource()),
-      'Аккаунт заблокирован',
-      'Назначен новый доступный аккаунт'
-    );
+    const key = `block-${review.id}`;
+    this.mutationKey.set(key);
+    this.error.set(null);
+    this.managerApi
+      .deactivateOrderReviewBot(review.orderId, review.id, review.botId, this.orderDetailsActivitySource())
+      .subscribe({
+        next: (updatedReview) => {
+          this.applyUpdatedOrderReview(updatedReview);
+          this.mutationKey.set(null);
+          if (updatedReview.botId && updatedReview.botId !== 1) {
+            this.toastService.success('Аккаунт заблокирован', 'Назначен новый доступный аккаунт');
+          } else {
+            this.toastService.warning(
+              'Аккаунт заблокирован без замены',
+              'Свободных аккаунтов нет. Карточка останется в «Выгуле» до пополнения пула аккаунтов 0–1.'
+            );
+          }
+        },
+        error: (err) => {
+          const message = this.errorMessage(err, 'Не удалось заблокировать аккаунт');
+          this.mutationKey.set(null);
+          this.error.set(message);
+          this.toastService.error('Аккаунт не заблокирован', message);
+        }
+      });
   }
 
   publishReview(review: OrderReviewItem): void {
@@ -2206,7 +2225,10 @@ export class OrderDetailsComponent {
         const message = this.errorMessage(err, 'Не удалось сохранить отзыв');
         this.reviewEditError.set(message);
         this.reviewEditSaving.set(false);
-        this.toastService.error('Отзыв не сохранен', message);
+        this.toastService.error(
+          message.includes('Для смены даты публикации обратитесь к менеджеру') ? 'Дата не изменена' : 'Отзыв не сохранен',
+          message
+        );
       }
     });
   }
