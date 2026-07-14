@@ -4,7 +4,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.dto.ClientMessagePreview;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.payments.model.PaymentLink;

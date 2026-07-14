@@ -1,5 +1,7 @@
-package com.hunt.otziv.p_products.next_order;
+package com.hunt.otziv.p_products.next_order.repository;
 
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

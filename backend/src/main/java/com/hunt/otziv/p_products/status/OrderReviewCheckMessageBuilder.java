@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.status;
 
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import java.math.BigDecimal;

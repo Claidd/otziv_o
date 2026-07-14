@@ -1,5 +1,8 @@
-package com.hunt.otziv.p_products.next_order;
+package com.hunt.otziv.p_products.next_order.service;
 
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
+import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;

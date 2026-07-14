@@ -8,7 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.repository.PaymentLinkArchiveRepository;
 import java.time.LocalDateTime;

@@ -1,6 +1,6 @@
 package com.hunt.otziv.client_chat_control.service;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;

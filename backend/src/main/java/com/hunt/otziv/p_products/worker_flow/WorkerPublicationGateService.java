@@ -1,7 +1,7 @@
 package com.hunt.otziv.p_products.worker_flow;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.User;

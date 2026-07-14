@@ -7,7 +7,7 @@ import com.hunt.otziv.archive.dto.ArchiveOrdersSettingsRequest;
 import com.hunt.otziv.archive.dto.ArchiveOrdersSettingsResponse;
 import com.hunt.otziv.archive.dto.ArchiveRunResult;
 import com.hunt.otziv.archive.repository.OrderArchiveDryRunRepository;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import java.time.Clock;
 import java.time.Instant;

@@ -5,7 +5,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerDailySummaryResponse;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerSummaryDeliveryLogRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;

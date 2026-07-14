@@ -1,6 +1,6 @@
 package com.hunt.otziv.p_products.worker_flow;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.r_review.board.ReviewBoardMode;
 import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
 import com.hunt.otziv.r_review.board.ReviewBoardScope;

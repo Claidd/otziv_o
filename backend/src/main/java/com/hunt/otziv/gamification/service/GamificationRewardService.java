@@ -1,6 +1,6 @@
 package com.hunt.otziv.gamification.service;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.dto.GamificationRewardClaimRequest;
 import com.hunt.otziv.gamification.dto.GamificationRewardClaimResponse;
 import com.hunt.otziv.gamification.dto.GamificationRewardClaimStatusRequest;

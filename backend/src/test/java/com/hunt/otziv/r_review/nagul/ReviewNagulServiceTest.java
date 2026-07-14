@@ -1,7 +1,7 @@
 package com.hunt.otziv.r_review.nagul;
 
 import com.hunt.otziv.b_bots.model.Bot;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Role;

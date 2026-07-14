@@ -1,4 +1,4 @@
-package com.hunt.otziv.p_products.next_order;
+package com.hunt.otziv.p_products.next_order.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;

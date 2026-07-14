@@ -1,10 +1,15 @@
-package com.hunt.otziv.p_products.next_order;
+package com.hunt.otziv.p_products.next_order.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.common_billing.service.CommonBillingNextOrderFailureMarker;
+import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestedEvent;
+import com.hunt.otziv.p_products.next_order.dto.NextOrderRequestSummary;
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequest;
+import com.hunt.otziv.p_products.next_order.model.NextOrderRequestStatus;
+import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;

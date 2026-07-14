@@ -1,7 +1,7 @@
 package com.hunt.otziv.performers.service;
 
 import com.hunt.otziv.c_cities.model.City;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.performers.dto.PerformerRolloutSettingsRequest;
 import com.hunt.otziv.performers.dto.PerformerRolloutSettingsResponse;

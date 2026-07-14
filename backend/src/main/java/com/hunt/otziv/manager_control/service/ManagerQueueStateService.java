@@ -1,6 +1,6 @@
 package com.hunt.otziv.manager_control.service;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
 import com.hunt.otziv.manager_control.model.*;

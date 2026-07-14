@@ -3,7 +3,7 @@ package com.hunt.otziv.manager_daily_summary.service;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerPerformanceDailyRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerSiteActivityEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerSummaryDeliveryLogRepository;

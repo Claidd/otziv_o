@@ -20,7 +20,7 @@ import com.hunt.otziv.client_messages.service.ClientMessageSlotPlanner;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.client_chat_control.service.ClientChatAutoIgnoreService;
 import com.hunt.otziv.config.cache.CacheConfig;
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.l_lead.model.PromoText;
 import com.hunt.otziv.l_lead.model.PromoTextAssignment;
 import com.hunt.otziv.l_lead.promo.PromoButtonCatalog;

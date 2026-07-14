@@ -1,5 +1,7 @@
-package com.hunt.otziv.config.settings;
+package com.hunt.otziv.config.settings.service;
 
+import com.hunt.otziv.config.settings.model.AppSetting;
+import com.hunt.otziv.config.settings.repository.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;

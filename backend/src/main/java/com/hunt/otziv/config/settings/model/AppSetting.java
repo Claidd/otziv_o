@@ -1,4 +1,4 @@
-package com.hunt.otziv.config.settings;
+package com.hunt.otziv.config.settings.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

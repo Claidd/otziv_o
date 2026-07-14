@@ -1,6 +1,6 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerDailySummaryResponse;
 import com.hunt.otziv.manager_daily_summary.model.ManagerSummaryDeliveryLog;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerSummaryDeliveryLogRepository;

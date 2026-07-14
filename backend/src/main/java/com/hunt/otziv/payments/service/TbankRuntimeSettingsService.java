@@ -1,6 +1,6 @@
 package com.hunt.otziv.payments.service;
 
-import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
 import com.hunt.otziv.payments.dto.TbankRuntimeSettingsResponse;
 import com.hunt.otziv.payments.dto.UpdateTbankRuntimeSettingsRequest;

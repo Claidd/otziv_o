@@ -1,4 +1,4 @@
-package com.hunt.otziv.p_products.next_order;
+package com.hunt.otziv.p_products.next_order.model;
 
 public enum NextOrderRequestStatus {
     PENDING,
