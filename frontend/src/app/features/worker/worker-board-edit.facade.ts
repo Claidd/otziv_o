@@ -257,7 +257,10 @@ export class WorkerBoardEditFacade {
         const message = this.deps.errorMessage(err, 'Не удалось сохранить отзыв');
         this.reviewEditError.set(message);
         this.reviewEditSaving.set(false);
-        this.deps.toastService.error('Отзыв не сохранен', message);
+        this.deps.toastService.error(
+          message.includes('Для смены даты публикации обратитесь к менеджеру') ? 'Дата не изменена' : 'Отзыв не сохранен',
+          message
+        );
       }
     });
   }

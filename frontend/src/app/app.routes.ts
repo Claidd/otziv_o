@@ -299,7 +299,7 @@ export const routes: Routes = [
       .then((m) => m.ScoreComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {

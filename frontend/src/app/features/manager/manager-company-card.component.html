@@ -29,6 +29,15 @@
         />
       }
     </div>
+    @if (company.allowWorkerPublicationDateEdit) {
+      <div
+        class="publication-date-permission-badge"
+        title="Специалисты могут менять даты публикации отзывов во всех заказах этой компании"
+      >
+        <span class="material-icons-sharp">event_available</span>
+        <span>Специалистам разрешена смена дат</span>
+      </div>
+    }
   </header>
 
   <div class="phone-row">

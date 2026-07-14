@@ -193,6 +193,7 @@ export interface CompanyCardItem {
   failedNextOrderRequestsCount?: number;
   nextOrderRequestFilialTitle?: string;
   nextOrderRequestError?: string;
+  allowWorkerPublicationDateEdit?: boolean;
 }
 
 export interface ClientMessageStatus {
@@ -356,7 +357,7 @@ export interface CompanyEditPayload {
   commentsCompany: string;
   active: boolean;
   publicationProgressReportsEnabled: boolean;
-  ignoreWorkerPublicationDateRisk: boolean;
+  allowWorkerPublicationDateEdit: boolean;
   createDate: string;
   updateStatus: string;
   dateNewTry: string;
@@ -400,7 +401,7 @@ export interface CompanyUpdateRequest {
   commentsCompany: string;
   active: boolean;
   publicationProgressReportsEnabled: boolean;
-  ignoreWorkerPublicationDateRisk: boolean;
+  allowWorkerPublicationDateEdit: boolean;
   newWorkerId: number | null;
   newFilialCityId: number | null;
   newFilialTitle: string;

@@ -131,7 +131,7 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     active: 'score',
     group: 'home',
     routerLink: '/admin/score',
-    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
+    roles: ['ADMIN', 'OWNER']
   },
   {
     id: 'manager-control-self',

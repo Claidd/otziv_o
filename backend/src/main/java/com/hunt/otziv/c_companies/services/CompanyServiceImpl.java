@@ -134,7 +134,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .subCategory(convertSubCategoryDTOToSubCategory(companyDTO.getSubCategory()))
                 .active(true)
                 .publicationProgressReportsEnabled(companyDTO.isPublicationProgressReportsEnabled())
-                .ignoreWorkerPublicationDateRisk(companyDTO.isIgnoreWorkerPublicationDateRisk())
+                .allowWorkerPublicationDateEdit(companyDTO.isAllowWorkerPublicationDateEdit())
                 .commentsCompany(companyDTO.getCommentsCompany())
                 .counterNoPay(0)
                 .counterPay(0)
@@ -968,7 +968,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setMaxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company));
             companyDTO.setMaxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company));
             companyDTO.setPublicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled());
-            companyDTO.setIgnoreWorkerPublicationDateRisk(company.isIgnoreWorkerPublicationDateRisk());
+            companyDTO.setAllowWorkerPublicationDateEdit(company.isAllowWorkerPublicationDateEdit());
             // Convert related entities to DTOs
             companyDTO.setUser(convertToUserDto(company.getUser()));
             companyDTO.setManager(convertToManagerDto(company.getManager()));
@@ -1033,6 +1033,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyListDTO.setFailedNextOrderRequestsCount(nextOrderSummary == null ? 0 : nextOrderSummary.failedCount());
             companyListDTO.setNextOrderRequestFilialTitle(nextOrderSummary == null ? null : nextOrderSummary.latestFilialTitle());
             companyListDTO.setNextOrderRequestError(nextOrderSummary == null ? null : nextOrderSummary.latestError());
+            companyListDTO.setAllowWorkerPublicationDateEdit(company.isAllowWorkerPublicationDateEdit());
             return companyListDTO;
         }
         else {
@@ -1179,7 +1180,7 @@ public class CompanyServiceImpl implements CompanyService{
                 .maxGroupLinked(maxGroupLinkService.isMaxGroupLinked(company))
                 .maxBotInviteUrl(maxGroupLinkService.buildInviteUrl(company))
                 .publicationProgressReportsEnabled(company.isPublicationProgressReportsEnabled())
-                .ignoreWorkerPublicationDateRisk(company.isIgnoreWorkerPublicationDateRisk())
+                .allowWorkerPublicationDateEdit(company.isAllowWorkerPublicationDateEdit())
                 .build();
     }
 
@@ -1426,9 +1427,9 @@ public class CompanyServiceImpl implements CompanyService{
             publicationProgressPreferenceService.setCompanyPreference(companyId, enabled);
             isChanged = true;
         }
-        if (!Objects.equals(companyDTO.isIgnoreWorkerPublicationDateRisk(), saveCompany.isIgnoreWorkerPublicationDateRisk())){
-            log.info("Обновляем исключение риска ручной смены даты публикации специалистом");
-            saveCompany.setIgnoreWorkerPublicationDateRisk(companyDTO.isIgnoreWorkerPublicationDateRisk());
+        if (!Objects.equals(companyDTO.isAllowWorkerPublicationDateEdit(), saveCompany.isAllowWorkerPublicationDateEdit())){
+            log.info("Обновляем разрешение специалистам менять даты публикации");
+            saveCompany.setAllowWorkerPublicationDateEdit(companyDTO.isAllowWorkerPublicationDateEdit());
             isChanged = true;
         }
         if (!Objects.equals(companyDTO.getCommentsCompany(), saveCompany.getCommentsCompany())){ /*Проверка комментарий*/

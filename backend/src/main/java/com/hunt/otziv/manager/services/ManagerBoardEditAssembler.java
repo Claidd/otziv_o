@@ -125,7 +125,7 @@ public class ManagerBoardEditAssembler {
                 safe(company.getCommentsCompany()),
                 company.isActive(),
                 company.isPublicationProgressReportsEnabled(),
-                company.isIgnoreWorkerPublicationDateRisk(),
+                company.isAllowWorkerPublicationDateEdit(),
                 dateValue(company.getCreateDate()),
                 dateValue(company.getUpdateStatus()),
                 dateValue(company.getDateNewTry()),
@@ -326,7 +326,9 @@ public class ManagerBoardEditAssembler {
                 productOptions(),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER"),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
-                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER"),
+                managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER")
+                        || (workerOnly && order.getCompany() != null
+                        && order.getCompany().isAllowWorkerPublicationDateEdit()),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER"),
                 canEditReviewVigul(authentication),
                 managerPermissionService.hasAnyRole(authentication, "ADMIN", "OWNER", "MANAGER", "WORKER"),
