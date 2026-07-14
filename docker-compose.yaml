@@ -352,12 +352,11 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_healthy
-      external-review-worker:
-        condition: service_healthy
     networks:
       - internal_net
 
   external-review-worker:
+    profiles: ["external-review"]
     image: ${EXTERNAL_REVIEW_WORKER_IMAGE:-claid38/otziv-external-review-worker:latest}
     build:
       context: ./backend/external-review-worker

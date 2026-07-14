@@ -29,6 +29,12 @@ public class ReviewAccountPoolAlertState {
     @Column(name = "cycle_number", nullable = false)
     private long cycleNumber;
 
+    @Column(name = "last_required_count", nullable = false)
+    private int lastRequiredCount;
+
+    @Column(name = "last_notified_at")
+    private LocalDateTime lastNotifiedAt;
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 

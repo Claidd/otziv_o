@@ -8,6 +8,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,6 +34,7 @@ public class ReviewAccountPoolAlertService {
     private static final String POOL_ACCOUNT_NAME = "Впиши Имя Фамилию";
     private static final String READY_STATUS = "Новый";
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
+    private static final int SHORTAGE_REMINDER_HOURS = 6;
 
     private final ReviewAccountPoolAlertStateRepository stateRepository;
     private final BotsRepository botsRepository;
@@ -52,8 +54,10 @@ public class ReviewAccountPoolAlertService {
                 1,
                 LocalDate.now(BUSINESS_ZONE)
         ));
+        int required = Math.toIntExact(botsRepository.countUnpublishedStubReviews());
 
         Integer previous = state.getLastRemainingCount();
+        int previousRequired = state.getLastRequiredCount();
         boolean replenished = previous != null && remaining > previous;
         if (replenished) {
             state.setCycleNumber(state.getCycleNumber() + 1);
@@ -67,22 +71,39 @@ public class ReviewAccountPoolAlertService {
         for (Integer threshold : reached) {
             mask |= thresholdBit(threshold);
         }
+        LocalDateTime now = LocalDateTime.now(BUSINESS_ZONE);
+        boolean shortage = required > remaining;
+        boolean shortageStarted = shortage && (previous == null || previousRequired <= previous);
+        boolean reminderDue = shortage && (state.getLastNotifiedAt() == null
+                || !now.isBefore(state.getLastNotifiedAt().plusHours(SHORTAGE_REMINDER_HOURS)));
+        boolean shouldNotify = !reached.isEmpty() || shortageStarted || reminderDue;
+
         state.setNotifiedThresholdMask(mask);
         state.setLastRemainingCount(remaining);
+        state.setLastRequiredCount(required);
+        if (shouldNotify) {
+            state.setLastNotifiedAt(now);
+        }
         stateRepository.save(state);
 
         long cycleNumber = state.getCycleNumber();
-        notifyAfterCommit(reached, remaining, cycleNumber);
+        Integer reachedThreshold = reached.isEmpty() ? null : reached.get(reached.size() - 1);
+        notifyAfterCommit(shouldNotify, reachedThreshold, remaining, required, cycleNumber, now);
         return remaining;
     }
 
-    private void notifyAfterCommit(List<Integer> reached, int remaining, long cycleNumber) {
-        if (reached.isEmpty()) {
+    private void notifyAfterCommit(
+            boolean shouldNotify,
+            Integer threshold,
+            int remaining,
+            int required,
+            long cycleNumber,
+            LocalDateTime notifiedAt
+    ) {
+        if (!shouldNotify) {
             return;
         }
-        Runnable notification = () -> reached.forEach(
-                threshold -> notifyRecipients(threshold, remaining, cycleNumber)
-        );
+        Runnable notification = () -> notifyRecipients(threshold, remaining, required, cycleNumber, notifiedAt);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             notification.run();
             return;
@@ -124,19 +145,31 @@ public class ReviewAccountPoolAlertService {
         return index < 0 ? 0 : 1 << index;
     }
 
-    private void notifyRecipients(int threshold, int remaining, long cycleNumber) {
+    private void notifyRecipients(
+            Integer threshold,
+            int remaining,
+            int required,
+            long cycleNumber,
+            LocalDateTime notifiedAt
+    ) {
         String title = remaining == 0
                 ? "Аккаунты для выгула закончились"
                 : "Заканчиваются аккаунты для выгула";
+        int deficit = Math.max(0, required - remaining);
+        int coverage = required <= 0 ? 100 : Math.min(100, (int) Math.round(remaining * 100.0d / required));
         String text = "В общем пуле осталось аккаунтов: " + remaining + "."
-                + "\nДостигнут порог: " + threshold + "."
+                + (threshold == null ? "" : "\nДостигнут порог: " + threshold + ".")
+                + "\nПубликаций с ботом-заглушкой: " + required + "."
+                + "\nТекущий дефицит: " + deficit + "."
+                + "\nПокрытие потребности: " + coverage + "%."
                 + "\nПул: город 325, активные аккаунты «Впиши Имя Фамилию» со счетчиком 0–1."
                 + "\n\nНеобходимо пополнить пул.";
-        long sourceId = (cycleNumber + 1) * 1_000L + threshold + 1L;
+        long sourceId = (cycleNumber + 1) * 10_000_000L
+                + notifiedAt.atZone(BUSINESS_ZONE).toEpochSecond() / 3600L;
 
         recipients().values().forEach(user -> notifyUser(user, title, text, sourceId));
-        log.warn("Отправлено уведомление о пуле аккаунтов: threshold={}, remaining={}, cycle={}",
-                threshold, remaining, cycleNumber);
+        log.warn("Отправлено уведомление о пуле аккаунтов: threshold={}, remaining={}, required={}, deficit={}, cycle={}",
+                threshold, remaining, required, deficit, cycleNumber);
     }
 
     private Map<Long, User> recipients() {

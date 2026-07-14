@@ -73,6 +73,15 @@ public class ClientChatMessage {
     @Column(name = "message_text", columnDefinition = "TEXT")
     private String messageText;
 
+    @Column(name = "matched_company_count", nullable = false)
+    private int matchedCompanyCount;
+
+    @Column(name = "matched_company_titles", length = 1000)
+    private String matchedCompanyTitles;
+
+    @Column(name = "routing_ambiguous", nullable = false)
+    private boolean routingAmbiguous;
+
     @Column(name = "message_at", nullable = false)
     private LocalDateTime messageAt;
 

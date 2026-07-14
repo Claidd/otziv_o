@@ -121,6 +121,7 @@ class ReviewAccountPoolAlertServiceTest {
         when(botsRepository.countAvailableAccountPool(
                 anyLong(), anyString(), anyString(), anyInt(), anyInt(), any(LocalDate.class)
         )).thenReturn(count);
+        lenient().when(botsRepository.countUnpublishedStubReviews()).thenReturn(0L);
         lenient().when(userService.getAllOwners("ROLE_OWNER")).thenReturn(owners);
         lenient().when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(admins);
     }

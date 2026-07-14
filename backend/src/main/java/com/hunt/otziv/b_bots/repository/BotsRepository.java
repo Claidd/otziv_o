@@ -20,6 +20,14 @@ import jakarta.persistence.LockModeType;
 @Repository
 public interface BotsRepository extends CrudRepository<Bot, Long> {
 
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM reviews r
+        WHERE COALESCE(r.review_publish, 0) = 0
+          AND r.review_bot = 1
+        """, nativeQuery = true)
+    long countUnpublishedStubReviews();
+
     interface AdminBotRow {
         Long getId();
         String getLogin();
