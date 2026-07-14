@@ -4,6 +4,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
 import com.hunt.otziv.manager_control.model.*;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_control.repository.ManagerQueueStateEventRepository;
@@ -16,6 +17,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,7 @@ import org.springframework.http.HttpStatus;
 public class ManagerQueueStateService {
     private final ManagerDailyControlRepository controlRepository;
     private final ManagerDailyControlItemRepository itemRepository;
+    private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ManagerQueueStateEventRepository eventRepository;
     private final ManagerRepository managerRepository;
     private final UserService userService;
@@ -90,18 +94,43 @@ public class ManagerQueueStateService {
     private void observe(ManagerDailyControl control, LocalDateTime now) {
         List<ManagerDailyControlItem> open = itemRepository.findByControl(control).stream()
                 .filter(item -> item.getGroup() == ManagerDailyControlGroup.ACTION)
+                .filter(item -> item.getItemType() != ManagerDailyControlItemType.ORDER_STATUS)
                 .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN)
                 .toList();
+        Map<Long, List<ManagerDailyControlConcreteItem>> concreteByParent = open.isEmpty()
+                ? Map.of()
+                : concreteItemRepository.findByParentItemIn(open).stream()
+                .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN)
+                .filter(item -> item.getParentItem() != null && item.getParentItem().getId() != null)
+                .collect(Collectors.groupingBy(item -> item.getParentItem().getId()));
         long within = 0, missed = 0, overdue = 0, total = 0;
         for (ManagerDailyControlItem item : open) {
             long count = Math.max(1, item.getCount());
-            total += count;
-            LocalDateTime first = item.getCreatedAt() == null ? now : item.getCreatedAt();
             int target = targetMinutes(item.getReasonCode());
             int hard = hardMinutes(item.getReasonCode());
-            if (now.isAfter(first.plusMinutes(hard))) overdue += count;
-            else if (now.isAfter(first.plusMinutes(target))) missed += count;
-            else within += count;
+            List<ManagerDailyControlConcreteItem> concrete = item.getId() == null
+                    ? List.of()
+                    : concreteByParent.getOrDefault(item.getId(), List.of());
+            for (ManagerDailyControlConcreteItem concreteItem : concrete) {
+                SlaBucket bucket = classify(
+                        concreteItem.getCreatedAt() == null ? item.getCreatedAt() : concreteItem.getCreatedAt(),
+                        1,
+                        target,
+                        hard,
+                        now
+                );
+                within += bucket.within(); missed += bucket.missed(); overdue += bucket.overdue(); total += bucket.total();
+            }
+            long aggregateRemainder = Math.max(0, count - concrete.size());
+            if (aggregateRemainder > 0) {
+                LocalDateTime aggregateStartedAt = concrete.stream()
+                        .map(ManagerDailyControlConcreteItem::getCreatedAt)
+                        .filter(java.util.Objects::nonNull)
+                        .min(LocalDateTime::compareTo)
+                        .orElse(item.getCreatedAt());
+                SlaBucket bucket = classify(aggregateStartedAt, aggregateRemainder, target, hard, now);
+                within += bucket.within(); missed += bucket.missed(); overdue += bucket.overdue(); total += bucket.total();
+            }
         }
         String state = total == 0 ? "CLEAN" : overdue > 0 ? "OVERDUE" : missed > 0 ? "LATE" : "CONTROLLED";
         ManagerQueueStateEvent previous = eventRepository.findTopByManager_IdOrderByObservedAtDescIdDesc(control.getManager().getId()).orElse(null);
@@ -117,6 +146,14 @@ public class ManagerQueueStateService {
         }
     }
 
+    private SlaBucket classify(LocalDateTime startedAt, long count, int targetMinutes, int hardMinutes, LocalDateTime now) {
+        long safeCount = Math.max(0, count);
+        LocalDateTime first = startedAt == null ? now : startedAt;
+        if (now.isAfter(first.plusMinutes(hardMinutes))) return new SlaBucket(0, 0, safeCount, safeCount);
+        if (now.isAfter(first.plusMinutes(targetMinutes))) return new SlaBucket(0, safeCount, 0, safeCount);
+        return new SlaBucket(safeCount, 0, 0, safeCount);
+    }
+
     private int targetMinutes(String reason) { return settingMinutes("target", reason, 120); }
     private int hardMinutes(String reason) { return settingMinutes("hard", reason, 720); }
     private int settingMinutes(String kind, String reason, int fallback) {
@@ -124,4 +161,6 @@ public class ManagerQueueStateService {
                 : reason != null && reason.contains("RISK") ? "risk" : "default";
         return Math.max(1, settings.getInt("manager.sla." + kind + "." + type + "-minutes", fallback));
     }
+
+    private record SlaBucket(long within, long missed, long overdue, long total) {}
 }

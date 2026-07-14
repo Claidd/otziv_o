@@ -296,6 +296,7 @@ export interface ManagerDailySummaryRow {
   riskCount: number;
   unansweredCount: number;
   taskOtherOpen?: number;
+  firstReplyCount: number;
   firstReplyAverageSeconds: number;
   firstReplyMedianSeconds: number;
   allReplyAverageSeconds: number;
@@ -305,6 +306,8 @@ export interface ManagerDailySummaryRow {
   repliesInSla: number;
   problemCount: number;
   problemResolvedCount: number;
+  problemActionTakenCount: number;
+  problemOpenCount: number;
   problemResolutionAverageSeconds: number;
   siteActiveSeconds: number;
   messengerActiveSeconds: number;

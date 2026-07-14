@@ -14,6 +14,7 @@ import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
@@ -51,10 +52,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ManagerDailySummaryService {
 
-    public static final String FORMULA_VERSION = "manager-v3";
+    public static final String FORMULA_VERSION = "manager-v4";
     private static final long REPLY_SLA_SECONDS = Duration.ofMinutes(30).toSeconds();
     private static final long EVENT_TAIL_SECONDS = 60;
-    private static final long REPLY_LOOKBACK_DAYS = 7;
 
     private final ManagerRepository managerRepository;
     private final ManagerPerformanceService performanceService;
@@ -124,9 +124,10 @@ public class ManagerDailySummaryService {
         ManagerActionBalance tasks = managerActionBalanceService.calculate(items, concrete);
         List<ClientChatMessage> dayMessages = messageRepository
                 .findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(manager.getId(), from, to);
+        int replyLookbackDays = Math.max(7, appSettingService.getInt("manager.summary.raw-retention-days", 90));
         ReplyStats replies = replyStats(
                 messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
-                        manager.getId(), from.minusDays(REPLY_LOOKBACK_DAYS), to),
+                        manager.getId(), from.minusDays(replyLookbackDays), to),
                 from,
                 to
         );
@@ -169,6 +170,8 @@ public class ManagerDailySummaryService {
         daily.setReplyHistogram(replies.all().histogram());
         daily.setProblemCount(problems.count());
         daily.setProblemResolvedCount(problems.resolvedCount());
+        daily.setProblemActionTakenCount(problems.actionTakenCount());
+        daily.setProblemOpenCount(problems.openCount());
         daily.setProblemResolutionTotalSeconds(problems.totalResolutionSeconds());
         daily.setProblemResolutionAverageSeconds(problems.averageResolutionSeconds());
         daily.setSiteActiveSeconds(activity.siteSeconds());
@@ -247,8 +250,14 @@ public class ManagerDailySummaryService {
                 .filter(item -> item.getCreatedAt() != null && item.getResolvedAt() != null)
                 .map(item -> Math.max(0, Duration.between(item.getCreatedAt(), item.getResolvedAt()).toSeconds()))
                 .toList();
+        long actionTaken = problems.stream()
+                .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.ACTION_TAKEN)
+                .count();
+        long open = problems.stream()
+                .filter(item -> item.getStatus() == null || item.getStatus() == ManagerDailyControlItemStatus.OPEN)
+                .count();
         long total = resolvedDurations.stream().mapToLong(Long::longValue).sum();
-        return new ProblemStats(problems.size(), resolvedDurations.size(), total,
+        return new ProblemStats(problems.size(), resolvedDurations.size(), actionTaken, open, total,
                 resolvedDurations.isEmpty() ? 0 : Math.round(total / (double) resolvedDurations.size()));
     }
 
@@ -322,8 +331,17 @@ public class ManagerDailySummaryService {
             buckets[index]++;
         }
         return new Distribution(values.size(), total, Math.round(total / (double) values.size()),
-                percentile(values, 0.50), percentile(values, 0.90), inSla,
+                median(values), percentile(values, 0.90), inSla,
                 java.util.Arrays.stream(buckets).mapToObj(String::valueOf).collect(Collectors.joining(",")));
+    }
+
+    private long median(List<Long> sortedValues) {
+        if (sortedValues.isEmpty()) return 0;
+        int middle = sortedValues.size() / 2;
+        if (sortedValues.size() % 2 != 0) return sortedValues.get(middle);
+        long left = sortedValues.get(middle - 1);
+        long right = sortedValues.get(middle);
+        return Math.round(left / 2.0 + right / 2.0);
     }
 
     private long percentile(List<Long> values, double percentile) {
@@ -464,9 +482,10 @@ public class ManagerDailySummaryService {
                 daily.getTaskAutoClosed(), daily.getTaskResolved(), daily.getTaskActionTaken(), daily.getTaskDeferred(),
                 daily.getTaskAcknowledged(), daily.getTaskProgressPercent(), daily.getOverdueCount(), daily.getRiskCount(), daily.getUnansweredCount(),
                 daily.getTaskOtherOpen(),
-                daily.getFirstReplyAverageSeconds(), daily.getFirstReplyMedianSeconds(), daily.getAllReplyAverageSeconds(),
+                daily.getFirstReplyCount(), daily.getFirstReplyAverageSeconds(), daily.getFirstReplyMedianSeconds(), daily.getAllReplyAverageSeconds(),
                 daily.getAllReplyMedianSeconds(), daily.getAllReplyP90Seconds(), daily.getAllReplyCount(), daily.getRepliesInSla(),
-                daily.getProblemCount(), daily.getProblemResolvedCount(), daily.getProblemResolutionAverageSeconds(),
+                daily.getProblemCount(), daily.getProblemResolvedCount(), daily.getProblemActionTakenCount(), daily.getProblemOpenCount(),
+                daily.getProblemResolutionAverageSeconds(),
                 daily.getSiteActiveSeconds(), daily.getMessengerActiveSeconds(), daily.getConfirmedActiveSeconds(),
                 daily.getLeadActionCount(), daily.getTargetSlaCount(), daily.getTargetSlaMetCount(), daily.getHardSlaBreachCount(),
                 daily.getControlledSeconds(), daily.getCleanQueueSeconds(), daily.getDayStars(), daily.getDayStatus(), daily.getXpEarned(),
@@ -483,7 +502,14 @@ public class ManagerDailySummaryService {
             this(count, totalSeconds, averageSeconds, medianSeconds, p90Seconds, 0, histogram);
         }
     }
-    private record ProblemStats(long count, long resolvedCount, long totalResolutionSeconds, long averageResolutionSeconds) {}
+    private record ProblemStats(
+            long count,
+            long resolvedCount,
+            long actionTakenCount,
+            long openCount,
+            long totalResolutionSeconds,
+            long averageResolutionSeconds
+    ) {}
     private record ActivityStats(long siteSeconds, long messengerOutsideSiteSeconds, long confirmedSeconds) {}
     private record Interval(LocalDateTime start, LocalDateTime end) {}
 

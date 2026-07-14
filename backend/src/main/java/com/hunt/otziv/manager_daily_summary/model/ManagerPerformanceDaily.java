@@ -73,6 +73,8 @@ public class ManagerPerformanceDaily {
     @Column(name = "reply_histogram", length = 500) private String replyHistogram;
     @Column(name = "problem_count", nullable = false) private long problemCount;
     @Column(name = "problem_resolved_count", nullable = false) private long problemResolvedCount;
+    @Column(name = "problem_action_taken_count", nullable = false) private long problemActionTakenCount;
+    @Column(name = "problem_open_count", nullable = false) private long problemOpenCount;
     @Column(name = "problem_resolution_total_seconds", nullable = false) private long problemResolutionTotalSeconds;
     @Column(name = "problem_resolution_average_seconds", nullable = false) private long problemResolutionAverageSeconds;
     @Column(name = "site_active_seconds", nullable = false) private long siteActiveSeconds;
@@ -99,7 +101,7 @@ public class ManagerPerformanceDaily {
         createdAt = now;
         updatedAt = now;
         if (grade == null) grade = "J";
-        if (formulaVersion == null) formulaVersion = "manager-v3";
+        if (formulaVersion == null) formulaVersion = "manager-v4";
         if (aggregationStatus == null) aggregationStatus = "CALCULATED";
         if (taskProgressPercent == null) taskProgressPercent = BigDecimal.ZERO;
         if (dayStatus == null) dayStatus = "IN_PROGRESS";
