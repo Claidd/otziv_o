@@ -36,18 +36,21 @@ class ManagerSummaryFormatterTest {
     void rendersSeparateSiteMessengerAndConfirmedActivity() {
         ManagerDailySummaryResponse row = new ManagerDailySummaryResponse(
                 LocalDate.of(2026, 7, 13), 1L, 10L, "Анжелика <Б>", 86, "B",
-                34, 29, 5, BigDecimal.valueOf(85.29), 2, 2, 2,
+                38, 29, 7, 2, 7, 12, 5, 5, BigDecimal.valueOf(76.32), 2, 2, 2, 1,
                 540, 360, 840, 480, 1800, 46, 40,
                 8, 7, 5040, 23040, 2820, 25860,
                 3, 46, 40, 0, 57600, 3600, 3, "IDEAL", 180,
-                "VERIFIED"
+                "VERIFIED", java.time.LocalDateTime.of(2026, 7, 13, 23, 0)
         );
 
         String message = formatter.format(List.of(row), true);
 
         assertTrue(message.contains("ТЕСТОВАЯ СВОДКА"));
         assertTrue(message.contains("Анжелика &lt;Б&gt;"));
-        assertTrue(message.contains("Задачи: <b>29 из 34</b>"));
+        assertTrue(message.contains("Обработано: <b>29 из 38</b>"));
+        assertTrue(message.contains("Осталось к действию: <b>7</b>"));
+        assertTrue(message.contains("Снято автоматически: <b>2</b>"));
+        assertTrue(message.contains("К среднему за 7 дней: <b>нет данных</b>"));
         assertTrue(message.contains("Подтверждённая активность: <b>7 ч 11 мин</b>"));
         assertTrue(message.contains("сайт: 6 ч 24 мин"));
         assertTrue(message.contains("мессенджеры вне сайта: 47 мин"));
@@ -57,11 +60,11 @@ class ManagerSummaryFormatterTest {
     void rendersNoSlaDataWhenThereWereNoReplies() {
         ManagerDailySummaryResponse row = new ManagerDailySummaryResponse(
                 LocalDate.of(2026, 7, 14), 1L, 10L, "Вика", 42, "F",
-                70, 0, 70, BigDecimal.ZERO, 7, 9, 6,
+                70, 0, 70, 0, 0, 0, 0, 0, BigDecimal.ZERO, 7, 9, 6, 48,
                 0, 0, 0, 0, 0, 0, 0,
                 55, 0, 0, 0, 60, 60,
                 0, 0, 0, 0, 480, 0, 3, "CONTROLLED", 0,
-                "VERIFIED"
+                "VERIFIED", java.time.LocalDateTime.of(2026, 7, 14, 23, 0)
         );
 
         String message = formatter.format(List.of(row), true);

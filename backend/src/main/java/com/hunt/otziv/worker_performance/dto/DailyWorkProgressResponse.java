@@ -37,7 +37,10 @@ public record DailyWorkProgressResponse(
         int disciplineScore,
         int workloadScore,
         long botChangeCount,
-        long botBlockCount
+        long botBlockCount,
+        boolean reached100,
+        LocalDateTime firstReached100At,
+        LocalDateTime lastReached100At
 ) {
     public DailyWorkProgressResponse(
             boolean visible,
@@ -95,7 +98,10 @@ public record DailyWorkProgressResponse(
                 0,
                 0,
                 0,
-                0
+                0,
+                false,
+                null,
+                null
         );
     }
 
@@ -134,7 +140,10 @@ public record DailyWorkProgressResponse(
                 0,
                 0,
                 0,
-                0
+                0,
+                false,
+                null,
+                null
         );
     }
 }

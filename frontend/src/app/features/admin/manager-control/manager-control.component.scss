@@ -411,6 +411,13 @@ p {
   white-space: nowrap;
 }
 
+.daily-task-progress > small {
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 .daily-task-progress-track {
   height: 0.62rem;
   overflow: hidden;

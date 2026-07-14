@@ -304,6 +304,9 @@
                   <span>Обработано за день</span>
                   <strong>{{ dailyTaskCompleted(manager) }} из {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
                 </div>
+                <small>{{ dailyTaskBalance(manager) }}</small>
+                <small>{{ dailyTaskHandledBreakdown(manager) }}</small>
+                <small>{{ dailyTaskRemainingBreakdown(manager) }}</small>
                 <div class="daily-task-progress-track">
                   <span [style.width.%]="dailyTaskProgress(manager)"></span>
                 </div>
@@ -431,6 +434,9 @@
                 <span>Обработано за день</span>
                 <strong>{{ dailyTaskCompleted(manager) }} из {{ dailyTaskTotal(manager) }} · {{ dailyTaskProgress(manager) }}%</strong>
               </div>
+              <small>{{ dailyTaskBalance(manager) }}</small>
+              <small>{{ dailyTaskHandledBreakdown(manager) }}</small>
+              <small>{{ dailyTaskRemainingBreakdown(manager) }}</small>
               <div class="daily-task-progress-track">
                 <span [style.width.%]="dailyTaskProgress(manager)"></span>
               </div>

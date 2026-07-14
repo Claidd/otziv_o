@@ -33,4 +33,7 @@ export interface DailyWorkProgress {
   workloadScore?: number;
   botChangeCount?: number;
   botBlockCount?: number;
+  reached100?: boolean;
+  firstReached100At?: string | null;
+  lastReached100At?: string | null;
 }

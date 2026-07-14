@@ -21,6 +21,13 @@ type EfficiencyBadge = {
   hint: string;
 };
 
+type StatRow = {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: 'neutral' | 'good' | 'warn';
+};
+
 type TeamSection = {
   key: TeamRole;
   title: string;
@@ -93,7 +100,7 @@ export class TeamComponent {
     }
   }
 
-  statRows(role: TeamRole, member: TeamMember): Array<{ label: string; value: string }> {
+  statRows(role: TeamRole, member: TeamMember): StatRow[] {
     if (role === 'manager') {
       if (!this.hasStats(member)) {
         return [];
@@ -107,7 +114,7 @@ export class TeamComponent {
     }
 
     if (role === 'worker') {
-      const rows = [
+      const rows: StatRow[] = [
         { label: 'ЗП', value: this.money(member.sum1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) },
@@ -116,16 +123,34 @@ export class TeamComponent {
       const progress = member.dailyProgress;
       if (progress?.visible) {
         if ((progress.recoveryCreatedCount || 0) > 0) {
-          rows.push({ label: 'Восст. создано', value: this.count(progress.recoveryCreatedCount) });
-        }
-        if ((progress.botChangeCount || 0) > 0 || (progress.botBlockCount || 0) > 0) {
           rows.push({
-            label: 'Боты',
-            value: `смена ${this.formatNumber(progress.botChangeCount)} / блок ${this.formatNumber(progress.botBlockCount)}`
+            label: 'Восст. создано',
+            value: this.count(progress.recoveryCreatedCount),
+            hint: 'Сколько задач восстановления создали специалисту за выбранный день.'
+          });
+        }
+        if ((progress.botChangeCount || 0) > 0) {
+          rows.push({
+            label: 'Смена бота',
+            value: this.count(progress.botChangeCount),
+            hint: 'Сколько раз специалист нажал «смена» у аккаунта.'
+          });
+        }
+        if ((progress.botBlockCount || 0) > 0) {
+          rows.push({
+            label: 'Блок бота',
+            value: this.count(progress.botBlockCount),
+            tone: 'warn',
+            hint: 'Сколько раз специалист увёл аккаунт в блок.'
           });
         }
         if ((progress.orderOverdueCount || 0) > 0) {
-          rows.push({ label: 'Просрочки заказов', value: this.count(progress.orderOverdueCount) });
+          rows.push({
+            label: 'Проср. заказов',
+            value: this.count(progress.orderOverdueCount),
+            tone: 'warn',
+            hint: 'Заказы, которые не были выполнены день-в-день.'
+          });
         }
       }
       return rows.filter((row) => row.label === 'ЗП' || row.value !== this.count(0));
@@ -181,6 +206,33 @@ export class TeamComponent {
         value: this.formatNumber(total),
         tone: 'neutral',
         hint: 'Всего карточек в расчёте за день: закрытые + активные сейчас.'
+      });
+
+      rows.push({
+        label: '100% достигал',
+        value: progress.reached100 ? 'Да' : 'Нет',
+        tone: progress.reached100 ? 'good' : 'neutral',
+        hint: 'Показывает, доходил ли специалист хотя бы один раз за выбранный день до 100% выполнения задач. Не сбрасывается, если позже пришли новые карточки.'
+      });
+    }
+
+    const firstReached100At = this.formatTime(progress.firstReached100At);
+    if (firstReached100At) {
+      rows.push({
+        label: 'Первый 100%',
+        value: firstReached100At,
+        tone: 'good',
+        hint: 'Время, когда специалист впервые за день закрыл все доступные карточки.'
+      });
+    }
+
+    const lastReached100At = this.formatTime(progress.lastReached100At);
+    if (lastReached100At && lastReached100At !== firstReached100At) {
+      rows.push({
+        label: 'Последний 100%',
+        value: lastReached100At,
+        tone: 'good',
+        hint: 'Последнее время за день, когда специалист снова доходил до 100% после новых задач.'
       });
     }
 
@@ -279,6 +331,9 @@ export class TeamComponent {
       : 'День закрыт';
     const median = this.formatDuration(progress.medianCloseSeconds);
     const activeWork = this.formatDuration(progress.activeWorkSeconds);
+    if ((progress.active || 0) > 0 && progress.reached100) {
+      return `${base} · 100% был`;
+    }
     if ((progress.orderOverdueCount || 0) > 0) {
       return `${base} · проср. заказов ${this.formatNumber(progress.orderOverdueCount)}`;
     }

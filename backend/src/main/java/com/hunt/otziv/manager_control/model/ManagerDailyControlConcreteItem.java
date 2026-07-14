@@ -129,6 +129,15 @@ public class ManagerDailyControlConcreteItem {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
+    @Column(name = "automatic_resolution", nullable = false)
+    private boolean automaticResolution;
+
+    @Column(name = "resolved_episode_count", nullable = false) private long resolvedEpisodeCount;
+    @Column(name = "action_taken_episode_count", nullable = false) private long actionTakenEpisodeCount;
+    @Column(name = "deferred_episode_count", nullable = false) private long deferredEpisodeCount;
+    @Column(name = "acknowledged_episode_count", nullable = false) private long acknowledgedEpisodeCount;
+    @Column(name = "auto_closed_episode_count", nullable = false) private long autoClosedEpisodeCount;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

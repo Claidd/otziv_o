@@ -72,6 +72,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -162,6 +163,8 @@ class ManagerControlServiceTest {
     private ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     @Mock
     private ManagerDailyControlEventRepository dailyControlEventRepository;
+    @Spy
+    private ManagerActionBalanceService managerActionBalanceService = new ManagerActionBalanceService();
     @Mock
     private LeadsRepository leadsRepository;
     @Mock
@@ -169,12 +172,6 @@ class ManagerControlServiceTest {
 
     @InjectMocks
     private ManagerControlService service;
-
-    @Test
-    void actionProgressTotalEqualsCompletedPlusCurrentlyPendingActions() {
-        assertEquals(20L, ManagerControlService.calculateActionTotalCount(16L, 4L));
-        assertEquals(22L, ManagerControlService.calculateActionTotalCount(22L, 0L));
-    }
 
     @Test
     void concreteMessageSlaUsesActualFirstObservedTime() throws Exception {

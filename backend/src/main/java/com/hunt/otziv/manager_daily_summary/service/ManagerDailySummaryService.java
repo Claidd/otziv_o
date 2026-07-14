@@ -2,19 +2,18 @@ package com.hunt.otziv.manager_daily_summary.service;
 
 import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
-import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
-import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
+import com.hunt.otziv.manager_control.dto.ManagerActionBalance;
+import com.hunt.otziv.manager_control.service.ManagerActionBalanceService;
+import com.hunt.otziv.manager_control.service.ManagerControlService;
 import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
-import com.hunt.otziv.manager_control.model.ManagerDailyControlGroup;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
-import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
@@ -52,9 +51,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ManagerDailySummaryService {
 
-    public static final String FORMULA_VERSION = "manager-v2";
+    public static final String FORMULA_VERSION = "manager-v3";
     private static final long REPLY_SLA_SECONDS = Duration.ofMinutes(30).toSeconds();
     private static final long EVENT_TAIL_SECONDS = 60;
+    private static final long REPLY_LOOKBACK_DAYS = 7;
 
     private final ManagerRepository managerRepository;
     private final ManagerPerformanceService performanceService;
@@ -62,12 +62,13 @@ public class ManagerDailySummaryService {
     private final ManagerDailyControlItemRepository itemRepository;
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ClientChatMessageRepository messageRepository;
-    private final ClientChatUnansweredItemRepository unansweredRepository;
     private final ManagerSiteActivityEventRepository activityRepository;
     private final ManagerPerformanceDailyRepository dailyRepository;
     private final AppSettingService appSettingService;
     private final JdbcTemplate jdbcTemplate;
     private final ManagerQueueStateService queueStateService;
+    private final ManagerControlService managerControlService;
+    private final ManagerActionBalanceService managerActionBalanceService;
     private final GamificationScoreLedgerRepository scoreLedgerRepository;
     private final GamificationEventService gamificationEventService;
 
@@ -76,6 +77,9 @@ public class ManagerDailySummaryService {
         LocalDate date = requestedDate == null ? LocalDate.now() : requestedDate;
         LocalDateTime from = date.atStartOfDay();
         LocalDateTime to = date.plusDays(1).atStartOfDay();
+        if (date.equals(LocalDate.now())) {
+            managerControlService.synchronizeDailySnapshot(date);
+        }
         Map<Long, ManagerPerformanceScoreResponse> scores = performanceService.score(date).stream()
                 .filter(row -> row.managerId() != null)
                 .collect(Collectors.toMap(ManagerPerformanceScoreResponse::managerId, Function.identity(), (left, right) -> left));
@@ -117,14 +121,17 @@ public class ManagerDailySummaryService {
         ManagerDailyControl control = controlRepository.findByControlDateAndManager(date, manager).orElse(null);
         List<ManagerDailyControlItem> items = control == null ? List.of() : itemRepository.findByControl(control);
         List<ManagerDailyControlConcreteItem> concrete = control == null ? List.of() : concreteItemRepository.findByControl(control);
-        TaskStats tasks = taskStats(items, concrete);
-        ReplyStats replies = replyStats(messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(manager.getId(), from, to));
+        ManagerActionBalance tasks = managerActionBalanceService.calculate(items, concrete);
+        List<ClientChatMessage> dayMessages = messageRepository
+                .findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(manager.getId(), from, to);
+        ReplyStats replies = replyStats(
+                messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+                        manager.getId(), from.minusDays(REPLY_LOOKBACK_DAYS), to),
+                from,
+                to
+        );
         ProblemStats problems = problemStats(concrete);
-        ActivityStats activity = activityStats(manager.getId(), from, to,
-                messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(manager.getId(), from, to));
-        long unanswered = unansweredRepository.countByManagerAndStatusAndLastClientMessageAtLessThanEqual(
-                manager, ClientChatUnansweredStatus.OPEN, to.minusNanos(1));
-
+        ActivityStats activity = activityStats(manager.getId(), from, to, dayMessages);
         ManagerPerformanceDaily daily = dailyRepository.findBySummaryDateAndManager_Id(date, manager.getId())
                 .orElseGet(ManagerPerformanceDaily::new);
         daily.setSummaryDate(date);
@@ -136,15 +143,18 @@ public class ManagerDailySummaryService {
         daily.setGrade(score == null ? grade(0) : score.grade());
         daily.setFormulaVersion(FORMULA_VERSION);
         daily.setTaskTotal(tasks.total());
-        daily.setTaskCompleted(tasks.completed());
-        daily.setTaskOpen(tasks.open());
-        daily.setTaskProgressPercent(percent(tasks.completed(), tasks.total()));
-        daily.setOverdueCount(items.stream()
-                .filter(item -> "OVERDUE_ORDERS".equals(item.getReasonCode()))
-                .mapToLong(ManagerDailyControlItem::getCount)
-                .sum());
-        daily.setRiskCount(score == null ? 0 : Math.max(0, score.backlogCount() - score.openCount() - unanswered));
-        daily.setUnansweredCount(unanswered);
+        daily.setTaskCompleted(tasks.handledByManager());
+        daily.setTaskOpen(tasks.remaining());
+        daily.setTaskAutoClosed(tasks.autoClosed());
+        daily.setTaskResolved(tasks.resolved());
+        daily.setTaskActionTaken(tasks.actionTaken());
+        daily.setTaskDeferred(tasks.deferred());
+        daily.setTaskAcknowledged(tasks.acknowledged());
+        daily.setTaskProgressPercent(percent(tasks.handledByManager(), tasks.total()));
+        daily.setOverdueCount(tasks.overdueRemaining());
+        daily.setRiskCount(tasks.riskRemaining());
+        daily.setUnansweredCount(tasks.unansweredRemaining());
+        daily.setTaskOtherOpen(tasks.otherRemaining());
         daily.setFirstReplyCount(replies.first().count());
         daily.setFirstReplyTotalSeconds(replies.first().totalSeconds());
         daily.setFirstReplyAverageSeconds(replies.first().averageSeconds());
@@ -184,6 +194,7 @@ public class ManagerDailySummaryService {
         daily.setDayStatus(stars >= 3 ? "IDEAL" : stars >= 2 ? "COMPLETED" : "NOT_COMPLETED");
         daily.setAggregationStatus(finalizeDay ? "VERIFIED" : "CALCULATED");
         daily.setFinalizedAt(finalizeDay ? LocalDateTime.now() : null);
+        daily.setSnapshotAt(LocalDateTime.now());
         ManagerPerformanceDaily saved = dailyRepository.save(daily);
         if (finalizeDay && stars >= 2) {
             gamificationEventService.recordManagerMilestone(GamificationEventService.MANAGER_DAY_COMPLETED, manager,
@@ -194,23 +205,7 @@ public class ManagerDailySummaryService {
         return saved;
     }
 
-    private TaskStats taskStats(List<ManagerDailyControlItem> items, List<ManagerDailyControlConcreteItem> concrete) {
-        if (!concrete.isEmpty()) {
-            long completed = concrete.stream().filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN).count();
-            return new TaskStats(concrete.size(), completed, concrete.size() - completed);
-        }
-        List<ManagerDailyControlItem> actionItems = items.stream()
-                .filter(item -> item.getGroup() == ManagerDailyControlGroup.ACTION)
-                .toList();
-        long total = actionItems.stream().mapToLong(ManagerDailyControlItem::getCount).sum();
-        long completed = actionItems.stream()
-                .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN)
-                .mapToLong(ManagerDailyControlItem::getCount)
-                .sum();
-        return new TaskStats(total, completed, Math.max(0, total - completed));
-    }
-
-    private ReplyStats replyStats(List<ClientChatMessage> messages) {
+    private ReplyStats replyStats(List<ClientChatMessage> messages, LocalDateTime from, LocalDateTime to) {
         Map<String, List<ClientChatMessage>> byChat = messages.stream()
                 .filter(message -> message.getChatId() != null)
                 .collect(Collectors.groupingBy(message -> message.getPlatform() + ":" + message.getChatId()));
@@ -227,10 +222,12 @@ public class ManagerDailySummaryService {
                 }
                 if (message.getSenderRole() == ClientChatSenderRole.STAFF && waitingSince != null) {
                     long seconds = businessSeconds(waitingSince, message.getMessageAt());
-                    allDurations.add(seconds);
-                    if (!firstReplyCaptured) {
-                        firstDurations.add(seconds);
-                        firstReplyCaptured = true;
+                    if (!message.getMessageAt().isBefore(from) && message.getMessageAt().isBefore(to)) {
+                        allDurations.add(seconds);
+                        if (!firstReplyCaptured) {
+                            firstDurations.add(seconds);
+                            firstReplyCaptured = true;
+                        }
                     }
                     waitingSince = null;
                 }
@@ -241,6 +238,8 @@ public class ManagerDailySummaryService {
 
     private ProblemStats problemStats(List<ManagerDailyControlConcreteItem> items) {
         List<ManagerDailyControlConcreteItem> problems = items.stream()
+                .filter(item -> item.getParentItem() != null)
+                .filter(item -> item.getParentItem().getItemType() != com.hunt.otziv.manager_control.model.ManagerDailyControlItemType.ORDER_STATUS)
                 .filter(item -> !"CLIENT_CHAT_UNANSWERED".equals(item.getEntityType()))
                 .filter(item -> !"RISK".equals(item.getEntityType()))
                 .toList();
@@ -462,21 +461,22 @@ public class ManagerDailySummaryService {
         return new ManagerDailySummaryResponse(
                 daily.getSummaryDate(), daily.getManager().getId(), daily.getManagerUserId(), daily.getManagerName(),
                 daily.getAdjustedScore(), daily.getGrade(), daily.getTaskTotal(), daily.getTaskCompleted(), daily.getTaskOpen(),
-                daily.getTaskProgressPercent(), daily.getOverdueCount(), daily.getRiskCount(), daily.getUnansweredCount(),
+                daily.getTaskAutoClosed(), daily.getTaskResolved(), daily.getTaskActionTaken(), daily.getTaskDeferred(),
+                daily.getTaskAcknowledged(), daily.getTaskProgressPercent(), daily.getOverdueCount(), daily.getRiskCount(), daily.getUnansweredCount(),
+                daily.getTaskOtherOpen(),
                 daily.getFirstReplyAverageSeconds(), daily.getFirstReplyMedianSeconds(), daily.getAllReplyAverageSeconds(),
                 daily.getAllReplyMedianSeconds(), daily.getAllReplyP90Seconds(), daily.getAllReplyCount(), daily.getRepliesInSla(),
                 daily.getProblemCount(), daily.getProblemResolvedCount(), daily.getProblemResolutionAverageSeconds(),
                 daily.getSiteActiveSeconds(), daily.getMessengerActiveSeconds(), daily.getConfirmedActiveSeconds(),
                 daily.getLeadActionCount(), daily.getTargetSlaCount(), daily.getTargetSlaMetCount(), daily.getHardSlaBreachCount(),
                 daily.getControlledSeconds(), daily.getCleanQueueSeconds(), daily.getDayStars(), daily.getDayStatus(), daily.getXpEarned(),
-                daily.getAggregationStatus());
+                daily.getAggregationStatus(), daily.getSnapshotAt());
     }
 
     private LocalDateTime min(LocalDateTime left, LocalDateTime right) { return left.isBefore(right) ? left : right; }
     private LocalDateTime max(LocalDateTime left, LocalDateTime right) { return left.isAfter(right) ? left : right; }
     private long number(Long value) { return value == null ? 0L : value; }
 
-    private record TaskStats(long total, long completed, long open) {}
     private record ReplyStats(Distribution first, Distribution all) {}
     private record Distribution(long count, long totalSeconds, long averageSeconds, long medianSeconds, long p90Seconds, long inSla, String histogram) {
         private Distribution(long count, long totalSeconds, long averageSeconds, long medianSeconds, long p90Seconds, String histogram) {

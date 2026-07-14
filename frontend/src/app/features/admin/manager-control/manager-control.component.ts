@@ -33,6 +33,7 @@ import { ToastService } from '../../../shared/toast.service';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { AuthService } from '../../../core/auth.service';
 import { ManagerPerformanceScore } from '../../../core/cabinet.api';
+import { managerActionBalanceView } from './manager-action-balance';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -151,7 +152,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.load();
+    this.load({ sync: true });
   }
 
   load(options: { silent?: boolean; sync?: boolean } = {}): void {
@@ -286,7 +287,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   dailyTaskTotal(manager: ManagerControlManager): number {
-    return Math.max(0, manager.actionTotalCount ?? 0);
+    return managerActionBalanceView(manager).total;
   }
 
   dailyTaskProgress(manager: ManagerControlManager): number {
@@ -294,18 +295,31 @@ export class ManagerControlComponent implements OnInit {
     if (total === 0) {
       return 100;
     }
-    return Math.max(0, Math.min(100, manager.actionProgressPercent ?? Math.round((manager.actionCompletedCount ?? 0) * 100 / total)));
+    return Math.max(0, Math.min(100, Math.round(managerActionBalanceView(manager).handled * 100 / total)));
   }
 
   dailyTaskCompleted(manager: ManagerControlManager): number {
-    return Math.max(0, manager.actionCompletedCount ?? 0);
+    return managerActionBalanceView(manager).handled;
   }
 
   dailyTaskProgressExplanation(manager: ManagerControlManager): string {
-    const total = this.dailyTaskTotal(manager);
-    const completed = this.dailyTaskCompleted(manager);
-    const remaining = Math.max(0, total - completed);
-    return `За день поступило: ${total}. Обработано: ${completed}. Остаётся к действию: ${remaining}.`;
+    const balance = managerActionBalanceView(manager);
+    return `Всего к обработке: ${balance.total}. Обработано менеджером: ${balance.handled}. Снято автоматически: ${balance.autoClosed}. Остаётся к действию: ${balance.remaining}.`;
+  }
+
+  dailyTaskBalance(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Баланс: ${balance.total} = ${balance.handled} обработано + ${balance.autoClosed} автоматически + ${balance.remaining} осталось`;
+  }
+
+  dailyTaskHandledBreakdown(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Обработано: решено ${balance.resolved} · действие выполнено ${balance.actionTaken} · отложено ${balance.deferred} · принято ${balance.acknowledged}`;
+  }
+
+  dailyTaskRemainingBreakdown(manager: ManagerControlManager): string {
+    const balance = managerActionBalanceView(manager);
+    return `Осталось: просрочки ${balance.overdue} · риски ${balance.risks} · без ответа ${balance.unanswered} · прочее ${balance.other}`;
   }
 
   queueDuration(seconds: number): string {

@@ -97,9 +97,14 @@
               }
 
               @if (statRows(section.key, member).length) {
-                <dl>
+                <dl class="stats-grid">
                   @for (row of statRows(section.key, member); track row.label) {
-                    <div>
+                    <div
+                      class="stat-cell"
+                      [class.warn]="row.tone === 'warn'"
+                      [class.good]="row.tone === 'good'"
+                      [attr.title]="row.hint || row.label"
+                    >
                       <dt>{{ row.label }}</dt>
                       <dd>{{ row.value }}</dd>
                     </div>

@@ -22,6 +22,8 @@ public class ManagerSummaryFormatter {
         long averageScore = Math.round(managers.stream().mapToInt(ManagerDailySummaryResponse::score).average().orElse(0));
         long tasks = managers.stream().mapToLong(ManagerDailySummaryResponse::taskTotal).sum();
         long completed = managers.stream().mapToLong(ManagerDailySummaryResponse::taskCompleted).sum();
+        long autoClosed = managers.stream().mapToLong(ManagerDailySummaryResponse::taskAutoClosed).sum();
+        long remaining = managers.stream().mapToLong(ManagerDailySummaryResponse::taskOpen).sum();
         long unanswered = managers.stream().mapToLong(ManagerDailySummaryResponse::unansweredCount).sum();
         long replies = managers.stream().mapToLong(ManagerDailySummaryResponse::replyCount).sum();
         long replySeconds = managers.stream().mapToLong(row -> row.allReplyAverageSeconds() * row.replyCount()).sum();
@@ -32,8 +34,12 @@ public class ManagerSummaryFormatter {
                 .append(managers.getFirst().date().format(DATE)).append("</b>\n\n")
                 .append("👥 Менеджеров: <b>").append(managers.size()).append("</b>\n")
                 .append("🏅 Средний рейтинг: <b>").append(averageScore).append("/100</b>\n")
-                .append("✅ Выполнено задач: <b>").append(completed).append(" из ").append(tasks).append("</b>\n")
-                .append("💬 Среднее время всех ответов: <b>")
+                .append("✅ Обработано за день: <b>").append(completed).append(" из ").append(tasks).append("</b>\n")
+                .append("📌 Осталось к действию: <b>").append(remaining).append("</b>\n");
+        if (autoClosed > 0) {
+            result.append("🤖 Снято автоматически: <b>").append(autoClosed).append("</b>\n");
+        }
+        result.append("💬 Среднее время всех ответов: <b>")
                 .append(duration(replies == 0 ? 0 : Math.round(replySeconds / (double) replies))).append("</b>\n")
                 .append("📭 Без ответа: <b>").append(unanswered).append("</b>");
         for (ManagerDailySummaryResponse manager : managers) {
@@ -43,19 +49,24 @@ public class ManagerSummaryFormatter {
     }
 
     private String formatManager(ManagerDailySummaryResponse row) {
-        int delta = dailyRepository.findTopByManager_IdAndSummaryDateLessThanOrderBySummaryDateDesc(row.managerId(), row.date())
-                .map(previous -> row.score() - previous.getAdjustedScore()).orElse(0);
+        var previous = dailyRepository.findTopByManager_IdAndSummaryDateLessThanOrderBySummaryDateDesc(row.managerId(), row.date());
         var week = dailyRepository.findByManager_IdAndSummaryDateBetween(row.managerId(), row.date().minusDays(7), row.date().minusDays(1));
-        int weekAverage = (int) Math.round(week.stream().mapToInt(item -> item.getAdjustedScore()).average().orElse(row.score()));
-        int weekDelta = row.score() - weekAverage;
+        String dayDelta = previous.map(item -> delta(row.score() - item.getAdjustedScore())).orElse("нет данных");
+        String weekDelta = week.isEmpty()
+                ? "нет данных"
+                : signed(row.score() - (int) Math.round(week.stream().mapToInt(item -> item.getAdjustedScore()).average().orElse(row.score())));
         String slaResult = row.replyCount() == 0
                 ? "нет данных"
                 : Math.round(row.repliesInSla() * 100.0 / row.replyCount()) + "%";
         return "👤 <b>" + escape(row.managerName()) + "</b>\n"
-                + "🏅 " + row.grade() + " — <b>" + row.score() + "/100</b> " + delta(delta) + "\n"
-                + "📈 К среднему за 7 дней: <b>" + signed(weekDelta) + "</b>\n"
-                + "✅ Задачи: <b>" + row.taskCompleted() + " из " + row.taskTotal() + "</b> ("
+                + "🏅 " + row.grade() + " — <b>" + row.score() + "/100</b> " + dayDelta + "\n"
+                + "📈 К среднему за 7 дней: <b>" + weekDelta + "</b>\n"
+                + "✅ Обработано: <b>" + row.taskCompleted() + " из " + row.taskTotal() + "</b> ("
                 + row.taskProgressPercent().setScale(0, java.math.RoundingMode.HALF_UP) + "%)\n"
+                + handledBreakdown(row)
+                + "📌 Осталось к действию: <b>" + row.taskOpen() + "</b>\n"
+                + remainingBreakdown(row)
+                + (row.taskAutoClosed() > 0 ? "🤖 Снято автоматически: <b>" + row.taskAutoClosed() + "</b>\n" : "")
                 + "💬 Первый ответ: <b>" + duration(row.firstReplyAverageSeconds()) + "</b>, медиана "
                 + duration(row.firstReplyMedianSeconds()) + "\n"
                 + "↩️ Все ответы: <b>" + duration(row.allReplyAverageSeconds()) + "</b>, медиана "
@@ -68,6 +79,20 @@ public class ManagerSummaryFormatter {
                 + "⏱ Подтверждённая активность: <b>" + duration(row.confirmedActiveSeconds()) + "</b>\n"
                 + "├ сайт: " + duration(row.siteActiveSeconds()) + "\n"
                 + "└ мессенджеры вне сайта: " + duration(row.messengerActiveSeconds());
+    }
+
+    private String handledBreakdown(ManagerDailySummaryResponse row) {
+        return "├ решено: " + row.taskResolved() + "\n"
+                + "├ действие выполнено: " + row.taskActionTaken() + "\n"
+                + "├ отложено: " + row.taskDeferred() + "\n"
+                + "└ принято в работу: " + row.taskAcknowledged() + "\n";
+    }
+
+    private String remainingBreakdown(ManagerDailySummaryResponse row) {
+        return "├ просрочки: " + row.overdueCount() + "\n"
+                + "├ риски: " + row.riskCount() + "\n"
+                + "├ без ответа по SLA: " + row.unansweredCount() + "\n"
+                + "└ прочее: " + row.taskOtherOpen() + "\n";
     }
 
     private String delta(int value) {

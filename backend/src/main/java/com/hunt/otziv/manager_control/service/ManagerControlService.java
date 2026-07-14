@@ -265,6 +265,7 @@ public class ManagerControlService {
     private final ManagerDailyControlItemRepository dailyControlItemRepository;
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     private final ManagerDailyControlEventRepository dailyControlEventRepository;
+    private final ManagerActionBalanceService managerActionBalanceService;
     private final ManagerPerformanceService managerPerformanceService;
     private final GamificationEventService gamificationEventService;
     private final LeadsRepository leadsRepository;
@@ -278,7 +279,21 @@ public class ManagerControlService {
     public ManagerControlSummaryResponse syncToday(Principal principal, Authentication authentication) {
         reconcileClientMessagesForControl();
         invalidateManagerPerformance();
-        return today(principal, authentication, true);
+        ManagerControlSummaryResponse initial = today(principal, authentication, true);
+        for (ManagerControlManagerResponse row : initial.managers()) {
+            managerRepository.findById(row.managerId()).ifPresent(manager -> syncManagerActionConcreteItems(manager, LocalDate.now()));
+        }
+        return today(principal, authentication, false);
+    }
+
+    @Transactional
+    public void synchronizeDailySnapshot(LocalDate date) {
+        LocalDate snapshotDate = date == null ? LocalDate.now() : date;
+        reconcileClientMessagesForControl();
+        for (Manager manager : managerRepository.findAllWithUserAndImage()) {
+            managerControl(manager, snapshotDate, null, true);
+            syncManagerActionConcreteItems(manager, snapshotDate);
+        }
     }
 
     private ManagerControlSummaryResponse today(Principal principal, Authentication authentication, boolean persist) {
@@ -357,6 +372,16 @@ public class ManagerControlService {
                 manager.actionTotalCount(),
                 manager.actionCompletedCount(),
                 manager.actionProgressPercent(),
+                manager.actionAutoClosedCount(),
+                manager.actionRemainingCount(),
+                manager.actionResolvedCount(),
+                manager.actionTakenCount(),
+                manager.actionDeferredCount(),
+                manager.actionAcknowledgedCount(),
+                manager.actionOverdueRemainingCount(),
+                manager.actionRiskRemainingCount(),
+                manager.actionUnansweredRemainingCount(),
+                manager.actionOtherRemainingCount(),
                 manager.leadActionCount(),
                 manager.status(),
                 manager.criticalCount(),
@@ -561,10 +586,12 @@ public class ManagerControlService {
         requireCommentIfNeeded(item, actionType, comment);
         ManagerDailyControlItemStatus status = itemStatusForAction(actionType);
         acceptControlIfCurrentManager(control, principal, "Контроль принят первым действием");
+        recordItemEpisode(item, status, false);
         item.setStatus(status);
         item.setActionType(actionType);
         item.setComment(comment);
         item.setResolvedAt(status == ManagerDailyControlItemStatus.RESOLVED ? LocalDateTime.now() : null);
+        item.setAutomaticResolution(false);
         dailyControlItemRepository.save(item);
 
         if (control.getStartedAt() == null) {
@@ -635,6 +662,7 @@ public class ManagerControlService {
             concreteItem.setStatus(ManagerDailyControlItemStatus.OPEN);
             concreteItem.setActionType(null);
             concreteItem.setResolvedAt(null);
+            concreteItem.setAutomaticResolution(false);
             concreteItem.setFollowUpAt(null);
             concreteItem.setLastManualTouchAt(now);
             ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -665,9 +693,11 @@ public class ManagerControlService {
                     "Закрыть карточку можно после ответа специалиста или администратором/владельцем"
             );
         }
+        recordConcreteEpisode(concreteItem, status, false);
         concreteItem.setStatus(status);
         concreteItem.setActionType(actionType);
         concreteItem.setResolvedAt(status == ManagerDailyControlItemStatus.RESOLVED ? now : null);
+        concreteItem.setAutomaticResolution(false);
         boolean movedToReminder = false;
         if ("ORDER".equals(concreteItem.getEntityType()) && status != ManagerDailyControlItemStatus.RESOLVED) {
             concreteItem.setLastManualTouchAt(now);
@@ -811,11 +841,13 @@ public class ManagerControlService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.ACTION_TAKEN, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
         concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
         concreteItem.setLastManualTouchAt(now);
         concreteItem.setFollowUpAt(now.plusDays(MANUAL_FOLLOW_UP_DAYS));
         concreteItem.setResolvedAt(null);
+        concreteItem.setAutomaticResolution(false);
         String statusNote = applyOrderStatusAfterClientSend(concreteItem, order);
         concreteItem.setComment(limit("Сообщение клиенту отправлено через " + safe(result.channel()) + statusNote, 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -896,10 +928,12 @@ public class ManagerControlService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.ACTION_TAKEN, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
         concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
         concreteItem.setLastManualTouchAt(now);
         concreteItem.setResolvedAt(now);
+        concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setComment(limit("Ответ отправлен через " + safe(result.channel()) + ": " + message, 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -1247,10 +1281,12 @@ public class ManagerControlService {
             String eventComment
     ) {
         LocalDateTime now = LocalDateTime.now();
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
         concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
         concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
         concreteItem.setComment(limit(comment, 1000));
         concreteItem.setResolvedAt(now);
+        concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setLastManualTouchAt(now);
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
@@ -1943,23 +1979,12 @@ public class ManagerControlService {
         List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats = controlSync.control().getId() == null
                 ? List.of()
                 : workerExplanationStats(controlSync.control());
-        List<ManagerDailyControlItem> actionItems = controlSync.items().stream()
-                .filter(item -> item.getGroup() == ManagerDailyControlGroup.ACTION)
-                .toList();
-        long actionCompletedCount = actionItems.stream()
-                .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN)
-                .mapToLong(item -> Math.max(0, item.getCount()))
-                .sum();
-        long currentActionCount = problems.stream().filter(problem -> "ACTION".equals(problem.group()))
-                .mapToLong(ManagerControlProblemResponse::count).sum()
-                + sections.stream().filter(section -> "ACTION".equals(section.group()))
-                .mapToLong(ManagerControlSectionResponse::count).sum();
-        if (actionItems.isEmpty()) {
-            actionCompletedCount = 0;
-        }
-        // Keep the counters explainable in the UI: total for the day is always
-        // what has already been completed plus what currently remains to be done.
-        long actionTotalCount = calculateActionTotalCount(currentActionCount, actionCompletedCount);
+        List<ManagerDailyControlConcreteItem> balanceConcreteItems = controlSync.control().getId() == null
+                ? List.of()
+                : dailyControlConcreteItemRepository.findByControl(controlSync.control());
+        var actionBalance = managerActionBalanceService.calculate(controlSync.items(), balanceConcreteItems);
+        long actionCompletedCount = actionBalance.handledByManager();
+        long actionTotalCount = actionBalance.total();
         int actionProgressPercent = actionTotalCount <= 0
                 ? 100
                 : (int) Math.max(0, Math.min(100, Math.round(actionCompletedCount * 100D / actionTotalCount)));
@@ -1988,6 +2013,16 @@ public class ManagerControlService {
                 actionTotalCount,
                 actionCompletedCount,
                 actionProgressPercent,
+                actionBalance.autoClosed(),
+                actionBalance.remaining(),
+                actionBalance.resolved(),
+                actionBalance.actionTaken(),
+                actionBalance.deferred(),
+                actionBalance.acknowledged(),
+                actionBalance.overdueRemaining(),
+                actionBalance.riskRemaining(),
+                actionBalance.unansweredRemaining(),
+                actionBalance.otherRemaining(),
                 leadActionCount,
                 status,
                 criticalCount,
@@ -2006,8 +2041,21 @@ public class ManagerControlService {
         );
     }
 
-    static long calculateActionTotalCount(long currentActionCount, long actionCompletedCount) {
-        return Math.max(0, currentActionCount) + Math.max(0, actionCompletedCount);
+    private void syncManagerActionConcreteItems(Manager manager, LocalDate today) {
+        ManagerDailyControl control = dailyControlRepository.findByControlDateAndManager(today, manager).orElse(null);
+        if (control == null) {
+            return;
+        }
+        List<ManagerDailyControlItem> items = dailyControlItemRepository.findByControl(control);
+        for (ManagerDailyControlItem item : items) {
+            if (item == null
+                    || item.getGroup() != ManagerDailyControlGroup.ACTION
+                    || item.getItemType() == ManagerDailyControlItemType.ORDER_STATUS
+                    || item.getCount() <= 0) {
+                continue;
+            }
+            syncConcreteExamples(item, detailExamples(manager, item, today));
+        }
     }
 
     private List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats(ManagerDailyControl control) {
@@ -2180,6 +2228,7 @@ public class ManagerControlService {
                 item.setControl(control);
                 item.setItemKey(input.itemKey());
                 item.setStatus(ManagerDailyControlItemStatus.OPEN);
+                item.setAutomaticResolution(false);
                 created = true;
             }
             long previousCount = item.getCount();
@@ -2201,6 +2250,7 @@ public class ManagerControlService {
             boolean changed = applyControlItemSnapshot(item, input);
             if (shouldReopen || shouldReopenFollowUp || shouldReopenConcrete) {
                 item.setStatus(ManagerDailyControlItemStatus.OPEN);
+                item.setAutomaticResolution(false);
                 item.setActionType(null);
                 item.setComment(null);
                 item.setResolvedAt(null);
@@ -2221,8 +2271,10 @@ public class ManagerControlService {
 
         for (ManagerDailyControlItem item : existing.values()) {
             if (!activeKeys.contains(item.getItemKey()) && isOpenActionItem(item)) {
+                recordItemEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
                 item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
                 item.setResolvedAt(LocalDateTime.now());
+                item.setAutomaticResolution(true);
                 currentItems.add(dailyControlItemRepository.save(item));
                 saveEvent(control, item, null, ManagerDailyControlEventType.ITEM_RESOLVED, ManagerDailyControlActionType.RESOLVED, "Автоматически закрыто: пункт больше не требует внимания");
             } else if (!currentItems.contains(item)) {
@@ -2700,10 +2752,12 @@ public class ManagerControlService {
                     || freshKeys.contains(item.getEntityKey())) {
                 continue;
             }
+            recordConcreteEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
             item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
             item.setActionType(ManagerDailyControlActionType.RESOLVED);
             item.setComment("Группа привязана или проблема больше не актуальна");
             item.setResolvedAt(now);
+            item.setAutomaticResolution(true);
             item.setFollowUpAt(null);
             item.setLastManualTouchAt(null);
             dailyControlConcreteItemRepository.save(item);
@@ -2825,6 +2879,7 @@ public class ManagerControlService {
         concreteItem.setActionType(null);
         concreteItem.setComment(null);
         concreteItem.setResolvedAt(null);
+        concreteItem.setAutomaticResolution(false);
         concreteItem.setFollowUpAt(null);
         concreteItem.setLastManualTouchAt(null);
         clearWorkerTelegramState(concreteItem);
@@ -3057,6 +3112,49 @@ public class ManagerControlService {
         return true;
     }
 
+    private void recordItemEpisode(
+            ManagerDailyControlItem item,
+            ManagerDailyControlItemStatus outcome,
+            boolean automatic
+    ) {
+        if (item == null || item.getStatus() != ManagerDailyControlItemStatus.OPEN || outcome == null) {
+            return;
+        }
+        long count = Math.max(1, item.getCount());
+        if (automatic) {
+            item.setAutoClosedEpisodeCount(item.getAutoClosedEpisodeCount() + count);
+            return;
+        }
+        switch (outcome) {
+            case RESOLVED -> item.setResolvedEpisodeCount(item.getResolvedEpisodeCount() + count);
+            case ACTION_TAKEN -> item.setActionTakenEpisodeCount(item.getActionTakenEpisodeCount() + count);
+            case DEFERRED -> item.setDeferredEpisodeCount(item.getDeferredEpisodeCount() + count);
+            case ACKNOWLEDGED -> item.setAcknowledgedEpisodeCount(item.getAcknowledgedEpisodeCount() + count);
+            case OPEN -> { }
+        }
+    }
+
+    private void recordConcreteEpisode(
+            ManagerDailyControlConcreteItem item,
+            ManagerDailyControlItemStatus outcome,
+            boolean automatic
+    ) {
+        if (item == null || item.getStatus() != ManagerDailyControlItemStatus.OPEN || outcome == null) {
+            return;
+        }
+        if (automatic) {
+            item.setAutoClosedEpisodeCount(item.getAutoClosedEpisodeCount() + 1);
+            return;
+        }
+        switch (outcome) {
+            case RESOLVED -> item.setResolvedEpisodeCount(item.getResolvedEpisodeCount() + 1);
+            case ACTION_TAKEN -> item.setActionTakenEpisodeCount(item.getActionTakenEpisodeCount() + 1);
+            case DEFERRED -> item.setDeferredEpisodeCount(item.getDeferredEpisodeCount() + 1);
+            case ACKNOWLEDGED -> item.setAcknowledgedEpisodeCount(item.getAcknowledgedEpisodeCount() + 1);
+            case OPEN -> { }
+        }
+    }
+
     private void updateParentItemFromConcreteItems(ManagerDailyControlItem parentItem) {
         if (parentItem == null || parentItem.getGroup() != ManagerDailyControlGroup.ACTION) {
             return;
@@ -3076,11 +3174,13 @@ public class ManagerControlService {
             parentItem.setActionType(ManagerDailyControlActionType.RESOLVED);
             parentItem.setComment("Все конкретные карточки внутри пункта закрыты");
             parentItem.setResolvedAt(LocalDateTime.now());
+            parentItem.setAutomaticResolution(false);
         } else {
             parentItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
             parentItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
             parentItem.setComment("Все конкретные карточки внутри пункта обработаны");
             parentItem.setResolvedAt(null);
+            parentItem.setAutomaticResolution(false);
         }
         dailyControlItemRepository.save(parentItem);
     }

@@ -164,20 +164,61 @@ dt,
   color: var(--otziv-info);
 }
 
-dl {
+.stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
+  gap: 0.55rem;
+}
+
+.stat-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 3.15rem;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.82rem;
+  padding: 0.46rem 0.55rem;
+  background: var(--otziv-surface-gradient-neutral);
+}
+
+.stat-cell.good {
+  border-color: var(--otziv-surface-border-green);
+  background: var(--otziv-surface-gradient-green);
+}
+
+.stat-cell.warn {
+  border-color: var(--otziv-surface-border-yellow);
+  background: var(--otziv-surface-gradient-yellow);
 }
 
 dt {
-  font-size: 0.78rem;
-  font-weight: 800;
+  overflow: hidden;
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 dd {
-  margin: 0.15rem 0 0;
-  font-weight: 900;
+  overflow: hidden;
+  margin: 0.22rem 0 0;
+  color: var(--otziv-dark);
+  font-size: 0.88rem;
+  font-weight: 950;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-cell.warn dd {
+  color: var(--otziv-danger);
+}
+
+.stat-cell.good dd {
+  color: var(--otziv-success);
 }
 
 .status-list {
@@ -561,29 +602,29 @@ dd {
   }
 
   app-daily-progress-strip,
-  dl,
+  .stats-grid,
   .progress-details,
   .status-list,
   .edit-link {
     grid-column: 1 / -1;
   }
 
-  dl {
+  .stats-grid {
     gap: 0.38rem;
   }
 
-  dl > div {
+  .stat-cell {
+    min-height: 2.72rem;
     border-radius: 0.7rem;
-    padding: 0.42rem;
-    background: var(--otziv-white);
+    padding: 0.38rem 0.42rem;
   }
 
   dt {
-    font-size: 0.66rem;
+    font-size: 0.6rem;
   }
 
   dd {
-    margin-top: 0.12rem;
+    margin-top: 0.14rem;
     font-size: 0.72rem;
   }
 

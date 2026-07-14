@@ -11,12 +11,13 @@ import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
-import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.config.settings.AppSettingService;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
 import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
+import com.hunt.otziv.manager_control.service.ManagerControlService;
+import com.hunt.otziv.manager_control.service.ManagerActionBalanceService;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
@@ -47,12 +48,12 @@ class ManagerDailySummaryServiceTest {
     @Mock private ManagerDailyControlItemRepository itemRepository;
     @Mock private ManagerDailyControlConcreteItemRepository concreteItemRepository;
     @Mock private ClientChatMessageRepository messageRepository;
-    @Mock private ClientChatUnansweredItemRepository unansweredRepository;
     @Mock private ManagerSiteActivityEventRepository activityRepository;
     @Mock private ManagerPerformanceDailyRepository dailyRepository;
     @Mock private AppSettingService appSettingService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private ManagerQueueStateService queueStateService;
+    @Mock private ManagerControlService managerControlService;
     @Mock private GamificationScoreLedgerRepository scoreLedgerRepository;
     @Mock private GamificationEventService gamificationEventService;
 
@@ -62,8 +63,8 @@ class ManagerDailySummaryServiceTest {
     void setUp() {
         service = new ManagerDailySummaryService(
                 managerRepository, performanceService, controlRepository, itemRepository, concreteItemRepository,
-                messageRepository, unansweredRepository, activityRepository, dailyRepository, appSettingService, jdbcTemplate,
-                queueStateService, scoreLedgerRepository, gamificationEventService
+                messageRepository, activityRepository, dailyRepository, appSettingService, jdbcTemplate,
+                queueStateService, managerControlService, new ManagerActionBalanceService(), scoreLedgerRepository, gamificationEventService
         );
         when(appSettingService.getInt(anyString(), anyInt())).thenAnswer(invocation -> invocation.getArgument(1));
         when(dailyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -93,6 +94,28 @@ class ManagerDailySummaryServiceTest {
         assertEquals(1, response.replyCount());
         assertEquals(900, response.allReplyAverageSeconds());
         assertEquals(900, response.firstReplyAverageSeconds());
+        assertEquals(1, response.repliesInSla());
+    }
+
+    @Test
+    void replyTodayIncludesClientMessageFromPreviousDay() {
+        LocalDate date = LocalDate.of(2026, 7, 14);
+        Manager manager = manager();
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(performanceService.score(date)).thenReturn(List.of());
+        when(controlRepository.findByControlDateAndManager(date, manager)).thenReturn(Optional.empty());
+        when(dailyRepository.findBySummaryDateAndManager_Id(date, manager.getId())).thenReturn(Optional.empty());
+        when(activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(any(), any(), any())).thenReturn(List.of());
+        when(messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(any(), any(), any()))
+                .thenReturn(List.of(
+                        message(1L, ClientChatSenderRole.CLIENT, date.minusDays(1).atTime(23, 50)),
+                        message(2L, ClientChatSenderRole.STAFF, date.atTime(0, 10))
+                ));
+
+        var response = service.calculate(date, false).getFirst();
+
+        assertEquals(1, response.replyCount());
+        assertEquals(1200, response.allReplyAverageSeconds());
         assertEquals(1, response.repliesInSla());
     }
 

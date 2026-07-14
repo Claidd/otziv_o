@@ -13,10 +13,16 @@ public record ManagerDailySummaryResponse(
         long taskTotal,
         long taskCompleted,
         long taskOpen,
+        long taskAutoClosed,
+        long taskResolved,
+        long taskActionTaken,
+        long taskDeferred,
+        long taskAcknowledged,
         BigDecimal taskProgressPercent,
         long overdueCount,
         long riskCount,
         long unansweredCount,
+        long taskOtherOpen,
         long firstReplyAverageSeconds,
         long firstReplyMedianSeconds,
         long allReplyAverageSeconds,
@@ -39,6 +45,7 @@ public record ManagerDailySummaryResponse(
         int dayStars,
         String dayStatus,
         long xpEarned,
-        String aggregationStatus
+        String aggregationStatus,
+        java.time.LocalDateTime snapshotAt
 ) {
 }

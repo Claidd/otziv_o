@@ -283,6 +283,7 @@ public class StaffDailyProgressService {
         Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate);
         Map<Long, WorkerActivityStats> activity = activityStats(workerUserIds, safeDate);
         Map<Long, WorkerAuxStats> aux = auxStats(workerIds, workerUserIds, workerUserIdByWorkerId, safeDate);
+        Map<Long, Reached100State> reached100States = reached100States(workerIds, safeDate);
         syncLifecycle(activeItems, completed, workerUserIdByWorkerId);
 
         Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
@@ -293,7 +294,8 @@ public class StaffDailyProgressService {
                     ? WorkerActivityStats.empty()
                     : activity.getOrDefault(worker.workerUserId(), WorkerActivityStats.empty());
             WorkerAuxStats auxStats = aux.getOrDefault(worker.workerId(), WorkerAuxStats.empty());
-            DailyWorkProgressResponse response = responseForWorker(safeDate, activeStats, stats, activityStats, auxStats);
+            Reached100State reached100State = reached100States.getOrDefault(worker.workerId(), Reached100State.empty());
+            DailyWorkProgressResponse response = responseForWorker(safeDate, activeStats, stats, activityStats, auxStats, reached100State);
             result.put(worker.workerId(), response);
             saveDaily(worker, response);
         }
@@ -357,6 +359,17 @@ public class StaffDailyProgressService {
         int speedScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::speedScore).average().orElse(0));
         int disciplineScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::disciplineScore).average().orElse(0));
         int workloadScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::workloadScore).average().orElse(0));
+        boolean reached100 = visible.stream().anyMatch(DailyWorkProgressResponse::reached100);
+        LocalDateTime firstReached100At = visible.stream()
+                .map(DailyWorkProgressResponse::firstReached100At)
+                .filter(Objects::nonNull)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+        LocalDateTime lastReached100At = visible.stream()
+                .map(DailyWorkProgressResponse::lastReached100At)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
 
         return new DailyWorkProgressResponse(
                 true,
@@ -400,7 +413,10 @@ public class StaffDailyProgressService {
                 disciplineScore,
                 workloadScore,
                 visible.stream().mapToLong(DailyWorkProgressResponse::botChangeCount).sum(),
-                visible.stream().mapToLong(DailyWorkProgressResponse::botBlockCount).sum()
+                visible.stream().mapToLong(DailyWorkProgressResponse::botBlockCount).sum(),
+                reached100,
+                firstReached100At,
+                lastReached100At
         );
     }
 
@@ -409,15 +425,30 @@ public class StaffDailyProgressService {
             WorkerActiveStats activeStats,
             WorkerCompletionStats stats,
             WorkerActivityStats activityStats,
-            WorkerAuxStats auxStats
+            WorkerAuxStats auxStats,
+            Reached100State previousReached100
     ) {
         WorkerActiveStats safeActiveStats = activeStats == null ? WorkerActiveStats.empty() : activeStats;
         WorkerAuxStats safeAuxStats = auxStats == null ? WorkerAuxStats.empty() : auxStats;
+        Reached100State safeReached100 = previousReached100 == null ? Reached100State.empty() : previousReached100;
         long completed = stats.completed();
         long active = Math.max(0, safeActiveStats.active());
         long total = completed + active;
         int percent = total == 0 ? 100 : percentInt(completed, total);
         boolean checked = total == 0 || active == 0;
+        boolean reached100Now = total > 0 && active == 0;
+        LocalDateTime reached100At = reached100Now
+                ? (stats.lastCompletedAt() == null ? evaluationTime(date) : stats.lastCompletedAt())
+                : null;
+        boolean reached100 = safeReached100.reached100() || reached100Now;
+        LocalDateTime firstReached100At = safeReached100.firstReached100At();
+        if (firstReached100At == null && reached100Now) {
+            firstReached100At = reached100At;
+        }
+        LocalDateTime lastReached100At = safeReached100.lastReached100At();
+        if (reached100Now && reached100At != null && (lastReached100At == null || reached100At.isAfter(lastReached100At))) {
+            lastReached100At = reached100At;
+        }
         int speedScore = speedScore(stats);
         int disciplineScore = disciplineScore(total, stats.totalOverdue() + safeActiveStats.totalOverdue());
         int workloadScore = workloadScore(completed);
@@ -460,7 +491,10 @@ public class StaffDailyProgressService {
                 disciplineScore,
                 workloadScore,
                 safeAuxStats.botChange(),
-                safeAuxStats.botBlock()
+                safeAuxStats.botBlock(),
+                reached100,
+                firstReached100At,
+                lastReached100At
         );
     }
 
@@ -806,6 +840,30 @@ public class StaffDailyProgressService {
         return result;
     }
 
+    private Map<Long, Reached100State> reached100States(List<Long> workerIds, LocalDate date) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("workerIds", workerIds)
+                .addValue("date", date);
+        Map<Long, Reached100State> result = new HashMap<>();
+        jdbc.queryForList("""
+                SELECT worker_id, reached_100, first_reached_100_at, last_reached_100_at
+                FROM worker_daily_performance
+                WHERE progress_date = :date
+                  AND worker_id IN (:workerIds)
+                """, params).forEach(row -> result.put(
+                longValue(row.get("worker_id")),
+                new Reached100State(
+                        booleanValue(row.get("reached_100")),
+                        toLocalDateTime(row.get("first_reached_100_at")),
+                        toLocalDateTime(row.get("last_reached_100_at"))
+                )
+        ));
+        return result;
+    }
+
     private void syncLifecycle(
             List<ActiveWorkItem> activeItems,
             Map<Long, WorkerCompletionStats> completionStats,
@@ -927,6 +985,9 @@ public class StaffDailyProgressService {
                 .addValue("openedCount", response.openedCount())
                 .addValue("percent", BigDecimal.valueOf(response.percent()).setScale(2, RoundingMode.HALF_UP))
                 .addValue("checked", response.checked())
+                .addValue("reached100", response.reached100())
+                .addValue("firstReached100At", response.firstReached100At())
+                .addValue("lastReached100At", response.lastReached100At())
                 .addValue("orderCompletedCount", response.orderCompletedCount())
                 .addValue("nagulCompletedCount", response.nagulCompletedCount())
                 .addValue("publishCompletedCount", response.publishCompletedCount())
@@ -956,6 +1017,7 @@ public class StaffDailyProgressService {
                 INSERT INTO worker_daily_performance (
                     progress_date, worker_id, worker_user_id, worker_name,
                     active_count, completed_count, total_count, opened_count, progress_percent, checked,
+                    reached_100, first_reached_100_at, last_reached_100_at,
                     order_completed_count, nagul_completed_count, publish_completed_count,
                     bad_completed_count, recovery_completed_count, recovery_created_count,
                     order_overdue_count, total_overdue_count,
@@ -968,6 +1030,7 @@ public class StaffDailyProgressService {
                 VALUES (
                     :date, :workerId, :workerUserId, :workerName,
                     :active, :completed, :total, :openedCount, :percent, :checked,
+                    :reached100, :firstReached100At, :lastReached100At,
                     :orderCompletedCount, :nagulCompletedCount, :publishCompletedCount,
                     :badCompletedCount, :recoveryCompletedCount, :recoveryCreatedCount,
                     :orderOverdueCount, :totalOverdueCount,
@@ -986,6 +1049,24 @@ public class StaffDailyProgressService {
                     opened_count = VALUES(opened_count),
                     progress_percent = VALUES(progress_percent),
                     checked = VALUES(checked),
+                    reached_100 = CASE
+                        WHEN worker_daily_performance.reached_100 = 1 OR VALUES(reached_100) = 1 THEN 1
+                        ELSE 0
+                    END,
+                    first_reached_100_at = CASE
+                        WHEN VALUES(reached_100) = 1 THEN COALESCE(worker_daily_performance.first_reached_100_at, VALUES(first_reached_100_at))
+                        ELSE worker_daily_performance.first_reached_100_at
+                    END,
+                    last_reached_100_at = CASE
+                        WHEN VALUES(reached_100) = 1 THEN
+                            CASE
+                                WHEN worker_daily_performance.last_reached_100_at IS NULL THEN VALUES(last_reached_100_at)
+                                WHEN VALUES(last_reached_100_at) IS NULL THEN worker_daily_performance.last_reached_100_at
+                                WHEN VALUES(last_reached_100_at) > worker_daily_performance.last_reached_100_at THEN VALUES(last_reached_100_at)
+                                ELSE worker_daily_performance.last_reached_100_at
+                            END
+                        ELSE worker_daily_performance.last_reached_100_at
+                    END,
                     order_completed_count = VALUES(order_completed_count),
                     nagul_completed_count = VALUES(nagul_completed_count),
                     publish_completed_count = VALUES(publish_completed_count),
@@ -1026,7 +1107,7 @@ public class StaffDailyProgressService {
         jdbc.update("""
                 INSERT INTO worker_performance_monthly (
                     month_start, worker_id, worker_user_id, working_days, completed_count, active_count,
-                    total_count, opened_count, average_progress_percent, checked_days,
+                    total_count, opened_count, average_progress_percent, checked_days, reached_100_days,
                     order_completed_count, nagul_completed_count, publish_completed_count,
                     bad_completed_count, recovery_completed_count, recovery_created_count,
                     order_overdue_count, total_overdue_count,
@@ -1046,6 +1127,7 @@ public class StaffDailyProgressService {
                        SUM(d.opened_count),
                        AVG(d.progress_percent),
                        SUM(CASE WHEN d.checked = 1 THEN 1 ELSE 0 END),
+                       SUM(CASE WHEN d.reached_100 = 1 THEN 1 ELSE 0 END),
                        SUM(d.order_completed_count),
                        SUM(d.nagul_completed_count),
                        SUM(d.publish_completed_count),
@@ -1081,6 +1163,7 @@ public class StaffDailyProgressService {
                     opened_count = VALUES(opened_count),
                     average_progress_percent = VALUES(average_progress_percent),
                     checked_days = VALUES(checked_days),
+                    reached_100_days = VALUES(reached_100_days),
                     order_completed_count = VALUES(order_completed_count),
                     nagul_completed_count = VALUES(nagul_completed_count),
                     publish_completed_count = VALUES(publish_completed_count),
@@ -1291,6 +1374,19 @@ public class StaffDailyProgressService {
         return value instanceof Number number ? number.longValue() : 0L;
     }
 
+    private static boolean booleanValue(Object value) {
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+        if (value instanceof Number number) {
+            return number.longValue() != 0;
+        }
+        if (value instanceof byte[] bytes) {
+            return bytes.length > 0 && bytes[0] != 0;
+        }
+        return value != null && Boolean.parseBoolean(String.valueOf(value));
+    }
+
     private static String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value);
     }
@@ -1320,6 +1416,12 @@ public class StaffDailyProgressService {
     }
 
     public record WorkerProgressSubject(Long workerId, Long workerUserId, String workerName) {
+    }
+
+    private record Reached100State(boolean reached100, LocalDateTime firstReached100At, LocalDateTime lastReached100At) {
+        static Reached100State empty() {
+            return new Reached100State(false, null, null);
+        }
     }
 
     private record WorkerActiveStats(long active, long orderOverdue, long totalOverdue) {

@@ -49,10 +49,16 @@ public class ManagerPerformanceDaily {
     @Column(name = "task_total", nullable = false) private long taskTotal;
     @Column(name = "task_completed", nullable = false) private long taskCompleted;
     @Column(name = "task_open", nullable = false) private long taskOpen;
+    @Column(name = "task_auto_closed", nullable = false) private long taskAutoClosed;
+    @Column(name = "task_resolved", nullable = false) private long taskResolved;
+    @Column(name = "task_action_taken", nullable = false) private long taskActionTaken;
+    @Column(name = "task_deferred", nullable = false) private long taskDeferred;
+    @Column(name = "task_acknowledged", nullable = false) private long taskAcknowledged;
     @Column(name = "task_progress_percent", nullable = false, precision = 5, scale = 2) private BigDecimal taskProgressPercent;
     @Column(name = "overdue_count", nullable = false) private long overdueCount;
     @Column(name = "risk_count", nullable = false) private long riskCount;
     @Column(name = "unanswered_count", nullable = false) private long unansweredCount;
+    @Column(name = "task_other_open", nullable = false) private long taskOtherOpen;
     @Column(name = "first_reply_count", nullable = false) private long firstReplyCount;
     @Column(name = "first_reply_total_seconds", nullable = false) private long firstReplyTotalSeconds;
     @Column(name = "first_reply_average_seconds", nullable = false) private long firstReplyAverageSeconds;
@@ -83,6 +89,7 @@ public class ManagerPerformanceDaily {
     @Column(name = "xp_earned", nullable = false) private long xpEarned;
     @Column(name = "aggregation_status", nullable = false, length = 24) private String aggregationStatus;
     @Column(name = "finalized_at") private LocalDateTime finalizedAt;
+    @Column(name = "snapshot_at") private LocalDateTime snapshotAt;
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
     @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt;
 
@@ -92,7 +99,7 @@ public class ManagerPerformanceDaily {
         createdAt = now;
         updatedAt = now;
         if (grade == null) grade = "J";
-        if (formulaVersion == null) formulaVersion = "manager-v2";
+        if (formulaVersion == null) formulaVersion = "manager-v3";
         if (aggregationStatus == null) aggregationStatus = "CALCULATED";
         if (taskProgressPercent == null) taskProgressPercent = BigDecimal.ZERO;
         if (dayStatus == null) dayStatus = "IN_PROGRESS";

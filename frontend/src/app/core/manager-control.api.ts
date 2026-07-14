@@ -217,6 +217,16 @@ export interface ManagerControlManager {
   actionTotalCount: number;
   actionCompletedCount: number;
   actionProgressPercent: number;
+  actionAutoClosedCount?: number;
+  actionRemainingCount?: number;
+  actionResolvedCount?: number;
+  actionTakenCount?: number;
+  actionDeferredCount?: number;
+  actionAcknowledgedCount?: number;
+  actionOverdueRemainingCount?: number;
+  actionRiskRemainingCount?: number;
+  actionUnansweredRemainingCount?: number;
+  actionOtherRemainingCount?: number;
   leadActionCount: number;
   status: ManagerControlStatus;
   criticalCount: number;
@@ -276,10 +286,16 @@ export interface ManagerDailySummaryRow {
   taskTotal: number;
   taskCompleted: number;
   taskOpen: number;
+  taskAutoClosed?: number;
+  taskResolved?: number;
+  taskActionTaken?: number;
+  taskDeferred?: number;
+  taskAcknowledged?: number;
   taskProgressPercent: number;
   overdueCount: number;
   riskCount: number;
   unansweredCount: number;
+  taskOtherOpen?: number;
   firstReplyAverageSeconds: number;
   firstReplyMedianSeconds: number;
   allReplyAverageSeconds: number;
@@ -303,6 +319,7 @@ export interface ManagerDailySummaryRow {
   dayStatus: string;
   xpEarned: number;
   aggregationStatus: string;
+  snapshotAt?: string | null;
 }
 
 export interface ManagerDailySummaryPreview {
