@@ -1,6 +1,7 @@
 package com.hunt.otziv.gamification.controller;
 
 import com.hunt.otziv.gamification.dto.GamificationMyProgressResponse;
+import com.hunt.otziv.gamification.dto.GamificationLeaderboardResponse;
 import com.hunt.otziv.gamification.dto.GamificationRewardClaimRequest;
 import com.hunt.otziv.gamification.dto.GamificationRewardClaimResponse;
 import com.hunt.otziv.gamification.dto.GamificationRewardResponse;
@@ -34,6 +35,15 @@ public class ApiGamificationController {
             @RequestParam(value = "days", defaultValue = "7") int days
     ) {
         return userProgressService.myProgress(principal, days);
+    }
+
+    @GetMapping("/leaderboard")
+    @PreAuthorize("isAuthenticated()")
+    public GamificationLeaderboardResponse leaderboard(
+            Principal principal,
+            @RequestParam(value = "days", defaultValue = "7") int days
+    ) {
+        return userProgressService.leaderboard(principal, days);
     }
 
     @GetMapping("/rewards")

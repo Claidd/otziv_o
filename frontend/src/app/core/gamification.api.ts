@@ -48,6 +48,28 @@ export interface GamificationMyProgress {
   breakdown: GamificationMyBreakdown[];
 }
 
+export interface GamificationLeaderboardEntry {
+  rank: number;
+  actorUserId?: number | null;
+  actorName: string;
+  actorRole: string;
+  events: number;
+  points: number;
+  timelinessPercent: number;
+  currentUser: boolean;
+}
+
+export interface GamificationLeaderboard {
+  enabled: boolean;
+  from: string;
+  to: string;
+  days: number;
+  actorRole: string;
+  ownRank?: number | null;
+  totalActors: number;
+  entries: GamificationLeaderboardEntry[];
+}
+
 export interface GamificationReward {
   id: number;
   code: string;
@@ -94,6 +116,12 @@ export class GamificationApi {
 
   getMyProgress(days = 7): Observable<GamificationMyProgress> {
     return this.http.get<GamificationMyProgress>(`${appEnvironment.apiBaseUrl}/api/gamification/me`, {
+      params: { days }
+    });
+  }
+
+  getLeaderboard(days = 7): Observable<GamificationLeaderboard> {
+    return this.http.get<GamificationLeaderboard>(`${appEnvironment.apiBaseUrl}/api/gamification/leaderboard`, {
       params: { days }
     });
   }

@@ -37,7 +37,7 @@ public class ManagerSummaryNotificationService {
             log.info("Manager daily summary is calculated but delivery is disabled");
             return 0;
         }
-        String message = formatter.format(managers, true);
+        String message = formatter.format(managers, false);
         int sent = 0;
         for (User recipient : recipients()) {
             if (recipient.getTelegramChatId() == null || alreadySent(date, recipient)) continue;

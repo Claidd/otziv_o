@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import {
   GamificationApi,
+  GamificationLeaderboard,
   GamificationMyBreakdown,
   GamificationMyMission,
   GamificationMyProgress,
@@ -147,6 +148,29 @@ type ProgressDays = 1 | 7 | 30;
               </div>
             </section>
 
+            @if (leaderboard()?.enabled) {
+              <section class="leaderboard">
+                <div class="section-head leaderboard-head">
+                  <div>
+                    <h2>Лига {{ roleLabel(leaderboard()?.actorRole) }}</h2>
+                    <p>Сравниваются только участники одной роли за выбранный период.</p>
+                  </div>
+                  <strong>Ваше место: {{ leaderboard()?.ownRank || '—' }} из {{ leaderboard()?.totalActors || 0 }}</strong>
+                </div>
+                <div class="leaderboard-list">
+                  @for (entry of leaderboard()?.entries || []; track entry.actorUserId || $index) {
+                    <article [class.current]="entry.currentUser">
+                      <b>#{{ entry.rank }}</b>
+                      <div><strong>{{ entry.actorName }}</strong><small>{{ entry.events }} действий · в срок {{ entry.timelinessPercent }}%</small></div>
+                      <em>{{ entry.points }} XP</em>
+                    </article>
+                  } @empty {
+                    <p class="empty">В этой лиге пока нет начислений.</p>
+                  }
+                </div>
+              </section>
+            }
+
             <section class="breakdown">
               <div class="section-head">
                 <div>
@@ -196,6 +220,7 @@ type ProgressDays = 1 | 7 | 30;
     .missions,
     .breakdown,
     .rewards,
+    .leaderboard,
     .empty-state {
       border: 1px solid rgba(103, 116, 131, 0.12);
       border-radius: 0.5rem;
@@ -345,6 +370,7 @@ type ProgressDays = 1 | 7 | 30;
     .missions,
     .breakdown,
     .rewards,
+    .leaderboard,
     .empty-state {
       display: grid;
       gap: 0.85rem;
@@ -407,6 +433,15 @@ type ProgressDays = 1 | 7 | 30;
     .reward-card p, .reward-card small { margin: 0.25rem 0 0; color: var(--otziv-info); font-size: 0.76rem; font-weight: 700; }
     .reward-card button { min-height: 2.3rem; border: 0; border-radius: 0.45rem; color: #fff; background: var(--otziv-primary); font: inherit; font-weight: 900; }
     .reward-card button:disabled { color: var(--otziv-info); background: rgba(103, 116, 131, 0.14); }
+    .leaderboard-head { align-items: center; }
+    .leaderboard-head > strong { color: var(--otziv-primary); white-space: nowrap; }
+    .leaderboard-list { display: grid; gap: .55rem; }
+    .leaderboard-list article { display: grid; grid-template-columns: 2.75rem minmax(0, 1fr) auto; align-items: center; gap: .8rem; border: 1px solid rgba(103,116,131,.14); border-radius: .5rem; padding: .7rem .85rem; background: var(--otziv-field-background); }
+    .leaderboard-list article.current { border-color: color-mix(in srgb, var(--otziv-primary) 45%, transparent); background: color-mix(in srgb, var(--otziv-primary) 8%, var(--otziv-field-background)); }
+    .leaderboard-list article > b { color: var(--otziv-primary); font-size: 1.05rem; }
+    .leaderboard-list article div { display: grid; gap: .15rem; }
+    .leaderboard-list article small { color: var(--otziv-info); font-weight: 700; }
+    .leaderboard-list article em { color: var(--otziv-warning); font-style: normal; font-weight: 900; white-space: nowrap; }
     .claim-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     .claim-list span { border-radius: 999px; padding: 0.4rem 0.65rem; color: var(--otziv-info); background: rgba(103, 116, 131, 0.08); font-size: 0.74rem; }
 
@@ -461,6 +496,7 @@ export class GamificationProgressComponent {
   ];
   readonly days = signal<ProgressDays>(7);
   readonly progress = signal<GamificationMyProgress | null>(null);
+  readonly leaderboard = signal<GamificationLeaderboard | null>(null);
   readonly loading = signal(false);
   readonly wallet = signal<GamificationWallet | null>(null);
   readonly rewards = signal<GamificationReward[]>([]);
@@ -542,17 +578,19 @@ export class GamificationProgressComponent {
     this.loading.set(true);
     forkJoin({
       progress: this.api.getMyProgress(this.days()),
+      leaderboard: this.api.getLeaderboard(this.days()),
       wallet: this.api.getWallet(),
       rewards: this.api.getRewards(),
       claims: this.api.getMyClaims()
     }).subscribe({
-      next: ({ progress, wallet, rewards, claims }) => {
+      next: ({ progress, leaderboard, wallet, rewards, claims }) => {
         this.progress.set({
           ...progress,
           missions: progress.missions ?? [],
           breakdown: progress.breakdown ?? []
         });
         this.wallet.set(wallet);
+        this.leaderboard.set({ ...leaderboard, entries: leaderboard.entries ?? [] });
         this.rewards.set(rewards ?? []);
         this.claims.set(claims ?? []);
         this.loading.set(false);
