@@ -24,6 +24,7 @@ import {
 } from '../../core/worker.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
+import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
@@ -105,6 +106,7 @@ type WorkerBoardState = {
   selector: 'app-worker-board',
   imports: [
     AdminLayoutComponent,
+    DailyProgressStripComponent,
     FormsModule,
     GamificationMeCardComponent,
     LoadErrorCardComponent,

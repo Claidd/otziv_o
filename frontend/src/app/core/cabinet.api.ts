@@ -4,6 +4,7 @@ import { catchError, Observable, shareReplay, throwError } from 'rxjs';
 import { appEnvironment } from './app-environment';
 import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 import { AuthService } from './auth.service';
+import { DailyWorkProgress } from './daily-progress';
 import type {
   CreateManualPaymentTaskRequest,
   ManualPaymentTaskResponse,
@@ -151,6 +152,7 @@ export interface TeamMember {
   inCorrect?: number;
   intVigul?: number;
   publish?: number;
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface TeamResponse {

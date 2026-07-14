@@ -25,6 +25,12 @@ public class AppSettingService {
     public static final String WORKER_PUBLICATION_SESSION_INACTIVITY_MINUTES = "worker.publication-session.inactivity-minutes";
     public static final String WORKER_PUBLICATION_SESSION_BUSINESS_ZONE = "worker.publication-session.business-zone";
     public static final String WORKER_PUBLICATION_SESSION_DAY_END_TIME = "worker.publication-session.day-end-time";
+    public static final String WORKER_PROGRESS_ENABLED = "worker.progress.enabled";
+    public static final String WORKER_PROGRESS_VISIBLE_ROLES = "worker.progress.visible-roles";
+    public static final String WORKER_PROGRESS_RAW_RETENTION_DAYS = "worker.progress.raw-retention-days";
+    public static final String WORKER_PROGRESS_DAILY_RETENTION_DAYS = "worker.progress.daily-retention-days";
+    public static final String WORKER_PROGRESS_CLEANUP_ENABLED = "worker.progress.cleanup-enabled";
+    public static final String WORKER_PROGRESS_MONTHLY_AGGREGATE_ENABLED = "worker.progress.monthly-aggregate-enabled";
     public static final String TELEGRAM_REPORTS_MORNING_ENABLED = "telegram.reports.morning.enabled";
     public static final String TELEGRAM_REPORTS_MORNING_TIME = "telegram.reports.morning.time";
     public static final String TELEGRAM_REPORTS_MORNING_LAST_RUN_KEY = "telegram.reports.morning.last-run-key";

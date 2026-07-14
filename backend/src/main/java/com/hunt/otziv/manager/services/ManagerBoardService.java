@@ -24,6 +24,8 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -42,6 +44,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -107,6 +110,7 @@ public class ManagerBoardService {
     private final UserMetricSnapshotService metricSnapshotService;
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
+    private final StaffDailyProgressService staffDailyProgressService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -177,7 +181,8 @@ public class ManagerBoardService {
                 promoTextService.getPromoTextsForManager(
                         resolvePromoManagerId(principal, authentication),
                         promoSectionCode(normalizedSection)
-                )
+                ),
+                managerDailyProgress(principal, authentication, managerFilter)
         );
     }
 
@@ -658,6 +663,58 @@ public class ManagerBoardService {
             return visibleManagerIds(principal, authentication);
         }
         return Set.of(managerFilter.getId());
+    }
+
+    private DailyWorkProgressResponse managerDailyProgress(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter
+    ) {
+        if (!staffDailyProgressService.progressEnabled()
+                || (!managerPermissionService.hasRole(authentication, "ADMIN") && !managerPermissionService.hasRole(authentication, "OWNER"))) {
+            return null;
+        }
+
+        List<Long> userIds = managerProgressUsers(principal, authentication, managerFilter);
+        if (userIds.isEmpty()) {
+            return null;
+        }
+
+        LocalDate today = LocalDate.now();
+        if (managerFilter != null && managerFilter.getUser() != null && managerFilter.getUser().getId() != null) {
+            return staffDailyProgressService.managerProgressByUserIds(userIds, today)
+                    .get(managerFilter.getUser().getId());
+        }
+        return staffDailyProgressService.aggregateManagerProgressByUserIds(userIds, today);
+    }
+
+    private List<Long> managerProgressUsers(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter
+    ) {
+        if (managerFilter != null) {
+            User managerUser = managerFilter.getUser();
+            return managerUser == null || managerUser.getId() == null
+                    ? List.of()
+                    : List.of(managerUser.getId());
+        }
+
+        List<Manager> managers;
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            managers = managerService.getAllManagers();
+        } else if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            managers = resolveOwnerManagers(principal).stream().toList();
+        } else {
+            managers = List.of();
+        }
+        return managers.stream()
+                .map(Manager::getUser)
+                .filter(Objects::nonNull)
+                .map(User::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
     }
 
     private Manager resolveManagerFilter(Long managerId, Principal principal, Authentication authentication) {

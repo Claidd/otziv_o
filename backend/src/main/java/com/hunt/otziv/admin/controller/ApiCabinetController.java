@@ -32,6 +32,8 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -88,6 +90,7 @@ public class ApiCabinetController {
     private final PaymentProfileService paymentProfileService;
     private final ManualPaymentTaskService manualPaymentTaskService;
     private final ManagerPerformanceService managerPerformanceService;
+    private final StaffDailyProgressService staffDailyProgressService;
 
     @Value("${otziv.analytics.aggregates.read-enabled:false}")
     private boolean aggregateAnalyticsReadEnabled;
@@ -267,17 +270,17 @@ public class ApiCabinetController {
                                     .flatMap(manager -> manager.getUser().getWorkers().stream())
                                     .toList();
 
-                            return ownerTeamResponse(
+                            return withTeamDailyProgress(ownerTeamResponse(
                                     selectedDate,
                                     role,
                                     managers,
                                     marketologs,
                                     workers,
                                     operators
-                            );
+                            ), selectedDate, true);
                         }
 
-                        return new TeamResponse(
+                        return withTeamDailyProgress(new TeamResponse(
                                 selectedDate,
                                 shortRole(role),
                                 canManageUsers,
@@ -287,7 +290,7 @@ public class ApiCabinetController {
                                 personalService.getMarketologs(),
                                 personalService.gerWorkers(),
                                 personalService.gerOperators()
-                        );
+                        ), selectedDate, canManageUsers);
                     }
             );
         });
@@ -523,6 +526,53 @@ public class ApiCabinetController {
     private User currentUser(Principal principal) {
         return userService.findByUserName(principal.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+    }
+
+    private TeamResponse withTeamDailyProgress(TeamResponse response, LocalDate selectedDate, boolean visible) {
+        if (!visible || response == null || !staffDailyProgressService.progressEnabled()) {
+            return response;
+        }
+
+        Map<Long, DailyWorkProgressResponse> managerProgress = staffDailyProgressService.managerProgressByUserIds(
+                response.managers().stream()
+                        .map(ManagersListDTO::getUserId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList(),
+                selectedDate
+        );
+        response.managers().forEach(manager ->
+                manager.setDailyProgress(managerProgress.get(manager.getUserId()))
+        );
+
+        List<StaffDailyProgressService.WorkerProgressSubject> workerSubjects = response.workers().stream()
+                .filter(worker -> worker.getId() != null)
+                .map(worker -> new StaffDailyProgressService.WorkerProgressSubject(
+                        worker.getId(),
+                        worker.getUserId(),
+                        firstNonBlank(worker.getFio(), worker.getLogin())
+                ))
+                .toList();
+        Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.workerProgressBySubjects(
+                workerSubjects,
+                selectedDate
+        );
+        response.workers().forEach(worker ->
+                worker.setDailyProgress(workerProgress.get(worker.getId()))
+        );
+        return response;
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return null;
     }
 
     private String primaryRole(Authentication authentication) {

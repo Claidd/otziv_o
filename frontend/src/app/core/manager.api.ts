@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { appEnvironment } from './app-environment';
+import { DailyWorkProgress } from './daily-progress';
 import type {
   DeepCompanyResearchJob,
   ReputationSingleReviewDraftRequest,
@@ -286,6 +287,7 @@ export interface ManagerBoard {
   orderStatuses: string[];
   metrics: ManagerMetric[];
   promoTexts: string[];
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface ManagerOverdueStatus {

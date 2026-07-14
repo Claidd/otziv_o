@@ -2159,6 +2159,69 @@
               <section class="settings-section">
                 <div class="section-head">
                   <div>
+                    <h3>Прогресс дня и награды</h3>
+                    <p class="settings-hint">Норматив контроля ограничивает результат 100%. Каталог можно оставить выключенным, пока состав наград не утвержден.</p>
+                  </div>
+                  <span class="gamification-state" [class.enabled]="gamificationForm.controls.slaEnabled.value">
+                    {{ gamificationForm.controls.slaEnabled.value ? 'SLA считается' : 'SLA выключен' }}
+                  </span>
+                </div>
+
+                <div class="form-grid">
+                  <label class="checkbox wide" appTooltip="Включает накопление времени контроля очереди и расчет SLA менеджеров.">
+                    <input class="switch" type="checkbox" formControlName="slaEnabled">
+                    <span>Считать состояние очереди и SLA</span>
+                  </label>
+                  <label>
+                    <span>Норматив контроля, часов</span>
+                    <input type="number" min="1" max="24" step="1" formControlName="controlTargetHours">
+                  </label>
+                  <label>
+                    <span>Цель дня, %</span>
+                    <input type="number" min="1" max="100" step="1" formControlName="dayTargetPercent">
+                  </label>
+                  <label>
+                    <span>XP на уровень</span>
+                    <input type="number" min="100" step="1" formControlName="levelXp">
+                  </label>
+                  <label>
+                    <span>Жетон каждые уровни</span>
+                    <input type="number" min="2" step="1" formControlName="tokenLevelStep">
+                  </label>
+                  <label class="checkbox" appTooltip="Открывает сотрудникам каталог и возможность подавать заявки на награды.">
+                    <input class="switch" type="checkbox" formControlName="rewardsEnabled">
+                    <span>Каталог наград доступен сотрудникам</span>
+                  </label>
+                  <label class="checkbox" appTooltip="Показывает публичное сравнение результатов. Для пилота рекомендуется оставить выключенным.">
+                    <input class="switch" type="checkbox" formControlName="competitionEnabled">
+                    <span>Публичное соревнование</span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
+                    <h3>Сроки реакции</h3>
+                    <p class="settings-hint">Целевое время влияет на оценку скорости, предельное — на критическую просрочку и зачет дня.</p>
+                  </div>
+                </div>
+
+                <div class="form-grid">
+                  <label><span>Сообщения: цель, мин</span><input type="number" min="1" step="1" formControlName="messageTargetMinutes"></label>
+                  <label><span>Сообщения: предел, мин</span><input type="number" min="1" step="1" formControlName="messageHardMinutes"></label>
+                  <label><span>Лиды: цель, мин</span><input type="number" min="1" step="1" formControlName="leadTargetMinutes"></label>
+                  <label><span>Лиды: предел, мин</span><input type="number" min="1" step="1" formControlName="leadHardMinutes"></label>
+                  <label><span>Риски: цель, мин</span><input type="number" min="1" step="1" formControlName="riskTargetMinutes"></label>
+                  <label><span>Риски: предел, мин</span><input type="number" min="1" step="1" formControlName="riskHardMinutes"></label>
+                  <label><span>Остальные: цель, мин</span><input type="number" min="1" step="1" formControlName="defaultTargetMinutes"></label>
+                  <label><span>Остальные: предел, мин</span><input type="number" min="1" step="1" formControlName="defaultHardMinutes"></label>
+                </div>
+              </section>
+
+              <section class="settings-section">
+                <div class="section-head">
+                  <div>
                     <h3>Правила очков</h3>
                     <p class="settings-hint">Правила используются только для предпросмотра. Реальные баллы пока не начисляются.</p>
                   </div>

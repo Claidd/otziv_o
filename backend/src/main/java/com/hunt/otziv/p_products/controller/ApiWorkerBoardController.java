@@ -40,6 +40,8 @@ import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -137,6 +139,7 @@ public class ApiWorkerBoardController {
     private final WorkerPublicationGateService workerPublicationGateService;
     private final WorkerActivityService workerActivityService;
     private final WorkerCredentialPreparationService credentialPreparationService;
+    private final StaffDailyProgressService staffDailyProgressService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -201,7 +204,8 @@ public class ApiWorkerBoardController {
                     message,
                     warning,
                     activeCredentialPreparation(authentication, normalizedSection),
-                    workerPublicationGateService.sessionState(principal, authentication)
+                    workerPublicationGateService.sessionState(principal, authentication),
+                    workerDailyProgress(principal, authentication, selectedWorker)
             );
         });
     }
@@ -1776,6 +1780,25 @@ public class ApiWorkerBoardController {
         return hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER");
     }
 
+    private DailyWorkProgressResponse workerDailyProgress(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker
+    ) {
+        if (!staffDailyProgressService.progressEnabled()
+                || (!hasRole(authentication, "ADMIN") && !hasRole(authentication, "OWNER"))) {
+            return null;
+        }
+
+        LocalDate today = LocalDate.now();
+        if (selectedWorker != null) {
+            return staffDailyProgressService.workerProgressByWorkers(List.of(selectedWorker), today)
+                    .get(selectedWorker.getId());
+        }
+
+        return staffDailyProgressService.aggregateWorkerProgress(workerFilterWorkers(principal, authentication), today);
+    }
+
     private List<Worker> workerFilterWorkers(Principal principal, Authentication authentication) {
         if (hasRole(authentication, "ADMIN")) {
             return sortWorkerOptions(workerService.getAllWorkers());
@@ -2423,7 +2446,8 @@ public class ApiWorkerBoardController {
             String message,
             boolean warning,
             WorkerCredentialPreparationResponse credentialPreparation,
-            WorkerPublicationSessionService.SessionState publicationSession
+            WorkerPublicationSessionService.SessionState publicationSession,
+            DailyWorkProgressResponse dailyProgress
     ) {
     }
 

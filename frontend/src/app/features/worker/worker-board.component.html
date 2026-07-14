@@ -28,6 +28,14 @@
         </nav>
 
         @if (!isRiskSection()) {
+        @if (board()?.dailyProgress?.visible) {
+          <app-daily-progress-strip
+            class="toolbar-progress"
+            [progress]="board()?.dailyProgress"
+            [label]="selectedWorkerLabel()"
+          />
+        }
+
         <div class="search-line toolbar-search" [class.has-clear]="keyword()">
           <label>
             <span class="material-icons-sharp">search</span>

@@ -308,7 +308,7 @@ export const routes: Routes = [
       .then((m) => m.GamificationProgressComponent),
     canActivate: [roleGuard],
     data: {
-      roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
+      roles: ['ADMIN', 'OWNER']
     }
   },
   {

@@ -23,6 +23,7 @@ import {
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
+import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
@@ -106,6 +107,7 @@ type ChatBotLinkPoll = {
   imports: [
     AdminLayoutComponent,
     CompanyCreateModalComponent,
+    DailyProgressStripComponent,
     FormsModule,
     GamificationMeCardComponent,
     LoadErrorCardComponent,

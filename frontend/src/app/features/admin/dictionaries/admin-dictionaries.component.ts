@@ -57,6 +57,10 @@ import {
   WhatsAppGroupSyncSettingsRequest
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
+import {
+  AdminGamificationRewardsApi,
+  GamificationRewardSettings
+} from '../../../core/admin-gamification-rewards.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
@@ -199,6 +203,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   private readonly dictionariesApi = inject(AdminDictionariesApi);
   private readonly phonesApi = inject(OperatorPhonesApi);
   private readonly auth = inject(AuthService);
+  private readonly rewardsApi = inject(AdminGamificationRewardsApi);
   private readonly toastService = inject(ToastService);
   private readonly requestedPhoneId = Number(this.route.snapshot.queryParamMap.get('phoneId'));
   private monitorTimerId: ReturnType<typeof window.setInterval> | null = null;
@@ -264,6 +269,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
   readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
   readonly gamificationSettings = signal<AdminGamificationSettings | null>(null);
+  readonly rewardSettings = signal<GamificationRewardSettings | null>(null);
   readonly gamificationRules = signal<AdminGamificationRule[]>([]);
   readonly gamificationProgress = signal<AdminGamificationProgress | null>(null);
   readonly gamificationProgressDays = signal<GamificationProgressDays>(1);
@@ -411,6 +417,21 @@ export class AdminDictionariesComponent implements OnDestroy {
     showInScore: [false],
     eventsEnabled: [false],
     shadowScoringEnabled: [false],
+    rewardsEnabled: [false],
+    competitionEnabled: [false],
+    levelXp: [500, [Validators.required, Validators.min(100)]],
+    tokenLevelStep: [5, [Validators.required, Validators.min(2)]],
+    slaEnabled: [false],
+    controlTargetHours: [14, [Validators.required, Validators.min(1), Validators.max(24)]],
+    dayTargetPercent: [90, [Validators.required, Validators.min(1), Validators.max(100)]],
+    messageTargetMinutes: [30, [Validators.required, Validators.min(1)]],
+    messageHardMinutes: [480, [Validators.required, Validators.min(1)]],
+    leadTargetMinutes: [60, [Validators.required, Validators.min(1)]],
+    leadHardMinutes: [480, [Validators.required, Validators.min(1)]],
+    riskTargetMinutes: [30, [Validators.required, Validators.min(1)]],
+    riskHardMinutes: [240, [Validators.required, Validators.min(1)]],
+    defaultTargetMinutes: [120, [Validators.required, Validators.min(1)]],
+    defaultHardMinutes: [720, [Validators.required, Validators.min(1)]],
     reviewPublishedRuleEnabled: [true],
     reviewPublishedRulePoints: [10],
     orderPaidRuleEnabled: [true],
@@ -721,6 +742,7 @@ export class AdminDictionariesComponent implements OnDestroy {
         whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
         clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings(),
         gamificationSettings: this.dictionariesApi.getGamificationSettings(),
+        rewardSettings: this.rewardsApi.settings(),
         gamificationRules: this.dictionariesApi.getGamificationRules(),
         gamificationProgress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
         gamificationScorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
@@ -743,6 +765,7 @@ export class AdminDictionariesComponent implements OnDestroy {
           whatsAppGroupSyncSettings,
           clientPublicationProgressReportSettings,
           gamificationSettings,
+          rewardSettings,
           gamificationRules,
           gamificationProgress,
           gamificationScorePreview,
@@ -765,6 +788,7 @@ export class AdminDictionariesComponent implements OnDestroy {
           this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
           this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
           this.applyGamificationSettings(gamificationSettings);
+          this.applyRewardSettings(rewardSettings);
           this.applyGamificationRules(gamificationRules);
           this.gamificationProgress.set(gamificationProgress);
           this.gamificationScorePreview.set(gamificationScorePreview);
@@ -807,6 +831,7 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.whatsAppGroupSyncSettings.set(null);
         this.clientPublicationProgressReportSettings.set(null);
         this.gamificationSettings.set(null);
+        this.rewardSettings.set(null);
         this.gamificationRules.set([]);
         this.gamificationProgress.set(null);
         this.gamificationScorePreview.set(null);
@@ -2802,6 +2827,11 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   private saveGamificationSettings(): void {
+    if (this.gamificationForm.invalid) {
+      this.gamificationForm.markAllAsTouched();
+      return;
+    }
+
     const raw = this.gamificationForm.getRawValue();
     const request: AdminGamificationSettingsRequest = {
       enabled: raw.enabled,
@@ -2814,14 +2844,35 @@ export class AdminDictionariesComponent implements OnDestroy {
       eventsEnabled: raw.eventsEnabled,
       shadowScoringEnabled: raw.shadowScoringEnabled
     };
+    const rewardRequest: GamificationRewardSettings = {
+      rewardsEnabled: raw.rewardsEnabled,
+      competitionEnabled: raw.competitionEnabled,
+      levelXp: raw.levelXp,
+      tokenLevelStep: raw.tokenLevelStep,
+      slaEnabled: raw.slaEnabled,
+      controlTargetHours: raw.controlTargetHours,
+      dayTargetPercent: raw.dayTargetPercent,
+      messageTargetMinutes: raw.messageTargetMinutes,
+      messageHardMinutes: raw.messageHardMinutes,
+      leadTargetMinutes: raw.leadTargetMinutes,
+      leadHardMinutes: raw.leadHardMinutes,
+      riskTargetMinutes: raw.riskTargetMinutes,
+      riskHardMinutes: raw.riskHardMinutes,
+      defaultTargetMinutes: raw.defaultTargetMinutes,
+      defaultHardMinutes: raw.defaultHardMinutes
+    };
 
     this.saving.set(true);
     this.error.set(null);
 
-    this.dictionariesApi.updateGamificationSettings(request).subscribe({
-      next: (settings) => {
+    forkJoin({
+      settings: this.dictionariesApi.updateGamificationSettings(request),
+      rewardSettings: this.rewardsApi.updateSettings(rewardRequest)
+    }).subscribe({
+      next: ({ settings, rewardSettings }) => {
         this.saving.set(false);
         this.applyGamificationSettings(settings);
+        this.applyRewardSettings(rewardSettings);
         this.toastService.success(
           'Геймификация сохранена',
           settings.enabled ? 'Контур включен' : 'Контур выключен'
@@ -3223,6 +3274,11 @@ export class AdminDictionariesComponent implements OnDestroy {
     });
   }
 
+  private applyRewardSettings(response: GamificationRewardSettings): void {
+    this.rewardSettings.set(response);
+    this.gamificationForm.patchValue(response);
+  }
+
   private applyGamificationRules(response: AdminGamificationRulesResponse): void {
     this.gamificationRules.set(response.rules);
     const rule = (eventType: string): AdminGamificationRule | undefined =>
@@ -3389,6 +3445,21 @@ export class AdminDictionariesComponent implements OnDestroy {
       showInScore: settings?.showInScore ?? false,
       eventsEnabled: settings?.eventsEnabled ?? false,
       shadowScoringEnabled: settings?.shadowScoringEnabled ?? false,
+      rewardsEnabled: this.rewardSettings()?.rewardsEnabled ?? false,
+      competitionEnabled: this.rewardSettings()?.competitionEnabled ?? false,
+      levelXp: this.rewardSettings()?.levelXp ?? 500,
+      tokenLevelStep: this.rewardSettings()?.tokenLevelStep ?? 5,
+      slaEnabled: this.rewardSettings()?.slaEnabled ?? false,
+      controlTargetHours: this.rewardSettings()?.controlTargetHours ?? 14,
+      dayTargetPercent: this.rewardSettings()?.dayTargetPercent ?? 90,
+      messageTargetMinutes: this.rewardSettings()?.messageTargetMinutes ?? 30,
+      messageHardMinutes: this.rewardSettings()?.messageHardMinutes ?? 480,
+      leadTargetMinutes: this.rewardSettings()?.leadTargetMinutes ?? 60,
+      leadHardMinutes: this.rewardSettings()?.leadHardMinutes ?? 480,
+      riskTargetMinutes: this.rewardSettings()?.riskTargetMinutes ?? 30,
+      riskHardMinutes: this.rewardSettings()?.riskHardMinutes ?? 240,
+      defaultTargetMinutes: this.rewardSettings()?.defaultTargetMinutes ?? 120,
+      defaultHardMinutes: this.rewardSettings()?.defaultHardMinutes ?? 720,
       reviewPublishedRuleEnabled: rule('REVIEW_PUBLISHED')?.enabled ?? true,
       reviewPublishedRulePoints: rule('REVIEW_PUBLISHED')?.points ?? 10,
       orderPaidRuleEnabled: rule('ORDER_PAID')?.enabled ?? true,

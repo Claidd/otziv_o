@@ -53,6 +53,13 @@
                 <p>{{ member.login }}</p>
               </div>
 
+              @if (member.dailyProgress?.visible) {
+                <app-daily-progress-strip
+                  [progress]="member.dailyProgress"
+                  [label]="progressLabel(section.key)"
+                />
+              }
+
               @if (statRows(section.key, member).length) {
                 <dl>
                   @for (row of statRows(section.key, member); track row.label) {

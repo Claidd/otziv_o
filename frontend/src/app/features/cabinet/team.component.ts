@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { CabinetApi, TeamMember, TeamResponse } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
+import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
 type TeamRole = 'manager' | 'marketolog' | 'worker' | 'operator';
@@ -16,7 +17,7 @@ type TeamSection = {
 
 @Component({
   selector: 'app-team',
-  imports: [AdminLayoutComponent, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, DailyProgressStripComponent, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './team.component.html',
   styleUrl: './team.component.scss'
 })
@@ -118,6 +119,10 @@ export class TeamComponent {
       { label: 'Выгул', value: member.intVigul || 0 },
       { label: 'Публикация', value: member.publish || 0 }
     ].filter((row) => row.value > 0);
+  }
+
+  progressLabel(role: TeamRole): string {
+    return role === 'manager' ? 'День' : 'Сегодня';
   }
 
   imageUrl(imageId?: number | null): string {
