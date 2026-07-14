@@ -68,6 +68,13 @@
   --otziv-tone-success-surface: #f5fff9;
   --otziv-tone-bad-border: rgba(232, 64, 112, 0.34);
   --otziv-tone-bad-surface: #fff7fb;
+  --otziv-progress-surface: rgba(255, 255, 255, 0.86);
+  --otziv-progress-border: rgba(108, 155, 207, 0.22);
+  --otziv-progress-track: #e9edf6;
+  --otziv-progress-fill: linear-gradient(90deg, #ff5b6e 0%, #f0bf4c 48%, #43b77a 100%);
+  --otziv-progress-fill-complete: linear-gradient(90deg, #1b9c85 0%, #55cda6 100%);
+  --otziv-progress-text: #363949;
+  --otziv-progress-label: #7d8da1;
   --otziv-shadow: 0 2rem 3rem var(--otziv-light);
   --otziv-shadow-hover: none;
   --otziv-card-radius: 2rem;
@@ -110,6 +117,13 @@ body.otziv-dark-theme {
   --otziv-tone-success-surface: #222b29;
   --otziv-tone-bad-border: rgba(255, 91, 143, 0.24);
   --otziv-tone-bad-surface: #28242b;
+  --otziv-progress-surface: rgba(32, 37, 40, 0.86);
+  --otziv-progress-border: rgba(122, 167, 220, 0.22);
+  --otziv-progress-track: rgba(232, 224, 244, 0.14);
+  --otziv-progress-fill: linear-gradient(90deg, #ff5b8f 0%, #d7bd78 48%, #4ac6b1 100%);
+  --otziv-progress-fill-complete: linear-gradient(90deg, #4ac6b1 0%, #7be0bd 100%);
+  --otziv-progress-text: #eef6ff;
+  --otziv-progress-label: #c5d9e6;
   --otziv-shadow: 0 2rem 3rem rgba(0, 0, 0, 0.4);
 }
 
@@ -150,6 +164,94 @@ body.otziv-dark-theme select optgroup {
 body.otziv-dark-theme select option:checked {
   color: #ffffff;
   background: #315f97;
+}
+
+@media (max-width: 860px) {
+  :is(
+    app-worker-board,
+    app-manager-board,
+    app-leads-board,
+    app-operator-board,
+    app-users-admin,
+    app-manager-archive,
+    app-operator-phones,
+    app-admin-dictionaries,
+    app-admin-cities
+  ) :is(
+    .search-line label,
+    .mobile-manager-search label,
+    .users-search label,
+    .archive-search label,
+    .phones-search label,
+    .dictionary-search,
+    .search-form
+  ) {
+    min-height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  :is(
+    app-worker-board,
+    app-manager-board,
+    app-leads-board,
+    app-operator-board,
+    app-users-admin,
+    app-manager-archive,
+    app-operator-phones,
+    app-admin-dictionaries,
+    app-admin-cities
+  ) :is(
+    .search-line input,
+    .mobile-manager-search input,
+    .users-search input,
+    .archive-search input,
+    .phones-search input,
+    .dictionary-search input,
+    .search-input
+  ) {
+    min-height: 2rem !important;
+    height: 100% !important;
+    line-height: 2rem !important;
+  }
+
+  :is(
+    app-worker-board,
+    app-manager-board,
+    app-leads-board,
+    app-operator-board,
+    app-users-admin,
+    app-manager-archive,
+    app-operator-phones,
+    app-admin-dictionaries,
+    app-admin-cities
+  ) :is(
+    .search-line > .icon-button,
+    .mobile-manager-search > button,
+    .mobile-manager-search > a,
+    .mobile-board-actions button,
+    .mobile-pager-action,
+    .users-search .icon-button,
+    .archive-search .icon-button,
+    .phones-search .icon-button,
+    .dictionary-icon-action
+  ) {
+    width: 2.15rem !important;
+    min-width: 2.15rem !important;
+    height: 2.15rem !important;
+    min-height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  :is(app-users-admin, app-manager-archive) :is(.users-search select, .archive-search select) {
+    min-height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
+
+  app-admin-cities .search-button {
+    min-height: 2.15rem !important;
+    height: 2.15rem !important;
+    border-radius: 0.85rem !important;
+  }
 }
 
 * {

@@ -37,6 +37,7 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -137,6 +138,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private WorkerCredentialPreparationService credentialPreparationService;
 
+    @Mock
+    private StaffDailyProgressService staffDailyProgressService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -184,7 +188,8 @@ class ApiWorkerBoardControllerTest {
                         publicationSessionService
                 ),
                 workerActivityService,
-                credentialPreparationService
+                credentialPreparationService,
+                staffDailyProgressService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));

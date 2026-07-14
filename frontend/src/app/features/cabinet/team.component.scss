@@ -161,6 +161,81 @@ dd {
   font-weight: 900;
 }
 
+.progress-details {
+  overflow: hidden;
+  border: 1px solid var(--otziv-surface-border-neutral);
+  border-radius: 0.85rem;
+  padding: 0.22rem 0.45rem 0.45rem;
+  background: var(--otziv-muted-surface);
+}
+
+.progress-details summary {
+  display: flex;
+  min-height: 1.45rem;
+  align-items: center;
+  gap: 0.32rem;
+  overflow: hidden;
+  color: var(--otziv-info);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  list-style: none;
+}
+
+.progress-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.progress-details summary span {
+  flex: 0 0 auto;
+  color: var(--otziv-primary);
+  font-size: 0.95rem;
+}
+
+.progress-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.progress-detail-grid span {
+  min-width: 0;
+  border: 1px solid rgba(103, 116, 131, 0.12);
+  border-radius: 0.68rem;
+  padding: 0.36rem 0.42rem;
+  background: var(--otziv-white);
+}
+
+.progress-detail-grid small,
+.progress-detail-grid strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-detail-grid small {
+  color: var(--otziv-info);
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.progress-detail-grid strong {
+  margin-top: 0.1rem;
+  color: var(--otziv-dark);
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
+.progress-detail-grid .good strong {
+  color: var(--otziv-success);
+}
+
+.progress-detail-grid .warn strong {
+  color: var(--otziv-danger);
+}
+
 .edit-link {
   display: inline-flex;
   width: fit-content;
@@ -451,7 +526,9 @@ dd {
     font-weight: 800;
   }
 
+  app-daily-progress-strip,
   dl,
+  .progress-details,
   .status-list,
   .edit-link {
     grid-column: 1 / -1;
@@ -488,6 +565,34 @@ dd {
     padding: 0.32rem 0.5rem;
     color: var(--otziv-success);
     background: var(--otziv-surface-gradient-green);
+    font-size: 0.66rem;
+  }
+
+  .progress-details {
+    border-radius: 0.78rem;
+    padding: 0.16rem 0.36rem 0.38rem;
+  }
+
+  .progress-details summary {
+    min-height: 1.25rem;
+    font-size: 0.64rem;
+  }
+
+  .progress-detail-grid {
+    gap: 0.28rem;
+    margin-top: 0.25rem;
+  }
+
+  .progress-detail-grid span {
+    border-radius: 0.58rem;
+    padding: 0.3rem 0.34rem;
+  }
+
+  .progress-detail-grid small {
+    font-size: 0.58rem;
+  }
+
+  .progress-detail-grid strong {
     font-size: 0.66rem;
   }
 

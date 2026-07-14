@@ -60,6 +60,25 @@
                 />
               }
 
+              @if (progressDetails(member); as details) {
+                @if (details.length) {
+                  <details class="progress-details">
+                    <summary>
+                      <span class="material-icons-sharp">query_stats</span>
+                      {{ progressSummary(member) }}
+                    </summary>
+                    <div class="progress-detail-grid">
+                      @for (row of details; track row.label) {
+                        <span [class.good]="row.tone === 'good'" [class.warn]="row.tone === 'warn'">
+                          <small>{{ row.label }}</small>
+                          <strong>{{ row.value }}</strong>
+                        </span>
+                      }
+                    </div>
+                  </details>
+                }
+              }
+
               @if (statRows(section.key, member).length) {
                 <dl>
                   @for (row of statRows(section.key, member); track row.label) {

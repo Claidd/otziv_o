@@ -22,20 +22,23 @@ import { DailyWorkProgress } from '../core/daily-progress';
     :host {
       display: block;
       min-width: 0;
+      align-self: center;
     }
 
     .daily-progress-strip {
       display: grid;
-      grid-template-columns: auto minmax(2.5rem, 1fr) auto auto auto;
-      min-height: 1.15rem;
+      box-sizing: border-box;
+      width: 100%;
+      grid-template-columns: auto minmax(3.5rem, 1fr) auto auto auto;
+      min-height: 1.35rem;
       align-items: center;
-      gap: 0.35rem;
-      border: 1px solid rgba(103, 116, 131, 0.16);
+      gap: 0.38rem;
+      border: 1px solid var(--otziv-progress-border);
       border-radius: 999px;
-      padding: 0.15rem 0.38rem;
-      color: var(--otziv-dark);
-      background: rgba(255, 255, 255, 0.74);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+      padding: 0.16rem 0.38rem;
+      color: var(--otziv-progress-text);
+      background: var(--otziv-progress-surface);
+      box-shadow: 0 0.22rem 0.65rem rgba(108, 155, 207, 0.08);
       font-family: var(--otziv-font-family);
       font-size: 0.68rem;
       font-weight: 900;
@@ -45,7 +48,8 @@ import { DailyWorkProgress } from '../core/daily-progress';
     .daily-progress-label {
       max-width: 5.5rem;
       overflow: hidden;
-      color: var(--otziv-info);
+      color: var(--otziv-progress-label);
+      line-height: 1;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -53,10 +57,11 @@ import { DailyWorkProgress } from '../core/daily-progress';
     .daily-progress-bar {
       position: relative;
       min-width: 0;
-      height: 0.36rem;
+      height: 0.42rem;
       overflow: hidden;
       border-radius: 999px;
-      background: rgba(196, 97, 220, 0.16);
+      background: var(--otziv-progress-track);
+      box-shadow: inset 0 0.05rem 0.18rem rgba(31, 44, 71, 0.1);
     }
 
     .daily-progress-bar i {
@@ -64,12 +69,13 @@ import { DailyWorkProgress } from '../core/daily-progress';
       inset: 0 auto 0 0;
       min-width: 0.2rem;
       border-radius: inherit;
-      background: linear-gradient(90deg, #7aa7dc, #c461dc);
+      background: var(--otziv-progress-fill);
+      background-size: 14rem 100%;
       transition: width 0.35s ease;
     }
 
     .daily-progress-strip.complete .daily-progress-bar i {
-      background: linear-gradient(90deg, #54c7a3, #70d36d);
+      background: var(--otziv-progress-fill-complete, var(--otziv-progress-fill));
     }
 
     .daily-progress-strip.empty .daily-progress-bar i {
@@ -78,11 +84,12 @@ import { DailyWorkProgress } from '../core/daily-progress';
 
     strong,
     em {
+      line-height: 1;
       white-space: nowrap;
     }
 
     em {
-      color: var(--otziv-info);
+      color: var(--otziv-progress-label);
       font-style: normal;
     }
 
@@ -95,8 +102,9 @@ import { DailyWorkProgress } from '../core/daily-progress';
     @media (max-width: 760px) {
       .daily-progress-strip {
         grid-template-columns: minmax(2.3rem, auto) minmax(0, 1fr) auto auto auto;
-        min-height: 0.95rem;
-        padding: 0.12rem 0.34rem;
+        min-height: 1.18rem;
+        gap: 0.3rem;
+        padding: 0.12rem 0.32rem;
         font-size: 0.62rem;
       }
 
@@ -105,7 +113,7 @@ import { DailyWorkProgress } from '../core/daily-progress';
       }
 
       .daily-progress-bar {
-        height: 0.28rem;
+        height: 0.34rem;
       }
     }
   `]

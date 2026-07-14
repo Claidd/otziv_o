@@ -8,6 +8,12 @@ import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.c
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
 type TeamRole = 'manager' | 'marketolog' | 'worker' | 'operator';
+type ProgressDetailTone = 'good' | 'warn' | 'neutral';
+type ProgressDetailRow = {
+  label: string;
+  value: string;
+  tone: ProgressDetailTone;
+};
 
 type TeamSection = {
   key: TeamRole;
@@ -122,7 +128,87 @@ export class TeamComponent {
   }
 
   progressLabel(role: TeamRole): string {
-    return role === 'manager' ? 'День' : 'Сегодня';
+    return role === 'manager' ? 'Команда' : 'Сегодня';
+  }
+
+  progressDetails(member: TeamMember): ProgressDetailRow[] {
+    const progress = member.dailyProgress;
+    if (!progress?.visible) {
+      return [];
+    }
+
+    const rows: ProgressDetailRow[] = [];
+    const total = Number(progress.total || 0);
+    const active = Number(progress.active || 0);
+
+    if (total > 0 || active > 0) {
+      rows.push({
+        label: 'Осталось',
+        value: this.formatNumber(active),
+        tone: active > 0 ? 'warn' : 'good'
+      });
+    }
+
+    if (total > 0) {
+      rows.push({
+        label: 'Нагрузка',
+        value: this.formatNumber(total),
+        tone: 'neutral'
+      });
+      rows.push({
+        label: 'Эффективность',
+        value: `${this.safePercent(progress.efficiencyScore || progress.percent)}%`,
+        tone: progress.checked ? 'good' : 'neutral'
+      });
+    }
+
+    this.pushDurationRow(rows, 'Активно', progress.activeWorkSeconds);
+
+    const activityWindow = this.formatTimeWindow(progress.firstActivityAt, progress.lastActivityAt);
+    if (activityWindow) {
+      rows.push({ label: 'Окно', value: activityWindow, tone: 'neutral' });
+    }
+
+    if ((progress.activityEvents || 0) > 0) {
+      rows.push({ label: 'Действий', value: this.formatNumber(progress.activityEvents), tone: 'neutral' });
+    }
+
+    this.pushDurationRow(rows, 'Медиана', progress.medianCloseSeconds);
+    this.pushDurationRow(rows, 'Среднее', progress.averageCloseSeconds);
+    this.pushDurationRow(rows, 'P90', progress.p90CloseSeconds);
+
+    const firstCompletedAt = this.formatTime(progress.firstCompletedAt);
+    if (firstCompletedAt) {
+      rows.push({ label: 'Первое закрытие', value: firstCompletedAt, tone: 'neutral' });
+    }
+
+    const lastCompletedAt = this.formatTime(progress.lastCompletedAt);
+    if (lastCompletedAt) {
+      rows.push({ label: 'Последнее', value: lastCompletedAt, tone: 'neutral' });
+    }
+
+    return rows;
+  }
+
+  progressSummary(member: TeamMember): string {
+    const progress = member.dailyProgress;
+    if (!progress?.visible) {
+      return '';
+    }
+
+    if ((progress.total || 0) <= 0) {
+      return 'Нет задач за день';
+    }
+
+    const base = (progress.active || 0) > 0
+      ? `Осталось ${this.formatNumber(progress.active)}`
+      : 'День закрыт';
+    const median = this.formatDuration(progress.medianCloseSeconds);
+    const activeWork = this.formatDuration(progress.activeWorkSeconds);
+    if (median) {
+      return `${base} · медиана ${median}`;
+    }
+    return activeWork ? `${base} · активно ${activeWork}` : base;
   }
 
   imageUrl(imageId?: number | null): string {
@@ -162,6 +248,83 @@ export class TeamComponent {
 
   private count(value?: number | null): string {
     return `${new Intl.NumberFormat('ru-RU').format(value || 0)} шт.`;
+  }
+
+  private pushDurationRow(rows: ProgressDetailRow[], label: string, seconds?: number | null): void {
+    const value = this.formatDuration(seconds);
+    if (value) {
+      rows.push({ label, value, tone: 'neutral' });
+    }
+  }
+
+  private formatDuration(seconds?: number | null): string {
+    const raw = Number(seconds || 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return '';
+    }
+
+    const totalSeconds = Math.max(1, Math.round(raw));
+    if (totalSeconds < 60) {
+      return '< 1 мин';
+    }
+
+    const totalMinutes = Math.max(1, Math.round(totalSeconds / 60));
+    if (totalMinutes < 60) {
+      return `${totalMinutes} мин`;
+    }
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours < 24) {
+      return minutes > 0 ? `${hours} ч ${minutes} мин` : `${hours} ч`;
+    }
+
+    const days = Math.floor(hours / 24);
+    const restHours = hours % 24;
+    return restHours > 0 ? `${days} д ${restHours} ч` : `${days} д`;
+  }
+
+  private formatTime(value?: string | null): string {
+    if (!value) {
+      return '';
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    return new Intl.DateTimeFormat('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  private formatTimeWindow(from?: string | null, to?: string | null): string {
+    const fromTime = this.formatTime(from);
+    const toTime = this.formatTime(to);
+    if (!fromTime && !toTime) {
+      return '';
+    }
+    if (!toTime || fromTime === toTime) {
+      return fromTime;
+    }
+    if (!fromTime) {
+      return toTime;
+    }
+    return `${fromTime}–${toTime}`;
+  }
+
+  private safePercent(value?: number | null): number {
+    const raw = Number(value || 0);
+    if (!Number.isFinite(raw)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(raw)));
+  }
+
+  private formatNumber(value?: number | null): string {
+    return new Intl.NumberFormat('ru-RU').format(value || 0);
   }
 
   private todayIso(): string {

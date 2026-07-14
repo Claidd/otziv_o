@@ -1,12 +1,14 @@
 package com.hunt.otziv.worker_performance.service;
 
 import com.hunt.otziv.config.settings.AppSettingService;
+import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -29,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StaffDailyProgressService {
 
     private static final long MANAGER_DAILY_GOAL = 3L;
+    private static final long SINGLE_ACTION_SESSION_SECONDS = 60L;
     private static final String ROLE_MANAGER = "MANAGER";
     private static final String ROLE_WORKER = "WORKER";
 
@@ -88,6 +91,11 @@ public class StaffDailyProgressService {
                     0,
                     0,
                     0,
+                    null,
+                    null,
+                    0,
+                    0,
+                    0,
                     completed,
                     percentInt(completed, total)
             ));
@@ -122,8 +130,98 @@ public class StaffDailyProgressService {
                 0,
                 0,
                 0,
+                null,
+                null,
+                0,
+                0,
+                0,
                 completed,
                 percent
+        );
+    }
+
+    public DailyWorkProgressResponse managerProgressFromPerformance(
+            ManagerPerformanceScoreResponse performance,
+            LocalDate date
+    ) {
+        if (performance == null) {
+            return null;
+        }
+        LocalDate safeDate = safeDate(date);
+        long completed = Math.max(0, performance.handledCount());
+        long active = Math.max(0, performance.openCount());
+        long total = completed + active;
+        int percent = total == 0 ? 100 : percentInt(completed, total);
+
+        return new DailyWorkProgressResponse(
+                true,
+                ROLE_MANAGER,
+                safeDate,
+                completed,
+                active,
+                total,
+                percent,
+                active == 0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                performance.actionTotal(),
+                performance.loadAdjustedPerformanceScore()
+        );
+    }
+
+    public DailyWorkProgressResponse aggregateManagerProgressFromPerformance(
+            Collection<ManagerPerformanceScoreResponse> performances,
+            LocalDate date
+    ) {
+        if (performances == null || performances.isEmpty()) {
+            return DailyWorkProgressResponse.hidden(ROLE_MANAGER, safeDate(date));
+        }
+        LocalDate safeDate = safeDate(date);
+        List<ManagerPerformanceScoreResponse> visible = performances.stream()
+                .filter(Objects::nonNull)
+                .toList();
+        if (visible.isEmpty()) {
+            return DailyWorkProgressResponse.hidden(ROLE_MANAGER, safeDate);
+        }
+
+        long completed = visible.stream().mapToLong(ManagerPerformanceScoreResponse::handledCount).sum();
+        long active = visible.stream().mapToLong(ManagerPerformanceScoreResponse::openCount).sum();
+        long total = completed + active;
+        int percent = total == 0 ? 100 : percentInt(completed, total);
+        int efficiency = (int) Math.round(visible.stream()
+                .mapToInt(ManagerPerformanceScoreResponse::loadAdjustedPerformanceScore)
+                .average()
+                .orElse(0));
+
+        return new DailyWorkProgressResponse(
+                true,
+                ROLE_MANAGER,
+                safeDate,
+                completed,
+                active,
+                total,
+                percent,
+                active == 0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                visible.stream().mapToLong(ManagerPerformanceScoreResponse::actionTotal).sum(),
+                efficiency
         );
     }
 
@@ -157,14 +255,23 @@ public class StaffDailyProgressService {
         }
 
         List<Long> workerIds = visibleWorkers.stream().map(WorkerProgressSubject::workerId).distinct().toList();
+        List<Long> workerUserIds = visibleWorkers.stream()
+                .map(WorkerProgressSubject::workerUserId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
         Map<Long, Long> active = activeCounts(workerIds, safeDate);
         Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate);
+        Map<Long, WorkerActivityStats> activity = activityStats(workerUserIds, safeDate);
 
         Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
         for (WorkerProgressSubject worker : visibleWorkers) {
             long activeCount = active.getOrDefault(worker.workerId(), 0L);
             WorkerCompletionStats stats = completed.getOrDefault(worker.workerId(), WorkerCompletionStats.empty());
-            DailyWorkProgressResponse response = responseForWorker(safeDate, activeCount, stats);
+            WorkerActivityStats activityStats = worker.workerUserId() == null
+                    ? WorkerActivityStats.empty()
+                    : activity.getOrDefault(worker.workerUserId(), WorkerActivityStats.empty());
+            DailyWorkProgressResponse response = responseForWorker(safeDate, activeCount, stats, activityStats);
             result.put(worker.workerId(), response);
             saveDaily(worker, response);
         }
@@ -181,37 +288,66 @@ public class StaffDailyProgressService {
     @Transactional
     public DailyWorkProgressResponse aggregateWorkerProgress(Collection<Worker> workers, LocalDate date) {
         Map<Long, DailyWorkProgressResponse> progress = workerProgressByWorkers(workers, date);
-        if (progress.isEmpty()) {
-            return DailyWorkProgressResponse.hidden(ROLE_WORKER, safeDate(date));
+        return aggregateProgressResponses(progress.values(), date, ROLE_WORKER);
+    }
+
+    public DailyWorkProgressResponse aggregateProgressResponses(
+            Collection<DailyWorkProgressResponse> progress,
+            LocalDate date,
+            String roleType
+    ) {
+        if (progress == null || progress.isEmpty()) {
+            return DailyWorkProgressResponse.hidden(roleType == null ? ROLE_WORKER : roleType, safeDate(date));
+        }
+        LocalDate safeDate = safeDate(date);
+        List<DailyWorkProgressResponse> visible = progress.stream()
+                .filter(Objects::nonNull)
+                .filter(DailyWorkProgressResponse::visible)
+                .toList();
+        if (visible.isEmpty()) {
+            return DailyWorkProgressResponse.hidden(roleType == null ? ROLE_WORKER : roleType, safeDate);
         }
 
-        LocalDate safeDate = safeDate(date);
-        long completed = progress.values().stream().mapToLong(DailyWorkProgressResponse::completed).sum();
-        long active = progress.values().stream().mapToLong(DailyWorkProgressResponse::active).sum();
+        long completed = visible.stream().mapToLong(DailyWorkProgressResponse::completed).sum();
+        long active = visible.stream().mapToLong(DailyWorkProgressResponse::active).sum();
         long total = completed + active;
-        long loadScore = progress.values().stream().mapToLong(DailyWorkProgressResponse::loadScore).sum();
-        long averageClose = weightedAverage(progress.values(), DailyWorkProgressResponse::averageCloseSeconds);
-        long medianClose = weightedAverage(progress.values(), DailyWorkProgressResponse::medianCloseSeconds);
-        long p90Close = weightedAverage(progress.values(), DailyWorkProgressResponse::p90CloseSeconds);
-        int efficiency = progress.isEmpty()
+        long loadScore = visible.stream().mapToLong(DailyWorkProgressResponse::loadScore).sum();
+        long averageClose = weightedAverage(visible, DailyWorkProgressResponse::averageCloseSeconds);
+        long medianClose = weightedAverage(visible, DailyWorkProgressResponse::medianCloseSeconds);
+        long p90Close = weightedAverage(visible, DailyWorkProgressResponse::p90CloseSeconds);
+        LocalDateTime firstActivityAt = visible.stream()
+                .map(DailyWorkProgressResponse::firstActivityAt)
+                .filter(Objects::nonNull)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+        LocalDateTime lastActivityAt = visible.stream()
+                .map(DailyWorkProgressResponse::lastActivityAt)
+                .filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+        long activeWorkSeconds = visible.stream().mapToLong(DailyWorkProgressResponse::activeWorkSeconds).sum();
+        long workWindowSeconds = secondsBetween(firstActivityAt, lastActivityAt);
+        long activityEvents = visible.stream().mapToLong(DailyWorkProgressResponse::activityEvents).sum();
+        int percent = total == 0 ? 100 : percentInt(completed, total);
+        int efficiency = visible.isEmpty()
                 ? 0
-                : (int) Math.round(progress.values().stream().mapToInt(DailyWorkProgressResponse::efficiencyScore).average().orElse(0));
+                : (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::efficiencyScore).average().orElse(0));
 
         return new DailyWorkProgressResponse(
                 true,
-                ROLE_WORKER,
+                roleType == null ? ROLE_WORKER : roleType,
                 safeDate,
                 completed,
                 active,
                 total,
-                percentInt(completed, total),
+                percent,
                 total == 0 || active == 0,
-                progress.values().stream()
+                visible.stream()
                         .map(DailyWorkProgressResponse::firstCompletedAt)
                         .filter(Objects::nonNull)
                         .min(LocalDateTime::compareTo)
                         .orElse(null),
-                progress.values().stream()
+                visible.stream()
                         .map(DailyWorkProgressResponse::lastCompletedAt)
                         .filter(Objects::nonNull)
                         .max(LocalDateTime::compareTo)
@@ -219,17 +355,28 @@ public class StaffDailyProgressService {
                 averageClose,
                 medianClose,
                 p90Close,
+                firstActivityAt,
+                lastActivityAt,
+                activeWorkSeconds,
+                workWindowSeconds,
+                activityEvents,
                 loadScore,
                 efficiency
         );
     }
 
-    private DailyWorkProgressResponse responseForWorker(LocalDate date, long active, WorkerCompletionStats stats) {
+    private DailyWorkProgressResponse responseForWorker(
+            LocalDate date,
+            long active,
+            WorkerCompletionStats stats,
+            WorkerActivityStats activityStats
+    ) {
         long completed = stats.completed();
         long total = completed + Math.max(0, active);
         int percent = total == 0 ? 100 : percentInt(completed, total);
         boolean checked = total == 0 || active == 0;
         int efficiencyScore = workerEfficiencyScore(percent, completed, active, stats.medianSeconds());
+        WorkerActivityStats safeActivityStats = activityStats == null ? WorkerActivityStats.empty() : activityStats;
 
         return new DailyWorkProgressResponse(
                 true,
@@ -245,7 +392,12 @@ public class StaffDailyProgressService {
                 stats.averageSeconds(),
                 stats.medianSeconds(),
                 stats.p90Seconds(),
-                completed,
+                safeActivityStats.firstActivityAt(),
+                safeActivityStats.lastActivityAt(),
+                safeActivityStats.activeWorkSeconds(),
+                safeActivityStats.workWindowSeconds(),
+                safeActivityStats.activityEvents(),
+                total,
                 efficiencyScore
         );
     }
@@ -402,6 +554,42 @@ public class StaffDailyProgressService {
         return result;
     }
 
+    private Map<Long, WorkerActivityStats> activityStats(List<Long> workerUserIds, LocalDate date) {
+        if (workerUserIds == null || workerUserIds.isEmpty()) {
+            return Map.of();
+        }
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("workerUserIds", workerUserIds)
+                .addValue("from", date.atStartOfDay())
+                .addValue("to", date.plusDays(1).atStartOfDay());
+        Map<Long, List<LocalDateTime>> rowsByWorker = new HashMap<>();
+        jdbc.queryForList("""
+                SELECT worker_user_id, created_at
+                FROM worker_activity_events
+                WHERE worker_user_id IN (:workerUserIds)
+                  AND created_at >= :from
+                  AND created_at < :to
+                ORDER BY worker_user_id, created_at
+                """, params).forEach(row -> {
+            Long workerUserId = longValue(row.get("worker_user_id"));
+            LocalDateTime createdAt = toLocalDateTime(row.get("created_at"));
+            if (workerUserId != null && workerUserId > 0 && createdAt != null) {
+                rowsByWorker.computeIfAbsent(workerUserId, ignored -> new ArrayList<>()).add(createdAt);
+            }
+        });
+
+        long sessionGapMinutes = Math.max(5, appSettingService.getInt(
+                AppSettingService.WORKER_PROGRESS_ACTIVITY_SESSION_GAP_MINUTES,
+                30
+        ));
+        Map<Long, WorkerActivityStats> result = new HashMap<>();
+        for (Map.Entry<Long, List<LocalDateTime>> entry : rowsByWorker.entrySet()) {
+            result.put(entry.getKey(), WorkerActivityStats.from(entry.getValue(), sessionGapMinutes));
+        }
+        return result;
+    }
+
     private void saveDaily(WorkerProgressSubject worker, DailyWorkProgressResponse response) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("date", response.date())
@@ -418,6 +606,11 @@ public class StaffDailyProgressService {
                 .addValue("averageCloseSeconds", response.averageCloseSeconds())
                 .addValue("medianCloseSeconds", response.medianCloseSeconds())
                 .addValue("p90CloseSeconds", response.p90CloseSeconds())
+                .addValue("firstActivityAt", response.firstActivityAt())
+                .addValue("lastActivityAt", response.lastActivityAt())
+                .addValue("activeWorkSeconds", response.activeWorkSeconds())
+                .addValue("workWindowSeconds", response.workWindowSeconds())
+                .addValue("activityEvents", response.activityEvents())
                 .addValue("loadScore", response.loadScore())
                 .addValue("efficiencyScore", response.efficiencyScore());
         jdbc.update("""
@@ -425,13 +618,15 @@ public class StaffDailyProgressService {
                     progress_date, worker_id, worker_user_id, worker_name,
                     active_count, completed_count, total_count, progress_percent, checked,
                     first_completed_at, last_completed_at, average_close_seconds, median_close_seconds,
-                    p90_close_seconds, load_score, efficiency_score, aggregation_status
+                    p90_close_seconds, first_activity_at, last_activity_at, active_work_seconds,
+                    work_window_seconds, activity_events, load_score, efficiency_score, aggregation_status
                 )
                 VALUES (
                     :date, :workerId, :workerUserId, :workerName,
                     :active, :completed, :total, :percent, :checked,
                     :firstCompletedAt, :lastCompletedAt, :averageCloseSeconds, :medianCloseSeconds,
-                    :p90CloseSeconds, :loadScore, :efficiencyScore, 'CALCULATED'
+                    :p90CloseSeconds, :firstActivityAt, :lastActivityAt, :activeWorkSeconds,
+                    :workWindowSeconds, :activityEvents, :loadScore, :efficiencyScore, 'CALCULATED'
                 )
                 ON DUPLICATE KEY UPDATE
                     worker_user_id = VALUES(worker_user_id),
@@ -446,6 +641,11 @@ public class StaffDailyProgressService {
                     average_close_seconds = VALUES(average_close_seconds),
                     median_close_seconds = VALUES(median_close_seconds),
                     p90_close_seconds = VALUES(p90_close_seconds),
+                    first_activity_at = VALUES(first_activity_at),
+                    last_activity_at = VALUES(last_activity_at),
+                    active_work_seconds = VALUES(active_work_seconds),
+                    work_window_seconds = VALUES(work_window_seconds),
+                    activity_events = VALUES(activity_events),
                     load_score = VALUES(load_score),
                     efficiency_score = VALUES(efficiency_score),
                     aggregation_status = VALUES(aggregation_status)
@@ -464,7 +664,8 @@ public class StaffDailyProgressService {
                 INSERT INTO worker_performance_monthly (
                     month_start, worker_id, worker_user_id, working_days, completed_count, active_count,
                     total_count, average_progress_percent, checked_days, average_close_seconds,
-                    median_close_seconds, p90_close_seconds, load_score, average_efficiency_score, closed_period
+                    median_close_seconds, p90_close_seconds, active_work_seconds, average_work_window_seconds,
+                    activity_events, load_score, average_efficiency_score, closed_period
                 )
                 SELECT :monthStart,
                        d.worker_id,
@@ -478,6 +679,9 @@ public class StaffDailyProgressService {
                        AVG(d.average_close_seconds),
                        AVG(d.median_close_seconds),
                        AVG(d.p90_close_seconds),
+                       SUM(d.active_work_seconds),
+                       AVG(d.work_window_seconds),
+                       SUM(d.activity_events),
                        SUM(d.load_score),
                        AVG(d.efficiency_score),
                        :closed
@@ -496,6 +700,9 @@ public class StaffDailyProgressService {
                     average_close_seconds = VALUES(average_close_seconds),
                     median_close_seconds = VALUES(median_close_seconds),
                     p90_close_seconds = VALUES(p90_close_seconds),
+                    active_work_seconds = VALUES(active_work_seconds),
+                    average_work_window_seconds = VALUES(average_work_window_seconds),
+                    activity_events = VALUES(activity_events),
                     load_score = VALUES(load_score),
                     average_efficiency_score = VALUES(average_efficiency_score),
                     closed_period = VALUES(closed_period)
@@ -519,6 +726,13 @@ public class StaffDailyProgressService {
                 .mapToLong(item -> getter.applyAsLong(item) * Math.max(0, item.completed()))
                 .sum();
         return weighted / totalWeight;
+    }
+
+    private static long secondsBetween(LocalDateTime from, LocalDateTime to) {
+        if (from == null || to == null || to.isBefore(from)) {
+            return 0;
+        }
+        return Math.max(0, Duration.between(from, to).getSeconds());
     }
 
     private String workerName(User user) {
@@ -560,6 +774,68 @@ public class StaffDailyProgressService {
     }
 
     public record WorkerProgressSubject(Long workerId, Long workerUserId, String workerName) {
+    }
+
+    private record WorkerActivityStats(
+            long activityEvents,
+            LocalDateTime firstActivityAt,
+            LocalDateTime lastActivityAt,
+            long activeWorkSeconds,
+            long workWindowSeconds
+    ) {
+        static WorkerActivityStats empty() {
+            return new WorkerActivityStats(0, null, null, 0, 0);
+        }
+
+        static WorkerActivityStats from(List<LocalDateTime> events, long sessionGapMinutes) {
+            if (events == null || events.isEmpty()) {
+                return empty();
+            }
+            List<LocalDateTime> sorted = events.stream()
+                    .filter(Objects::nonNull)
+                    .sorted()
+                    .toList();
+            if (sorted.isEmpty()) {
+                return empty();
+            }
+
+            long safeGapSeconds = Math.max(1, sessionGapMinutes) * 60L;
+            LocalDateTime first = sorted.get(0);
+            LocalDateTime last = sorted.get(sorted.size() - 1);
+            LocalDateTime sessionStart = first;
+            LocalDateTime previous = first;
+            int sessionEvents = 1;
+            long activeSeconds = 0;
+
+            for (int i = 1; i < sorted.size(); i++) {
+                LocalDateTime current = sorted.get(i);
+                long gapSeconds = secondsBetween(previous, current);
+                if (gapSeconds > safeGapSeconds) {
+                    activeSeconds += sessionSeconds(sessionStart, previous, sessionEvents);
+                    sessionStart = current;
+                    sessionEvents = 1;
+                } else {
+                    sessionEvents++;
+                }
+                previous = current;
+            }
+            activeSeconds += sessionSeconds(sessionStart, previous, sessionEvents);
+
+            return new WorkerActivityStats(
+                    sorted.size(),
+                    first,
+                    last,
+                    activeSeconds,
+                    secondsBetween(first, last)
+            );
+        }
+
+        private static long sessionSeconds(LocalDateTime from, LocalDateTime to, int eventCount) {
+            if (eventCount <= 1) {
+                return SINGLE_ACTION_SESSION_SECONDS;
+            }
+            return Math.max(SINGLE_ACTION_SESSION_SECONDS, secondsBetween(from, to));
+        }
     }
 
     private record WorkerCompletionStats(

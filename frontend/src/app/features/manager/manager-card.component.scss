@@ -890,12 +890,12 @@
 
 .order-card .progress {
   min-height: 0.36rem;
-  background: #f3ddf8;
+  background: var(--otziv-progress-track);
 }
 
 .order-card .progress-bar {
-  color: var(--otziv-dark);
-  background: #bdcfe5;
+  color: var(--otziv-progress-text);
+  background: var(--otziv-progress-fill);
 }
 
 @media (max-width: 860px) {

@@ -533,34 +533,86 @@ public class ApiCabinetController {
             return response;
         }
 
-        Map<Long, DailyWorkProgressResponse> managerProgress = staffDailyProgressService.managerProgressByUserIds(
-                response.managers().stream()
-                        .map(ManagersListDTO::getUserId)
-                        .filter(Objects::nonNull)
-                        .distinct()
-                        .toList(),
-                selectedDate
-        );
-        response.managers().forEach(manager ->
-                manager.setDailyProgress(managerProgress.get(manager.getUserId()))
-        );
+        ManagerWorkerProgressContext managerWorkerContext = managerWorkerProgressContext(response.managers());
+        Map<Long, StaffDailyProgressService.WorkerProgressSubject> workerSubjectsById = new LinkedHashMap<>(managerWorkerContext.workerSubjectsById());
 
-        List<StaffDailyProgressService.WorkerProgressSubject> workerSubjects = response.workers().stream()
+        response.workers().stream()
                 .filter(worker -> worker.getId() != null)
-                .map(worker -> new StaffDailyProgressService.WorkerProgressSubject(
+                .forEach(worker -> workerSubjectsById.putIfAbsent(
                         worker.getId(),
-                        worker.getUserId(),
-                        firstNonBlank(worker.getFio(), worker.getLogin())
-                ))
-                .toList();
+                        new StaffDailyProgressService.WorkerProgressSubject(
+                                worker.getId(),
+                                worker.getUserId(),
+                                firstNonBlank(worker.getFio(), worker.getLogin())
+                        )
+                ));
         Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.workerProgressBySubjects(
-                workerSubjects,
+                workerSubjectsById.values(),
                 selectedDate
         );
         response.workers().forEach(worker ->
                 worker.setDailyProgress(workerProgress.get(worker.getId()))
         );
+        response.managers().forEach(manager -> {
+            List<DailyWorkProgressResponse> teamProgress = managerWorkerContext.workerIdsByManagerId()
+                    .getOrDefault(manager.getId(), List.of()).stream()
+                    .map(workerProgress::get)
+                    .filter(Objects::nonNull)
+                    .toList();
+            manager.setDailyProgress(staffDailyProgressService.aggregateProgressResponses(
+                    teamProgress,
+                    selectedDate,
+                    "WORKER_TEAM"
+            ));
+        });
         return response;
+    }
+
+    private ManagerWorkerProgressContext managerWorkerProgressContext(List<ManagersListDTO> managerDtos) {
+        if (managerDtos == null || managerDtos.isEmpty()) {
+            return ManagerWorkerProgressContext.empty();
+        }
+
+        List<Long> managerIds = managerDtos.stream()
+                .map(ManagersListDTO::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (managerIds.isEmpty()) {
+            return ManagerWorkerProgressContext.empty();
+        }
+
+        List<Manager> selectedManagers = managerService.getAllManagers().stream()
+                .filter(manager -> manager.getId() != null && managerIds.contains(manager.getId()))
+                .toList();
+        List<Manager> managersWithWorkers = selectedManagers.isEmpty()
+                ? List.of()
+                : personalService.findAllManagersWorkers(selectedManagers);
+
+        Map<Long, List<Long>> workerIdsByManagerId = new LinkedHashMap<>();
+        Map<Long, StaffDailyProgressService.WorkerProgressSubject> workerSubjectsById = new LinkedHashMap<>();
+        managersWithWorkers.forEach(manager -> {
+            if (manager.getId() == null || manager.getUser() == null || manager.getUser().getWorkers() == null) {
+                return;
+            }
+            List<Long> workerIds = manager.getUser().getWorkers().stream()
+                    .filter(Objects::nonNull)
+                    .filter(worker -> worker.getId() != null)
+                    .peek(worker -> workerSubjectsById.putIfAbsent(
+                            worker.getId(),
+                            new StaffDailyProgressService.WorkerProgressSubject(
+                                    worker.getId(),
+                                    worker.getUser() == null ? null : worker.getUser().getId(),
+                                    workerName(worker)
+                            )
+                    ))
+                    .map(Worker::getId)
+                    .distinct()
+                    .toList();
+            workerIdsByManagerId.put(manager.getId(), workerIds);
+        });
+
+        return new ManagerWorkerProgressContext(workerIdsByManagerId, workerSubjectsById);
     }
 
     private String firstNonBlank(String... values) {
@@ -573,6 +625,12 @@ public class ApiCabinetController {
             }
         }
         return null;
+    }
+
+    private String workerName(Worker worker) {
+        return worker == null || worker.getUser() == null
+                ? null
+                : firstNonBlank(worker.getUser().getFio(), worker.getUser().getUsername());
     }
 
     private String primaryRole(Authentication authentication) {
@@ -719,6 +777,15 @@ public class ApiCabinetController {
             List<WorkersListDTO> workers,
             List<OperatorsListDTO> operators
     ) {
+    }
+
+    private record ManagerWorkerProgressContext(
+            Map<Long, List<Long>> workerIdsByManagerId,
+            Map<Long, StaffDailyProgressService.WorkerProgressSubject> workerSubjectsById
+    ) {
+        static ManagerWorkerProgressContext empty() {
+            return new ManagerWorkerProgressContext(Map.of(), Map.of());
+        }
     }
 
     public record ScoreResponse(

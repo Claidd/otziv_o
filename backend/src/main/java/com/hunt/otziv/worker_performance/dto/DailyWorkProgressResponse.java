@@ -17,6 +17,11 @@ public record DailyWorkProgressResponse(
         long averageCloseSeconds,
         long medianCloseSeconds,
         long p90CloseSeconds,
+        LocalDateTime firstActivityAt,
+        LocalDateTime lastActivityAt,
+        long activeWorkSeconds,
+        long workWindowSeconds,
+        long activityEvents,
         long loadScore,
         int efficiencyScore
 ) {
@@ -30,6 +35,11 @@ public record DailyWorkProgressResponse(
                 0,
                 0,
                 false,
+                null,
+                null,
+                0,
+                0,
+                0,
                 null,
                 null,
                 0,

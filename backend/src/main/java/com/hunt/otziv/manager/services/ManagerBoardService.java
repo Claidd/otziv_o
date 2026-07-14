@@ -14,6 +14,8 @@ import com.hunt.otziv.manager.dto.api.ManagerMetricResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.manager.dto.api.PageResponse;
+import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
+import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -111,6 +113,7 @@ public class ManagerBoardService {
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final StaffDailyProgressService staffDailyProgressService;
+    private final ManagerPerformanceService managerPerformanceService;
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -681,11 +684,21 @@ public class ManagerBoardService {
         }
 
         LocalDate today = LocalDate.now();
+        List<ManagerPerformanceScoreResponse> performance = managerPerformanceService.score(today);
         if (managerFilter != null && managerFilter.getUser() != null && managerFilter.getUser().getId() != null) {
-            return staffDailyProgressService.managerProgressByUserIds(userIds, today)
-                    .get(managerFilter.getUser().getId());
+            return performance.stream()
+                    .filter(score -> Objects.equals(score.managerUserId(), managerFilter.getUser().getId()))
+                    .findFirst()
+                    .map(score -> staffDailyProgressService.managerProgressFromPerformance(score, today))
+                    .orElse(null);
         }
-        return staffDailyProgressService.aggregateManagerProgressByUserIds(userIds, today);
+        Set<Long> visibleUserIds = Set.copyOf(userIds);
+        return staffDailyProgressService.aggregateManagerProgressFromPerformance(
+                performance.stream()
+                        .filter(score -> visibleUserIds.contains(score.managerUserId()))
+                        .toList(),
+                today
+        );
     }
 
     private List<Long> managerProgressUsers(

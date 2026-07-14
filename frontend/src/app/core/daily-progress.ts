@@ -12,6 +12,11 @@ export interface DailyWorkProgress {
   averageCloseSeconds: number;
   medianCloseSeconds: number;
   p90CloseSeconds: number;
+  firstActivityAt?: string | null;
+  lastActivityAt?: string | null;
+  activeWorkSeconds: number;
+  workWindowSeconds: number;
+  activityEvents: number;
   loadScore: number;
   efficiencyScore: number;
 }
