@@ -3,8 +3,8 @@ package com.hunt.otziv.reputationai.infrastructure.ai.yandex;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
-import com.hunt.otziv.reputationai.infrastructure.ai.AiRequest;
-import com.hunt.otziv.reputationai.infrastructure.ai.AiResponse;
+import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiRequest;
+import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiResponse;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 

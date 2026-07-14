@@ -6,8 +6,8 @@ import com.hunt.otziv.reputationai.api.dto.ReputationContentPackRequest;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
 import com.hunt.otziv.reputationai.domain.ReputationContentPack;
 import com.hunt.otziv.reputationai.domain.ResearchSnapshot;
-import com.hunt.otziv.reputationai.persistence.ReputationDeepReportJobEntity;
-import com.hunt.otziv.reputationai.persistence.ReputationDeepReportJobRepository;
+import com.hunt.otziv.reputationai.persistence.model.ReputationDeepReportJobEntity;
+import com.hunt.otziv.reputationai.persistence.repository.ReputationDeepReportJobRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

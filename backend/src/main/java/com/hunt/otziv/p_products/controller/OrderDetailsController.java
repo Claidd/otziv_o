@@ -9,7 +9,7 @@ import com.hunt.otziv.p_products.dto.NagulResult;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.services.service.OrderService;
-import com.hunt.otziv.p_products.worker_flow.WorkerPublicationGateService;
+import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.services.ReviewArchiveService;
 import com.hunt.otziv.r_review.services.ReviewService;

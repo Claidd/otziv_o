@@ -1,6 +1,6 @@
 package com.hunt.otziv.reputationai.infrastructure.search.yandex;
 
-import com.hunt.otziv.reputationai.infrastructure.search.SearchResult;
+import com.hunt.otziv.reputationai.infrastructure.search.dto.SearchResult;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;

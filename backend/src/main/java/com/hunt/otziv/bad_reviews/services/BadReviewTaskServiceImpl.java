@@ -23,7 +23,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
-import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
+import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;

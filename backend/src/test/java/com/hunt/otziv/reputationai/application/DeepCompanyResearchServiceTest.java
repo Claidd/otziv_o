@@ -5,7 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
-import com.hunt.otziv.reputationai.infrastructure.ai.openai.OpenAiResponseResult;
+import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

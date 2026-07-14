@@ -16,7 +16,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
-import com.hunt.otziv.p_products.worker_flow.WorkerTaskCompletionMonitorService;
+import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
