@@ -2770,7 +2770,7 @@ public class ManagerControlService {
     ) {
         boolean changed = false;
         LocalDateTime firstObservedAt = example.firstObservedAt();
-        if (firstObservedAt != null && (item.getCreatedAt() == null || firstObservedAt.isBefore(item.getCreatedAt()))) {
+        if (shouldAlignFirstObservedAt(item.getCreatedAt(), firstObservedAt)) {
             item.setCreatedAt(firstObservedAt);
             changed = true;
         }
@@ -2834,6 +2834,13 @@ public class ManagerControlService {
             }
         }
         return changed;
+    }
+
+    private boolean shouldAlignFirstObservedAt(LocalDateTime storedAt, LocalDateTime sourceAt) {
+        if (sourceAt == null) {
+            return false;
+        }
+        return storedAt == null || Math.abs(Duration.between(storedAt, sourceAt).getSeconds()) > 60;
     }
 
     private boolean reopenQueuedChatBindingRepair(ManagerDailyControlConcreteItem concreteItem) {

@@ -242,6 +242,13 @@ class ManagerControlServiceTest {
 
         assertTrue((Boolean) method.invoke(service, stored, source));
         assertEquals(sourceActionableAt, stored.getCreatedAt());
+
+        LocalDateTime correctedLaterSource = LocalDateTime.of(2026, 7, 15, 14, 55);
+        stored.setCreatedAt(LocalDateTime.of(2026, 7, 15, 0, 0));
+        source = source.withSla(correctedLaterSource, null, null, null);
+
+        assertTrue((Boolean) method.invoke(service, stored, source));
+        assertEquals(correctedLaterSource, stored.getCreatedAt());
     }
 
     @Test
