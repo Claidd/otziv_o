@@ -198,7 +198,7 @@ export interface CompanyCardItem {
 }
 
 export interface ClientMessageStatus {
-  state: 'sent' | 'scheduled' | 'failed' | 'manual_control' | 'none';
+  state: 'sent' | 'scheduled' | 'waiting_recovery' | 'failed' | 'manual_control' | 'none';
   label: string;
   tone: 'success' | 'wait' | 'danger' | 'muted';
   scenario?: string | null;

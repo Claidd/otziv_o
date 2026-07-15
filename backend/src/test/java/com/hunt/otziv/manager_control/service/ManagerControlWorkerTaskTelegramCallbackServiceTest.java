@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -81,7 +82,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
     }
 
     @Test
-    void riskExplanationButtonFromBoundWorkerGroupDoesNotRequirePersonalTelegramBinding() {
+    void riskExplanationButtonFromGroupTargetsAssignedWorkerTelegramOnly() {
         User worker = worker();
         WorkerRiskIncident incident = riskIncident();
         ManagerDailyControlConcreteItem item = riskConcreteItem();
@@ -89,29 +90,45 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         when(concreteItemRepository.findById(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
-        when(userService.findByChatId(444L)).thenReturn(Optional.empty());
+        when(userService.findByChatId(555L)).thenReturn(Optional.empty());
 
-        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 444L, "mc-task-risk-explain:30"));
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 555L, "mc-task-risk-explain:30"));
 
-        assertEquals(Optional.of("Напишите пояснение следующим сообщением"), answer);
+        assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), answer);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
         verify(riskIncidentRepository).save(captor.capture());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
-        verify(telegramService).sendForceReplyMessage(eq(-100123L), any());
+        verify(telegramService).sendSelectiveForceReplyMessage(
+                eq(-100123L),
+                eq(444L),
+                contains("Код запроса: risk-77")
+        );
+        verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
     }
 
     @Test
     void groupTextStoresPendingGeneralExplanationForBoundWorkerGroup() {
         User worker = worker();
         ManagerDailyControlConcreteItem item = generalConcreteItem();
+        item.setWorkerExplanationRequestedAt(java.time.LocalDateTime.now());
+        Worker reviewWorker = new Worker();
+        reviewWorker.setUser(worker);
+        Review review = new Review();
+        review.setWorker(reviewWorker);
 
-        when(userService.findByChatId(444L)).thenReturn(Optional.empty());
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
         when(userRepository.findAllByWorkerTelegramGroupChatIdOrderById(-100123L)).thenReturn(List.of(worker));
-        when(concreteItemRepository.findByWorkerNotificationUserIdAndWorkerExplanationRequestedAtIsNotNullAndWorkerExplanationAtIsNullOrderByWorkerExplanationPromptedAtDesc(2L))
-                .thenReturn(List.of(item));
+        when(concreteItemRepository.findById(31L)).thenReturn(Optional.of(item));
+        when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
         when(concreteItemRepository.save(any(ManagerDailyControlConcreteItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        boolean handled = service.handleWorkerGroupTextMessage(-100123L, 444L, "Закрыла, потому что карточка была ошибочная.");
+        boolean handled = service.handleWorkerGroupTextMessage(
+                -100123L,
+                444L,
+                "Нажмите «Ответить» на это сообщение.\nКод запроса: task-31",
+                true,
+                "Закрыла, потому что карточка была ошибочная."
+        );
 
         assertEquals(true, handled);
         ArgumentCaptor<ManagerDailyControlConcreteItem> captor = ArgumentCaptor.forClass(ManagerDailyControlConcreteItem.class);
@@ -119,6 +136,28 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertEquals("Закрыла, потому что карточка была ошибочная.", captor.getValue().getWorkerExplanation());
         assertEquals(2L, captor.getValue().getWorkerExplanationByUserId());
         verify(telegramService).sendMessage(eq(-100123L), any(String.class));
+    }
+
+    @Test
+    void groupTextFromOwnerIsNotStoredAsWorkerExplanation() {
+        User worker = worker();
+        User owner = new User();
+        owner.setId(5L);
+        owner.setActive(true);
+
+        when(userService.findByChatId(555L)).thenReturn(Optional.of(owner));
+        when(userRepository.findAllByWorkerTelegramGroupChatIdOrderById(-100123L)).thenReturn(List.of(worker));
+
+        boolean handled = service.handleWorkerGroupTextMessage(
+                -100123L,
+                555L,
+                "Нажмите «Ответить» на это сообщение.\nКод запроса: task-31",
+                true,
+                "Комментарий владельца"
+        );
+
+        assertEquals(false, handled);
+        verify(concreteItemRepository, never()).save(any());
     }
 
     @Test
@@ -193,6 +232,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         worker.setId(2L);
         worker.setUsername("worker");
         worker.setActive(true);
+        worker.setTelegramChatId(444L);
         worker.setWorkerTelegramGroupChatId(-100123L);
         return worker;
     }

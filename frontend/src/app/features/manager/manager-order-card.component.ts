@@ -149,7 +149,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
       if (status.scenario) {
         details.push(`Сценарий: ${this.clientMessageScenarioLabel(status.scenario)}`);
       }
-      if (status.errorCode) {
+      if (status.errorCode && status.state !== 'waiting_recovery') {
         details.push(`Код: ${status.errorCode}`);
       }
       if (status.errorMessage) {
@@ -205,7 +205,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
     const status = this.commonInvoiceStatusLabel().toLocaleLowerCase('ru-RU');
 
     if (this.commonInvoiceRecoveryHoldActive()) {
-      return 'Общий счет: ждем восстановления отзывов';
+      return 'Ждём восстановления отзывов';
     }
     if (this.cleanLabel(this.order.commonInvoiceLastError)) {
       return 'Контроль: ошибка общего счета';
@@ -237,7 +237,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
     const paid = this.order.commonInvoicePaidOrders ?? 0;
 
     if (this.commonInvoiceRecoveryHoldActive()) {
-      details.push('Восстановление отзывов активно, напоминания клиенту временно поставлены на паузу');
+      details.push('Отправка продолжится автоматически после завершения восстановления');
     } else if (error) {
       details.push(`Ошибка: ${error}`);
     }

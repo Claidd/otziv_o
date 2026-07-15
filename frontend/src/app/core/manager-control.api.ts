@@ -180,6 +180,10 @@ export interface ManagerControlSection {
   itemStatus?: ManagerControlItemStatus | null;
   actionType?: ManagerControlActionType | null;
   comment?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: 'TARGET' | 'LATE' | 'OVERDUE' | 'COMPLETED_TARGET' | 'COMPLETED_LATE' | 'COMPLETED_OVERDUE' | null;
 }
 
 export interface ManagerControlOverdueStatus {

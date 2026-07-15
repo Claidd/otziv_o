@@ -16,9 +16,11 @@ import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
+import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -28,6 +30,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,6 +88,9 @@ class ApiCabinetControllerTest {
     @Mock
     private StaffDailyProgressService staffDailyProgressService;
 
+    @Mock
+    private WorkerNetworkViolationService workerNetworkViolationService;
+
     private ApiCabinetController controller;
     private Principal principal;
     private Authentication authentication;
@@ -104,7 +110,8 @@ class ApiCabinetControllerTest {
                 paymentProfileService,
                 manualPaymentTaskService,
                 managerPerformanceService,
-                staffDailyProgressService
+                staffDailyProgressService,
+                workerNetworkViolationService
         );
         principal = () -> "alex";
         authentication = new UsernamePasswordAuthenticationToken(
@@ -117,6 +124,14 @@ class ApiCabinetControllerTest {
                 .role("ADMIN")
                 .build());
         lenient().when(managerPerformanceService.score(DATE)).thenReturn(List.of());
+        lenient().when(workerNetworkViolationService.statsForPeriod(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(Map.of());
+        lenient().when(workerNetworkViolationService.statisticsVisibleForRole(
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(true);
     }
 
     @Test
@@ -130,7 +145,7 @@ class ApiCabinetControllerTest {
         when(personalService.gerWorkersToAndCountToDateToOwner(List.of(fixture.worker()), DATE)).thenReturn(List.of());
         when(personalService.gerOperatorsAndCountToDateToOwner(List.of(fixture.operator()), DATE)).thenReturn(List.of());
 
-        ApiCabinetController.TeamResponse response = controller.team(principal, ownerAuthentication(), DATE, true);
+        ApiCabinetController.TeamResponse response = controller.team(principal, ownerAuthentication(), DATE, null, true);
 
         assertEquals("OWNER", response.role());
         assertEquals(100, response.managers().getFirst().getSum1Month());
@@ -161,7 +176,7 @@ class ApiCabinetControllerTest {
                 List.of()
         )));
 
-        ApiCabinetController.TeamResponse response = controller.team(principal, ownerAuthentication(), DATE, true);
+        ApiCabinetController.TeamResponse response = controller.team(principal, ownerAuthentication(), DATE, null, true);
 
         assertEquals("OWNER", response.role());
         assertEquals(200, response.managers().getFirst().getSum1Month());
@@ -186,7 +201,7 @@ class ApiCabinetControllerTest {
         when(personalService.gerWorkersToAndCountToDateToOwner(List.of(fixture.worker()), DATE)).thenReturn(List.of());
         when(personalService.gerOperatorsAndCountToDateToOwner(List.of(fixture.operator()), DATE)).thenReturn(List.of());
 
-        ApiCabinetController.TeamResponse response = controller.team(principal, ownerAuthentication(), DATE, true);
+        ApiCabinetController.TeamResponse response = controller.team(principal, ownerAuthentication(), DATE, null, true);
 
         assertEquals(175, response.managers().getFirst().getSum1Month());
     }
@@ -440,6 +455,18 @@ class ApiCabinetControllerTest {
                 .build();
     }
 
+    private User activeStaffUser(Long id, String fio, String roleName) {
+        Role role = new Role();
+        role.setName(roleName);
+        return User.builder()
+                .id(id)
+                .fio(fio)
+                .username("user-" + id)
+                .active(true)
+                .roles(Set.of(role))
+                .build();
+    }
+
     private Authentication ownerAuthentication() {
         return new UsernamePasswordAuthenticationToken(
                 "alex",
@@ -452,6 +479,12 @@ class ApiCabinetControllerTest {
         when(userService.findByUserName("alex")).thenReturn(Optional.of(fixture.owner()));
         when(userService.findManagersByUserName("alex")).thenReturn(Set.of(fixture.manager()));
         when(personalService.findAllManagersWorkers(List.of(fixture.manager()))).thenReturn(List.of(fixture.expandedManager()));
+        when(personalService.findCurrentMarketologsForManagers(List.of(fixture.manager())))
+                .thenReturn(List.of(fixture.marketolog()));
+        when(personalService.findCurrentWorkersForManagers(List.of(fixture.manager())))
+                .thenReturn(Set.of(fixture.worker()));
+        when(personalService.findCurrentOperatorsForManagers(List.of(fixture.manager())))
+                .thenReturn(Set.of(fixture.operator()));
     }
 
     private ManagersListDTO managerDto(String fio, int sum1Month) {
@@ -487,15 +520,15 @@ class ApiCabinetControllerTest {
                 .build();
         Marketolog marketolog = Marketolog.builder()
                 .id(200L)
-                .user(user(20L, "Marketolog One"))
+                .user(activeStaffUser(20L, "Marketolog One", "ROLE_MARKETOLOG"))
                 .build();
         Worker worker = Worker.builder()
                 .id(300L)
-                .user(user(30L, "Worker One"))
+                .user(activeStaffUser(30L, "Worker One", "ROLE_WORKER"))
                 .build();
         Operator operator = Operator.builder()
                 .id(400L)
-                .user(user(40L, "Operator One"))
+                .user(activeStaffUser(40L, "Operator One", "ROLE_OPERATOR"))
                 .build();
 
         User expandedManagerUser = User.builder()

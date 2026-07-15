@@ -273,6 +273,9 @@ export interface AdminClientMessageSettings {
   paymentReminderIntervalDays: number;
   reviewCheckRetryDelayHours: number;
   paymentInvoiceRetryDelayHours: number;
+  transientRetryMinutes: number;
+  manualControlFailureThreshold: number;
+  manualControlAfterMinutes: number;
   badReviewInvoiceRetryDelayHours: number;
   badReviewAutoBanDelayDays: number;
   reviewRecoveryNoticeRetryDelayHours: number;
@@ -400,9 +403,13 @@ export interface AdminClientMessageMonitor {
   readyToSendNow: number;
   waitingForWindow: number;
   missingChannelBindings: number;
+  manualControlCandidates: number;
+  retryWaitingCandidates: number;
+  recoveryHoldCandidates: number;
   sentToday: number;
   failedToday: number;
   skippedToday: number;
+  autoRecoveredToday: number;
   disabledStates: number;
   archiveDiagnostics?: AdminClientMessageArchiveDiagnostics | null;
   scenarios: AdminClientMessageMonitorScenario[];

@@ -101,6 +101,7 @@ public interface ZpRepository extends CrudRepository<Zp, Long>  {
         ) z ON z.zp_user = u.id
         LEFT JOIN users_roles ur ON ur.user_id = u.id
         LEFT JOIN roles r ON r.id = ur.role_id
+        WHERE u.active = true
         GROUP BY u.id, u.fio, z.total_sum, z.total_orders, z.total_amount
         ORDER BY totalSum DESC
     """, nativeQuery = true)

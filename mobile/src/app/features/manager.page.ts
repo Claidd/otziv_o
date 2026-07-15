@@ -25,6 +25,7 @@ import {
   CompanyCreateSource,
   CompanyItem,
   CompanyUpdateRequest,
+  DailyWorkProgress,
   ManagerBoard,
   ManagerBoardSection,
   ManagerOption,
@@ -133,6 +134,27 @@ type CompanyPreservedFields = Pick<
             [ariaLabel]="'Статусы: ' + sectionLabel()"
             (select)="selectStatus($event)"
           />
+
+          @if (board()?.dailyProgress; as progress) {
+            @if (progress.visible) {
+              <section
+                class="manager-day-progress"
+                [class.complete]="progress.checked"
+                [class.empty]="(progress.total || 0) <= 0"
+                [title]="managerProgressTitle(progress)"
+                aria-label="Дневной прогресс менеджера"
+              >
+                <span>Прогресс</span>
+                <i><b [style.width.%]="managerProgressPercent(progress)"></b></i>
+                <strong>{{ progress.completed || 0 }}/{{ progress.total || 0 }}</strong>
+                <em>{{ managerProgressPercent(progress) }}%</em>
+                @if (progress.checked) {
+                  <span class="material-icons-sharp">check_circle</span>
+                }
+              </section>
+              <p class="manager-day-progress-summary">{{ managerProgressSummary(progress) }}</p>
+            }
+          }
 
           <app-mobile-search-bar
             [value]="keyword()"
@@ -1353,6 +1375,96 @@ type CompanyPreservedFields = Pick<
       opacity: 0.52;
     }
 
+    .manager-day-progress {
+      display: grid;
+      flex: 0 0 auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      gap: 0.34rem;
+      min-height: 1.48rem;
+      border: 1px solid rgba(108, 155, 207, 0.22);
+      border-radius: 999px;
+      padding: 0.18rem 0.42rem;
+      color: var(--otziv-dark);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 0.55rem 1.1rem rgba(132, 139, 200, 0.08);
+    }
+
+    .manager-day-progress span,
+    .manager-day-progress strong,
+    .manager-day-progress em {
+      display: block;
+      overflow: hidden;
+      min-width: 0;
+      font-size: 0.62rem;
+      font-style: normal;
+      font-weight: 950;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .manager-day-progress > span:first-child {
+      max-width: 4.8rem;
+      color: var(--otziv-info);
+      font-size: 0.58rem;
+    }
+
+    .manager-day-progress i {
+      display: block;
+      overflow: hidden;
+      height: 0.36rem;
+      min-width: 5rem;
+      border-radius: 999px;
+      background: rgba(136, 150, 169, 0.18);
+    }
+
+    .manager-day-progress i b {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ef5f7d 0%, #f2a06a 55%, #52af91 100%);
+      transition: width 180ms ease;
+    }
+
+    .manager-day-progress.complete i b {
+      background: linear-gradient(90deg, #54b894 0%, #6fcba5 100%);
+    }
+
+    .manager-day-progress.empty i b {
+      background: rgba(136, 150, 169, 0.24);
+    }
+
+    .manager-day-progress .material-icons-sharp {
+      color: #52af91;
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .manager-day-progress-summary {
+      flex: 0 0 auto;
+      margin: -0.18rem 0 0;
+      overflow: hidden;
+      padding: 0 0.42rem;
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 900;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    :host-context(body.otziv-dark-theme) .manager-day-progress {
+      border-color: rgba(163, 189, 204, 0.2);
+      background: rgba(21, 26, 30, 0.72);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .manager-day-progress i {
+      background: rgba(163, 189, 204, 0.18);
+    }
+
     .manager-list {
       flex: 1 1 0;
       min-height: 0;
@@ -1977,6 +2089,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   private readonly listStateMaxAgeMs = 2 * 60 * 60 * 1000;
   private routeSubscription?: Subscription;
   private lastMobileNavKey = '';
+  private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly board = signal<ManagerBoard | null>(null);
   readonly activeSection = signal<ManagerBoardSection>('companies');
@@ -2088,6 +2201,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.applyMobileNavIntent(false);
     this.lastMobileNavKey = this.mobileNavKey();
     this.initialized = true;
+    this.scheduleMidnightRefresh();
     void this.load();
     this.routeSubscription = this.route.queryParamMap.subscribe((params) => {
       if (!this.initialized) {
@@ -2131,6 +2245,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyNoteTimers.clear();
     this.orderNoteTimers.forEach((timer) => clearTimeout(timer));
     this.orderNoteTimers.clear();
+    this.clearMidnightRefresh();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -2272,6 +2387,53 @@ export class ManagerPage implements OnInit, OnDestroy {
     const company = this.selectedCompany();
     const companySuffix = this.activeSection() === 'orders' && company ? ` · ${company.title}` : '';
     return `${this.activeTotal()} записей · ${this.currentStatus().toLowerCase()}${companySuffix}`;
+  }
+
+  managerProgressPercent(progress?: DailyWorkProgress | null): number {
+    if (!progress) {
+      return 0;
+    }
+    const fallback = progress.total > 0 ? (progress.completed / progress.total) * 100 : (progress.checked ? 100 : 0);
+    return this.clampPercent(progress.percent ?? fallback);
+  }
+
+  managerProgressTitle(progress?: DailyWorkProgress | null): string {
+    if (!progress) {
+      return 'Прогресс пока не рассчитан.';
+    }
+    const parts = [
+      `Прогресс дня: закрыто ${progress.completed || 0} из ${progress.total || 0}`,
+      `${this.managerProgressPercent(progress)}%`
+    ];
+    if (progress.active > 0) {
+      parts.push(`осталось ${progress.active}`);
+    }
+    if (progress.medianCloseSeconds > 0) {
+      parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
+    }
+    return parts.join(' · ');
+  }
+
+  managerProgressSummary(progress?: DailyWorkProgress | null): string {
+    if (!progress?.visible) {
+      return '';
+    }
+    if ((progress.total || 0) <= 0) {
+      return 'Нет задач за день';
+    }
+    const parts: string[] = [];
+    if (progress.checked) {
+      parts.push('День закрыт');
+    } else {
+      parts.push(`Осталось ${progress.active || 0}`);
+    }
+    if (progress.reached100 && !progress.checked) {
+      parts.push('100% уже был');
+    }
+    if (progress.medianCloseSeconds > 0) {
+      parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
+    }
+    return parts.join(' · ');
   }
 
   activeTotal(): number {
@@ -3577,6 +3739,64 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   dateText(value?: string): string {
     return value ? value.slice(0, 10) : 'Нет даты';
+  }
+
+  private clampPercent(value?: number | null): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(numeric)));
+  }
+
+  private formatDurationSeconds(value?: number | null): string {
+    const totalMinutes = Math.max(0, Math.round((value || 0) / 60));
+    if (totalMinutes <= 0) {
+      return '0 мин';
+    }
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    const parts: string[] = [];
+    if (days > 0) {
+      parts.push(`${days} д`);
+    }
+    if (hours > 0) {
+      parts.push(`${hours} ч`);
+    }
+    if (minutes > 0 || parts.length === 0) {
+      parts.push(`${minutes} мин`);
+    }
+    return parts.slice(0, 2).join(' ');
+  }
+
+  private localDateKey(date = new Date()): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private scheduleMidnightRefresh(): void {
+    this.clearMidnightRefresh();
+    const previousDay = this.localDateKey();
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
+    const delay = Math.max(1000, Math.min(2_147_483_647, nextMidnight.getTime() - now.getTime()));
+
+    this.midnightRefreshTimer = setTimeout(() => {
+      if (this.localDateKey() !== previousDay) {
+        void this.load();
+      }
+      this.scheduleMidnightRefresh();
+    }, delay);
+  }
+
+  private clearMidnightRefresh(): void {
+    if (this.midnightRefreshTimer) {
+      clearTimeout(this.midnightRefreshTimer);
+      this.midnightRefreshTimer = null;
+    }
   }
 
   private async load(): Promise<void> {

@@ -1,5 +1,7 @@
 package com.hunt.otziv.manager_control.dto;
 
+import java.time.LocalDateTime;
+
 public record ManagerControlSectionResponse(
         String code,
         String label,
@@ -10,7 +12,11 @@ public record ManagerControlSectionResponse(
         Long itemId,
         String itemStatus,
         String actionType,
-        String comment
+        String comment,
+        LocalDateTime firstObservedAt,
+        LocalDateTime targetDeadlineAt,
+        LocalDateTime hardDeadlineAt,
+        String slaState
 ) {
     public ManagerControlSectionResponse(
             String code,
@@ -20,6 +26,6 @@ public record ManagerControlSectionResponse(
             String group,
             String targetUrl
     ) {
-        this(code, label, count, severity, group, targetUrl, null, null, null, null);
+        this(code, label, count, severity, group, targetUrl, null, null, null, null, null, null, null, null);
     }
 }

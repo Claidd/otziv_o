@@ -128,6 +128,10 @@ import java.util.stream.Collectors;
 public class ManagerControlService {
 
     private static final int DETAIL_EXAMPLE_LIMIT = 5;
+    private static final String CONTROL_CARD_TARGET_SETTING = "manager.sla.target.control-card-minutes";
+    private static final String CONTROL_CARD_HARD_SETTING = "manager.sla.hard.control-card-minutes";
+    private static final int CONTROL_CARD_TARGET_MINUTES = 30;
+    private static final int CONTROL_CARD_HARD_MINUTES = 60;
     private static final int MANUAL_FOLLOW_UP_DAYS = 2;
     private static final int WORKER_TASK_FOLLOW_UP_HOURS = 3;
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
@@ -780,16 +784,8 @@ public class ManagerControlService {
             String label
     ) {
         Manager manager = control == null ? null : control.getManager();
-        String normalized = safe(reasonCode).toUpperCase(Locale.ROOT);
-        boolean risk = normalized.contains("RISK");
-        int target = Math.max(1, appSettingService.getInt(
-                risk ? "manager.sla.target.risk-minutes" : "manager.sla.target.default-minutes",
-                risk ? 30 : 120
-        ));
-        int hard = Math.max(target, appSettingService.getInt(
-                risk ? "manager.sla.hard.risk-minutes" : "manager.sla.hard.default-minutes",
-                risk ? 240 : 720
-        ));
+        int target = controlCardTargetMinutes();
+        int hard = controlCardHardMinutes(target);
         gamificationEventService.recordManagerControlAction(
                 manager,
                 uniqueKey,
@@ -2476,15 +2472,8 @@ public class ManagerControlService {
             return new SlaWindow(null, null, null, null);
         }
         LocalDateTime started = firstObservedAt == null ? LocalDateTime.now() : firstObservedAt;
-        String normalized = safe(code).toUpperCase(Locale.ROOT);
-        String suffix = normalized.contains("UNANSWERED") ? "message"
-                : normalized.contains("LEAD") ? "lead"
-                : normalized.contains("RISK") ? "risk"
-                : "default";
-        int defaultTarget = "message".equals(suffix) || "risk".equals(suffix) ? 30 : "lead".equals(suffix) ? 60 : 120;
-        int defaultHard = "risk".equals(suffix) ? 240 : "message".equals(suffix) || "lead".equals(suffix) ? 480 : 720;
-        int targetMinutes = Math.max(1, appSettingService.getInt("manager.sla.target." + suffix + "-minutes", defaultTarget));
-        int hardMinutes = Math.max(targetMinutes, appSettingService.getInt("manager.sla.hard." + suffix + "-minutes", defaultHard));
+        int targetMinutes = controlCardTargetMinutes();
+        int hardMinutes = controlCardHardMinutes(targetMinutes);
         LocalDateTime target = started.plusMinutes(targetMinutes);
         LocalDateTime hard = started.plusMinutes(hardMinutes);
         LocalDateTime reference = completedAt == null ? LocalDateTime.now() : completedAt;
@@ -2493,10 +2482,19 @@ public class ManagerControlService {
         return new SlaWindow(started, target, hard, state);
     }
 
+    private int controlCardTargetMinutes() {
+        return Math.max(1, appSettingService.getInt(CONTROL_CARD_TARGET_SETTING, CONTROL_CARD_TARGET_MINUTES));
+    }
+
+    private int controlCardHardMinutes(int targetMinutes) {
+        return Math.max(targetMinutes, appSettingService.getInt(CONTROL_CARD_HARD_SETTING, CONTROL_CARD_HARD_MINUTES));
+    }
+
     private ManagerControlSectionResponse decorate(ManagerControlSectionResponse response, ManagerDailyControlItem item) {
         if (item == null) {
             return response;
         }
+        SlaWindow sla = slaWindow(response.code(), item.getCreatedAt(), item.getResolvedAt());
         return new ManagerControlSectionResponse(
                 response.code(),
                 response.label(),
@@ -2507,7 +2505,11 @@ public class ManagerControlService {
                 item.getId(),
                 item.getStatus().name(),
                 item.getActionType() == null ? null : item.getActionType().name(),
-                item.getComment()
+                item.getComment(),
+                sla.firstObservedAt(),
+                sla.targetDeadlineAt(),
+                sla.hardDeadlineAt(),
+                sla.state()
         );
     }
 

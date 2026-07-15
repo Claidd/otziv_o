@@ -153,6 +153,28 @@ export interface TeamMember {
   intVigul?: number;
   publish?: number;
   dailyProgress?: DailyWorkProgress | null;
+  monthlyProgress?: DailyWorkProgress | null;
+  dailyNetworkViolations?: WorkerNetworkViolationStats | null;
+  monthlyNetworkViolations?: WorkerNetworkViolationStats | null;
+}
+
+export interface WorkerNetworkViolationStats {
+  visible: boolean;
+  episodeCount: number;
+  attemptCount: number;
+  daysWithViolations: number;
+  severity: 'NONE' | 'WARNING' | 'CRITICAL';
+  details: WorkerNetworkViolationDetail[];
+}
+
+export interface WorkerNetworkViolationDetail {
+  firstSeenAt: string;
+  lastSeenAt: string;
+  reason: string;
+  scope: string;
+  attemptCount: number;
+  provider?: string | null;
+  blocked: boolean;
 }
 
 export interface TeamResponse {
@@ -263,6 +285,10 @@ export type AnalyticsOptions = CacheOptions & {
   allTime?: boolean;
 };
 
+export type TeamOptions = CacheOptions & {
+  month?: string;
+};
+
 type CacheEntry<T> = {
   expiresAt: number;
   request$: Observable<T>;
@@ -304,12 +330,14 @@ export class CabinetApi {
     );
   }
 
-  getTeam(date?: string, options: CacheOptions = {}): Observable<TeamResponse> {
-    const cacheKey = this.cacheKey('team', date ?? 'current');
+  getTeam(date?: string, options: TeamOptions = {}): Observable<TeamResponse> {
+    const cacheKey = this.cacheKey('team', date ?? 'current', options.month ?? 'current-month');
 
     return this.cached(this.teamCache, cacheKey, options, () =>
       this.http.get<TeamResponse>(`${appEnvironment.apiBaseUrl}/api/cabinet/team`, {
-        params: this.paramsWithDate(date, options)
+        params: options.month
+          ? this.paramsWithDate(date, options).set('month', options.month)
+          : this.paramsWithDate(date, options)
       })
     );
   }

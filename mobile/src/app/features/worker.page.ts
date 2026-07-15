@@ -11,6 +11,7 @@ import {
 import { Subscription, firstValueFrom } from 'rxjs';
 import {
   ApiService,
+  DailyWorkProgress,
   ManagerOverdueOrders,
   ManagerOverdueStatus,
   MetricItem,
@@ -130,6 +131,27 @@ type CredentialWaitSection = 'publish' | 'nagul';
             ariaLabel="Разделы специалиста"
             (select)="selectStatusSliderSection($event)"
           />
+
+          @if (board()?.dailyProgress; as progress) {
+            @if (progress.visible) {
+              <section
+                class="worker-day-progress"
+                [class.complete]="progress.checked"
+                [class.empty]="(progress.total || 0) <= 0"
+                [title]="workerProgressTitle(progress)"
+                aria-label="Дневной прогресс специалиста"
+              >
+                <span>Прогресс</span>
+                <i><b [style.width.%]="workerProgressPercent(progress)"></b></i>
+                <strong>{{ progress.completed || 0 }}/{{ progress.total || 0 }}</strong>
+                <em>{{ workerProgressPercent(progress) }}%</em>
+                @if (progress.checked) {
+                  <span class="material-icons-sharp">check_circle</span>
+                }
+              </section>
+              <p class="worker-day-progress-summary">{{ workerProgressSummary(progress) }}</p>
+            }
+          }
 
           <app-mobile-search-bar
             [value]="keyword()"
@@ -605,6 +627,86 @@ type CredentialWaitSection = 'publish' | 'nagul';
 
     .worker-search-line button:disabled {
       opacity: 0.52;
+    }
+
+    .worker-day-progress {
+      display: grid;
+      flex: 0 0 auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      gap: 0.34rem;
+      min-height: 1.48rem;
+      border: 1px solid rgba(108, 155, 207, 0.22);
+      border-radius: 999px;
+      padding: 0.18rem 0.42rem;
+      color: var(--otziv-dark);
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 0.55rem 1.1rem rgba(132, 139, 200, 0.08);
+    }
+
+    .worker-day-progress span,
+    .worker-day-progress strong,
+    .worker-day-progress em {
+      display: block;
+      overflow: hidden;
+      min-width: 0;
+      font-size: 0.62rem;
+      font-style: normal;
+      font-weight: 950;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .worker-day-progress > span:first-child {
+      max-width: 4.8rem;
+      color: var(--otziv-info);
+      font-size: 0.58rem;
+    }
+
+    .worker-day-progress i {
+      display: block;
+      overflow: hidden;
+      height: 0.36rem;
+      min-width: 5rem;
+      border-radius: 999px;
+      background: rgba(136, 150, 169, 0.18);
+    }
+
+    .worker-day-progress i b {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ef5f7d 0%, #f2a06a 55%, #52af91 100%);
+      transition: width 180ms ease;
+    }
+
+    .worker-day-progress.complete i b {
+      background: linear-gradient(90deg, #54b894 0%, #6fcba5 100%);
+    }
+
+    .worker-day-progress.empty i b {
+      background: rgba(136, 150, 169, 0.24);
+    }
+
+    .worker-day-progress .material-icons-sharp {
+      color: #52af91;
+      font-size: 0.9rem;
+      line-height: 1;
+    }
+
+    .worker-day-progress-summary {
+      flex: 0 0 auto;
+      margin: -0.18rem 0 0;
+      overflow: hidden;
+      padding: 0 0.42rem;
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 900;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .worker-status-strip {
@@ -1308,6 +1410,16 @@ type CredentialWaitSection = 'publish' | 'nagul';
       background: rgba(25, 30, 36, 0.92);
     }
 
+    :host-context(body.otziv-dark-theme) .worker-day-progress {
+      border-color: rgba(163, 189, 204, 0.2);
+      background: rgba(21, 26, 30, 0.72);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .worker-day-progress i {
+      background: rgba(163, 189, 204, 0.18);
+    }
+
     :host-context(body.otziv-dark-theme) .publish-button:not(.credential-locked) {
       color: #7af0d0 !important;
       background: rgba(27, 156, 133, 0.18) !important;
@@ -1327,6 +1439,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private publishCredentialWaitTimer: ReturnType<typeof setInterval> | null = null;
+  private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly publishCredentialPreparationStorageKeys: Record<CredentialWaitSection, string> = {
     publish: 'otziv-mobile-worker-publish-prep:v1',
     nagul: 'otziv-mobile-worker-nagul-prep:v1'
@@ -1423,6 +1536,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.restoreStoredListState();
     this.applyMobileNavIntent(false);
     this.lastMobileNavKey = this.mobileNavKey();
+    this.scheduleMidnightRefresh();
     void this.load();
     this.loadDailyOverdueReminder();
     this.routeSubscription = this.route.queryParamMap.subscribe((params) => {
@@ -1444,6 +1558,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.clearSearchTimer();
     this.clearNoticeTimer();
     this.clearPublishCredentialWaitTimer();
+    this.clearMidnightRefresh();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -2254,6 +2369,59 @@ export class WorkerPage implements OnInit, OnDestroy {
     return Number(this.sectionMetric(section)?.delta ?? 0);
   }
 
+  workerProgressPercent(progress?: DailyWorkProgress | null): number {
+    if (!progress) {
+      return 0;
+    }
+    const fallback = progress.total > 0 ? (progress.completed / progress.total) * 100 : (progress.checked ? 100 : 0);
+    return this.clampPercent(progress.percent ?? fallback);
+  }
+
+  workerProgressTitle(progress?: DailyWorkProgress | null): string {
+    if (!progress) {
+      return 'Прогресс пока не рассчитан.';
+    }
+    const parts = [
+      `Прогресс дня: закрыто ${progress.completed || 0} из ${progress.total || 0}`,
+      `${this.workerProgressPercent(progress)}%`
+    ];
+    if (progress.active > 0) {
+      parts.push(`осталось ${progress.active}`);
+    }
+    if ((progress.orderOverdueCount || 0) > 0) {
+      parts.push(`проср. заказов ${progress.orderOverdueCount}`);
+    }
+    if (progress.medianCloseSeconds > 0) {
+      parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
+    }
+    return parts.join(' · ');
+  }
+
+  workerProgressSummary(progress?: DailyWorkProgress | null): string {
+    if (!progress?.visible) {
+      return '';
+    }
+    if ((progress.total || 0) <= 0) {
+      return 'Нет задач за день';
+    }
+    const parts: string[] = [];
+    if (progress.checked) {
+      parts.push('День закрыт');
+    } else {
+      parts.push(`Осталось ${progress.active || 0}`);
+    }
+    if (progress.reached100 && !progress.checked) {
+      parts.push('100% уже был');
+    }
+    if ((progress.orderOverdueCount || 0) > 0) {
+      parts.push(`проср. заказов ${progress.orderOverdueCount}`);
+    }
+    if (progress.medianCloseSeconds > 0) {
+      parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
+    }
+    return parts.join(' · ');
+  }
+
   activeTotal(): number {
     return this.activePage().totalElements ?? 0;
   }
@@ -2648,6 +2816,35 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   money(value?: number): string {
     return `${Math.round(Number(value ?? 0)).toLocaleString('ru-RU')} руб.`;
+  }
+
+  private clampPercent(value?: number | null): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(numeric)));
+  }
+
+  private formatDurationSeconds(value?: number | null): string {
+    const totalMinutes = Math.max(0, Math.round((value || 0) / 60));
+    if (totalMinutes <= 0) {
+      return '0 мин';
+    }
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    const parts: string[] = [];
+    if (days > 0) {
+      parts.push(`${days} д`);
+    }
+    if (hours > 0) {
+      parts.push(`${hours} ч`);
+    }
+    if (minutes > 0 || parts.length === 0) {
+      parts.push(`${minutes} мин`);
+    }
+    return parts.slice(0, 2).join(' ');
   }
 
   isMutating(key: string): boolean {
@@ -3167,6 +3364,29 @@ export class WorkerPage implements OnInit, OnDestroy {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
+  }
+
+  private scheduleMidnightRefresh(): void {
+    this.clearMidnightRefresh();
+    const previousDay = this.localDateKey();
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
+    const delay = Math.max(1000, Math.min(2_147_483_647, nextMidnight.getTime() - now.getTime()));
+
+    this.midnightRefreshTimer = setTimeout(() => {
+      if (this.localDateKey() !== previousDay) {
+        void this.load();
+        this.loadDailyOverdueReminder();
+      }
+      this.scheduleMidnightRefresh();
+    }, delay);
+  }
+
+  private clearMidnightRefresh(): void {
+    if (this.midnightRefreshTimer) {
+      clearTimeout(this.midnightRefreshTimer);
+      this.midnightRefreshTimer = null;
+    }
   }
 
   private readStoredDate(key: string): string | null {

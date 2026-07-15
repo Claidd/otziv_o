@@ -728,7 +728,7 @@ export interface OrderItem {
 }
 
 export interface ClientMessageStatus {
-  state: 'sent' | 'scheduled' | 'failed' | 'manual_control' | 'none';
+  state: 'sent' | 'scheduled' | 'waiting_recovery' | 'failed' | 'manual_control' | 'none';
   label: string;
   tone: 'success' | 'wait' | 'danger' | 'muted';
   scenario?: string | null;
@@ -1177,6 +1177,7 @@ export interface ManagerBoard {
   orders: Page<OrderItem>;
   orderStatuses: string[];
   companyStatuses: string[];
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface ManagerBoardQuery {
@@ -1600,6 +1601,7 @@ export interface WorkerBoard {
   message?: string;
   warning?: boolean;
   credentialPreparation?: WorkerCredentialPreparation | null;
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface WorkerBoardQuery {
@@ -2244,6 +2246,10 @@ export interface AdminClientMessageMonitor {
   readyToSendNow?: number;
   waitingForWindow?: number;
   missingChannelBindings?: number;
+  manualControlCandidates?: number;
+  retryWaitingCandidates?: number;
+  recoveryHoldCandidates?: number;
+  autoRecoveredToday?: number;
   sentToday: number;
   failedToday: number;
   skippedToday: number;
@@ -2578,6 +2584,51 @@ export interface CabinetStatDto {
   percent2MonthOrders: number;
 }
 
+export interface DailyWorkProgress {
+  visible: boolean;
+  roleType: 'MANAGER' | 'WORKER' | string;
+  date: string;
+  completed: number;
+  active: number;
+  total: number;
+  percent: number;
+  checked: boolean;
+  firstCompletedAt?: string | null;
+  lastCompletedAt?: string | null;
+  averageCloseSeconds: number;
+  medianCloseSeconds: number;
+  p90CloseSeconds: number;
+  firstActivityAt?: string | null;
+  lastActivityAt?: string | null;
+  activeWorkSeconds: number;
+  workWindowSeconds: number;
+  activityEvents: number;
+  loadScore: number;
+  efficiencyScore: number;
+  openedCount?: number;
+  orderCompletedCount?: number;
+  nagulCompletedCount?: number;
+  publishCompletedCount?: number;
+  badCompletedCount?: number;
+  recoveryCompletedCount?: number;
+  recoveryCreatedCount?: number;
+  orderOverdueCount?: number;
+  totalOverdueCount?: number;
+  speedScore?: number;
+  disciplineScore?: number;
+  workloadScore?: number;
+  botChangeCount?: number;
+  botBlockCount?: number;
+  reached100?: boolean;
+  firstReached100At?: string | null;
+  lastReached100At?: string | null;
+  periodType?: 'DAY' | 'MONTH' | string;
+  workingDays?: number;
+  checkedDays?: number;
+  reached100Days?: number;
+  closedPeriod?: boolean;
+}
+
 export interface TeamMember {
   id: number;
   userId: number;
@@ -2596,6 +2647,8 @@ export interface TeamMember {
   inCorrect?: number | null;
   intVigul?: number | null;
   publish?: number | null;
+  dailyProgress?: DailyWorkProgress | null;
+  monthlyProgress?: DailyWorkProgress | null;
 }
 
 export interface TeamResponse {
@@ -2674,6 +2727,11 @@ export interface AnalyticsOptions {
   allTime?: boolean;
 }
 
+export interface TeamOptions {
+  forceRefresh?: boolean;
+  month?: string;
+}
+
 export interface ManagerManualPaymentSettings {
   profileId?: number | null;
   profileName: string;
@@ -2746,9 +2804,13 @@ export class ApiService {
     });
   }
 
-  getCabinetTeam(date?: string, options: { forceRefresh?: boolean } = {}): Observable<TeamResponse> {
+  getCabinetTeam(date?: string, options: TeamOptions = {}): Observable<TeamResponse> {
+    let params = this.cabinetDateParams(date, options.forceRefresh);
+    if (options.month) {
+      params = params.set('month', options.month);
+    }
     return this.http.get<TeamResponse>(this.apiUrl('/api/cabinet/team'), {
-      params: this.cabinetDateParams(date, options.forceRefresh)
+      params
     });
   }
 

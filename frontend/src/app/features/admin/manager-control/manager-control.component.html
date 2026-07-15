@@ -350,7 +350,7 @@
                     @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
                       <a
                         [href]="problem.targetUrl"
-                        class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}"
+                        class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }} {{ slaCardClass(problem) }}"
                         [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
                         [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
                       >
@@ -369,9 +369,17 @@
                       </a>
                     }
                     @for (section of actionSections(manager); track trackSection($index, section)) {
-                      <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }}" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
+                      <a
+                        [href]="section.targetUrl"
+                        class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }} {{ slaCardClass(section) }}"
+                        [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'"
+                        [class.has-sla]="section.targetDeadlineAt && (!section.itemStatus || section.itemStatus === 'OPEN')"
+                      >
                         <span>{{ section.label }}</span>
                         <strong>{{ section.count }}</strong>
+                        @if (slaTimer(section)) {
+                          <small class="sla-timer {{ slaTimerClass(section) }}">{{ slaTimer(section) }}</small>
+                        }
                         @if (section.itemStatus && section.itemStatus !== 'OPEN') {
                           <em>{{ itemStatusLabel(section.itemStatus) }}</em>
                         }
@@ -462,7 +470,7 @@
                   @for (problem of actionProblems(manager); track trackProblem($index, problem)) {
                     <a
                       [href]="problem.targetUrl"
-                      class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }}"
+                      class="control-chip critical {{ countToneClass(problem.count) }} {{ itemActionClass(problem.actionType) }} {{ slaCardClass(problem) }}"
                       [class.handled]="problem.itemStatus && problem.itemStatus !== 'OPEN'"
                       [class.has-sla]="problem.targetDeadlineAt && (!problem.itemStatus || problem.itemStatus === 'OPEN')"
                     >
@@ -481,9 +489,17 @@
                     </a>
                   }
                   @for (section of actionSections(manager); track trackSection($index, section)) {
-                    <a [href]="section.targetUrl" class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }}" [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'">
+                    <a
+                      [href]="section.targetUrl"
+                      class="control-chip critical {{ countToneClass(section.count) }} {{ itemActionClass(section.actionType) }} {{ slaCardClass(section) }}"
+                      [class.handled]="section.itemStatus && section.itemStatus !== 'OPEN'"
+                      [class.has-sla]="section.targetDeadlineAt && (!section.itemStatus || section.itemStatus === 'OPEN')"
+                    >
                       <span>{{ section.label }}</span>
                       <strong>{{ section.count }}</strong>
+                      @if (slaTimer(section)) {
+                        <small class="sla-timer {{ slaTimerClass(section) }}">{{ slaTimer(section) }}</small>
+                      }
                       @if (section.itemStatus && section.itemStatus !== 'OPEN') {
                         <em>{{ itemStatusLabel(section.itemStatus) }}</em>
                       }
@@ -688,6 +704,13 @@
               @if (dayControlHint()) {
                 <p class="day-control-hint">{{ dayControlHint() }}</p>
               }
+              <div class="sla-goal-note" title="Цель для всех карточек, уже попавших в контроль: закрыть до 30 минут отлично, до 60 минут приемлемо, более 60 минут плохо.">
+                <span class="material-icons-sharp">timer</span>
+                <strong>Цель карточек контроля</strong>
+                <span><b>до 30 мин</b> отлично</span>
+                <span><b>до 60 мин</b> приемлемо</span>
+                <span><b>60+ мин</b> плохо</span>
+              </div>
               <div class="auto-close-state" [class.ready]="detail()!.canCloseDay && !detail()!.closedAt" [class.closed]="!!detail()!.closedAt">
                 <span class="material-icons-sharp">{{ detail()!.closedAt ? 'verified' : detail()!.canCloseDay ? 'schedule' : 'lock_clock' }}</span>
                 <em>{{ controlAutoCloseStatus() }}</em>
@@ -744,7 +767,7 @@
                   <div class="detail-examples">
                     @for (example of item.examples; track example.controlEntityId || example.type + '-' + example.entityId + '-' + $index) {
                       <div
-                        class="detail-example"
+                        class="detail-example {{ slaCardClass(example) }}"
                         [class.handled]="example.itemStatus && example.itemStatus !== 'OPEN'"
                         [class.waiting-client]="isWaitingForClientExample(example)"
                       >

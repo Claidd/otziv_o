@@ -114,6 +114,16 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['ADMIN', 'OWNER']
   },
   {
+    id: 'manager-control',
+    label: 'Контроль',
+    description: 'Замечания менеджеров',
+    icon: 'fact_check',
+    active: 'manager-control',
+    group: 'home',
+    routerLink: '/admin/manager-control',
+    roles: ['ADMIN', 'OWNER']
+  },
+  {
     id: 'team',
     label: 'Моя команда',
     description: 'Сотрудники и показатели',
@@ -182,16 +192,6 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     active: 'tbank-payments',
     group: 'home',
     routerLink: '/admin/tbank-payments',
-    roles: ['ADMIN', 'OWNER']
-  },
-  {
-    id: 'manager-control',
-    label: 'Контроль',
-    description: 'Замечания менеджеров',
-    icon: 'fact_check',
-    active: 'manager-control',
-    group: 'home',
-    routerLink: '/admin/manager-control',
     roles: ['ADMIN', 'OWNER']
   },
   {

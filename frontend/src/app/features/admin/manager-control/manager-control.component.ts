@@ -332,28 +332,55 @@ export class ManagerControlComponent implements OnInit {
     this.api.myQueueState().subscribe({ next: (state) => this.queueState.set(state), error: () => this.queueState.set(null) });
   }
 
-  slaTimer(item: ManagerControlProblem | ManagerControlConcreteItem): string {
+  slaTimer(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): string {
     this.clock();
-    if (!item.targetDeadlineAt || (item.itemStatus && item.itemStatus !== 'OPEN')) {
+    if (item.itemStatus && item.itemStatus !== 'OPEN') {
       return '';
     }
-    const target = new Date(item.targetDeadlineAt).getTime();
-    const hard = item.hardDeadlineAt ? new Date(item.hardDeadlineAt).getTime() : target;
-    const now = Date.now();
-    if (!Number.isFinite(target)) return '';
-    if (now <= target) return `До цели ${this.durationShort(target - now)}`;
-    if (Number.isFinite(hard) && now <= hard) return `Цель пропущена · до просрочки ${this.durationShort(hard - now)}`;
-    return `Просрочено на ${this.durationShort(now - hard)}`;
+    const startedAt = this.slaStartedAt(item);
+    if (startedAt === null) return '';
+    return `Без решения: ${this.elapsedShort(Date.now() - startedAt)}`;
   }
 
-  slaTimerClass(item: ManagerControlProblem | ManagerControlConcreteItem): string {
+  slaTimerClass(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): string {
     this.clock();
+    if (item.itemStatus && item.itemStatus !== 'OPEN') {
+      return '';
+    }
     const now = Date.now();
-    const target = item.targetDeadlineAt ? new Date(item.targetDeadlineAt).getTime() : Number.NaN;
-    const hard = item.hardDeadlineAt ? new Date(item.hardDeadlineAt).getTime() : target;
-    if (Number.isFinite(hard) && now > hard) return 'sla-overdue';
-    if (Number.isFinite(target) && now > target) return 'sla-late';
+    const target = this.dateTimeMs(item.targetDeadlineAt);
+    const hard = this.dateTimeMs(item.hardDeadlineAt) ?? target;
+    if (target === null && hard === null) return '';
+    if (hard !== null && now > hard) return 'sla-overdue';
+    if (target !== null && now > target) return 'sla-late';
     return 'sla-target';
+  }
+
+  slaCardClass(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): string {
+    const timerClass = this.slaTimerClass(item);
+    return timerClass ? `sla-card-${timerClass.replace('sla-', '')}` : '';
+  }
+
+  private slaStartedAt(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): number | null {
+    const direct = this.dateTimeMs(item.firstObservedAt);
+    if (direct !== null) return direct;
+    const target = this.dateTimeMs(item.targetDeadlineAt);
+    if (target !== null) return target - 30 * 60_000;
+    const hard = this.dateTimeMs(item.hardDeadlineAt);
+    if (hard !== null) return hard - 60 * 60_000;
+    return null;
+  }
+
+  private dateTimeMs(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+
+  private elapsedShort(milliseconds: number): string {
+    const minutes = Math.max(0, Math.floor(milliseconds / 60_000));
+    if (minutes < 1) return 'меньше 1 мин';
+    return this.durationShort(minutes * 60_000);
   }
 
   private durationShort(milliseconds: number): string {

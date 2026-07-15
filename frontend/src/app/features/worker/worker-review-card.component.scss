@@ -1104,16 +1104,61 @@
   }
 }
 
-// Very short and landscape mobile viewports cannot contain the full action
-// panel, pager and bottom navigation at once. Let the page scroll vertically
-// and keep every card action available instead of covering it with the pager.
+// Keep the complete card footer above the fixed pager on short phones. The
+// review text is the flexible area; controls are compacted only when vertical
+// space is scarce, while the card itself remains independently scrollable.
 @media (max-width: 860px) and (max-height: 680px) {
   .worker-card {
-    height: auto;
-    min-height: 24rem;
+    box-sizing: border-box;
+    height: clamp(17rem, calc(100dvh - 17.65rem), 22.5rem);
+    min-height: 0;
+    gap: 0.22rem;
+    padding: 0.45rem;
   }
 
   .review-card {
-    grid-template-rows: auto minmax(4rem, auto) auto;
+    grid-template-rows: auto minmax(2.5rem, 1fr) auto;
+  }
+
+  .review-card-footer {
+    gap: 0.2rem;
+  }
+
+  .review-field-editor--text textarea,
+  .review-field-editor--text.expanded textarea {
+    min-height: 2.5rem;
+  }
+
+  .review-field-editor--answer textarea {
+    height: 2.1rem;
+    min-height: 2.1rem;
+  }
+
+  .bot-line,
+  .publish-button {
+    min-height: 1.65rem;
+  }
+
+  .review-actions {
+    gap: 0.2rem;
+  }
+
+  .review-actions button,
+  .review-actions a {
+    min-height: 1.55rem;
+    padding-inline: 0.28rem;
+    font-size: 0.66rem;
+  }
+
+  .worker-card footer {
+    bottom: -0.45rem;
+    min-height: 2.25rem;
+    padding-block: 0.08rem;
+  }
+
+  .worker-card footer .review-edit-link {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0.2rem 0.35rem;
   }
 }

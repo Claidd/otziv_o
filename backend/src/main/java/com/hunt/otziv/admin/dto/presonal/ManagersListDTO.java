@@ -25,6 +25,7 @@ public class ManagersListDTO {
     private int payment1Month;
     private int leadsInWorkInMonth;
     private DailyWorkProgressResponse dailyProgress;
+    private DailyWorkProgressResponse monthlyProgress;
 
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;

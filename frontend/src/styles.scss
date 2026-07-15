@@ -71,7 +71,7 @@
   --otziv-progress-surface: rgba(255, 255, 255, 0.86);
   --otziv-progress-border: rgba(108, 155, 207, 0.22);
   --otziv-progress-track: #e9edf6;
-  --otziv-progress-fill: linear-gradient(90deg, #ff5b6e 0%, #f0bf4c 48%, #43b77a 100%);
+  --otziv-progress-fill: linear-gradient(90deg, #ef6f78 0%, #f2b36f 100%);
   --otziv-progress-fill-complete: linear-gradient(90deg, #1b9c85 0%, #55cda6 100%);
   --otziv-progress-text: #363949;
   --otziv-progress-label: #7d8da1;
@@ -120,7 +120,7 @@ body.otziv-dark-theme {
   --otziv-progress-surface: rgba(32, 37, 40, 0.86);
   --otziv-progress-border: rgba(122, 167, 220, 0.22);
   --otziv-progress-track: rgba(232, 224, 244, 0.14);
-  --otziv-progress-fill: linear-gradient(90deg, #ff5b8f 0%, #d7bd78 48%, #4ac6b1 100%);
+  --otziv-progress-fill: linear-gradient(90deg, #ef7585 0%, #eeb06f 100%);
   --otziv-progress-fill-complete: linear-gradient(90deg, #4ac6b1 0%, #7be0bd 100%);
   --otziv-progress-text: #eef6ff;
   --otziv-progress-label: #c5d9e6;
@@ -4874,6 +4874,21 @@ body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-or
 body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-orange { background: linear-gradient(145deg, rgba(80,53,32,.96), rgba(37,42,50,.98)); }
 body.otziv-dark-theme app-manager-control .manager-control .control-chip.tone-red,
 body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.tone-red { background: linear-gradient(145deg, rgba(76,40,55,.96), rgba(37,42,50,.98)); }
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.sla-card-target,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.sla-card-target {
+  border-color: rgba(96,211,176,.42);
+  background: linear-gradient(145deg, rgba(31,78,68,.98), rgba(32,38,50,.98));
+}
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.sla-card-late,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.sla-card-late {
+  border-color: rgba(247,208,96,.45);
+  background: linear-gradient(145deg, rgba(82,64,34,.98), rgba(33,38,50,.98));
+}
+body.otziv-dark-theme app-manager-control .manager-control .control-chip.sla-card-overdue,
+body.otziv-dark-theme app-manager-control .manager-control.personal-mode .personal-remark-actions .control-chip.sla-card-overdue {
+  border-color: rgba(255,91,143,.44);
+  background: linear-gradient(145deg, rgba(80,40,56,.98), rgba(33,38,50,.98));
+}
 body.otziv-dark-theme app-manager-control .manager-control .sla-timer.sla-target {
   border-color: rgba(97,224,194,.48);
   color: #b3f5e5;
@@ -4995,11 +5010,32 @@ body.otziv-dark-theme app-manager-control .manager-control .sla-timer.sla-overdu
   background: #fff;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.76), 0 1rem 1.9rem rgba(38,51,77,.11);
 }
+.themed-detail .detail-examples .detail-example.sla-card-target {
+  border-color: rgba(76,157,135,.38);
+  background: linear-gradient(145deg, rgba(235,250,243,.98), rgba(255,255,255,.94));
+}
+.themed-detail .detail-examples .detail-example.sla-card-late {
+  border-color: rgba(245,166,35,.48);
+  background: linear-gradient(145deg, rgba(255,248,224,.98), rgba(255,255,255,.94));
+}
+.themed-detail .detail-examples .detail-example.sla-card-overdue {
+  border-color: rgba(239,49,100,.42);
+  background: linear-gradient(145deg, rgba(255,240,244,.98), rgba(255,255,255,.94));
+}
 .themed-detail .detail-example.waiting-client {
   background: #fff;
 }
 .themed-detail .detail-example.handled {
   background: #fff;
+}
+.themed-detail .detail-example.waiting-client.sla-card-target {
+  background: linear-gradient(145deg, rgba(235,250,243,.98), rgba(255,255,255,.94));
+}
+.themed-detail .detail-example.waiting-client.sla-card-late {
+  background: linear-gradient(145deg, rgba(255,248,224,.98), rgba(255,255,255,.94));
+}
+.themed-detail .detail-example.waiting-client.sla-card-overdue {
+  background: linear-gradient(145deg, rgba(255,240,244,.98), rgba(255,255,255,.94));
 }
 .themed-detail .detail-example-field,
 .themed-detail .detail-example-text em,
@@ -5115,11 +5151,32 @@ body.otziv-dark-theme .themed-detail .detail-example {
   background: var(--td-inner-card);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 1rem 1.9rem rgba(0,0,0,.26);
 }
+body.otziv-dark-theme .themed-detail .detail-example.sla-card-target {
+  border-color: rgba(96,211,176,.38);
+  background: linear-gradient(145deg, rgba(31,78,68,.96), rgba(28,34,45,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-example.sla-card-late {
+  border-color: rgba(247,208,96,.42);
+  background: linear-gradient(145deg, rgba(82,64,34,.96), rgba(28,34,45,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-example.sla-card-overdue {
+  border-color: rgba(255,91,143,.42);
+  background: linear-gradient(145deg, rgba(80,40,56,.96), rgba(28,34,45,.98));
+}
 body.otziv-dark-theme .themed-detail .detail-example.waiting-client {
   background: linear-gradient(135deg, rgba(44,52,64,.98), rgba(72,63,39,.95));
 }
 body.otziv-dark-theme .themed-detail .detail-example.handled {
   background: linear-gradient(135deg, rgba(44,52,64,.98), rgba(34,72,63,.95));
+}
+body.otziv-dark-theme .themed-detail .detail-example.waiting-client.sla-card-target {
+  background: linear-gradient(145deg, rgba(31,78,68,.96), rgba(28,34,45,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-example.waiting-client.sla-card-late {
+  background: linear-gradient(145deg, rgba(82,64,34,.96), rgba(28,34,45,.98));
+}
+body.otziv-dark-theme .themed-detail .detail-example.waiting-client.sla-card-overdue {
+  background: linear-gradient(145deg, rgba(80,40,56,.96), rgba(28,34,45,.98));
 }
 body.otziv-dark-theme .themed-detail .day-score,
 body.otziv-dark-theme .themed-detail .stage-actions button,

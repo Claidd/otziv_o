@@ -3,6 +3,7 @@ package com.hunt.otziv.worker_performance.service;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class WorkerProgressRetentionJob {
+    private static final ZoneId PROGRESS_ZONE = ZoneId.of("Asia/Irkutsk");
 
     private final AppSettingService appSettingService;
     private final JdbcTemplate jdbcTemplate;
@@ -28,8 +30,8 @@ public class WorkerProgressRetentionJob {
 
         int rawDays = Math.max(30, appSettingService.getInt(AppSettingService.WORKER_PROGRESS_RAW_RETENTION_DAYS, 90));
         int dailyDays = Math.max(90, appSettingService.getInt(AppSettingService.WORKER_PROGRESS_DAILY_RETENTION_DAYS, 400));
-        LocalDate today = LocalDate.now();
-        LocalDateTime rawCutoff = LocalDateTime.now().minusDays(rawDays);
+        LocalDate today = LocalDate.now(PROGRESS_ZONE);
+        LocalDateTime rawCutoff = LocalDateTime.now(PROGRESS_ZONE).minusDays(rawDays);
         LocalDate dailyCutoff = today.minusDays(dailyDays);
 
         staffDailyProgressService.rebuildMonthlyAggregates(today.minusMonths(1), true);

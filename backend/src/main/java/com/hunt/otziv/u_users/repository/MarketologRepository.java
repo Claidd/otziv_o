@@ -31,8 +31,11 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
         SELECT m
         FROM Marketolog m
         JOIN FETCH m.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
         WHERE :manager IN elements(u.managers)
+          AND u.active = true
+          AND r.name = 'ROLE_MARKETOLOG'
         """)
     List<Marketolog> findAllByManager(Manager manager);
 
@@ -40,8 +43,11 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
         SELECT m
         FROM Marketolog m
         JOIN FETCH m.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
         WHERE m IN (:marketologs)
+          AND u.active = true
+          AND r.name = 'ROLE_MARKETOLOG'
         """)
     List<Marketolog> findAllToManagerMarketologs(Set<Marketolog> marketologs);
 
@@ -49,7 +55,10 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
         SELECT m
         FROM Marketolog m
         JOIN FETCH m.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
+        WHERE u.active = true
+          AND r.name = 'ROLE_MARKETOLOG'
         """)
     List<Marketolog> findAllWithUserAndImage();
 
@@ -57,6 +66,7 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
         SELECT DISTINCT m
         FROM Marketolog m
         JOIN FETCH m.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
         WHERE EXISTS (
             SELECT 1
@@ -64,6 +74,8 @@ public interface MarketologRepository extends CrudRepository<Marketolog, Long> {
             WHERE man MEMBER OF u.managers
               AND man IN :managers
         )
+          AND u.active = true
+          AND r.name = 'ROLE_MARKETOLOG'
         """)
     List<Marketolog> findAllByMarketologsToOwner(List<Manager> managers);
 

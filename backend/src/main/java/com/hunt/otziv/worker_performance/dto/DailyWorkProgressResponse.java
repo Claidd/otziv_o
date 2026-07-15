@@ -40,7 +40,12 @@ public record DailyWorkProgressResponse(
         long botBlockCount,
         boolean reached100,
         LocalDateTime firstReached100At,
-        LocalDateTime lastReached100At
+        LocalDateTime lastReached100At,
+        String periodType,
+        int workingDays,
+        int checkedDays,
+        int reached100Days,
+        boolean closedPeriod
 ) {
     public DailyWorkProgressResponse(
             boolean visible,
@@ -101,7 +106,12 @@ public record DailyWorkProgressResponse(
                 0,
                 false,
                 null,
-                null
+                null,
+                "DAY",
+                0,
+                0,
+                0,
+                false
         );
     }
 
@@ -143,7 +153,12 @@ public record DailyWorkProgressResponse(
                 0,
                 false,
                 null,
-                null
+                null,
+                "DAY",
+                0,
+                0,
+                0,
+                false
         );
     }
 }

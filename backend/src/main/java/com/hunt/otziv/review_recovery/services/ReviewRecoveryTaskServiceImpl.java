@@ -29,6 +29,7 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryTaskRepository;
+import com.hunt.otziv.review_recovery.event.ReviewRecoveryReleasedEvent;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -52,6 +53,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -96,6 +98,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final OrderStatusCheckerService orderStatusCheckerService;
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -692,6 +695,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (recoveryGateService.hasActiveRecoveryTasks(orderId)) {
             return;
         }
+
+        eventPublisher.publishEvent(new ReviewRecoveryReleasedEvent(orderId));
 
         Order order = orderRepository.findByIdForMutation(orderId).orElse(sourceOrder);
         if (order == null || order.getId() == null) {

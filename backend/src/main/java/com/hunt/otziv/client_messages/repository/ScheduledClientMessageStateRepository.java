@@ -137,6 +137,149 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     List<NativeScenarioCount> countDueMissingChannelBindingsByScenario(@Param("status") String status,
                                                                        @Param("now") LocalDateTime now);
 
+    @Query(value = """
+        SELECT COUNT(DISTINCT state.state_id)
+        FROM scheduled_client_message_state state
+        LEFT JOIN companies company ON company.company_id = state.company_id
+        WHERE state.state_status = :status
+          AND (
+              (
+                  state.scenario IN (
+                      'CLIENT_TEXT_REMINDER',
+                      'REVIEW_CHECK_REMINDER',
+                      'REVIEW_CHECK_DELIVERY_RETRY',
+                      'PAYMENT_INVOICE_RETRY',
+                      'PAYMENT_REMINDER',
+                      'ARCHIVE_REORDER_OFFER',
+                      'BAD_REVIEW_INVOICE',
+                      'REVIEW_RECOVERY_NOTICE'
+                  )
+                  AND (
+                      company.company_id IS NULL
+                      OR company.company_url_chat IS NULL
+                      OR TRIM(company.company_url_chat) = ''
+                      OR (
+                          LOWER(company.company_url_chat) LIKE '%chat.whatsapp.com/%'
+                          AND (company.company_group_id IS NULL OR TRIM(company.company_group_id) = '')
+                      )
+                      OR (
+                          (
+                              LOWER(company.company_url_chat) REGEXP '(^|//)(t\\\\.me|telegram\\\\.me|telegram\\\\.dog)/'
+                              OR LOWER(company.company_url_chat) LIKE 'tg://resolve%'
+                          )
+                          AND company.company_telegram_group_chat_id IS NULL
+                      )
+                      OR (
+                          LOWER(company.company_url_chat) REGEXP '(^|//)(web\\\\.)?max\\\\.ru/'
+                          AND company.company_max_group_chat_id IS NULL
+                      )
+                      OR (
+                          LOWER(company.company_url_chat) NOT LIKE '%chat.whatsapp.com/%'
+                          AND LOWER(company.company_url_chat) NOT REGEXP '(^|//)(t\\\\.me|telegram\\\\.me|telegram\\\\.dog)/'
+                          AND LOWER(company.company_url_chat) NOT LIKE 'tg://resolve%'
+                          AND LOWER(company.company_url_chat) NOT REGEXP '(^|//)(web\\\\.)?max\\\\.ru/'
+                      )
+                  )
+              )
+              OR (
+                  state.last_error_code IS NOT NULL
+                  AND TRIM(state.last_error_code) <> ''
+                  AND LOWER(state.last_error_code) NOT LIKE '%dry_run%'
+                  AND LOWER(state.last_error_code) NOT LIKE '%review_recovery_active%'
+                  AND LOWER(state.last_error_code) NOT LIKE '%order_status_changed%'
+                  AND LOWER(state.last_error_code) NOT LIKE '%status_change%'
+                  AND LOWER(state.last_error_code) NOT LIKE '%auto_archive%'
+                  AND LOWER(state.last_error_code) NOT LIKE '%auto_ban%'
+                  AND LOWER(state.last_error_code) <> 'client_message_state_auto_recovered'
+                  AND (
+                      LOWER(state.last_error_code) IN (
+                          'whatsapp_group_missing',
+                          'telegram_group_missing',
+                          'max_group_missing',
+                          'chat_platform_unknown',
+                          'whatsapp_client_missing',
+                          'unknown_client',
+                          'missing_client',
+                          'empty_client_url',
+                          'missing_group_id',
+                          'message_empty',
+                          'missing_message',
+                          'company_missing'
+                      )
+                      OR state.consecutive_failures >= :failureThreshold
+                      OR (
+                          state.last_attempt_at IS NOT NULL
+                          AND state.last_attempt_at <= :manualControlCutoff
+                      )
+                  )
+              )
+          )
+        """, nativeQuery = true)
+    long countManualControlCandidates(@Param("status") String status,
+                                      @Param("failureThreshold") int failureThreshold,
+                                      @Param("manualControlCutoff") LocalDateTime manualControlCutoff);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM scheduled_client_message_state state
+        WHERE state.state_status = :status
+          AND state.last_error_code IS NOT NULL
+          AND TRIM(state.last_error_code) <> ''
+          AND state.next_attempt_at IS NOT NULL
+          AND state.next_attempt_at > :now
+          AND LOWER(state.last_error_code) NOT LIKE '%dry_run%'
+          AND LOWER(state.last_error_code) NOT LIKE '%review_recovery_active%'
+          AND LOWER(state.last_error_code) NOT LIKE '%order_status_changed%'
+          AND LOWER(state.last_error_code) NOT LIKE '%status_change%'
+          AND LOWER(state.last_error_code) NOT LIKE '%auto_archive%'
+          AND LOWER(state.last_error_code) NOT LIKE '%auto_ban%'
+          AND LOWER(state.last_error_code) <> 'client_message_state_auto_recovered'
+          AND LOWER(state.last_error_code) NOT IN (
+              'whatsapp_group_missing',
+              'telegram_group_missing',
+              'max_group_missing',
+              'chat_platform_unknown',
+              'whatsapp_client_missing',
+              'unknown_client',
+              'missing_client',
+              'empty_client_url',
+              'missing_group_id',
+              'message_empty',
+              'missing_message',
+              'company_missing'
+          )
+          AND state.consecutive_failures < :failureThreshold
+          AND (
+              state.last_attempt_at IS NULL
+              OR state.last_attempt_at > :manualControlCutoff
+          )
+        """, nativeQuery = true)
+    long countRetryWaitingCandidates(@Param("status") String status,
+                                     @Param("now") LocalDateTime now,
+                                     @Param("failureThreshold") int failureThreshold,
+                                     @Param("manualControlCutoff") LocalDateTime manualControlCutoff);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM scheduled_client_message_state state
+        WHERE state.state_status = :status
+          AND LOWER(COALESCE(state.last_error_code, '')) = 'review_recovery_active'
+        """, nativeQuery = true)
+    long countReviewRecoveryHolds(@Param("status") String status);
+
+    @Modifying
+    @Query(value = """
+        UPDATE scheduled_client_message_state state
+        SET state.next_attempt_at = :now,
+            state.locked_until = NULL,
+            state.updated_at = :now
+        WHERE state.order_id = :orderId
+          AND state.state_status = 'ACTIVE'
+          AND LOWER(COALESCE(state.last_error_code, '')) = 'review_recovery_active'
+        """, nativeQuery = true)
+    int releaseReviewRecoveryHolds(@Param("orderId") Long orderId,
+                                   @Param("now") LocalDateTime now);
+
     @Query("""
         SELECT COUNT(s)
         FROM ScheduledClientMessageState s

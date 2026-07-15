@@ -465,6 +465,9 @@ export class AdminDictionariesComponent implements OnDestroy {
     paymentReminderIntervalDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
     reviewCheckRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     paymentInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
+    transientRetryMinutes: [15, [Validators.required, Validators.min(1), Validators.max(1440)]],
+    manualControlFailureThreshold: [3, [Validators.required, Validators.min(1), Validators.max(100)]],
+    manualControlAfterMinutes: [60, [Validators.required, Validators.min(1), Validators.max(1440)]],
     badReviewInvoiceRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
     badReviewAutoBanDelayDays: [2, [Validators.required, Validators.min(1), Validators.max(365)]],
     reviewRecoveryNoticeRetryDelayHours: [2, [Validators.required, Validators.min(1), Validators.max(168)]],
@@ -626,12 +629,17 @@ export class AdminDictionariesComponent implements OnDestroy {
       { label: 'Готово к отправке', value: monitor?.readyToSendNow ?? 0, icon: 'bolt', tone: 'green' },
       { label: 'Ждет окно', value: monitor?.waitingForWindow ?? 0, icon: 'access_time', tone: 'yellow' },
       { label: 'Нет chatId', value: monitor?.missingChannelBindings ?? 0, icon: 'link_off', tone: monitor?.missingChannelBindings ? 'pink' : 'teal' },
+      { label: 'Ручной контроль', value: monitor?.manualControlCandidates ?? 0, icon: 'support_agent', tone: monitor?.manualControlCandidates ? 'pink' : 'teal' },
+      { label: 'Ждут retry', value: monitor?.retryWaitingCandidates ?? 0, icon: 'replay', tone: monitor?.retryWaitingCandidates ? 'yellow' : 'teal' },
+      { label: 'Ждут восстановления', value: monitor?.recoveryHoldCandidates ?? 0, icon: 'healing', tone: monitor?.recoveryHoldCandidates ? 'blue' : 'teal' },
+      { label: 'Автовосстановлено', value: monitor?.autoRecoveredToday ?? 0, icon: 'auto_fix_high', tone: monitor?.autoRecoveredToday ? 'green' : 'teal' },
       { label: 'Отправлено сегодня', value: monitor?.sentToday ?? 0, icon: 'send', tone: 'green' },
       { label: 'Ошибок сегодня', value: monitor?.failedToday ?? 0, icon: 'priority_high', tone: monitor?.failedToday ? 'pink' : 'teal' },
       { label: 'Пропущено', value: monitor?.skippedToday ?? 0, icon: 'pause_circle', tone: 'teal' },
       { label: 'Отключено задач', value: monitor?.disabledStates ?? 0, icon: 'block', tone: monitor?.disabledStates ? 'pink' : 'blue' }
     ];
   });
+
   readonly selectedImportCity = computed(() => {
     const cityId = this.importCityId();
     return cityId == null ? null : this.botCities().find((city) => city.id === cityId) ?? null;
@@ -2980,6 +2988,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentReminderIntervalDays: Number(raw.paymentReminderIntervalDays ?? 2),
       reviewCheckRetryDelayHours: Number(raw.reviewCheckRetryDelayHours ?? 2),
       paymentInvoiceRetryDelayHours: Number(raw.paymentInvoiceRetryDelayHours ?? 2),
+      transientRetryMinutes: Number(raw.transientRetryMinutes ?? 15),
+      manualControlFailureThreshold: Number(raw.manualControlFailureThreshold ?? 3),
+      manualControlAfterMinutes: Number(raw.manualControlAfterMinutes ?? 60),
       badReviewInvoiceRetryDelayHours: Number(raw.badReviewInvoiceRetryDelayHours ?? 2),
       badReviewAutoBanDelayDays: Number(raw.badReviewAutoBanDelayDays ?? 2),
       reviewRecoveryNoticeRetryDelayHours: Number(raw.reviewRecoveryNoticeRetryDelayHours ?? 2),
@@ -3496,6 +3507,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       paymentReminderIntervalDays: settings?.paymentReminderIntervalDays ?? 2,
       reviewCheckRetryDelayHours: settings?.reviewCheckRetryDelayHours ?? 2,
       paymentInvoiceRetryDelayHours: settings?.paymentInvoiceRetryDelayHours ?? 2,
+      transientRetryMinutes: settings?.transientRetryMinutes ?? 15,
+      manualControlFailureThreshold: settings?.manualControlFailureThreshold ?? 3,
+      manualControlAfterMinutes: settings?.manualControlAfterMinutes ?? 60,
       badReviewInvoiceRetryDelayHours: settings?.badReviewInvoiceRetryDelayHours ?? 2,
       badReviewAutoBanDelayDays: settings?.badReviewAutoBanDelayDays ?? 2,
       reviewRecoveryNoticeRetryDelayHours: settings?.reviewRecoveryNoticeRetryDelayHours ?? 2,

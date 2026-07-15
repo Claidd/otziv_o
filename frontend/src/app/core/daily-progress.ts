@@ -36,4 +36,9 @@ export interface DailyWorkProgress {
   reached100?: boolean;
   firstReached100At?: string | null;
   lastReached100At?: string | null;
+  periodType?: 'DAY' | 'MONTH' | string;
+  workingDays?: number;
+  checkedDays?: number;
+  reached100Days?: number;
+  closedPeriod?: boolean;
 }

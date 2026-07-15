@@ -291,15 +291,16 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
-    void workerOverdueReminderUsesWorkerSectionsInsteadOfManagerOrderStatuses() {
+    void workerOverdueReminderUsesOnlySectionItemsOlderThanThreshold() {
         LocalDate today = LocalDate.now();
-        when(orderRepository.summarizeOverdueOrdersByWorker(eq(worker), any(LocalDate.class), anySet()))
+        LocalDate cutoff = today.minusDays(5);
+        when(orderRepository.summarizeOverdueOrdersByWorker(eq(worker), eq(cutoff), anySet()))
                 .thenReturn(List.of(
                         new Object[] { "Новый", 2L, today.minusDays(8) },
                         new Object[] { "Не оплачено", 5L, today.minusDays(30) }
                 ));
         when(reviewService.getAllReviewDTOByWorkerByPublishToVigul(
-                any(LocalDate.class),
+                eq(cutoff),
                 eq(principal),
                 eq(0),
                 eq(1),
@@ -307,7 +308,7 @@ class ApiWorkerBoardControllerTest {
                 eq("")
         )).thenReturn(reviewPageWithOldestDate(today.minusDays(6), 3));
         when(reviewService.getAllReviewDTOByWorkerByPublish(
-                any(LocalDate.class),
+                eq(cutoff),
                 eq(principal),
                 eq(0),
                 eq(1),
@@ -319,7 +320,7 @@ class ApiWorkerBoardControllerTest {
         recoveryTask.setScheduledDate(today.minusDays(7));
         when(reviewRecoveryTaskService.getDueTasksToWorker(
                 eq(worker),
-                any(LocalDate.class),
+                eq(cutoff),
                 eq(""),
                 any(Pageable.class)
         )).thenReturn(new PageImpl<>(List.of(recoveryTask), PageRequest.of(0, 1), 1));
@@ -328,13 +329,14 @@ class ApiWorkerBoardControllerTest {
         badTask.setScheduledDate(today.minusDays(9));
         when(badReviewTaskService.getDueTasksToWorker(
                 eq(worker),
-                any(LocalDate.class),
+                eq(cutoff),
                 eq(""),
                 any(Pageable.class)
         )).thenReturn(new PageImpl<>(List.of(badTask), PageRequest.of(0, 1), 1));
 
         ManagerOverdueOrdersResponse response = controller.getOverdueOrders(principal, workerAuth);
 
+        assertEquals(4, response.thresholdDays());
         assertEquals(11, response.total());
         assertTrue(hasOverdueStatus(response, "Новые", 2, 8));
         assertTrue(hasOverdueStatus(response, "Выгул", 3, 6));
@@ -342,6 +344,61 @@ class ApiWorkerBoardControllerTest {
         assertTrue(hasOverdueStatus(response, "Восстановление", 1, 7));
         assertTrue(hasOverdueStatus(response, "Плохие", 1, 9));
         assertFalse(response.statuses().stream().anyMatch(status -> "Не оплачено".equals(status.status())));
+        verify(appSettingService, never()).getInt(AppSettingService.NAGUL_LOOKAHEAD_DAYS, 60);
+    }
+
+    @Test
+    void privilegedRolesUseTheSameOverdueCutoffForEveryWorkerSection() {
+        LocalDate cutoff = LocalDate.now().minusDays(5);
+
+        Principal adminPrincipal = () -> "admin";
+        Authentication adminAuth = auth("ROLE_ADMIN");
+        when(reviewService.getAllReviewDTOAndDateToAdminToVigul(cutoff, 0, 1, "asc", ""))
+                .thenReturn(emptyReviewPage());
+        when(reviewService.getAllReviewDTOAndDateToAdmin(cutoff, 0, 1, "asc", ""))
+                .thenReturn(emptyReviewPage());
+        when(reviewRecoveryTaskService.getDueTasksToAdmin(eq(cutoff), eq(""), any(Pageable.class)))
+                .thenReturn(Page.empty());
+        when(badReviewTaskService.getDueTasksToAdmin(eq(cutoff), eq(""), any(Pageable.class)))
+                .thenReturn(emptyBadTaskPage());
+
+        assertEquals(0, controller.getOverdueOrders(adminPrincipal, adminAuth).total());
+
+        Principal ownerPrincipal = () -> "owner";
+        Authentication ownerAuth = auth("ROLE_OWNER");
+        Manager ownerManager = new Manager();
+        ownerManager.setId(31L);
+        Set<Manager> ownerManagers = Set.of(ownerManager);
+        when(userService.findManagersByUserName("owner")).thenReturn(ownerManagers);
+        when(reviewService.getAllReviewDTOByOwnerByPublishToVigul(cutoff, ownerPrincipal, 0, 1, "asc", ""))
+                .thenReturn(emptyReviewPage());
+        when(reviewService.getAllReviewDTOByOwnerByPublish(cutoff, ownerPrincipal, 0, 1, "asc", ""))
+                .thenReturn(emptyReviewPage());
+        when(reviewRecoveryTaskService.getDueTasksToOwner(eq(ownerManagers), eq(cutoff), eq(""), any(Pageable.class)))
+                .thenReturn(Page.empty());
+        when(badReviewTaskService.getDueTasksToOwner(eq(ownerManagers), eq(cutoff), eq(""), any(Pageable.class)))
+                .thenReturn(emptyBadTaskPage());
+
+        assertEquals(0, controller.getOverdueOrders(ownerPrincipal, ownerAuth).total());
+
+        Principal managerPrincipal = () -> "manager-overdue";
+        Authentication managerAuth = auth("ROLE_MANAGER");
+        User managerUser = new User();
+        managerUser.setId(41L);
+        Manager manager = new Manager();
+        manager.setId(42L);
+        when(userService.findByUserName("manager-overdue")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(41L)).thenReturn(manager);
+        when(reviewService.getAllReviewDTOByManagerByPublishToVigul(cutoff, managerPrincipal, 0, 1, "asc", ""))
+                .thenReturn(emptyReviewPage());
+        when(reviewService.getAllReviewDTOByManagerByPublish(cutoff, managerPrincipal, 0, 1, "asc", ""))
+                .thenReturn(emptyReviewPage());
+        when(reviewRecoveryTaskService.getDueTasksToManager(eq(manager), eq(cutoff), eq(""), any(Pageable.class)))
+                .thenReturn(Page.empty());
+        when(badReviewTaskService.getDueTasksToManager(eq(manager), eq(cutoff), eq(""), any(Pageable.class)))
+                .thenReturn(emptyBadTaskPage());
+
+        assertEquals(0, controller.getOverdueOrders(managerPrincipal, managerAuth).total());
     }
 
     @Test

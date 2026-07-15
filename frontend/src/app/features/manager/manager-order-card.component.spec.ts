@@ -165,12 +165,12 @@ describe('ManagerOrderCardComponent', () => {
     const indicator = element.querySelector<HTMLButtonElement>('.communication-indicator');
     expect(indicator?.classList.contains('communication-indicator--wait')).toBe(true);
     expect(indicator?.classList.contains('communication-indicator--danger')).toBe(false);
-    expect(indicator?.title).toBe('Общий счет: ждем восстановления отзывов');
+    expect(indicator?.title).toBe('Ждём восстановления отзывов');
 
     indicator?.click();
     fixture.detectChanges();
 
-    expect(element.querySelector('.communication-popover')?.textContent).toContain('Восстановление отзывов активно');
+    expect(element.querySelector('.communication-popover')?.textContent).toContain('Отправка продолжится автоматически');
     expect(element.querySelector('.communication-popover')?.textContent).not.toContain('Ошибка: review_recovery_active');
   });
 

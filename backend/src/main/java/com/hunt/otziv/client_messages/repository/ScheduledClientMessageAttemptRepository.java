@@ -22,6 +22,12 @@ public interface ScheduledClientMessageAttemptRepository extends CrudRepository<
 
     long countByStatusAndAttemptedAtGreaterThanEqual(ScheduledMessageAttemptStatus status, LocalDateTime attemptedAt);
 
+    long countByStatusAndErrorCodeAndAttemptedAtGreaterThanEqual(
+            ScheduledMessageAttemptStatus status,
+            String errorCode,
+            LocalDateTime attemptedAt
+    );
+
     @Query("""
         SELECT COUNT(a)
         FROM ScheduledClientMessageAttempt a

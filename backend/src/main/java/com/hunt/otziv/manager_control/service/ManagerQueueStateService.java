@@ -29,6 +29,11 @@ import org.springframework.http.HttpStatus;
 @Service
 @RequiredArgsConstructor
 public class ManagerQueueStateService {
+    private static final String CONTROL_CARD_TARGET_SETTING = "manager.sla.target.control-card-minutes";
+    private static final String CONTROL_CARD_HARD_SETTING = "manager.sla.hard.control-card-minutes";
+    private static final int CONTROL_CARD_TARGET_MINUTES = 30;
+    private static final int CONTROL_CARD_HARD_MINUTES = 60;
+
     private final ManagerDailyControlRepository controlRepository;
     private final ManagerDailyControlItemRepository itemRepository;
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
@@ -154,12 +159,12 @@ public class ManagerQueueStateService {
         return new SlaBucket(safeCount, 0, 0, safeCount);
     }
 
-    private int targetMinutes(String reason) { return settingMinutes("target", reason, 120); }
-    private int hardMinutes(String reason) { return settingMinutes("hard", reason, 720); }
-    private int settingMinutes(String kind, String reason, int fallback) {
-        String type = "CLIENT_CHAT_UNANSWERED".equals(reason) ? "message" : "LEADS".equals(reason) ? "lead"
-                : reason != null && reason.contains("RISK") ? "risk" : "default";
-        return Math.max(1, settings.getInt("manager.sla." + kind + "." + type + "-minutes", fallback));
+    private int targetMinutes(String reason) {
+        return Math.max(1, settings.getInt(CONTROL_CARD_TARGET_SETTING, CONTROL_CARD_TARGET_MINUTES));
+    }
+
+    private int hardMinutes(String reason) {
+        return Math.max(targetMinutes(reason), settings.getInt(CONTROL_CARD_HARD_SETTING, CONTROL_CARD_HARD_MINUTES));
     }
 
     private record SlaBucket(long within, long missed, long overdue, long total) {}

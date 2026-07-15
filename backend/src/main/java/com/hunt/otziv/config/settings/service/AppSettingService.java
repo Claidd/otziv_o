@@ -129,6 +129,9 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_PAUSE_REASON = "client.messages.pause-reason";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS = "client.messages.whatsapp-auth.retry-hours";
     public static final String CLIENT_MESSAGES_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = "client.messages.whatsapp-auth.alert-cooldown-hours";
+    public static final String CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES = "client.messages.transient-retry-minutes";
+    public static final String CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD = "client.messages.manual-control.failure-threshold";
+    public static final String CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES = "client.messages.manual-control.after-minutes";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED = "manager-control.unanswered-client-messages.auto-ignore-enabled";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH = "manager-control.unanswered-client-messages.auto-ignore-max-length";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES = "manager-control.unanswered-client-messages.auto-ignore-phrases";

@@ -28,4 +28,20 @@ class ApiExceptionHandlerTest {
                 response.getBody().message()
         );
     }
+
+    @Test
+    void handleDataIntegrityExplainsLinkedBusinessData() {
+        ResponseEntity<ApiExceptionHandler.ApiErrorResponse> response = handler.handleDataIntegrity(
+                new DataIntegrityViolationException(
+                        "could not execute statement",
+                        new RuntimeException("Cannot delete or update a parent row: a foreign key constraint fails")
+                )
+        );
+
+        assertNotNull(response.getBody());
+        assertEquals(
+                "Изменение не сохранено: запись связана с рабочими данными. История сохранена, ничего не удалено.",
+                response.getBody().message()
+        );
+    }
 }

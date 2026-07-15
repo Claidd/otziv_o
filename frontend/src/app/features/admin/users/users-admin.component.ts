@@ -357,6 +357,7 @@ export class UsersAdminComponent implements OnDestroy {
       enabled: raw.enabled,
       roles: raw.roles
     };
+    const employmentChanged = user.active !== request.enabled;
 
     this.saving.set(true);
     this.adminUsersApi.updateUser(user.id, request).subscribe({
@@ -366,8 +367,18 @@ export class UsersAdminComponent implements OnDestroy {
         this.users.update((users) => users.map((item) => item.id === updatedUser.id ? updatedUser : item));
         this.patchForm(updatedUser);
         this.cabinetApi.clearTeamCache();
+        this.loadAssignmentOptions();
         this.saving.set(false);
-        this.toastService.success('Пользователь сохранен', updatedUser.username);
+        if (employmentChanged) {
+          this.toastService.success(
+            updatedUser.active ? 'Сотрудник возвращён в штат' : 'Сотрудник уволен',
+            updatedUser.active
+              ? 'Доступ восстановлен, сотрудник снова появился в рабочих списках.'
+              : 'Доступ отключён, профиль и история работы сохранены.'
+          );
+        } else {
+          this.toastService.success('Пользователь сохранен', updatedUser.username);
+        }
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось сохранить пользователя');
@@ -376,6 +387,27 @@ export class UsersAdminComponent implements OnDestroy {
         this.toastService.error('Пользователь не сохранен', message);
       }
     });
+  }
+
+  changeEmploymentStatus(active: boolean): void {
+    const user = this.selectedUser();
+    if (!user || this.isAdminUser(user) || user.active === active || this.saving()) {
+      return;
+    }
+
+    const action = active ? 'вернуть сотрудника в штат' : 'уволить сотрудника';
+    const consequence = active
+      ? 'Доступ к системе будет восстановлен.'
+      : 'Доступ к системе будет закрыт, но профиль и история работы сохранятся.';
+    if (!window.confirm(`Вы действительно хотите ${action} «${user.fio || user.username}»?\n\n${consequence}`)) {
+      return;
+    }
+
+    // Кадровое действие не должно случайно сохранять незавершённые правки формы.
+    this.patchForm(user);
+    this.form.controls.enabled.setValue(active);
+    this.form.controls.enabled.markAsDirty();
+    this.save();
   }
 
   deleteSelectedUser(): void {

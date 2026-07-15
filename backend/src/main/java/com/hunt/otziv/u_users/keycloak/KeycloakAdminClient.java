@@ -20,9 +20,11 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
 import static org.springframework.http.HttpStatus.CONFLICT;
@@ -151,6 +153,27 @@ public class KeycloakAdminClient {
                     .toBodilessEntity();
         } catch (RestClientResponseException e) {
             throw keycloakException("Failed to remove Keycloak realm roles", e);
+        }
+    }
+
+    public Set<String> getAssignedRealmRoleNames(String keycloakUserId) {
+        try {
+            KeycloakRoleRepresentation[] roles = restClient.get()
+                    .uri(adminUri("users", keycloakUserId, "role-mappings", "realm"))
+                    .headers(this::setBearerAuth)
+                    .retrieve()
+                    .body(KeycloakRoleRepresentation[].class);
+
+            if (roles == null || roles.length == 0) {
+                return Set.of();
+            }
+
+            return Arrays.stream(roles)
+                    .map(KeycloakRoleRepresentation::name)
+                    .filter(this::hasText)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        } catch (RestClientResponseException e) {
+            throw keycloakException("Failed to read assigned Keycloak realm roles", e);
         }
     }
 

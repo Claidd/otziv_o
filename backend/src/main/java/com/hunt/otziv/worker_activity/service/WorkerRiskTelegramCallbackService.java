@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
@@ -44,6 +43,7 @@ public class WorkerRiskTelegramCallbackService {
     private static final String SOURCE_MANAGER_WARNING = "WORKER_RISK_MANAGER_WARNING";
     private static final String SOURCE_MANAGER_VIOLATION = "WORKER_RISK_MANAGER_VIOLATION";
     private static final String SOURCE_WORKER_EXPLANATION = "WORKER_RISK_WORKER_EXPLANATION";
+    private static final String GROUP_EXPLANATION_MARKER = "Код запроса: risk-";
     private static final String WORKER_RISK_PENALTY_EVENT = "WORKER_RISK_PENALTY";
     private static final int DEFAULT_PENALTY_POINTS = 1;
     private static final DateTimeFormatter TELEGRAM_TIME_FORMAT = DateTimeFormatter.ofPattern("dd.MM HH:mm");
@@ -136,12 +136,19 @@ public class WorkerRiskTelegramCallbackService {
     }
 
     @Transactional
-    public boolean handleWorkerGroupTextMessage(long chatId, Long actorTelegramId, String messageText) {
-        if (chatId >= 0 || clean(messageText).isBlank()) {
+    public boolean handleWorkerGroupTextMessage(
+            long chatId,
+            Long actorTelegramId,
+            String replyToMessageText,
+            boolean replyToBotMessage,
+            String messageText
+    ) {
+        if (chatId >= 0 || clean(messageText).isBlank() || !replyToBotMessage) {
             return false;
         }
 
-        WorkerRiskIncident incident = findPendingGroupExplanation(chatId).orElse(null);
+        Long incidentId = explanationMarkerId(replyToMessageText);
+        WorkerRiskIncident incident = incidentId == null ? null : incidentRepository.findById(incidentId).orElse(null);
         if (incident == null) {
             return false;
         }
@@ -155,6 +162,10 @@ public class WorkerRiskTelegramCallbackService {
         User actor = actorTelegramId == null
                 ? null
                 : userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
+        if (actor == null || actor.getId() == null || !Objects.equals(actor.getId(), worker.getId())
+                || incident.getExplanationRequestedAt() == null || incident.getWorkerExplanationAt() != null) {
+            return false;
+        }
         return saveWorkerExplanation(chatId, worker, actor, incident, messageText);
     }
 
@@ -238,7 +249,7 @@ public class WorkerRiskTelegramCallbackService {
                 + "\nОбъект: " + html(clean(incident.getEntityType())) + " #" + valueOrDash(incident.getEntityId())
                 + "\nДетали: " + html(clean(incident.getDetails()))
                 + (waitingForExplanation
-                        ? "\n\nНапишите пояснение следующим сообщением в эту группу."
+                        ? "\n\nОтветьте на отдельное сообщение бота с кодом запроса."
                         : "\n\nОтвет получен: " + formatTelegramTime(incident.getWorkerExplanationAt())
                         + "\nПояснение:\n" + html(clean(incident.getWorkerExplanation())));
 
@@ -276,16 +287,6 @@ public class WorkerRiskTelegramCallbackService {
                         WorkerRiskIncidentStatus.OPEN,
                         WorkerRiskResolutionAction.EXPLANATION_REQUESTED
                 );
-    }
-
-    private Optional<WorkerRiskIncident> findPendingGroupExplanation(long chatId) {
-        return incidentRepository.findPendingExplanationByWorkerGroupChatId(
-                        chatId,
-                        WorkerRiskIncidentStatus.OPEN,
-                        WorkerRiskResolutionAction.EXPLANATION_REQUESTED,
-                        PageRequest.of(0, 1)
-                ).stream()
-                .findFirst();
     }
 
     private Optional<CallbackCommand> parse(String callbackData) {
@@ -351,14 +352,52 @@ public class WorkerRiskTelegramCallbackService {
 
         if (chatId != null) {
             updateOriginalRiskTelegramMessage(incident, "принято, нужен комментарий", true);
-            telegramService.sendForceReplyMessage(chatId,
+            sendExplanationPrompt(chatId, worker,
                     "Статус: принято, нужен комментарий."
-                            + "\nНапишите пояснение следующим сообщением."
                             + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                             + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
-                            + "\nПричина: " + clean(incident.getTitle()));
+                            + "\nПричина: " + clean(incident.getTitle()),
+                    incident.getId());
         }
-        return Optional.of("Напишите пояснение следующим сообщением");
+        return Optional.of(chatId != null && chatId < 0
+                ? "Ответьте на сообщение бота с кодом запроса"
+                : "Напишите пояснение следующим сообщением");
+    }
+
+    private void sendExplanationPrompt(long chatId, User worker, String text, Long incidentId) {
+        if (chatId < 0) {
+            String prompt = text
+                    + "\nНапишите пояснение следующим сообщением."
+                    + "\n" + GROUP_EXPLANATION_MARKER + incidentId;
+            if (worker != null && worker.getTelegramChatId() != null) {
+                telegramService.sendSelectiveForceReplyMessage(chatId, worker.getTelegramChatId(), prompt);
+            } else {
+                telegramService.sendMessage(chatId,
+                        text
+                                + "\nTelegram специалиста не привязан к профилю. Привяжите его, чтобы адресно запросить пояснение."
+                                + "\n" + GROUP_EXPLANATION_MARKER + incidentId);
+            }
+            return;
+        }
+        telegramService.sendForceReplyMessage(chatId, text + "\nНапишите пояснение следующим сообщением.");
+    }
+
+    private Long explanationMarkerId(String text) {
+        String value = clean(text);
+        int markerIndex = value.lastIndexOf(GROUP_EXPLANATION_MARKER);
+        if (markerIndex < 0) {
+            return null;
+        }
+        String rawId = value.substring(markerIndex + GROUP_EXPLANATION_MARKER.length()).trim();
+        int separator = rawId.indexOf('\n');
+        if (separator >= 0) {
+            rawId = rawId.substring(0, separator).trim();
+        }
+        try {
+            return Long.parseLong(rawId);
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     private Optional<User> workerFor(WorkerRiskIncident incident) {

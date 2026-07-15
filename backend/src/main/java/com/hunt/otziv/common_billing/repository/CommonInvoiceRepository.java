@@ -163,6 +163,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
                   AND linkedOrder.manager = :manager
             )
         )
+          AND LOWER(COALESCE(invoice.lastError, '')) NOT LIKE 'review_recovery_active:%'
           AND (
             invoice.status IN :criticalStatuses
             OR (
@@ -210,6 +211,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
                   AND linkedOrder.manager = :manager
             )
         )
+          AND LOWER(COALESCE(invoice.lastError, '')) NOT LIKE 'review_recovery_active:%'
           AND (
             invoice.status IN :criticalStatuses
             OR (

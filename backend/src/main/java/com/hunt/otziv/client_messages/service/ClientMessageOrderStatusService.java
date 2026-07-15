@@ -4,29 +4,43 @@ import com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ClientMessageOrderStatusService {
 
     private static final String STATUS_PUBLIC = "Опубликовано";
+    public static final int DEFAULT_MANUAL_CONTROL_FAILURE_THRESHOLD = 3;
+    public static final int DEFAULT_MANUAL_CONTROL_AFTER_MINUTES = 60;
 
     private final ScheduledClientMessageStateRepository stateRepository;
     private final AppSettingService appSettingService;
+    private final ScheduledClientMessageService scheduledClientMessageService;
+    private final CompanyRepository companyRepository;
+    private final SharedChatLinkSyncService sharedChatLinkSyncService;
+    private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
 
     public void enrichOrderList(List<OrderDTOList> orders) {
         if (orders == null || orders.isEmpty()) {
@@ -41,6 +55,8 @@ public class ClientMessageOrderStatusService {
         if (orderIds.isEmpty()) {
             return;
         }
+
+        recoverMissingChatBindings(orders);
 
         Map<Long, ClientMessageOrderStatusResponse> statuses = stateRepository.findByOrderIdIn(orderIds).stream()
                 .filter(state -> state.getOrderId() != null)
@@ -57,10 +73,152 @@ public class ClientMessageOrderStatusService {
             ClientMessageOrderStatusResponse bindingStatus = missingChatBindingStatus(order);
             ClientMessageOrderStatusResponse savedStatus = statuses.get(order.getId());
             ClientMessageOrderStatusResponse missingStateStatus = savedStatus == null ? missingScheduledStateStatus(order) : null;
+            if (bindingStatus == null && savedStatus == null && missingStateStatus != null) {
+                savedStatus = recoverMissingScheduledState(order);
+                if (savedStatus != null) {
+                    missingStateStatus = null;
+                }
+            }
             order.setClientMessageStatus(bindingStatus != null
                     ? bindingStatus
                     : savedStatus != null ? savedStatus : missingStateStatus);
         });
+    }
+
+    private void recoverMissingChatBindings(List<OrderDTOList> orders) {
+        List<OrderDTOList> candidates = orders.stream()
+                .filter(this::needsChatBindingRepair)
+                .toList();
+        if (candidates.isEmpty()) {
+            return;
+        }
+
+        repairSharedChatBindings(candidates);
+        repairWhatsAppChatBindings(candidates);
+        clearAutomationErrorsForRecoveredBindings(candidates);
+    }
+
+    private void repairSharedChatBindings(List<OrderDTOList> candidates) {
+        try {
+            sharedChatLinkSyncService.syncSharedChatIds();
+            refreshCompanyChatBindings(candidates);
+        } catch (RuntimeException e) {
+            log.warn("Автопочинка общих ссылок чатов автоответчика не выполнена", e);
+        }
+    }
+
+    private void repairWhatsAppChatBindings(List<OrderDTOList> candidates) {
+        Set<Long> companyIds = candidates.stream()
+                .filter(this::needsWhatsAppBindingRepair)
+                .map(OrderDTOList::getCompanyId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (companyIds.isEmpty()) {
+            return;
+        }
+
+        for (Long companyId : companyIds) {
+            try {
+                Company company = companyRepository.findById(companyId).orElse(null);
+                if (company == null || hasText(company.getGroupId())) {
+                    continue;
+                }
+                WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult result =
+                        whatsAppGroupLinkSyncService.repairCompanyLink(company);
+                if (result != null && result.linked()) {
+                    log.info("Автопочинка WhatsApp-группы привязала companyId={}: {}", companyId, result.message());
+                }
+            } catch (RuntimeException e) {
+                log.warn("Автопочинка WhatsApp-группы автоответчика не выполнена companyId={}", companyId, e);
+            }
+        }
+        refreshCompanyChatBindings(candidates);
+    }
+
+    private void refreshCompanyChatBindings(List<OrderDTOList> orders) {
+        Set<Long> companyIds = orders.stream()
+                .map(OrderDTOList::getCompanyId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (Long companyId : companyIds) {
+            companyRepository.findById(companyId)
+                    .ifPresent(company -> orders.stream()
+                            .filter(order -> Objects.equals(order.getCompanyId(), companyId))
+                            .forEach(order -> applyCompanyChatBinding(order, company)));
+        }
+    }
+
+    private void applyCompanyChatBinding(OrderDTOList order, Company company) {
+        order.setCompanyUrlChat(company.getUrlChat());
+        order.setGroupId(company.getGroupId());
+        order.setTelegramGroupChatId(company.getTelegramGroupChatId());
+        order.setTelegramGroupLinked(company.getTelegramGroupChatId() != null);
+        order.setMaxGroupChatId(company.getMaxGroupChatId());
+        order.setMaxGroupLinked(company.getMaxGroupChatId() != null);
+    }
+
+    private void clearAutomationErrorsForRecoveredBindings(List<OrderDTOList> candidates) {
+        candidates.stream()
+                .filter(order -> !needsChatBindingRepair(order))
+                .filter(order -> order.getId() != null && order.getId() > 0)
+                .forEach(order -> {
+                    try {
+                        scheduledClientMessageService.ensureClientMessageStateForOrderId(order.getId());
+                    } catch (RuntimeException e) {
+                        log.warn("Не удалось сбросить ошибку автоответчика после автопривязки чата orderId={}",
+                                order.getId(), e);
+                    }
+                });
+    }
+
+    private boolean needsChatBindingRepair(OrderDTOList order) {
+        return needsWhatsAppBindingRepair(order)
+                || needsTelegramBindingRepair(order)
+                || needsMaxBindingRepair(order);
+    }
+
+    private boolean needsWhatsAppBindingRepair(OrderDTOList order) {
+        if (order == null || !hasText(order.getCompanyUrlChat())) {
+            return false;
+        }
+        return isWhatsAppUrl(order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT))
+                && !hasText(order.getGroupId());
+    }
+
+    private boolean needsTelegramBindingRepair(OrderDTOList order) {
+        if (order == null || !hasText(order.getCompanyUrlChat())) {
+            return false;
+        }
+        return isTelegramUrl(order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT))
+                && order.getTelegramGroupChatId() == null;
+    }
+
+    private boolean needsMaxBindingRepair(OrderDTOList order) {
+        if (order == null || !hasText(order.getCompanyUrlChat())) {
+            return false;
+        }
+        return isMaxUrl(order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT))
+                && order.getMaxGroupChatId() == null;
+    }
+
+    private ClientMessageOrderStatusResponse recoverMissingScheduledState(OrderDTOList order) {
+        if (order == null || order.getId() == null || order.getId() <= 0) {
+            return null;
+        }
+        try {
+            scheduledClientMessageService.recoverMissingClientMessageStateForOrderId(order.getId());
+            return latestStatusForOrder(order.getId());
+        } catch (Exception e) {
+            log.warn("Не удалось автоматически восстановить очередь автоответчика для заказа {}", order.getId(), e);
+            return null;
+        }
+    }
+
+    private ClientMessageOrderStatusResponse latestStatusForOrder(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return null;
+        }
+        return toResponse(selectRelevantState(stateRepository.findByOrderIdIn(List.of(orderId))));
     }
 
     private ScheduledClientMessageState selectRelevantState(Collection<ScheduledClientMessageState> states) {
@@ -80,6 +238,9 @@ public class ClientMessageOrderStatusService {
     private int priority(ScheduledClientMessageState state) {
         if (state == null) {
             return 0;
+        }
+        if (isReviewRecoveryHold(state)) {
+            return 35;
         }
         if (requiresManualControl(state)) {
             return 40;
@@ -120,7 +281,11 @@ public class ClientMessageOrderStatusService {
         String tone;
         String label;
 
-        if (requiresManualControl(state)) {
+        if (isReviewRecoveryHold(state)) {
+            statusState = "waiting_recovery";
+            tone = "wait";
+            label = "Ждём восстановления отзывов";
+        } else if (requiresManualControl(state)) {
             statusState = "manual_control";
             tone = "danger";
             label = manualControlLabel(state.getLastErrorCode());
@@ -163,6 +328,12 @@ public class ClientMessageOrderStatusService {
         return state.getLastAttemptAt() == null || !state.getLastSuccessAt().isBefore(state.getLastAttemptAt());
     }
 
+    private boolean isReviewRecoveryHold(ScheduledClientMessageState state) {
+        return state != null
+                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && normalize(state.getLastErrorCode()).equals("review_recovery_active");
+    }
+
     private boolean requiresManualControl(ScheduledClientMessageState state) {
         if (state.getStatus() == ScheduledMessageStateStatus.DONE) {
             return false;
@@ -177,10 +348,35 @@ public class ClientMessageOrderStatusService {
             return false;
         }
 
-        return state.getConsecutiveFailures() > 0
-                || state.getStatus() == ScheduledMessageStateStatus.DISABLED
-                || isManualFixError(code)
-                || isSendFailure(code);
+        if (state.getStatus() == ScheduledMessageStateStatus.DISABLED) {
+            return true;
+        }
+
+        if (isManualFixError(code)) {
+            return true;
+        }
+
+        return shouldEscalateFailure(state);
+    }
+
+    private boolean shouldEscalateFailure(ScheduledClientMessageState state) {
+        int threshold = Math.max(1, appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD,
+                DEFAULT_MANUAL_CONTROL_FAILURE_THRESHOLD
+        ));
+        if (state.getConsecutiveFailures() >= threshold) {
+            return true;
+        }
+
+        LocalDateTime lastAttemptAt = state.getLastAttemptAt();
+        if (lastAttemptAt == null) {
+            return false;
+        }
+        int minutes = Math.max(1, appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES,
+                DEFAULT_MANUAL_CONTROL_AFTER_MINUTES
+        ));
+        return !lastAttemptAt.plusMinutes(minutes).isAfter(LocalDateTime.now());
     }
 
     private boolean isManualFixError(String code) {
@@ -198,24 +394,14 @@ public class ClientMessageOrderStatusService {
                 || code.equals("company_missing");
     }
 
-    private boolean isSendFailure(String code) {
-        return code.contains("whatsapp")
-                || code.contains("telegram")
-                || code.contains("max_")
-                || code.contains("http")
-                || code.contains("timeout")
-                || code.contains("exception")
-                || code.contains("not_ready")
-                || code.contains("unavailable");
-    }
-
     private boolean isOperationalSkip(String code) {
         return code.contains("dry_run")
                 || code.contains("review_recovery_active")
                 || code.contains("order_status_changed")
                 || code.contains("status_change")
                 || code.contains("auto_archive")
-                || code.contains("auto_ban");
+                || code.contains("auto_ban")
+                || code.contains("client_message_state_auto_recovered");
     }
 
     private String manualControlLabel(String errorCode) {
@@ -246,13 +432,13 @@ public class ClientMessageOrderStatusService {
         }
 
         String normalizedUrl = order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT);
-        if (normalizedUrl.matches("^(?:https?://)?chat\\.whatsapp\\.com/.+") && !hasText(order.getGroupId())) {
+        if (isWhatsAppUrl(normalizedUrl) && !hasText(order.getGroupId())) {
             return manualBindingResponse("whatsapp_group_missing", "Контроль: WhatsApp-группа не привязана");
         }
         if (isTelegramUrl(normalizedUrl) && order.getTelegramGroupChatId() == null) {
             return manualBindingResponse("telegram_group_missing", "Контроль: Telegram-группа не привязана");
         }
-        if (normalizedUrl.matches("^(?:https?://)?(?:web\\.)?max\\.ru/.+") && order.getMaxGroupChatId() == null) {
+        if (isMaxUrl(normalizedUrl) && order.getMaxGroupChatId() == null) {
             return manualBindingResponse("max_group_missing", "Контроль: MAX-группа не привязана");
         }
 
@@ -262,6 +448,14 @@ public class ClientMessageOrderStatusService {
     private boolean isTelegramUrl(String normalizedUrl) {
         return normalizedUrl.matches("^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/.+")
                 || normalizedUrl.startsWith("tg://resolve?");
+    }
+
+    private boolean isWhatsAppUrl(String normalizedUrl) {
+        return normalizedUrl.matches("^(?:https?://)?chat\\.whatsapp\\.com/.+");
+    }
+
+    private boolean isMaxUrl(String normalizedUrl) {
+        return normalizedUrl.matches("^(?:https?://)?(?:web\\.)?max\\.ru/.+");
     }
 
     private ClientMessageOrderStatusResponse manualBindingResponse(String errorCode, String label) {

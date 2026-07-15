@@ -6,9 +6,31 @@
     </div>
 
     <div class="toolbar-actions">
-      <label>
-        <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectDate($event)">
-      </label>
+      <div class="period-toggle" aria-label="Режим прогресса">
+        <button
+          type="button"
+          [class.active]="progressMode() === 'day'"
+          (click)="selectProgressMode('day')"
+        >
+          Сегодня
+        </button>
+        <button
+          type="button"
+          [class.active]="progressMode() === 'month'"
+          (click)="selectProgressMode('month')"
+        >
+          Месяц
+        </button>
+      </div>
+      @if (progressMode() === 'day') {
+        <label>
+          <input type="date" aria-label="Дата" [ngModel]="selectedDate()" (ngModelChange)="selectDate($event)">
+        </label>
+      } @else {
+        <label>
+          <input type="month" aria-label="Месяц" [ngModel]="selectedMonth()" (ngModelChange)="selectMonth($event)">
+        </label>
+      }
       <button type="button" (click)="refresh()" [disabled]="loading()">
         <span class="material-icons-sharp">refresh</span>
         {{ loading() ? 'Обновляю' : 'Обновить' }}
@@ -65,11 +87,13 @@
                 <p>{{ member.login }}</p>
               </div>
 
-              @if (member.dailyProgress?.visible) {
+              @if (memberProgress(member); as progress) {
+                @if (progress.visible) {
                 <app-daily-progress-strip
-                  [progress]="member.dailyProgress"
+                  [progress]="progress"
                   [label]="progressLabel(section.key)"
                 />
+                }
               }
 
               @if (progressDetails(member); as details) {
@@ -102,6 +126,7 @@
                     <div
                       class="stat-cell"
                       [class.warn]="row.tone === 'warn'"
+                      [class.danger]="row.tone === 'danger'"
                       [class.good]="row.tone === 'good'"
                       [attr.title]="row.hint || row.label"
                     >
@@ -112,7 +137,40 @@
                 </dl>
               }
 
-              @if (section.key === 'worker' && statusRows(member).length) {
+              @if (section.key === 'worker') {
+                @if (networkViolations(member); as violations) {
+                  @if (violations.visible && violations.episodeCount > 0) {
+                  <details class="network-violation-details" [class.critical]="violations.severity === 'CRITICAL'">
+                    <summary>
+                      <span class="material-icons-sharp">wifi_off</span>
+                      Нарушения сети: {{ violations.episodeCount }}
+                    </summary>
+                    <p class="network-violation-total">
+                      Попыток: {{ violations.attemptCount }}
+                      @if (progressMode() === 'month') {
+                        · дней с нарушениями: {{ violations.daysWithViolations }}
+                      }
+                    </p>
+                    <div class="network-violation-list">
+                      @for (detail of violations.details; track detail.firstSeenAt + detail.reason + detail.scope) {
+                        <article>
+                          <strong>{{ networkViolationReason(detail.reason) }}</strong>
+                          <small>{{ networkViolationTime(detail) }} · {{ networkViolationScope(detail.scope) }}</small>
+                          @if (detail.provider) {
+                            <small>{{ detail.provider }}</small>
+                          }
+                          <span>
+                            {{ detail.attemptCount }} попыток · {{ networkViolationResult(detail) }}
+                          </span>
+                        </article>
+                      }
+                    </div>
+                  </details>
+                  }
+                }
+              }
+
+              @if (progressMode() === 'day' && section.key === 'worker' && statusRows(member).length) {
                 <div class="status-list">
                   @for (row of statusRows(member); track row.label) {
                     <span>{{ row.label }} {{ row.value }}</span>

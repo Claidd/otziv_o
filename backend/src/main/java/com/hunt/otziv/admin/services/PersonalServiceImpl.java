@@ -595,6 +595,30 @@ public class PersonalServiceImpl implements PersonalService {
         return managerService.findAllManagersWorkers(managerList);
     }
 
+    @Override
+    public List<Marketolog> findCurrentMarketologsForManagers(List<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return List.of();
+        }
+        return marketologService.getAllMarketologsToOwner(managerList);
+    }
+
+    @Override
+    public Set<Worker> findCurrentWorkersForManagers(List<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Set.of();
+        }
+        return workerService.getAllWorkersToManagerList(managerList);
+    }
+
+    @Override
+    public Set<Operator> findCurrentOperatorsForManagers(List<Manager> managerList) {
+        if (managerList == null || managerList.isEmpty()) {
+            return Set.of();
+        }
+        return operatorService.getAllOperatorsToManagerList(managerList);
+    }
+
     public List<ManagersListDTO> getManagersToOwner(List<Manager> managers){
         return managers.stream().map(this::toManagersListDTO).toList();
 //        return managerService.getAllManagersToOwner(managers).stream().map(this::toManagersListDTO).collect(Collectors.toList());

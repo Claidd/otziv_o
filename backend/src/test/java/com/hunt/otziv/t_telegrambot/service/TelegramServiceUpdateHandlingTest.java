@@ -18,6 +18,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -26,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -63,6 +65,38 @@ class TelegramServiceUpdateHandlingTest {
         verify(userService, never()).findByChatId(anyLong());
         verify(userService, never()).findByUserName(anyString());
         assertTrue(service.sentMessages.isEmpty());
+    }
+
+    @Test
+    void groupReplyPassesBotPromptAndWorkerIdentityToRiskHandler() {
+        CapturingTelegramService service = service();
+        when(telegramGroupLinkService.handleGroupStartCommand(anyLong(), anyString()))
+                .thenReturn(Optional.empty());
+        when(workerRiskTelegramCallbackServiceProvider.getIfAvailable())
+                .thenReturn(workerRiskTelegramCallbackService);
+        when(workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(
+                -100123L,
+                888L,
+                "Код запроса: risk-77",
+                true,
+                "Пояснение специалиста"
+        )).thenReturn(true);
+
+        service.onUpdateReceived(groupReplyUpdate(
+                -100123L,
+                888L,
+                "Пояснение специалиста",
+                "Код запроса: risk-77"
+        ));
+
+        verify(workerRiskTelegramCallbackService).handleWorkerGroupTextMessage(
+                eq(-100123L),
+                eq(888L),
+                eq("Код запроса: risk-77"),
+                eq(true),
+                eq("Пояснение специалиста")
+        );
+        verifyNoInteractions(userService);
     }
 
     @Test
@@ -113,6 +147,26 @@ class TelegramServiceUpdateHandlingTest {
         assertEquals("publication_progress:disable:10",
                 markup.getKeyboard().getFirst().getFirst().getCallbackData());
         verifyNoInteractions(userService);
+    }
+
+    @Test
+    void selectiveForceReplyTargetsOnlyMentionedWorker() {
+        CapturingTelegramService service = service();
+
+        boolean result = service.sendSelectiveForceReplyMessage(
+                -100123L,
+                888L,
+                "Нужно пояснение по карточке <77>"
+        );
+
+        assertTrue(result);
+        SendMessage sent = service.sentMessages.getFirst();
+        ForceReplyKeyboard markup = (ForceReplyKeyboard) sent.getReplyMarkup();
+        assertEquals(Boolean.TRUE, markup.getForceReply());
+        assertEquals(Boolean.TRUE, markup.getSelective());
+        assertEquals("HTML", sent.getParseMode());
+        assertTrue(sent.getText().contains("tg://user?id=888"));
+        assertTrue(sent.getText().contains("&lt;77&gt;"));
     }
 
     @Test
@@ -175,6 +229,37 @@ class TelegramServiceUpdateHandlingTest {
 
         Update update = new Update();
         update.setCallbackQuery(callbackQuery);
+        return update;
+    }
+
+    private static Update groupReplyUpdate(
+            long chatId,
+            long actorTelegramId,
+            String text,
+            String replyToText
+    ) {
+        Chat chat = new Chat();
+        chat.setId(chatId);
+        chat.setType("supergroup");
+
+        org.telegram.telegrambots.meta.api.objects.User actor = new org.telegram.telegrambots.meta.api.objects.User();
+        actor.setId(actorTelegramId);
+
+        org.telegram.telegrambots.meta.api.objects.User bot = new org.telegram.telegrambots.meta.api.objects.User();
+        bot.setIsBot(true);
+
+        Message prompt = new Message();
+        prompt.setText(replyToText);
+        prompt.setFrom(bot);
+
+        Message message = new Message();
+        message.setChat(chat);
+        message.setText(text);
+        message.setFrom(actor);
+        message.setReplyToMessage(prompt);
+
+        Update update = new Update();
+        update.setMessage(message);
         return update;
     }
 

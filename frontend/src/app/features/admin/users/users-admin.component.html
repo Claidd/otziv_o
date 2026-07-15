@@ -284,11 +284,37 @@
           <label class="checkbox wide">
             <input
               type="checkbox"
-              formControlName="enabled"
-              [attr.disabled]="isAdminUser(selectedUser()) ? '' : null"
+              [checked]="form.controls.enabled.value"
+              disabled
             >
-            <span>Включен</span>
+            <span>{{ selectedUser()?.active ? 'Работает · доступ включён' : 'Уволен · доступ отключён' }}</span>
           </label>
+
+          @if (!isAdminUser(selectedUser())) {
+            <section class="employment-card" [class.inactive]="!selectedUser()?.active">
+              <span class="material-icons-sharp">
+                {{ selectedUser()?.active ? 'person_off' : 'person_add' }}
+              </span>
+              <div>
+                <strong>{{ selectedUser()?.active ? 'Увольнение без потери истории' : 'Сотрудник находится в архиве' }}</strong>
+                <small>
+                  {{ selectedUser()?.active
+                    ? 'Профиль, заказы, отзывы и статистика сохранятся. Сотрудник исчезнет из текущих рабочих списков.'
+                    : 'Верните сотрудника в штат, чтобы восстановить вход и снова показывать его в рабочих списках.' }}
+                </small>
+              </div>
+              <button
+                type="button"
+                class="employment-action"
+                [class.restore]="!selectedUser()?.active"
+                (click)="changeEmploymentStatus(!selectedUser()?.active)"
+                [disabled]="saving()"
+              >
+                <span class="material-icons-sharp">{{ selectedUser()?.active ? 'person_remove' : 'person_add' }}</span>
+                {{ selectedUser()?.active ? 'Уволить' : 'Вернуть в штат' }}
+              </button>
+            </section>
+          }
 
           @if (isAdminUser(selectedUser())) {
             <p class="hint compact">Админа нельзя отключить, удалить или лишить роли администратора.</p>

@@ -26,8 +26,11 @@ public interface OperatorRepository extends CrudRepository<Operator, Long> {
         SELECT o
         FROM Operator o
         JOIN FETCH o.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
         WHERE :manager IN elements(u.managers)
+          AND u.active = true
+          AND r.name = 'ROLE_OPERATOR'
         """)
     List<Operator> findAllToManager(Manager manager);
 
@@ -35,8 +38,11 @@ public interface OperatorRepository extends CrudRepository<Operator, Long> {
         SELECT o
         FROM Operator o
         JOIN FETCH o.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
         WHERE o IN (:operators)
+          AND u.active = true
+          AND r.name = 'ROLE_OPERATOR'
         """)
     List<Operator> findAllToManagerOperators(Set<Operator> operators);
 
@@ -44,7 +50,10 @@ public interface OperatorRepository extends CrudRepository<Operator, Long> {
         SELECT o
         FROM Operator o
         JOIN FETCH o.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
+        WHERE u.active = true
+          AND r.name = 'ROLE_OPERATOR'
         """)
     List<Operator> findAllWithUserAndImage();
 
@@ -73,9 +82,12 @@ public interface OperatorRepository extends CrudRepository<Operator, Long> {
         SELECT DISTINCT o
         FROM Operator o
         JOIN FETCH o.user u
+        JOIN u.roles r
         LEFT JOIN FETCH u.image
         LEFT JOIN FETCH u.managers m
         WHERE m IN :managerList
+          AND u.active = true
+          AND r.name = 'ROLE_OPERATOR'
         """)
     Set<Operator> findAllByManagers(List<Manager> managerList);
 

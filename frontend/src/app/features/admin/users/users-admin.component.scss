@@ -499,6 +499,73 @@ tr.unlinked td {
   justify-content: flex-start;
 }
 
+.employment-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(239, 49, 100, 0.22);
+  border-radius: var(--otziv-small-radius);
+  padding: 0.75rem;
+  background: rgba(239, 49, 100, 0.06);
+}
+
+.employment-card.inactive {
+  border-color: rgba(27, 156, 133, 0.24);
+  background: rgba(27, 156, 133, 0.07);
+}
+
+.employment-card > .material-icons-sharp {
+  color: var(--otziv-danger);
+  font-size: 1.55rem;
+}
+
+.employment-card.inactive > .material-icons-sharp {
+  color: var(--otziv-success);
+}
+
+.employment-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.employment-card strong {
+  color: var(--otziv-dark);
+  font-size: 0.78rem;
+}
+
+.employment-card small {
+  color: var(--otziv-info);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.employment-action {
+  border-color: rgba(239, 49, 100, 0.34) !important;
+  color: #a8173f !important;
+  background: #fff5f7 !important;
+  white-space: nowrap;
+}
+
+.employment-action.restore {
+  border-color: rgba(27, 156, 133, 0.32) !important;
+  color: #287767 !important;
+  background: #f2fbf6 !important;
+}
+
+@media (max-width: 720px) {
+  .employment-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .employment-action {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
 .assignments {
   border-top: 1px solid var(--otziv-light);
   padding-top: 0.9rem;

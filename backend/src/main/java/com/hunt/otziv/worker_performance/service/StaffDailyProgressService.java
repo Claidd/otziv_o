@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -19,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class StaffDailyProgressService {
 
+    private static final ZoneId PROGRESS_ZONE = ZoneId.of("Asia/Irkutsk");
     private static final long MANAGER_DAILY_GOAL = 3L;
     private static final long SINGLE_ACTION_SESSION_SECONDS = 60L;
     private static final String ROLE_MANAGER = "MANAGER";
@@ -312,13 +315,77 @@ public class StaffDailyProgressService {
     @Transactional
     public DailyWorkProgressResponse aggregateWorkerProgress(Collection<Worker> workers, LocalDate date) {
         Map<Long, DailyWorkProgressResponse> progress = workerProgressByWorkers(workers, date);
-        return aggregateProgressResponses(progress.values(), date, ROLE_WORKER);
+        List<Long> workerIds = workers == null ? List.of() : workers.stream()
+                .filter(Objects::nonNull)
+                .map(Worker::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return aggregateTeamProgressResponses(progress.values(), workerIds, date, ROLE_WORKER);
+    }
+
+    @Transactional
+    public Map<Long, DailyWorkProgressResponse> monthlyWorkerProgressBySubjects(
+            Collection<WorkerProgressSubject> workers,
+            LocalDate monthStart
+    ) {
+        if (!progressEnabled() || workers == null || workers.isEmpty()) {
+            return Map.of();
+        }
+        LocalDate safeMonthStart = safeDate(monthStart).withDayOfMonth(1);
+        List<WorkerProgressSubject> visibleWorkers = workers.stream()
+                .filter(Objects::nonNull)
+                .filter(worker -> worker.workerId() != null)
+                .toList();
+        if (visibleWorkers.isEmpty()) {
+            return Map.of();
+        }
+
+        rebuildMonthly(
+                safeMonthStart,
+                safeMonthStart.isBefore(progressToday().withDayOfMonth(1))
+        );
+
+        List<Long> workerIds = visibleWorkers.stream().map(WorkerProgressSubject::workerId).distinct().toList();
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("workerIds", workerIds)
+                .addValue("monthStart", safeMonthStart);
+        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
+        jdbc.queryForList("""
+                SELECT *
+                FROM worker_performance_monthly
+                WHERE month_start = :monthStart
+                  AND worker_id IN (:workerIds)
+                """, params).forEach(row -> {
+            Long workerId = longValue(row.get("worker_id"));
+            result.put(workerId, monthlyResponse(safeMonthStart, row));
+        });
+        return result;
     }
 
     public DailyWorkProgressResponse aggregateProgressResponses(
             Collection<DailyWorkProgressResponse> progress,
             LocalDate date,
             String roleType
+    ) {
+        return aggregateProgressResponses(progress, date, roleType, null);
+    }
+
+    public DailyWorkProgressResponse aggregateTeamProgressResponses(
+            Collection<DailyWorkProgressResponse> progress,
+            Collection<Long> workerIds,
+            LocalDate date,
+            String roleType
+    ) {
+        Reached100State teamReached100 = teamReached100State(workerIds, date);
+        return aggregateProgressResponses(progress, date, roleType, teamReached100);
+    }
+
+    private DailyWorkProgressResponse aggregateProgressResponses(
+            Collection<DailyWorkProgressResponse> progress,
+            LocalDate date,
+            String roleType,
+            Reached100State teamReached100
     ) {
         if (progress == null || progress.isEmpty()) {
             return DailyWorkProgressResponse.hidden(roleType == null ? ROLE_WORKER : roleType, safeDate(date));
@@ -359,17 +426,16 @@ public class StaffDailyProgressService {
         int speedScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::speedScore).average().orElse(0));
         int disciplineScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::disciplineScore).average().orElse(0));
         int workloadScore = (int) Math.round(visible.stream().mapToInt(DailyWorkProgressResponse::workloadScore).average().orElse(0));
-        boolean reached100 = visible.stream().anyMatch(DailyWorkProgressResponse::reached100);
-        LocalDateTime firstReached100At = visible.stream()
-                .map(DailyWorkProgressResponse::firstReached100At)
-                .filter(Objects::nonNull)
-                .min(LocalDateTime::compareTo)
-                .orElse(null);
-        LocalDateTime lastReached100At = visible.stream()
-                .map(DailyWorkProgressResponse::lastReached100At)
-                .filter(Objects::nonNull)
-                .max(LocalDateTime::compareTo)
-                .orElse(null);
+        boolean reached100Now = total > 0 && active == 0;
+        boolean reached100 = teamReached100 == null ? reached100Now : teamReached100.reached100();
+        LocalDateTime firstReached100At = teamReached100 == null ? null : teamReached100.firstReached100At();
+        LocalDateTime lastReached100At = teamReached100 == null ? null : teamReached100.lastReached100At();
+        if (reached100Now && !reached100) {
+            LocalDateTime reachedAt = safeDate.equals(progressToday()) ? progressNow() : safeDate.plusDays(1).atStartOfDay();
+            reached100 = true;
+            firstReached100At = reachedAt;
+            lastReached100At = reachedAt;
+        }
 
         return new DailyWorkProgressResponse(
                 true,
@@ -416,7 +482,67 @@ public class StaffDailyProgressService {
                 visible.stream().mapToLong(DailyWorkProgressResponse::botBlockCount).sum(),
                 reached100,
                 firstReached100At,
-                lastReached100At
+                lastReached100At,
+                roleType != null && roleType.endsWith("_MONTH") ? "MONTH" : "DAY",
+                visible.stream().mapToInt(DailyWorkProgressResponse::workingDays).sum(),
+                visible.stream().mapToInt(DailyWorkProgressResponse::checkedDays).sum(),
+                visible.stream().mapToInt(DailyWorkProgressResponse::reached100Days).sum(),
+                visible.stream().allMatch(DailyWorkProgressResponse::closedPeriod)
+        );
+    }
+
+    private DailyWorkProgressResponse monthlyResponse(LocalDate monthStart, Map<String, Object> row) {
+        long completed = longValue(row.get("completed_count"));
+        long active = longValue(row.get("active_count"));
+        long total = longValue(row.get("total_count"));
+        int workingDays = intValue(row.get("working_days"));
+        int checkedDays = intValue(row.get("checked_days"));
+        int reached100Days = intValue(row.get("reached_100_days"));
+        int percent = intValue(row.get("average_progress_percent"));
+        boolean closedPeriod = booleanValue(row.get("closed_period"));
+        return new DailyWorkProgressResponse(
+                true,
+                "WORKER_MONTH",
+                monthStart,
+                completed,
+                active,
+                total,
+                percent,
+                workingDays > 0 && checkedDays >= workingDays,
+                null,
+                null,
+                longValue(row.get("average_close_seconds")),
+                longValue(row.get("median_close_seconds")),
+                longValue(row.get("p90_close_seconds")),
+                null,
+                null,
+                longValue(row.get("active_work_seconds")),
+                longValue(row.get("average_work_window_seconds")),
+                longValue(row.get("activity_events")),
+                longValue(row.get("load_score")),
+                intValue(row.get("average_efficiency_score")),
+                longValue(row.get("opened_count")),
+                longValue(row.get("order_completed_count")),
+                longValue(row.get("nagul_completed_count")),
+                longValue(row.get("publish_completed_count")),
+                longValue(row.get("bad_completed_count")),
+                longValue(row.get("recovery_completed_count")),
+                longValue(row.get("recovery_created_count")),
+                longValue(row.get("order_overdue_count")),
+                longValue(row.get("total_overdue_count")),
+                intValue(row.get("average_speed_score")),
+                intValue(row.get("average_discipline_score")),
+                intValue(row.get("average_workload_score")),
+                longValue(row.get("bot_change_count")),
+                longValue(row.get("bot_block_count")),
+                reached100Days > 0,
+                null,
+                null,
+                "MONTH",
+                workingDays,
+                checkedDays,
+                reached100Days,
+                closedPeriod
         );
     }
 
@@ -494,7 +620,12 @@ public class StaffDailyProgressService {
                 safeAuxStats.botBlock(),
                 reached100,
                 firstReached100At,
-                lastReached100At
+                lastReached100At,
+                "DAY",
+                0,
+                0,
+                0,
+                false
         );
     }
 
@@ -537,6 +668,17 @@ public class StaffDailyProgressService {
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM order_details recovery_od
+                          JOIN review_recovery_batches recovery_batch
+                            ON recovery_batch.review_recovery_batch_order = recovery_od.order_detail_order
+                          JOIN review_recovery_tasks recovery_task
+                            ON recovery_task.review_recovery_task_batch = recovery_batch.review_recovery_batch_id
+                          WHERE recovery_od.order_detail_id = r.review_order_details
+                            AND recovery_batch.review_recovery_batch_status = 'OPEN'
+                            AND recovery_task.review_recovery_task_status = 'PLANNED'
+                      )
 
                     UNION ALL
 
@@ -556,6 +698,17 @@ public class StaffDailyProgressService {
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'нужно подсавить%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подставить текст%'
                       AND LOWER(TRIM(r.review_text)) NOT LIKE 'подсавить текст%'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM order_details recovery_od
+                          JOIN review_recovery_batches recovery_batch
+                            ON recovery_batch.review_recovery_batch_order = recovery_od.order_detail_order
+                          JOIN review_recovery_tasks recovery_task
+                            ON recovery_task.review_recovery_task_batch = recovery_batch.review_recovery_batch_id
+                          WHERE recovery_od.order_detail_id = r.review_order_details
+                            AND recovery_batch.review_recovery_batch_status = 'OPEN'
+                            AND recovery_task.review_recovery_task_status = 'PLANNED'
+                      )
 
                     UNION ALL
 
@@ -652,7 +805,18 @@ public class StaffDailyProgressService {
                     SELECT r.review_worker AS worker_id,
                            'review_nagul' AS item_type,
                            r.review_id AS item_id,
-                           COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, e.created_at) AS opened_at,
+                           GREATEST(
+                               COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, e.created_at),
+                               COALESCE((
+                                   SELECT MAX(recovery_batch.review_recovery_batch_completed_at)
+                                   FROM order_details recovery_od
+                                   JOIN review_recovery_batches recovery_batch
+                                     ON recovery_batch.review_recovery_batch_order = recovery_od.order_detail_order
+                                   WHERE recovery_od.order_detail_id = r.review_order_details
+                                     AND recovery_batch.review_recovery_batch_completed_at IS NOT NULL
+                                     AND recovery_batch.review_recovery_batch_completed_at <= e.created_at
+                               ), COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, e.created_at))
+                           ) AS opened_at,
                            e.created_at AS done_at
                     FROM worker_activity_events e
                     JOIN reviews r ON r.review_id = e.review_id
@@ -666,7 +830,18 @@ public class StaffDailyProgressService {
                     SELECT r.review_worker AS worker_id,
                            'review_publish' AS item_type,
                            r.review_id AS item_id,
-                           COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))) AS opened_at,
+                           GREATEST(
+                               COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))),
+                               COALESCE((
+                                   SELECT MAX(recovery_batch.review_recovery_batch_completed_at)
+                                   FROM order_details recovery_od
+                                   JOIN review_recovery_batches recovery_batch
+                                     ON recovery_batch.review_recovery_batch_order = recovery_od.order_detail_order
+                                   WHERE recovery_od.order_detail_id = r.review_order_details
+                                     AND recovery_batch.review_recovery_batch_completed_at IS NOT NULL
+                                     AND recovery_batch.review_recovery_batch_completed_at <= COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))
+                               ), COALESCE(TIMESTAMP(r.review_publish_date) + INTERVAL 10 HOUR, COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed))))
+                           ) AS opened_at,
                            COALESCE(r.review_published_marked_at, TIMESTAMP(r.review_changed)) AS done_at
                     FROM reviews r
                     WHERE r.review_worker IN (:workerIds)
@@ -864,6 +1039,89 @@ public class StaffDailyProgressService {
         return result;
     }
 
+    /**
+     * Reconstructs moments when the whole team's queue was empty. Individual
+     * reached_100 flags cannot be aggregated because workers may have cleared
+     * their queues at different times.
+     */
+    private Reached100State teamReached100State(Collection<Long> workerIds, LocalDate date) {
+        List<Long> safeWorkerIds = workerIds == null ? List.of() : workerIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (safeWorkerIds.isEmpty()) {
+            return Reached100State.empty();
+        }
+
+        LocalDate safeDate = safeDate(date);
+        LocalDateTime from = safeDate.atStartOfDay();
+        LocalDateTime now = progressNow();
+        if (safeDate.isAfter(now.toLocalDate())) {
+            return Reached100State.empty();
+        }
+        LocalDateTime to = safeDate.equals(now.toLocalDate()) ? now : safeDate.plusDays(1).atStartOfDay();
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("workerIds", safeWorkerIds)
+                .addValue("from", from)
+                .addValue("to", to);
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT opened_at, closed_at
+                FROM worker_work_item_lifecycle
+                WHERE worker_id IN (:workerIds)
+                  AND excluded = 0
+                  AND opened_at < :to
+                  AND (closed_at IS NULL OR closed_at > :from)
+                """, params);
+        return teamReached100State(rows, from, to);
+    }
+
+    static Reached100State teamReached100State(
+            Collection<Map<String, Object>> lifecycleRows,
+            LocalDateTime from,
+            LocalDateTime to
+    ) {
+        if (lifecycleRows == null || lifecycleRows.isEmpty() || from == null || to == null || !to.isAfter(from)) {
+            return Reached100State.empty();
+        }
+
+        long active = 0;
+        boolean workSeen = false;
+        Map<LocalDateTime, Long> changes = new TreeMap<>();
+        for (Map<String, Object> row : lifecycleRows) {
+            LocalDateTime openedAt = toLocalDateTime(row.get("opened_at"));
+            LocalDateTime closedAt = toLocalDateTime(row.get("closed_at"));
+            if (openedAt == null || !openedAt.isBefore(to) || (closedAt != null && !closedAt.isAfter(from))) {
+                continue;
+            }
+            if (openedAt.isBefore(from)) {
+                active++;
+                workSeen = true;
+            } else {
+                changes.merge(openedAt, 1L, Long::sum);
+            }
+            if (closedAt != null && closedAt.isAfter(from) && !closedAt.isAfter(to)) {
+                changes.merge(closedAt, -1L, Long::sum);
+            }
+        }
+
+        LocalDateTime firstReached100At = null;
+        LocalDateTime lastReached100At = null;
+        for (Map.Entry<LocalDateTime, Long> change : changes.entrySet()) {
+            long before = active;
+            active = Math.max(0, active + change.getValue());
+            if (change.getValue() > 0) {
+                workSeen = true;
+            }
+            if (workSeen && before > 0 && active == 0) {
+                if (firstReached100At == null) {
+                    firstReached100At = change.getKey();
+                }
+                lastReached100At = change.getKey();
+            }
+        }
+        return new Reached100State(firstReached100At != null, firstReached100At, lastReached100At);
+    }
+
     private void syncLifecycle(
             List<ActiveWorkItem> activeItems,
             Map<Long, WorkerCompletionStats> completionStats,
@@ -946,7 +1204,7 @@ public class StaffDailyProgressService {
             long effectiveCloseSeconds,
             boolean overdue
     ) {
-        LocalDateTime safeOpenedAt = openedAt == null ? LocalDateTime.now() : openedAt;
+        LocalDateTime safeOpenedAt = openedAt == null ? progressNow() : openedAt;
         return new MapSqlParameterSource()
                 .addValue("workItemKey", itemType + ":" + itemId)
                 .addValue("workerId", workerId)
@@ -1285,9 +1543,9 @@ public class StaffDailyProgressService {
 
     private LocalDateTime evaluationTime(LocalDate date) {
         LocalDate safeDate = safeDate(date);
-        LocalDate today = LocalDate.now();
+        LocalDate today = progressToday();
         if (safeDate.equals(today)) {
-            return LocalDateTime.now();
+            return progressNow();
         }
         return safeDate.plusDays(1).atStartOfDay();
     }
@@ -1360,7 +1618,15 @@ public class StaffDailyProgressService {
     }
 
     private LocalDate safeDate(LocalDate date) {
-        return date == null ? LocalDate.now() : date;
+        return date == null ? progressToday() : date;
+    }
+
+    private LocalDate progressToday() {
+        return LocalDate.now(PROGRESS_ZONE);
+    }
+
+    private LocalDateTime progressNow() {
+        return LocalDateTime.now(PROGRESS_ZONE);
     }
 
     private static int percentInt(long part, long total) {
@@ -1372,6 +1638,13 @@ public class StaffDailyProgressService {
 
     private static long longValue(Object value) {
         return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    private static int intValue(Object value) {
+        if (value instanceof Number number) {
+            return (int) Math.round(number.doubleValue());
+        }
+        return 0;
     }
 
     private static boolean booleanValue(Object value) {

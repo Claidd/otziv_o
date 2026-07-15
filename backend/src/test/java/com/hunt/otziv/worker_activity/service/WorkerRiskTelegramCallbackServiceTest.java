@@ -26,14 +26,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -182,52 +184,101 @@ class WorkerRiskTelegramCallbackServiceTest {
 
         Optional<String> answer = service.handle(callbackFromGroup(-100123L, 444L, "worker-risk-explain:77"));
 
-        assertEquals(Optional.of("Напишите пояснение следующим сообщением"), answer);
+        assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), answer);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
         verify(incidentRepository).save(captor.capture());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
         assertEquals(WorkerRiskIncidentStatus.OPEN, captor.getValue().getStatus());
-        verify(telegramService).sendForceReplyMessage(eq(-100123L), any());
+        verify(telegramService).sendSelectiveForceReplyMessage(
+                eq(-100123L),
+                eq(888L),
+                contains("Код запроса: risk-77")
+        );
+        verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
     }
 
     @Test
-    void workerGroupTextMessageStoresDelegateExplanationAndClearsWorkerReminder() {
+    void explanationPromptWithoutWorkerTelegramBindingDoesNotForceReplyForWholeGroup() {
+        WorkerRiskIncident incident = incident();
+        User worker = user(2L, "worker", null, "ROLE_WORKER");
+        worker.setWorkerTelegramGroupChatId(-100123L);
+
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.handle(callbackFromGroup(-100123L, 444L, "worker-risk-explain:77"));
+
+        verify(telegramService).sendMessage(
+                eq(-100123L),
+                contains("Telegram специалиста не привязан")
+        );
+        verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
+        verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
+    }
+
+    @Test
+    void workerGroupReplyStoresAssignedWorkerExplanationAndClearsWorkerReminder() {
         WorkerRiskIncident incident = incident();
         incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        incident.setExplanationRequestedAt(java.time.LocalDateTime.now());
         incident.setExplanationPromptedAt(java.time.LocalDateTime.now());
         User worker = user(2L, "worker", 888L, "ROLE_WORKER");
         worker.setWorkerTelegramGroupChatId(-100123L);
-        User delegate = user(4L, "delegate", 444L, "ROLE_MANAGER");
         User managerUser = user(3L, "manager", 999L, "ROLE_MANAGER");
         Manager manager = new Manager();
         manager.setId(10L);
         manager.setUser(managerUser);
         worker.setManagers(Set.of(manager));
 
-        when(incidentRepository.findPendingExplanationByWorkerGroupChatId(
-                eq(-100123L),
-                eq(WorkerRiskIncidentStatus.OPEN),
-                eq(WorkerRiskResolutionAction.EXPLANATION_REQUESTED),
-                any(Pageable.class)
-        )).thenReturn(List.of(incident));
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
-        when(userService.findByChatId(444L)).thenReturn(Optional.of(delegate));
+        when(userService.findByChatId(888L)).thenReturn(Optional.of(worker));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of());
         when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
 
-        boolean handled = service.handleWorkerGroupTextMessage(-100123L, 444L, "Тест.");
+        boolean handled = service.handleWorkerGroupTextMessage(
+                -100123L,
+                888L,
+                "Нажмите «Ответить» на это сообщение.\nКод запроса: risk-77",
+                true,
+                "Тест."
+        );
 
         assertEquals(true, handled);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
         verify(incidentRepository).save(captor.capture());
         assertEquals("Тест.", captor.getValue().getWorkerExplanation());
-        assertEquals(4L, captor.getValue().getWorkerExplanationByUserId());
+        assertEquals(2L, captor.getValue().getWorkerExplanationByUserId());
         verify(personalReminderService).deleteSystemReminderBySource(
                 eq(worker),
                 eq("WORKER_RISK_MANAGER_WARNING"),
                 eq(77L)
         );
+    }
+
+    @Test
+    void workerGroupReplyFromManagerIsNotStoredAsWorkerExplanation() {
+        WorkerRiskIncident incident = incident();
+        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        worker.setWorkerTelegramGroupChatId(-100123L);
+        User manager = user(4L, "manager", 444L, "ROLE_MANAGER");
+
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(manager));
+
+        boolean handled = service.handleWorkerGroupTextMessage(
+                -100123L,
+                444L,
+                "Нажмите «Ответить» на это сообщение.\nКод запроса: risk-77",
+                true,
+                "Комментарий менеджера"
+        );
+
+        assertEquals(false, handled);
+        verify(incidentRepository, never()).save(any());
     }
 
     @Test

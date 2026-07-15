@@ -6,6 +6,7 @@ import { firstValueFrom, Subscription } from 'rxjs';
 import {
   AnalyticsResponse,
   CabinetProfile,
+  DailyWorkProgress,
   DictionarySummary,
   DictionarySummaryItem,
   ManagerManualPaymentSettings,
@@ -44,6 +45,7 @@ type HomeSectionKey = 'profile' | 'analytics' | 'team' | 'score' | 'dictionaries
 type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
 type MetricTone = 'green' | 'blue' | 'yellow' | 'red';
 type TeamKey = 'managers' | 'marketologs' | 'workers' | 'operators';
+type TeamProgressMode = 'day' | 'month';
 
 type HomeSectionLink = {
   key: HomeSectionKey;
@@ -104,12 +106,23 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
               </div>
 
               <label class="date-control">
-                <input type="date" [ngModel]="selectedDate()" (ngModelChange)="setDate($event)">
+                @if (activeSection() === 'team' && teamProgressMode() === 'month') {
+                  <input type="month" [ngModel]="selectedMonth()" (ngModelChange)="setTeamMonth($event)">
+                } @else {
+                  <input type="date" [ngModel]="selectedDate()" (ngModelChange)="setDate($event)">
+                }
               </label>
 
               <button class="icon-button" type="button" (click)="reload(true)" [disabled]="loading()" aria-label="Обновить">
                 <span class="material-icons-sharp">refresh</span>
               </button>
+            </section>
+          }
+
+          @if (activeSection() === 'team') {
+            <section class="period-row team-progress-row" aria-label="Период команды">
+              <button type="button" [class.active]="teamProgressMode() === 'day'" (click)="setTeamProgressMode('day')">Сегодня</button>
+              <button type="button" [class.active]="teamProgressMode() === 'month'" (click)="setTeamProgressMode('month')">Месяц</button>
             </section>
           }
 
@@ -669,11 +682,38 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       <div class="people-strip">
                         @for (member of members(section.key); track member.userId) {
                           <article class="person-card">
+                            @if (memberProgress(member); as progress) {
+                              @if (progress.visible) {
+                                <span
+                                  class="team-efficiency-badge score-{{ efficiencyTone(progress) }}"
+                                  [title]="efficiencyTitle(progress)"
+                                >{{ memberEfficiency(progress) }}</span>
+                              }
+                            }
                             <img [src]="imageUrl(member.imageId)" [alt]="member.fio || member.login">
                             <div>
                               <strong>{{ member.fio || member.login }}</strong>
                               <span>{{ member.login }}</span>
                             </div>
+                            @if (memberProgress(member); as progress) {
+                              @if (progress.visible) {
+                                <section
+                                  class="team-progress-strip"
+                                  [class.complete]="progress.checked"
+                                  [class.empty]="(progress.total || 0) <= 0"
+                                  [title]="teamProgressTitle(progress)"
+                                >
+                                  <span>{{ teamProgressLabel() }}</span>
+                                  <i><b [style.width.%]="safeProgressPercent(progress)"></b></i>
+                                  <strong>{{ progress.completed || 0 }}/{{ progress.total || 0 }}</strong>
+                                  <em>{{ safeProgressPercent(progress) }}%</em>
+                                  @if (progress.checked) {
+                                    <span class="material-icons-sharp">check_circle</span>
+                                  }
+                                </section>
+                                <p class="team-progress-summary">{{ teamProgressSummary(progress) }}</p>
+                              }
+                            }
                             <dl>
                               @for (row of teamRows(section.key, member); track row.label) {
                                 <div><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
@@ -991,6 +1031,10 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     .period-row button.active {
       color: var(--otziv-primary);
       background: var(--otziv-light);
+    }
+
+    .team-progress-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .home-panel {
@@ -1756,6 +1800,20 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(37, 43, 47, 0.96) 100%);
     }
 
+    :host-context(body.otziv-dark-theme) .team-efficiency-badge {
+      background: rgba(21, 26, 30, 0.94);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .team-progress-strip {
+      border-color: rgba(163, 189, 204, 0.2);
+      background: rgba(21, 26, 30, 0.7);
+    }
+
+    :host-context(body.otziv-dark-theme) .team-progress-strip i {
+      background: rgba(163, 189, 204, 0.18);
+    }
+
     :host-context(body.otziv-compact-phone) .bar-chart,
     :host-context(body.otziv-short-phone) .bar-chart {
       height: 11.7rem;
@@ -1851,6 +1909,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     }
 
     .person-card {
+      position: relative;
       display: grid;
       flex: 0 0 min(16.5rem, 76vw);
       grid-template-columns: auto minmax(0, 1fr);
@@ -1880,6 +1939,121 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       color: var(--otziv-info);
       font-size: 0.68rem;
       font-weight: 800;
+    }
+
+    .team-efficiency-badge {
+      position: absolute;
+      top: 0.52rem;
+      right: 0.55rem;
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border: 1px solid rgba(108, 155, 207, 0.36);
+      border-radius: 50%;
+      color: var(--otziv-primary);
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 0.55rem 1.1rem rgba(108, 155, 207, 0.16);
+      font-size: 0.68rem;
+      font-weight: 950;
+      line-height: 1;
+    }
+
+    .team-efficiency-badge.score-green {
+      border-color: rgba(47, 159, 149, 0.5);
+      color: #238879;
+      box-shadow: 0 0.55rem 1.1rem rgba(47, 159, 149, 0.16);
+    }
+
+    .team-efficiency-badge.score-yellow {
+      border-color: rgba(235, 178, 58, 0.52);
+      color: #b6790d;
+      box-shadow: 0 0.55rem 1.1rem rgba(235, 178, 58, 0.16);
+    }
+
+    .team-efficiency-badge.score-red {
+      border-color: rgba(232, 48, 103, 0.5);
+      color: var(--otziv-danger);
+      box-shadow: 0 0.55rem 1.1rem rgba(232, 48, 103, 0.16);
+    }
+
+    .team-progress-strip {
+      display: grid;
+      grid-column: 1 / -1;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      gap: 0.28rem;
+      min-width: 0;
+      min-height: 1.24rem;
+      border: 1px solid rgba(108, 155, 207, 0.2);
+      border-radius: 999px;
+      padding: 0.16rem 0.28rem;
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .team-progress-strip span,
+    .team-progress-strip strong,
+    .team-progress-strip em {
+      display: block;
+      overflow: hidden;
+      min-width: 0;
+      color: var(--otziv-dark);
+      font-size: 0.57rem;
+      font-style: normal;
+      font-weight: 950;
+      line-height: 1;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .team-progress-strip > span:first-child {
+      max-width: 4.4rem;
+      color: var(--otziv-info);
+      font-size: 0.54rem;
+    }
+
+    .team-progress-strip i {
+      display: block;
+      overflow: hidden;
+      height: 0.34rem;
+      min-width: 2.4rem;
+      border-radius: 999px;
+      background: rgba(136, 150, 169, 0.17);
+    }
+
+    .team-progress-strip i b {
+      display: block;
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ef5f7d 0%, #f2a06a 55%, #52af91 100%);
+      transition: width 180ms ease;
+    }
+
+    .team-progress-strip.complete i b {
+      background: linear-gradient(90deg, #54b894 0%, #6fcba5 100%);
+    }
+
+    .team-progress-strip.empty i b {
+      background: rgba(136, 150, 169, 0.24);
+    }
+
+    .team-progress-strip .material-icons-sharp {
+      color: #52af91;
+      font-size: 0.86rem;
+      line-height: 1;
+    }
+
+    .team-progress-summary {
+      grid-column: 1 / -1;
+      margin: -0.16rem 0 0;
+      overflow: hidden;
+      color: var(--otziv-info);
+      font-size: 0.62rem;
+      font-weight: 900;
+      line-height: 1.18;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .person-card dl {
@@ -2019,9 +2193,12 @@ export class HomePage implements OnInit, OnDestroy {
   private querySubscription?: Subscription;
   private routerEventsSubscription?: Subscription;
   private lastMobileNavKey = '';
+  private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly activeSection = signal<HomeSectionKey>('profile');
   readonly selectedDate = signal(this.todayIso());
+  readonly selectedMonth = signal(this.currentMonthIso());
+  readonly teamProgressMode = signal<TeamProgressMode>('day');
   readonly analyticsMode = signal<'lastTwoYears' | 'allTime' | 'custom'>('lastTwoYears');
   readonly periodFrom = signal(this.defaultPeriodFromIso(this.selectedDate()));
   readonly periodTo = signal(this.selectedDate());
@@ -2077,6 +2254,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.applyRouteSection(this.route.snapshot.paramMap);
     this.applyMobileNavIntent(this.route.snapshot.queryParamMap);
     this.lastMobileNavKey = this.mobileNavKey(this.route.snapshot.queryParamMap);
+    this.scheduleMidnightRefresh();
     void this.reload();
 
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
@@ -2107,6 +2285,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.routeSubscription?.unsubscribe();
     this.querySubscription?.unsubscribe();
     this.routerEventsSubscription?.unsubscribe();
+    this.clearMidnightRefresh();
   }
 
   navLinks(): HomeSectionLink[] {
@@ -2195,12 +2374,27 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   setDate(value: string): void {
-    this.selectedDate.set(value || this.todayIso());
+    const nextDate = value || this.todayIso();
+    this.selectedDate.set(nextDate);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) {
+      this.selectedMonth.set(nextDate.slice(0, 7));
+    }
     if (this.analyticsMode() === 'lastTwoYears') {
       this.periodFrom.set(this.defaultPeriodFromIso(this.selectedDate()));
       this.periodTo.set(this.selectedDate());
     }
     void this.reload();
+  }
+
+  setTeamProgressMode(mode: TeamProgressMode): void {
+    this.teamProgressMode.set(mode);
+  }
+
+  setTeamMonth(value: string): void {
+    this.selectedMonth.set(value || this.currentMonthIso());
+    if (this.activeSection() === 'team') {
+      void this.reload();
+    }
   }
 
   setAnalyticsMode(mode: 'lastTwoYears' | 'allTime'): void {
@@ -2241,7 +2435,10 @@ export class HomePage implements OnInit, OnDestroy {
           await this.loadManualPaymentTasks(forceRefresh);
           break;
         case 'team':
-          this.team.set(await firstValueFrom(this.api.getCabinetTeam(this.selectedDate(), { forceRefresh })));
+          this.team.set(await firstValueFrom(this.api.getCabinetTeam(this.selectedDate(), {
+            forceRefresh,
+            month: this.teamMonthParam()
+          })));
           break;
         case 'score':
           this.score.set(await firstValueFrom(this.api.getCabinetScore(this.selectedDate(), { forceRefresh })));
@@ -2751,31 +2948,196 @@ export class HomePage implements OnInit, OnDestroy {
     return this.team()?.[key] ?? [];
   }
 
+  memberProgress(member: TeamMember): DailyWorkProgress | null {
+    return this.teamProgressMode() === 'month'
+      ? member.monthlyProgress ?? null
+      : member.dailyProgress ?? null;
+  }
+
+  teamProgressLabel(): string {
+    return this.teamProgressMode() === 'month' ? 'Месяц' : 'Сегодня';
+  }
+
+  safeProgressPercent(progress?: DailyWorkProgress | null): number {
+    if (!progress) {
+      return 0;
+    }
+    const fallback = progress.total > 0 ? (progress.completed / progress.total) * 100 : (progress.checked ? 100 : 0);
+    return this.clampPercent(progress.percent ?? fallback);
+  }
+
+  memberEfficiency(progress?: DailyWorkProgress | null): number {
+    return this.clampPercent(progress?.efficiencyScore ?? 0);
+  }
+
+  efficiencyTone(progress?: DailyWorkProgress | null): MetricTone {
+    const score = this.memberEfficiency(progress);
+    if (score >= 85) {
+      return 'green';
+    }
+    if (score >= 65) {
+      return 'blue';
+    }
+    if (score >= 40) {
+      return 'yellow';
+    }
+    return 'red';
+  }
+
+  efficiencyTitle(progress?: DailyWorkProgress | null): string {
+    if (!progress) {
+      return 'Эффективность пока не рассчитана.';
+    }
+    const parts = [
+      `Эффективность ${this.memberEfficiency(progress)}/100`,
+      'учитывает прогресс, скорость закрытия, нагрузку и дисциплину'
+    ];
+    if (progress.speedScore !== undefined) {
+      parts.push(`скорость ${this.clampPercent(progress.speedScore)}`);
+    }
+    if (progress.disciplineScore !== undefined) {
+      parts.push(`дисциплина ${this.clampPercent(progress.disciplineScore)}`);
+    }
+    if (progress.workloadScore !== undefined) {
+      parts.push(`нагрузка ${this.clampPercent(progress.workloadScore)}`);
+    }
+    return parts.join(' · ');
+  }
+
+  teamProgressTitle(progress?: DailyWorkProgress | null): string {
+    if (!progress) {
+      return 'Прогресс пока не рассчитан.';
+    }
+    const period = this.teamProgressMode() === 'month' ? 'Месяц' : 'Сегодня';
+    const parts = [
+      `${period}: закрыто ${progress.completed || 0} из ${progress.total || 0}`,
+      `${this.safeProgressPercent(progress)}%`
+    ];
+    if (progress.active > 0) {
+      parts.push(`осталось ${progress.active}`);
+    }
+    if (progress.medianCloseSeconds > 0) {
+      parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
+    }
+    if (this.teamProgressMode() === 'month') {
+      parts.push(`100% дней ${progress.reached100Days || 0}/${progress.workingDays || 0}`);
+    }
+    return parts.join(' · ');
+  }
+
+  teamProgressSummary(progress?: DailyWorkProgress | null): string {
+    if (!progress?.visible) {
+      return '';
+    }
+
+    if (this.teamProgressMode() === 'month') {
+      if ((progress.workingDays || 0) <= 0) {
+        return 'За месяц данных пока нет';
+      }
+      return `100% ${progress.reached100Days || 0}/${progress.workingDays || 0} дн. · медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`;
+    }
+
+    if ((progress.total || 0) <= 0) {
+      return 'Нет задач за день';
+    }
+
+    const parts: string[] = [];
+    if (progress.checked) {
+      parts.push('День закрыт');
+    } else {
+      parts.push(`Осталось ${progress.active || 0}`);
+    }
+    if (progress.reached100 && !progress.checked) {
+      parts.push('100% уже был');
+    }
+    if ((progress.orderOverdueCount || 0) > 0) {
+      parts.push(`проср. заказов ${progress.orderOverdueCount}`);
+    }
+    if (progress.medianCloseSeconds > 0) {
+      parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
+    }
+    return parts.join(' · ');
+  }
+
   teamRows(key: TeamKey, member: TeamMember): Row[] {
+    const progress = this.memberProgress(member);
+    const rows: Row[] = [];
+
     if (key === 'managers') {
-      return [
+      rows.push(
         { label: 'ЗП', value: this.money(member.sum1Month) },
         { label: 'Выручка', value: this.money(member.payment1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
         { label: 'Отзывы', value: this.count(member.review1Month) }
-      ];
+      );
+      this.appendProgressRows(rows, progress);
+      return rows;
     }
 
     if (key === 'workers') {
-      return [
+      rows.push(
         { label: 'ЗП', value: this.money(member.sum1Month) },
         { label: 'Заказы', value: this.count(member.order1Month) },
-        { label: 'Отзывы', value: this.count(member.review1Month) },
-        { label: 'В работе', value: this.count((member.newOrder || 0) + (member.inCorrect || 0) + (member.intVigul || 0) + (member.publish || 0)) }
-      ];
+        { label: 'Отзывы', value: this.count(member.review1Month) }
+      );
+      if (this.teamProgressMode() === 'day') {
+        rows.push({ label: 'В работе', value: this.count((member.newOrder || 0) + (member.inCorrect || 0) + (member.intVigul || 0) + (member.publish || 0)) });
+      }
+      this.appendProgressRows(rows, progress);
+      return rows;
     }
 
-    return [
+    rows.push(
       { label: 'ЗП', value: this.money(member.sum1Month) },
       { label: 'Новые', value: this.count(member.leadsNew) },
       { label: 'В работе', value: this.count(member.leadsInWork) },
       { label: 'Конверсия', value: `${member.percentInWork || 0}%` }
-    ];
+    );
+    this.appendProgressRows(rows, progress);
+    return rows;
+  }
+
+  private appendProgressRows(rows: Row[], progress?: DailyWorkProgress | null): void {
+    if (!progress?.visible) {
+      return;
+    }
+
+    rows.push(
+      { label: 'Эффективн.', value: `${this.memberEfficiency(progress)}%` },
+      { label: this.teamProgressMode() === 'month' ? 'Выполнено мес.' : 'Выполнено', value: `${progress.completed || 0}/${progress.total || 0}` }
+    );
+
+    if (this.teamProgressMode() === 'month') {
+      rows.push(
+        { label: 'Раб. дней', value: this.count(progress.workingDays) },
+        { label: '100% дней', value: this.count(progress.reached100Days) },
+        { label: 'Дней закрыто', value: this.count(progress.checkedDays) }
+      );
+    }
+
+    this.addCountRow(rows, 'Восст. создано', progress.recoveryCreatedCount);
+    this.addCountRow(rows, 'Восст. закрыто', progress.recoveryCompletedCount);
+    this.addCountRow(rows, 'Проср. заказов', progress.orderOverdueCount);
+    this.addCountRow(rows, 'Просрочки', progress.totalOverdueCount);
+    this.addCountRow(rows, 'Смена бота', progress.botChangeCount);
+    this.addCountRow(rows, 'Блок бота', progress.botBlockCount);
+
+    if ((progress.activityEvents || 0) > 0) {
+      rows.push({ label: 'Действий', value: this.count(progress.activityEvents) });
+    }
+    if ((progress.activeWorkSeconds || 0) > 0) {
+      rows.push({ label: 'Активно', value: this.formatDurationSeconds(progress.activeWorkSeconds) });
+    }
+    if ((progress.medianCloseSeconds || 0) > 0) {
+      rows.push({ label: 'Медиана', value: this.formatDurationSeconds(progress.medianCloseSeconds) });
+    }
+  }
+
+  private addCountRow(rows: Row[], label: string, value?: number | null): void {
+    if ((value || 0) <= 0) {
+      return;
+    }
+    rows.push({ label, value: this.countWithUnit(value) });
   }
 
   scoreUsers(key: TeamKey): ScoreUser[] {
@@ -3072,6 +3434,35 @@ export class HomePage implements OnInit, OnDestroy {
     return `${this.count(value)} шт.`;
   }
 
+  private clampPercent(value?: number | null): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round(numeric)));
+  }
+
+  private formatDurationSeconds(value?: number | null): string {
+    const totalMinutes = Math.max(0, Math.round((value || 0) / 60));
+    if (totalMinutes <= 0) {
+      return '0 мин';
+    }
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+    const parts: string[] = [];
+    if (days > 0) {
+      parts.push(`${days} д`);
+    }
+    if (hours > 0) {
+      parts.push(`${hours} ч`);
+    }
+    if (minutes > 0 || parts.length === 0) {
+      parts.push(`${minutes} мин`);
+    }
+    return parts.slice(0, 2).join(' ');
+  }
+
   private shortMoney(value: number): string {
     const abs = Math.abs(value || 0);
     if (abs >= 1_000_000) {
@@ -3093,7 +3484,70 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   private todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+    return this.localDateIso(new Date());
+  }
+
+  private currentMonthIso(): string {
+    return this.todayIso().slice(0, 7);
+  }
+
+  private teamMonthParam(): string {
+    const value = this.selectedMonth() || this.currentMonthIso();
+    return /^\d{4}-\d{2}$/.test(value) ? `${value}-01` : value;
+  }
+
+  private localDateIso(date: Date): string {
+    return [
+      date.getFullYear(),
+      this.pad2(date.getMonth() + 1),
+      this.pad2(date.getDate())
+    ].join('-');
+  }
+
+  private pad2(value: number): string {
+    return String(value).padStart(2, '0');
+  }
+
+  private scheduleMidnightRefresh(): void {
+    this.clearMidnightRefresh();
+    const previousToday = this.todayIso();
+    const previousMonth = this.currentMonthIso();
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
+    const delay = Math.max(1000, Math.min(2_147_483_647, nextMidnight.getTime() - now.getTime()));
+
+    this.midnightRefreshTimer = setTimeout(() => {
+      let shouldReload = false;
+      const today = this.todayIso();
+      const month = this.currentMonthIso();
+
+      if (this.selectedDate() === previousToday) {
+        this.selectedDate.set(today);
+        shouldReload = true;
+        if (this.analyticsMode() === 'lastTwoYears') {
+          this.periodFrom.set(this.defaultPeriodFromIso(today));
+          this.periodTo.set(today);
+        }
+      }
+
+      if (this.selectedMonth() === previousMonth) {
+        this.selectedMonth.set(month);
+        shouldReload = true;
+      }
+
+      if (shouldReload && this.activeSection() !== 'dictionaries') {
+        void this.reload(true);
+      }
+
+      this.scheduleMidnightRefresh();
+    }, delay);
+  }
+
+  private clearMidnightRefresh(): void {
+    if (this.midnightRefreshTimer) {
+      clearTimeout(this.midnightRefreshTimer);
+      this.midnightRefreshTimer = null;
+    }
   }
 
   private errorMessage(error: unknown): string {

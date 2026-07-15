@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public interface PersonalService {
     List<WorkersListDTO> gerWorkers();
@@ -33,6 +34,9 @@ public interface PersonalService {
 //    UserStatDTO getWorkerReviews2(String login, LocalDate localDate);
 
     List<Manager> findAllManagersWorkers(List<Manager> managerList);
+    List<Marketolog> findCurrentMarketologsForManagers(List<Manager> managerList);
+    Set<Worker> findCurrentWorkersForManagers(List<Manager> managerList);
+    Set<Operator> findCurrentOperatorsForManagers(List<Manager> managerList);
 
     List<ManagersListDTO> getManagersAndCountToDate(LocalDate localdate);
     List<MarketologsListDTO> getMarketologsAndCountToDate(LocalDate localdate);

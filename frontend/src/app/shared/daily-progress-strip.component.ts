@@ -147,7 +147,7 @@ export class DailyProgressStripComponent {
   tooltipText(): string {
     const progress = this.progress;
     if (!progress?.visible) {
-      return 'Дневной прогресс пока недоступен.';
+      return 'Прогресс пока недоступен.';
     }
 
     const completed = progress.completed || 0;
@@ -156,6 +156,12 @@ export class DailyProgressStripComponent {
     const percent = this.safePercent();
     const name = this.label || this.defaultLabel();
     const base = `${completed}/${total} — ${percent}%, осталось ${active}.`;
+
+    if (progress.periodType === 'MONTH' || progress.roleType === 'WORKER_MONTH' || progress.roleType === 'WORKER_TEAM_MONTH') {
+      const days = progress.workingDays || 0;
+      const reached = progress.reached100Days || 0;
+      return `Месячный прогресс: агрегированные закрытые задачи / месячная нагрузка. Дней в статистике: ${days}, дней с достижением 100%: ${reached}. ${base}`;
+    }
 
     if (name === 'Команда' || progress.roleType === 'WORKER_TEAM') {
       return `Прогресс команды за сегодня: закрытые задачи специалистов / все задачи специалистов (закрытые + активные). ${base}`;

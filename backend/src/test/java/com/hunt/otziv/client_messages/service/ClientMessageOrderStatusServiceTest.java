@@ -2,13 +2,19 @@ package com.hunt.otziv.client_messages.service;
 
 import com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
+import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,11 +22,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ClientMessageOrderStatusServiceTest {
@@ -31,94 +42,131 @@ class ClientMessageOrderStatusServiceTest {
     @Mock
     private AppSettingService appSettingService;
 
+    @Mock
+    private ScheduledClientMessageService scheduledClientMessageService;
+
+    @Mock
+    private CompanyRepository companyRepository;
+
+    @Mock
+    private SharedChatLinkSyncService sharedChatLinkSyncService;
+
+    @Mock
+    private WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
+
+    private ClientMessageOrderStatusService service;
+
     @BeforeEach
-    void setUpSettings() {
-        lenient().when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, true)).thenReturn(true);
-        lenient().when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true)).thenReturn(true);
-        lenient().when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_ENABLED, true)).thenReturn(true);
-        lenient().when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES))
-                .thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES);
-        lenient().when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_STATUSES))
-                .thenReturn(ScheduledClientMessageService.DEFAULT_PAYMENT_REMINDER_STATUSES);
-        lenient().when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES))
-                .thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES);
-        lenient().when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS))
-                .thenReturn(ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS);
-        lenient().when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS))
-                .thenReturn(ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS);
-        lenient().when(appSettingService.getInt(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS, ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS))
-                .thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS);
+    void setUp() {
+        service = new ClientMessageOrderStatusService(
+                stateRepository,
+                appSettingService,
+                scheduledClientMessageService,
+                companyRepository,
+                sharedChatLinkSyncService,
+                whatsAppGroupLinkSyncService
+        );
     }
 
     @Test
-    void enrichOrderListMarksMissingWhatsappGroupAsManualControl() {
-        ClientMessageOrderStatusService service = new ClientMessageOrderStatusService(stateRepository, appSettingService);
-        OrderDTOList order = OrderDTOList.builder().id(15L).build();
-        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+    void clearsRemarkCardWhenTelegramBindingIsRecoveredAutomatically() {
+        OrderDTOList order = order(10L, 1L, "https://t.me/company_chat");
+        Company repairedCompany = Company.builder()
+                .id(1L)
+                .urlChat("https://t.me/company_chat")
+                .telegramGroupChatId(100500L)
+                .build();
+        when(companyRepository.findById(1L)).thenReturn(Optional.of(repairedCompany));
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
+
+        service.enrichOrderList(List.of(order));
+
+        assertNull(order.getClientMessageStatus());
+        assertEquals(100500L, order.getTelegramGroupChatId());
+        verify(sharedChatLinkSyncService).syncSharedChatIds();
+        verify(scheduledClientMessageService).ensureClientMessageStateForOrderId(10L);
+    }
+
+    @Test
+    void keepsManagerRemarkCardWhenTelegramBindingCannotBeRecovered() {
+        OrderDTOList order = order(11L, 2L, "https://t.me/company_without_binding");
+        Company companyWithoutBinding = Company.builder()
+                .id(2L)
+                .urlChat("https://t.me/company_without_binding")
+                .build();
+        when(companyRepository.findById(2L)).thenReturn(Optional.of(companyWithoutBinding));
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
+
+        service.enrichOrderList(List.of(order));
+
+        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
+        assertNotNull(status);
+        assertEquals("manual_control", status.state());
+        assertEquals("danger", status.tone());
+        assertEquals("telegram_group_missing", status.errorCode());
+        assertEquals("Контроль: Telegram-группа не привязана", status.label());
+        verify(scheduledClientMessageService, never()).ensureClientMessageStateForOrderId(any());
+    }
+
+    @Test
+    void attemptsWhatsAppGroupRepairBeforeCreatingManagerRemarkCard() {
+        OrderDTOList order = order(12L, 3L, "https://chat.whatsapp.com/invite-code");
+        Company companyWithoutBinding = Company.builder()
                 .id(3L)
-                .orderId(15L)
-                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
-                .status(ScheduledMessageStateStatus.ACTIVE)
-                .lastAttemptAt(LocalDateTime.now().minusMinutes(5))
-                .updatedAt(LocalDateTime.now())
-                .lastErrorCode("whatsapp_group_missing")
-                .lastErrorMessage("Для WhatsApp-группы не задан groupId")
-                .consecutiveFailures(1)
+                .urlChat("https://chat.whatsapp.com/invite-code")
                 .build();
-
-        when(stateRepository.findByOrderIdIn(List.of(15L))).thenReturn(List.of(state));
+        when(companyRepository.findById(3L)).thenReturn(Optional.of(companyWithoutBinding));
+        when(whatsAppGroupLinkSyncService.repairCompanyLink(companyWithoutBinding))
+                .thenReturn(new WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult(false, "не найдено"));
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
 
         service.enrichOrderList(List.of(order));
 
         ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
         assertNotNull(status);
         assertEquals("manual_control", status.state());
-        assertEquals("danger", status.tone());
-        assertEquals("Контроль: WhatsApp-группа не привязана", status.label());
         assertEquals("whatsapp_group_missing", status.errorCode());
-        verify(stateRepository).findByOrderIdIn(List.of(15L));
-    }
-
-    @Test
-    void enrichOrderListDoesNotShowScheduledWhenWhatsappGroupIsNotLinkedYet() {
-        ClientMessageOrderStatusService service = new ClientMessageOrderStatusService(stateRepository, appSettingService);
-        OrderDTOList order = OrderDTOList.builder()
-                .id(16L)
-                .companyUrlChat("https://chat.whatsapp.com/example")
-                .groupId("")
-                .build();
-        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
-                .id(4L)
-                .orderId(16L)
-                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
-                .status(ScheduledMessageStateStatus.ACTIVE)
-                .nextAttemptAt(LocalDateTime.now().plusHours(2))
-                .updatedAt(LocalDateTime.now())
-                .build();
-
-        when(stateRepository.findByOrderIdIn(List.of(16L))).thenReturn(List.of(state));
-
-        service.enrichOrderList(List.of(order));
-
-        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
-        assertNotNull(status);
-        assertEquals("manual_control", status.state());
-        assertEquals("danger", status.tone());
         assertEquals("Контроль: WhatsApp-группа не привязана", status.label());
-        assertEquals("whatsapp_group_missing", status.errorCode());
-        verify(stateRepository).findByOrderIdIn(List.of(16L));
+        verify(sharedChatLinkSyncService).syncSharedChatIds();
+        verify(whatsAppGroupLinkSyncService).repairCompanyLink(companyWithoutBinding);
+        verify(scheduledClientMessageService, never()).ensureClientMessageStateForOrderId(any());
     }
 
     @Test
-    void enrichOrderListMarksStaleReviewCheckOrderWithoutQueueStateAsManualControl() {
-        ClientMessageOrderStatusService service = new ClientMessageOrderStatusService(stateRepository, appSettingService);
-        OrderDTOList order = OrderDTOList.builder()
-                .id(17L)
-                .status("На проверке")
-                .dayToChangeStatusAgo(26)
+    void keepsTemporaryDeliveryErrorInRetryQueueBeforeManualThreshold() {
+        OrderDTOList order = order(13L, null, null);
+        ScheduledClientMessageState state = activeState(13L)
+                .lastErrorCode("telegram_send_timeout")
+                .lastErrorMessage("Временная ошибка Telegram")
+                .consecutiveFailures(2)
+                .lastAttemptAt(LocalDateTime.now().minusMinutes(10))
+                .nextAttemptAt(LocalDateTime.now().plusMinutes(5))
                 .build();
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(state));
+        stubManualControlSettings(3, 60);
 
-        when(stateRepository.findByOrderIdIn(List.of(17L))).thenReturn(List.of());
+        service.enrichOrderList(List.of(order));
+
+        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
+        assertNotNull(status);
+        assertEquals("scheduled", status.state());
+        assertEquals("wait", status.tone());
+        assertEquals("Автоответчик запланирован", status.label());
+        assertEquals("telegram_send_timeout", status.errorCode());
+    }
+
+    @Test
+    void escalatesTemporaryDeliveryErrorAfterManualFailureThreshold() {
+        OrderDTOList order = order(14L, null, null);
+        ScheduledClientMessageState state = activeState(14L)
+                .lastErrorCode("telegram_send_timeout")
+                .lastErrorMessage("Временная ошибка Telegram")
+                .consecutiveFailures(3)
+                .lastAttemptAt(LocalDateTime.now().minusMinutes(10))
+                .nextAttemptAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(state));
+        stubManualControlSettings(3, 60);
 
         service.enrichOrderList(List.of(order));
 
@@ -126,80 +174,59 @@ class ClientMessageOrderStatusServiceTest {
         assertNotNull(status);
         assertEquals("manual_control", status.state());
         assertEquals("danger", status.tone());
-        assertEquals("Контроль: автоответчик не создан", status.label());
-        assertEquals("client_message_state_missing", status.errorCode());
-        verify(stateRepository).findByOrderIdIn(List.of(17L));
+        assertEquals("Контроль: автоответчик не отправил", status.label());
+        assertEquals("telegram_send_timeout", status.errorCode());
     }
 
     @Test
-    void enrichOrderListMarksPublishedOrderWithoutInvoiceRetryAsManualControl() {
-        ClientMessageOrderStatusService service = new ClientMessageOrderStatusService(stateRepository, appSettingService);
-        OrderDTOList order = OrderDTOList.builder()
-                .id(18L)
-                .status("Опубликовано")
-                .dayToChangeStatusAgo(1)
-                .commonInvoice(false)
+    void showsReviewRecoveryAsNeutralWaitingStateWithoutManagerControl() {
+        OrderDTOList order = order(15L, null, null);
+        ScheduledClientMessageState state = activeState(15L)
+                .lastErrorCode("review_recovery_active")
+                .lastErrorMessage("Отправка продолжится автоматически после завершения восстановления")
+                .consecutiveFailures(99)
+                .lastAttemptAt(LocalDateTime.now().minusHours(5))
+                .nextAttemptAt(LocalDateTime.now().plusMinutes(10))
                 .build();
-
-        when(stateRepository.findByOrderIdIn(List.of(18L))).thenReturn(List.of());
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(state));
 
         service.enrichOrderList(List.of(order));
 
         ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
         assertNotNull(status);
-        assertEquals("manual_control", status.state());
-        assertEquals("danger", status.tone());
-        assertEquals("Контроль: счет не поставлен в очередь", status.label());
-        assertEquals("payment_invoice_retry_missing", status.errorCode());
-        verify(stateRepository).findByOrderIdIn(List.of(18L));
+        assertEquals("waiting_recovery", status.state());
+        assertEquals("wait", status.tone());
+        assertEquals("Ждём восстановления отзывов", status.label());
+        assertEquals("review_recovery_active", status.errorCode());
     }
 
-    @Test
-    void enrichOrderListPrefersSentStateOverCompletedStateWithOldError() {
-        ClientMessageOrderStatusService service = new ClientMessageOrderStatusService(stateRepository, appSettingService);
-        OrderDTOList order = OrderDTOList.builder().id(19L).build();
-        ScheduledClientMessageState oldCompletedError = ScheduledClientMessageState.builder()
-                .id(31L)
-                .orderId(19L)
-                .scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
-                .status(ScheduledMessageStateStatus.DONE)
-                .lastAttemptAt(LocalDateTime.now().minusDays(4))
-                .updatedAt(LocalDateTime.now().minusDays(4))
-                .lastErrorCode("telegram_not_sent")
-                .lastErrorMessage("Telegram вернул отказ")
-                .consecutiveFailures(1)
-                .sentCount(0)
+    private OrderDTOList order(Long orderId, Long companyId, String companyUrlChat) {
+        return OrderDTOList.builder()
+                .id(orderId)
+                .companyId(companyId)
+                .companyUrlChat(companyUrlChat)
                 .build();
-        ScheduledClientMessageState sentReminder = ScheduledClientMessageState.builder()
-                .id(32L)
-                .orderId(19L)
-                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
-                .status(ScheduledMessageStateStatus.DONE)
-                .lastAttemptAt(LocalDateTime.now().minusMinutes(5))
-                .lastSuccessAt(LocalDateTime.now().minusMinutes(5))
-                .updatedAt(LocalDateTime.now().minusMinutes(5))
-                .sentCount(1)
-                .build();
-
-        when(stateRepository.findByOrderIdIn(List.of(19L))).thenReturn(List.of(oldCompletedError, sentReminder));
-
-        service.enrichOrderList(List.of(order));
-
-        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
-        assertNotNull(status);
-        assertEquals("sent", status.state());
-        assertEquals("success", status.tone());
-        assertEquals("Автоответчик отправил", status.label());
-        assertEquals("PAYMENT_REMINDER", status.scenario());
-        verify(stateRepository).findByOrderIdIn(List.of(19L));
     }
 
-    @Test
-    void enrichOrderListSkipsSyntheticCommonInvoiceCards() {
-        ClientMessageOrderStatusService service = new ClientMessageOrderStatusService(stateRepository, appSettingService);
+    private ScheduledClientMessageState.ScheduledClientMessageStateBuilder activeState(Long orderId) {
+        return ScheduledClientMessageState.builder()
+                .id(orderId)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey(String.valueOf(orderId))
+                .orderId(orderId)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .updatedAt(LocalDateTime.now());
+    }
 
-        service.enrichOrderList(List.of(OrderDTOList.builder().id(-101L).build()));
-
-        verifyNoInteractions(stateRepository);
+    private void stubManualControlSettings(int failureThreshold, int afterMinutes) {
+        when(appSettingService.getInt(
+                eq(AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD),
+                anyInt()
+        )).thenReturn(failureThreshold);
+        lenient().when(appSettingService.getInt(
+                eq(AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES),
+                anyInt()
+        )).thenReturn(afterMinutes);
     }
 }

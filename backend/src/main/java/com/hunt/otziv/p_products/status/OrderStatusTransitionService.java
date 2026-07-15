@@ -177,6 +177,12 @@ public class OrderStatusTransitionService {
                 newStatus,
                 "requestedStatus=" + requestedStatus
         );
+        eventPublisher.publishEvent(new OrderStatusChangedEvent(
+                order.getId(),
+                oldStatus,
+                newStatus,
+                requestedStatus
+        ));
     }
 
     private boolean handleNotPaidStatus(Order order) {

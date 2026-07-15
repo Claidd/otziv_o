@@ -227,10 +227,10 @@ public class ApiWorkerBoardController {
             List<ManagerOverdueStatusResponse> statuses = new ArrayList<>();
             addPositiveStatus(statuses, overdueOrderSection(orderRows, today, ORDER_STATUS_NEW, "Новые"));
             addPositiveStatus(statuses, overdueOrderSection(orderRows, today, ORDER_STATUS_CORRECT, "Коррекция"));
-            addPositiveStatus(statuses, overdueReviewSection(principal, authentication, SECTION_NAGUL, "Выгул", today));
-            addPositiveStatus(statuses, overdueReviewSection(principal, authentication, SECTION_PUBLISH, "Публикация", today));
-            addPositiveStatus(statuses, overdueRecoverySection(principal, authentication, today));
-            addPositiveStatus(statuses, overdueBadSection(principal, authentication, today));
+            addPositiveStatus(statuses, overdueReviewSection(principal, authentication, SECTION_NAGUL, "Выгул", cutoff, today));
+            addPositiveStatus(statuses, overdueReviewSection(principal, authentication, SECTION_PUBLISH, "Публикация", cutoff, today));
+            addPositiveStatus(statuses, overdueRecoverySection(principal, authentication, cutoff, today));
+            addPositiveStatus(statuses, overdueBadSection(principal, authentication, cutoff, today));
 
             long total = statuses.stream()
                     .mapToLong(ManagerOverdueStatusResponse::count)
@@ -980,8 +980,30 @@ public class ApiWorkerBoardController {
             int pageSize,
             String sortDirection
     ) {
+        return loadRecoveryTasks(
+                principal,
+                authentication,
+                selectedWorker,
+                keyword,
+                pageNumber,
+                pageSize,
+                sortDirection,
+                LocalDate.now()
+        );
+    }
+
+    private Page<ReviewRecoveryTask> loadRecoveryTasks(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            LocalDate dueOnOrBefore
+    ) {
         PageRequest pageable = PageRequest.of(pageNumber, pageSize, recoveryTaskSort(sortDirection));
-        LocalDate date = LocalDate.now();
+        LocalDate date = Objects.requireNonNull(dueOnOrBefore, "dueOnOrBefore");
 
         if (selectedWorker != null) {
             return reviewRecoveryTaskService.getDueTasksToWorker(selectedWorker, date, keyword, pageable);
@@ -1008,8 +1030,30 @@ public class ApiWorkerBoardController {
             int pageSize,
             String sortDirection
     ) {
+        return loadBadReviewTasks(
+                principal,
+                authentication,
+                selectedWorker,
+                keyword,
+                pageNumber,
+                pageSize,
+                sortDirection,
+                LocalDate.now()
+        );
+    }
+
+    private Page<BadReviewTask> loadBadReviewTasks(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker,
+            String keyword,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            LocalDate dueOnOrBefore
+    ) {
         PageRequest pageable = PageRequest.of(pageNumber, pageSize, badReviewTaskSort(sortDirection));
-        LocalDate date = LocalDate.now();
+        LocalDate date = Objects.requireNonNull(dueOnOrBefore, "dueOnOrBefore");
 
         if (selectedWorker != null) {
             return badReviewTaskService.getDueTasksToWorker(selectedWorker, date, keyword, pageable);
@@ -1059,6 +1103,31 @@ public class ApiWorkerBoardController {
             String keyword
     ) {
         LocalDate date = SECTION_NAGUL.equals(section) ? nagulLookaheadDate() : LocalDate.now();
+        return loadReviewPage(
+                principal,
+                authentication,
+                selectedWorker,
+                section,
+                pageNumber,
+                pageSize,
+                sortDirection,
+                keyword,
+                date
+        );
+    }
+
+    private Page<ReviewDTOOne> loadReviewPage(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker,
+            String section,
+            int pageNumber,
+            int pageSize,
+            String sortDirection,
+            String keyword,
+            LocalDate dueOnOrBefore
+    ) {
+        LocalDate date = Objects.requireNonNull(dueOnOrBefore, "dueOnOrBefore");
 
         if (selectedWorker != null) {
             if (SECTION_BAD.equals(section)) {
@@ -1919,9 +1988,20 @@ public class ApiWorkerBoardController {
             Authentication authentication,
             String section,
             String sectionLabel,
+            LocalDate cutoff,
             LocalDate today
     ) {
-        Page<ReviewDTOOne> page = loadReviewPage(principal, authentication, null, section, 0, 1, "asc", "");
+        Page<ReviewDTOOne> page = loadReviewPage(
+                principal,
+                authentication,
+                null,
+                section,
+                0,
+                1,
+                "asc",
+                "",
+                cutoff
+        );
         LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getPublishedDate();
         return new ManagerOverdueStatusResponse(sectionLabel, page.getTotalElements(), daysSince(oldestDate, today));
     }
@@ -1929,9 +2009,10 @@ public class ApiWorkerBoardController {
     private ManagerOverdueStatusResponse overdueRecoverySection(
             Principal principal,
             Authentication authentication,
+            LocalDate cutoff,
             LocalDate today
     ) {
-        Page<ReviewRecoveryTask> page = loadRecoveryTasks(principal, authentication, null, "", 0, 1, "asc");
+        Page<ReviewRecoveryTask> page = loadRecoveryTasks(principal, authentication, null, "", 0, 1, "asc", cutoff);
         LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getScheduledDate();
         return new ManagerOverdueStatusResponse("Восстановление", page.getTotalElements(), daysSince(oldestDate, today));
     }
@@ -1939,9 +2020,10 @@ public class ApiWorkerBoardController {
     private ManagerOverdueStatusResponse overdueBadSection(
             Principal principal,
             Authentication authentication,
+            LocalDate cutoff,
             LocalDate today
     ) {
-        Page<BadReviewTask> page = loadBadReviewTasks(principal, authentication, null, "", 0, 1, "asc");
+        Page<BadReviewTask> page = loadBadReviewTasks(principal, authentication, null, "", 0, 1, "asc", cutoff);
         LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getScheduledDate();
         return new ManagerOverdueStatusResponse("Плохие", page.getTotalElements(), daysSince(oldestDate, today));
     }

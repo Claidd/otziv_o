@@ -55,9 +55,9 @@ describe('app navigation registry', () => {
     expect(appNavigationLinksForGroup('home', ['MANAGER']).map((link) => link.id)).toEqual(expect.arrayContaining([
       'personal-cabinet',
       'team',
-      'score',
       'manager-control-self'
     ]));
     expect(appNavigationLinksForGroup('home', ['OWNER']).map((link) => link.id)).not.toContain('manager-control-self');
+    expect(adminSections.indexOf('manager-control')).toBeLessThan(adminSections.indexOf('team'));
   });
 });

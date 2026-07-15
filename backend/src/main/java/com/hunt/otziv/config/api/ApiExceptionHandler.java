@@ -17,6 +17,8 @@ import java.util.regex.Pattern;
 @RestControllerAdvice(annotations = RestController.class)
 public class ApiExceptionHandler {
     private static final Pattern DATA_TOO_LONG_COLUMN = Pattern.compile("Data too long for column '([^']+)'");
+    private static final Pattern DUPLICATE_ENTRY = Pattern.compile("Duplicate entry '([^']*)' for key '([^']*)'");
+    private static final Pattern FOREIGN_KEY_CONSTRAINT = Pattern.compile("foreign key constraint fails", Pattern.CASE_INSENSITIVE);
     private static final Map<String, String> FIELD_LABELS = Map.ofEntries(
             Map.entry("company_name", "Наименование"),
             Map.entry("phones", "Телефоны"),
@@ -70,7 +72,17 @@ public class ApiExceptionHandler {
             return "Поле \"" + label + "\" слишком длинное для текущей схемы базы. Примените последние миграции и повторите импорт.";
         }
 
-        return "Данные не удалось сохранить. Проверьте файл на дубли и слишком длинные значения.";
+
+        Matcher duplicateMatcher = DUPLICATE_ENTRY.matcher(message);
+        if (duplicateMatcher.find()) {
+            return "Изменение не сохранено: значение \"" + duplicateMatcher.group(1) + "\" уже используется.";
+        }
+
+        if (FOREIGN_KEY_CONSTRAINT.matcher(message).find()) {
+            return "Изменение не сохранено: запись связана с рабочими данными. История сохранена, ничего не удалено.";
+        }
+
+        return "Изменение не сохранено из-за ограничения базы данных. Обновите страницу и повторите действие.";
     }
 
     private String mostSpecificMessage(DataIntegrityViolationException ex) {

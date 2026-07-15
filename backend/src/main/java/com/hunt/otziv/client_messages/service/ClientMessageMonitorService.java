@@ -91,6 +91,10 @@ public class ClientMessageMonitorService {
                     0,
                     0,
                     0,
+                    0,
+                    0,
+                    0,
+                    0,
                     archiveDiagnostics(nowStorage),
                     scenarioSummaries(
                             Map.of(),
@@ -157,7 +161,28 @@ public class ClientMessageMonitorService {
                 ScheduledMessageAttemptStatus.SKIPPED,
                 todayStartStorage
         );
+        long autoRecoveredToday = attemptRepository.countByStatusAndErrorCodeAndAttemptedAtGreaterThanEqual(
+                ScheduledMessageAttemptStatus.SKIPPED,
+                ScheduledClientMessageService.AUTO_RECOVERED_ERROR_CODE,
+                todayStartStorage
+        );
         long missingChannelBindings = missingChannelByScenario.values().stream().mapToLong(Long::longValue).sum();
+        int manualControlFailureThreshold = manualControlFailureThreshold();
+        LocalDateTime manualControlCutoff = nowStorage.minusMinutes(manualControlAfterMinutes());
+        long manualControlCandidates = stateRepository.countManualControlCandidates(
+                ScheduledMessageStateStatus.ACTIVE.name(),
+                manualControlFailureThreshold,
+                manualControlCutoff
+        );
+        long retryWaitingCandidates = stateRepository.countRetryWaitingCandidates(
+                ScheduledMessageStateStatus.ACTIVE.name(),
+                nowStorage,
+                manualControlFailureThreshold,
+                manualControlCutoff
+        );
+        long recoveryHoldCandidates = stateRepository.countReviewRecoveryHolds(
+                ScheduledMessageStateStatus.ACTIVE.name()
+        );
         long waitingForWindow = waitingForWindow(dueByScenario, workerEnabled, windowAllowed, paused);
         long readyToSendNow = readyToSendNow(dueByScenario, dueMissingChannelByScenario, workerEnabled, liveEnabled, windowAllowed, paused);
         LocalDateTime nextAttemptAt = stateRepository.findNextAttempt(
@@ -186,9 +211,13 @@ public class ClientMessageMonitorService {
                 readyToSendNow,
                 waitingForWindow,
                 missingChannelBindings,
+                manualControlCandidates,
+                retryWaitingCandidates,
+                recoveryHoldCandidates,
                 sentToday,
                 failedToday,
                 skippedToday,
+                autoRecoveredToday,
                 stateRepository.countByStatus(ScheduledMessageStateStatus.DISABLED),
                 archiveDiagnostics(nowStorage),
                 scenarioSummaries(
@@ -774,6 +803,20 @@ public class ClientMessageMonitorService {
 
     private LocalDateTime clientMessagesPausedUntil() {
         return parseLocalDateTime(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL, null));
+    }
+
+    private int manualControlFailureThreshold() {
+        return Math.max(1, appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD,
+                ClientMessageOrderStatusService.DEFAULT_MANUAL_CONTROL_FAILURE_THRESHOLD
+        ));
+    }
+
+    private int manualControlAfterMinutes() {
+        return Math.max(1, appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES,
+                ClientMessageOrderStatusService.DEFAULT_MANUAL_CONTROL_AFTER_MINUTES
+        ));
     }
 
     private LocalDateTime parseLocalDateTime(String value) {

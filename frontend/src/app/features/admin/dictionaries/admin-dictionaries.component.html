@@ -3160,6 +3160,21 @@
                         <input type="number" min="1" max="1440" step="1" formControlName="errorProtectionCooldownMinutes">
                       </label>
 
+                      <label appTooltip="Через сколько минут повторять временные сбои отправки: timeout, клиент не готов, кратковременная ошибка API. Это не ручной контроль, система пробует сама.">
+                        <span>Повтор временной ошибки, минут</span>
+                        <input type="number" min="1" max="1440" step="1" formControlName="transientRetryMinutes">
+                      </label>
+
+                      <label appTooltip="Сколько подряд временных ошибок достаточно, чтобы задача попала в ручной контроль. Явные проблемы привязки чата всё равно попадают сразу.">
+                        <span>В контроль после ошибок</span>
+                        <input type="number" min="1" max="100" step="1" formControlName="manualControlFailureThreshold">
+                      </label>
+
+                      <label appTooltip="Если временная ошибка не восстановилась за это время после последней попытки, задача попадет в ручной контроль.">
+                        <span>В контроль после, минут</span>
+                        <input type="number" min="1" max="1440" step="1" formControlName="manualControlAfterMinutes">
+                      </label>
+
                       <label appTooltip="Если WhatsApp-клиент не авторизован, ждет QR или временно не готов, через сколько часов пробовать снова. Такой сбой не уводит задачу в долгую паузу.">
                         <span>Повтор WhatsApp QR, часов</span>
                         <input type="number" min="1" max="48" step="1" formControlName="whatsAppAuthRetryHours">

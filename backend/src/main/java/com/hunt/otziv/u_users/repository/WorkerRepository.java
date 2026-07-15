@@ -30,6 +30,9 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
                    u.username AS username
             FROM Worker w
             JOIN w.user u
+            JOIN u.roles r
+            WHERE u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     List<WorkerOptionRow> findWorkerOptions();
 
@@ -37,7 +40,10 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             SELECT w
             FROM Worker w
             JOIN FETCH w.user u
+            JOIN u.roles r
             LEFT JOIN FETCH u.image
+            WHERE u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     Set<Worker> findAll();
 
@@ -45,7 +51,10 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
     SELECT DISTINCT w
     FROM Worker w
     JOIN FETCH w.user u
+    JOIN u.roles r
     LEFT JOIN FETCH u.image
+    WHERE u.active = true
+      AND r.name = 'ROLE_WORKER'
 """)
     Set<Worker> findAllWithUserAndImageSet();
 
@@ -53,8 +62,11 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             SELECT w
             FROM Worker w
             JOIN FETCH w.user u
+            JOIN u.roles r
             LEFT JOIN FETCH u.image
             WHERE :manager IN elements(u.managers)
+              AND u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     List<Worker> findAllToManager(Manager manager);
 
@@ -62,8 +74,11 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             SELECT w
             FROM Worker w
             JOIN FETCH w.user u
+            JOIN u.roles r
             LEFT JOIN FETCH u.image
             WHERE w IN (:workers)
+              AND u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     List<Worker> findAllToManagerWorkers(Set<Worker> workers);
 
@@ -93,7 +108,10 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             SELECT w
             FROM Worker w
             JOIN FETCH w.user u
+            JOIN u.roles r
             LEFT JOIN FETCH u.image
+            WHERE u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     List<Worker> findAllWithUserAndImage();
 
@@ -110,9 +128,12 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             SELECT DISTINCT w
             FROM Worker w
             JOIN FETCH w.user u
+            JOIN u.roles r
             LEFT JOIN FETCH u.image
             LEFT JOIN FETCH u.managers m
             WHERE m IN :managerList
+              AND u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     Set<Worker> findAllToManagerList(List<Manager> managerList);
 
@@ -120,9 +141,12 @@ public interface WorkerRepository extends CrudRepository<Worker, Long> {
             SELECT DISTINCT w
             FROM Worker w
             JOIN FETCH w.user u
+            JOIN u.roles r
             LEFT JOIN FETCH u.image
             JOIN u.managers m
             WHERE m.id = :managerId
+              AND u.active = true
+              AND r.name = 'ROLE_WORKER'
             """)
     Set<Worker> findAllByManagerIdWithUser(@Param("managerId") Long managerId);
 

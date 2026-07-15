@@ -2,6 +2,7 @@ package com.hunt.otziv.admin.dto.presonal;
 
 
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,6 +29,9 @@ public class WorkersListDTO {
     private int intVigul;
     private int publish;
     private DailyWorkProgressResponse dailyProgress;
+    private DailyWorkProgressResponse monthlyProgress;
+    private WorkerNetworkViolationStatsResponse dailyNetworkViolations;
+    private WorkerNetworkViolationStatsResponse monthlyNetworkViolations;
 //    private BigDecimal coefficient;
 //    private BigDecimal sum1Day;
 //    private BigDecimal sum1Week;

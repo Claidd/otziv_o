@@ -25,6 +25,8 @@ import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.UpdateManualPaymentTaskStatusRequest;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse;
+import com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
 import com.hunt.otziv.u_users.model.Operator;
@@ -36,6 +38,7 @@ import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import java.security.Principal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.function.Function;
@@ -68,6 +71,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 @RequestMapping("/api/cabinet")
 public class ApiCabinetController {
+    private static final ZoneId CABINET_ZONE = ZoneId.of("Asia/Irkutsk");
+
 
     private static final List<String> BUSINESS_ROLE_PRIORITY = List.of(
             "ROLE_ADMIN",
@@ -91,6 +96,7 @@ public class ApiCabinetController {
     private final ManualPaymentTaskService manualPaymentTaskService;
     private final ManagerPerformanceService managerPerformanceService;
     private final StaffDailyProgressService staffDailyProgressService;
+    private final WorkerNetworkViolationService workerNetworkViolationService;
 
     @Value("${otziv.analytics.aggregates.read-enabled:false}")
     private boolean aggregateAnalyticsReadEnabled;
@@ -228,15 +234,18 @@ public class ApiCabinetController {
             Authentication authentication,
             @RequestParam(value = "date", required = false)
             @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
+            @RequestParam(value = "month", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate month,
             @RequestParam(value = "refresh", defaultValue = "false") boolean refresh
     ) {
         return performanceMetrics.recordEndpoint("cabinet.team", () -> {
             LocalDate selectedDate = selectedDate(date);
+            LocalDate selectedMonth = selectedMonth(month, selectedDate);
             String role = primaryRole(authentication);
 
-            return cached(
+            TeamResponse response = cached(
                     CacheConfig.CABINET_TEAM,
-                    cabinetKey("team", principal.getName(), role, selectedDate, aggregateAnalyticsReadEnabled),
+                    cabinetKey("team", principal.getName(), role, selectedDate, selectedMonth, aggregateAnalyticsReadEnabled),
                     refresh,
                     () -> {
                         User user = currentUser(principal);
@@ -260,27 +269,21 @@ public class ApiCabinetController {
                         if ("ROLE_OWNER".equals(role)) {
                             List<Manager> managers = userService.findManagersByUserName(principal.getName()).stream().toList();
                             List<Manager> expandedManagers = personalService.findAllManagersWorkers(managers);
-                            List<Marketolog> marketologs = expandedManagers.stream()
-                                    .flatMap(manager -> manager.getUser().getMarketologs().stream())
-                                    .toList();
-                            List<Operator> operators = expandedManagers.stream()
-                                    .flatMap(manager -> manager.getUser().getOperators().stream())
-                                    .toList();
-                            List<Worker> workers = expandedManagers.stream()
-                                    .flatMap(manager -> manager.getUser().getWorkers().stream())
-                                    .toList();
+                            List<Marketolog> marketologs = personalService.findCurrentMarketologsForManagers(managers);
+                            List<Operator> operators = personalService.findCurrentOperatorsForManagers(managers).stream().toList();
+                            List<Worker> workers = personalService.findCurrentWorkersForManagers(managers).stream().toList();
 
-                            return withTeamDailyProgress(ownerTeamResponse(
+                            return withTeamMonthlyProgress(withTeamDailyProgress(ownerTeamResponse(
                                     selectedDate,
                                     role,
                                     managers,
                                     marketologs,
                                     workers,
                                     operators
-                            ), selectedDate, true);
+                            ), selectedDate, true), selectedMonth, true);
                         }
 
-                        return withTeamDailyProgress(new TeamResponse(
+                        return withTeamMonthlyProgress(withTeamDailyProgress(new TeamResponse(
                                 selectedDate,
                                 shortRole(role),
                                 canManageUsers,
@@ -290,9 +293,10 @@ public class ApiCabinetController {
                                 personalService.getMarketologs(),
                                 personalService.gerWorkers(),
                                 personalService.gerOperators()
-                        ), selectedDate, canManageUsers);
+                        ), selectedDate, canManageUsers), selectedMonth, canManageUsers);
                     }
             );
+            return withTeamNetworkViolations(response, selectedDate, selectedMonth);
         });
     }
 
@@ -400,7 +404,11 @@ public class ApiCabinetController {
     }
 
     private LocalDate selectedDate(LocalDate date) {
-        return date == null ? LocalDate.now() : date;
+        return date == null ? LocalDate.now(CABINET_ZONE) : date;
+    }
+
+    private LocalDate selectedMonth(LocalDate month, LocalDate selectedDate) {
+        return (month == null ? selectedDate : month).withDayOfMonth(1);
     }
 
     private <T> T cached(String cacheName, String key, boolean refresh, Supplier<T> valueLoader) {
@@ -559,10 +567,95 @@ public class ApiCabinetController {
                     .map(workerProgress::get)
                     .filter(Objects::nonNull)
                     .toList();
-            manager.setDailyProgress(staffDailyProgressService.aggregateProgressResponses(
+            List<Long> teamWorkerIds = managerWorkerContext.workerIdsByManagerId()
+                    .getOrDefault(manager.getId(), List.of());
+            manager.setDailyProgress(staffDailyProgressService.aggregateTeamProgressResponses(
                     teamProgress,
+                    teamWorkerIds,
                     selectedDate,
                     "WORKER_TEAM"
+            ));
+        });
+        return response;
+    }
+
+    private TeamResponse withTeamMonthlyProgress(TeamResponse response, LocalDate selectedMonth, boolean visible) {
+        if (!visible || response == null || !staffDailyProgressService.progressEnabled()) {
+            return response;
+        }
+
+        LocalDate monthStart = selectedMonth(selectedMonth, response.date());
+        ManagerWorkerProgressContext managerWorkerContext = managerWorkerProgressContext(response.managers());
+        Map<Long, StaffDailyProgressService.WorkerProgressSubject> workerSubjectsById = new LinkedHashMap<>(managerWorkerContext.workerSubjectsById());
+
+        response.workers().stream()
+                .filter(worker -> worker.getId() != null)
+                .forEach(worker -> workerSubjectsById.putIfAbsent(
+                        worker.getId(),
+                        new StaffDailyProgressService.WorkerProgressSubject(
+                                worker.getId(),
+                                worker.getUserId(),
+                                firstNonBlank(worker.getFio(), worker.getLogin())
+                        )
+                ));
+        Map<Long, DailyWorkProgressResponse> workerProgress = staffDailyProgressService.monthlyWorkerProgressBySubjects(
+                workerSubjectsById.values(),
+                monthStart
+        );
+        response.workers().forEach(worker ->
+                worker.setMonthlyProgress(workerProgress.get(worker.getId()))
+        );
+        response.managers().forEach(manager -> {
+            List<DailyWorkProgressResponse> teamProgress = managerWorkerContext.workerIdsByManagerId()
+                    .getOrDefault(manager.getId(), List.of()).stream()
+                    .map(workerProgress::get)
+                    .filter(Objects::nonNull)
+                    .toList();
+            manager.setMonthlyProgress(staffDailyProgressService.aggregateProgressResponses(
+                    teamProgress,
+                    monthStart,
+                    "WORKER_TEAM_MONTH"
+            ));
+        });
+        return response;
+    }
+
+    private TeamResponse withTeamNetworkViolations(
+            TeamResponse response,
+            LocalDate selectedDate,
+            LocalDate selectedMonth
+    ) {
+        if (response == null
+                || !workerNetworkViolationService.statisticsVisibleForRole(response.role())
+                || response.workers() == null
+                || response.workers().isEmpty()) {
+            return response;
+        }
+
+        List<Long> userIds = response.workers().stream()
+                .map(WorkersListDTO::getUserId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, WorkerNetworkViolationStatsResponse> daily = workerNetworkViolationService.statsForPeriod(
+                userIds,
+                selectedDate,
+                selectedDate.plusDays(1)
+        );
+        LocalDate monthStart = selectedMonth.withDayOfMonth(1);
+        Map<Long, WorkerNetworkViolationStatsResponse> monthly = workerNetworkViolationService.statsForPeriod(
+                userIds,
+                monthStart,
+                monthStart.plusMonths(1)
+        );
+        response.workers().forEach(worker -> {
+            worker.setDailyNetworkViolations(daily.getOrDefault(
+                    worker.getUserId(),
+                    WorkerNetworkViolationStatsResponse.empty()
+            ));
+            worker.setMonthlyNetworkViolations(monthly.getOrDefault(
+                    worker.getUserId(),
+                    WorkerNetworkViolationStatsResponse.empty()
             ));
         });
         return response;

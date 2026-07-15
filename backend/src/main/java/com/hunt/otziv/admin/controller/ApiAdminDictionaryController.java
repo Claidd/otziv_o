@@ -17,6 +17,7 @@ import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.client_messages.service.ClientMessageSlotPlanner;
+import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.client_chat_control.service.ClientChatAutoIgnoreService;
 import com.hunt.otziv.config.cache.CacheConfig;
@@ -712,6 +713,9 @@ public class ApiAdminDictionaryController {
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS, request.paymentReminderIntervalDays(), 1, 365, "Интервал напоминания об оплате");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_RETRY_DELAY_HOURS, request.reviewCheckRetryDelayHours(), 1, 168, "Повтор ссылки проверки после сбоя");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS, request.paymentInvoiceRetryDelayHours(), 1, 168, "Повтор счета после сбоя");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES, request.transientRetryMinutes(), 1, 1440, "Повтор временной ошибки");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD, request.manualControlFailureThreshold(), 1, 100, "Порог ошибок ручного контроля");
+        saveIntSetting(AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES, request.manualControlAfterMinutes(), 1, 1440, "Порог времени ручного контроля");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS, request.badReviewInvoiceRetryDelayHours(), 1, 168, "Повтор счета после плохого отзыва");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_AUTO_BAN_DELAY_DAYS, request.badReviewAutoBanDelayDays(), 1, 365, "Автобан после плохих отзывов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_RECOVERY_NOTICE_RETRY_DELAY_HOURS, request.reviewRecoveryNoticeRetryDelayHours(), 1, 168, "Повтор уведомления о восстановлении");
@@ -1134,6 +1138,18 @@ public class ApiAdminDictionaryController {
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_PAYMENT_INVOICE_RETRY_DELAY_HOURS,
                         ScheduledClientMessageService.DEFAULT_PAYMENT_INVOICE_RETRY_DELAY_HOURS
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES,
+                        ScheduledClientMessageService.DEFAULT_TRANSIENT_RETRY_MINUTES
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD,
+                        ClientMessageOrderStatusService.DEFAULT_MANUAL_CONTROL_FAILURE_THRESHOLD
+                ),
+                appSettingService.getInt(
+                        AppSettingService.CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES,
+                        ClientMessageOrderStatusService.DEFAULT_MANUAL_CONTROL_AFTER_MINUTES
                 ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_BAD_REVIEW_INVOICE_RETRY_DELAY_HOURS,
@@ -1716,6 +1732,9 @@ public class ApiAdminDictionaryController {
             Integer paymentReminderIntervalDays,
             Integer reviewCheckRetryDelayHours,
             Integer paymentInvoiceRetryDelayHours,
+            Integer transientRetryMinutes,
+            Integer manualControlFailureThreshold,
+            Integer manualControlAfterMinutes,
             Integer badReviewInvoiceRetryDelayHours,
             Integer badReviewAutoBanDelayDays,
             Integer reviewRecoveryNoticeRetryDelayHours,
@@ -1785,6 +1804,9 @@ public class ApiAdminDictionaryController {
             int paymentReminderIntervalDays,
             int reviewCheckRetryDelayHours,
             int paymentInvoiceRetryDelayHours,
+            int transientRetryMinutes,
+            int manualControlFailureThreshold,
+            int manualControlAfterMinutes,
             int badReviewInvoiceRetryDelayHours,
             int badReviewAutoBanDelayDays,
             int reviewRecoveryNoticeRetryDelayHours,

@@ -71,6 +71,16 @@ public class KeycloakUserProvisioningService {
     private static final String OWNER_ROLE = "ROLE_OWNER";
     private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
     private static final String OWNER_CONTROL_OWN_MANAGERS = "OWN_MANAGERS";
+    private static final Set<String> MANAGED_KEYCLOAK_ROLES = Set.of(
+            "ADMIN",
+            "OWNER",
+            "MANAGER",
+            "OPERATOR",
+            "WORKER",
+            "PERFORMER",
+            "MARKETOLOG",
+            CLIENT_ROLE
+    );
 
     private final UserRepository userRepository;
     private final ImageRepository imageRepository;
@@ -158,9 +168,9 @@ public class KeycloakUserProvisioningService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
 
-        Set<String> oldKeycloakRoles = toKeycloakRoles(user.getRoles());
         Set<String> newKeycloakRoles = normalizeKeycloakRoles(request.getRoles());
         List<Role> newLocalRoles = findLocalRoles(newKeycloakRoles);
+        String oldUsername = user.getUsername();
         String newUsername = normalizedUpdateUsername(user, request);
         ensureUsernameAvailable(user, newUsername);
 
@@ -172,13 +182,6 @@ public class KeycloakUserProvisioningService {
             if (!newKeycloakRoles.contains(ADMIN_KEYCLOAK_ROLE)) {
                 throw new ResponseStatusException(FORBIDDEN, "Admin role cannot be removed from an admin user.");
             }
-        }
-
-        String keycloakId = hasText(user.getKeycloakId())
-                ? updateKeycloakUserAndRepairIdIfNeeded(user, newUsername, request)
-                : null;
-        if (hasText(keycloakId)) {
-            replaceKeycloakRealmRoles(keycloakId, oldKeycloakRoles, newKeycloakRoles);
         }
 
         Set<String> oldLocalRoleNames = user.getRoles() == null ? Set.of() : user.getRoles().stream()
@@ -203,6 +206,15 @@ public class KeycloakUserProvisioningService {
 
         updateRoleAssignments(user, oldLocalRoleNames, newLocalRoles);
         userRepository.flush();
+
+        if (hasText(user.getKeycloakId())) {
+            String keycloakId = updateKeycloakUserAndRepairIdIfNeeded(user, oldUsername, newUsername, request);
+            if (hasText(keycloakId)) {
+                synchronizeKeycloakRealmRoles(keycloakId, newKeycloakRoles);
+            }
+            user.setAuthProvider(hasText(user.getKeycloakId()) ? KEYCLOAK_AUTH_PROVIDER : LOCAL_AUTH_PROVIDER);
+            userRepository.flush();
+        }
         clearCabinetCaches();
 
         return toAdminResponse(user);
@@ -433,23 +445,6 @@ public class KeycloakUserProvisioningService {
     }
 
     private void updateRoleAssignments(User user, Set<String> oldLocalRoleNames, Collection<Role> newRoles) {
-        Set<String> newLocalRoleNames = newRoles.stream()
-                .map(Role::getName)
-                .collect(Collectors.toSet());
-
-        if (oldLocalRoleNames.contains("ROLE_OPERATOR") && !newLocalRoleNames.contains("ROLE_OPERATOR")) {
-            operatorService.deleteOperator(user);
-        }
-        if (oldLocalRoleNames.contains("ROLE_MANAGER") && !newLocalRoleNames.contains("ROLE_MANAGER")) {
-            managerService.deleteManager(user);
-        }
-        if (oldLocalRoleNames.contains("ROLE_WORKER") && !newLocalRoleNames.contains("ROLE_WORKER")) {
-            workerService.deleteWorker(user);
-        }
-        if (oldLocalRoleNames.contains("ROLE_MARKETOLOG") && !newLocalRoleNames.contains("ROLE_MARKETOLOG")) {
-            marketologService.deleteMarketolog(user);
-        }
-
         List<Role> rolesToCreate = newRoles.stream()
                 .filter(role -> !oldLocalRoleNames.contains(role.getName()))
                 .toList();
@@ -750,17 +745,15 @@ public class KeycloakUserProvisioningService {
         }
     }
 
-    private void replaceKeycloakRealmRoles(
-            String keycloakUserId,
-            Set<String> oldKeycloakRoles,
-            Set<String> newKeycloakRoles
-    ) {
-        Set<String> rolesToRemove = oldKeycloakRoles.stream()
+    private void synchronizeKeycloakRealmRoles(String keycloakUserId, Set<String> newKeycloakRoles) {
+        Set<String> assignedRoles = keycloakAdminClient.getAssignedRealmRoleNames(keycloakUserId);
+        Set<String> rolesToRemove = assignedRoles.stream()
+                .filter(MANAGED_KEYCLOAK_ROLES::contains)
                 .filter(role -> !newKeycloakRoles.contains(role))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         Set<String> rolesToAdd = newKeycloakRoles.stream()
-                .filter(role -> !oldKeycloakRoles.contains(role))
+                .filter(role -> !assignedRoles.contains(role))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         keycloakAdminClient.removeRealmRoles(keycloakUserId, rolesToRemove);
@@ -790,7 +783,12 @@ public class KeycloakUserProvisioningService {
                 });
     }
 
-    private String updateKeycloakUserAndRepairIdIfNeeded(User user, String username, UpdateKeycloakUserRequest request) {
+    private String updateKeycloakUserAndRepairIdIfNeeded(
+            User user,
+            String oldUsername,
+            String username,
+            UpdateKeycloakUserRequest request
+    ) {
         try {
             keycloakAdminClient.updateUser(user.getKeycloakId(), username, request);
             return user.getKeycloakId();
@@ -799,7 +797,7 @@ public class KeycloakUserProvisioningService {
                 throw e;
             }
 
-            String repairedKeycloakId = keycloakAdminClient.findUserIdByUsername(user.getUsername())
+            String repairedKeycloakId = keycloakAdminClient.findUserIdByUsername(oldUsername)
                     .orElse(null);
             if (!hasText(repairedKeycloakId)) {
                 user.setKeycloakId(null);

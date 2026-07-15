@@ -190,8 +190,14 @@ public class TelegramService extends TelegramLongPollingBot {
             WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
                     workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
             Long actorTelegramId = update.getMessage().getFrom() == null ? null : update.getMessage().getFrom().getId();
+            Message replyToMessage = update.getMessage().getReplyToMessage();
+            String replyToMessageText = telegramMessageText(replyToMessage);
+            boolean replyToBotMessage = replyToMessage != null
+                    && replyToMessage.getFrom() != null
+                    && Boolean.TRUE.equals(replyToMessage.getFrom().getIsBot());
             if (workerRiskTelegramCallbackService != null
-                    && workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(chatId, actorTelegramId, messageText)) {
+                    && workerRiskTelegramCallbackService.handleWorkerGroupTextMessage(
+                    chatId, actorTelegramId, replyToMessageText, replyToBotMessage, messageText)) {
                 return;
             }
 
@@ -200,7 +206,8 @@ public class TelegramService extends TelegramLongPollingBot {
                             ? null
                             : managerControlWorkerTaskTelegramCallbackServiceProvider.getIfAvailable();
             if (managerControlWorkerTaskTelegramCallbackService != null
-                    && managerControlWorkerTaskTelegramCallbackService.handleWorkerGroupTextMessage(chatId, actorTelegramId, messageText)) {
+                    && managerControlWorkerTaskTelegramCallbackService.handleWorkerGroupTextMessage(
+                    chatId, actorTelegramId, replyToMessageText, replyToBotMessage, messageText)) {
                 return;
             }
 
@@ -334,6 +341,16 @@ public class TelegramService extends TelegramLongPollingBot {
         Optional<PublicationProgressPreferenceService.PreferenceUpdate> update =
                 publicationProgressPreferenceService.handleTelegramCommand(chatId, messageText);
         return update == null ? Optional.empty() : update;
+    }
+
+    private String telegramMessageText(Message message) {
+        if (message == null) {
+            return "";
+        }
+        if (message.hasText()) {
+            return message.getText();
+        }
+        return message.getCaption() == null ? "" : message.getCaption();
     }
 
     private void trackTelegramGroupMessage(Update update) {
@@ -529,6 +546,28 @@ public class TelegramService extends TelegramLongPollingBot {
         forceReply.setForceReply(true);
         forceReply.setSelective(false);
         return sendSingleMessage(chatId, text, null, forceReply);
+    }
+
+    public boolean sendSelectiveForceReplyMessage(long chatId, long targetTelegramUserId, String text) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return false;
+        }
+        if (!hasText(text) || targetTelegramUserId <= 0) {
+            log.warn("Адресный Telegram-запрос для {} не отправлен: текст пустой или пользователь не определён", chatId);
+            return false;
+        }
+
+        ForceReplyKeyboard forceReply = new ForceReplyKeyboard();
+        forceReply.setForceReply(true);
+        forceReply.setSelective(true);
+        String targetedText = "<a href=\"tg://user?id=" + targetTelegramUserId + "\">Специалист</a>\n"
+                + escapeTelegramHtml(text);
+        return sendSingleMessage(chatId, targetedText, "HTML", forceReply);
     }
 
     public Optional<Integer> sendMessageWithInlineKeyboardMessageId(
@@ -914,6 +953,14 @@ public class TelegramService extends TelegramLongPollingBot {
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private static String escapeTelegramHtml(String value) {
+        return value == null
+                ? ""
+                : value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private boolean isChatIdCommand(String messageText) {

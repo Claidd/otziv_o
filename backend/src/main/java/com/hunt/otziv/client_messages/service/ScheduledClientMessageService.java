@@ -55,6 +55,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -62,6 +63,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 @RequiredArgsConstructor
 public class ScheduledClientMessageService {
+
+    private static final int REVIEW_RECOVERY_RECHECK_MINUTES = 10;
 
     public static final String DEFAULT_REVIEW_CHECK_STATUSES = "На проверке";
     public static final String DEFAULT_CLIENT_TEXT_REMINDER_STATUSES = "Новый";
@@ -108,6 +111,8 @@ public class ScheduledClientMessageService {
     public static final int DEFAULT_WHATSAPP_GAP_SECONDS = 180;
     public static final int DEFAULT_WHATSAPP_AUTH_RETRY_HOURS = 2;
     public static final int DEFAULT_WHATSAPP_AUTH_ALERT_COOLDOWN_HOURS = 12;
+    public static final int DEFAULT_TRANSIENT_RETRY_MINUTES = 15;
+    public static final String AUTO_RECOVERED_ERROR_CODE = "client_message_state_auto_recovered";
     public static final int DEFAULT_NO_SEND_MAX_FAILURES = 30;
     public static final int DEFAULT_ERROR_PROTECTION_THRESHOLD = 20;
     public static final int DEFAULT_ERROR_PROTECTION_WINDOW_MINUTES = 10;
@@ -206,6 +211,14 @@ public class ScheduledClientMessageService {
     }
 
     @Transactional
+    public int releaseReviewRecoveryHold(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return 0;
+        }
+        return stateRepository.releaseReviewRecoveryHolds(orderId, LocalDateTime.now(clock));
+    }
+
+    @Transactional
     public void reconcileCandidatesNow() {
         LocalDateTime nowStorage = LocalDateTime.now(clock);
         reconcileCandidates(nowStorage);
@@ -268,6 +281,67 @@ public class ScheduledClientMessageService {
         return scenario;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean ensureClientMessageStateForOrderId(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForMutation(orderId).orElse(null);
+        if (order == null) {
+            return false;
+        }
+        if (ensureClientTextReminderForOrder(order)) {
+            return true;
+        }
+        Optional<ClientMessageScenario> scenario = ensureOrderAutomationForOrder(order);
+        return scenario.isPresent();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean recoverMissingClientMessageStateForOrderId(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForMutation(orderId).orElse(null);
+        if (order == null) {
+            return false;
+        }
+
+        Optional<ScheduledClientMessageState> recoveredState = Optional.empty();
+        if (ensureClientTextReminderForOrder(order)) {
+            recoveredState = findClientTextReminderState(order);
+        }
+
+        if (recoveredState.isEmpty()) {
+            Optional<ClientMessageScenario> scenario = ensureOrderAutomationForOrder(order);
+            if (scenario.isPresent()) {
+                recoveredState = findOrderAutomationState(scenario.get(), order);
+            }
+        }
+
+        recoveredState.ifPresent(this::recordAutoRecoveredState);
+        return recoveredState.isPresent();
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean ensureClientMessageStateAfterOrderStatusChange(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForMutation(orderId).orElse(null);
+        if (order == null) {
+            return false;
+        }
+
+        boolean eligible = ensureClientTextReminderForOrderOnSchedule(order);
+        Optional<ClientMessageScenario> scenario = orderAutomationScenario(order);
+        if (scenario.isPresent()) {
+            ensureOrderStateOnSchedule(scenario.get(), order);
+            eligible = true;
+        }
+        return eligible;
+    }
+
     public Optional<ClientMessageScenario> orderAutomationScenario(Order order) {
         if (order == null || order.getId() == null) {
             return Optional.empty();
@@ -288,6 +362,85 @@ public class ScheduledClientMessageService {
             return Optional.of(ClientMessageScenario.PAYMENT_REMINDER);
         }
         return Optional.empty();
+    }
+
+    private Optional<ScheduledClientMessageState> findClientTextReminderState(Order order) {
+        if (order == null || order.getId() == null) {
+            return Optional.empty();
+        }
+        return stateRepository.findByScenarioAndTargetKey(
+                ClientMessageScenario.CLIENT_TEXT_REMINDER,
+                clientTextWaitingTargetKey(order.getId(), clientTextWaitingChangedAt(order))
+        );
+    }
+
+    private Optional<ScheduledClientMessageState> findOrderAutomationState(ClientMessageScenario scenario, Order order) {
+        if (scenario == null || order == null || order.getId() == null) {
+            return Optional.empty();
+        }
+        return stateRepository.findByScenarioAndTargetKey(
+                scenario,
+                orderTargetKey(order.getId(), orderStatusChangedAt(order))
+        );
+    }
+
+    private void recordAutoRecoveredState(ScheduledClientMessageState state) {
+        recordAttempt(
+                state,
+                ScheduledMessageAttemptStatus.SKIPPED,
+                "system",
+                AUTO_RECOVERED_ERROR_CODE,
+                "Очередь автоответчика восстановлена автоматически перед показом контроля",
+                "Автовосстановление очереди автоответчика",
+                0
+        );
+    }
+
+    private boolean ensureClientTextReminderForOrderOnSchedule(Order order) {
+        if (order == null || !order.isWaitingForClient()) {
+            return false;
+        }
+        String status = statusTitle(order);
+        if (!listSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, DEFAULT_CLIENT_TEXT_REMINDER_STATUSES)
+                .contains(status)) {
+            return false;
+        }
+
+        LocalDateTime waitingChangedAt = clientTextWaitingChangedAt(order);
+        return ensureState(
+                ClientMessageScenario.CLIENT_TEXT_REMINDER,
+                ClientMessageTargetType.ORDER,
+                clientTextWaitingTargetKey(order.getId(), waitingChangedAt),
+                order.getCompany() == null ? null : order.getCompany().getId(),
+                order.getId(),
+                null,
+                scheduleAtStorage(waitingChangedAt.plusDays(clientTextReminderIntervalDays()))
+        );
+    }
+
+    private boolean ensureOrderStateOnSchedule(ClientMessageScenario scenario, Order order) {
+        LocalDateTime statusChangedAt = orderStatusChangedAt(order);
+        String targetKey = orderTargetKey(order.getId(), statusChangedAt);
+        return ensureState(
+                scenario,
+                ClientMessageTargetType.ORDER,
+                targetKey,
+                order.getCompany() == null ? null : order.getCompany().getId(),
+                order.getId(),
+                null,
+                nextAttemptAfterStatusChange(scenario, statusChangedAt)
+        );
+    }
+
+    private LocalDateTime nextAttemptAfterStatusChange(ClientMessageScenario scenario, LocalDateTime statusChangedAt) {
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        return switch (scenario) {
+            case REVIEW_CHECK_DELIVERY_RETRY -> scheduleAtStorage(nowStorage.plusHours(reviewCheckRetryDelayHours()));
+            case PAYMENT_INVOICE_RETRY -> scheduleAtStorage(nowStorage.plusHours(paymentInvoiceRetryDelayHours()));
+            case REVIEW_CHECK_REMINDER -> scheduleAtStorage(statusChangedAt.plusDays(reviewCheckIntervalDays()));
+            case PAYMENT_REMINDER -> scheduleAtStorage(statusChangedAt.plusDays(paymentReminderIntervalDays()));
+            default -> scheduleAtStorage(nowStorage.plusDays(DEFAULT_REMINDER_INTERVAL_DAYS));
+        };
     }
 
     private void ensureOrderStateNow(ClientMessageScenario scenario, Order order) {
@@ -1318,13 +1471,15 @@ public class ScheduledClientMessageService {
         if (!reviewRecoveryHoldService.shouldPauseClientMessages(order)) {
             return false;
         }
-        String message = "У заказа идет восстановление отзывов, клиентский сценарий поставлен на паузу";
-        recordAttempt(state, ScheduledMessageAttemptStatus.SKIPPED, null, "review_recovery_active", message, message, 0);
+        String message = "У заказа идет восстановление отзывов. Отправка продолжится автоматически после завершения восстановления";
+        if (!"review_recovery_active".equalsIgnoreCase(state.getLastErrorCode())) {
+            recordAttempt(state, ScheduledMessageAttemptStatus.SKIPPED, null, "review_recovery_active", message, message, 0);
+        }
         state.setLastAttemptAt(nowStorage);
         state.setLastErrorCode("review_recovery_active");
         state.setLastErrorMessage(message);
         state.setLockedUntil(null);
-        state.setNextAttemptAt(scheduleAtStorage(nowStorage.plusDays(1)));
+        state.setNextAttemptAt(scheduleAtStorage(nowStorage.plusMinutes(REVIEW_RECOVERY_RECHECK_MINUTES)));
         stateRepository.save(state);
         return true;
     }
@@ -1395,7 +1550,7 @@ public class ScheduledClientMessageService {
             return new FailureRetryPolicy(nextWhatsAppAuthAttemptAt(nowStorage), false, true, false);
         }
         if (isWhatsAppFastRetryError(code, readable)) {
-            return new FailureRetryPolicy(nextWhatsAppAuthAttemptAt(nowStorage), false, false, false);
+            return new FailureRetryPolicy(nextTransientAttemptAt(nowStorage), false, false, false);
         }
         if (isManualFixError(code)) {
             boolean disable = consecutiveFailures >= DEFAULT_NO_SEND_MAX_FAILURES;
@@ -1404,7 +1559,7 @@ public class ScheduledClientMessageService {
         if (isOperationalNoSendError(code)) {
             return new FailureRetryPolicy(nextNoSendAttemptAt(nowStorage), false, false, false);
         }
-        return new FailureRetryPolicy(nextNoSendAttemptAt(nowStorage), false, false, true);
+        return new FailureRetryPolicy(nextTransientAttemptAt(nowStorage), false, false, true);
     }
 
     private boolean isWhatsAppFastRetryError(String code, String readable) {
@@ -1704,6 +1859,16 @@ public class ScheduledClientMessageService {
 
     private LocalDateTime nextWhatsAppAuthAttemptAt(LocalDateTime nowStorage) {
         return scheduleAtStorage(nowStorage.plusHours(whatsAppAuthRetryHours()));
+    }
+
+    private LocalDateTime nextTransientAttemptAt(LocalDateTime nowStorage) {
+        int minutes = intSetting(
+                AppSettingService.CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES,
+                DEFAULT_TRANSIENT_RETRY_MINUTES,
+                1,
+                1440
+        );
+        return scheduleAtStorage(nowStorage.plusMinutes(minutes));
     }
 
     private boolean withinDailyLimit(LocalDateTime nowStorage) {
