@@ -323,7 +323,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 THEN true
                 ELSE false
             END,
-            c.groupId
+            c.groupId,
+            o.statusChangedAt
         FROM Order o
         LEFT JOIN o.details d
         LEFT JOIN o.status s

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -76,6 +77,7 @@ class OrderDtoMapperTest {
     void toBoardDTORowMapsProjectionFieldsAndFallbacks() {
         UUID detailId = UUID.fromString("00000000-0000-0000-0000-000000000011");
         LocalDate now = LocalDate.now();
+        LocalDateTime statusChangedAt = LocalDateTime.of(2026, 7, 13, 9, 38);
         Object[] row = {
                 10L,
                 5L,
@@ -103,7 +105,8 @@ class OrderDtoMapperTest {
                 now.plusDays(1),
                 null,
                 true,
-                "group-row"
+                "group-row",
+                statusChangedAt
         };
 
         OrderDTOList dto = mapper.toBoardDTO(row);
@@ -126,6 +129,7 @@ class OrderDtoMapperTest {
         assertEquals("Подкатегория", dto.getSubCategoryTitle());
         assertEquals(now.minusDays(10), dto.getCreated());
         assertEquals(now.minusDays(4), dto.getChanged());
+        assertEquals(statusChangedAt, dto.getStatusChangedAt());
         assertEquals(now.plusDays(1), dto.getPayDay());
         assertEquals(4, dto.getDayToChangeStatusAgo());
         assertEquals("нет заметок", dto.getOrderComments());

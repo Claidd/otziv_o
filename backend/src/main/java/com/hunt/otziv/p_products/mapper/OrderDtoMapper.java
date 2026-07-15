@@ -29,6 +29,8 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
@@ -152,6 +154,7 @@ public class OrderDtoMapper {
                 .subCategoryTitle(rowString(row, 20, "Не выбрано"))
                 .created(rowLocalDate(row, 21))
                 .changed(changedDate)
+                .statusChangedAt(rowLocalDateTime(row, 27))
                 .payDay(rowLocalDate(row, 23))
                 .dayToChangeStatusAgo(daysDifference)
                 .orderComments(rowString(row, 24, "нет заметок"))
@@ -505,6 +508,14 @@ public class OrderDtoMapper {
     private LocalDate rowLocalDate(Object[] row, int index) {
         Object value = rowValue(row, index);
         return value instanceof LocalDate localDate ? localDate : null;
+    }
+
+    private LocalDateTime rowLocalDateTime(Object[] row, int index) {
+        Object value = rowValue(row, index);
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime;
+        }
+        return value instanceof java.sql.Timestamp timestamp ? timestamp.toLocalDateTime() : null;
     }
 
     private String rowString(Object[] row, int index, String fallback) {
