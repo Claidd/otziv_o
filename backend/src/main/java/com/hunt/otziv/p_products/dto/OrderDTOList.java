@@ -81,6 +81,8 @@ public class OrderDTOList {
 
     private LocalDate changed;
 
+    private LocalDateTime statusChangedAt;
+
     private LocalDate payDay;
 
     private long dayToChangeStatusAgo;

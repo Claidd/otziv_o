@@ -202,6 +202,49 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void orderControlSlaStartsWhenStatusBecomesActionableInsteadOfPageOpen() throws Exception {
+        LocalDateTime statusChangedAt = LocalDateTime.of(2026, 7, 13, 9, 38);
+        OrderDTOList order = OrderDTOList.builder()
+                .id(42L)
+                .status("На проверке")
+                .changed(statusChangedAt.toLocalDate())
+                .statusChangedAt(statusChangedAt)
+                .build();
+        when(appSettingService.getInt(
+                eq(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS),
+                eq(ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS)
+        )).thenReturn(2);
+
+        Method method = ManagerControlService.class.getDeclaredMethod("orderControlStartedAt", OrderDTOList.class);
+        method.setAccessible(true);
+
+        assertEquals(statusChangedAt.plusDays(2), method.invoke(service, order));
+    }
+
+    @Test
+    void synchronizationBackfillsEarlierSourceTimeForExistingCard() throws Exception {
+        LocalDateTime pageOpenedAt = LocalDateTime.of(2026, 7, 15, 9, 38);
+        LocalDateTime sourceActionableAt = LocalDateTime.of(2026, 7, 15, 7, 12);
+        ManagerDailyControlConcreteItem stored = new ManagerDailyControlConcreteItem();
+        stored.setCreatedAt(pageOpenedAt);
+        ManagerControlConcreteItemResponse source = new ManagerControlConcreteItemResponse(
+                null, "ORDER", 42L, "Компания", null, "На проверке", 2L, "Причина",
+                "/orders", null, null, null, null, "OPEN", null, null,
+                null, null, null
+        ).withSla(sourceActionableAt, null, null, null);
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "applyConcreteItemSnapshot",
+                ManagerDailyControlConcreteItem.class,
+                ManagerControlConcreteItemResponse.class
+        );
+        method.setAccessible(true);
+
+        assertTrue((Boolean) method.invoke(service, stored, source));
+        assertEquals(sourceActionableAt, stored.getCreatedAt());
+    }
+
+    @Test
     void commonInvoiceControlPassesPartiallyPaidStatusForPendingOrderFilter() throws Exception {
         Manager manager = new Manager();
         when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any()))

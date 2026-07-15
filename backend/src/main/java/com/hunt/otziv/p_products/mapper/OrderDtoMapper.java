@@ -107,6 +107,7 @@ public class OrderDtoMapper {
                         : "Не выбрано")
                 .created(order.getCreated())
                 .changed(order.getChanged())
+                .statusChangedAt(order.getStatusChangedAt())
                 .payDay(order.getPayDay())
                 .dayToChangeStatusAgo(daysDifference)
                 .orderComments(order.getZametka() == null ? "нет заметок" : order.getZametka())

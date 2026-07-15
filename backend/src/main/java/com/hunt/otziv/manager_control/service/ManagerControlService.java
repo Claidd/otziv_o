@@ -3254,7 +3254,20 @@ public class ManagerControlService {
                 null,
                 null,
                 orderContactText(order)
-        );
+        ).withSla(orderControlStartedAt(order), null, null, null);
+    }
+
+    private LocalDateTime orderControlStartedAt(OrderDTOList order) {
+        if (order == null) {
+            return null;
+        }
+        LocalDateTime statusChangedAt = order.getStatusChangedAt();
+        if (statusChangedAt == null && order.getChanged() != null) {
+            statusChangedAt = order.getChanged().atStartOfDay();
+        }
+        return statusChangedAt == null
+                ? null
+                : statusChangedAt.plusDays(managerControlOrderThresholdDays(order.getStatus()));
     }
 
     private String orderManagerReason(OrderDTOList order, LocalDate today) {
@@ -3383,6 +3396,7 @@ public class ManagerControlService {
                 .waitingForClient(order != null && order.isWaitingForClient())
                 .created(order == null ? null : order.getCreated())
                 .changed(order == null ? null : order.getChanged())
+                .statusChangedAt(order == null ? null : order.getStatusChangedAt())
                 .payDay(order == null ? null : order.getPayDay())
                 .orderComments(order == null ? null : order.getZametka())
                 .groupId(company == null ? null : company.getGroupId())
@@ -4104,7 +4118,18 @@ public class ManagerControlService {
                 null,
                 null,
                 contactText
-        );
+        ).withSla(workerOrderControlStartedAt(order), null, null, null);
+    }
+
+    private LocalDateTime workerOrderControlStartedAt(Order order) {
+        if (order == null) {
+            return null;
+        }
+        LocalDateTime statusChangedAt = order.getStatusChangedAt();
+        if (statusChangedAt == null && order.getChanged() != null) {
+            statusChangedAt = order.getChanged().atStartOfDay();
+        }
+        return statusChangedAt == null ? null : statusChangedAt.plusDays(WORKER_ORDER_UNCHANGED_DAYS);
     }
 
     private List<Order> workerStaleOrdersForControl(List<Long> workerIds, String status, LocalDate today) {
@@ -4433,7 +4458,7 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        );
+        ).withSla(startOfDay(task.getScheduledDate()), null, null, null);
     }
 
     private List<ManagerControlConcreteItemResponse> nagulReviewExamples(Manager manager, LocalDate today, int limit) {
@@ -4474,7 +4499,7 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        );
+        ).withSla(startOfDay(review.getPublishedDate()), null, null, null);
     }
 
     private String nagulReviewReason(Review review, LocalDate today) {
@@ -4520,7 +4545,7 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        );
+        ).withSla(startOfDay(review.getPublishedDate()), null, null, null);
     }
 
     private Order reviewOrder(Review review) {
@@ -4585,7 +4610,11 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        );
+        ).withSla(startOfDay(task.getScheduledDate()), null, null, null);
+    }
+
+    private LocalDateTime startOfDay(LocalDate date) {
+        return date == null ? null : date.atStartOfDay();
     }
 
     private String badReviewTaskReason(BadReviewTask task, LocalDate today) {
