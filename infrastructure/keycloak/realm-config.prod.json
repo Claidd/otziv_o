@@ -50,6 +50,10 @@
         "description": "Worker access"
       },
       {
+        "name": "PERFORMER",
+        "description": "Performer access"
+      },
+      {
         "name": "MARKETOLOG",
         "description": "Marketing access"
       },

@@ -19,6 +19,7 @@ import com.hunt.otziv.r_review.board.ReviewBoardMode;
 import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
 import com.hunt.otziv.r_review.board.ReviewBoardScope;
 import com.hunt.otziv.r_review.bot.service.ReviewBotChangeService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
 import com.hunt.otziv.r_review.edit.ReviewEditService;
@@ -77,6 +78,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewBoardQueryService reviewBoardQueryService;
     private final ReviewNagulService reviewNagulService;
     private final ReviewBotChangeService reviewBotChangeService;
+    private final ReviewAccountWalkScheduleService reviewAccountWalkScheduleService;
     private final ReviewEditService reviewEditService;
     private final OrderStatusCheckerService orderStatusCheckerService;
     private final BusinessAuditService businessAuditService;
@@ -891,6 +893,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
             requireWorkerPublicationDatePermission(userRole, saveReview);
+            requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
             validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
             log.info("Обновляем дату публикации отзыва");
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
@@ -1134,6 +1137,7 @@ public class ReviewServiceImpl implements ReviewService {
             isChanged = true;
         }
         if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+            requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
             validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
             saveReview.setPublishedDate(reviewDTO.getPublishedDate());
             isChanged = true;
@@ -1213,6 +1217,34 @@ public class ReviewServiceImpl implements ReviewService {
     private void validateManualPublicationDate(Review review, LocalDate date) {
         requireAllowed(date);
         requireAllowedAfterPrevious(date, previousReviewPublicationDate(review));
+        LocalDate walkNotBefore = reviewAccountWalkScheduleService.minimumPublicationDateForCurrentAccount(review);
+        if (walkNotBefore != null && date.isBefore(walkNotBefore)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Для назначенного невыгулянного аккаунта дата публикации должна быть не раньше " + walkNotBefore
+            );
+        }
+    }
+
+    private void requirePublicationDateIntegrity(Review review, LocalDate requestedDate) {
+        if (review == null
+                || requestedDate != null
+                || review.isPublish()
+                || review.getPublishedDate() == null) {
+            return;
+        }
+        String orderStatus = Optional.ofNullable(review.getOrderDetails())
+                .map(OrderDetails::getOrder)
+                .map(Order::getStatus)
+                .map(status -> status.getTitle())
+                .orElse("");
+        if ("Публикация".equals(orderStatus)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Нельзя очистить дату неопубликованного отзыва, пока заказ находится в «Публикации». "
+                            + "Сохраните текущую дату или сначала переведите заказ в «Коррекцию»."
+            );
+        }
     }
 
     private LocalDate previousReviewPublicationDate(Review review) {
@@ -1322,18 +1354,8 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
-    public void changeBot(Long reviewId, boolean forceWalkDelayIfUnwalked) {
-        reviewBotChangeService.changeBot(reviewId, forceWalkDelayIfUnwalked);
-    }
-
-    @Override
     public void assignNewAccount(Long reviewId) {
         reviewBotChangeService.assignNewAccount(reviewId);
-    }
-
-    @Override
-    public void assignNewAccount(Long reviewId, boolean forceWalkDelayIfUnwalked) {
-        reviewBotChangeService.assignNewAccount(reviewId, forceWalkDelayIfUnwalked);
     }
 
     @Override
@@ -1341,10 +1363,6 @@ public class ReviewServiceImpl implements ReviewService {
         reviewBotChangeService.deActivateAndChangeBot(reviewId, botId);
     }
 
-    @Override
-    public void deActivateAndChangeBot(Long reviewId, Long botId, boolean forceWalkDelayIfUnwalked) {
-        reviewBotChangeService.deActivateAndChangeBot(reviewId, botId, forceWalkDelayIfUnwalked);
-    }
 
     public List<Bot> findAllBotsMinusFilial(Review review) {
         return reviewBotChangeService.findAllBotsMinusFilial(review);

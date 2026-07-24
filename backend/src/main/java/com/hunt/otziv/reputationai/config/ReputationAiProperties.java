@@ -9,7 +9,7 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "reputation-ai")
 public class ReputationAiProperties {
 
-    private String provider = "yandexgpt";
+    private String provider = "deepseek";
     private int maxWebsitePages = 36;
     private int maxDeepWebsitePages = 12;
     private int maxWebsiteChars = 20_000;
@@ -17,6 +17,7 @@ public class ReputationAiProperties {
     private String userAgent = "OtzivReputationAI/1.0";
     private Search search = new Search();
     private YandexGpt yandex = new YandexGpt();
+    private DeepSeek deepseek = new DeepSeek();
     private OpenAi openai = new OpenAi();
 
     public String getProvider() {
@@ -81,6 +82,14 @@ public class ReputationAiProperties {
 
     public void setYandex(YandexGpt yandex) {
         this.yandex = yandex == null ? new YandexGpt() : yandex;
+    }
+
+    public DeepSeek getDeepseek() {
+        return deepseek;
+    }
+
+    public void setDeepseek(DeepSeek deepseek) {
+        this.deepseek = deepseek == null ? new DeepSeek() : deepseek;
     }
 
     public OpenAi getOpenai() {
@@ -199,9 +208,134 @@ public class ReputationAiProperties {
         }
     }
 
+    public static class DeepSeek {
+        private String apiKey = "";
+        private String baseUrl = "https://api.deepseek.com";
+        private String anthropicBaseUrl = "https://api.deepseek.com/anthropic";
+        private String model = "deepseek-v4-pro";
+        private Duration timeout = Duration.ofMinutes(10);
+        private int maxTokens = 24000;
+        private boolean thinkingEnabled = true;
+        private String reasoningEffort = "high";
+        private boolean anthropicWebSearchEnabled = true;
+        private int anthropicWebSearchMaxUses = 6;
+        private boolean anthropicDeepSearchEnabled = true;
+        private int anthropicDeepSearchPasses = 4;
+        private boolean anthropicFallbackEnabled = true;
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey == null ? "" : apiKey.trim();
+        }
+
+        public String getBaseUrl() {
+            return baseUrl;
+        }
+
+        public void setBaseUrl(String baseUrl) {
+            this.baseUrl = baseUrl == null || baseUrl.isBlank()
+                    ? "https://api.deepseek.com"
+                    : baseUrl.trim().replaceAll("/+$", "");
+        }
+
+        public String getAnthropicBaseUrl() {
+            return anthropicBaseUrl;
+        }
+
+        public void setAnthropicBaseUrl(String anthropicBaseUrl) {
+            this.anthropicBaseUrl = anthropicBaseUrl == null || anthropicBaseUrl.isBlank()
+                    ? "https://api.deepseek.com/anthropic"
+                    : anthropicBaseUrl.trim().replaceAll("/+$", "");
+        }
+
+        public String getModel() {
+            return model;
+        }
+
+        public void setModel(String model) {
+            this.model = model == null || model.isBlank() ? "deepseek-v4-pro" : model.trim();
+        }
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(Duration timeout) {
+            this.timeout = timeout == null ? Duration.ofMinutes(10) : timeout;
+        }
+
+        public int getMaxTokens() {
+            return maxTokens;
+        }
+
+        public void setMaxTokens(int maxTokens) {
+            this.maxTokens = Math.max(1000, Math.min(384000, maxTokens));
+        }
+
+        public boolean isThinkingEnabled() {
+            return thinkingEnabled;
+        }
+
+        public void setThinkingEnabled(boolean thinkingEnabled) {
+            this.thinkingEnabled = thinkingEnabled;
+        }
+
+        public String getReasoningEffort() {
+            return reasoningEffort;
+        }
+
+        public void setReasoningEffort(String reasoningEffort) {
+            String normalized = reasoningEffort == null ? "" : reasoningEffort.trim().toLowerCase();
+            this.reasoningEffort = "max".equals(normalized) ? "max" : "high";
+        }
+
+        public boolean isAnthropicWebSearchEnabled() {
+            return anthropicWebSearchEnabled;
+        }
+
+        public void setAnthropicWebSearchEnabled(boolean anthropicWebSearchEnabled) {
+            this.anthropicWebSearchEnabled = anthropicWebSearchEnabled;
+        }
+
+        public int getAnthropicWebSearchMaxUses() {
+            return anthropicWebSearchMaxUses;
+        }
+
+        public void setAnthropicWebSearchMaxUses(int anthropicWebSearchMaxUses) {
+            this.anthropicWebSearchMaxUses = Math.max(1, Math.min(20, anthropicWebSearchMaxUses));
+        }
+
+        public boolean isAnthropicDeepSearchEnabled() {
+            return anthropicDeepSearchEnabled;
+        }
+
+        public void setAnthropicDeepSearchEnabled(boolean anthropicDeepSearchEnabled) {
+            this.anthropicDeepSearchEnabled = anthropicDeepSearchEnabled;
+        }
+
+        public int getAnthropicDeepSearchPasses() {
+            return anthropicDeepSearchPasses;
+        }
+
+        public void setAnthropicDeepSearchPasses(int anthropicDeepSearchPasses) {
+            this.anthropicDeepSearchPasses = Math.max(1, Math.min(4, anthropicDeepSearchPasses));
+        }
+
+        public boolean isAnthropicFallbackEnabled() {
+            return anthropicFallbackEnabled;
+        }
+
+        public void setAnthropicFallbackEnabled(boolean anthropicFallbackEnabled) {
+            this.anthropicFallbackEnabled = anthropicFallbackEnabled;
+        }
+    }
+
     public static class Search {
         private String provider = "yandex";
-        private int maxQueries = 6;
+        private int maxQueries = 10;
         private int resultsPerQuery = 5;
         private int crawlResultLimit = 20;
         private YandexSearch yandex = new YandexSearch();

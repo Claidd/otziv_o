@@ -6,7 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -25,6 +27,11 @@ public class WorkerCellularAccessProperties {
     private int violationRetentionDays = 90;
     private boolean countUnknownNetworkViolations = true;
     private boolean violationStatisticsVisibleToManagers = true;
+    private Set<String> enforcedReasons = new LinkedHashSet<>(Set.of(
+            "NON_CELLULAR_NETWORK",
+            "VPN_PROXY_OR_DATACENTER"
+    ));
+    private boolean enforceNativeVirtualDevice = true;
 
     public enum Mode {
         OFF,

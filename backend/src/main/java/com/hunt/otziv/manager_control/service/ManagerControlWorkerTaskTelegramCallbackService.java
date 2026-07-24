@@ -22,7 +22,9 @@ import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -107,21 +109,16 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
             return Optional.of("Специалист карточки не найден");
         }
 
-        Long callbackChatId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getChatId();
-        boolean workerGroupClick = isWorkerGroupForTask(worker, callbackChatId);
         Long telegramUserId = callbackQuery.getFrom() == null ? null : callbackQuery.getFrom().getId();
         User actor = telegramUserId == null
                 ? null
                 : userService.findByChatId(telegramUserId).filter(User::isActive).orElse(null);
         if (actor == null) {
-            if (!workerGroupClick) {
-                return Optional.of("Telegram не привязан к пользователю");
-            }
-            actor = worker;
+            return Optional.of("Telegram не привязан к пользователю");
         }
 
-        if (!Objects.equals(worker.getId(), actor.getId()) && !workerGroupClick) {
-            return Optional.of("Эта кнопка предназначена назначенному работнику");
+        if (!Objects.equals(worker.getId(), actor.getId())) {
+            return Optional.of("Эта кнопка предназначена назначенному специалисту");
         }
 
         if (acceptCallback) {
@@ -183,8 +180,8 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         concreteItemRepository.save(item);
         personalReminderService.deleteSystemReminderBySource(groupWorker, SOURCE_WORKER_TASK_REQUEST, item.getId());
         telegramService.sendMessage(chatId,
-                "Пояснение принято. Менеджер увидит его в карточке контроля."
-                        + "\n\nСтатус: ответ получен"
+                "🟢 ОТВЕТ ПОЛУЧЕН"
+                        + "\nПояснение принято. Менеджер увидит его в карточке контроля."
                         + "\nКарточка: " + withoutFinancialInfo(item.getTitle()));
         return true;
     }
@@ -264,7 +261,8 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         if (chatId == null || messageId == null) {
             return;
         }
-        String text = "Менеджер запросил пояснение."
+        String text = "🟡 ОЖИДАЕМ ОТВЕТ"
+                + "\nМенеджер запросил пояснение."
                 + "\nСтатус: принято, нужен комментарий"
                 + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
                 + "\n" + withoutFinancialInfo(item.getSubtitle())
@@ -342,9 +340,9 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
 
     private void sendExplanationPrompt(long chatId, User worker, String text, String marker) {
         if (chatId < 0) {
-            String prompt = text + "\nНапишите пояснение следующим сообщением." + "\n" + marker;
+            String prompt = text + "\nОтветьте на это сообщение коротким пояснением." + "\n" + marker;
             if (worker != null && worker.getTelegramChatId() != null) {
-                telegramService.sendSelectiveForceReplyMessage(chatId, worker.getTelegramChatId(), prompt);
+                telegramService.sendMessage(chatId, "Только назначенный специалист.\n" + prompt);
             } else {
                 telegramService.sendMessage(chatId,
                         text
@@ -383,7 +381,8 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         if (chatId == null || messageId == null) {
             return;
         }
-        String text = "Менеджер запросил действие: проверьте открытый риск."
+        String text = "🟡 ОЖИДАЕМ ОТВЕТ"
+                + "\nМенеджер запросил действие: проверьте открытый риск."
                 + "\nСтатус: принято, нужен комментарий"
                 + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
                 + "\n" + withoutFinancialInfo(item.getSubtitle())
@@ -405,13 +404,6 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
 
     private boolean isRiskTask(ManagerDailyControlConcreteItem item) {
         return "RISK".equals(safe(item == null ? null : item.getEntityType()));
-    }
-
-    private boolean isWorkerGroupForTask(User worker, Long chatId) {
-        return worker != null
-                && chatId != null
-                && worker.getWorkerTelegramGroupChatId() != null
-                && Objects.equals(worker.getWorkerTelegramGroupChatId(), chatId);
     }
 
     private User workerUserForGroup(long chatId) {
@@ -468,6 +460,64 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         } catch (RuntimeException exception) {
             return null;
         }
+    }
+
+    @Transactional
+    public boolean remindPendingExplanation(ManagerDailyControlConcreteItem item, LocalDateTime now) {
+        if (item == null || item.getId() == null
+                || item.getWorkerExplanationRequestedAt() == null
+                || item.getWorkerNotificationSentAt() == null
+                || item.getWorkerExplanationAt() != null) {
+            return false;
+        }
+        User worker = workerUserForTask(item);
+        if (worker == null || worker.getWorkerTelegramGroupChatId() == null) {
+            return false;
+        }
+
+        LocalDateTime sentAt = item.getWorkerNotificationSentAt();
+        LocalDateTime checkedAt = now == null ? LocalDateTime.now() : now;
+        boolean overdue = !checkedAt.isBefore(sentAt.plusHours(3));
+        long waitingMinutes = Math.max(0, Duration.between(sentAt, checkedAt).toMinutes());
+        String status = overdue
+                ? "🔴 ПРОСРОЧЕНО: ответ не получен более 3 часов"
+                : "🟡 ОЖИДАЕМ ОТВЕТ: " + waitingLabel(waitingMinutes);
+        String text = status
+                + "\nМенеджер ждёт пояснение."
+                + "\nКарточка: " + withoutFinancialInfo(item.getTitle())
+                + "\nПричина: " + withoutFinancialInfo(item.getReason());
+
+        long chatId = worker.getWorkerTelegramGroupChatId();
+        boolean sent;
+        if (item.getWorkerExplanationPromptedAt() != null) {
+            String marker = isRiskTask(item)
+                    ? GROUP_RISK_EXPLANATION_MARKER + item.getEntityId()
+                    : GROUP_TASK_EXPLANATION_MARKER + item.getId();
+            sent = telegramService.sendMessage(
+                    chatId,
+                    text + "\nТолько назначенный специалист: ответьте на это сообщение коротким пояснением.\n" + marker
+            );
+        } else {
+            sent = telegramService.sendMessageWithInlineKeyboard(
+                    chatId,
+                    text + "\nНажмите кнопку и отправьте короткое пояснение.",
+                    null,
+                    List.of(List.of(isRiskTask(item) ? riskExplanationButton(item.getId()) : explanationButton(item.getId())))
+            );
+        }
+        if (!sent) {
+            return false;
+        }
+        item.setWorkerReminderSentAt(checkedAt);
+        item.setWorkerReminderCount(item.getWorkerReminderCount() + 1);
+        concreteItemRepository.save(item);
+        return true;
+    }
+
+    private String waitingLabel(long minutes) {
+        long hours = minutes / 60;
+        long remainder = minutes % 60;
+        return hours > 0 ? hours + " ч " + remainder + " мин" : remainder + " мин";
     }
 
     private String safe(String value) {

@@ -42,7 +42,7 @@ class OrderCreatedNotificationListenerTest {
 
         listener.notifyWorker(new OrderCreatedEvent(55L));
 
-        verify(telegramService).sendMessage(100L, "У вас новый заказ для: Компания");
+        verify(telegramService).sendMessage(-100L, "У вас новый заказ для: Компания");
         verify(mobilePushBusinessNotificationService).notifyWorkerNewOrder(order);
     }
 
@@ -52,6 +52,7 @@ class OrderCreatedNotificationListenerTest {
 
         User user = new User();
         user.setTelegramChatId(100L);
+        user.setWorkerTelegramGroupChatId(-100L);
 
         Worker worker = new Worker();
         worker.setId(7L);

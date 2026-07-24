@@ -159,11 +159,23 @@ public class MaxBotUpdateService {
     }
 
     private static String messageText(JsonNode update) {
-        return firstText(
+        String text = firstText(
                 update.path("message").path("body"),
                 update.path("body"),
                 update
         );
+        if (hasText(text)) {
+            return text;
+        }
+        JsonNode attachments = update.path("message").path("body").path("attachments");
+        if (!attachments.isArray() || attachments.isEmpty()) {
+            attachments = update.path("message").path("attachments");
+        }
+        if (attachments.isArray() && !attachments.isEmpty()) {
+            String type = text(attachments.get(0), "type");
+            return "[Вложение" + (hasText(type) ? ": " + type : "") + "]";
+        }
+        return "";
     }
 
     private static String firstText(JsonNode... nodes) {
@@ -178,7 +190,7 @@ public class MaxBotUpdateService {
     }
 
     private void trackMessageCreated(JsonNode update, Long chatId, Long userId, String messageText) {
-        if (clientChatMessageTrackerService == null || chatId == null || !hasText(messageText)) {
+        if (clientChatMessageTrackerService == null || chatId == null) {
             return;
         }
         if (isKnownBotSender(update)) {

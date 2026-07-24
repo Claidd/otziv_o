@@ -14,6 +14,8 @@ param(
     [switch]$DockerLogin,
     [switch]$SkipBuildPush,
     [switch]$SkipEnvUpload,
+    [string]$MobileApkPath = "",
+    [switch]$SkipMobileApkUpload,
     [switch]$NoBuildCache,
     [switch]$Help
 )
@@ -37,6 +39,8 @@ Useful options:
   -DockerLogin                   Run local docker login before build and push.
   -SkipBuildPush                 Skip local docker build/push and deploy already pushed APP_IMAGE/WEB_IMAGE tag.
   -SkipEnvUpload                 Keep VPS env file and only update APP_IMAGE/WEB_IMAGE in it.
+  -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
+  -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -NoBuildCache                  Build images without Docker cache.
 '@ | Write-Host
 }
@@ -186,6 +190,48 @@ function Get-EnvFileValue {
     return $DefaultValue
 }
 
+function Get-MobileReleaseArtifact {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [string]$RequestedPath = ""
+    )
+
+    $candidateFiles = @()
+    if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+        $resolvedRequestedPath = if ([System.IO.Path]::IsPathRooted($RequestedPath)) {
+            $RequestedPath
+        } else {
+            Join-Path $RepoRoot $RequestedPath
+        }
+        if (-not (Test-Path -LiteralPath $resolvedRequestedPath -PathType Leaf)) {
+            throw "Mobile APK not found: $resolvedRequestedPath"
+        }
+        $candidateFiles = @(Get-Item -LiteralPath $resolvedRequestedPath)
+    } else {
+        $buildsDirectory = Join-Path $RepoRoot "mobile\builds"
+        if (-not (Test-Path -LiteralPath $buildsDirectory -PathType Container)) {
+            return $null
+        }
+        $candidateFiles = @(Get-ChildItem -LiteralPath $buildsDirectory -File -Filter "otziv-prod-release-v*-code*.apk")
+    }
+
+    $parsed = foreach ($file in $candidateFiles) {
+        if ($file.Name -notmatch '^otziv-prod-release-v(?<versionName>[0-9A-Za-z._-]+)-code(?<versionCode>[0-9]+)\.apk$') {
+            if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+                throw "Mobile APK name must match otziv-prod-release-v<version>-code<code>.apk: $($file.Name)"
+            }
+            continue
+        }
+        [pscustomobject]@{
+            File = $file
+            VersionName = $Matches.versionName
+            VersionCode = [int]$Matches.versionCode
+        }
+    }
+
+    return $parsed | Sort-Object VersionCode, @{ Expression = { $_.File.LastWriteTimeUtc }; Descending = $true } -Descending | Select-Object -First 1
+}
+
 if ($Help) {
     Show-Help
     exit 0
@@ -221,6 +267,24 @@ $remote = "${VpsUser}@${VpsHost}"
 $remoteBundle = "/tmp/otziv-deploy-${Tag}.tar.gz"
 $stageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-" + [System.Guid]::NewGuid().ToString("N"))
 $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-${Tag}.tar.gz")
+$mobileRelease = if ($SkipMobileApkUpload) { $null } else { Get-MobileReleaseArtifact -RepoRoot $repoRoot -RequestedPath $MobileApkPath }
+$sshArgs = @()
+$scpArgs = @()
+if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
+    $sshArgs += @("-i", $SshKey)
+    $scpArgs += @("-i", $SshKey)
+}
+$sshKeepAliveArgs = @(
+    "-o", "BatchMode=yes",
+    "-o", "ConnectTimeout=15",
+    "-o", "ConnectionAttempts=2",
+    "-o", "StrictHostKeyChecking=accept-new",
+    "-o", "ServerAliveInterval=20",
+    "-o", "ServerAliveCountMax=12",
+    "-o", "TCPKeepAlive=yes"
+)
+$sshArgs += @("-p", "$VpsPort") + $sshKeepAliveArgs
+$scpArgs += @("-P", "$VpsPort") + $sshKeepAliveArgs
 
 if (-not (Test-Path -LiteralPath $buildCompose)) {
     throw "Missing build compose file: $buildCompose"
@@ -239,6 +303,11 @@ if (-not $SkipEnvUpload) {
 Write-Host "Building and pushing:"
 Write-Host "  APP_IMAGE=$appImage"
 Write-Host "  WEB_IMAGE=$webImage"
+if ($null -ne $mobileRelease) {
+    Write-Host "  MOBILE_APK=$($mobileRelease.File.FullName) (version $($mobileRelease.VersionName), code $($mobileRelease.VersionCode))"
+} elseif (-not $SkipMobileApkUpload) {
+    Write-Warning "No signed release APK found in mobile/builds. Mobile publication will be skipped."
+}
 
 if ($DockerLogin) {
     Invoke-External -FilePath "docker" -Arguments @("login", "-u", $DockerLoginUsername)
@@ -253,13 +322,50 @@ if (-not $SkipBuildPush) {
         $buildArgs += "--no-cache"
     }
     Invoke-External -FilePath "docker" -Arguments $buildArgs
-    Invoke-External -FilePath "docker" -Arguments @("compose", "-f", $buildCompose, "push")
+    Write-Host "Pushing application image..."
+    Invoke-External -FilePath "docker" -Arguments @("push", $appImage)
+    Write-Host "Pushing web image..."
+    Invoke-External -FilePath "docker" -Arguments @("push", $webImage)
+    Write-Host "Docker images pushed successfully."
 } else {
     Write-Host "Skipping docker build/push; deploying already published images."
 }
 
+if ($null -ne $mobileRelease) {
+    Write-Host "Checking mobile APK state on VPS..."
+    $remotePathForCheck = ConvertTo-BashSingleQuoted $VpsPath
+    $mobileCodeForCheck = $mobileRelease.VersionCode
+    $remoteMobileCheck = @"
+remote_path=$remotePathForCheck
+metadata="`$remote_path/data/mobile-releases/release.json"
+if [ -f "`$metadata" ]; then
+  code="`$(grep -o '"versionCode":[[:space:]]*[0-9]*' "`$metadata" | grep -o '[0-9]*' | head -n 1 || true)"
+  file_name="`$(grep -o '"fileName":"[^"]*"' "`$metadata" | cut -d '"' -f 4 | head -n 1 || true)"
+  if [ -n "`$code" ] && [ "`$code" -ge "$mobileCodeForCheck" ] && [ -n "`$file_name" ] && [ -f "`$remote_path/data/mobile-releases/`$file_name" ]; then
+    find "`$remote_path/data/mobile-releases" -maxdepth 1 -type f -name '*.apk' ! -name "`$file_name" -delete
+    printf 'PRESENT'
+  else
+    printf 'MISSING'
+  fi
+else
+  printf 'MISSING'
+fi
+"@
+    $remoteMobileState = (& ssh @sshArgs $remote $remoteMobileCheck).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to check the mobile release on VPS."
+    }
+    if ($remoteMobileState -eq "PRESENT") {
+        Write-Host "Mobile APK code $($mobileRelease.VersionCode) or newer is already present on VPS; excluding it from the deploy bundle."
+        $mobileRelease = $null
+    } elseif ($remoteMobileState -ne "MISSING") {
+        throw "Unexpected mobile release check response from VPS: $remoteMobileState"
+    }
+}
+
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 try {
+    Write-Host "Preparing deployment bundle..."
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docker-compose.yaml"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
@@ -276,6 +382,34 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\init-letsencrypt.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\renew-letsencrypt.sh"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\register-max-webhook.ps1"
+
+    $uploadedMobileRelease = "0"
+    if ($null -ne $mobileRelease) {
+        $mobileStageDirectory = Join-Path $stageRoot ".deploy-mobile-update"
+        New-Item -ItemType Directory -Path $mobileStageDirectory -Force | Out-Null
+        $mobileFileName = "otziv-v$($mobileRelease.VersionName)-code$($mobileRelease.VersionCode).apk"
+        $mobileStageApk = Join-Path $mobileStageDirectory $mobileFileName
+        Copy-Item -LiteralPath $mobileRelease.File.FullName -Destination $mobileStageApk -Force
+        $mobileSha256 = (Get-FileHash -LiteralPath $mobileStageApk -Algorithm SHA256).Hash.ToUpperInvariant()
+        $mobileMetadata = [ordered]@{
+            versionCode = $mobileRelease.VersionCode
+            versionName = $mobileRelease.VersionName
+            minSupportedVersionCode = 0
+            required = $false
+            notes = "Версия $($mobileRelease.VersionName) опубликована автоматически при deploy $Tag."
+            fileName = $mobileFileName
+            fileSize = (Get-Item -LiteralPath $mobileStageApk).Length
+            sha256 = $mobileSha256
+            publishedAt = [DateTimeOffset]::UtcNow.ToString("o")
+        }
+        $mobileMetadataJson = $mobileMetadata | ConvertTo-Json -Compress
+        [System.IO.File]::WriteAllText(
+            (Join-Path $mobileStageDirectory "release.json"),
+            $mobileMetadataJson,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        $uploadedMobileRelease = "1"
+    }
 
     if (-not $SkipEnvUpload) {
         $stageEnv = Join-Path $stageRoot $RemoteEnvFile
@@ -304,25 +438,8 @@ try {
     }
     Invoke-External -FilePath "tar" -Arguments @("-czf", $bundlePath, "-C", $stageRoot, ".")
 
-    $sshArgs = @()
-    $scpArgs = @()
-    if (-not [string]::IsNullOrWhiteSpace($SshKey)) {
-        $sshArgs += @("-i", $SshKey)
-        $scpArgs += @("-i", $SshKey)
-    }
-    $sshKeepAliveArgs = @(
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=15",
-        "-o", "ConnectionAttempts=2",
-        "-o", "StrictHostKeyChecking=accept-new",
-        "-o", "ServerAliveInterval=20",
-        "-o", "ServerAliveCountMax=12",
-        "-o", "TCPKeepAlive=yes"
-    )
-    $sshArgs += @("-p", "$VpsPort") + $sshKeepAliveArgs
-    $scpArgs += @("-P", "$VpsPort") + $sshKeepAliveArgs
-
     $mkdirScript = "mkdir -p $(ConvertTo-BashSingleQuoted $VpsPath)"
+    Write-Host "Uploading deployment bundle to VPS..."
     Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $mkdirScript))
     Copy-DeployBundle -ScpArgs $scpArgs -BundlePath $bundlePath -Remote $remote -RemoteBundle $remoteBundle
 
@@ -350,6 +467,7 @@ env_file=$remoteEnvFileQuoted
 deploy_tag=$deployTagQuoted
 vps_host=$vpsHostQuoted
 uploaded_env=$uploadedEnv
+uploaded_mobile_release=$uploadedMobileRelease
 
 compose() {
   if command -v docker-compose >/dev/null 2>&1; then
@@ -420,6 +538,92 @@ get_env() {
   else
     printf '%s' "`$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
   fi
+}
+
+publish_bundled_mobile_release() {
+  bundle_dir=".deploy-mobile-update"
+  metadata_file="`$bundle_dir/release.json"
+  target_dir="data/mobile-releases"
+
+  if [ "`$uploaded_mobile_release" != "1" ]; then
+    rm -rf "`$bundle_dir"
+    return 0
+  fi
+  if [ ! -f "`$metadata_file" ]; then
+    echo "Mobile release metadata is missing from the deploy bundle." >&2
+    exit 1
+  fi
+
+  incoming_apk="`$(find "`$bundle_dir" -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+  incoming_code="`$(grep -o '"versionCode":[[:space:]]*[0-9]*' "`$metadata_file" | grep -o '[0-9]*' | head -n 1)"
+  expected_sha="`$(grep -o '"sha256":"[0-9A-Fa-f]*"' "`$metadata_file" | cut -d '"' -f 4 | head -n 1)"
+  if [ -z "`$incoming_apk" ] || [ -z "`$incoming_code" ] || [ -z "`$expected_sha" ]; then
+    echo "Mobile release bundle is incomplete." >&2
+    exit 1
+  fi
+
+  incoming_file_name="`$(basename "`$incoming_apk")"
+  actual_sha="`$(sha256sum "`$incoming_apk" | awk '{print toupper(`$1)}')"
+  expected_sha="`$(printf '%s' "`$expected_sha" | tr '[:lower:]' '[:upper:]')"
+  if [ "`$actual_sha" != "`$expected_sha" ]; then
+    echo "Mobile APK SHA-256 verification failed before publication." >&2
+    exit 1
+  fi
+
+  if ! mkdir -p "`$target_dir" 2>/dev/null || [ ! -w "`$target_dir" ]; then
+    deploy_uid="`$(id -u)"
+    deploy_gid="`$(id -g)"
+    if sudo -n true >/dev/null 2>&1; then
+      sudo mkdir -p "`$target_dir"
+      sudo chown "`$deploy_uid:`$deploy_gid" "`$target_dir"
+    else
+      docker run --rm --user 0 \
+        -v "`$PWD/data:/host-data" \
+        --entrypoint sh "`$app_image" \
+        -c "mkdir -p /host-data/mobile-releases && chown `$deploy_uid:`$deploy_gid /host-data/mobile-releases"
+    fi
+  fi
+  if [ ! -w "`$target_dir" ]; then
+    echo "Mobile release storage is not writable after permission repair: `$target_dir" >&2
+    exit 1
+  fi
+  current_code="0"
+  current_file_name=""
+  if [ -f "`$target_dir/release.json" ]; then
+    current_code="`$(grep -o '"versionCode":[[:space:]]*[0-9]*' "`$target_dir/release.json" | grep -o '[0-9]*' | head -n 1 || true)"
+    current_file_name="`$(grep -o '"fileName":"[^"]*"' "`$target_dir/release.json" | cut -d '"' -f 4 | head -n 1 || true)"
+    [ -n "`$current_code" ] || current_code="0"
+  fi
+
+  if [ "`$current_code" -gt "`$incoming_code" ]; then
+    echo "Mobile APK code `$incoming_code is older than published code `$current_code; skipping."
+    rm -rf "`$bundle_dir"
+    return 0
+  fi
+  if [ "`$current_code" -eq "`$incoming_code" ] && [ -n "`$current_file_name" ] && [ -f "`$target_dir/`$current_file_name" ]; then
+    echo "Mobile APK code `$incoming_code is already published; skipping upload."
+    find "`$target_dir" -maxdepth 1 -type f -name '*.apk' ! -name "`$current_file_name" -delete
+    rm -rf "`$bundle_dir"
+    return 0
+  fi
+
+  apk_temp="`$target_dir/.`$incoming_file_name.tmp"
+  metadata_temp="`$target_dir/.release.json.tmp"
+  cp "`$incoming_apk" "`$apk_temp"
+  copied_sha="`$(sha256sum "`$apk_temp" | awk '{print toupper(`$1)}')"
+  if [ "`$copied_sha" != "`$expected_sha" ]; then
+    rm -f "`$apk_temp"
+    echo "Mobile APK SHA-256 verification failed after copying to storage." >&2
+    exit 1
+  fi
+  mv -f "`$apk_temp" "`$target_dir/`$incoming_file_name"
+  cp "`$metadata_file" "`$metadata_temp"
+  mv -f "`$metadata_temp" "`$target_dir/release.json"
+  chmod 644 "`$target_dir/`$incoming_file_name" "`$target_dir/release.json" || true
+
+  find "`$target_dir" -maxdepth 1 -type f -name '*.apk' ! -name "`$incoming_file_name" -delete
+  rm -rf "`$bundle_dir"
+  echo "Published mobile APK code `$incoming_code and removed older APK files."
 }
 
 remove_repo_images() {
@@ -566,7 +770,8 @@ if [ -f "`$env_file" ]; then
   chmod 600 "`$backup_dir/`$env_file" || true
 fi
 
-tar -xzf "`$bundle_path" -C "`$remote_path"
+rm -rf .deploy-mobile-update
+tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"
 rm -f "`$bundle_path"
 
 if [ ! -f docker-compose.yaml ]; then
@@ -615,6 +820,7 @@ require_compose_service whatsapp_vika
 remove_repo_images "`$app_repo"
 remove_repo_images "`$web_repo"
 compose pull app nginx
+publish_bundled_mobile_release
 if docker ps --format '{{.Names}}' | grep -Fxq my-mysql; then
   bash infrastructure/scripts/prod/validate-flyway-migrations.sh "`$app_image" my-mysql
 else
@@ -641,7 +847,10 @@ remove_service_containers whatsapp_lika
 recreate_service_with_retry whatsapp_lika
 remove_service_containers whatsapp_vika
 recreate_service_with_retry whatsapp_vika
-compose up -d --remove-orphans phpmyadmin dozzle alloy
+compose up -d --remove-orphans --no-deps phpmyadmin dozzle alloy
+wait_service_healthy nginx 300
+wait_service_healthy whatsapp_lika 300
+wait_service_healthy whatsapp_vika 300
 keycloak_settings_applied=0
 for attempt in 1 2 3; do
   wait_service_healthy keycloak 300

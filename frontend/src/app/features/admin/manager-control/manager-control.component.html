@@ -211,7 +211,7 @@
           <span class="material-icons-sharp">{{ statusIcon(manager.status) }}</span>
           <div>
             <strong>{{ manager.name }}</strong>
-            <small>{{ manager.totalAttentionCount }} к действию · {{ manager.workloadCount }} нагрузка</small>
+            <small>{{ currentActionCount(manager) }} к действию · {{ manager.workloadCount }} нагрузка</small>
           </div>
         </article>
       }
@@ -264,8 +264,8 @@
       <div class="manager-list">
         @for (manager of managers(); track trackManager($index, manager)) {
           @if (personalEmbeddedMode()) {
-            <article class="personal-remark-card {{ detailCountToneClass(manager.totalAttentionCount) }}" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
-              <header class="personal-remark-head {{ countToneClass(manager.totalAttentionCount) }}">
+            <article class="personal-remark-card {{ detailCountToneClass(currentActionCount(manager)) }}" [class.red]="manager.status === 'RED'" [class.yellow]="manager.status === 'YELLOW'" [class.green]="manager.status === 'GREEN'">
+              <header class="personal-remark-head {{ countToneClass(currentActionCount(manager)) }}">
                 <div class="manager-main">
                   @if (personalManagerPerformance(manager); as performance) {
                     <span class="status-icon manager-performance-score-icon {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}" [title]="'Оценка менеджера: ' + performance.loadAdjustedPerformanceScore">
@@ -276,7 +276,7 @@
                   }
                   <div class="personal-remark-total">
                     <strong>
-                      {{ manager.totalAttentionCount }} сейчас к действию
+                      {{ currentActionCount(manager) }} сейчас к действию
                       @if (personalManagerPerformance(manager); as performance) {
                         <span class="manager-score-badge {{ performanceToneClass(performance.loadAdjustedPerformanceScore) }}">{{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}</span>
                       }
@@ -323,15 +323,15 @@
               }
 
               <div class="personal-remark-metrics">
-                <article class="personal-metric overdue {{ countToneClass(manager.overdueOrderCount) }}">
+                <article class="personal-metric overdue {{ countToneClass(currentOverdueCount(manager)) }}">
                   <span class="material-icons-sharp">schedule</span>
                   <small>Просрочки</small>
-                  <b>{{ manager.overdueOrderCount }}</b>
+                  <b>{{ currentOverdueCount(manager) }}</b>
                 </article>
-                <article class="personal-metric risks {{ countToneClass(manager.openRiskCount) }}">
+                <article class="personal-metric risks {{ countToneClass(currentRiskCount(manager)) }}">
                   <span class="material-icons-sharp">warning</span>
                   <small>Риски</small>
-                  <b>{{ manager.openRiskCount }}</b>
+                  <b>{{ currentRiskCount(manager) }}</b>
                 </article>
                 <article class="personal-metric other {{ countToneClass(otherCriticalCount(manager)) }}">
                   <span class="material-icons-sharp">fact_check</span>
@@ -341,7 +341,7 @@
               </div>
 
               @if (hasActionRows(manager)) {
-                <section class="personal-remark-actions {{ countToneClass(manager.totalAttentionCount) }}">
+                <section class="personal-remark-actions {{ countToneClass(currentActionCount(manager)) }}">
                   <div class="group-head">
                     <span class="material-icons-sharp">priority_high</span>
                     <strong>К действию</strong>
@@ -396,7 +396,7 @@
             </article>
           } @else {
           <article
-            class="manager-row {{ detailCountToneClass(manager.totalAttentionCount) }}"
+            class="manager-row {{ detailCountToneClass(currentActionCount(manager)) }}"
             [class.red]="manager.status === 'RED'"
             [class.yellow]="manager.status === 'YELLOW'"
             [class.green]="manager.status === 'GREEN'"
@@ -404,7 +404,7 @@
             (mouseenter)="selectManager(manager)"
             (focusin)="selectManager(manager)"
           >
-            <header class="manager-card-head {{ countToneClass(manager.totalAttentionCount) }}">
+            <header class="manager-card-head {{ countToneClass(currentActionCount(manager)) }}">
               <div class="manager-main">
                 <span class="status-icon material-icons-sharp">{{ statusIcon(manager.status) }}</span>
                 <div>
@@ -420,7 +420,7 @@
 
               <div class="manager-status">
                 <span class="status-badge">{{ statusLabel(manager.status) }}</span>
-                <strong>{{ manager.totalAttentionCount }} сейчас к действию</strong>
+                <strong>{{ currentActionCount(manager) }} сейчас к действию</strong>
                 <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
               </div>
 
@@ -451,17 +451,17 @@
             </div>
 
             <div class="manager-numbers">
-              <span class="metric urgent {{ countToneClass(manager.overdueOrderCount) }}"><b>{{ manager.overdueOrderCount }}</b><small>просрочки</small></span>
-              <span class="metric urgent {{ countToneClass(manager.openRiskCount) }}"><b>{{ manager.openRiskCount }}</b><small>риски</small></span>
+              <span class="metric urgent {{ countToneClass(currentOverdueCount(manager)) }}"><b>{{ currentOverdueCount(manager) }}</b><small>просрочки</small></span>
+              <span class="metric urgent {{ countToneClass(currentRiskCount(manager)) }}"><b>{{ currentRiskCount(manager) }}</b><small>риски</small></span>
               <span class="metric {{ countToneClass(otherCriticalCount(manager)) }}">
-                <b>{{ manager.criticalCount }}</b>
+                <b>{{ currentCriticalActionCount(manager) }}</b>
                 <small>всего к действию</small>
-                <small>{{ manager.overdueOrderCount }} проср. + {{ manager.openRiskCount }} риски + {{ otherCriticalCount(manager) }} прочее</small>
+                <small>{{ currentOverdueCount(manager) }} проср. + {{ currentRiskCount(manager) }} риски + {{ otherCriticalCount(manager) }} прочее</small>
               </span>
             </div>
 
             @if (hasActionRows(manager)) {
-              <section class="control-group action-group {{ countToneClass(manager.totalAttentionCount) }}">
+              <section class="control-group action-group {{ countToneClass(currentActionCount(manager)) }}">
                 <div class="group-head">
                   <span class="material-icons-sharp">priority_high</span>
                   <strong>К действию</strong>
@@ -665,7 +665,7 @@
         <span class="material-icons-sharp">{{ statusIcon(manager.status) }}</span>
         <div>
           <strong>{{ manager.name }}</strong>
-          <small>{{ manager.totalAttentionCount }} к действию · {{ manager.workloadCount }} нагрузка</small>
+          <small>{{ currentActionCount(manager) }} к действию · {{ manager.workloadCount }} нагрузка</small>
         </div>
       </article>
     }
@@ -878,7 +878,17 @@
 
                           @if (example.type === 'ORDER') {
                             <div class="review-followup order-open-action">
-                              @if (canRepairAutomationIssue(example)) {
+                              @if (isAutomationWaitingForSlot(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action waiting-action"
+                                  disabled
+                                  [title]="automationWaitingSlotText(example)"
+                                >
+                                  <span class="material-icons-sharp">schedule</span>
+                                  Ожидает отправки
+                                </button>
+                              } @else if (canRepairAutomationIssue(example)) {
                                 <button
                                   type="button"
                                   class="review-action repair-action"
@@ -920,6 +930,8 @@
                               }
                               @if (canContactOrder(example)) {
                                 <small>{{ contactFollowUpHint(example) }}</small>
+                              } @else if (isAutomationWaitingForSlot(example)) {
+                                <small>{{ automationWaitingSlotText(example) }}</small>
                               }
                             </div>
                           }
@@ -980,7 +992,17 @@
                             </div>
                           } @else if (canRequestWorkerTask(example)) {
                             <div class="review-followup worker-request">
-                              @if (canRepairAutomationIssue(example)) {
+                              @if (isAutomationWaitingForSlot(example)) {
+                                <button
+                                  type="button"
+                                  class="review-action waiting-action"
+                                  disabled
+                                  [title]="automationWaitingSlotText(example)"
+                                >
+                                  <span class="material-icons-sharp">schedule</span>
+                                  Ожидает отправки
+                                </button>
+                              } @else if (canRepairAutomationIssue(example)) {
                                 <button
                                   type="button"
                                   class="review-action repair-action"
@@ -1019,6 +1041,9 @@
                                 <span class="material-icons-sharp">campaign</span>
                                 {{ workerRequestButtonLabel(example) }}
                               </button>
+                              @if (isAutomationWaitingForSlot(example)) {
+                                <small>{{ automationWaitingSlotText(example) }}</small>
+                              }
                             </div>
                           }
 
@@ -1062,6 +1087,21 @@
                                 (click)="repairConcreteItem(example)"
                                 [disabled]="isConcreteUpdating(example.controlEntityId)"
                                 title="Запросить новый Telegram chat_id и обновить привязку"
+                              >
+                                <span class="material-icons-sharp">build</span>
+                                Починить
+                              </button>
+                            </div>
+                          }
+
+                          @if (example.type === 'ORDER_PAYMENT_INTEGRITY' || example.type === 'PUBLICATION_DATE_REVIEW') {
+                            <div class="review-followup order-open-action">
+                              <button
+                                type="button"
+                                class="review-action repair-action"
+                                (click)="repairConcreteItem(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Автоматически устранить проблему и повторно проверить карточку"
                               >
                                 <span class="material-icons-sharp">build</span>
                                 Починить

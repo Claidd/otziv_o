@@ -106,7 +106,7 @@ class ReviewBotChangeServiceTest {
 
         assertSame(selectedBot, review.getBot());
         assertTrue(review.isVigul());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, true, false);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
     }
 
@@ -125,11 +125,11 @@ class ReviewBotChangeServiceTest {
         when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of(6L, 7L, 8L))))
                 .thenReturn(selectedBot);
 
-        service.changeBot(15L, true);
+        service.changeBot(15L);
 
         verify(assignmentExclusionService).rejectCurrentBot(review, "CHANGE");
         assertSame(selectedBot, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, true, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
     }
 
     @Test
@@ -234,13 +234,13 @@ class ReviewBotChangeServiceTest {
         when(reviewRepository.findUnpublishedReviewsByBotIdForReassignment(5L, 21L))
                 .thenReturn(List.of(affectedReview));
 
-        service.deActivateAndChangeBot(21L, null, true);
+        service.deActivateAndChangeBot(21L, null);
 
         assertFalse(currentBot.isActive());
         assertSame(selectedBot, review.getBot());
         assertSame(affectedReplacement, affectedReview.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(affectedReview, false, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(affectedReview);
         verify(reviewRepository).save(review);
     }
 
@@ -351,10 +351,10 @@ class ReviewBotChangeServiceTest {
         when(botAssignmentService.assignBotForReviewChange(same(review), eq(Set.of())))
                 .thenReturn(selectedBot);
 
-        service.changeBot(17L, true);
+        service.changeBot(17L);
 
         assertSame(selectedBot, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
     }
 
@@ -378,7 +378,7 @@ class ReviewBotChangeServiceTest {
         service.assignNewAccount(44L);
 
         assertSame(selectedBot, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, true, false);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
     }
 
@@ -399,10 +399,10 @@ class ReviewBotChangeServiceTest {
         when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(77L));
         when(botService.claimNewAccountForCity(same(city), eq(Set.of(77L, 5L)))).thenReturn(Optional.of(selectedBot));
 
-        service.assignNewAccount(44L, true);
+        service.assignNewAccount(44L);
 
         assertSame(selectedBot, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
     }
 

@@ -3,6 +3,8 @@ package com.hunt.otziv.whatsapp.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.webhook.security.WebhookSignatureVerifier;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupWebhookDeduplicator;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +29,8 @@ class WhatsAppWebhookControllerTest {
 
     @Mock
     private ReplyService replyService;
+    @Mock
+    private WhatsAppGroupWebhookDeduplicator groupWebhookDeduplicator;
 
     private WebhookSignatureVerifier signatureVerifier;
     private WhatsAppWebhookController controller;
@@ -34,9 +38,11 @@ class WhatsAppWebhookControllerTest {
     @BeforeEach
     void setUp() {
         signatureVerifier = new WebhookSignatureVerifier();
-        controller = new WhatsAppWebhookController(replyService, new ObjectMapper(), signatureVerifier);
+        controller = new WhatsAppWebhookController(replyService, new ObjectMapper(), signatureVerifier, groupWebhookDeduplicator);
         ReflectionTestUtils.setField(controller, "webhookSecret", SECRET);
         ReflectionTestUtils.setField(controller, "hmacRequired", false);
+        org.mockito.Mockito.lenient().when(groupWebhookDeduplicator.acquire(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true);
     }
 
     @Test
@@ -86,6 +92,37 @@ class WhatsAppWebhookControllerTest {
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         verify(replyService, never()).processIncomingReply(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void parsesGatewaySystemMessageClassification() {
+        String body = "{\"clientId\":\"whatsapp_vika\",\"groupId\":\"12001@g.us\","
+                + "\"messageId\":\"message-1\",\"fromMe\":true,\"systemGenerated\":true,"
+                + "\"message\":\"Автоматический отчет\"}";
+
+        ResponseEntity<Void> response = controller.handleGroupReply(request(), SECRET, null, body);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        ArgumentCaptor<WhatsAppGroupReplyDTO> captor = ArgumentCaptor.forClass(WhatsAppGroupReplyDTO.class);
+        verify(replyService).processGroupReply(captor.capture());
+        assertEquals(Boolean.TRUE, captor.getValue().getSystemGenerated());
+        assertEquals("message-1", captor.getValue().getMessageId());
+    }
+
+    @Test
+    void ignoresRepeatedGroupWebhookAfterSuccessfulDelivery() {
+        String body = "{\"clientId\":\"whatsapp_vika\",\"groupId\":\"12001@g.us\","
+                + "\"messageId\":\"message-1\",\"message\":\"Отключить уведомления\"}";
+        org.mockito.Mockito.when(groupWebhookDeduplicator.acquire(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(true, false);
+
+        ResponseEntity<Void> first = controller.handleGroupReply(request(), SECRET, null, body);
+        ResponseEntity<Void> duplicate = controller.handleGroupReply(request(), SECRET, null, body);
+
+        assertEquals(HttpStatus.OK, first.getStatusCode());
+        assertEquals(HttpStatus.OK, duplicate.getStatusCode());
+        verify(replyService, org.mockito.Mockito.times(1))
+                .processGroupReply(org.mockito.ArgumentMatchers.any());
     }
 
     private static MockHttpServletRequest request() {

@@ -53,11 +53,17 @@ public class WorkerTaskCompletionMonitorService {
         }
 
         String workerText = workerWarningText(counters, taskSection, taskId);
-        notifyUser(workerUser, "Предупреждение по закрытию задач", workerText, workerUser.getId());
+        notifyUser(
+                workerUser,
+                "Предупреждение по закрытию задач",
+                workerText,
+                workerUser.getId(),
+                workerUser.getWorkerTelegramGroupChatId()
+        );
 
         String managerText = managerWarningText(workerUser, counters, taskSection, taskId);
         recipients(workerUser).values().forEach(user ->
-                notifyUser(user, "Проверьте закрытия специалиста", managerText, workerUser.getId())
+                notifyUser(user, "Проверьте закрытия специалиста", managerText, workerUser.getId(), user.getTelegramChatId())
         );
 
         log.warn(
@@ -115,7 +121,7 @@ public class WorkerTaskCompletionMonitorService {
         recipients.putIfAbsent(user.getId(), user);
     }
 
-    private void notifyUser(User user, String title, String text, Long sourceId) {
+    private void notifyUser(User user, String title, String text, Long sourceId, Long telegramChatId) {
         boolean alreadyOpen = false;
         try {
             alreadyOpen = personalReminderService.hasOpenSystemReminder(user, SOURCE_SUSPICIOUS_COMPLETION, sourceId);
@@ -134,9 +140,9 @@ public class WorkerTaskCompletionMonitorService {
             alreadyOpen = true;
         }
 
-        if (!alreadyOpen && user.getTelegramChatId() != null) {
+        if (!alreadyOpen && telegramChatId != null) {
             try {
-                telegramService.sendMessage(user.getTelegramChatId(), text);
+                telegramService.sendMessage(telegramChatId, text);
             } catch (RuntimeException e) {
                 log.warn("Не удалось отправить Telegram-предупреждение о массовом закрытии задач userId={}", user.getId(), e);
             }

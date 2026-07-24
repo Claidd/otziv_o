@@ -200,6 +200,84 @@ class ClientMessageOrderStatusServiceTest {
         assertEquals("review_recovery_active", status.errorCode());
     }
 
+    @Test
+    void showsRateLimitedQueueAsNeutralWaitingStateWithoutManagerControl() {
+        OrderDTOList order = order(16L, null, null);
+        LocalDateTime nextAttemptAt = LocalDateTime.now().plusMinutes(20);
+        ScheduledClientMessageState state = activeState(16L)
+                .lastErrorCode("rate_limited")
+                .lastErrorMessage("Следующий слот отправки: " + nextAttemptAt)
+                .consecutiveFailures(99)
+                .lastAttemptAt(LocalDateTime.now().minusHours(5))
+                .nextAttemptAt(nextAttemptAt)
+                .sentCount(1)
+                .build();
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(state));
+        when(scheduledClientMessageService.effectiveNextAttemptAt(nextAttemptAt)).thenReturn(nextAttemptAt);
+
+        service.enrichOrderList(List.of(order));
+
+        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
+        assertNotNull(status);
+        assertEquals("scheduled", status.state());
+        assertEquals("wait", status.tone());
+        assertEquals("Ожидает отправки", status.label());
+        assertEquals("rate_limited", status.errorCode());
+        assertEquals(nextAttemptAt, status.nextAttemptAt());
+    }
+
+    @Test
+    void ignoresClientTextReminderFromPreviousWaitingCycle() {
+        LocalDateTime currentCycle = LocalDateTime.of(2026, 7, 24, 20, 37, 52);
+        OrderDTOList order = order(25_442L, null, null);
+        order.setStatus("Новый");
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(currentCycle);
+        order.setDayToChangeStatusAgo(30);
+
+        ScheduledClientMessageState staleState = activeState(25_442L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetKey("client-text:25442:2026-07-18T14:50:19")
+                .lastErrorCode("rate_limited")
+                .nextAttemptAt(LocalDateTime.of(2026, 7, 24, 20, 54, 6))
+                .build();
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(staleState));
+
+        service.enrichOrderList(List.of(order));
+
+        assertNull(order.getClientMessageStatus());
+        verify(scheduledClientMessageService, never()).recoverMissingClientMessageStateForOrderId(any());
+        verify(scheduledClientMessageService, never()).effectiveNextAttemptAt(any());
+    }
+
+    @Test
+    void usesOnlyClientTextReminderFromCurrentWaitingCycle() {
+        LocalDateTime currentCycle = LocalDateTime.of(2026, 7, 24, 20, 37, 52);
+        LocalDateTime nextAttemptAt = LocalDateTime.of(2026, 7, 27, 10, 0);
+        OrderDTOList order = order(25_442L, null, null);
+        order.setStatus("Новый");
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(currentCycle);
+
+        ScheduledClientMessageState staleState = activeState(25_442L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetKey("client-text:25442:2026-07-18T14:50:19")
+                .lastErrorCode("missing_group_id")
+                .build();
+        ScheduledClientMessageState currentState = activeState(25_442L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetKey("client-text:25442:2026-07-24T20:37:52")
+                .nextAttemptAt(nextAttemptAt)
+                .build();
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of(staleState, currentState));
+
+        service.enrichOrderList(List.of(order));
+
+        assertNotNull(order.getClientMessageStatus());
+        assertEquals("scheduled", order.getClientMessageStatus().state());
+        assertEquals(nextAttemptAt, order.getClientMessageStatus().nextAttemptAt());
+    }
+
     private OrderDTOList order(Long orderId, Long companyId, String companyUrlChat) {
         return OrderDTOList.builder()
                 .id(orderId)

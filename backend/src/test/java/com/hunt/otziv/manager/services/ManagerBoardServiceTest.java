@@ -16,6 +16,8 @@ import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,6 +70,9 @@ class ManagerBoardServiceTest {
     private ManagerService managerService;
 
     @Mock
+    private WorkerService workerService;
+
+    @Mock
     private BadReviewTaskService badReviewTaskService;
 
     @Mock
@@ -81,6 +86,9 @@ class ManagerBoardServiceTest {
 
     @Mock
     private ClientMessageOrderStatusService clientMessageOrderStatusService;
+
+    @Mock
+    private StaffDailyProgressService staffDailyProgressService;
 
     @Spy
     private ManagerPermissionService managerPermissionService = new ManagerPermissionService();

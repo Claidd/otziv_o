@@ -96,6 +96,7 @@ public class OrderDtoMapper {
                 .amount(order.getAmount())
                 .counter(order.getCounter())
                 .waitingForClient(order.isWaitingForClient())
+                .waitingForClientChangedAt(order.getWaitingForClientChangedAt())
                 .firstOrderForCompany(isFirstOrderForCompany(order))
                 .workerUserFio(order.getWorker() != null && order.getWorker().getUser() != null
                         ? safeString(order.getWorker().getUser().getFio())
@@ -148,6 +149,7 @@ public class OrderDtoMapper {
                 .amount(rowInteger(row, 15))
                 .counter(rowInteger(row, 16))
                 .waitingForClient(rowBoolean(row, 17))
+                .waitingForClientChangedAt(rowLocalDateTime(row, 28))
                 .workerUserFio(rowString(row, 18, ""))
                 .categoryTitle(rowString(row, 19, "Не выбрано"))
                 .subCategoryTitle(rowString(row, 20, "Не выбрано"))

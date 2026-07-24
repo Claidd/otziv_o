@@ -113,8 +113,32 @@
               <span>{{ assignment.status }}</span>
             </header>
             <p>{{ assignment.cityTitle }} · {{ assignment.platform }} · отзыв #{{ assignment.reviewId }}</p>
+            @if (assignment.externalConfirmStatus) {
+              <p>Внешняя проверка: {{ assignment.externalConfirmStatus }}</p>
+            }
+            @if (assignment.performerPublicationScreenshotUrl) {
+              <p>
+                Скриншот исполнителя:
+                <a [href]="assignment.performerPublicationScreenshotUrl" target="_blank" rel="noopener">открыть</a>
+              </p>
+            }
+            @if (assignment.managerConfirmationScreenshotUrl) {
+              <p>
+                Скриншот менеджера:
+                <a [href]="assignment.managerConfirmationScreenshotUrl" target="_blank" rel="noopener">открыть</a>
+              </p>
+            }
             <p>{{ assignment.draftText }}</p>
             @if (assignment.status === 'PUBLISHED_CLAIMED') {
+              <label class="screenshot-upload">
+                <span>Скриншот подтверждения менеджера</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  (change)="uploadManagerScreenshot(assignment, $event)"
+                  [disabled]="saving() === 'manager-screenshot-' + assignment.id"
+                >
+              </label>
               <button type="button" (click)="verifyAssignment(assignment)" [disabled]="saving() === 'verify-' + assignment.id">
                 <span class="material-icons-sharp">verified</span>
                 Подтвердить вручную

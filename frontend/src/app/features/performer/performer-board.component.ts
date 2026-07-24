@@ -43,6 +43,7 @@ export class PerformerBoardComponent implements OnInit {
     published: [],
     paid: []
   });
+  readonly keyword = signal('');
   readonly activeSection = signal<SectionKey>('offers');
   readonly selectedAssignment = signal<PerformerAssignment | null>(null);
   readonly mobileStatusSheetOpen = signal(false);
@@ -58,11 +59,11 @@ export class PerformerBoardComponent implements OnInit {
   });
 
   readonly sections = computed(() => [
-    { key: 'offers' as const, label: 'Новые', icon: 'notifications_active', count: this.board().offers.length },
-    { key: 'active' as const, label: 'Активные', icon: 'directions_walk', count: this.board().active.length },
-    { key: 'waitingPublication' as const, label: 'Публикация', icon: 'schedule', count: this.board().waitingPublication.length },
-    { key: 'published' as const, label: 'Опубликованы', icon: 'published_with_changes', count: this.board().published.length },
-    { key: 'paid' as const, label: 'Оплачены', icon: 'payments', count: this.board().paid.length }
+    { key: 'offers' as const, label: 'Новые', icon: 'fiber_new', count: this.board().offers.length },
+    { key: 'active' as const, label: 'Выгул', icon: 'directions_walk', count: this.board().active.length },
+    { key: 'waitingPublication' as const, label: 'Публикация', icon: 'published_with_changes', count: this.board().waitingPublication.length },
+    { key: 'published' as const, label: 'Ожидание', icon: 'manage_search', count: this.board().published.length },
+    { key: 'paid' as const, label: 'Оплаченные', icon: 'payments', count: this.board().paid.length }
   ]);
 
   readonly mobileStatusItems = computed<MobileStatusItem[]>(() => this.sections().map((section) => ({
@@ -73,7 +74,11 @@ export class PerformerBoardComponent implements OnInit {
     tone: this.mobileSectionTone(section.key)
   })));
 
-  readonly currentItems = computed(() => this.board()[this.activeSection()]);
+  readonly currentItems = computed(() => this.filterAssignments(this.board()[this.activeSection()]));
+  readonly currentSectionLabel = computed(() =>
+    this.sections().find((section) => section.key === this.activeSection())?.label ?? 'Карточки'
+  );
+  readonly title = computed(() => `Исполнитель - ${this.currentSectionLabel()}`);
 
   constructor() {
     const initialIntent = this.mobileNavIntent.intent();
@@ -119,7 +124,7 @@ export class PerformerBoardComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.error.set(apiErrorMessage(err, 'Не удалось загрузить задания'));
+        this.error.set(apiErrorMessage(err, 'Не удалось загрузить карточки'));
         this.loading.set(false);
       }
     });
@@ -140,6 +145,14 @@ export class PerformerBoardComponent implements OnInit {
 
   closeMobileStatusSheet(): void {
     this.mobileStatusSheetOpen.set(false);
+  }
+
+  setKeyword(value: string): void {
+    this.keyword.set(value);
+  }
+
+  clearSearch(): void {
+    this.keyword.set('');
   }
 
   accept(item: PerformerAssignment): void {
@@ -191,6 +204,28 @@ export class PerformerBoardComponent implements OnInit {
     );
   }
 
+  uploadPublicationScreenshot(item: PerformerAssignment, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    this.actionSaving.set(`screenshot-${item.id}`);
+    this.api.uploadPublicationScreenshot(item.id, file).subscribe({
+      next: (assignment) => {
+        this.toast.success('Скриншот загружен');
+        this.selectedAssignment.set(assignment);
+        this.actionSaving.set(null);
+        this.load();
+      },
+      error: (err) => {
+        this.toast.error('Скриншот не загружен', apiErrorMessage(err, 'Не удалось загрузить файл'));
+        this.actionSaving.set(null);
+      }
+    });
+    input.value = '';
+  }
+
   submitProblem(item: PerformerAssignment): void {
     if (this.problemForm.invalid) {
       this.problemForm.markAllAsTouched();
@@ -215,6 +250,35 @@ export class PerformerBoardComponent implements OnInit {
       published: 'green',
       paid: 'blue'
     }[section] as MobileStatusItem['tone'];
+  }
+
+  private filterAssignments(items: PerformerAssignment[]): PerformerAssignment[] {
+    const keyword = this.normalize(this.keyword());
+    if (!keyword) {
+      return items;
+    }
+    return items.filter((item) => this.assignmentSearchText(item).includes(keyword));
+  }
+
+  private assignmentSearchText(item: PerformerAssignment): string {
+    return [
+      item.id,
+      item.orderId,
+      item.reviewId,
+      item.companyTitle,
+      item.filialTitle,
+      item.cityTitle,
+      item.platform,
+      item.status,
+      item.draftText,
+      item.finalText,
+      item.instruction,
+      item.publicationUrl
+    ].map((part) => this.normalize(part)).join(' ');
+  }
+
+  private normalize(value: unknown): string {
+    return String(value ?? '').trim().toLowerCase();
   }
 
   private runAction<T>(key: string, request: { subscribe: Function }, success: string): void {

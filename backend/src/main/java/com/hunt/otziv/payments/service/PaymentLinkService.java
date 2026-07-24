@@ -178,6 +178,7 @@ public class PaymentLinkService {
     private final PaymentLinkArchiveService paymentLinkArchiveService;
     private final AppSettingService appSettingService;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+    private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
@@ -191,6 +192,7 @@ public class PaymentLinkService {
 
         Order order = orderRepository.findByIdForMutation(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
+        orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
 
         long amountKopecks = amountKopecks(payableSum(order));
         if (amountKopecks <= 0) {
@@ -554,7 +556,7 @@ public class PaymentLinkService {
                 manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
                 return toAdminResponse(link);
             }
-            boolean updated = orderTransactionService.handlePaymentStatus(link.getOrder());
+            boolean updated = handlePaymentStatusWithoutPrematureRepeat(link.getOrder());
             LocalDateTime now = LocalDateTime.now();
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(now);
@@ -568,6 +570,7 @@ public class PaymentLinkService {
             if (updated) {
                 paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "Ручная оплата подтверждена");
             }
+            syncCommonInvoiceOrderPayment(link, "Ручная оплата заказа");
             return toAdminResponse(link);
         } catch (Exception e) {
             link.setStatus(PaymentLinkStatus.FAILED);
@@ -1005,7 +1008,7 @@ public class PaymentLinkService {
             return;
         }
         try {
-            boolean updated = orderTransactionService.handlePaymentStatus(link.getOrder());
+            boolean updated = handlePaymentStatusWithoutPrematureRepeat(link.getOrder());
             link.setStatus(PaymentLinkStatus.CONFIRMED);
             link.setPaidAt(LocalDateTime.now());
             link.setConfirmedAmountKopecks(link.getAmountKopecks());
@@ -1045,7 +1048,7 @@ public class PaymentLinkService {
         }
 
         try {
-            boolean updated = orderTransactionService.handlePaymentStatus(order);
+            boolean updated = handlePaymentStatusWithoutPrematureRepeat(order);
             link.setLastError(null);
             paymentLinkRepository.save(link);
             if (updated) {
@@ -1065,6 +1068,27 @@ public class PaymentLinkService {
     private boolean canApplyOrderPaymentNow(Order order) {
         return order != null
                 && (order.isComplete() || order.getAmount() <= order.getCounter());
+    }
+
+    private boolean handlePaymentStatusWithoutPrematureRepeat(Order order) throws Exception {
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        Long orderId = order == null ? null : order.getId();
+        if (commonBillingService == null || orderId == null) {
+            return orderTransactionService.handlePaymentStatus(order);
+        }
+        try {
+            if (commonBillingService.isOrderInActiveCommonInvoice(orderId)) {
+                return orderTransactionService.handlePaymentStatus(order, false);
+            }
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Не удалось проверить общий счет заказа {} перед оплатой; следующий заказ временно не создается",
+                    orderId,
+                    e
+            );
+            return orderTransactionService.handlePaymentStatus(order, false);
+        }
+        return orderTransactionService.handlePaymentStatus(order);
     }
 
     private void syncCommonInvoiceOrderPayment(PaymentLink link, String reason) {
@@ -1314,6 +1338,7 @@ public class PaymentLinkService {
     }
 
     private void validatePayable(PaymentLink link) {
+        orderPaymentIntegrityService.assertPaymentCycleAllowed(link == null ? null : link.getOrder());
         if (link.getExpiresAt().isBefore(LocalDateTime.now())) {
             link.setStatus(PaymentLinkStatus.EXPIRED);
             throw new ResponseStatusException(HttpStatus.GONE, "Срок действия платежной ссылки истек");

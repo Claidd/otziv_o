@@ -16,6 +16,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.text_generator.config.PromptFactory;
 import com.hunt.otziv.text_generator.dto.PromptDTO;
@@ -48,6 +49,7 @@ public class AutoTextServiceImpl implements AutoTextService{
     private final ReviewGenerationManager reviewGenerationManager;
     private final PromptFactory promptFactory;
     private final WebsiteParserService websiteParserService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
 
 
 //==================================== НАСТРОЙКИ ТЕКСТОВ - НАЧАЛО ==================================================
@@ -266,6 +268,7 @@ public class AutoTextServiceImpl implements AutoTextService{
             );
             review.setBot(selectedBot);
             botAssignmentService.updateReviewVigulBasedOnBotCounter(review, selectedBot);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review);
             Review saved = reviewService.save(review);
             if (saved != null) {
                 reviewList.add(saved);

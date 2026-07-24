@@ -10,7 +10,8 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const requestPath = pathFromRequestUrl(request.url, apiBaseUrl);
   const isPublicApi = requestPath.startsWith('/api/payments/public')
     || requestPath.startsWith('/api/auth/')
-    || requestPath.startsWith('/api/review-check/');
+    || requestPath.startsWith('/api/review-check/')
+    || requestPath.startsWith('/api/mobile-update');
   const shouldAttachToken = !isPublicApi && (
     request.url.startsWith('/api') || (apiBaseUrl.length > 0 && request.url.startsWith(apiBaseUrl))
   );

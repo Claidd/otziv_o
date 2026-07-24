@@ -43,6 +43,7 @@ import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentLinkArchiveService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.PaymentSuccessClientNotifier;
 import com.hunt.otziv.payments.service.TbankClient;
@@ -81,6 +82,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -123,6 +125,9 @@ class PaymentLinkServiceTest {
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Mock
+    private OrderPaymentIntegrityService orderPaymentIntegrityService;
 
     @Test
     void createForOrderDoesNotMarkOuterClientMessageTransactionRollbackOnlyOnBusinessConflict() throws Exception {
@@ -243,6 +248,23 @@ class PaymentLinkServiceTest {
         assertTrue(response.instructionText().contains("Комментарий: Оплата заказа №12"));
         assertFalse(response.copyText().contains("https://example.ru/pay/"));
         assertTrue(response.copyText().contains("После оплаты отправьте чек в этот чат."));
+    }
+
+    @Test
+    void createForOrderRejectsSettledOrderBeforeCreatingAnyLink() {
+        TbankPaymentProperties properties = properties();
+        PaymentLinkService service = service(properties);
+        Order order = order(101L, "Уже оплачено", BigDecimal.valueOf(1250));
+        when(orderRepository.findByIdForMutation(101L)).thenReturn(Optional.of(order));
+        doThrow(new ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "Заказ уже полностью оплачен"
+        )).when(orderPaymentIntegrityService).assertPaymentCycleAllowed(order);
+
+        assertThrows(ResponseStatusException.class, () -> service.createForOrder(101L));
+
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+        verify(paymentProfileService, never()).selectForManager(any());
     }
 
     @Test
@@ -622,6 +644,37 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void confirmManualPaymentForCommonInvoiceDoesNotOpenNextOrderBeforeInvoiceCloses() throws Exception {
+        CommonBillingService commonBillingService = org.mockito.Mockito.mock(CommonBillingService.class);
+        PaymentLinkService service = service(properties(), new TbankTokenSigner(), commonBillingService);
+        Order order = order(16L, "ООО Общий счет", BigDecimal.valueOf(500));
+        PaymentLink link = new PaymentLink();
+        link.setId(16L);
+        link.setOrder(order);
+        link.setToken("manual-common-token");
+        link.setAmountKopecks(50000L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.MANUAL_REPORTED);
+        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository.findByIdWithOrder(16L)).thenReturn(Optional.of(link));
+        when(paymentLinkRepository.save(any(PaymentLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(commonBillingService.isOrderInActiveCommonInvoice(16L)).thenReturn(true);
+        when(orderTransactionService.handlePaymentStatus(order, false)).thenReturn(true);
+
+        service.confirmManual(16L, "admin@example.ru");
+
+        verify(orderTransactionService).handlePaymentStatus(order, false);
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
+        verify(commonBillingService).applyConfirmedOrderPayment(
+                eq(16L),
+                any(LocalDateTime.class),
+                eq("Ручная оплата заказа")
+        );
+    }
+
+    @Test
     void confirmedWebhookInTestModeDoesNotTouchOrderPaymentTransition() throws Exception {
         TbankPaymentProperties properties = properties();
         properties.setTerminalKey("terminal");
@@ -701,7 +754,8 @@ class PaymentLinkServiceTest {
         payload.put("Token", signer.sign(payload, "password"));
 
         when(paymentLinkRepository.findByTbankOrderIdWithOrder("o21-test")).thenReturn(Optional.of(link));
-        when(orderTransactionService.handlePaymentStatus(order)).thenReturn(true);
+        when(commonBillingService.isOrderInActiveCommonInvoice(21L)).thenReturn(true);
+        when(orderTransactionService.handlePaymentStatus(order, false)).thenReturn(true);
 
         service.handleTbankWebhook(payload);
 
@@ -712,7 +766,8 @@ class PaymentLinkServiceTest {
         assertNotNull(order.getCompany().getLastPayerEmailAt());
         assertNotNull(link.getPaymentSuccessNotifiedAt());
         assertNull(link.getPaymentSuccessNotificationError());
-        verify(orderTransactionService).handlePaymentStatus(order);
+        verify(orderTransactionService).handlePaymentStatus(order, false);
+        verify(orderTransactionService, never()).handlePaymentStatus(order);
         verify(paymentSuccessClientNotifier).notifySuccess(link);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "T-Bank/SBP оплата подтверждена");
         verify(commonBillingService).applyConfirmedOrderPayment(
@@ -1485,7 +1540,8 @@ class PaymentLinkServiceTest {
                 paymentInvoiceRetryScheduler,
                 paymentLinkArchiveService,
                 appSettingService,
-                commonBillingServiceProvider
+                commonBillingServiceProvider,
+                orderPaymentIntegrityService
         );
     }
 

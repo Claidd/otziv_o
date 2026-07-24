@@ -138,7 +138,7 @@ class BotAssignmentServiceImplTest {
             Review review = invocation.getArgument(0);
             review.setVigul(true);
             return null;
-        }).when(accountWalkScheduleService).synchronizeAfterAccountChange(pending, false, false);
+        }).when(accountWalkScheduleService).synchronizeAfterAccountChange(pending);
 
         int promoted = service.promoteReviewsWithWalkedAccounts(List.of(pending, manuallyWalked));
 
@@ -147,7 +147,7 @@ class BotAssignmentServiceImplTest {
         assertTrue(manuallyWalked.isVigul());
         verify(reviewRepository).saveAll(List.of(pending));
         verify(accountWalkScheduleService, never())
-                .synchronizeAfterAccountChange(manuallyWalked, false, false);
+                .synchronizeAfterAccountChange(manuallyWalked);
     }
 
     @Test
@@ -334,8 +334,6 @@ class BotAssignmentServiceImplTest {
         when(botService.claimReserveBotForCity(eq(city), anyCollection()))
                 .thenReturn(Optional.of(reserveBot));
         when(assignmentGuardService.blockedBotIds(any())).thenReturn(Set.of(777L, 888L));
-        when(accountWalkScheduleService.isWalkedAccount(stubBot)).thenReturn(true);
-
         service.checkAndNotifyAboutStubBots(List.of(existingReview, stubReview));
 
         ArgumentCaptor<Collection<Long>> excludedIdsCaptor = ArgumentCaptor.forClass(Collection.class);
@@ -344,13 +342,13 @@ class BotAssignmentServiceImplTest {
         assertTrue(excludedIdsCaptor.getValue().containsAll(Set.of(777L, 888L)));
         assertSame(reserveBot, stubReview.getBot());
         assertEquals(false, stubReview.isVigul());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview, true, false);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview);
         verify(reviewRepository).saveAll(List.of(stubReview));
         verify(telegramService, never()).sendAlertToAdmins(anyString());
     }
 
     @Test
-    void checkAndNotifyAboutStubBotsCanForceWalkDelayWhenReserveAssignedForPublication() {
+    void checkAndNotifyAboutStubBotsAlwaysChecksWalkDelayWhenReserveAssigned() {
         BotAssignmentServiceImpl service = service();
         City city = city(5L, "Иркутск");
         Filial filial = filial(20L, company(10L), city);
@@ -368,12 +366,12 @@ class BotAssignmentServiceImplTest {
         service.checkAndNotifyAboutStubBots(List.of(stubReview), true);
 
         assertSame(reserveBot, stubReview.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview, false, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(stubReview);
         verify(reviewRepository).saveAll(List.of(stubReview));
     }
 
     @Test
-    void assignBotsToExistingReviewsCanForceWalkDelayForPublication() {
+    void assignBotsToExistingReviewsAlwaysChecksWalkDelay() {
         BotAssignmentServiceImpl service = service();
         City city = city(5L, "Иркутск");
         Filial filial = filial(20L, company(10L), city);
@@ -389,7 +387,7 @@ class BotAssignmentServiceImplTest {
         assertTrue(service.assignBotsToExistingReviews(List.of(review), filial, true));
 
         assertSame(candidate, review.getBot());
-        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review, false, true);
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).saveAll(List.of(review));
     }
 

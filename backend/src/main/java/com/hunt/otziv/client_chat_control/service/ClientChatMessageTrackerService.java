@@ -19,8 +19,11 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -48,18 +51,30 @@ public class ClientChatMessageTrackerService {
 
     @Transactional
     public void track(ClientChatMessageCommand command) {
+        track(command, null);
+    }
+
+    @Transactional
+    public void track(ClientChatMessageCommand command, ClientChatSenderRole senderRoleOverride) {
         if (!enabled() || command == null || command.platform() == null || !hasText(command.chatId())) {
             return;
         }
+        LocalDateTime messageAt = command.messageAt() == null ? LocalDateTime.now() : command.messageAt();
         String messageText = safe(command.messageText());
+        if (messageText.isBlank() && hasText(command.externalMessageId())) {
+            messageText = "[Нетекстовое сообщение]";
+        }
         if (messageText.isBlank()) {
             return;
         }
-        if (hasText(command.externalMessageId())
+        String externalMessageId = hasText(command.externalMessageId())
+                ? limit(command.externalMessageId(), 255)
+                : fallbackExternalMessageId(command, messageText, messageAt);
+        if (hasText(externalMessageId)
                 && messageRepository.findByPlatformAndChatIdAndExternalMessageId(
                         command.platform(),
                         limit(command.chatId(), 160),
-                        limit(command.externalMessageId(), 255)
+                        externalMessageId
                 ).isPresent()) {
             return;
         }
@@ -71,13 +86,16 @@ public class ClientChatMessageTrackerService {
         Company company = resolution.primaryCompany();
         Manager manager = resolution.manager();
         ClientChatDirection direction = command.direction() == null ? ClientChatDirection.INCOMING : command.direction();
-        ClientChatSenderRole senderRole = normalizeSenderRole(command, participantClassifier.classify(
-                command.platform(),
-                direction,
-                command.senderExternalId(),
-                command.senderName(),
-                company
-        ));
+        ClientChatSenderRole classifiedRole = senderRoleOverride == null
+                ? participantClassifier.classify(
+                        command.platform(),
+                        direction,
+                        command.senderExternalId(),
+                        command.senderName(),
+                        company
+                )
+                : senderRoleOverride;
+        ClientChatSenderRole senderRole = normalizeSenderRole(command, classifiedRole);
 
         ClientChatMessage message = new ClientChatMessage();
         message.setPlatform(command.platform());
@@ -85,7 +103,7 @@ public class ClientChatMessageTrackerService {
         message.setSenderRole(senderRole);
         message.setChatId(limit(command.chatId(), 160));
         message.setChatTitle(limit(command.chatTitle(), 255));
-        message.setExternalMessageId(limit(command.externalMessageId(), 255));
+        message.setExternalMessageId(externalMessageId);
         message.setCompany(company);
         message.setManager(manager);
         message.setSenderExternalId(limit(command.senderExternalId(), 160));
@@ -94,16 +112,21 @@ public class ClientChatMessageTrackerService {
         message.setMatchedCompanyCount(resolution.companyCount());
         message.setMatchedCompanyTitles(limit(resolution.companyTitles(), 1000));
         message.setRoutingAmbiguous(resolution.ambiguous());
-        message.setMessageAt(command.messageAt() == null ? LocalDateTime.now() : command.messageAt());
+        message.setMessageAt(messageAt);
         ClientChatMessage savedMessage = messageRepository.save(message);
 
-        if (senderRole == ClientChatSenderRole.BOT || direction == ClientChatDirection.OUTGOING) {
+        if (senderRole == ClientChatSenderRole.BOT) {
             log.debug("Client chat system/outgoing message ignored for unanswered control: platform={}, chatId={}, messageId={}",
                     command.platform(), command.chatId(), savedMessage.getId());
             return;
         }
         if (senderRole == ClientChatSenderRole.STAFF) {
             closeOpenItems(command.platform(), command.chatId(), ClientChatUnansweredStatus.ANSWERED, "Ответ сотрудника");
+            return;
+        }
+        if (direction == ClientChatDirection.OUTGOING) {
+            log.debug("Client chat unclassified outgoing message ignored for unanswered control: platform={}, chatId={}, messageId={}",
+                    command.platform(), command.chatId(), savedMessage.getId());
             return;
         }
 
@@ -268,7 +291,7 @@ public class ClientChatMessageTrackerService {
     }
 
     private LocalDateTime dueCutoff() {
-        return LocalDateTime.now().minusMinutes(Math.max(1, appSettingService.getInt(WARNING_MINUTES, 30)));
+        return LocalDateTime.now().minusMinutes(Math.max(0, appSettingService.getInt(WARNING_MINUTES, 0)));
     }
 
     private boolean enabled() {
@@ -344,6 +367,26 @@ public class ClientChatMessageTrackerService {
 
     private static String encode(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
+
+    private static String fallbackExternalMessageId(
+            ClientChatMessageCommand command,
+            String messageText,
+            LocalDateTime messageAt
+    ) {
+        String fingerprintSource = command.platform() + "|"
+                + safe(command.chatId()) + "|"
+                + safe(command.senderExternalId()) + "|"
+                + (command.direction() == null ? ClientChatDirection.INCOMING : command.direction()) + "|"
+                + messageAt.truncatedTo(ChronoUnit.SECONDS) + "|"
+                + messageText;
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(fingerprintSource.getBytes(StandardCharsets.UTF_8));
+            return "fp:" + HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
     }
 
     private static String safe(String value) {

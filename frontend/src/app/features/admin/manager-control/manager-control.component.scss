@@ -91,11 +91,11 @@ p {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 0;
+  border: 1px solid var(--otziv-action-border);
   border-radius: var(--otziv-small-radius);
   padding: 0 1.05rem;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
+  color: var(--otziv-action);
+  background: var(--otziv-field-background);
   box-shadow: none;
   font: inherit;
   font-weight: 900;
@@ -1437,6 +1437,19 @@ p {
   text-align: center;
 }
 
+.worker-notification-badge.pending {
+  border-color: #e8cf83;
+  background: #fff9e8;
+  color: #8a6500;
+}
+
+.worker-notification-badge.overdue {
+  border-color: #e58da1;
+  background: #fff0f3;
+  color: #b91f48;
+  box-shadow: 0 0 0 2px rgb(185 31 72 / 8%);
+}
+
 .detail-example.sla-card-target {
   border-color: rgba(76, 157, 135, 0.38);
   background: linear-gradient(145deg, rgba(235, 250, 243, 0.98), rgba(255, 255, 255, 0.94));
@@ -1798,6 +1811,15 @@ button.review-action.send-action:disabled {
   color: #9aa6b8;
   box-shadow: none;
   cursor: not-allowed;
+}
+
+button.review-action.waiting-action:disabled {
+  border-color: #f0d99b;
+  background: #fffaf0;
+  color: #7a5a00;
+  box-shadow: none;
+  cursor: default;
+  opacity: 1;
 }
 
 button.review-action.danger-action {

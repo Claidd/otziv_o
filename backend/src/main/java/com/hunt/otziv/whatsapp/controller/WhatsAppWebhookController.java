@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.webhook.security.WebhookSignatureVerifier;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupReplyDTO;
 import com.hunt.otziv.whatsapp.dto.WhatsAppReplyDTO;
+import com.hunt.otziv.whatsapp.service.WhatsAppGroupWebhookDeduplicator;
 import com.hunt.otziv.whatsapp.service.service.ReplyService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class WhatsAppWebhookController {
     private final ReplyService replyService;
     private final ObjectMapper objectMapper;
     private final WebhookSignatureVerifier signatureVerifier;
+    private final WhatsAppGroupWebhookDeduplicator groupWebhookDeduplicator;
 
     @Value("${whatsapp.webhook.secret:}")
     private String webhookSecret;
@@ -77,7 +79,18 @@ public class WhatsAppWebhookController {
         }
 
         log.info("WhatsApp group webhook accepted from {}", request.getRemoteAddr());
-        replyService.processGroupReply(groupReply);
+        if (!groupWebhookDeduplicator.acquire(groupReply)) {
+            log.info("WhatsApp group webhook duplicate ignored: clientId={}, groupId={}, messageId={}",
+                    groupReply.getClientId(), groupReply.getGroupId(), groupReply.getMessageId());
+            return ResponseEntity.ok().build();
+        }
+        try {
+            replyService.processGroupReply(groupReply);
+            groupWebhookDeduplicator.complete(groupReply);
+        } catch (RuntimeException | Error e) {
+            groupWebhookDeduplicator.release(groupReply);
+            throw e;
+        }
         return ResponseEntity.ok().build();
     }
 
@@ -109,4 +122,3 @@ public class WhatsAppWebhookController {
     }
 
 }
-

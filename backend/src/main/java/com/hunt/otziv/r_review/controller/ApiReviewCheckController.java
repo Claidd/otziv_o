@@ -13,6 +13,7 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -62,6 +63,7 @@ public class ApiReviewCheckController {
     private final CompanyService companyService;
     private final ReviewCheckArchiveService reviewCheckArchiveService;
     private final BusinessAuditService businessAuditService;
+    private final OrderPublicationApprovalService publicationApprovalService;
 
     @GetMapping("/{orderDetailId}")
     public ReviewCheckResponse getReviewCheck(
@@ -151,23 +153,10 @@ public class ApiReviewCheckController {
         validateReviewTextsReadyForAction(updateDto, "Нельзя разрешить публикацию: заполните текст всех отзывов");
         saveUpdateDto(updateDto);
 
-        if (!orderService.changeStatusForOrder(order.getId(), "Публикация")) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось перевести заказ в публикацию");
-        }
-
-        if (!reviewService.updateOrderDetailAndReviewAndPublishDate(updateDto)) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось назначить даты публикации");
-        }
-
-        businessAuditService.recordSafely(
-                "publication_allowed",
-                "order_detail",
-                orderDetailId,
+        publicationApprovalService.approvePreparedOrder(
                 order.getId(),
-                null,
-                null,
-                "Публикация",
-                "reviews=" + updateDto.getReviews().size() + ";" + approvalAuditDetails(authentication, servletRequest)
+                List.of(updateDto),
+                approvalAuditDetails(authentication, servletRequest)
         );
 
         return buildResponse(orderDetailId, authentication);

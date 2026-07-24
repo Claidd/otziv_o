@@ -101,7 +101,7 @@ public class ManagerPerformanceDaily {
         createdAt = now;
         updatedAt = now;
         if (grade == null) grade = "J";
-        if (formulaVersion == null) formulaVersion = "manager-v4";
+        if (formulaVersion == null) formulaVersion = "manager-v5";
         if (aggregationStatus == null) aggregationStatus = "CALCULATED";
         if (taskProgressPercent == null) taskProgressPercent = BigDecimal.ZERO;
         if (dayStatus == null) dayStatus = "IN_PROGRESS";

@@ -5,6 +5,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
@@ -81,6 +82,7 @@ public class OrderDeletionService {
     private final CompanyService companyService;
     private final CompanyStatusService companyStatusService;
     private final EntityManager entityManager;
+    private final BusinessAuditService businessAuditService;
 
     @Transactional
     public boolean deleteOrder(Long orderId, Principal principal) {
@@ -156,6 +158,22 @@ public class OrderDeletionService {
                 log.info("Заказ ID: {} успешно удален", orderId);
 
                 stopCompanyIfDeletedLastNewOrder(companyId, deletedOrderStatus, orderId);
+
+                businessAuditService.recordSafely(
+                        "order_deleted",
+                        "order",
+                        orderId,
+                        orderId,
+                        null,
+                        deletedOrderStatus,
+                        "deleted",
+                        "initiator=" + username
+                                + "; role=" + userRole
+                                + "; companyId=" + companyId
+                                + "; details=" + orderDetails.size()
+                                + "; reviews=" + totalDeletedReviews
+                                + "; paymentLinksArchived=" + archivedPaymentLinks
+                );
 
                 log.info("Успешное завершение удаления заказа ID: {}. Удалено: заказ, {} деталей, {} отзывов, {} плохих задач",
                         orderId, orderDetails.size(), totalDeletedReviews, deletedBadReviewTasks);

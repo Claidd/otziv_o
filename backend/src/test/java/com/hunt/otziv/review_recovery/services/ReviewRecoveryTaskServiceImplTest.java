@@ -44,6 +44,7 @@ import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,6 +120,9 @@ class ReviewRecoveryTaskServiceImplTest {
 
     @Mock
     private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ReviewRecoveryTaskServiceImpl service;
@@ -301,7 +305,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .build();
 
-        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(nextBot));
         when(botCooldownService.isAvailableForAssignment(nextBot)).thenReturn(true);
         when(taskRepository.save(task)).thenReturn(task);
@@ -313,6 +317,7 @@ class ReviewRecoveryTaskServiceImplTest {
         assertEquals("login", updated.getBotLoginSnapshot());
         assertEquals("password", updated.getBotPasswordSnapshot());
         assertEquals("Бот Ф.", updated.getBotFioSnapshot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
         verify(botCooldownService).markReservedUntilTaskCompletion(nextBot, "review recovery task 40");
     }
@@ -451,7 +456,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 .build();
         User actor = user(4L);
 
-        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(taskRepository.save(task)).thenReturn(task);
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.PLANNED)).thenReturn(0L);
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.DONE)).thenReturn(1L);
@@ -487,7 +492,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 .status(ReviewRecoveryTaskStatus.PLANNED)
                 .build();
 
-        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(taskRepository.save(task)).thenReturn(task);
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.PLANNED)).thenReturn(0L);
         when(taskRepository.countByBatchIdAndStatus(30L, ReviewRecoveryTaskStatus.DONE)).thenReturn(0L);
@@ -506,7 +511,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 .status(ReviewRecoveryTaskStatus.DONE)
                 .build();
 
-        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
 
         assertThrows(ResponseStatusException.class, () -> service.cancelTask(40L));
         verify(taskRepository, never()).save(any(ReviewRecoveryTask.class));
@@ -551,7 +556,7 @@ class ReviewRecoveryTaskServiceImplTest {
                 .build();
         LocalDate newDate = LocalDate.of(2026, 5, 20);
 
-        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
         when(taskRepository.save(task)).thenReturn(task);
 
         ReviewRecoveryTask updated = service.updateTask(40L, "новый текст", "новый ответ", newDate);
@@ -559,6 +564,20 @@ class ReviewRecoveryTaskServiceImplTest {
         assertEquals("новый текст", updated.getRecoveryText());
         assertEquals("новый ответ", updated.getRecoveryAnswer());
         assertEquals(newDate, updated.getScheduledDate());
+        verify(taskRepository).findByIdForMutation(40L);
+        verify(taskRepository, never()).findById(40L);
+    }
+
+    @Test
+    void getTaskUsesReadOnlyLookupWithoutPessimisticWriteLock() {
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(40L).build();
+        when(taskRepository.findById(40L)).thenReturn(Optional.of(task));
+
+        ReviewRecoveryTask loaded = service.getTask(40L);
+
+        assertSame(task, loaded);
+        verify(taskRepository).findById(40L);
+        verify(taskRepository, never()).findByIdForMutation(40L);
     }
 
     @Test

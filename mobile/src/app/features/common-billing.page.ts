@@ -387,6 +387,39 @@ type InvoiceAction =
       display: block;
       min-height: 31rem;
     }
+
+    :host-context(body.otziv-dark-theme) .state-card,
+    :host-context(body.otziv-dark-theme) .invoice-hero,
+    :host-context(body.otziv-dark-theme) .invoice-stats,
+    :host-context(body.otziv-dark-theme) .invoice-actions,
+    :host-context(body.otziv-dark-theme) .invoice-timeline,
+    :host-context(body.otziv-dark-theme) .invoice-orders {
+      border-color: rgba(163, 189, 204, 0.18);
+      background: linear-gradient(155deg, rgba(32, 37, 40, 0.98) 0%, rgba(24, 29, 33, 0.98) 100%);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .invoice-stats article,
+    :host-context(body.otziv-dark-theme) .invoice-order-card {
+      border-color: rgba(163, 189, 204, 0.16);
+      background: linear-gradient(145deg, rgba(37, 43, 47, 0.98) 0%, rgba(27, 32, 36, 0.98) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .invoice-actions button,
+    :host-context(body.otziv-dark-theme) .order-actions button {
+      border-color: rgba(163, 189, 204, 0.2);
+      background: rgba(21, 26, 30, 0.86);
+    }
+
+    :host-context(body.otziv-dark-theme) .invoice-actions .success,
+    :host-context(body.otziv-dark-theme) .order-actions button:not(.danger):nth-child(2) {
+      background: rgba(74, 198, 177, 0.13);
+    }
+
+    :host-context(body.otziv-dark-theme) .invoice-actions .danger,
+    :host-context(body.otziv-dark-theme) .order-actions .danger {
+      background: rgba(255, 91, 143, 0.12);
+    }
   `]
 })
 export class CommonBillingPage implements OnInit {

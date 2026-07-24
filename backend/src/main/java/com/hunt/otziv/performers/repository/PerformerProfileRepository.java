@@ -37,16 +37,6 @@ public interface PerformerProfileRepository extends CrudRepository<PerformerProf
           AND u.active = true
           AND u.telegramChatId IS NOT NULL
           AND (
-              c.id = :cityId
-              OR EXISTS (
-                  SELECT pc.id
-                  FROM PerformerCity pc
-                  WHERE pc.performer = p
-                    AND pc.city.id = :cityId
-                    AND pc.active = true
-              )
-          )
-          AND (
               SELECT COUNT(a.id)
               FROM ReviewPerformerAssignment a
               WHERE a.performer = p
@@ -67,17 +57,59 @@ public interface PerformerProfileRepository extends CrudRepository<PerformerProf
                     com.hunt.otziv.performers.model.PerformerAssignmentStatus.CANCELLED
                 )
           )
+          AND (
+              :companyId IS NULL
+              OR NOT EXISTS (
+                  SELECT sameCompany.id
+                  FROM ReviewPerformerAssignment sameCompany
+                  WHERE sameCompany.performer = p
+                    AND sameCompany.order.company.id = :companyId
+                    AND sameCompany.status NOT IN (
+                        com.hunt.otziv.performers.model.PerformerAssignmentStatus.REJECTED,
+                        com.hunt.otziv.performers.model.PerformerAssignmentStatus.CANCELLED
+                    )
+              )
+          )
+          AND (
+              :companyId IS NULL
+              OR NOT EXISTS (
+                  SELECT sameCompanyOffer.id
+                  FROM ReviewPerformerOffer sameCompanyOffer
+                  WHERE sameCompanyOffer.performer = p
+                    AND sameCompanyOffer.assignment.order.company.id = :companyId
+                    AND sameCompanyOffer.status IN (
+                        com.hunt.otziv.performers.model.PerformerOfferStatus.OFFERED,
+                        com.hunt.otziv.performers.model.PerformerOfferStatus.ACCEPTED
+                    )
+              )
+          )
           AND NOT EXISTS (
               SELECT offered.id
               FROM ReviewPerformerOffer offered
               WHERE offered.performer = p
                 AND offered.assignment.id = :assignmentId
           )
-        ORDER BY p.rating DESC, p.reliabilityScore DESC, p.completedCount DESC, p.id ASC
+        ORDER BY
+          CASE
+              WHEN c.id = :cityId THEN 0
+              WHEN EXISTS (
+                  SELECT priorityCity.id
+                  FROM PerformerCity priorityCity
+                  WHERE priorityCity.performer = p
+                    AND priorityCity.city.id = :cityId
+                    AND priorityCity.active = true
+              ) THEN 0
+              ELSE 1
+          END ASC,
+          p.rating DESC,
+          p.reliabilityScore DESC,
+          p.completedCount DESC,
+          p.id ASC
     """)
     List<PerformerProfile> findOfferCandidates(
             @Param("cityId") Long cityId,
             @Param("orderId") Long orderId,
+            @Param("companyId") Long companyId,
             @Param("assignmentId") Long assignmentId,
             @Param("status") PerformerProfileStatus status,
             Pageable pageable

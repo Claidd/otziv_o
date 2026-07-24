@@ -182,7 +182,7 @@
 .refresh-button,
 .run-panel .save-settings,
 .run-panel button[type='submit'] {
-  background: var(--otziv-primary);
+  background: var(--otziv-action-fill);
   color: var(--otziv-white);
 }
 
@@ -294,7 +294,7 @@
   display: inline-grid;
   place-items: center;
   color: var(--otziv-white);
-  background: var(--otziv-primary);
+  background: var(--otziv-action-fill);
 }
 
 .panel-title h2 {
@@ -548,12 +548,12 @@ td span {
 .details-link {
   width: 2.2rem;
   height: 2.2rem;
-  border: 0;
+  border: 1px solid var(--otziv-action-border);
   border-radius: 8px;
   display: inline-grid;
   place-items: center;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
+  color: var(--otziv-action);
+  background: var(--otziv-field-background);
 }
 
 .details-link:disabled {

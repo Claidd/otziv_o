@@ -91,6 +91,20 @@ protocol_mapper_id() {
     | awk -F, -v mapper_name="$mapper_name" '$2 == mapper_name { print $1; exit }'
 }
 
+ensure_realm_role() {
+  role_name="$1"
+  role_description="$2"
+
+  if kc_retry get "roles/$role_name" -r "$REALM" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  kc_retry create roles -r "$REALM" \
+    -s "name=$role_name" \
+    -s "description=$role_description" \
+    || echo "Warning: could not create Keycloak realm role $role_name." >&2
+}
+
 APP_BASE_URL="${OTZIV_APP_BASE_URL:-$(env_value OTZIV_APP_BASE_URL)}"
 KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-$(env_value KEYCLOAK_PUBLIC_URL)}"
 REALM="${KEYCLOAK_ADMIN_REALM:-$(env_value KEYCLOAK_ADMIN_REALM)}"
@@ -168,6 +182,15 @@ kc_retry update "realms/$REALM" \
   -s "offlineSessionIdleTimeout=$MOBILE_SESSION_SECONDS" \
   -s offlineSessionMaxLifespanEnabled=true \
   -s "offlineSessionMaxLifespan=$MOBILE_SESSION_SECONDS"
+
+ensure_realm_role ADMIN "Full administration access"
+ensure_realm_role OWNER "Business owner access"
+ensure_realm_role MANAGER "Manager access"
+ensure_realm_role OPERATOR "Operator access"
+ensure_realm_role WORKER "Worker access"
+ensure_realm_role PERFORMER "Performer access"
+ensure_realm_role MARKETOLOG "Marketing access"
+ensure_realm_role CLIENT "Client access"
 
 frontend_client_uuid="$(client_uuid_by_id otziv-frontend)"
 

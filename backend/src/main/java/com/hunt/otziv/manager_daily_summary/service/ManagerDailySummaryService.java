@@ -52,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ManagerDailySummaryService {
 
-    public static final String FORMULA_VERSION = "manager-v4";
+    public static final String FORMULA_VERSION = "manager-v5";
     private static final long REPLY_SLA_SECONDS = Duration.ofMinutes(30).toSeconds();
     private static final long EVENT_TAIL_SECONDS = 60;
 
@@ -79,6 +79,7 @@ public class ManagerDailySummaryService {
         LocalDateTime to = date.plusDays(1).atStartOfDay();
         if (date.equals(LocalDate.now())) {
             managerControlService.synchronizeDailySnapshot(date);
+            performanceService.invalidate();
         }
         Map<Long, ManagerPerformanceScoreResponse> scores = performanceService.score(date).stream()
                 .filter(row -> row.managerId() != null)
@@ -88,6 +89,7 @@ public class ManagerDailySummaryService {
         for (Manager manager : managerRepository.findAllWithUserAndImage()) {
             saved.add(calculateManager(date, from, to, manager, scores.get(manager.getId()), finalizeDay));
         }
+        dailyRepository.flush();
         rebuildMonthly(date.withDayOfMonth(1), !date.equals(LocalDate.now()) && date.equals(date.withDayOfMonth(date.lengthOfMonth())));
         rebuildYearly(date.withDayOfYear(1), !date.equals(LocalDate.now()) && date.equals(date.withDayOfYear(date.lengthOfYear())));
         if (date.getDayOfMonth() == 1) {
@@ -248,7 +250,8 @@ public class ManagerDailySummaryService {
                 .toList();
         List<Long> resolvedDurations = problems.stream()
                 .filter(item -> item.getCreatedAt() != null && item.getResolvedAt() != null)
-                .map(item -> Math.max(0, Duration.between(item.getCreatedAt(), item.getResolvedAt()).toSeconds()))
+                .filter(item -> !item.getResolvedAt().isBefore(item.getCreatedAt()))
+                .map(item -> Duration.between(item.getCreatedAt(), item.getResolvedAt()).toSeconds())
                 .toList();
         long actionTaken = problems.stream()
                 .filter(item -> item.getStatus() == ManagerDailyControlItemStatus.ACTION_TAKEN)

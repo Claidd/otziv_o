@@ -52,6 +52,8 @@ public interface UserService extends UserDetailsService{
 
     Map<String, Long> getAllWorkers();
 
+    Map<String, Long> getAllWorkerTelegramGroups();
+
     List<User> getAllOwners(String roleName);
 
     Set<Long> findAllRelevantUserIdsForOwner(Set<Manager> managers);

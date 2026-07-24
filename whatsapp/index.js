@@ -5,6 +5,15 @@ const path = require("path");
 const QRCode = require("qrcode");
 const qrcodeTerminal = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
+const {
+  DeliveredMessageCache,
+  RecentOutboundRegistry,
+  createMessageHandler,
+} = require("./message-webhook");
+const {
+  groupFromInviteInfo,
+  normalizeInviteCode,
+} = require("./group-invite");
 
 const CLIENT_ID = process.env.CLIENT_ID || "whatsapp_default";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
@@ -25,6 +34,11 @@ const WHATSAPP_PUPPETEER_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_PUPP
 const WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_READY_AFTER_AUTH_TIMEOUT_MS, 300000);
 const WHATSAPP_STARTUP_READY_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_STARTUP_READY_TIMEOUT_MS, 600000);
 const WHATSAPP_READY_WATCHDOG_INTERVAL_MS = parsePositiveInt(process.env.WHATSAPP_READY_WATCHDOG_INTERVAL_MS, 15000);
+const WHATSAPP_WEBHOOK_ATTEMPTS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_ATTEMPTS, 3);
+const WHATSAPP_WEBHOOK_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_TIMEOUT_MS, 10000);
+const WHATSAPP_WEBHOOK_RETRY_DELAY_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_RETRY_DELAY_MS, 500);
+const WHATSAPP_MESSAGE_DEDUP_TTL_MS = parsePositiveInt(process.env.WHATSAPP_MESSAGE_DEDUP_TTL_MS, 86400000);
+const WHATSAPP_OUTBOUND_MARK_TTL_MS = parsePositiveInt(process.env.WHATSAPP_OUTBOUND_MARK_TTL_MS, 600000);
 
 let client = null;
 let ready = false;
@@ -42,6 +56,11 @@ let readyWatchdogTimer = null;
 let groupsCache = null;
 let groupsCacheAt = null;
 let groupsRefreshPromise = null;
+let lastGroupsSuccessAt = null;
+let lastGroupsError = null;
+let lastGroupsErrorAt = null;
+const outboundRegistry = new RecentOutboundRegistry(WHATSAPP_OUTBOUND_MARK_TTL_MS);
+const deliveredMessageCache = new DeliveredMessageCache(WHATSAPP_MESSAGE_DEDUP_TTL_MS);
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -238,6 +257,9 @@ function statusPayload() {
     groupInviteTimeoutMs: WHATSAPP_GROUP_INVITE_TIMEOUT_MS,
     groupInviteConcurrency: WHATSAPP_GROUP_INVITE_CONCURRENCY,
     groupsCachedAt: groupsCacheAt,
+    lastGroupsSuccessAt,
+    lastGroupsError,
+    lastGroupsErrorAt,
   };
 }
 
@@ -356,7 +378,13 @@ function wireClientEvents(instance) {
 
   instance.on("message_create", (message) => {
     handleIncomingMessage(message).catch((error) => {
-      log("warn", "Message webhook failed", { error: error.message });
+      log("warn", "Message webhook failed", {
+        stage: error.stage || "delivery",
+        path: error.path,
+        status: error.status,
+        attempt: error.attempt,
+        error: error.message,
+      });
     });
   });
 }
@@ -448,42 +476,12 @@ function scheduleRestart() {
   }, 5000);
 }
 
-async function handleIncomingMessage(message) {
-  if (!message || message.from === "status@broadcast") {
-    return;
-  }
-
-  const body = String(message.body || "").trim();
-  if (!body) {
-    return;
-  }
-
-  const chat = await message.getChat();
-  if (chat.isGroup) {
-    await postBackendWebhook("/webhook/whatsapp-group-reply", {
-      clientId: CLIENT_ID,
-      groupId: chat.id && chat.id._serialized ? chat.id._serialized : message.from,
-      groupName: chat.name || "",
-      from: message.author || message.from,
-      fromName: message._data && message._data.notifyName ? message._data.notifyName : "",
-      messageId: message.id && message.id._serialized ? message.id._serialized : null,
-      timestamp: message.timestamp || null,
-      fromMe: Boolean(message.fromMe),
-      message: body,
-    });
-    return;
-  }
-
-  if (message.fromMe) {
-    return;
-  }
-
-  await postBackendWebhook("/webhook/whatsapp-reply", {
-    clientId: CLIENT_ID,
-    from: message.from,
-    message: body,
-  });
-}
+const handleIncomingMessage = createMessageHandler({
+  clientId: CLIENT_ID,
+  outboundRegistry,
+  postWebhook: postBackendWebhook,
+  log,
+});
 
 async function postBackendWebhook(path, payload) {
   const body = JSON.stringify(payload);
@@ -496,16 +494,60 @@ async function postBackendWebhook(path, payload) {
       .digest("hex")}`;
   }
 
-  const response = await fetch(`${SERVER_URL}${path}`, {
-    method: "POST",
-    headers,
-    body,
+  return deliveredMessageCache.deliver(path, payload, async () => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= WHATSAPP_WEBHOOK_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), WHATSAPP_WEBHOOK_TIMEOUT_MS);
+      try {
+        const response = await fetch(`${SERVER_URL}${path}`, {
+          method: "POST",
+          headers,
+          body,
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          if (attempt > 1) {
+            log("info", "Backend webhook delivered after retry", {
+              path,
+              attempt,
+              groupId: payload.groupId,
+              messageId: payload.messageId,
+            });
+          }
+          return { status: response.status, attempt };
+        }
+        const responseText = await response.text().catch(() => "");
+        const error = new Error(`Backend webhook returned ${response.status}${responseText ? `: ${responseText}` : ""}`);
+        error.status = response.status;
+        error.retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+        throw error;
+      } catch (error) {
+        error.path = path;
+        error.stage = error.name === "AbortError" ? "timeout" : "post_webhook";
+        error.attempt = attempt;
+        lastError = error;
+        const retryable = error.retryable !== false && (!error.status || error.status === 408 || error.status === 429 || error.status >= 500);
+        if (!retryable || attempt >= WHATSAPP_WEBHOOK_ATTEMPTS) {
+          throw error;
+        }
+        log("warn", "Backend webhook attempt failed; retry scheduled", {
+          stage: error.stage,
+          path,
+          status: error.status,
+          attempt,
+          nextAttempt: attempt + 1,
+          groupId: payload.groupId,
+          messageId: payload.messageId,
+          error: error.message,
+        });
+        await new Promise((resolve) => setTimeout(resolve, WHATSAPP_WEBHOOK_RETRY_DELAY_MS * attempt));
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+    throw lastError || new Error(`Backend webhook ${path} failed`);
   });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Backend webhook ${path} returned ${response.status}: ${text}`);
-  }
 }
 
 async function inviteInfo(groupChat) {
@@ -595,12 +637,23 @@ function startGroupsRefresh() {
     .then((snapshot) => {
       groupsCache = snapshot;
       groupsCacheAt = new Date().toISOString();
+      lastGroupsSuccessAt = groupsCacheAt;
+      lastGroupsError = null;
+      lastGroupsErrorAt = null;
       log("info", "WhatsApp groups cache refreshed", {
         totalChats: snapshot.totalChats,
         groupCount: snapshot.groups.length,
         inviteCount: snapshot.groups.filter((group) => Boolean(group.inviteLink)).length,
       });
       return snapshot;
+    })
+    .catch((error) => {
+      lastGroupsError = errorMessage(error);
+      lastGroupsErrorAt = new Date().toISOString();
+      log("warn", "WhatsApp groups cache refresh failed", {
+        error: lastGroupsError,
+      });
+      throw error;
     })
     .finally(() => {
       groupsRefreshPromise = null;
@@ -675,7 +728,15 @@ app.post("/send-group", asyncRoute(async (req, res) => {
     return;
   }
 
-  const sent = await client.sendMessage(groupId, message);
+  const outboundToken = outboundRegistry.begin(groupId, message);
+  let sent;
+  try {
+    sent = await client.sendMessage(groupId, message);
+    outboundRegistry.complete(outboundToken, sent && sent.id ? sent.id._serialized : null);
+  } catch (error) {
+    outboundRegistry.cancel(outboundToken);
+    throw error;
+  }
   res.json({
     status: "ok",
     clientId: CLIENT_ID,
@@ -709,12 +770,68 @@ app.get("/groups", asyncRoute(async (req, res) => {
     );
     res.json(groupsPayload(snapshot, { cached: false, refreshInProgress: false }));
   } catch (error) {
-    log("warn", "Groups cache refresh is still running", { error: error.message });
-    res.json(groupsPayload(groupsCache, {
+    const detail = errorMessage(error);
+    log("warn", "Groups cache refresh unavailable", { error: detail });
+    const payload = groupsPayload(groupsCache, {
+      status: groupsCache ? "ok" : "groups_unavailable",
       cached: Boolean(groupsCache),
       refreshInProgress: Boolean(groupsRefreshPromise),
-      message: groupsCache ? "Returning stale groups cache" : "Groups cache is warming up",
-    }));
+      message: groupsCache ? "Returning stale groups cache" : "WhatsApp group metadata is unavailable",
+      error: groupsCache ? undefined : detail,
+    });
+    res.status(groupsCache ? 200 : 503).json(payload);
+  }
+}));
+
+app.post("/groups/resolve-invite", asyncRoute(async (req, res) => {
+  if (!requireReady(res)) {
+    return;
+  }
+
+  const inviteCode = normalizeInviteCode(req.body && (req.body.inviteCode || req.body.inviteLink));
+  if (!inviteCode) {
+    res.status(400).json({
+      status: "error",
+      code: "invalid_invite_code",
+      message: "A valid WhatsApp invite code is required",
+    });
+    return;
+  }
+
+  try {
+    const inviteInfo = await withTimeout(
+      () => client.getInviteInfo(inviteCode),
+      Math.min(WHATSAPP_GROUPS_RESPONSE_TIMEOUT_MS, 10000),
+      "Invite group lookup"
+    );
+    const group = groupFromInviteInfo(inviteInfo, inviteCode);
+    if (!group) {
+      log("warn", "WhatsApp invite resolved without group id", {
+        inviteInfoFields: inviteInfo && typeof inviteInfo === "object"
+          ? Object.keys(inviteInfo).slice(0, 20)
+          : [],
+      });
+      res.status(502).json({
+        status: "error",
+        code: "invite_group_id_missing",
+        message: "WhatsApp returned invite information without a group id",
+      });
+      return;
+    }
+
+    log("info", "WhatsApp group resolved directly by invite", {
+      groupId: group.groupId,
+      namePresent: Boolean(group.name),
+    });
+    res.json({ status: "ok", clientId: CLIENT_ID, group });
+  } catch (error) {
+    const detail = errorMessage(error);
+    log("warn", "WhatsApp direct invite lookup failed", { error: detail });
+    res.status(502).json({
+      status: "error",
+      code: "invite_lookup_failed",
+      message: detail,
+    });
   }
 }));
 
@@ -754,10 +871,10 @@ app.get("/lastseen/:phone", asyncRoute(async (req, res) => {
 }));
 
 app.use((error, req, res, next) => {
-  lastError = error.message;
+  lastError = errorMessage(error);
   log("error", "HTTP request failed", {
     path: req.path,
-    error: error.message,
+    error: lastError,
   });
   if (res.headersSent) {
     next(error);
@@ -766,7 +883,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({
     status: "error",
     code: "internal_error",
-    message: error.message,
+    message: lastError,
   });
 });
 

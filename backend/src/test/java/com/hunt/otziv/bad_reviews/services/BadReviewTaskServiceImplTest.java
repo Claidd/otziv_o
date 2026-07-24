@@ -23,6 +23,7 @@ import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -100,6 +101,9 @@ class BadReviewTaskServiceImplTest {
 
     @Mock
     private ReviewBotAssignmentGuardService assignmentGuardService;
+
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @InjectMocks
     private BadReviewTaskServiceImpl service;
@@ -262,6 +266,7 @@ class BadReviewTaskServiceImplTest {
         assertEquals("next-login", updated.getBotLoginSnapshot());
         assertEquals("next-password", updated.getBotPasswordSnapshot());
         assertEquals("Новый П.", updated.getBotFioSnapshot());
+        verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
         verify(badReviewTaskRepository).save(task);
     }

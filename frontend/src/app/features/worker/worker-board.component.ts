@@ -61,6 +61,7 @@ import {
   workerOrderPaymentCopyText,
   workerReviewDetailsPath,
   workerOrderReviewCopyText,
+  workerCredentialCopyTarget,
   workerMobileSections,
   workerReviewCopyLabel,
   workerSectionLabel
@@ -242,7 +243,8 @@ export class WorkerBoardComponent implements OnDestroy {
     mutationKey: this.mutationKey,
     setBoardPatch: (board) => this.setBoardPatch(board),
     loadBoard: () => this.loadBoard(),
-    errorMessage: (err, fallback) => this.errorMessage(err, fallback)
+    errorMessage: (err, fallback) => this.errorMessage(err, fallback),
+    reviewActionSource: () => this.workerActivitySource()
   });
   private readonly editFacade = new WorkerBoardEditFacade({
     managerApi: this.managerApi,
@@ -805,14 +807,19 @@ export class WorkerBoardComponent implements OnDestroy {
       vk: 'https://vk.com/'
     }[kind] ?? '';
 
-    if (!(await this.copyText(value, `${kind}-${review.id}`, `${workerReviewCopyLabel(kind)} скопирован`))) {
+    const copiedKey = `${kind}-${review.id}`;
+    const copyLabel = workerReviewCopyLabel(kind);
+    const isCredential = kind === 'login' || kind === 'password';
+
+    if (!(await this.copyText(value, copiedKey, `${copyLabel} скопирован`, !isCredential))) {
       return;
     }
 
-    if (kind === 'login' || kind === 'password') {
+    if (isCredential) {
       if (!(await this.logReviewCredentialCopyClick(review, kind))) {
         return;
       }
+      this.showCopySuccess(copiedKey, `${copyLabel} скопирован и подтвержден`);
       this.markPublishCredentialCopied(review, kind);
     }
   }
@@ -827,7 +834,11 @@ export class WorkerBoardComponent implements OnDestroy {
     }
 
     try {
-      await firstValueFrom(this.workerApi.logReviewCopyClick(review.id, kind, this.workerActivitySource()));
+      const target = workerCredentialCopyTarget(review);
+      const request = target.resource === 'recovery-task'
+        ? this.workerApi.logRecoveryTaskCopyClick(target.id, kind, this.workerActivitySource())
+        : this.workerApi.logReviewCopyClick(target.id, kind, this.workerActivitySource());
+      await firstValueFrom(request);
       return true;
     } catch {
       this.toastService.error(
@@ -909,6 +920,22 @@ export class WorkerBoardComponent implements OnDestroy {
     }
 
     return true;
+  }
+
+  requireCredentialCopyBeforeAccountAction(): boolean {
+    return this.shouldUsePublishCredentialWait();
+  }
+
+  accountActionCredentialsCopied(review: WorkerReviewItem): boolean {
+    if (!this.requireCredentialCopyBeforeAccountAction()) {
+      return true;
+    }
+
+    const preparation = this.publishCredentialPreparation();
+    return preparation.reviewId === review.id
+      && preparation.botId === (review.botId ?? null)
+      && Boolean(preparation.loginAt)
+      && Boolean(preparation.passwordAt);
   }
 
   publishCredentialWaitTitle(review: WorkerReviewItem): string {
@@ -1439,7 +1466,7 @@ export class WorkerBoardComponent implements OnDestroy {
     this.board.update((board) => board ? updater(board) : board);
   }
 
-  private async copyText(text: string, copiedKey: string, toast: string): Promise<boolean> {
+  private async copyText(text: string, copiedKey: string, toast: string, showSuccess = true): Promise<boolean> {
     const value = text.trim();
 
     if (!value) {
@@ -1447,18 +1474,24 @@ export class WorkerBoardComponent implements OnDestroy {
     }
 
     if (await copyTextToClipboard(value)) {
-      this.copied.set(copiedKey);
-      this.toastService.success('Скопировано', toast);
-      window.setTimeout(() => {
-        if (this.copied() === copiedKey) {
-          this.copied.set(null);
-        }
-      }, 1200);
+      if (showSuccess) {
+        this.showCopySuccess(copiedKey, toast);
+      }
       return true;
     }
 
     this.toastService.error('Не скопировано', 'Браузер не дал доступ к буферу обмена');
     return false;
+  }
+
+  private showCopySuccess(copiedKey: string, message: string): void {
+    this.copied.set(copiedKey);
+    this.toastService.success('Скопировано', message);
+    window.setTimeout(() => {
+      if (this.copied() === copiedKey) {
+        this.copied.set(null);
+      }
+    }, 1200);
   }
 
   private workerActivitySource(): { sourcePage: string; sourceSection: string } {

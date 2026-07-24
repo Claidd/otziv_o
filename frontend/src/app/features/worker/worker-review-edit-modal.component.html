@@ -16,7 +16,7 @@
           [title]="deleting ? 'Удаляю...' : 'Удалить отзыв'"
           [attr.aria-label]="deleting ? 'Удаляю отзыв' : 'Удалить отзыв'"
         >
-          <span class="material-icons-sharp">close</span>
+          <span class="material-icons-sharp" aria-hidden="true">delete</span>
         </button>
       }
       <div>
@@ -24,7 +24,7 @@
         <h2 id="review-edit-title">Редактирование отзыва</h2>
       </div>
       <button type="button" class="lead-edit-close" (click)="closed.emit()" [disabled]="busy" title="Закрыть">
-        <span class="material-icons-sharp">close</span>
+        <span class="material-icons-sharp" aria-hidden="true">close</span>
       </button>
     </header>
 

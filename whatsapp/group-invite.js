@@ -1,0 +1,112 @@
+function normalizeInviteCode(raw) {
+  const value = String(raw || "").trim();
+  if (!value) {
+    return "";
+  }
+
+  const direct = value.match(/^[A-Za-z0-9_-]{10,}$/);
+  if (direct) {
+    return direct[0];
+  }
+
+  const url = value.match(/^(?:https?:\/\/)?chat\.whatsapp\.com\/([A-Za-z0-9_-]{10,})(?:[/?#].*)?$/i);
+  return url ? url[1] : "";
+}
+
+function serializedGroupId(value) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    const candidate = value.trim();
+    if (candidate.endsWith("@g.us")) {
+      return candidate;
+    }
+    return /^[0-9-]{8,}$/.test(candidate) ? `${candidate}@g.us` : "";
+  }
+  if (typeof value !== "object") {
+    return "";
+  }
+
+  for (const field of ["_serialized", "serialized"]) {
+    const candidate = serializedGroupId(value[field]);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const user = String(value.user || "").trim();
+  const server = String(value.server || "").trim();
+  if (user && server === "g.us") {
+    return `${user}@g.us`;
+  }
+
+  return "";
+}
+
+function firstText(values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+function groupFromInviteInfo(info, inviteCode) {
+  if (!info || typeof info !== "object") {
+    return null;
+  }
+
+  const metadata = info.groupMetadata && typeof info.groupMetadata === "object"
+    ? info.groupMetadata
+    : {};
+  const group = info.group && typeof info.group === "object" ? info.group : {};
+  const idCandidates = [
+    info.groupId,
+    info.gid,
+    info.id,
+    metadata.groupId,
+    metadata.id,
+    group.groupId,
+    group.gid,
+    group.id,
+  ];
+  let groupId = "";
+  for (const candidate of idCandidates) {
+    groupId = serializedGroupId(candidate);
+    if (groupId) {
+      break;
+    }
+  }
+  if (!groupId) {
+    return null;
+  }
+
+  const code = normalizeInviteCode(inviteCode);
+  return {
+    groupId,
+    id: groupId,
+    chatId: groupId,
+    name: firstText([
+      info.subject,
+      info.title,
+      info.name,
+      info.groupSubject,
+      metadata.subject,
+      metadata.title,
+      metadata.name,
+      group.subject,
+      group.title,
+      group.name,
+    ]),
+    inviteCode: code,
+    inviteLink: code ? `https://chat.whatsapp.com/${code}` : null,
+  };
+}
+
+module.exports = {
+  groupFromInviteInfo,
+  normalizeInviteCode,
+  serializedGroupId,
+};

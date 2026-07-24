@@ -343,9 +343,9 @@ tr.unlinked td {
 }
 
 .page-numbers button.active {
-  border-color: rgba(108, 155, 207, 0.45);
-  color: var(--otziv-primary);
-  background: rgba(108, 155, 207, 0.14);
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
 }
 
 .pagination-controls .icon-button:disabled,

@@ -336,6 +336,16 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['ADMIN', 'OWNER']
   },
   {
+    id: 'mobile-update',
+    label: 'Обновление Android',
+    description: 'Публикация APK сотрудникам',
+    icon: 'system_update',
+    active: 'mobile-update',
+    group: 'home',
+    routerLink: '/admin/mobile-update',
+    roles: ['ADMIN', 'OWNER']
+  },
+  {
     id: 'metrics',
     label: 'Метрики',
     description: 'Мониторинг приложения',

@@ -5,6 +5,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.l_lead.model.Lead;
@@ -197,7 +198,9 @@ public class ReplyServiceImpl implements ReplyService {
         groupCompanyLinker.linkByGroupName(reply.getGroupId(), reply.getGroupName());
 
         Optional<PublicationProgressPreferenceService.PreferenceUpdate> preferenceUpdate =
-                publicationProgressPreferenceService.handleWhatsAppCommand(reply.getGroupId(), reply.getMessage());
+                Boolean.TRUE.equals(reply.getSystemGenerated())
+                        ? Optional.empty()
+                        : publicationProgressPreferenceService.handleWhatsAppCommand(reply.getGroupId(), reply.getMessage());
         if (preferenceUpdate.isPresent()) {
             sendGroupPreferenceResponse(reply, preferenceUpdate.get().message());
             return;
@@ -213,6 +216,11 @@ public class ReplyServiceImpl implements ReplyService {
             return;
         }
         try {
+            ClientChatSenderRole senderRoleOverride = Boolean.TRUE.equals(reply.getSystemGenerated())
+                    ? ClientChatSenderRole.BOT
+                    : reply.isFromMe() && Boolean.FALSE.equals(reply.getSystemGenerated())
+                            ? ClientChatSenderRole.STAFF
+                            : null;
             clientChatMessageTrackerService.track(new ClientChatMessageCommand(
                     ClientChatPlatform.WHATSAPP,
                     reply.isFromMe() ? ClientChatDirection.OUTGOING : ClientChatDirection.INCOMING,
@@ -223,7 +231,7 @@ public class ReplyServiceImpl implements ReplyService {
                     reply.getFromName(),
                     reply.getMessage(),
                     whatsappMessageTime(reply.getTimestamp())
-            ));
+            ), senderRoleOverride);
         } catch (Exception e) {
             log.warn("WhatsApp group reply tracking failed groupId={}", reply.getGroupId(), e);
         }

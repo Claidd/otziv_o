@@ -115,6 +115,12 @@ export class ScoreComponent {
       return [];
     }
     return [
+      {
+        label: 'Команда 100%',
+        value: performance.teamProgressEligibleDays > 0
+          ? `${performance.teamProgressReached100Days}/${performance.teamProgressEligibleDays} дн. · ${this.percent(performance.teamProgressReached100Rate)}`
+          : '-'
+      },
       { label: 'В срок проблем', value: this.percent(performance.problemSlaRate) },
       { label: 'В срок клиентов', value: this.percent(performance.clientSlaRate) },
       { label: 'Просрочки', value: `${this.percent(performance.overdueRate)} · ${this.decimal(performance.avgDailyOverdue)} в день` },
@@ -134,44 +140,51 @@ export class ScoreComponent {
     }
     return [
       {
+        key: 'team-completion',
+        label: 'Команда 100%',
+        weight: 15,
+        score: performance.teamCompletionScore,
+        hint: `Доля дней, когда все работники закрыли к 23:59 задачи, поступившие до 23:00, и средний итоговый прогресс команды (${this.percent(performance.teamProgressAveragePercent)}). Задачи последнего часа переходят на следующий день.`
+      },
+      {
         key: 'problem-speed',
         label: 'Проблемы',
-        weight: 25,
+        weight: 17,
         score: performance.problemSpeedScore,
         hint: 'Скорость решения замечаний из дневного контроля. Открытые задачи считаются по текущему времени и не штрафуются жестко, пока они еще внутри SLA 8 часов.'
       },
       {
         key: 'client-response',
         label: 'Клиенты',
-        weight: 20,
+        weight: 21,
         score: performance.clientResponseScore,
         hint: 'Скорость ответа на неотвеченные клиентские сообщения. Открытые сообщения считаются по текущему времени и штрафуются только по мере приближения или выхода за норматив 30 минут.'
       },
       {
         key: 'overdue-control',
         label: 'Просрочки',
-        weight: 20,
+        weight: 21,
         score: performance.overdueControlScore,
         hint: 'Контроль просроченных заказов: учитываем долю просрочек в общей нагрузке и возраст просроченных задач.'
       },
       {
         key: 'specialist-risk',
         label: 'Спец. и риски',
-        weight: 15,
+        weight: 13,
         score: performance.specialistRiskScore,
         hint: `Работа с проблемами специалистов и рисками. Учитываем SLA реакции и качество обработки риска: ${performance.riskQualityScore}/100.`
       },
       {
         key: 'control-discipline',
         label: 'Контроль',
-        weight: 10,
+        weight: 9,
         score: performance.controlDisciplineScore,
         hint: 'Дисциплина дневного контроля: принятие контроля, закрытие дня и отсутствие формального быстрого прокликивания.'
       },
       {
         key: 'stability',
         label: 'Стабильность',
-        weight: 10,
+        weight: 4,
         score: performance.stabilityScore,
         hint: 'Стабильность работы: меньше повторных проблем и отложенных задач означает более высокий балл.'
       }

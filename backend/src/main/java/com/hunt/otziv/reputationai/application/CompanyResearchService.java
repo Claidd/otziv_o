@@ -97,6 +97,11 @@ public class CompanyResearchService {
                 subCategoryTitle(company)
         );
         List<String> urlsToCrawl = new ArrayList<>();
+        List<String> filialUrls = filialCrawlUrls(company);
+        Set<String> knownMapPlatforms = mapPlatforms(filialUrls);
+        filialUrls.stream()
+                .filter(url -> mapPlatform(url).isBlank())
+                .forEach(urlsToCrawl::add);
         if (safeRequest.shouldIncludeCompanyWebsite() && !isBlank(website) && isLikelyPublicBusinessUrl(website)) {
             urlsToCrawl.add(website);
         } else if (safeRequest.shouldIncludeCompanyWebsite() && !isBlank(website)) {
@@ -110,8 +115,21 @@ public class CompanyResearchService {
                 warnings.add("Публичная ссылка пропущена как нерелевантная: " + publicUrl);
             }
         }
+        knownMapPlatforms = mergeMapPlatforms(knownMapPlatforms, urlsToCrawl);
+        for (String mapUrl : urlsToCrawl.stream().filter(url -> !mapPlatform(url).isBlank()).toList()) {
+            boolean alreadyPresent = sources.stream().anyMatch(source -> mapUrl.equals(source.url()));
+            if (!alreadyPresent) {
+                sources.add(new CompanySource(
+                        "crm_map",
+                        "Карточка компании на карте из CRM",
+                        mapUrl,
+                        joinNonBlank(company.getTitle(), company.getCity(), "ссылка из CRM")
+                ));
+            }
+        }
+        urlsToCrawl.removeIf(url -> !mapPlatform(url).isBlank());
 
-        SearchRun searchRun = searchPublicSources(company, productHints, pageContext);
+        SearchRun searchRun = searchPublicSources(company, productHints, pageContext, knownMapPlatforms);
         if (!searchRun.available()) {
             warnings.add("Публичный поиск не выполнен: провайдер " + searchRun.provider() + " не настроен или недоступен.");
         } else if (searchRun.results().isEmpty()) {
@@ -129,7 +147,6 @@ public class CompanyResearchService {
                     result.snippet()
             ));
         }
-        urlsToCrawl.addAll(filialCrawlUrls(company));
         urlsToCrawl.addAll(prioritizedCrawlUrls(searchRun.results(), pageContext));
 
         Set<String> deepCrawlHosts = pageRoleClassifier.host(website).isBlank()
@@ -215,8 +232,13 @@ public class CompanyResearchService {
         snapshotRepository.save(entity);
     }
 
-    private SearchRun searchPublicSources(Company company, List<String> products, PageRoleContext pageContext) {
-        List<String> queries = buildSearchQueries(company, products);
+    private SearchRun searchPublicSources(
+            Company company,
+            List<String> products,
+            PageRoleContext pageContext,
+            Set<String> knownMapPlatforms
+    ) {
+        List<String> queries = buildSearchQueries(company, products, knownMapPlatforms);
         String provider = searchProviderRouter.activeProviderName();
         boolean available = searchProviderRouter.activeProviderAvailable();
         if (queries.isEmpty()) {
@@ -239,7 +261,7 @@ public class CompanyResearchService {
         return new SearchRun(provider, true, queries, results);
     }
 
-    private List<String> buildSearchQueries(Company company, List<String> products) {
+    private List<String> buildSearchQueries(Company company, List<String> products, Set<String> knownMapPlatforms) {
         LinkedHashSet<String> queries = new LinkedHashSet<>();
         String companyName = company.getTitle();
         if (isBlank(companyName)) {
@@ -252,17 +274,27 @@ public class CompanyResearchService {
         List<String> filialHints = filialSearchHints(company);
 
         queries.add(joinNonBlank(companyName, city, category, "отзывы"));
-        queries.add(joinNonBlank(companyName, city, "2ГИС"));
-        queries.add(joinNonBlank(companyName, city, "Яндекс Карты"));
-        queries.add(joinNonBlank(companyName, city, "Google Maps"));
+        for (String hint : filialHints) {
+            queries.add(joinNonBlank(companyName, hint));
+        }
+        if (!knownMapPlatforms.contains("2gis")) {
+            queries.add(joinNonBlank(companyName, city, "site:2gis.ru"));
+        }
+        if (!knownMapPlatforms.contains("yandex-maps")) {
+            queries.add(joinNonBlank(companyName, city, "site:yandex.ru/maps"));
+        }
+        if (!knownMapPlatforms.contains("google-maps")) {
+            queries.add(joinNonBlank(companyName, city, "site:google.com/maps"));
+        }
         queries.add(joinNonBlank(companyName, city, "сайт"));
         if (!isBlank(product)) {
             queries.add(joinNonBlank(companyName, product, city));
         }
         queries.add(joinNonBlank(companyName, city, "цены услуги"));
         for (String hint : filialHints) {
-            queries.add(joinNonBlank(companyName, hint));
-            queries.add(joinNonBlank(companyName, hint, "2ГИС"));
+            if (!knownMapPlatforms.contains("2gis")) {
+                queries.add(joinNonBlank(companyName, hint, "2ГИС"));
+            }
             queries.add(joinNonBlank(companyName, hint, "отзывы"));
             queries.add(joinNonBlank(companyName, hint, "цены услуги"));
         }
@@ -328,6 +360,9 @@ public class CompanyResearchService {
                 .filter(result -> pageRoleClassifier.classify(result.url(), result.title(), result.snippet(), pageContext).canCrawlFromSearch())
                 .filter(result -> !isBlank(result.url()))
                 .filter(result -> isLikelyPublicBusinessUrl(result.url()))
+                // Карты обычно отдают JS-заглушку или держат соединение до таймаута.
+                // Их URL и поисковые выдержки уже передаются модели как источники.
+                .filter(result -> mapPlatform(result.url()).isBlank())
                 .sorted(Comparator.comparingInt(this::crawlPriority))
                 .map(SearchResult::url)
                 .distinct()
@@ -1011,10 +1046,12 @@ public class CompanyResearchService {
                 || NON_OFFER_NAME_MARKERS.stream().anyMatch(lower::contains)) {
             return false;
         }
-        return containsAny(lower, List.of(
-                "квест", "лазертаг", "нерф", "картинг", "день рождения", "праздник", "выпускной",
-                "прятки", "амонг", "хагги", "уэнсдей", "сталкер", "психоз", "психбольница",
-                "тюрьма", "замок", "экзорцизм", "звездные", "оно", "лоботомия", "космический"
+        if (!lower.matches(".*\\p{L}.*") || lower.split("\\s+").length > 12) {
+            return false;
+        }
+        return !containsAny(lower, List.of(
+                "главная страница", "политика конфиденциальности", "пользовательское соглашение",
+                "служба поддержки", "войти", "регистрация", "cookie", "captcha", "страница не найдена"
         ));
     }
 
@@ -1116,19 +1153,11 @@ public class CompanyResearchService {
         addIfContains(advantages, lower, "подбор", "помощь с подбором");
         addIfContains(advantages, lower, "быстр", "быстрое оформление");
 
-        if (advantages.isEmpty()) {
-            advantages.add("можно уточнить преимущества у менеджера");
-            advantages.add("можно выделить сервис, ассортимент и удобство покупки после проверки фактов");
-        }
-
         return List.copyOf(advantages);
     }
 
     private List<String> buildPositiveTopics(List<String> products, String text) {
         LinkedHashSet<String> topics = new LinkedHashSet<>();
-        topics.add("выбранная программа или квест");
-        topics.add("организация праздника");
-
         String lower = normalizeForMatch(text);
         if (lower.contains("актер") || lower.contains("актёр")) {
             topics.add("работа актеров");
@@ -1136,15 +1165,20 @@ public class CompanyResearchService {
         if (lower.contains("чайная зона")) {
             topics.add("чайная зона и удобство для гостей");
         }
-        if (lower.contains("дет")) {
+        if (lower.contains("детск") || lower.contains("ребен") || lower.contains("ребён")) {
             topics.add("эмоции ребенка");
         }
         if (!products.isEmpty()) {
             topics.add("выбор " + products.getFirst());
         }
 
-        topics.add("удобство записи");
-        topics.add("соответствие описанию");
+        addIfContains(topics, lower, "консульта", "консультация и понятные объяснения");
+        addIfContains(topics, lower, "достав", "условия и удобство доставки");
+        addIfContains(topics, lower, "гарант", "гарантийная поддержка");
+        addIfContains(topics, lower, "запис", "удобство записи");
+        addIfContains(topics, lower, "заказ", "оформление заказа");
+        addIfContains(topics, lower, "качеств", "качество товара или услуги");
+        addIfContains(topics, lower, "персонал", "работа персонала");
         return List.copyOf(topics);
     }
 
@@ -1155,11 +1189,12 @@ public class CompanyResearchService {
         if (lower.contains("страш")) {
             topics.add("уровень страха и возрастные ограничения");
         }
-        topics.add("скорость ответа и подтверждения записи");
-        topics.add("точность описания программы");
-        topics.add("состояние локации и реквизита");
-        topics.add("организация времени");
-        topics.add("точность ожиданий клиента");
+        addIfContains(topics, lower, "ожидан", "время ожидания");
+        addIfContains(topics, lower, "достав", "сроки доставки");
+        addIfContains(topics, lower, "запис", "скорость ответа и подтверждения записи");
+        addIfContains(topics, lower, "возврат", "условия возврата");
+        addIfContains(topics, lower, "гарант", "условия гарантии");
+        addIfContains(topics, lower, "цена", "актуальность цены");
         return List.copyOf(topics);
     }
 
@@ -1195,9 +1230,30 @@ public class CompanyResearchService {
                 .map(this::normalizeForMatch)
                 .filter(token -> token.length() >= 4)
                 .anyMatch(haystack::contains);
+        List<String> filialDetails = filialDetailHints(company);
+        boolean hasFilialDetailSignal = filialDetails.stream()
+                .map(this::normalizeForMatch)
+                .filter(token -> token.length() >= 4)
+                .anyMatch(haystack::contains);
+
+        boolean localDirectory = isTrustedLocalDirectory(result.url()) || !mapPlatform(result.url()).isBlank();
+        if (localDirectory) {
+            boolean locationMatched = filialDetails.isEmpty()
+                    ? hasCity || hasFilialSignal
+                    : hasFilialDetailSignal;
+            if (!locationMatched) {
+                return false;
+            }
+            return (!companyName.isBlank() && haystack.contains(companyName)) || hasBusinessToken;
+        }
 
         if (!companyName.isBlank() && haystack.contains(companyName)) {
-            return hasCity || hasFilialSignal || hasBusinessToken || isTrustedLocalDirectory(result.url());
+            String compactCompanyName = companyName.replaceAll("[^\\p{L}\\p{N}]+", "");
+            boolean shortOrAmbiguousName = compactCompanyName.length() <= 4;
+            return hasCity
+                    || hasFilialSignal
+                    || hasBusinessToken
+                    || (!shortOrAmbiguousName && isTrustedLocalDirectory(result.url()));
         }
 
         if (!hasCity && !hasFilialSignal) {
@@ -1218,6 +1274,67 @@ public class CompanyResearchService {
                 "yandex.ru",
                 "maps.yandex.ru"
         ).contains(host);
+    }
+
+    private List<String> filialDetailHints(Company company) {
+        if (company.getFilial() == null || company.getFilial().isEmpty()) {
+            return List.of();
+        }
+        String companyName = normalizeForMatch(company.getTitle());
+        String companyCity = normalizeForMatch(company.getCity());
+        return company.getFilial().stream()
+                .filter(filial -> filial != null && !isBlank(filial.getTitle()))
+                .map(filial -> filial.getTitle().trim())
+                .filter(value -> {
+                    String normalized = normalizeForMatch(value);
+                    return !normalized.equals(companyName)
+                            && !normalized.equals(companyCity)
+                            && !List.of("филиал", "нет филиала", "пусто", "не указан", "не указано").contains(normalized);
+                })
+                .distinct()
+                .limit(8)
+                .toList();
+    }
+
+    private Set<String> mapPlatforms(List<String> urls) {
+        if (urls == null || urls.isEmpty()) {
+            return Set.of();
+        }
+        LinkedHashSet<String> platforms = new LinkedHashSet<>();
+        urls.stream()
+                .map(this::mapPlatform)
+                .filter(value -> !value.isBlank())
+                .forEach(platforms::add);
+        return Set.copyOf(platforms);
+    }
+
+    private Set<String> mergeMapPlatforms(Set<String> current, List<String> urls) {
+        LinkedHashSet<String> platforms = new LinkedHashSet<>(current == null ? Set.of() : current);
+        platforms.addAll(mapPlatforms(urls));
+        return Set.copyOf(platforms);
+    }
+
+    private String mapPlatform(String url) {
+        String normalized = url == null ? "" : url.trim();
+        if (!normalized.isBlank() && !normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+            normalized = "https://" + normalized;
+        }
+        String currentHost = host(normalized);
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (currentHost.equals("2gis.ru") || currentHost.endsWith(".2gis.ru") || currentHost.equals("go.2gis.com")) {
+            return "2gis";
+        }
+        if ((currentHost.equals("yandex.ru") || currentHost.endsWith(".yandex.ru")
+                || currentHost.equals("yandex.com") || currentHost.endsWith(".yandex.com"))
+                && (lower.contains("/maps") || currentHost.startsWith("maps.yandex."))) {
+            return "yandex-maps";
+        }
+        if (((currentHost.equals("google.com") || currentHost.endsWith(".google.com")
+                || currentHost.startsWith("google.") || currentHost.startsWith("maps.google.")) && lower.contains("/maps"))
+                || currentHost.equals("maps.app.goo.gl")) {
+            return "google-maps";
+        }
+        return "";
     }
 
     private List<String> cleanList(List<String> values) {

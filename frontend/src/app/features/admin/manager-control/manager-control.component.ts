@@ -275,15 +275,33 @@ export class ManagerControlComponent implements OnInit {
   }
 
   attentionTotal(): number {
-    return this.summary()?.attentionTotal ?? 0;
+    return this.managers().reduce((sum, manager) => sum + this.currentActionCount(manager), 0);
   }
 
   criticalTotal(): number {
-    return this.summary()?.criticalTotal ?? 0;
+    return this.managers().reduce((sum, manager) => sum + this.currentCriticalActionCount(manager), 0);
   }
 
   otherCriticalCount(manager: ManagerControlManager): number {
-    return Math.max(0, manager.criticalCount - manager.overdueOrderCount - manager.openRiskCount);
+    const balance = managerActionBalanceView(manager);
+    return balance.unanswered + balance.other;
+  }
+
+  currentActionCount(manager: ManagerControlManager): number {
+    return managerActionBalanceView(manager).remaining;
+  }
+
+  currentCriticalActionCount(manager: ManagerControlManager): number {
+    const balance = managerActionBalanceView(manager);
+    return balance.overdue + balance.risks + balance.unanswered + balance.other;
+  }
+
+  currentOverdueCount(manager: ManagerControlManager): number {
+    return managerActionBalanceView(manager).overdue;
+  }
+
+  currentRiskCount(manager: ManagerControlManager): number {
+    return managerActionBalanceView(manager).risks;
   }
 
   dailyTaskTotal(manager: ManagerControlManager): number {
@@ -434,7 +452,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   actionProblems(manager: ManagerControlManager): ManagerControlProblem[] {
-    return manager.problems.filter((problem) => problem.group === 'ACTION');
+    return manager.problems.filter((problem) =>
+      problem.group === 'ACTION' && (!problem.itemStatus || problem.itemStatus === 'OPEN')
+    );
   }
 
   overdueBreakdown(manager: ManagerControlManager): string {
@@ -449,7 +469,11 @@ export class ManagerControlComponent implements OnInit {
   }
 
   actionSections(manager: ManagerControlManager): ManagerControlSection[] {
-    return manager.workerSections.filter((section) => section.group === 'ACTION' && section.count > 0);
+    return manager.workerSections.filter((section) =>
+      section.group === 'ACTION'
+      && section.count > 0
+      && (!section.itemStatus || section.itemStatus === 'OPEN')
+    );
   }
 
   workloadSections(manager: ManagerControlManager): ManagerControlSection[] {
@@ -477,6 +501,14 @@ export class ManagerControlComponent implements OnInit {
       return [];
     }
     return [
+      {
+        key: 'team-progress',
+        label: 'Команда 100%',
+        value: performance.teamProgressEligibleDays > 0
+          ? `${performance.teamProgressReached100Days}/${performance.teamProgressEligibleDays} дн. · ${this.percent(performance.teamProgressReached100Rate)}`
+          : '-',
+        hint: `Дни, когда к 23:59 все закреплённые работники закрыли на 100% задачи, поступившие до 23:00. Задачи последнего часа переходят на следующий день. Средний итоговый прогресс: ${this.percent(performance.teamProgressAveragePercent)}; незакрытых сотруднико-дней: ${performance.teamProgressMissedWorkerDays}.`
+      },
       {
         key: 'problem-sla-rate',
         label: 'В срок проблем',
@@ -543,44 +575,51 @@ export class ManagerControlComponent implements OnInit {
     }
     return [
       {
+        key: 'team-completion',
+        label: 'Команда 100%',
+        weight: 15,
+        score: performance.teamCompletionScore,
+        hint: 'Итог работы команды к 23:59 по задачам, поступившим до 23:00: 70% фактора — доля дней, когда все работники достигли 100%; 30% — средний итоговый прогресс команды.'
+      },
+      {
         key: 'problem-speed',
         label: 'Проблемы',
-        weight: 25,
+        weight: 17,
         score: performance.problemSpeedScore,
         hint: 'Скорость решения замечаний из дневного контроля. Открытые задачи не штрафуются жестко, пока они еще внутри SLA 8 часов.'
       },
       {
         key: 'client-response',
         label: 'Клиенты',
-        weight: 20,
+        weight: 21,
         score: performance.clientResponseScore,
         hint: 'Скорость ответа клиентам. Открытые сообщения считаются по текущему времени и штрафуются только по мере приближения или выхода за норматив 30 минут.'
       },
       {
         key: 'overdue-control',
         label: 'Просрочки',
-        weight: 20,
+        weight: 21,
         score: performance.overdueControlScore,
         hint: 'Доля просроченных заказов в рабочей базе и возраст просрочек. Меньше и моложе просрочки дают выше балл.'
       },
       {
         key: 'specialist-risk',
         label: 'Спец. и риски',
-        weight: 15,
+        weight: 13,
         score: performance.specialistRiskScore,
         hint: `Проблемы специалистов считаются по SLA 8 часов, риски по SLA 2 часа. Качество обработки рисков: ${performance.riskQualityScore}/100.`
       },
       {
         key: 'control-discipline',
         label: 'Контроль',
-        weight: 10,
+        weight: 9,
         score: performance.controlDisciplineScore,
         hint: 'Принятие контроля, закрытие дня и отсутствие формального быстрого прокликивания.'
       },
       {
         key: 'stability',
         label: 'Стабильность',
-        weight: 10,
+        weight: 4,
         score: performance.stabilityScore,
         hint: 'Меньше повторных проблем и отложенных задач означает более высокий балл.'
       }
@@ -626,7 +665,7 @@ export class ManagerControlComponent implements OnInit {
 
   hasActionRows(manager: ManagerControlManager): boolean {
     return this.actionProblems(manager).length > 0
-      || manager.overdueStatuses.length > 0
+      || manager.overdueStatuses.some((item) => !item.itemStatus || item.itemStatus === 'OPEN')
       || this.actionSections(manager).length > 0;
   }
 
@@ -1356,10 +1395,19 @@ export class ManagerControlComponent implements OnInit {
 
   canRepairAutomationIssue(example: ManagerControlConcreteItem): boolean {
     const reason = (example.reason ?? '').toLowerCase();
+    if (this.isAutomationWaitingForSlot(example)) {
+      return false;
+    }
+    if (example.type === 'ORDER_PAYMENT_INTEGRITY') {
+      return true;
+    }
     if (example.type === 'COMMON_INVOICE') {
       return reason.includes('нажмите «починить»') || reason.includes('нажмите "починить"');
     }
     if (example.type === 'TELEGRAM_CHAT') {
+      return true;
+    }
+    if (example.type === 'PUBLICATION_DATE_REVIEW') {
       return true;
     }
     const repairableChatBinding = this.isChatBindingIssue(example);
@@ -1381,6 +1429,53 @@ export class ManagerControlComponent implements OnInit {
         || reason.includes('автоответчик не закрыл')
       );
     return repairableChatBinding || repairableWaitingClient || repairableOrderQueue;
+  }
+
+  isAutomationWaitingForSlot(example: ManagerControlConcreteItem): boolean {
+    const reason = (example.reason ?? '').toLowerCase();
+    const automationQueueReason = (
+      example.type === 'ORDER'
+      || example.type === 'WORKER_ORDER_NEW'
+      || example.type === 'WORKER_ORDER_CORRECT'
+    ) && (
+      reason.includes('следующий слот отправки')
+      || reason.includes('очередь автоответчика исправна')
+    );
+    if (!automationQueueReason) {
+      return false;
+    }
+    const slot = this.automationWaitingSlotDate(example);
+    return slot === null || slot.getTime() > this.clock();
+  }
+
+  automationWaitingSlotText(example: ManagerControlConcreteItem): string {
+    const slot = this.automationWaitingSlotDate(example);
+    if (!slot) {
+      return 'очередь исправна, отправка продолжится автоматически';
+    }
+    const day = String(slot.getDate()).padStart(2, '0');
+    const month = String(slot.getMonth() + 1).padStart(2, '0');
+    const hours = String(slot.getHours()).padStart(2, '0');
+    const minutes = String(slot.getMinutes()).padStart(2, '0');
+    return `следующая попытка ${day}.${month} в ${hours}:${minutes}`;
+  }
+
+  private automationWaitingSlotDate(example: ManagerControlConcreteItem): Date | null {
+    const reason = example.reason ?? '';
+    const match = reason.match(
+      /следующий слот отправки:\s*(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/i
+    );
+    if (!match) {
+      return null;
+    }
+    const slot = new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5])
+    );
+    return Number.isNaN(slot.getTime()) ? null : slot;
   }
 
   isContactTextCopied(example: ManagerControlConcreteItem): boolean {
@@ -1414,6 +1509,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   concreteActionTitle(example: ManagerControlConcreteItem, actionType: ManagerControlActionType, fallback: string): string {
+    if (example.type === 'COMMON_INVOICE' && actionType === 'ACTION_TAKEN') {
+      return 'Проверить текущее состояние счёта и закрыть карточку, если проблема устранена';
+    }
     if (this.requiresPreparedContact(example, actionType)) {
       return 'Сначала нажмите «Текст» и отправьте сообщение клиенту';
     }
@@ -1447,6 +1545,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   contactFollowUpHint(example: ManagerControlConcreteItem): string {
+    if (this.isAutomationWaitingForSlot(example)) {
+      return this.automationWaitingSlotText(example);
+    }
     if (example.followUpAt) {
       return `скроется до ${new Date(example.followUpAt).toLocaleString('ru-RU', {
         day: '2-digit',
@@ -1737,14 +1838,14 @@ export class ManagerControlComponent implements OnInit {
     if (example.workerExplanationAt) {
       return 'Ответ получен';
     }
+    if (this.isWorkerExplanationOverdue(example)) {
+      return 'Ответ просрочен';
+    }
     if (!this.workerRequiresExplanation(example) && example.workerNotificationSentAt) {
       return 'Напомнили';
     }
-    if (example.workerNotificationAcceptedAt) {
-      return 'Ждем ответ';
-    }
-    if (example.workerNotificationSentAt) {
-      return 'В группу';
+    if (this.isWorkerWaitingForExplanation(example)) {
+      return 'Ждём ответ';
     }
     if (example.workerNotificationAttemptedAt) {
       const reason = (example.workerNotificationFailureReason ?? '').trim();
@@ -1756,6 +1857,12 @@ export class ManagerControlComponent implements OnInit {
   workerNotificationBadgeClass(example: ManagerControlConcreteItem): string {
     if (example.workerExplanationAt) {
       return 'accepted';
+    }
+    if (this.isWorkerExplanationOverdue(example)) {
+      return 'overdue';
+    }
+    if (this.isWorkerWaitingForExplanation(example)) {
+      return 'pending';
     }
     if (example.workerNotificationAcceptedAt) {
       return 'sent';
@@ -1770,6 +1877,9 @@ export class ManagerControlComponent implements OnInit {
   }
 
   workerNotificationTitle(example: ManagerControlConcreteItem): string {
+    if (this.isWorkerExplanationOverdue(example)) {
+      return `${this.workerNotificationNote(example)}. Ответ не получен в течение 3 часов`;
+    }
     return this.workerNotificationNote(example) || 'Запрос в группу еще не отправлялся';
   }
 
@@ -1785,6 +1895,15 @@ export class ManagerControlComponent implements OnInit {
       && !!example.workerNotificationSentAt
       && this.workerRequiresExplanation(example)
       && !example.workerExplanationAt;
+  }
+
+  isWorkerExplanationOverdue(example: ManagerControlConcreteItem): boolean {
+    this.clock();
+    if (!this.isWorkerWaitingForExplanation(example) || !example.workerNotificationSentAt) {
+      return false;
+    }
+    const sentAt = Date.parse(example.workerNotificationSentAt);
+    return Number.isFinite(sentAt) && Date.now() - sentAt >= 3 * 60 * 60 * 1000;
   }
 
   riskExplanationRequested(example: ManagerControlConcreteItem): boolean {
@@ -1947,6 +2066,8 @@ export class ManagerControlComponent implements OnInit {
         return 'restore';
       case 'PUBLISH_REVIEW':
         return 'rate_review';
+      case 'PUBLICATION_DATE_REVIEW':
+        return 'event_busy';
       case 'NAGUL_REVIEW':
         return 'directions_walk';
       case 'WORKER_ORDER_NEW':
@@ -2063,6 +2184,10 @@ export class ManagerControlComponent implements OnInit {
     actionType: ManagerControlActionType,
     options: { manualWorkerNotification?: boolean } = {}
   ): void {
+    if (example.type === 'COMMON_INVOICE' && example.itemStatus === 'RESOLVED') {
+      this.toast.success('Карточка закрыта', 'Общий счёт больше не требует внимания');
+      return;
+    }
     if (actionType === 'ACTION_TAKEN' && this.canRequestWorkerTask(example)) {
       if (example.workerNotificationSentAt) {
         if (!this.workerRequiresExplanation(example)) {

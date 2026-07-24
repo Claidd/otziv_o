@@ -1,6 +1,7 @@
 package com.hunt.otziv.whatsapp;
 
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
+import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
 import com.hunt.otziv.whatsapp.service.WhatsAppServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,7 +15,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
@@ -130,5 +133,29 @@ class WhatsAppServiceTest {
         assertTrue(!status.configured());
         assertTrue(status.message().contains("whatsapp_lika"));
     }
-}
 
+    @Test
+    void resolveGroupByInviteReturnsExactGroupWithoutListingChats() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("whatsapp_vika");
+        config.setUrl("http://whatsapp_vika:3000");
+
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(
+                eq("http://whatsapp_vika:3000/groups/resolve-invite"),
+                any(),
+                eq(String.class)
+        )).thenReturn(ResponseEntity.ok("""
+                {"status":"ok","group":{"groupId":"1203633063@g.us","name":"Drivevision","inviteLink":"https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw"}}
+                """));
+
+        Optional<WhatsAppGroupInfo> group = service.resolveGroupByInvite(
+                "whatsapp_vika",
+                "https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw?s=cl&p=i"
+        );
+
+        assertTrue(group.isPresent());
+        assertEquals("1203633063@g.us", group.get().groupId());
+        assertEquals("Drivevision", group.get().name());
+    }
+}

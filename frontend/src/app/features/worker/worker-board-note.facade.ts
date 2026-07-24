@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import type { Signal, WritableSignal } from '@angular/core';
 import type { OrderCardItem } from '../../core/manager.api';
-import type { WorkerApi, WorkerBoard, WorkerPermissions, WorkerReviewItem } from '../../core/worker.api';
+import type { WorkerActivitySource, WorkerApi, WorkerBoard, WorkerPermissions, WorkerReviewItem } from '../../core/worker.api';
 import type { ToastService } from '../../shared/toast.service';
 import type { ReviewEditableField, SideNoteField } from './worker-board.config';
 import {
@@ -46,6 +46,7 @@ export type WorkerBoardNoteFacadeDeps = {
   setBoardPatch: (board: WorkerBoard | null) => void;
   loadBoard: () => void;
   errorMessage: (err: unknown, fallback: string) => string;
+  reviewActionSource: () => WorkerActivitySource;
 };
 
 export class WorkerBoardNoteFacade {
@@ -198,8 +199,8 @@ export class WorkerBoardNoteFacade {
       : field === 'text' && review.badTask && review.badTaskId
       ? this.deps.workerApi.updateBadReviewTask(review.badTaskId, value, review.badTaskScheduledDate || review.publishedDate || null)
       : field === 'text'
-        ? this.deps.workerApi.updateReviewText(review.id, review.orderId, value)
-        : this.deps.workerApi.updateReviewAnswer(review.id, review.orderId, value);
+        ? this.deps.workerApi.updateReviewText(review.id, review.orderId, value, this.deps.reviewActionSource())
+        : this.deps.workerApi.updateReviewAnswer(review.id, review.orderId, value, this.deps.reviewActionSource());
 
     this.deps.mutationKey.set(key);
     request.subscribe({
@@ -279,7 +280,7 @@ export class WorkerBoardNoteFacade {
     const key = workerReviewNoteMutationKey(review);
     this.deps.mutationKey.set(key);
 
-    this.deps.workerApi.updateReviewNote(review.id, review.orderId, value).subscribe({
+    this.deps.workerApi.updateReviewNote(review.id, review.orderId, value, this.deps.reviewActionSource()).subscribe({
       next: () => {
         this.deps.setBoardPatch(workerPatchReviewNote(this.deps.board(), review.id, value));
         this.deps.mutationKey.set(null);

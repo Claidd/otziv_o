@@ -336,14 +336,31 @@
                   >
                 </label>
 
-                <label class="company-switch-field">
-                  <span>
-                    <strong>Отчеты клиенту</strong>
-                    <small>Публиковать прогресс по заказам</small>
+                <label
+                  class="company-switch-field company-switch-field--publication-alerts"
+                  [class.company-switch-field--enabled]="draft.publicationProgressReportsEnabled"
+                >
+                  <span class="company-switch-field__copy">
+                    <strong>Оповещения о каждой публикации</strong>
+                    <small>
+                      @if (draft.publicationProgressReportsEnabled) {
+                        Сейчас включены — клиент получает сообщение после каждого опубликованного отзыва.
+                      } @else {
+                        Сейчас отключены — сообщения после каждой публикации клиенту не отправляются.
+                      }
+                    </small>
+                    <em [class.is-disabled]="!draft.publicationProgressReportsEnabled">
+                      {{ draft.publicationProgressReportsEnabled ? 'Включены' : 'Отключены' }}
+                    </em>
+                    <small class="company-switch-field__hint">
+                      Выключите переключатель и нажмите «Сохранить» внизу. Это не отвязывает WhatsApp-группу;
+                      итоговые сообщения по заказу продолжат работать.
+                    </small>
                   </span>
                   <input
                     name="publicationProgressReportsEnabled"
                     type="checkbox"
+                    aria-label="Оповещения клиенту после каждой публикации отзыва"
                     [ngModel]="draft.publicationProgressReportsEnabled"
                     (ngModelChange)="setField('publicationProgressReportsEnabled', $event)"
                   >

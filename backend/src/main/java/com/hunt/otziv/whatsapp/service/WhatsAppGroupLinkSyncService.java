@@ -19,7 +19,11 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 @Slf4j
@@ -111,14 +115,45 @@ public class WhatsAppGroupLinkSyncService {
         int clients = 0;
         int groups = 0;
         int groupsWithInvite = 0;
+        int directInviteMatches = 0;
         List<String> visibleGroupNames = new java.util.ArrayList<>();
         List<Company> singleCompany = List.of(company);
 
+        // The exact invite lookup does not enumerate all chats and therefore keeps the repair
+        // button useful even when WhatsApp Web temporarily breaks client.getChats().
         for (WhatsAppProperties.ClientConfig client : configuredClients) {
             if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
                 continue;
             }
             clients++;
+            Optional<WhatsAppGroupInfo> directGroup = whatsAppService.resolveGroupByInvite(
+                    client.getId(),
+                    company.getUrlChat()
+            );
+            if (directGroup.isEmpty() || !hasText(directGroup.get().groupId())) {
+                continue;
+            }
+            directInviteMatches++;
+            WhatsAppGroupInfo group = directGroup.get();
+            int linked = groupCompanyLinker.linkByInvite(
+                    group.groupId(),
+                    company.getUrlChat(),
+                    singleCompany
+            );
+            if (linked == 0) {
+                linked = groupCompanyLinker.linkByGroupName(group.groupId(), group.name(), singleCompany);
+            }
+            if (linked > 0 || java.util.Objects.equals(company.getGroupId(), group.groupId())) {
+                return WhatsAppGroupRepairResult.linked(
+                        "WhatsApp-группа найдена напрямую по invite-ссылке у клиента " + client.getId()
+                );
+            }
+        }
+
+        for (WhatsAppProperties.ClientConfig client : configuredClients) {
+            if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
+                continue;
+            }
             List<WhatsAppGroupInfo> clientGroups = whatsAppService.listGroups(client.getId(), true);
             if (clientGroups == null) {
                 clientGroups = List.of();
@@ -154,7 +189,10 @@ public class WhatsAppGroupLinkSyncService {
         }
         if (groups == 0) {
             return WhatsAppGroupRepairResult.failed(
-                    "WhatsApp-шлюз доступен, но не вернул группы. Проверьте авторизацию WhatsApp-аккаунта и что он состоит в нужной группе."
+                    directInviteMatches > 0
+                            ? "WhatsApp нашел invite-ссылку, но не смог безопасно сохранить groupId. Проверьте конфликт существующей привязки."
+                            : "WhatsApp подключен, но не смог разрешить invite-ссылку и прочитать список групп. "
+                                    + "Название компании и состав администраторов менять не требуется."
             );
         }
 
@@ -231,12 +269,103 @@ public class WhatsAppGroupLinkSyncService {
         }
 
         linked += syncSharedChatIdsNow(source);
+        linked += repairConflictingInviteGroupIds(configuredClients, source);
 
         appSettingService.setString(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_RUN_AT, Instant.now().toString());
         appSettingService.setInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, linked);
         log.info("WhatsApp group sync finished source={} clients={} groups={} linked={} durationMs={}",
                 source, clients, groups, linked, System.currentTimeMillis() - startedAt);
         return linked;
+    }
+
+    /**
+     * Repairs the dangerous case where one stored WhatsApp groupId belongs to companies
+     * with different invite links. A normal group list sync cannot help while getChats()
+     * is unavailable, so only the small conflicting subset is resolved directly by invite.
+     */
+    int repairConflictingInviteGroupIds(
+            List<WhatsAppProperties.ClientConfig> configuredClients,
+            String source
+    ) {
+        List<Company> companies = groupCompanyLinker.companiesWithChatUrl();
+        if (companies == null || companies.isEmpty() || configuredClients == null || configuredClients.isEmpty()) {
+            return 0;
+        }
+
+        Map<String, Map<String, List<Company>>> byGroupAndInvite = new LinkedHashMap<>();
+        for (Company company : companies) {
+            if (company == null || !hasText(company.getGroupId())) {
+                continue;
+            }
+            Optional<String> inviteCode = WhatsAppGroupCompanyLinker.whatsAppInviteCode(company.getUrlChat());
+            if (inviteCode.isEmpty()) {
+                continue;
+            }
+            byGroupAndInvite
+                    .computeIfAbsent(company.getGroupId().trim(), ignored -> new LinkedHashMap<>())
+                    .computeIfAbsent(inviteCode.get(), ignored -> new ArrayList<>())
+                    .add(company);
+        }
+
+        int repaired = 0;
+        for (Map.Entry<String, Map<String, List<Company>>> groupEntry : byGroupAndInvite.entrySet()) {
+            Map<String, List<Company>> companiesByInvite = groupEntry.getValue();
+            if (companiesByInvite.size() < 2) {
+                continue;
+            }
+
+            log.warn(
+                    "WhatsApp groupId conflict detected source={} groupId={} distinctInviteLinks={} companies={}",
+                    source,
+                    groupEntry.getKey(),
+                    companiesByInvite.size(),
+                    companiesByInvite.values().stream().mapToInt(List::size).sum()
+            );
+            for (List<Company> inviteCompanies : companiesByInvite.values()) {
+                repaired += repairInviteCompaniesDirectly(inviteCompanies, configuredClients, source);
+            }
+        }
+        return repaired;
+    }
+
+    private int repairInviteCompaniesDirectly(
+            List<Company> companies,
+            List<WhatsAppProperties.ClientConfig> configuredClients,
+            String source
+    ) {
+        if (companies == null || companies.isEmpty()) {
+            return 0;
+        }
+        Company representative = companies.getFirst();
+        for (WhatsAppProperties.ClientConfig client : configuredClients) {
+            if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
+                continue;
+            }
+            Optional<WhatsAppGroupInfo> resolved = whatsAppService.resolveGroupByInvite(
+                    client.getId(),
+                    representative.getUrlChat()
+            );
+            if (resolved.isEmpty() || !hasText(resolved.get().groupId())) {
+                continue;
+            }
+
+            int updated = groupCompanyLinker.linkByInvite(
+                    resolved.get().groupId(),
+                    representative.getUrlChat(),
+                    companies
+            );
+            if (updated > 0) {
+                log.info(
+                        "WhatsApp groupId conflict repaired source={} client={} inviteCompanies={} newGroupId={}",
+                        source,
+                        client.getId(),
+                        updated,
+                        resolved.get().groupId()
+                );
+            }
+            return updated;
+        }
+        return 0;
     }
 
     int syncClientGroups(String clientId) {

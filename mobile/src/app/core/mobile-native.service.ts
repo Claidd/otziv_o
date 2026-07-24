@@ -2,8 +2,10 @@ import { Injectable, NgZone, computed, effect, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
+import { Device, type DeviceInfo } from '@capacitor/device';
 import { Keyboard, KeyboardResize, KeyboardStyle, type KeyboardInfo } from '@capacitor/keyboard';
 import { Network, type ConnectionStatus } from '@capacitor/network';
+import { Preferences } from '@capacitor/preferences';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { mobileEnvironment } from './mobile-environment';
@@ -15,12 +17,22 @@ const DEFAULT_NETWORK_STATUS: ConnectionStatus = {
   connectionType: 'unknown'
 };
 
+const INSTALLATION_ID_KEY = 'otziv.mobile.installation-id';
+
+interface NativeTelemetry {
+  device: DeviceInfo;
+  appVersion: string;
+  appBuild: string;
+  installationId: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class MobileNativeService {
   private initialized = false;
   private readonly listenerHandles: PluginListenerHandle[] = [];
   private viewportHeightBeforeKeyboard = typeof window === 'undefined' ? 0 : window.innerHeight;
   private lastKeyboardInfo: KeyboardInfo | null = null;
+  private telemetryPromise: Promise<void> | null = null;
 
   readonly isNative = Capacitor.isNativePlatform();
   readonly networkStatus = signal<ConnectionStatus>(DEFAULT_NETWORK_STATUS);
@@ -29,6 +41,7 @@ export class MobileNativeService {
   readonly keyboardHeight = signal(0);
   readonly ready = signal(false);
   readonly runtimeError = signal<string | null>(null);
+  readonly nativeTelemetry = signal<NativeTelemetry | null>(null);
   readonly isOffline = computed(() => !this.networkStatus().connected);
 
   constructor(
@@ -47,11 +60,64 @@ export class MobileNativeService {
     }
 
     this.initialized = true;
+    this.telemetryPromise = this.loadNativeTelemetry();
     this.bindBrowserNetwork();
     this.bindViewportResize();
     this.bindRuntimeErrors();
     void this.initializeNative();
     window.setTimeout(() => void this.hideSplash(), 450);
+  }
+
+  async accessTelemetryHeaders(): Promise<Record<string, string>> {
+    if (!this.isNative) {
+      return {};
+    }
+    if (!this.initialized) {
+      this.initialize();
+    }
+    await this.telemetryPromise?.catch(() => undefined);
+
+    const telemetry = this.nativeTelemetry();
+    const network = this.networkStatus();
+    return {
+      'X-Otziv-App-Client': 'capacitor',
+      'X-Otziv-Device-Platform': Capacitor.getPlatform(),
+      'X-Otziv-Device-Model': telemetry?.device.model ?? 'unknown',
+      'X-Otziv-Device-Virtual': telemetry ? String(telemetry.device.isVirtual) : 'unknown',
+      'X-Otziv-Network-Type': network.connectionType ?? 'unknown',
+      'X-Otziv-App-Version': telemetry?.appVersion ?? 'unknown',
+      'X-Otziv-App-Build': telemetry?.appBuild ?? 'unknown',
+      'X-Otziv-Installation-Id': telemetry?.installationId ?? 'unknown'
+    };
+  }
+
+  private async loadNativeTelemetry(): Promise<void> {
+    if (!this.isNative || !Capacitor.isPluginAvailable('Device')) {
+      return;
+    }
+    const [device, appInfo, installationId] = await Promise.all([
+      Device.getInfo(),
+      CapacitorApp.getInfo(),
+      this.getOrCreateInstallationId()
+    ]);
+    this.zone.run(() => this.nativeTelemetry.set({
+      device,
+      appVersion: appInfo.version,
+      appBuild: appInfo.build,
+      installationId
+    }));
+  }
+
+  private async getOrCreateInstallationId(): Promise<string> {
+    const stored = await Preferences.get({ key: INSTALLATION_ID_KEY });
+    if (stored.value) {
+      return stored.value;
+    }
+    const generated = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+    await Preferences.set({ key: INSTALLATION_ID_KEY, value: generated });
+    return generated;
   }
 
   private async initializeNative(): Promise<void> {

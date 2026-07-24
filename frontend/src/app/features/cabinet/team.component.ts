@@ -1,10 +1,14 @@
 import { Component, OnDestroy, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
   CabinetApi,
+  TeamPatternConfidence,
+  TeamPatternInsight,
   TeamMember,
   TeamResponse,
+  WorkerPatternAnalysis,
   WorkerNetworkViolationDetail,
   WorkerNetworkViolationStats
 } from '../../core/cabinet.api';
@@ -13,9 +17,20 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import {
+  WORKER_SORT_OPTIONS,
+  memberProgressForMode,
+  primaryWorkerPatternSignal,
+  publicationRate,
+  sortWorkerMembers,
+  type TeamProgressMode,
+  type WorkerPatternSignal,
+  type WorkerSortDirection,
+  type WorkerSortKey
+} from './team-metrics.helpers';
 
 type TeamRole = 'manager' | 'marketolog' | 'worker' | 'operator';
-type TeamProgressMode = 'day' | 'month';
+type TeamPatternView = 'team' | 'workers';
 type ProgressDetailTone = 'good' | 'warn' | 'neutral';
 type ProgressDetailRow = {
   label: string;
@@ -32,6 +47,8 @@ type EfficiencyBadge = {
 type StatRow = {
   label: string;
   value: string;
+  detail?: string;
+  rate?: boolean;
   hint?: string;
   tone?: 'neutral' | 'good' | 'warn' | 'danger';
 };
@@ -44,17 +61,22 @@ type TeamSection = {
 
 @Component({
   selector: 'app-team',
-  imports: [AdminLayoutComponent, DailyProgressStripComponent, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, DailyProgressStripComponent, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './team.component.html',
   styleUrl: './team.component.scss'
 })
 export class TeamComponent implements OnDestroy {
+  private readonly workerSortStorageKey = 'otziv-team-worker-sort:v1';
   readonly selectedDate = signal(this.todayIso());
   readonly selectedMonth = signal(this.currentMonthIso());
   readonly progressMode = signal<TeamProgressMode>('day');
+  readonly patternView = signal<TeamPatternView>('team');
   readonly team = signal<TeamResponse | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly workerSortKey = signal<WorkerSortKey>(this.readWorkerSort().key);
+  readonly workerSortDirection = signal<WorkerSortDirection>(this.readWorkerSort().direction);
+  readonly workerSortOptions = WORKER_SORT_OPTIONS;
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly sections: TeamSection[] = [
@@ -65,7 +87,8 @@ export class TeamComponent implements OnDestroy {
   ];
 
   constructor(private readonly cabinetApi: CabinetApi) {
-    this.load();
+    // Team metrics are operational data; do not reuse the three-hour cabinet cache on page entry.
+    this.load(true);
     this.scheduleMidnightRefresh();
   }
 
@@ -107,6 +130,80 @@ export class TeamComponent implements OnDestroy {
     this.progressMode.set(mode);
   }
 
+  selectPatternView(view: TeamPatternView): void {
+    this.patternView.set(view);
+  }
+
+  workerPattern(member: TeamMember): WorkerPatternAnalysis | null {
+    return this.team()?.patterns?.workers?.[String(member.userId)] ?? null;
+  }
+
+  workerPrimaryPattern(member: TeamMember): TeamPatternInsight | null {
+    if (this.progressMode() !== 'month') {
+      return null;
+    }
+    return this.workerPatternSignal(member)?.insight ?? null;
+  }
+
+  workerPatternSignal(member: TeamMember): WorkerPatternSignal | null {
+    return primaryWorkerPatternSignal(this.workerPattern(member));
+  }
+
+  workersWithPatternSignals(): TeamMember[] {
+    const workers = this.team()?.workers ?? [];
+    return workers
+      .filter((member) => this.workerPatternSignal(member) !== null)
+      .sort((left, right) => {
+        const bySignal = (this.workerPatternSignal(right)?.sortScore ?? -Infinity)
+          - (this.workerPatternSignal(left)?.sortScore ?? -Infinity);
+        return bySignal || (left.fio || left.login).localeCompare(right.fio || right.login, 'ru');
+      });
+  }
+
+  patternConfidenceLabel(confidence: TeamPatternConfidence | null | undefined): string {
+    switch (confidence) {
+      case 'MODERATE': return 'Данных достаточно для наблюдения';
+      case 'LIMITED': return 'Ограниченная выборка';
+      default: return 'Недостаточно данных';
+    }
+  }
+
+  patternPeriodLabel(): string {
+    const patterns = this.team()?.patterns;
+    if (!patterns?.from || !patterns?.to) {
+      return 'Выбранный месяц';
+    }
+    const format = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' });
+    return `${format.format(new Date(`${patterns.from}T00:00:00`))}–${format.format(new Date(`${patterns.to}T00:00:00`))}`;
+  }
+
+  selectWorkerSort(key: WorkerSortKey): void {
+    if (this.workerSortKey() === key && key !== 'default') {
+      this.workerSortDirection.update((direction) => direction === 'desc' ? 'asc' : 'desc');
+    } else {
+      this.workerSortKey.set(key);
+      this.workerSortDirection.set(key === 'default' ? 'asc' : 'desc');
+    }
+    this.storeWorkerSort();
+  }
+
+  selectWorkerSortFromControl(key: WorkerSortKey): void {
+    if (this.workerSortKey() === key) {
+      return;
+    }
+    this.workerSortKey.set(key);
+    this.workerSortDirection.set(key === 'default' ? 'asc' : 'desc');
+    this.storeWorkerSort();
+  }
+
+  toggleWorkerSortDirection(): void {
+    if (this.workerSortKey() === 'default') {
+      return;
+    }
+    this.workerSortDirection.update((direction) => direction === 'desc' ? 'asc' : 'desc');
+    this.storeWorkerSort();
+  }
+
   members(section: TeamSection): TeamMember[] {
     const team = this.team();
     if (!team) {
@@ -119,14 +216,14 @@ export class TeamComponent implements OnDestroy {
       case 'marketolog':
         return team.marketologs;
       case 'worker':
-        return team.workers;
+        return sortWorkerMembers(team.workers, this.workerSortKey(), this.workerSortDirection(), this.progressMode());
       case 'operator':
         return team.operators;
     }
   }
 
   memberProgress(member: TeamMember): DailyWorkProgress | null | undefined {
-    return this.progressMode() === 'month' ? member.monthlyProgress : member.dailyProgress;
+    return memberProgressForMode(member, this.progressMode());
   }
 
   statRows(role: TeamRole, member: TeamMember): StatRow[] {
@@ -143,63 +240,55 @@ export class TeamComponent implements OnDestroy {
     }
 
     if (role === 'worker') {
-      const rows: StatRow[] = [
-        { label: 'ЗП', value: this.money(member.sum1Month) },
-        { label: 'Заказы', value: this.count(member.order1Month) },
-        { label: 'Отзывы', value: this.count(member.review1Month) },
-        { label: 'В работе', value: this.count((member.newOrder || 0) + (member.inCorrect || 0) + (member.intVigul || 0) + (member.publish || 0)) }
-      ];
       const progress = this.memberProgress(member);
-      if (progress?.visible) {
-        if ((progress.recoveryCreatedCount || 0) > 0) {
-          rows.push({
-            label: 'Восст. создано',
-            value: this.count(progress.recoveryCreatedCount),
-            hint: this.progressMode() === 'month'
-              ? 'Сколько задач восстановления создали специалисту за выбранный месяц.'
-              : 'Сколько задач восстановления создали специалисту за выбранный день.'
-          });
-        }
-        if ((progress.botChangeCount || 0) > 0) {
-          rows.push({
-            label: 'Смена бота',
-            value: this.count(progress.botChangeCount),
-            hint: this.progressMode() === 'month'
-              ? 'Сколько раз специалист нажал «смена» у аккаунта за выбранный месяц.'
-              : 'Сколько раз специалист нажал «смена» у аккаунта.'
-          });
-        }
-        if ((progress.botBlockCount || 0) > 0) {
-          rows.push({
-            label: 'Блок бота',
-            value: this.count(progress.botBlockCount),
-            tone: 'warn',
-            hint: this.progressMode() === 'month'
-              ? 'Сколько раз специалист увёл аккаунт в блок за выбранный месяц.'
-              : 'Сколько раз специалист увёл аккаунт в блок.'
-          });
-        }
-        if ((progress.orderOverdueCount || 0) > 0) {
-          rows.push({
-            label: 'Проср. заказов',
-            value: this.count(progress.orderOverdueCount),
-            tone: 'warn',
-            hint: this.progressMode() === 'month'
-              ? 'Заказы, которые не были выполнены день-в-день за выбранный месяц.'
-              : 'Заказы, которые не были выполнены день-в-день.'
-          });
-        }
-      }
       const violations = this.networkViolations(member);
-      if (violations?.visible && violations.episodeCount > 0) {
-        rows.push({
+      const publications = Number(progress?.publishCompletedCount || 0);
+      const recoveries = Number(progress?.recoveryCreatedCount || 0);
+      const blocks = Number(progress?.botBlockCount || 0);
+      const botChanges = Number(progress?.botChangeCount || 0);
+      const overdue = Number(progress?.orderOverdueCount || 0);
+      const networkEpisodes = Number(violations?.visible ? violations.episodeCount : 0);
+      const monthMode = this.progressMode() === 'month';
+      return [
+        { label: 'ЗП', value: this.money(member.sum1Month) },
+        {
+          label: 'Восстановления',
+          value: monthMode ? this.publicationRatePercentLabel(recoveries, publications) : this.count(recoveries),
+          detail: monthMode ? this.publicationRateDetail(recoveries, publications, 'задач') : undefined,
+          rate: monthMode,
+          tone: recoveries === 0 && publications > 0 ? 'good' : 'neutral',
+          hint: monthMode
+            ? `За выбранный месяц. Формула доли: созданные восстановления ÷ публикации × 100%. Создано восстановлений: ${this.formatNumber(recoveries)}. Публикаций: ${this.formatNumber(publications)}.`
+            : `Создано задач восстановления за выбранный день: ${this.formatNumber(recoveries)}.`
+        },
+        {
+          label: 'Смена бота',
+          value: this.count(botChanges),
+          hint: 'Сколько раз специалист нажал «смена» у аккаунта за выбранный период.'
+        },
+        {
+          label: 'Блокировки',
+          value: monthMode ? this.publicationRatePercentLabel(blocks, publications) : this.count(blocks),
+          detail: monthMode ? this.publicationRateDetail(blocks, publications, 'акк.') : undefined,
+          rate: monthMode,
+          tone: blocks === 0 && publications > 0 ? 'good' : blocks > 0 ? 'warn' : 'neutral',
+          hint: monthMode
+            ? `За выбранный месяц. Количество разных заблокированных аккаунтов при работе с публикациями на 100 завершённых публикаций. На одной карточке может быть заблокировано несколько разных аккаунтов. Блокировок: ${this.formatNumber(blocks)}. Публикаций: ${this.formatNumber(publications)}.`
+            : `Заблокировано аккаунтов за выбранный день: ${this.formatNumber(blocks)}.`
+        },
+        {
+          label: 'Проср. заказов',
+          value: this.count(overdue),
+          tone: overdue > 0 ? 'warn' : 'neutral',
+          hint: 'Заказы, которые не были выполнены день-в-день за выбранный период.'
+        },
+        {
           label: 'Нарушения сети',
-          value: this.count(violations.episodeCount),
-          tone: violations.severity === 'CRITICAL' ? 'danger' : 'warn',
-          hint: `${this.count(violations.episodeCount)} эпизодов, ${this.count(violations.attemptCount)} попыток.`
-        });
-      }
-      return rows.filter((row) => row.label === 'ЗП' || row.value !== this.count(0));
+          value: this.count(networkEpisodes),
+          tone: networkEpisodes <= 0 ? 'neutral' : violations?.severity === 'CRITICAL' ? 'danger' : 'warn',
+          hint: `${this.count(networkEpisodes)} эпизодов, ${this.count(violations?.attemptCount || 0)} попыток.`
+        }
+      ];
     }
 
     if (!this.hasStats(member)) {
@@ -280,6 +369,24 @@ export class TeamComponent implements OnDestroy {
 
   networkViolationResult(detail: WorkerNetworkViolationDetail): string {
     return detail.blocked ? 'Заблокировано' : 'Зафиксировано в режиме аудита';
+  }
+
+  networkViolationEvidence(evidence: string): string {
+    const values = Object.fromEntries(evidence.split(';').map((part) => {
+      const separator = part.indexOf('=');
+      return separator < 0 ? [part, ''] : [part.slice(0, separator), part.slice(separator + 1)];
+    }));
+    if (values['client'] !== 'capacitor') {
+      return 'Источник: браузер или старая версия приложения';
+    }
+    const networkLabels: Record<string, string> = {
+      cellular: 'мобильная сеть',
+      wifi: 'Wi-Fi',
+      none: 'нет сети',
+      unknown: 'сеть не определена'
+    };
+    const virtual = values['virtual'] === 'true' ? 'эмулятор' : values['virtual'] === 'false' ? 'физическое устройство' : 'устройство не определено';
+    return `${values['model'] || values['platform'] || 'Мобильное приложение'} · ${virtual} · ${networkLabels[values['network']] || values['network'] || 'сеть не определена'} · версия ${values['app'] || 'неизвестна'}`;
   }
 
   progressDetails(member: TeamMember): ProgressDetailRow[] {
@@ -376,6 +483,21 @@ export class TeamComponent implements OnDestroy {
     this.pushCountRow(rows, 'Просрочек всего', progress.totalOverdueCount, `Все просроченные карточки в расчёте ${periodHint}.`);
     this.pushCountRow(rows, 'Смена бота', progress.botChangeCount, `Сколько раз специалист нажал «смена» у аккаунта ${periodHint}.`);
     this.pushCountRow(rows, 'Блок бота', progress.botBlockCount, `Сколько раз специалист увёл аккаунт в блок ${periodHint}.`);
+    const publications = Number(progress.publishCompletedCount || 0);
+    if (monthMode && publications > 0) {
+      rows.push({
+        label: 'Блокировки %',
+        value: this.publicationRateLabel(progress.botBlockCount, publications),
+        tone: Number(progress.botBlockCount || 0) > 0 ? 'warn' : 'good',
+        hint: `Доля блокировок аккаунтов от ${this.formatNumber(publications)} публикаций ${periodHint}.`
+      });
+      rows.push({
+        label: 'Восстановления %',
+        value: this.publicationRateLabel(progress.recoveryCreatedCount, publications),
+        tone: Number(progress.recoveryCreatedCount || 0) > 0 ? 'neutral' : 'good',
+        hint: `Доля созданных восстановлений от ${this.formatNumber(publications)} публикаций ${periodHint}.`
+      });
+    }
     this.pushScoreRow(rows, 'Скорость', progress.speedScore, monthMode ? 'Средняя месячная оценка 0–100 по скорости закрытия задач.' : 'Оценка 0–100 по скорости закрытия после появления карточки. Ночное окно 00:00–10:00 не увеличивает время.');
     this.pushScoreRow(rows, 'Дисциплина', progress.disciplineScore, monthMode ? 'Средняя месячная оценка 0–100 по отсутствию просрочек.' : 'Оценка 0–100 по отсутствию просрочек.');
     this.pushScoreRow(rows, 'Нагрузка', progress.workloadScore, monthMode ? 'Средняя месячная оценка 0–100 по объёму выполненных задач.' : 'Оценка 0–100 по объёму выполненных задач относительно дневного норматива.');
@@ -504,6 +626,17 @@ export class TeamComponent implements OnDestroy {
     return member.userId;
   }
 
+  activeWorkerSortLabel(): string {
+    return this.workerSortOptions.find((option) => option.key === this.workerSortKey())?.shortLabel ?? 'По умолчанию';
+  }
+
+  workerSortDirectionLabel(): string {
+    if (this.workerSortKey() === 'default') {
+      return 'Исходный порядок';
+    }
+    return this.workerSortDirection() === 'desc' ? 'Сначала больше' : 'Сначала меньше';
+  }
+
   private hasStats(member: TeamMember): boolean {
     return [
       member.sum1Month,
@@ -525,6 +658,60 @@ export class TeamComponent implements OnDestroy {
 
   private count(value?: number | null): string {
     return `${new Intl.NumberFormat('ru-RU').format(value || 0)} шт.`;
+  }
+
+  private publicationRateLabel(count: number | null | undefined, publications: number | null | undefined): string {
+    const numerator = this.formatNumber(count);
+    const denominator = this.formatNumber(publications);
+    const rate = publicationRate(count, publications);
+    return rate === null
+      ? `${numerator}/${denominator} · —`
+      : `${numerator}/${denominator} · ${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(rate)}%`;
+  }
+
+  private publicationRatePercentLabel(count: number | null | undefined, publications: number | null | undefined): string {
+    const rate = publicationRate(count, publications);
+    return rate === null
+      ? '—'
+      : `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(rate)}%`;
+  }
+
+  private publicationRateDetail(
+    count: number | null | undefined,
+    publications: number | null | undefined,
+    unit: string
+  ): string {
+    const numerator = this.formatNumber(count);
+    const denominator = Number(publications || 0);
+    return denominator > 0
+      ? `${numerator} ${unit} / ${this.formatNumber(denominator)} публ.`
+      : `${numerator} ${unit} · нет публикаций`;
+  }
+
+  private readWorkerSort(): { key: WorkerSortKey; direction: WorkerSortDirection } {
+    try {
+      const raw = window.localStorage.getItem(this.workerSortStorageKey);
+      if (!raw) {
+        return { key: 'default', direction: 'asc' };
+      }
+      const value = JSON.parse(raw) as { key?: WorkerSortKey; direction?: WorkerSortDirection };
+      const key = WORKER_SORT_OPTIONS.some((option) => option.key === value.key) ? value.key! : 'default';
+      const direction = value.direction === 'asc' || value.direction === 'desc' ? value.direction : 'desc';
+      return { key, direction: key === 'default' ? 'asc' : direction };
+    } catch {
+      return { key: 'default', direction: 'asc' };
+    }
+  }
+
+  private storeWorkerSort(): void {
+    try {
+      window.localStorage.setItem(this.workerSortStorageKey, JSON.stringify({
+        key: this.workerSortKey(),
+        direction: this.workerSortDirection()
+      }));
+    } catch {
+      // The selected sort still works for the current page session.
+    }
   }
 
   private pushDurationRow(rows: ProgressDetailRow[], label: string, seconds: number | null | undefined, hint: string): void {

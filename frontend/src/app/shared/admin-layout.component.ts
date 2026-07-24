@@ -80,6 +80,7 @@ export class AdminLayoutComponent {
   }
   @Input() hideSidebarBeforeLogin = true;
   @Input() rightPanelMode: 'default' | 'custom' = 'default';
+  @Input() showDefaultRightPanelWithCustom = false;
   @Input() profileImageUrl: string | null = null;
   @Input() profileImageAlt = 'Фото профиля';
   @Input() managerPerformance: ManagerPerformanceScore | null = null;
@@ -104,7 +105,7 @@ export class AdminLayoutComponent {
       'manager-control', 'team', 'score', 'manager-control-self', 'achievements', 'gamification-rewards', 'analytics', 'training',
       'company-archive', 'cities', 'archive-admin', 'performers-admin',
       'tbank', 'common-billing', 'reputation-ai', 'dictionaries', 'users', 'new-user',
-      'migration', 'metrics'
+      'migration', 'mobile-update', 'metrics'
     ]),
     APP_LOGOUT_LINK
   ];
@@ -424,6 +425,14 @@ export class AdminLayoutComponent {
 
     return [
       {
+        key: 'team-progress',
+        label: 'Команда 100%',
+        value: performance.teamProgressEligibleDays > 0
+          ? `${performance.teamProgressReached100Days}/${performance.teamProgressEligibleDays} дн. · ${this.percent(performance.teamProgressReached100Rate)}`
+          : '-',
+        hint: `Дни, когда к 23:59 все работники менеджера закрыли на 100% задачи, поступившие до 23:00. Задачи последнего часа переходят на следующий день. Средний итоговый прогресс: ${this.percent(performance.teamProgressAveragePercent)}; незакрытых сотруднико-дней: ${performance.teamProgressMissedWorkerDays}.`
+      },
+      {
         key: 'problem-sla-rate',
         label: 'В срок проблем',
         value: this.percent(performance.problemSlaRate),
@@ -471,44 +480,51 @@ export class AdminLayoutComponent {
 
     return [
       {
+        key: 'team-completion',
+        label: 'Команда 100%',
+        weight: 15,
+        score: performance.teamCompletionScore,
+        hint: 'Итог работы команды к 23:59 по задачам, поступившим до 23:00: 70% фактора — доля полностью закрытых дней, 30% — средний итоговый прогресс.'
+      },
+      {
         key: 'problem-speed',
         label: 'Проблемы',
-        weight: 25,
+        weight: 17,
         score: performance.problemSpeedScore,
         hint: 'Скорость решения замечаний из дневного контроля. Открытые задачи не штрафуются жестко, пока они еще внутри SLA 8 часов.'
       },
       {
         key: 'client-response',
         label: 'Клиенты',
-        weight: 20,
+        weight: 21,
         score: performance.clientResponseScore,
         hint: 'Скорость ответа клиентам. Открытые сообщения считаются по текущему времени и штрафуются по мере приближения или выхода за норматив 30 минут.'
       },
       {
         key: 'overdue-control',
         label: 'Просрочки',
-        weight: 20,
+        weight: 21,
         score: performance.overdueControlScore,
         hint: 'Доля просроченных заказов в рабочей базе и возраст просрочек.'
       },
       {
         key: 'specialist-risk',
         label: 'Спец. и риски',
-        weight: 15,
+        weight: 13,
         score: performance.specialistRiskScore,
         hint: `Проблемы специалистов считаются по SLA 8 часов, риски по SLA 2 часа. Качество обработки рисков: ${performance.riskQualityScore}/100.`
       },
       {
         key: 'control-discipline',
         label: 'Контроль',
-        weight: 10,
+        weight: 9,
         score: performance.controlDisciplineScore,
         hint: 'Принятие контроля, закрытие дня и отсутствие формального быстрого прокликивания.'
       },
       {
         key: 'stability',
         label: 'Стабильность',
-        weight: 10,
+        weight: 4,
         score: performance.stabilityScore,
         hint: 'Меньше повторных проблем и отложенных задач означает более высокий балл.'
       }

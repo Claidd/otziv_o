@@ -542,7 +542,11 @@ export class GamificationProgressComponent {
       MANAGER_CONTROL_ACTION: 'Закрытые замечания',
       MANAGER_QUEUE_CLEARED: 'Полностью закрытая очередь',
       MANAGER_DAY_COMPLETED: 'Завершённые дни',
-      MANAGER_IDEAL_DAY: 'Идеальные дни'
+      MANAGER_IDEAL_DAY: 'Идеальные дни',
+      WORKER_DAY_100: 'Дни на 100%',
+      WORKER_100_STREAK: 'Серии на 100%',
+      MANAGER_TEAM_DAY_100: 'Командные дни на 100%',
+      MANAGER_TEAM_100_STREAK: 'Командные серии на 100%'
     }[eventType] ?? (eventType || 'Событие');
   }
 

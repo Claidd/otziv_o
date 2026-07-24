@@ -11,6 +11,8 @@ import {
   workerErrorMessage,
   workerOrderPaymentCopyText,
   workerOrderReviewCopyText,
+  workerOrderTargetStatus,
+  workerCredentialCopyTarget,
   workerMobileSections,
   workerReviewCopyLabel,
   workerSectionLabel
@@ -23,6 +25,13 @@ describe('worker-board config helpers', () => {
     expect(workerReviewCopyLabel('password')).toBe('Пароль');
     expect(trackWorkerSection(0, WORKER_SECTIONS[0])).toBe('new');
     expect(trackWorkerAction(0, WORKER_ORDER_STATUS_ACTIONS[0])).toBe('На проверке');
+  });
+
+  it('routes a waiting client order through link delivery without changing regular orders', () => {
+    const action = { label: 'на проверку', status: 'На проверке', icon: 'manage_search' };
+
+    expect(workerOrderTargetStatus({ waitingForClient: true }, action)).toBe('В проверку');
+    expect(workerOrderTargetStatus({ waitingForClient: false }, action)).toBe('На проверке');
   });
 
   it('keeps the mobile section picker focused on the seven work queues', () => {
@@ -55,6 +64,17 @@ describe('worker-board config helpers', () => {
     expect(trackWorkerReview(0, { id: 13 } as never)).toBe(13);
     expect(trackWorkerMetric(0, { section: 'publish' } as never)).toBe('publish');
     expect(trackWorkerOption(0, { id: 14 } as never)).toBe(14);
+  });
+
+  it('records credential copies against recovery tasks instead of deleted source reviews', () => {
+    expect(workerCredentialCopyTarget({
+      id: 143065,
+      recoveryTask: true,
+      recoveryTaskId: 465
+    } as never)).toEqual({ resource: 'recovery-task', id: 465 });
+
+    expect(workerCredentialCopyTarget({ id: 177434 } as never))
+      .toEqual({ resource: 'review', id: 177434 });
   });
 
   it('builds review copy text with company, promo and review link blocks', () => {

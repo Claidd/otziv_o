@@ -442,8 +442,8 @@
     <button
       type="button"
       (click)="botChangeRequested.emit()"
-      [disabled]="accountActionLocked() || isMutating('review-' + review.id + '-change-bot')"
-      [title]="accountActionTitle()"
+      [disabled]="isMutating('review-' + review.id + '-change-bot')"
+      title="Сменить аккаунт"
     >
       {{ isMutating('review-' + review.id + '-change-bot') ? '...' : 'смена' }}
     </button>

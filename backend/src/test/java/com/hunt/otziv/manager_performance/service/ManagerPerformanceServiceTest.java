@@ -3,12 +3,14 @@ package com.hunt.otziv.manager_performance.service;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlEventType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlGroup;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlSeverity;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlEventRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
@@ -20,6 +22,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -47,9 +50,13 @@ class ManagerPerformanceServiceTest {
     @Mock
     private ManagerDailyControlConcreteItemRepository concreteItemRepository;
     @Mock
+    private ManagerDailyControlEventRepository controlEventRepository;
+    @Mock
     private ClientChatUnansweredItemRepository unansweredItemRepository;
     @Mock
     private WorkerRiskIncidentRepository riskIncidentRepository;
+    @Mock
+    private ManagerTeamProgressService managerTeamProgressService;
 
     @InjectMocks
     private ManagerPerformanceService service;
@@ -58,7 +65,7 @@ class ManagerPerformanceServiceTest {
     void noPerformanceDataDoesNotProduceExcellentScore() {
         Manager manager = manager(1L, 101L);
         stubManagers(manager);
-        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE.withDayOfMonth(31)))
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE))
                 .thenReturn(List.of());
 
         ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
@@ -66,6 +73,25 @@ class ManagerPerformanceServiceTest {
         assertEquals(0, score.performanceScore());
         assertEquals(0, score.loadAdjustedPerformanceScore());
         assertEquals("-", score.grade());
+    }
+
+    @Test
+    void completedTeamDaysContributeOnlyTheirDeclaredWeightWithoutControlData() {
+        Manager manager = manager(1L, 101L);
+        stubManagers(manager);
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE)).thenReturn(List.of());
+        when(managerTeamProgressService.statisticsByManagerIds(
+                List.of(1L), DATE.withDayOfMonth(1), DATE
+        )).thenReturn(Map.of(1L, new ManagerTeamProgressService.TeamProgressStats(
+                10, 9, 1, 90.0, 99.0, 1, 93
+        )));
+
+        ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
+
+        assertEquals(14, score.performanceScore());
+        assertEquals(9, score.teamProgressReached100Days());
+        assertEquals(93, score.teamCompletionScore());
+        assertEquals("I", score.grade());
     }
 
     @Test
@@ -78,7 +104,7 @@ class ManagerPerformanceServiceTest {
             items.add(item(control, "ORDERS_WORKLOAD", ManagerDailyControlGroup.WORKLOAD, ManagerDailyControlItemType.PROBLEM, 100));
             items.add(item(control, "OVERDUE_ORDERS", ManagerDailyControlGroup.ACTION, ManagerDailyControlItemType.ORDER_STATUS, 1));
         });
-        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE.withDayOfMonth(31)))
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE))
                 .thenReturn(controls);
         when(itemRepository.findByControlIn(controls)).thenReturn(items);
         when(concreteItemRepository.findByParentItemIn(items)).thenReturn(List.of());
@@ -99,7 +125,7 @@ class ManagerPerformanceServiceTest {
         ManagerDailyControlItem problem = item(control, "REQUIRES_ATTENTION", ManagerDailyControlGroup.ACTION, ManagerDailyControlItemType.PROBLEM, 1);
         ManagerDailyControlConcreteItem concrete = concrete(control, problem);
         List<ManagerDailyControlItem> items = List.of(workload, problem);
-        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE.withDayOfMonth(31)))
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE))
                 .thenReturn(List.of(control));
         when(itemRepository.findByControlIn(List.of(control))).thenReturn(items);
         when(concreteItemRepository.findByParentItemIn(items)).thenReturn(List.of(concrete));
@@ -118,9 +144,9 @@ class ManagerPerformanceServiceTest {
         ManagerDailyControl control = control(manager, DATE);
         ManagerDailyControlItem problem = item(control, "REQUIRES_ATTENTION", ManagerDailyControlGroup.ACTION, ManagerDailyControlItemType.PROBLEM, 1);
         ManagerDailyControlConcreteItem concrete = concrete(control, problem);
-        concrete.setCreatedAt(LocalDateTime.now().minusHours(1));
+        concrete.setCreatedAt(DATE.atTime(20, 0));
         List<ManagerDailyControlItem> items = List.of(problem);
-        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE.withDayOfMonth(31)))
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE))
                 .thenReturn(List.of(control));
         when(itemRepository.findByControlIn(List.of(control))).thenReturn(items);
         when(concreteItemRepository.findByParentItemIn(items)).thenReturn(List.of(concrete));
@@ -128,7 +154,95 @@ class ManagerPerformanceServiceTest {
         ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
 
         assertEquals(100.0, score.problemSlaRate());
-        assertEquals(100, score.problemSpeedScore());
+        assertTrue(score.problemSpeedScore() > 0);
+    }
+
+    @Test
+    void overdueRateUsesBreachesAgainstAllActionEpisodes() {
+        Manager manager = manager(1L, 101L);
+        stubManagers(manager);
+        List<ManagerDailyControl> controls = controls(manager, 10);
+        List<ManagerDailyControlItem> items = new ArrayList<>();
+        controls.forEach(control -> {
+            items.add(item(control, "ORDERS_WORKLOAD", ManagerDailyControlGroup.WORKLOAD,
+                    ManagerDailyControlItemType.PROBLEM, 100));
+            items.add(item(control, "OVERDUE_ORDERS", ManagerDailyControlGroup.ACTION,
+                    ManagerDailyControlItemType.ORDER_STATUS, 1));
+            items.add(item(control, "MANAGER_ACTIONS", ManagerDailyControlGroup.ACTION,
+                    ManagerDailyControlItemType.PROBLEM, 100));
+        });
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE)).thenReturn(controls);
+        when(itemRepository.findByControlIn(controls)).thenReturn(items);
+        when(concreteItemRepository.findByParentItemIn(items)).thenReturn(List.of());
+
+        ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
+
+        assertEquals(1.0, score.overdueRate());
+        assertTrue(score.overdueControlScore() >= 98);
+    }
+
+    @Test
+    void ordinaryFollowUpDoesNotCountAsReopening() {
+        Manager manager = manager(1L, 101L);
+        stubManagers(manager);
+        ManagerDailyControl control = control(manager, DATE);
+        ManagerDailyControlItem problem = item(control, "REQUIRES_ATTENTION", ManagerDailyControlGroup.ACTION,
+                ManagerDailyControlItemType.PROBLEM, 1);
+        problem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        ManagerDailyControlConcreteItem concrete = concrete(control, problem);
+        concrete.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
+        concrete.setLastManualTouchAt(DATE.atTime(11, 0));
+        concrete.setFollowUpAt(DATE.plusDays(2).atTime(10, 0));
+        List<ManagerDailyControlItem> items = List.of(problem);
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE)).thenReturn(List.of(control));
+        when(itemRepository.findByControlIn(List.of(control))).thenReturn(items);
+        when(concreteItemRepository.findByParentItemIn(items)).thenReturn(List.of(concrete));
+
+        ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
+
+        assertEquals(0.0, score.reopenRate());
+        assertEquals(100, score.stabilityScore());
+    }
+
+    @Test
+    void actualControlReopeningIsCountedFromJournal() {
+        Manager manager = manager(1L, 101L);
+        stubManagers(manager);
+        ManagerDailyControl control = control(manager, DATE);
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE)).thenReturn(List.of(control));
+        when(itemRepository.findByControlIn(List.of(control))).thenReturn(List.of());
+        when(controlEventRepository.countByControlInAndEventType(
+                List.of(control), ManagerDailyControlEventType.CONTROL_REOPENED)).thenReturn(1L);
+
+        ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
+
+        assertEquals(100.0, score.reopenRate());
+        assertEquals(0, score.stabilityScore());
+    }
+
+    @Test
+    void futureTimestampDoesNotArtificiallyImproveValidSlowSample() {
+        Manager manager = manager(1L, 101L);
+        stubManagers(manager);
+        ManagerDailyControl control = control(manager, DATE);
+        ManagerDailyControlItem problem = item(control, "REQUIRES_ATTENTION", ManagerDailyControlGroup.ACTION,
+                ManagerDailyControlItemType.PROBLEM, 2);
+        ManagerDailyControlConcreteItem slow = concrete(control, problem);
+        slow.setId(901L);
+        slow.setCreatedAt(DATE.atTime(1, 0));
+        slow.setLastManualTouchAt(DATE.atTime(20, 0));
+        ManagerDailyControlConcreteItem invalidFuture = concrete(control, problem);
+        invalidFuture.setId(902L);
+        invalidFuture.setCreatedAt(DATE.plusDays(1).atTime(10, 0));
+        invalidFuture.setLastManualTouchAt(DATE.atTime(12, 0));
+        List<ManagerDailyControlItem> items = List.of(problem);
+        when(controlRepository.findByControlDateBetween(DATE.withDayOfMonth(1), DATE)).thenReturn(List.of(control));
+        when(itemRepository.findByControlIn(List.of(control))).thenReturn(items);
+        when(concreteItemRepository.findByParentItemIn(items)).thenReturn(List.of(slow, invalidFuture));
+
+        ManagerPerformanceScoreResponse score = service.score(DATE).getFirst();
+
+        assertEquals(0, score.problemSpeedScore());
     }
 
     private void stubManagers(Manager manager) {
@@ -136,6 +250,8 @@ class ManagerPerformanceServiceTest {
         when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
         lenient().when(unansweredItemRepository.findPerformanceItems(anyCollection(), any(), any(), any()))
                 .thenReturn(List.of());
+        lenient().when(managerTeamProgressService.statisticsByManagerIds(anyCollection(), any(), any()))
+                .thenReturn(Map.of());
     }
 
     private Manager manager(Long managerId, Long userId) {

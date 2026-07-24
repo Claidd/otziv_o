@@ -8,6 +8,7 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
+import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
@@ -65,6 +66,9 @@ class ApiReviewCheckControllerTest {
 
     @Mock
     private BusinessAuditService businessAuditService;
+
+    @Mock
+    private OrderPublicationApprovalService publicationApprovalService;
 
     @Test
     void anonymousResponseKeepsClientActionsButHidesInternalFields() {
@@ -144,9 +148,6 @@ class ApiReviewCheckControllerTest {
         UUID orderDetailId = UUID.randomUUID();
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
                 .thenReturn(orderDetails(orderDetailId, "На проверке"));
-        when(orderService.changeStatusForOrder(101L, "Публикация")).thenReturn(true);
-        when(reviewService.updateOrderDetailAndReviewAndPublishDate(any())).thenReturn(true);
-
         controller().approveReviews(
                 orderDetailId,
                 new ApiReviewCheckController.ReviewCheckUpdateRequest(
@@ -168,9 +169,12 @@ class ApiReviewCheckControllerTest {
         verify(reviewService).updateOrderDetailAndReview(any(OrderDetailsDTO.class), reviewCaptor.capture(), eq(501L));
         assertThat(reviewCaptor.getValue().getText()).isEqualTo("client changed text");
         assertThat(reviewCaptor.getValue().getAnswer()).isEqualTo("client changed answer");
-        verify(orderService).changeStatusForOrder(101L, "Публикация");
+        verify(publicationApprovalService).approvePreparedOrder(
+                eq(101L),
+                any(),
+                any()
+        );
         verify(orderService, never()).changeStatusForOrder(101L, "Коррекция");
-        verify(reviewService).updateOrderDetailAndReviewAndPublishDate(any());
     }
 
     @Test
@@ -328,7 +332,8 @@ class ApiReviewCheckControllerTest {
                 reviewService,
                 companyService,
                 reviewCheckArchiveService,
-                businessAuditService
+                businessAuditService,
+                publicationApprovalService
         );
     }
 

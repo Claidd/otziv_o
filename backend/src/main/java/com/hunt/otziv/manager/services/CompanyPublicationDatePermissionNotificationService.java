@@ -1,8 +1,11 @@
 package com.hunt.otziv.manager.services;
 
+import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.UserService;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +22,7 @@ public class CompanyPublicationDatePermissionNotificationService {
     private final UserService userService;
     private final TelegramService telegramService;
     private final ManagerPermissionService managerPermissionService;
+    private final CompanyRepository companyRepository;
 
     public void notifyEnabledByManager(
             Long companyId,
@@ -47,10 +51,42 @@ public class CompanyPublicationDatePermissionNotificationService {
                 : companyTitle.trim() + " (#" + companyId + ")";
         String text = "Менеджер включил разрешение специалистам менять даты публикации."
                 + "\nКомпания: " + company
+                + "\nСпециалист: " + workerLabel(companyId)
                 + "\nМенеджер: " + manager
                 + "\n\nРазрешение действует для отзывов во всех заказах этой компании.";
 
         recipients().values().forEach(user -> send(user, text));
+    }
+
+    private String workerLabel(Long companyId) {
+        if (companyId == null) {
+            return "не назначен";
+        }
+        return companyRepository.findByIdWithWorkers(companyId)
+                .map(company -> company.getWorkers() == null
+                        ? List.<Worker>of()
+                        : company.getWorkers().stream().filter(worker -> worker != null).toList())
+                .orElseGet(List::of)
+                .stream()
+                .map(Worker::getUser)
+                .filter(user -> user != null && user.isActive())
+                .sorted(Comparator.comparing(user -> userLabel(user).toLowerCase()))
+                .map(this::userLabel)
+                .filter(label -> !label.isBlank())
+                .reduce((left, right) -> left + ", " + right)
+                .orElse("не назначен");
+    }
+
+    private String userLabel(User user) {
+        if (user == null) {
+            return "";
+        }
+        String fio = user.getFio() == null ? "" : user.getFio().trim();
+        String username = user.getUsername() == null ? "" : user.getUsername().trim();
+        if (!fio.isBlank() && !username.isBlank()) {
+            return fio + " (" + username + ")";
+        }
+        return !fio.isBlank() ? fio : username;
     }
 
     private String actorLabel(Authentication authentication) {

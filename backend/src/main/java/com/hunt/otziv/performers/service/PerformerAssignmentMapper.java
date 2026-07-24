@@ -22,6 +22,8 @@ public class PerformerAssignmentMapper {
         Company company = assignment.getOrder() != null ? assignment.getOrder().getCompany() : null;
         Filial filial = assignment.getFilial();
         String cityTitle = assignment.getCity() != null ? safe(assignment.getCity().getTitle()) : "";
+        String externalConfirmStatus = assignment.getReview() != null ? safe(assignment.getReview().getExternalConfirmStatus()) : "";
+        String externalConfirmScreenshotUrl = assignment.getReview() != null ? safe(assignment.getReview().getExternalConfirmScreenshotUrl()) : "";
 
         return new PerformerAssignmentResponse(
                 assignment.getId(),
@@ -33,10 +35,14 @@ public class PerformerAssignmentMapper {
                 cityTitle,
                 assignment.getPlatform() != null ? assignment.getPlatform().name() : "",
                 assignment.getStatus() != null ? assignment.getStatus().name() : "",
+                externalConfirmStatus,
+                externalConfirmScreenshotUrl,
                 safe(assignment.getClientApprovedTextSnapshot()),
                 safe(assignment.getPerformerFinalText()),
                 safe(assignment.getInstruction()),
                 safe(assignment.getPublicationUrl()),
+                safe(assignment.getPerformerPublicationScreenshotUrl()),
+                safe(assignment.getManagerConfirmationScreenshotUrl()),
                 dateTime(assignment.getAcceptedAt()),
                 dateTime(assignment.getWalkedAt()),
                 dateTime(assignment.getPublishAvailableAt()),

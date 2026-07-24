@@ -13,6 +13,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Worker;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,9 @@ class OrderReviewMutationServiceTest {
 
     @Mock
     private CompanyService companyService;
+
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @Test
     void addNewReviewCreatesReviewRecalculatesTotalsAndIncrementsCompanyCounter() {
@@ -165,7 +169,8 @@ class OrderReviewMutationServiceTest {
                 orderDetailsService,
                 botAssignmentService,
                 reviewService,
-                companyService
+                companyService,
+                accountWalkScheduleService
         );
     }
 

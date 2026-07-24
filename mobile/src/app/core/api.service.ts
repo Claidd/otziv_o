@@ -1237,6 +1237,13 @@ export interface ManagerPerformanceScore {
   riskQualityScore: number;
   controlDisciplineScore: number;
   stabilityScore: number;
+  teamProgressEligibleDays: number;
+  teamProgressReached100Days: number;
+  teamProgressIncompleteDays: number;
+  teamProgressReached100Rate: number;
+  teamProgressAveragePercent: number;
+  teamProgressMissedWorkerDays: number;
+  teamCompletionScore: number;
 }
 
 export interface WorkerRiskIncident {
@@ -1346,7 +1353,19 @@ export interface ManagerControlConcreteItem {
   rollbackMessage?: string | null;
   canRollback?: boolean | null;
   specialistName?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: ManagerControlSlaState | null;
 }
+
+export type ManagerControlSlaState =
+  | 'TARGET'
+  | 'LATE'
+  | 'OVERDUE'
+  | 'COMPLETED_TARGET'
+  | 'COMPLETED_LATE'
+  | 'COMPLETED_OVERDUE';
 
 export interface ManagerControlItemDetail {
   itemId: number;
@@ -1376,6 +1395,7 @@ export interface ManagerControlWorkerExplanationStats {
   requestCount: number;
   unansweredCount: number;
   overdueCount: number;
+  hardBreachCount: number;
   averageResponseMinutes: number;
 }
 
@@ -1419,6 +1439,10 @@ export interface ManagerControlProblem {
   itemStatus?: ManagerControlItemStatus | null;
   actionType?: ManagerControlActionType | null;
   comment?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: ManagerControlSlaState | null;
 }
 
 export interface ManagerControlSection {
@@ -1432,6 +1456,10 @@ export interface ManagerControlSection {
   itemStatus?: ManagerControlItemStatus | null;
   actionType?: ManagerControlActionType | null;
   comment?: string | null;
+  firstObservedAt?: string | null;
+  targetDeadlineAt?: string | null;
+  hardDeadlineAt?: string | null;
+  slaState?: ManagerControlSlaState | null;
 }
 
 export interface ManagerControlOverdueStatus {
@@ -1453,6 +1481,12 @@ export interface ManagerControlManager {
   active: boolean;
   dailyControlId?: number | null;
   dailyControlStatus?: 'NOT_STARTED' | 'IN_PROGRESS' | 'GREEN' | 'YELLOW' | 'RED' | null;
+  startedAt?: string | null;
+  closedAt?: string | null;
+  morningStartedAt?: string | null;
+  morningCompletedAt?: string | null;
+  dayCheckedAt?: string | null;
+  finalCheckedAt?: string | null;
   qualityScore: number;
   qualityGrade?: string | null;
   riskScore: number;
@@ -1465,6 +1499,20 @@ export interface ManagerControlManager {
   warningCount: number;
   workloadCount: number;
   totalAttentionCount: number;
+  actionTotalCount?: number;
+  actionCompletedCount?: number;
+  actionRemainingCount?: number;
+  actionProgressPercent?: number;
+  actionResolvedCount?: number;
+  actionTakenCount?: number;
+  actionDeferredCount?: number;
+  actionAcknowledgedCount?: number;
+  actionAutoClosedCount?: number;
+  actionOverdueRemainingCount?: number;
+  actionRiskRemainingCount?: number;
+  actionUnansweredRemainingCount?: number;
+  actionOtherRemainingCount?: number;
+  leadActionCount?: number;
   overdueOrderCount: number;
   openRiskCount: number;
   orderAttentionCount: number;
@@ -2649,6 +2697,27 @@ export interface TeamMember {
   publish?: number | null;
   dailyProgress?: DailyWorkProgress | null;
   monthlyProgress?: DailyWorkProgress | null;
+  dailyNetworkViolations?: WorkerNetworkViolationStats | null;
+  monthlyNetworkViolations?: WorkerNetworkViolationStats | null;
+}
+
+export interface WorkerNetworkViolationStats {
+  visible: boolean;
+  episodeCount: number;
+  attemptCount: number;
+  daysWithViolations: number;
+  severity: 'NONE' | 'WARNING' | 'CRITICAL';
+  details: WorkerNetworkViolationDetail[];
+}
+
+export interface WorkerNetworkViolationDetail {
+  firstSeenAt: string;
+  lastSeenAt: string;
+  reason: string;
+  scope: string;
+  attemptCount: number;
+  provider?: string | null;
+  blocked: boolean;
 }
 
 export interface TeamResponse {
@@ -3927,20 +3996,31 @@ export class ApiService {
     return this.http.delete<void>(this.apiUrl(`/api/worker/bots/${botId}`));
   }
 
-  logWorkerReviewCopyClick(reviewId: number, field: 'login' | 'password', source?: WorkerActivitySource): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`), { field, ...source });
+  logWorkerReviewCopyClick(
+    reviewId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<WorkerCredentialPreparation | null> {
+    return this.http.post<WorkerCredentialPreparation | null>(
+      this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`),
+      { field, ...source }
+    );
   }
 
-  updateWorkerReviewText(reviewId: number, orderId: number, text: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/text`), { orderId, text });
+  updateWorkerReviewText(reviewId: number, orderId: number, text: string, source?: WorkerActivitySource): Observable<void> {
+    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/text`), { orderId, text, ...source });
   }
 
-  updateWorkerReviewAnswer(reviewId: number, orderId: number, answer: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/answer`), { orderId, answer });
+  updateWorkerReviewBotName(reviewId: number, botName: string): Observable<void> {
+    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/bot-name`), { botName });
   }
 
-  updateWorkerReviewNote(reviewId: number, orderId: number, comment: string): Observable<void> {
-    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/note`), { orderId, comment });
+  updateWorkerReviewAnswer(reviewId: number, orderId: number, answer: string, source?: WorkerActivitySource): Observable<void> {
+    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/answer`), { orderId, answer, ...source });
+  }
+
+  updateWorkerReviewNote(reviewId: number, orderId: number, comment: string, source?: WorkerActivitySource): Observable<void> {
+    return this.http.put<void>(this.apiUrl(`/api/worker/reviews/${reviewId}/note`), { orderId, comment, ...source });
   }
 
   getLeadBoard(query: LeadBoardQuery = {}): Observable<LeadBoard> {

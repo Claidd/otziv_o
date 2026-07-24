@@ -1,34 +1,76 @@
-<app-admin-layout title="Кабинет исполнителя" active="performer">
-  <app-mobile-status-slider
-    class="mobile-performer-status"
-    [items]="mobileStatusItems()"
-    [activeKey]="activeSection()"
-    ariaLabel="Разделы кабинета исполнителя"
-    (select)="selectMobileSection($event)"
-  />
+<app-admin-layout [title]="title()" active="performer">
+  <section class="worker-workspace performer-workspace">
+    <app-mobile-status-slider
+      class="mobile-performer-status"
+      [items]="mobileStatusItems()"
+      [activeKey]="activeSection()"
+      ariaLabel="Разделы кабинета исполнителя"
+      (select)="selectMobileSection($event)"
+    />
 
-  <section class="toolbar">
-    @for (section of sections(); track section.key) {
-      <button type="button" [class.active]="activeSection() === section.key" (click)="setSection(section.key)">
-        <span class="material-icons-sharp">{{ section.icon }}</span>
-        <span>{{ section.label }}</span>
-        <strong>{{ section.count }}</strong>
-      </button>
+    <div class="worker-controls">
+      <header class="worker-toolbar">
+        <nav class="worker-dropdowns" aria-label="Меню исполнителя">
+          <select class="worker-section-select" [value]="activeSection()" (change)="selectMobileSection($any($event.target).value)" aria-label="Раздел исполнителя">
+            @for (section of sections(); track section.key) {
+              <option [value]="section.key">{{ section.label }} · {{ section.count }}</option>
+            }
+          </select>
+
+          <div class="section-tabs" aria-label="Статусы исполнителя">
+            @for (section of sections(); track section.key) {
+              <button type="button" [class.active]="activeSection() === section.key" (click)="setSection(section.key)">
+                <span class="material-icons-sharp">{{ section.icon }}</span>
+                {{ section.label }}
+                <strong class="section-count">{{ section.count }}</strong>
+              </button>
+            }
+          </div>
+        </nav>
+
+        <div class="search-line toolbar-search" [class.has-clear]="keyword()">
+          <label>
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="text"
+              placeholder="Компания, филиал, отзыв, ID"
+              [value]="keyword()"
+              (input)="setKeyword($any($event.target).value)"
+              (keyup.enter)="load()"
+            >
+          </label>
+
+          <button type="button" class="icon-button search-refresh" (click)="load()" [disabled]="loading()" title="Обновить">
+            <span class="material-icons-sharp">refresh</span>
+          </button>
+
+          @if (keyword()) {
+            <button type="button" class="icon-button" (click)="clearSearch()" title="Сбросить поиск">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          }
+        </div>
+      </header>
+    </div>
+
+    @if (error()) {
+      <app-load-error-card title="Карточки не загружены" [message]="error()!" />
     }
-  </section>
 
-  @if (error()) {
-    <app-load-error-card title="Задания не загружены" [message]="error()!" />
-  }
-
-  @if (loading()) {
-    <section class="empty">Загружаю задания</section>
-  } @else if (currentItems().length === 0) {
-    <section class="empty">В этом разделе пока пусто</section>
-  } @else {
-    <section class="assignment-grid">
-      @for (item of currentItems(); track item.id) {
-        <article class="assignment-card">
+    @if (loading()) {
+      <section class="empty">Загружаю карточки</section>
+    } @else if (currentItems().length === 0) {
+      <section class="empty">{{ keyword() ? 'По поиску ничего не найдено' : 'В этом разделе пока пусто' }}</section>
+    } @else {
+      <section class="worker-cards review-cards assignment-grid">
+        @for (item of currentItems(); track item.id) {
+          <article
+            class="assignment-card worker-card"
+            [class.card-tone--wait]="activeSection() === 'offers'"
+            [class.card-tone--walk]="activeSection() === 'active'"
+            [class.card-tone--publication]="activeSection() === 'waitingPublication'"
+            [class.card-tone--success]="activeSection() === 'published' || activeSection() === 'paid'"
+          >
           <header>
             <div>
               <h2>{{ item.companyTitle || 'Компания' }}</h2>
@@ -39,6 +81,9 @@
 
           @if (item.filialTitle) {
             <p class="meta">{{ item.filialTitle }}</p>
+          }
+          @if (item.externalConfirmStatus && activeSection() === 'published') {
+            <p class="meta">Проверка: {{ item.externalConfirmStatus }}</p>
           }
           <p class="instruction">{{ item.instruction }}</p>
           <blockquote>{{ item.draftText }}</blockquote>
@@ -72,6 +117,20 @@
                 Опубликовал
               </button>
             }
+
+            @if (activeSection() === 'published') {
+              <span class="assignment-state">
+                <span class="material-icons-sharp">manage_search</span>
+                Ждет подтверждения менеджера
+              </span>
+            }
+
+            @if (activeSection() === 'paid') {
+              <span class="assignment-state">
+                <span class="material-icons-sharp">payments</span>
+                Выплата подтверждена
+              </span>
+            }
           </footer>
 
           @if (selectedAssignment()?.id === item.id) {
@@ -86,10 +145,20 @@
                   <input type="url" formControlName="publicationUrl">
                 </label>
                 <label>
+                  <span>Скриншот публикации</span>
+                  <input type="file" accept="image/*" (change)="uploadPublicationScreenshot(item, $event)">
+                </label>
+                @if (item.performerPublicationScreenshotUrl) {
+                  <a class="evidence-link" [href]="item.performerPublicationScreenshotUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp">image</span>
+                    Открыть загруженный скриншот
+                  </a>
+                }
+                <label>
                   <span>Комментарий</span>
                   <input type="text" formControlName="comment">
                 </label>
-                <button type="submit" [disabled]="actionSaving() === 'published-' + item.id">
+                <button type="submit" [disabled]="actionSaving() === 'published-' + item.id || actionSaving() === 'screenshot-' + item.id">
                   <span class="material-icons-sharp">done_all</span>
                   Отправить
                 </button>
@@ -107,18 +176,19 @@
               </form>
             }
           }
-        </article>
-      }
-    </section>
-  }
+          </article>
+        }
+      </section>
+    }
 
-  <app-mobile-status-sheet
-    [open]="mobileStatusSheetOpen()"
-    kicker="Исполнитель"
-    title="Выберите раздел"
-    [items]="mobileStatusItems()"
-    [activeKey]="activeSection()"
-    (selected)="selectMobileSection($event)"
-    (closed)="closeMobileStatusSheet()"
-  />
+    <app-mobile-status-sheet
+      [open]="mobileStatusSheetOpen()"
+      kicker="Исполнитель"
+      title="Выберите раздел"
+      [items]="mobileStatusItems()"
+      [activeKey]="activeSection()"
+      (selected)="selectMobileSection($event)"
+      (closed)="closeMobileStatusSheet()"
+    />
+  </section>
 </app-admin-layout>

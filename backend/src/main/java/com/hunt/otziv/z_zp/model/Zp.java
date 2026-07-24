@@ -40,4 +40,6 @@ public class Zp implements ZpStatView {
     private LocalDate created;
     @Column(name = "zp_active")
     private boolean active;
+    @Column(name = "zp_source")
+    private String source;
 }

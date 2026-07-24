@@ -16,7 +16,7 @@
       </nav>
 
       <div class="dictionary-actions">
-        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <label class="dictionary-search" [appTooltip]="searchTooltip()">
             <span class="material-icons-sharp">search</span>
             <input
@@ -37,7 +37,7 @@
           </button>
         }
 
-        @if (activeTab() !== 'settings' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
@@ -760,6 +760,100 @@
         }
       </article>
     </section>
+    } @else if (activeTab() === 'aiProvider') {
+    <section class="dictionary-ai-provider-page">
+      <article class="dictionary-card ai-provider-card">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Системная настройка</p>
+            <h2>AI-провайдер</h2>
+            <p class="ai-provider-intro">Выбранная модель используется для запросов «О компании», «Помощь» и инструментов AI-репутации. Настройка сохраняется после перезапуска.</p>
+          </div>
+          @if (aiProviderStatus(); as status) {
+            <span class="ai-provider-state" [class.available]="status.aiAvailable">
+              {{ status.aiAvailable ? 'доступен' : 'не доступен' }}
+            </span>
+          }
+        </div>
+
+        @if (aiProviderError()) {
+          <p class="ai-provider-error">{{ aiProviderError() }}</p>
+        }
+
+        @if (aiProviderStatus(); as status) {
+          <div class="ai-provider-switch" role="group" aria-label="AI-провайдер">
+            <button
+              type="button"
+              [class.active]="status.aiProvider === 'deepseek'"
+              [disabled]="switchingAiProvider() || !status.deepSeekConfigured"
+              [attr.aria-pressed]="status.aiProvider === 'deepseek'"
+              (click)="selectAiProvider('deepseek')">
+              <span class="material-icons-sharp">neurology</span>
+              <strong>DeepSeek</strong>
+              <small>{{ status.deepSeekConfigured ? status.deepSeekModel : 'не настроен' }}</small>
+              @if (status.aiProvider === 'deepseek') { <em>Используется</em> }
+            </button>
+            <button
+              type="button"
+              [class.active]="status.aiProvider === 'yandexgpt'"
+              [disabled]="switchingAiProvider() || !status.yandexGptConfigured"
+              [attr.aria-pressed]="status.aiProvider === 'yandexgpt'"
+              (click)="selectAiProvider('yandexgpt')">
+              <span class="material-icons-sharp">language</span>
+              <strong>YandexGPT</strong>
+              <small>{{ status.yandexGptConfigured ? status.yandexModel : 'не настроен' }}</small>
+              @if (status.aiProvider === 'yandexgpt') { <em>Используется</em> }
+            </button>
+            <button
+              type="button"
+              [class.active]="status.aiProvider === 'openai'"
+              [disabled]="switchingAiProvider() || !status.openAiConfigured"
+              [attr.aria-pressed]="status.aiProvider === 'openai'"
+              (click)="selectAiProvider('openai')">
+              <span class="material-icons-sharp">auto_awesome</span>
+              <strong>OpenAI</strong>
+              <small>{{ status.openAiConfigured ? status.openAiModel : 'не настроен' }}</small>
+              @if (status.aiProvider === 'openai') { <em>Используется</em> }
+            </button>
+          </div>
+
+          <div class="ai-provider-details">
+            <span><strong>Активный маршрут:</strong> {{ aiProviderDisplayName(status.aiProvider) }}</span>
+            <span><strong>Модель:</strong> {{ aiProviderModel(status.aiProvider, status) }}</span>
+            @if (status.aiProvider === 'deepseek') {
+              <span>
+                <strong>Поиск:</strong>
+                DeepSeek Anthropic Web Search · {{ status.deepSeekAnthropicWebSearchEnabled ? 'доступен' : 'выключен' }}
+                + сборщик {{ status.searchProvider }} · {{ status.searchAvailable ? 'доступен' : 'не доступен' }}
+              </span>
+            } @else {
+              <span><strong>Поиск:</strong> {{ status.searchProvider }} · {{ status.searchAvailable ? 'доступен' : 'не доступен' }}</span>
+            }
+            @if (status.aiProvider === 'deepseek') {
+              <span>
+                <strong>Глубокий поиск:</strong>
+                {{ status.deepSeekAnthropicWebSearchEnabled
+                  ? (status.deepSeekAnthropicDeepSearchEnabled
+                      ? 'Anthropic Web Search + карты/сайты через внешний сборщик · этапов: ' + status.deepSeekAnthropicDeepSearchPasses
+                        + ' · до ' + status.deepSeekAnthropicWebSearchMaxUses + ' обращений на этап'
+                      : 'Anthropic Web Search + внешний сборщик · один этап · до ' + status.deepSeekAnthropicWebSearchMaxUses + ' обращений')
+                  : 'Chat Completions без встроенного поиска' }}
+              </span>
+            }
+          </div>
+
+          @if (status.warnings.length) {
+            <div class="ai-provider-warnings">
+              @for (warning of status.warnings; track warning) {
+                <p><span class="material-icons-sharp">warning</span>{{ warning }}</p>
+              }
+            </div>
+          }
+        } @else if (loading()) {
+          <p class="ai-provider-loading">Загружаю настройки AI-провайдера...</p>
+        }
+      </article>
+    </section>
     } @else {
     <section class="dictionary-grid" [class.autoresponder-layout]="activeTab() === 'autoresponder'">
       <article class="dictionary-card table-card">
@@ -832,11 +926,24 @@
             }
 
             @case ('cities') {
+              <div class="dictionary-inline-actions">
+                <label class="city-coordinate-import">
+                  <span class="material-icons-sharp">upload_file</span>
+                  Импорт координат
+                  <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" (change)="importCityCoordinates($event)">
+                </label>
+                <button type="button" class="secondary" (click)="rebuildCityDistances()" [disabled]="rebuildingCityDistances()">
+                  <span class="material-icons-sharp">route</span>
+                  {{ rebuildingCityDistances() ? 'Пересчитываю' : 'Пересчитать id >= 150' }}
+                </button>
+              </div>
               <table>
                 <thead>
                   <tr>
                     <th>Город</th>
                     <th>ID</th>
+                    <th>Координаты</th>
+                    <th>Близость</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -844,9 +951,23 @@
                     <tr [class.selected]="selectedId() === city.id" (click)="selectCity(city)">
                       <td><strong>{{ city.title }}</strong></td>
                       <td>{{ city.id }}</td>
+                      <td>
+                        @if (city.latitude != null && city.longitude != null) {
+                          {{ city.latitude }}, {{ city.longitude }}
+                        } @else {
+                          <span class="muted">нет</span>
+                        }
+                      </td>
+                      <td>
+                        @if (city.distanceMatrixReady) {
+                          {{ city.distanceCount }}
+                        } @else {
+                          <span class="muted">не готово</span>
+                        }
+                      </td>
                     </tr>
                   } @empty {
-                    <tr><td colspan="2" class="no-results">Городов нет.</td></tr>
+                    <tr><td colspan="4" class="no-results">Городов нет.</td></tr>
                   }
                 </tbody>
               </table>
@@ -860,7 +981,7 @@
                     <th>Цена</th>
                     <th>Категория</th>
                     <th>Фото</th>
-                    <th>Исполнители</th>
+                    <th>Публикует</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -877,8 +998,11 @@
                       </td>
                       <td>
                         <span class="status-pill" [class.off]="!product.requiresPerformer">
-                          {{ product.requiresPerformer ? product.targetPlatform : 'Нет' }}
+                          {{ product.requiresPerformer ? ('Исполнитель · ' + product.targetPlatform) : 'Специалист' }}
                         </span>
+                        @if (product.requiresPerformer) {
+                          <span>{{ product.performerRewardPercent || 0 }}% исполнителю</span>
+                        }
                       </td>
                     </tr>
                   } @empty {
@@ -1582,11 +1706,20 @@
                 <span>Название города</span>
                 <input type="text" formControlName="title">
               </label>
+              <label appTooltip="Широта города. Если указать широту и долготу, сайт сможет рассчитать ближайшие города.">
+                <span>Широта</span>
+                <input type="number" step="0.000001" min="-90" max="90" formControlName="latitude">
+              </label>
+              <label appTooltip="Долгота города. После сохранения город пересчитывается в матрице расстояний.">
+                <span>Долгота</span>
+                <input type="number" step="0.000001" min="-180" max="180" formControlName="longitude">
+              </label>
               @if (cityForm.invalid && cityForm.touched) {
                 <p class="error compact">Название обязательно.</p>
               }
               <div class="actions">
                 @if (selectedId() !== null) {
+                  <button type="button" class="secondary" (click)="rebuildSelectedCityDistances()" [disabled]="rebuildingCityDistances() || saving()">Пересчитать город</button>
                   <button type="button" class="danger" (click)="deleteSelected()" [disabled]="deleting() || saving()">Удалить</button>
                 }
                 <button type="submit" [disabled]="saving()">{{ saving() ? 'Сохраняю' : 'Сохранить' }}</button>
@@ -1620,20 +1753,40 @@
                 <span>Нужна фотография</span>
               </label>
 
-              <label class="checkbox" appTooltip="Если включено, после перехода заказа в публикацию отзывы по этому продукту будут передаваться исполнителям в разрешенных rollout городах.">
-                <input type="checkbox" formControlName="requiresPerformer">
-                <span>Публикация через исполнителей</span>
-              </label>
-
-              <label appTooltip="Площадка попадет в карточку задания исполнителя и поможет внешней проверке выбрать правильный сценарий.">
-                <span>Площадка исполнителя</span>
-                <select formControlName="targetPlatform">
-                  <option value="YANDEX">Яндекс</option>
-                  <option value="GOOGLE">Google</option>
-                  <option value="GIS">2GIS</option>
-                  <option value="OTHER">Другая</option>
+              <label appTooltip="По умолчанию все продукты публикует специалист. Вариант «Исполнитель» включает раздачу отдельных карточек отзывов исполнителям в разрешенных rollout городах.">
+                <span>Кто публикует</span>
+                <select formControlName="requiresPerformer">
+                  <option [ngValue]="false">Специалист</option>
+                  <option [ngValue]="true">Исполнитель</option>
                 </select>
               </label>
+
+              @if (productForm.controls.requiresPerformer.value) {
+                <label appTooltip="Площадка попадет в карточку задания исполнителя и поможет внешней проверке выбрать правильный сценарий.">
+                  <span>Площадка исполнителя</span>
+                  <select formControlName="targetPlatform">
+                    <option value="YANDEX">Яндекс</option>
+                    <option value="GOOGLE">Google</option>
+                    <option value="GIS">2GIS</option>
+                    <option value="OTHER">Другая</option>
+                  </select>
+                </label>
+
+                <label appTooltip="Процент от цены продукта, который получит исполнитель после ручного подтверждения менеджером.">
+                  <span>Исполнитель, %</span>
+                  <input type="number" min="0" max="100" step="0.01" formControlName="performerRewardPercent">
+                </label>
+
+                <label appTooltip="Процент специалиста сохраняется в продукте для последующего расчета после оплаты клиентом.">
+                  <span>Специалист, %</span>
+                  <input type="number" min="0" max="100" step="0.01" formControlName="specialistRewardPercent">
+                </label>
+
+                <label appTooltip="Процент менеджера сохраняется в продукте для последующего расчета после оплаты клиентом.">
+                  <span>Менеджер, %</span>
+                  <input type="number" min="0" max="100" step="0.01" formControlName="managerRewardPercent">
+                </label>
+              }
 
               @if (productForm.invalid && productForm.touched) {
                 <p class="error compact">Название, цена и категория обязательны.</p>
@@ -3277,6 +3430,14 @@
     }
 
     @if (activeTab() === 'accounts') {
+      <article class="stat-card teal tracked-city-accounts">
+        <div>
+          <span>Город {{ trackedBotCityId }} · не заблокировано</span>
+          <strong>{{ trackedCityUnblockedAccounts() ?? '—' }}</strong>
+          <small>На момент входа на страницу</small>
+        </div>
+        <i class="material-icons-sharp">verified_user</i>
+      </article>
       <button type="button" class="import-accounts-button" (click)="openBotImport()">
         <span class="material-icons-sharp">upload_file</span>
         Добавить аккаунты

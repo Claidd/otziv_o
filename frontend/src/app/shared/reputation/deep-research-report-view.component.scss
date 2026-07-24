@@ -23,6 +23,33 @@
   gap: 0.8rem;
 }
 
+.coverage-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid rgba(211, 139, 30, 0.38);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  color: var(--otziv-dark);
+  background: rgba(255, 190, 75, 0.12);
+}
+
+.coverage-warning > .material-icons-sharp {
+  color: #c47a0b;
+}
+
+.coverage-warning strong,
+.coverage-warning span {
+  display: block;
+}
+
+.coverage-warning span {
+  margin-top: 0.25rem;
+  color: var(--otziv-info);
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 .report-head,
 .report-actions,
 .deep-report-topic header,

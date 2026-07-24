@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.BatchSize;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 @Entity
@@ -26,6 +27,16 @@ public class City {
     //    название города
     @Column(name = "city_title")
     private String title;
+
+    @Column(name = "latitude", precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 7)
+    private BigDecimal longitude;
+
+    @Builder.Default
+    @Column(name = "distance_matrix_ready", nullable = false)
+    private boolean distanceMatrixReady = false;
 
     //     одного города может быть много филиалов
     @OneToMany(mappedBy = "city", fetch = FetchType.LAZY, orphanRemoval = true)

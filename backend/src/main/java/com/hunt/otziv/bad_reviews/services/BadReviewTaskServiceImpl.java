@@ -28,6 +28,7 @@ import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -81,6 +82,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final BusinessAuditService businessAuditService;
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewBotAssignmentGuardService assignmentGuardService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -952,6 +954,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
         markReleasedIfChanged(review.getBot(), bot, "bad review source review bot changed");
         review.setBot(bot);
+        accountWalkScheduleService.synchronizeAfterAccountChange(review);
         reviewRepository.save(review);
     }
 

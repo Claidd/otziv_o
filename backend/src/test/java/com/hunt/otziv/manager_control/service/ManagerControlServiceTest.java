@@ -4,6 +4,9 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.client_messages.service.ClientMessageOrderStatusService;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
+import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
+import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
@@ -16,6 +19,8 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.common_billing.model.CommonInvoice;
+import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
@@ -42,8 +47,10 @@ import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -140,11 +147,15 @@ class ManagerControlServiceTest {
     @Mock
     private PaymentLinkRepository paymentLinkRepository;
     @Mock
+    private OrderPaymentIntegrityService orderPaymentIntegrityService;
+    @Mock
     private CommonInvoiceRepository commonInvoiceRepository;
     @Mock
     private CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     @Mock
     private CommonBillingService commonBillingService;
+    @Mock
+    private OrderPublicationApprovalService publicationApprovalService;
     @Mock
     private WorkerRiskIncidentRepository riskIncidentRepository;
     @Mock
@@ -185,8 +196,8 @@ class ManagerControlServiceTest {
                 firstObservedAt.plusHours(1), null, null
         ).withSla(firstObservedAt, null, null, null);
         when(appSettingService.getBoolean("manager.sla.enabled", false)).thenReturn(true);
-        when(appSettingService.getInt("manager.sla.target.message-minutes", 30)).thenReturn(30);
-        when(appSettingService.getInt("manager.sla.hard.message-minutes", 480)).thenReturn(480);
+        when(appSettingService.getInt("manager.sla.target.control-card-minutes", 30)).thenReturn(30);
+        when(appSettingService.getInt("manager.sla.hard.control-card-minutes", 60)).thenReturn(480);
 
         Method method = ManagerControlService.class.getDeclaredMethod(
                 "decorateConcreteSla",
@@ -433,12 +444,17 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void commonInvoiceConcreteActionIsRecordedWithoutOrderStatusSideEffects() throws Exception {
+    void commonInvoiceConcreteActionClosesCardWhenInvoiceIsNoLongerAProblem() throws Exception {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
         ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
         concrete.setEntityId(88L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(88L);
+        invoice.setStatus(CommonInvoiceStatus.INVOICED);
+        invoice.setUpdatedAt(LocalDateTime.now());
         stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findById(88L)).thenReturn(Optional.of(invoice));
 
         ManagerControlConcreteItemResponse response = service.actionConcreteItem(
                 concrete.getId(),
@@ -447,11 +463,37 @@ class ManagerControlServiceTest {
                 adminAuth()
         );
 
-        assertEquals(ManagerDailyControlItemStatus.ACTION_TAKEN, concrete.getStatus());
-        assertEquals("ACTION_TAKEN", response.itemStatus());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
         assertEquals("Ошибка счета показана в правой панели", concrete.getComment());
         verify(orderRepository, never()).findById(any());
         verify(orderService, never()).changeStatusForOrder(any(), any());
+    }
+
+    @Test
+    void commonInvoiceConcreteActionRejectsFalseDoneWhileInvoiceIsStillStale() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(88L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(88L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setUpdatedAt(LocalDateTime.now().minusDays(5));
+        when(dailyControlConcreteItemRepository.findById(concrete.getId())).thenReturn(Optional.of(concrete));
+        when(managerPermissionService.hasRole(any(), eq("ADMIN"))).thenReturn(true);
+        when(commonInvoiceRepository.findById(88L)).thenReturn(Optional.of(invoice));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest("ACTION_TAKEN", "Готово", null),
+                principal(),
+                adminAuth()
+        ));
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("все еще требует внимания"));
+        verify(dailyControlConcreteItemRepository, never()).save(any());
     }
 
     @Test
@@ -552,6 +594,57 @@ class ManagerControlServiceTest {
         assertEquals("RESOLVED", response.itemStatus());
         assertTrue(concrete.getComment().contains("WhatsApp-группа найдена"));
         verify(whatsAppGroupLinkSyncService).repairCompanyLink(company);
+    }
+
+    @Test
+    void repairRegularOrderCardRestoresClientTextReminderForNewWaitingOrder() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(25442L);
+        concrete.setReason("Автоответчик не обработал заказ: нет записи в очереди CLIENT_TEXT_REMINDER");
+
+        LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 7, 18, 14, 50, 19);
+        Company company = new Company();
+        company.setId(2155L);
+        company.setTitle("Хэлп Девелопмент");
+        company.setUrlChat("https://chat.whatsapp.com/test");
+        company.setGroupId("120363000@g.us");
+        OrderStatus newStatus = new OrderStatus();
+        newStatus.setId(1L);
+        newStatus.setTitle("Новый");
+        Order order = new Order();
+        order.setId(25442L);
+        order.setCompany(company);
+        order.setStatus(newStatus);
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(waitingChangedAt);
+
+        ScheduledClientMessageState healthyState = ScheduledClientMessageState.builder()
+                .id(4200L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetKey("client-text:25442:2026-07-18T14:50:19")
+                .orderId(25442L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(LocalDateTime.of(2026, 7, 24, 20, 54, 6))
+                .build();
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(orderRepository.findById(25442L)).thenReturn(Optional.of(order));
+        when(scheduledClientMessageStateRepository.findByOrderIdIn(List.of(25442L)))
+                .thenReturn(List.of(healthyState));
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("CLIENT_TEXT_REMINDER"));
+        verify(scheduledClientMessageService).ensureClientTextReminderForOrder(order);
+        verify(scheduledClientMessageService, never()).ensureOrderAutomationForOrder(order);
     }
 
     @Test

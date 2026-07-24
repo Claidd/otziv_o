@@ -49,9 +49,7 @@ public class StaffDailyProgressService {
             "RECOVERY_TASK_BOT_CHANGE"
     );
     private static final List<String> BOT_BLOCK_ACTIONS = List.of(
-            "REVIEW_BOT_DEACTIVATE",
-            "BAD_TASK_BOT_DEACTIVATE",
-            "RECOVERY_TASK_BOT_DEACTIVATE"
+            "REVIEW_BOT_DEACTIVATE"
     );
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -259,8 +257,36 @@ public class StaffDailyProgressService {
                 .toList(), date);
     }
 
+    @Transactional(readOnly = true)
+    public Map<Long, DailyWorkProgressResponse> workerEndOfDayProgressByWorkers(
+            Collection<Worker> workers,
+            LocalDate date,
+            LocalDateTime ignoreOpenedAtOrAfter
+    ) {
+        if (!progressEnabled() || workers == null || workers.isEmpty()) {
+            return Map.of();
+        }
+        return workerProgressBySubjectsInternal(workers.stream()
+                .filter(Objects::nonNull)
+                .map(worker -> new WorkerProgressSubject(
+                        worker.getId(),
+                        worker.getUser() == null ? null : worker.getUser().getId(),
+                        workerName(worker.getUser())
+                ))
+                .toList(), date, ignoreOpenedAtOrAfter, false);
+    }
+
     @Transactional
     public Map<Long, DailyWorkProgressResponse> workerProgressBySubjects(Collection<WorkerProgressSubject> workers, LocalDate date) {
+        return workerProgressBySubjectsInternal(workers, date, null, true);
+    }
+
+    private Map<Long, DailyWorkProgressResponse> workerProgressBySubjectsInternal(
+            Collection<WorkerProgressSubject> workers,
+            LocalDate date,
+            LocalDateTime ignoreOpenedAtOrAfter,
+            boolean persist
+    ) {
         if (!progressEnabled() || workers == null || workers.isEmpty()) {
             return Map.of();
         }
@@ -282,12 +308,20 @@ public class StaffDailyProgressService {
                 .distinct()
                 .toList();
         List<ActiveWorkItem> activeItems = activeItems(workerIds, safeDate);
+        if (ignoreOpenedAtOrAfter != null) {
+            activeItems = activeItems.stream()
+                    .filter(item -> includedInEndOfDay(item.addedAt(), ignoreOpenedAtOrAfter))
+                    .toList();
+        }
         Map<Long, WorkerActiveStats> active = activeStats(activeItems, safeDate);
-        Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate);
+        Map<Long, WorkerCompletionStats> completed = completionStats(workerIds, safeDate, ignoreOpenedAtOrAfter);
         Map<Long, WorkerActivityStats> activity = activityStats(workerUserIds, safeDate);
         Map<Long, WorkerAuxStats> aux = auxStats(workerIds, workerUserIds, workerUserIdByWorkerId, safeDate);
         Map<Long, Reached100State> reached100States = reached100States(workerIds, safeDate);
-        syncLifecycle(activeItems, completed, workerUserIdByWorkerId);
+        if (persist) {
+            syncLifecycle(activeItems, completed, workerUserIdByWorkerId);
+            excludeWaitingClientOrdersFromLifecycle(workerIds);
+        }
 
         Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
         for (WorkerProgressSubject worker : visibleWorkers) {
@@ -300,10 +334,18 @@ public class StaffDailyProgressService {
             Reached100State reached100State = reached100States.getOrDefault(worker.workerId(), Reached100State.empty());
             DailyWorkProgressResponse response = responseForWorker(safeDate, activeStats, stats, activityStats, auxStats, reached100State);
             result.put(worker.workerId(), response);
-            saveDaily(worker, response);
+            if (persist) {
+                saveDaily(worker, response);
+            }
         }
-        rebuildMonthly(safeDate.withDayOfMonth(1), false);
+        if (persist) {
+            rebuildMonthly(safeDate.withDayOfMonth(1), false);
+        }
         return result;
+    }
+
+    static boolean includedInEndOfDay(LocalDateTime addedAt, LocalDateTime cutoff) {
+        return cutoff == null || addedAt == null || addedAt.isBefore(cutoff);
     }
 
     @Transactional
@@ -637,7 +679,11 @@ public class StaffDailyProgressService {
 
         List<ActiveWorkItem> result = new ArrayList<>();
         jdbc.queryForList("""
-                SELECT worker_id, item_type, item_id, opened_at
+                SELECT active_items.worker_id,
+                       active_items.item_type,
+                       active_items.item_id,
+                       active_items.opened_at,
+                       COALESCE(lifecycle.available_at, lifecycle.opened_at, active_items.opened_at) AS added_at
                 FROM (
                     SELECT o.order_worker AS worker_id,
                            'order' AS item_type,
@@ -648,7 +694,7 @@ public class StaffDailyProgressService {
                     WHERE o.order_worker IN (:workerIds)
                       AND COALESCE(o.order_complete, 0) = 0
                       AND s.order_status_title IN ('Новый', 'Коррекция')
-                      AND COALESCE(o.order_waiting_for_client, 0) = 0
+                      AND o.order_waiting_for_client = FALSE
 
                     UNION ALL
 
@@ -734,12 +780,15 @@ public class StaffDailyProgressService {
                       AND b.review_recovery_batch_status = 'OPEN'
                       AND t.review_recovery_task_scheduled_date <= :today
                 ) active_items
-                WHERE worker_id IS NOT NULL
+                LEFT JOIN worker_work_item_lifecycle lifecycle
+                  ON lifecycle.work_item_key = CONCAT(active_items.item_type, ':', active_items.item_id)
+                WHERE active_items.worker_id IS NOT NULL
                 """, params).forEach(row -> result.add(new ActiveWorkItem(
                 longValue(row.get("worker_id")),
                 stringValue(row.get("item_type")),
                 longValue(row.get("item_id")),
-                toLocalDateTime(row.get("opened_at"))
+                toLocalDateTime(row.get("opened_at")),
+                toLocalDateTime(row.get("added_at"))
         )));
         return result;
     }
@@ -768,7 +817,11 @@ public class StaffDailyProgressService {
         return result;
     }
 
-    private Map<Long, WorkerCompletionStats> completionStats(List<Long> workerIds, LocalDate date) {
+    private Map<Long, WorkerCompletionStats> completionStats(
+            List<Long> workerIds,
+            LocalDate date,
+            LocalDateTime ignoreOpenedAtOrAfter
+    ) {
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("workerIds", workerIds)
                 .addValue("from", date.atStartOfDay())
@@ -777,7 +830,12 @@ public class StaffDailyProgressService {
 
         Map<Long, List<CompletedItem>> rowsByWorker = new HashMap<>();
         jdbc.queryForList("""
-                SELECT worker_id, item_type, item_id, opened_at, done_at
+                SELECT completed_items.worker_id,
+                       completed_items.item_type,
+                       completed_items.item_id,
+                       completed_items.opened_at,
+                       completed_items.done_at,
+                       COALESCE(lifecycle.available_at, lifecycle.opened_at, completed_items.opened_at) AS added_at
                 FROM (
                     SELECT o.order_worker AS worker_id,
                            'order' AS item_type,
@@ -799,6 +857,7 @@ public class StaffDailyProgressService {
                       AND e.created_at < :to
                       AND e.old_value IN ('Новый', 'Коррекция')
                       AND COALESCE(e.new_value, '') NOT IN ('Новый', 'Коррекция')
+                      AND o.order_waiting_for_client = FALSE
 
                     UNION ALL
 
@@ -889,18 +948,24 @@ public class StaffDailyProgressService {
                       AND t.review_recovery_task_status = 'DONE'
                       AND t.review_recovery_task_completed_date = :date
                 ) completed_items
-                WHERE worker_id IS NOT NULL
-                """, params).forEach(row -> rowsByWorker
-                .computeIfAbsent(longValue(row.get("worker_id")), ignored -> new ArrayList<>())
-                .add(new CompletedItem(
+                LEFT JOIN worker_work_item_lifecycle lifecycle
+                  ON lifecycle.work_item_key = CONCAT(completed_items.item_type, ':', completed_items.item_id)
+                WHERE completed_items.worker_id IS NOT NULL
+                """, params).forEach(row -> {
+            CompletedItem item = new CompletedItem(
                         longValue(row.get("worker_id")),
                         stringValue(row.get("item_type")),
                         longValue(row.get("item_id")),
                         toLocalDateTime(row.get("opened_at")),
+                        toLocalDateTime(row.get("added_at")),
                         toLocalDateTime(row.get("done_at")),
                         effectiveSeconds(toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at"))),
                         isOverdue(stringValue(row.get("item_type")), toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at")))
-                )));
+                );
+            if (includedInEndOfDay(item.addedAt(), ignoreOpenedAtOrAfter)) {
+                rowsByWorker.computeIfAbsent(item.workerId(), ignored -> new ArrayList<>()).add(item);
+            }
+        });
 
         Map<Long, WorkerCompletionStats> result = new HashMap<>();
         for (Map.Entry<Long, List<CompletedItem>> entry : rowsByWorker.entrySet()) {
@@ -991,7 +1056,11 @@ public class StaffDailyProgressService {
             jdbc.queryForList("""
                     SELECT worker_user_id,
                            SUM(CASE WHEN action IN (:changeActions) THEN 1 ELSE 0 END) AS bot_change_count,
-                           SUM(CASE WHEN action IN (:blockActions) THEN 1 ELSE 0 END) AS bot_block_count
+                           COUNT(DISTINCT CASE
+                               WHEN action IN (:blockActions)
+                               THEN SUBSTRING_INDEX(SUBSTRING_INDEX(details, 'botId=', -1), ';', 1)
+                               ELSE NULL
+                           END) AS bot_block_count
                     FROM worker_activity_events
                     WHERE worker_user_id IN (:workerUserIds)
                       AND created_at >= :from
@@ -1181,8 +1250,14 @@ public class StaffDailyProgressService {
                     worker_id = VALUES(worker_id),
                     worker_user_id = VALUES(worker_user_id),
                     section_code = VALUES(section_code),
-                    opened_at = LEAST(opened_at, VALUES(opened_at)),
-                    available_at = COALESCE(available_at, VALUES(available_at)),
+                    opened_at = CASE
+                        WHEN excluded = 1 AND exclusion_reason = 'waiting_for_client' THEN VALUES(opened_at)
+                        ELSE LEAST(opened_at, VALUES(opened_at))
+                    END,
+                    available_at = CASE
+                        WHEN excluded = 1 AND exclusion_reason = 'waiting_for_client' THEN VALUES(available_at)
+                        ELSE COALESCE(available_at, VALUES(available_at))
+                    END,
                     due_at = VALUES(due_at),
                     closed_at = VALUES(closed_at),
                     effective_close_seconds = VALUES(effective_close_seconds),
@@ -1191,6 +1266,24 @@ public class StaffDailyProgressService {
                     excluded = 0,
                     exclusion_reason = NULL
                 """, batch.toArray(MapSqlParameterSource[]::new));
+    }
+
+    private void excludeWaitingClientOrdersFromLifecycle(List<Long> workerIds) {
+        if (workerIds == null || workerIds.isEmpty()) {
+            return;
+        }
+        jdbc.update("""
+                UPDATE worker_work_item_lifecycle lifecycle
+                JOIN orders orders_waiting
+                  ON lifecycle.item_type = 'order'
+                 AND lifecycle.item_id = orders_waiting.order_id
+                SET lifecycle.active = 0,
+                    lifecycle.overdue = 0,
+                    lifecycle.excluded = 1,
+                    lifecycle.exclusion_reason = 'waiting_for_client'
+                WHERE orders_waiting.order_worker IN (:workerIds)
+                  AND orders_waiting.order_waiting_for_client = TRUE
+                """, new MapSqlParameterSource("workerIds", workerIds));
     }
 
     private MapSqlParameterSource lifecycleParams(
@@ -1388,10 +1481,23 @@ public class StaffDailyProgressService {
                        SUM(CASE WHEN d.reached_100 = 1 THEN 1 ELSE 0 END),
                        SUM(d.order_completed_count),
                        SUM(d.nagul_completed_count),
-                       SUM(d.publish_completed_count),
+                       CASE WHEN :closed THEN SUM(d.publish_completed_count) ELSE (
+                           SELECT COUNT(*)
+                           FROM reviews monthly_review
+                           WHERE monthly_review.review_worker = d.worker_id
+                             AND monthly_review.review_publish = 1
+                             AND COALESCE(monthly_review.review_published_marked_at, TIMESTAMP(monthly_review.review_changed)) >= :monthStart
+                             AND COALESCE(monthly_review.review_published_marked_at, TIMESTAMP(monthly_review.review_changed)) < :nextMonth
+                       ) END,
                        SUM(d.bad_completed_count),
                        SUM(d.recovery_completed_count),
-                       SUM(d.recovery_created_count),
+                       CASE WHEN :closed THEN SUM(d.recovery_created_count) ELSE (
+                           SELECT COUNT(*)
+                           FROM review_recovery_tasks monthly_recovery
+                           WHERE monthly_recovery.review_recovery_task_worker = d.worker_id
+                             AND monthly_recovery.review_recovery_task_created_at >= :monthStart
+                             AND monthly_recovery.review_recovery_task_created_at < :nextMonth
+                       ) END,
                        SUM(d.order_overdue_count),
                        SUM(d.total_overdue_count),
                        AVG(d.average_close_seconds),
@@ -1403,8 +1509,30 @@ public class StaffDailyProgressService {
                        SUM(d.active_work_seconds),
                        AVG(d.work_window_seconds),
                        SUM(d.activity_events),
-                       SUM(d.bot_change_count),
-                       SUM(d.bot_block_count),
+                       CASE WHEN :closed THEN SUM(d.bot_change_count) ELSE (
+                           SELECT COUNT(*)
+                           FROM worker_activity_events monthly_change
+                           WHERE monthly_change.worker_user_id = (
+                               SELECT monthly_worker.user_id
+                               FROM workers monthly_worker
+                               WHERE monthly_worker.worker_id = d.worker_id
+                           )
+                             AND monthly_change.created_at >= :monthStart
+                             AND monthly_change.created_at < :nextMonth
+                             AND monthly_change.action IN ('REVIEW_BOT_CHANGE', 'BAD_TASK_BOT_CHANGE', 'RECOVERY_TASK_BOT_CHANGE')
+                       ) END,
+                       CASE WHEN :closed THEN SUM(d.bot_block_count) ELSE (
+                           SELECT COUNT(*)
+                           FROM worker_activity_events monthly_block
+                           WHERE monthly_block.worker_user_id = (
+                               SELECT monthly_worker.user_id
+                               FROM workers monthly_worker
+                               WHERE monthly_worker.worker_id = d.worker_id
+                           )
+                             AND monthly_block.created_at >= :monthStart
+                             AND monthly_block.created_at < :nextMonth
+                             AND monthly_block.action = 'REVIEW_BOT_DEACTIVATE'
+                       ) END,
                        SUM(d.load_score),
                        AVG(d.efficiency_score),
                        :closed
@@ -1674,7 +1802,13 @@ public class StaffDailyProgressService {
         return null;
     }
 
-    private record ActiveWorkItem(Long workerId, String itemType, Long itemId, LocalDateTime openedAt) {
+    private record ActiveWorkItem(
+            Long workerId,
+            String itemType,
+            Long itemId,
+            LocalDateTime openedAt,
+            LocalDateTime addedAt
+    ) {
     }
 
     private record CompletedItem(
@@ -1682,6 +1816,7 @@ public class StaffDailyProgressService {
             String itemType,
             Long itemId,
             LocalDateTime openedAt,
+            LocalDateTime addedAt,
             LocalDateTime doneAt,
             long durationSeconds,
             boolean overdue

@@ -100,6 +100,12 @@ public class ReviewPerformerAssignment {
     @Column(name = "publication_url", length = 1000)
     private String publicationUrl;
 
+    @Column(name = "performer_publication_screenshot_url", length = 1000)
+    private String performerPublicationScreenshotUrl;
+
+    @Column(name = "manager_confirmation_screenshot_url", length = 1000)
+    private String managerConfirmationScreenshotUrl;
+
     @Column(name = "instruction", length = 3000)
     private String instruction;
 

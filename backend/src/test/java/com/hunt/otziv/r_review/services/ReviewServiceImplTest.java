@@ -11,11 +11,13 @@ import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotChangeService;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.edit.ReviewEditService;
 import com.hunt.otziv.r_review.mapper.ReviewDtoMapper;
@@ -101,6 +103,9 @@ class ReviewServiceImplTest {
 
     @Mock
     private ReviewBotChangeService reviewBotChangeService;
+
+    @Mock
+    private ReviewAccountWalkScheduleService reviewAccountWalkScheduleService;
 
     @Mock
     private ReviewEditService reviewEditService;
@@ -208,6 +213,45 @@ class ReviewServiceImplTest {
 
         assertEquals(nextDate, review.getPublishedDate());
         verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void managerCannotClearUnpublishedDateWhileOrderIsInPublication() {
+        Review review = reviewForPublicationDatePermission(false);
+        review.getOrderDetails().getOrder().setStatus(OrderStatus.builder().title("Публикация").build());
+        LocalDate originalDate = review.getPublishedDate();
+        ReviewDTO dto = publicationDateUpdate(null);
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> reviewService.updateReview("ROLE_MANAGER", dto, 17L)
+        );
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("сначала переведите заказ в «Коррекцию»"));
+        assertEquals(originalDate, review.getPublishedDate());
+        verify(reviewRepository, never()).save(review);
+    }
+
+    @Test
+    void manualPublicationDateCannotUndercutCurrentAccountWalkWindow() {
+        Review review = reviewForPublicationDatePermission(false);
+        LocalDate requestedDate = nextAllowedPublicationDate(LocalDate.now().plusDays(3));
+        LocalDate walkNotBefore = requestedDate.plusDays(2);
+        ReviewDTO dto = publicationDateUpdate(requestedDate);
+        when(reviewRepository.findById(17L)).thenReturn(Optional.of(review));
+        when(reviewAccountWalkScheduleService.minimumPublicationDateForCurrentAccount(review))
+                .thenReturn(walkNotBefore);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> reviewService.updateReview("ROLE_MANAGER", dto, 17L)
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains(walkNotBefore.toString()));
+        verify(reviewRepository, never()).save(review);
     }
 
     private Review reviewForPublicationDatePermission(boolean allowed) {

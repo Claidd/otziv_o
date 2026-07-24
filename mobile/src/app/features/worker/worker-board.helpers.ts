@@ -19,6 +19,7 @@ export type ReviewCopyKind = 'url' | 'login' | 'password' | 'text' | 'answer' | 
 export const DEFAULT_WORKER_SECTION: WorkerBoardSection = 'new';
 export const WORKER_SECTIONS: readonly WorkerBoardSection[] = ['new', 'correct', 'nagul', 'recovery', 'publish', 'bad', 'all'];
 export const REVIEW_SECTIONS = new Set<WorkerBoardSection>(['nagul', 'recovery', 'publish', 'bad']);
+export const MOBILE_WORKER_ACTIVITY_SOURCE_PAGE = 'mobile-worker-board';
 
 export const WORKER_SECTION_LABELS: Record<WorkerBoardSection, string> = {
   all: 'Все',
@@ -51,6 +52,15 @@ export const ORDER_STATUS_ACTIONS: readonly WorkerStatusAction[] = [
   { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
   { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
 ];
+
+export function workerOrderTargetStatus(
+  order: Pick<OrderItem, 'waitingForClient'>,
+  action: WorkerStatusAction
+): string {
+  return order.waitingForClient && action.status === 'На проверке'
+    ? 'В проверку'
+    : action.status;
+}
 
 export const DEFAULT_WORKER_PERMISSIONS: WorkerPermissions = {
   canManageOrderStatuses: false,
@@ -121,4 +131,11 @@ export function workerReviewTitle(review: WorkerReviewItem, section: WorkerBoard
   return filial && (section === 'nagul' || section === 'recovery' || section === 'publish')
     ? `${company} - ${filial}`
     : company;
+}
+
+export function formatCredentialWaitSeconds(seconds: number): string {
+  const normalized = Math.max(0, Math.ceil(Number(seconds) || 0));
+  const minutes = Math.floor(normalized / 60);
+  const remainder = normalized % 60;
+  return `${minutes}:${String(remainder).padStart(2, '0')}`;
 }

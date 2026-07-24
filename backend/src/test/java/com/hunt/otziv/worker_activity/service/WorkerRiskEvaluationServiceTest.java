@@ -318,6 +318,45 @@ class WorkerRiskEvaluationServiceTest {
     }
 
     @Test
+    void normalDailyNagulVolumeDoesNotCreateFrequencyIncident() {
+        WorkerRiskEvaluationService service = service();
+        WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_NAGUL);
+        User worker = user(1L, "worker", "Иван Работник", 101L);
+        when(eventRepository.countByWorkerUserIdAndActionInAndCreatedAtGreaterThanEqual(
+                eq(1L), eq(List.of(WorkerActivityAction.REVIEW_NAGUL)), any(LocalDateTime.class)
+        )).thenReturn(0L, 51L);
+
+        service.evaluateSafely(event, worker);
+
+        verify(incidentRepository, never()).save(any(WorkerRiskIncident.class));
+    }
+
+    @Test
+    void dailyNagulLimitIsRaisedToOneHundred() {
+        WorkerRiskEvaluationService service = service();
+        WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_NAGUL);
+        User worker = user(1L, "worker", "Иван Работник", 101L);
+        when(eventRepository.countByWorkerUserIdAndActionInAndCreatedAtGreaterThanEqual(
+                eq(1L), eq(List.of(WorkerActivityAction.REVIEW_NAGUL)), any(LocalDateTime.class)
+        )).thenReturn(0L, 100L);
+        when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
+                eq(1L),
+                eq("NAGUL_DAY"),
+                eq(WorkerRiskIncidentStatus.OPEN),
+                eq(501L),
+                any(LocalDateTime.class)
+        )).thenReturn(false);
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.evaluateSafely(event, worker);
+
+        ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
+        verify(incidentRepository).save(captor.capture());
+        assertEquals("NAGUL_DAY", captor.getValue().getRuleCode());
+        assertEquals(true, captor.getValue().getDetails().contains("порог: 100"));
+    }
+
+    @Test
     void repeatedFastCloseAfterAccountCopyCreatesSeriesIncident() {
         WorkerRiskEvaluationService service = service();
         WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_NAGUL);

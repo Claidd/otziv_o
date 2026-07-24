@@ -30,6 +30,7 @@ public class AiReviewTemplateFactory {
     private final OpenAiProvider openAiProvider;
     private final ObjectMapper objectMapper;
     private final ReputationAiProperties properties;
+    private final ReputationAiProviderSelectionService providerSelectionService;
 
     public boolean isOpenAiAvailable() {
         return openAiProvider.isAvailable();
@@ -226,6 +227,9 @@ public class AiReviewTemplateFactory {
     }
 
     private String modelLabel(String profileKey) {
+        if (isDeepSeekActive()) {
+            return properties.getDeepseek().getModel();
+        }
         if (isYandexActive()) {
             return properties.getYandex().getModel();
         }
@@ -234,12 +238,10 @@ public class AiReviewTemplateFactory {
     }
 
     private boolean isYandexActive() {
-        String provider = properties.getProvider();
-        if (provider == null) {
-            return false;
-        }
-        return "yandex".equalsIgnoreCase(provider.trim())
-                || "yandexgpt".equalsIgnoreCase(provider.trim())
-                || "yandex-gpt".equalsIgnoreCase(provider.trim());
+        return "yandexgpt".equals(providerSelectionService.activeProvider());
+    }
+
+    private boolean isDeepSeekActive() {
+        return "deepseek".equals(providerSelectionService.activeProvider());
     }
 }

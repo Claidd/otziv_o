@@ -261,7 +261,7 @@ public class OrderStatusTransitionService {
                 if (orderStatusNotificationService.hasWorkerWithTelegram(order)) {
                     String companyTitle = order.getCompany().getTitle();
                     telegramService.sendMessage(
-                            order.getWorker().getUser().getTelegramChatId(),
+                            order.getWorker().getUser().getWorkerTelegramGroupChatId(),
                             companyTitle + ". Новый заказ из Архива. " +
                                     "\n https://o-ogo.ru/worker/new_orders"
                     );
@@ -553,6 +553,7 @@ public class OrderStatusTransitionService {
 
     private boolean handleToCheckStatus(Order order) {
         validateReviewsReadyForCheck(order);
+        clearCurrentClientWaiting(order);
 
         try {
             log.info("=== НАЧАЛО ПЕРЕВОДА ЗАКАЗА В СТАТУС 'НА ПРОВЕРКУ' ===");
@@ -624,6 +625,20 @@ public class OrderStatusTransitionService {
         }
     }
 
+    private void clearCurrentClientWaiting(Order order) {
+        if (order == null || !order.isWaitingForClient()) {
+            return;
+        }
+
+        // Current waiting is finished because the received texts are being sent
+        // for review. Keep the persistent preference so the next repeat order
+        // starts by waiting for fresh client text again.
+        order.setClientTextExpected(true);
+        order.setWaitingForClient(false);
+        order.setWaitingForClientChangedAt(null);
+        log.info("Заказ ID {} больше не ждет текст клиента: отзывы переданы на проверку", order.getId());
+    }
+
     private boolean handleManualInCheckStatus(Order order) {
         validateReviewsReadyForCheck(order);
 
@@ -684,7 +699,7 @@ public class OrderStatusTransitionService {
                 return;
             }
 
-            Long chatId = order.getWorker().getUser().getTelegramChatId();
+            Long chatId = order.getWorker().getUser().getWorkerTelegramGroupChatId();
             String companyTitle = order.getCompany() == null ? "" : safeString(order.getCompany().getTitle());
             String comments = order.getCompany() == null ? "" : safeString(order.getCompany().getCommentsCompany());
             orderCorrectionTelegramNotifier.notifyWorkerCorrection(

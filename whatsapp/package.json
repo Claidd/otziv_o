@@ -5,7 +5,8 @@
   "description": "Internal WhatsApp Web gateway for Otziv",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test message-webhook.test.js group-invite.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",

@@ -636,6 +636,16 @@ public class UserServiceImpl implements UserService {
                 ));
     }
 
+    @Override
+    public Map<String, Long> getAllWorkerTelegramGroups() {
+        return userRepository.getAllWorkerTelegramGroups().stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> (Long) row[1],
+                        (left, right) -> left
+                ));
+    }
+
     private Image toImageEntity(MultipartFile file) throws IOException {
         return imageService.saveCompressedProfileImage(file);
     }

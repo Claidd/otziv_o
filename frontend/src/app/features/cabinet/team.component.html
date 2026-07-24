@@ -1,4 +1,9 @@
-<app-admin-layout [title]="'Моя команда'" active="team">
+<app-admin-layout
+  [title]="'Моя команда'"
+  active="team"
+  rightPanelMode="custom"
+  [showDefaultRightPanelWithCustom]="true"
+>
   <section class="team-toolbar">
     <div>
       <p class="eyebrow">PERSONAL</p>
@@ -31,6 +36,30 @@
           <input type="month" aria-label="Месяц" [ngModel]="selectedMonth()" (ngModelChange)="selectMonth($event)">
         </label>
       }
+      <div class="mobile-sort-control">
+        <label>
+          <span>Сортировка работников</span>
+          <select
+            aria-label="Сортировка работников"
+            [ngModel]="workerSortKey()"
+            (ngModelChange)="selectWorkerSortFromControl($event)"
+          >
+            @for (option of workerSortOptions; track option.key) {
+              <option [ngValue]="option.key">{{ option.shortLabel }}</option>
+            }
+          </select>
+        </label>
+        <button
+          type="button"
+          class="mobile-sort-direction"
+          [disabled]="workerSortKey() === 'default'"
+          (click)="toggleWorkerSortDirection()"
+          [attr.aria-label]="workerSortDirectionLabel()"
+          [attr.title]="workerSortDirectionLabel()"
+        >
+          <span class="material-icons-sharp">{{ workerSortDirection() === 'desc' ? 'south' : 'north' }}</span>
+        </button>
+      </div>
       <button type="button" (click)="refresh()" [disabled]="loading()">
         <span class="material-icons-sharp">refresh</span>
         {{ loading() ? 'Обновляю' : 'Обновить' }}
@@ -59,7 +88,7 @@
 
         <div class="people-grid">
           @for (member of members(section); track memberTrack(member)) {
-            <article class="person-card">
+            <article class="person-card" [class.worker-card]="section.key === 'worker'">
               @if (efficiencyBadge(member); as badge) {
                 <span
                   class="efficiency-badge"
@@ -71,54 +100,71 @@
                   {{ badge.value }}
                 </span>
               }
-
-              @if (team()?.canOpenUserInfo) {
-                <a class="avatar-link" [routerLink]="['/admin/user-info', member.userId]">
-                  <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
-                </a>
-              } @else {
-                <div class="avatar-link">
-                  <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
-                </div>
+              @if (section.key === 'worker') {
+                @if (workerPrimaryPattern(member); as pattern) {
+                  <span
+                    class="pattern-signal-badge"
+                    [attr.title]="pattern.title + '. ' + pattern.message"
+                    [attr.aria-label]="pattern.title + '. ' + pattern.message"
+                  >
+                    <span class="material-icons-sharp">insights</span>
+                  </span>
+                }
               }
 
-              <div class="person-main">
-                <h3>{{ member.fio || member.login }}</h3>
-                <p>{{ member.login }}</p>
+              <div class="person-identity">
+                @if (team()?.canOpenUserInfo) {
+                  <a class="avatar-link" [routerLink]="['/admin/user-info', member.userId]">
+                    <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
+                  </a>
+                } @else {
+                  <div class="avatar-link">
+                    <img [src]="imageUrl(member.imageId)" [alt]="member.fio">
+                  </div>
+                }
+
+                <div class="person-main">
+                  <h3>{{ member.fio || member.login }}</h3>
+                  <p>{{ member.login }}</p>
+                </div>
               </div>
 
-              @if (memberProgress(member); as progress) {
-                @if (progress.visible) {
-                <app-daily-progress-strip
-                  [progress]="progress"
-                  [label]="progressLabel(section.key)"
-                />
+              <div class="progress-strip-slot">
+                @if (memberProgress(member); as progress) {
+                  @if (progress.visible) {
+                    <app-daily-progress-strip
+                      [progress]="progress"
+                      [label]="progressLabel(section.key)"
+                    />
+                  }
                 }
-              }
+              </div>
 
-              @if (progressDetails(member); as details) {
-                @if (details.length) {
-                  <details class="progress-details">
-                    <summary title="Детализация дневного прогресса: остаток, нагрузка, активное время, рабочее окно и скорость закрытия.">
-                      <span class="material-icons-sharp">query_stats</span>
-                      {{ progressSummary(member) }}
-                    </summary>
-                    <div class="progress-detail-grid">
-                      @for (row of details; track row.label) {
-                        <span
-                          [class.good]="row.tone === 'good'"
-                          [class.warn]="row.tone === 'warn'"
-                          [attr.title]="row.hint"
-                          [attr.aria-label]="row.label + ': ' + row.value + '. ' + row.hint"
-                        >
-                          <small>{{ row.label }}</small>
-                          <strong>{{ row.value }}</strong>
-                        </span>
-                      }
-                    </div>
-                  </details>
+              <div class="progress-summary-slot">
+                @if (progressDetails(member); as details) {
+                  @if (details.length) {
+                    <details class="progress-details">
+                      <summary title="Детализация дневного прогресса: остаток, нагрузка, активное время, рабочее окно и скорость закрытия.">
+                        <span class="material-icons-sharp">query_stats</span>
+                        {{ progressSummary(member) }}
+                      </summary>
+                      <div class="progress-detail-grid">
+                        @for (row of details; track row.label) {
+                          <span
+                            [class.good]="row.tone === 'good'"
+                            [class.warn]="row.tone === 'warn'"
+                            [attr.title]="row.hint"
+                            [attr.aria-label]="row.label + ': ' + row.value + '. ' + row.hint"
+                          >
+                            <small>{{ row.label }}</small>
+                            <strong>{{ row.value }}</strong>
+                          </span>
+                        }
+                      </div>
+                    </details>
+                  }
                 }
-              }
+              </div>
 
               @if (statRows(section.key, member).length) {
                 <dl class="stats-grid">
@@ -128,52 +174,75 @@
                       [class.warn]="row.tone === 'warn'"
                       [class.danger]="row.tone === 'danger'"
                       [class.good]="row.tone === 'good'"
+                      [class.rate]="row.rate"
                       [attr.title]="row.hint || row.label"
                     >
                       <dt>{{ row.label }}</dt>
                       <dd>{{ row.value }}</dd>
+                      @if (row.detail) {
+                        <small class="stat-detail">{{ row.detail }}</small>
+                      }
                     </div>
                   }
                 </dl>
               }
 
               @if (section.key === 'worker') {
-                @if (networkViolations(member); as violations) {
-                  @if (violations.visible && violations.episodeCount > 0) {
-                  <details class="network-violation-details" [class.critical]="violations.severity === 'CRITICAL'">
-                    <summary>
-                      <span class="material-icons-sharp">wifi_off</span>
-                      Нарушения сети: {{ violations.episodeCount }}
-                    </summary>
-                    <p class="network-violation-total">
-                      Попыток: {{ violations.attemptCount }}
-                      @if (progressMode() === 'month') {
-                        · дней с нарушениями: {{ violations.daysWithViolations }}
-                      }
-                    </p>
-                    <div class="network-violation-list">
-                      @for (detail of violations.details; track detail.firstSeenAt + detail.reason + detail.scope) {
-                        <article>
-                          <strong>{{ networkViolationReason(detail.reason) }}</strong>
-                          <small>{{ networkViolationTime(detail) }} · {{ networkViolationScope(detail.scope) }}</small>
-                          @if (detail.provider) {
-                            <small>{{ detail.provider }}</small>
+                <div class="network-details-slot">
+                  @if (networkViolations(member); as violations) {
+                    @if (violations.visible && violations.episodeCount > 0) {
+                      <details class="network-violation-details" [class.critical]="violations.severity === 'CRITICAL'">
+                        <summary>
+                          <span class="material-icons-sharp">wifi_off</span>
+                          Нарушения сети: {{ violations.episodeCount }}
+                        </summary>
+                        <p class="network-violation-total">
+                          Попыток: {{ violations.attemptCount }}
+                          @if (progressMode() === 'month') {
+                            · дней с нарушениями: {{ violations.daysWithViolations }}
                           }
-                          <span>
-                            {{ detail.attemptCount }} попыток · {{ networkViolationResult(detail) }}
-                          </span>
-                        </article>
-                      }
+                        </p>
+                        <div class="network-violation-list">
+                          @for (detail of violations.details; track detail.firstSeenAt + detail.reason + detail.scope) {
+                            <article>
+                              <strong>{{ networkViolationReason(detail.reason) }}</strong>
+                              <small>{{ networkViolationTime(detail) }} · {{ networkViolationScope(detail.scope) }}</small>
+                              @if (detail.provider) {
+                                <small>{{ detail.provider }}</small>
+                              }
+                              @if (detail.clientEvidence) {
+                                <small>{{ networkViolationEvidence(detail.clientEvidence) }}</small>
+                              }
+                              <span>
+                                {{ detail.attemptCount }} попыток · {{ networkViolationResult(detail) }}
+                              </span>
+                            </article>
+                          }
+                        </div>
+                      </details>
+                    } @else {
+                      <div class="network-violation-empty">
+                        <span class="material-icons-sharp">wifi</span>
+                        Нарушения сети: 0
+                      </div>
+                    }
+                  } @else {
+                    <div class="network-violation-empty">
+                      <span class="material-icons-sharp">wifi</span>
+                      Нарушения сети: 0
                     </div>
-                  </details>
                   }
-                }
+                </div>
               }
 
-              @if (progressMode() === 'day' && section.key === 'worker' && statusRows(member).length) {
-                <div class="status-list">
-                  @for (row of statusRows(member); track row.label) {
-                    <span>{{ row.label }} {{ row.value }}</span>
+              @if (progressMode() === 'day' && section.key === 'worker') {
+                <div class="status-list-slot">
+                  @if (statusRows(member).length) {
+                    <div class="status-list">
+                      @for (row of statusRows(member); track row.label) {
+                        <span>{{ row.label }} {{ row.value }}</span>
+                      }
+                    </div>
                   }
                 </div>
               }
@@ -198,6 +267,139 @@
     <section class="empty-state">
       <span class="material-icons-sharp">hourglass_top</span>
       <p>Загружаю команду</p>
+    </section>
+  }
+
+  <section admin-right-content class="team-sort-panel" aria-label="Сортировка работников">
+    <header>
+      <span class="material-icons-sharp">sort</span>
+      <div>
+        <p>Работники</p>
+        <h2>Сортировка</h2>
+      </div>
+    </header>
+    <p class="team-sort-period">
+      {{ progressMode() === 'month' ? 'За выбранный месяц' : 'За выбранный день' }}
+    </p>
+    <div class="team-sort-options">
+      @for (option of workerSortOptions; track option.key) {
+        <button
+          type="button"
+          [class.active]="workerSortKey() === option.key"
+          (click)="selectWorkerSort(option.key)"
+          [attr.title]="option.hint"
+        >
+          <span class="material-icons-sharp">{{ option.icon }}</span>
+          <span>{{ option.shortLabel }}</span>
+          @if (workerSortKey() === option.key && option.key !== 'default') {
+            <span class="material-icons-sharp sort-direction">
+              {{ workerSortDirection() === 'desc' ? 'south' : 'north' }}
+            </span>
+          }
+        </button>
+      }
+    </div>
+    <footer>
+      <small>Выбрано</small>
+      <strong>{{ activeWorkerSortLabel() }}</strong>
+      <span>{{ workerSortDirectionLabel() }}</span>
+    </footer>
+  </section>
+
+  @if (team()?.patterns; as patterns) {
+    <section admin-right-content class="team-pattern-panel" aria-label="Закономерности в работе команды">
+      <header>
+        <span class="material-icons-sharp">insights</span>
+        <div>
+          <p>Аналитика</p>
+          <h2>Закономерности</h2>
+        </div>
+      </header>
+
+      <div class="pattern-meta">
+        <span>{{ patternPeriodLabel() }}</span>
+        <strong>{{ patternConfidenceLabel(patterns.confidence) }}</strong>
+        <small>{{ patterns.workerCount }} сотрудников в выборке · {{ patterns.publicationCount }} публикаций</small>
+      </div>
+
+      <div class="pattern-view-toggle" role="group" aria-label="Вид закономерностей">
+        <button type="button" [class.active]="patternView() === 'team'" (click)="selectPatternView('team')">
+          Команда
+        </button>
+        <button type="button" [class.active]="patternView() === 'workers'" (click)="selectPatternView('workers')">
+          Сотрудники
+        </button>
+      </div>
+
+      @if (patternView() === 'team') {
+        <div class="pattern-insight-list">
+          @for (insight of patterns.insights; track insight.code) {
+            <article
+              class="pattern-insight"
+              [class.warning]="insight.tone === 'WARNING'"
+              [class.positive]="insight.tone === 'POSITIVE'"
+              [class.neutral]="insight.tone === 'NEUTRAL'"
+            >
+              <strong>{{ insight.title }}</strong>
+              <p>{{ insight.message }}</p>
+              <small>{{ patternConfidenceLabel(insight.confidence) }}</small>
+            </article>
+          }
+        </div>
+      } @else {
+        <div
+          class="pattern-worker-list"
+          tabindex="0"
+          aria-label="Список персональных закономерностей сотрудников"
+        >
+          @for (member of workersWithPatternSignals(); track member.userId) {
+            @if (workerPattern(member); as workerPattern) {
+              @if (workerPatternSignal(member); as signal) {
+                <details>
+                  <summary>
+                    <span>{{ member.fio || member.login }}</span>
+                    <span
+                      class="pattern-worker-signal"
+                      [class.warning]="signal.insight.tone === 'WARNING'"
+                      [class.neutral]="signal.insight.tone === 'NEUTRAL'"
+                    >
+                      <strong>
+                        @if (signal.value !== null) {
+                          {{ signal.value | number:'1.0-1' }}{{ signal.valueSuffix }}
+                        } @else {
+                          {{ signal.fallbackValue }}
+                        }
+                      </strong>
+                      <small>{{ signal.metricLabel }}</small>
+                    </span>
+                  </summary>
+                  <p>
+                    {{ signal.eventCount }} {{ signal.eventLabel }} / {{ workerPattern.publicationCount }} публикаций
+                  </p>
+                  <span class="pattern-worker-analysis-title">Персональные наблюдения</span>
+                  @for (insight of workerPattern.insights; track insight.code) {
+                    <small
+                      class="pattern-worker-insight"
+                      [class.warning]="insight.tone === 'WARNING'"
+                      [class.positive]="insight.tone === 'POSITIVE'"
+                      [class.neutral]="insight.tone === 'NEUTRAL'"
+                    ><b>{{ insight.title }}.</b> {{ insight.message }}</small>
+                  }
+                </details>
+              }
+            }
+          } @empty {
+            <div class="pattern-empty">
+              <span class="material-icons-sharp">task_alt</span>
+              Пока недостаточно персональных данных
+            </div>
+          }
+        </div>
+      }
+
+      <footer>
+        Связь показателей не доказывает причину. Выводы используются только как сигнал для проверки.
+      </footer>
     </section>
   }
 </app-admin-layout>

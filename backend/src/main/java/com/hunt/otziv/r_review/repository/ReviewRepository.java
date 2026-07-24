@@ -31,6 +31,37 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
         Integer getActiveBotsCount();
     }
 
+    @Query("""
+        SELECT DISTINCT r
+        FROM Review r
+        JOIN FETCH r.orderDetails od
+        JOIN FETCH od.order o
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial orderFilial
+        LEFT JOIN FETCH orderFilial.city
+        LEFT JOIN FETCH od.product detailsProduct
+        LEFT JOIN FETCH r.product reviewProduct
+        LEFT JOIN FETCH r.filial reviewFilial
+        LEFT JOIN FETCH reviewFilial.city
+        WHERE r.publish = false
+          AND r.publishedDate IS NOT NULL
+          AND r.publishedDate <= :cutoffDate
+          AND (
+              reviewProduct.requiresPerformer = true
+              OR detailsProduct.requiresPerformer = true
+          )
+          AND NOT EXISTS (
+              SELECT a.id
+              FROM ReviewPerformerAssignment a
+              WHERE a.review = r
+          )
+        ORDER BY r.publishedDate ASC, r.id ASC
+    """)
+    List<Review> findPerformerAssignmentCandidates(
+            @Param("cutoffDate") LocalDate cutoffDate,
+            Pageable pageable
+    );
+
     @Query(value = """
         SELECT c.city_id AS cityId,
                c.city_title AS cityTitle,
@@ -989,4 +1020,38 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
           AND r.publishedDate <= :date
     """)
     long countDueToWalk(@Param("date") LocalDate date);
+
+    @Query("""
+        SELECT COUNT(r.id)
+        FROM Review r
+        JOIN r.orderDetails od
+        JOIN od.order o
+        JOIN o.status s
+        WHERE o.manager = :manager
+          AND s.title = 'Публикация'
+          AND r.publish = false
+          AND r.publishedDate IS NULL
+    """)
+    long countPublicationDateIssuesByManager(@Param("manager") Manager manager);
+
+    @Query("""
+        SELECT r
+        FROM Review r
+        JOIN FETCH r.orderDetails od
+        JOIN FETCH od.order o
+        JOIN FETCH o.status s
+        LEFT JOIN FETCH o.company
+        LEFT JOIN FETCH o.filial
+        LEFT JOIN FETCH o.worker w
+        LEFT JOIN FETCH w.user
+        WHERE o.manager = :manager
+          AND s.title = 'Публикация'
+          AND r.publish = false
+          AND r.publishedDate IS NULL
+        ORDER BY o.statusChangedAt ASC, r.id ASC
+    """)
+    List<Review> findPublicationDateIssuesByManager(
+            @Param("manager") Manager manager,
+            Pageable pageable
+    );
 }

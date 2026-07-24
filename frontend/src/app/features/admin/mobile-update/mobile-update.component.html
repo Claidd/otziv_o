@@ -1,0 +1,40 @@
+<app-admin-layout title="Обновление приложения" active="mobile-update">
+  <main class="update-admin">
+    <header class="page-heading">
+      <div><span class="eyebrow">ANDROID</span><h1>Версия приложения</h1><p>Публикация APK для установленного приложения сотрудников.</p></div>
+      <button class="icon-button" type="button" title="Обновить сведения" (click)="load()"><span class="material-icons-sharp">refresh</span></button>
+    </header>
+
+    <section class="release-band">
+      @if (loading()) {
+        <p>Загружаем текущую версию…</p>
+      } @else if (current()?.enabled) {
+        <div class="release-title"><span class="material-icons-sharp">android</span><div><small>Опубликована</small><strong>{{ current()?.versionName }}</strong></div></div>
+        <dl>
+          <div><dt>versionCode</dt><dd>{{ current()?.versionCode }}</dd></div>
+          <div><dt>Размер</dt><dd>{{ formatSize(current()?.fileSize ?? null) }}</dd></div>
+          <div><dt>Дата</dt><dd>{{ current()?.publishedAt | date:'dd.MM.yyyy HH:mm' }}</dd></div>
+          <div><dt>Режим</dt><dd>{{ current()?.required ? 'Обязательное' : 'Можно отложить' }}</dd></div>
+        </dl>
+        <code>{{ current()?.sha256 }}</code>
+      } @else {
+        <p>Мобильная версия ещё не опубликована.</p>
+      }
+    </section>
+
+    <section class="publish-panel">
+      <div class="section-title"><span class="material-icons-sharp">upload_file</span><div><h2>Опубликовать APK</h2><p>Файл станет доступен приложению сразу после успешной загрузки.</p></div></div>
+      <div class="form-grid">
+        <label class="file-field"><span>APK-файл</span><input type="file" accept=".apk,application/vnd.android.package-archive" (change)="selectFile($event)"><strong>{{ file?.name || 'Выберите подписанный APK' }}</strong></label>
+        <label><span>versionCode</span><input type="number" min="1" [(ngModel)]="versionCode"></label>
+        <label><span>Название версии</span><input [(ngModel)]="versionName" placeholder="1.0.54"></label>
+        <label><span>Минимальная версия</span><input type="number" min="0" [(ngModel)]="minSupportedVersionCode"></label>
+        <label class="notes"><span>Что изменилось</span><textarea rows="4" [(ngModel)]="notes" placeholder="Кратко перечислите изменения"></textarea></label>
+        <label class="required"><input type="checkbox" [(ngModel)]="required"><span>Обязательное обновление</span></label>
+      </div>
+      @if (error()) { <p class="message error" role="alert">{{ error() }}</p> }
+      @if (success()) { <p class="message success" role="status">{{ success() }}</p> }
+      <button class="publish-button" type="button" [disabled]="publishing()" (click)="publish()"><span class="material-icons-sharp">publish</span>{{ publishing() ? 'Загрузка…' : 'Опубликовать обновление' }}</button>
+    </section>
+  </main>
+</app-admin-layout>

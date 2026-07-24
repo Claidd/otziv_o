@@ -277,6 +277,14 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     @Query("""
         SELECT COUNT(b.id)
         FROM Bot b
+        WHERE b.botCity.id = :cityId
+          AND b.active = true
+    """)
+    long countActiveByCityId(@Param("cityId") Long cityId);
+
+    @Query("""
+        SELECT COUNT(b.id)
+        FROM Bot b
         WHERE b.active = true
           AND b.status.botStatusTitle = :status
     """)

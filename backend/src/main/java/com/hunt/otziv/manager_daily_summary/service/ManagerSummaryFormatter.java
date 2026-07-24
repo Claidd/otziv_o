@@ -92,6 +92,7 @@ public class ManagerSummaryFormatter {
                 + "🛠 Проблемные карточки: <b>" + row.problemCount() + "</b>\n"
                 + "├ окончательно решено: " + row.problemResolvedCount() + "\n"
                 + "├ действие выполнено: " + row.problemActionTakenCount() + "\n"
+                + problemOtherLine(row)
                 + "├ осталось открыто: " + row.problemOpenCount() + "\n"
                 + "└ среднее окончательного решения: " + duration(row.problemResolutionAverageSeconds()) + "\n"
                 + "⚠️ Просрочки: " + row.overdueCount() + " · риски: " + row.riskCount() + " · без ответа: " + row.unansweredCount() + "\n"
@@ -101,6 +102,14 @@ public class ManagerSummaryFormatter {
                 + "⏱ Подтверждённая активность: <b>" + duration(row.confirmedActiveSeconds()) + "</b>\n"
                 + "├ сайт: " + duration(row.siteActiveSeconds()) + "\n"
                 + "└ мессенджеры вне сайта: " + duration(row.messengerActiveSeconds());
+    }
+
+    private String problemOtherLine(ManagerDailySummaryResponse row) {
+        long other = Math.max(0, row.problemCount()
+                - row.problemResolvedCount()
+                - row.problemActionTakenCount()
+                - row.problemOpenCount());
+        return other == 0 ? "" : "├ отложено/прочее: " + other + "\n";
     }
 
     private String handledBreakdown(ManagerDailySummaryResponse row) {

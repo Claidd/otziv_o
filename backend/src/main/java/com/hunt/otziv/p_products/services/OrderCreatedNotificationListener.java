@@ -41,7 +41,7 @@ public class OrderCreatedNotificationListener {
         log.info("Отправляем уведомление работнику после коммита заказа {}...", order.getId());
 
         if (order.getWorker() != null && order.getWorker().getUser() != null) {
-            Long chatId = order.getWorker().getUser().getTelegramChatId();
+            Long chatId = order.getWorker().getUser().getWorkerTelegramGroupChatId();
             if (chatId != null) {
                 String msg = "У вас новый заказ для: " + companyTitle(order);
                 try {
@@ -51,7 +51,7 @@ public class OrderCreatedNotificationListener {
                     log.error("Ошибка при отправке уведомления о новом заказе {} работнику: {}", order.getId(), e.getMessage());
                 }
             } else {
-                log.warn("У работника ID {} не указан chatId в Telegram", order.getWorker().getId());
+                log.warn("У работника ID {} не привязана рабочая группа Telegram", order.getWorker().getId());
             }
         } else {
             log.warn("У заказа {} нет работника или пользователя для уведомления", order.getId());

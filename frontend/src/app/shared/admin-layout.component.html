@@ -236,7 +236,8 @@
 
     @if (rightPanelMode === 'custom') {
       <ng-content select="[admin-right-content]"></ng-content>
-    } @else {
+    }
+    @if (rightPanelMode === 'default' || showDefaultRightPanelWithCustom) {
       <article class="profile-card">
         <img
           [class.profile-card-photo]="profileImageUrl"

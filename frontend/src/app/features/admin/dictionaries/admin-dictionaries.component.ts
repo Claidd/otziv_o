@@ -41,6 +41,7 @@ import {
   BotsResponse,
   ClientPublicationProgressReportSettingsRequest,
   ClientMessageSettingsRequest,
+  CityRequest,
   DictionaryOption,
   ManagerTextRequest,
   NagulSettingsRequest,
@@ -57,6 +58,8 @@ import {
   WhatsAppGroupSyncSettingsRequest
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
+import { ReputationAiApi } from '../../../core/reputation-ai.api';
+import type { ReputationAiProvider, ReputationAiStatus } from '../../../core/reputation-ai.api';
 import {
   AdminGamificationRewardsApi,
   GamificationRewardSettings
@@ -76,7 +79,7 @@ import {
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -181,6 +184,10 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
     title: 'Рабочие настройки',
     text: 'Паузы, расписания отчетов и синхронизации, которые влияют на автоматические процессы.'
   },
+  aiProvider: {
+    title: 'AI-провайдер',
+    text: 'Основная модель для запросов «О компании», «Помощь» и инструментов AI-репутации.'
+  },
   autoresponder: {
     title: 'Автоответчик',
     text: 'Расписания, статусы, лимиты и тексты клиентских автонапоминаний.'
@@ -204,6 +211,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   private readonly phonesApi = inject(OperatorPhonesApi);
   private readonly auth = inject(AuthService);
   private readonly rewardsApi = inject(AdminGamificationRewardsApi);
+  private readonly reputationAiApi = inject(ReputationAiApi);
   private readonly toastService = inject(ToastService);
   private readonly requestedPhoneId = Number(this.route.snapshot.queryParamMap.get('phoneId'));
   private monitorTimerId: ReturnType<typeof window.setInterval> | null = null;
@@ -220,6 +228,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     { key: 'specialistTransfer', label: 'Передача', icon: 'sync_alt' },
     { key: 'gamification', label: 'Геймификация', icon: 'emoji_events' },
     { key: 'settings', label: 'Настройки', icon: 'tune' },
+    { key: 'aiProvider', label: 'AI-провайдер', icon: 'psychology' },
     { key: 'autoresponder', label: 'Автоответчик', icon: 'mark_chat_unread' },
     { key: 'autoresponderMonitor', label: 'Мониторинг', icon: 'monitor_heart' }
   ];
@@ -233,6 +242,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly saving = signal(false);
   readonly deleting = signal(false);
   readonly importing = signal(false);
+  readonly rebuildingCityDistances = signal(false);
   readonly syncingWhatsAppGroups = signal(false);
   readonly syncingSharedChatLinks = signal(false);
   readonly error = signal<string | null>(null);
@@ -293,6 +303,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly otherGamificationBalances = computed(() => this.withoutRoles(this.gamificationBalances()?.balances ?? [], ['WORKER', 'MANAGER']));
   readonly recentGamificationEvents = computed(() => this.gamificationEvents().slice(0, 6));
   readonly clientMessageSettings = signal<AdminClientMessageSettings | null>(null);
+  readonly aiProviderStatus = signal<ReputationAiStatus | null>(null);
+  readonly aiProviderError = signal<string | null>(null);
+  readonly switchingAiProvider = signal(false);
   readonly clientMessageMonitor = signal<AdminClientMessageMonitor | null>(null);
   readonly clientMessageMaintenancePreview = signal<AdminClientMessageMaintenancePreview | null>(null);
   readonly clientMessageMonitorLoading = signal(false);
@@ -317,6 +330,8 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly botPage = signal(0);
   readonly botPageSize = signal(50);
   readonly botsTotal = signal(0);
+  readonly trackedBotCityId = 325;
+  readonly trackedCityUnblockedAccounts = signal<number | null>(null);
   readonly botPageSizeOptions = [50, 100, 200];
   readonly canManageAllDictionaries = computed(() => {
     this.auth.tokenParsed();
@@ -338,7 +353,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   });
 
   readonly cityForm = this.fb.nonNullable.group({
-    title: ['', Validators.required]
+    title: ['', Validators.required],
+    latitude: [''],
+    longitude: ['']
   });
 
   readonly productForm = this.fb.group({
@@ -347,7 +364,10 @@ export class AdminDictionariesComponent implements OnDestroy {
     categoryId: this.fb.control<number | null>(null, Validators.required),
     photo: this.fb.nonNullable.control(false),
     requiresPerformer: this.fb.nonNullable.control(false),
-    targetPlatform: this.fb.nonNullable.control<'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER'>('OTHER')
+    targetPlatform: this.fb.nonNullable.control<'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER'>('OTHER'),
+    performerRewardPercent: this.fb.nonNullable.control(0),
+    specialistRewardPercent: this.fb.nonNullable.control(0),
+    managerRewardPercent: this.fb.nonNullable.control(0)
   });
 
   readonly phoneForm = this.fb.nonNullable.group({
@@ -582,6 +602,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         return this.gamificationTotal();
       case 'settings':
         return this.settingsTotal();
+      case 'aiProvider':
+        return this.aiProviderStatus()?.aiAvailable ? 1 : 0;
       case 'autoresponder':
         return this.autoresponderTotal();
       case 'autoresponderMonitor':
@@ -708,6 +730,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       this.activeTab.set('categories');
     }
 
+    if (this.canManageAllDictionaries()) {
+      this.loadTrackedCityUnblockedAccountsSnapshot();
+    }
     this.loadAll();
   }
 
@@ -729,9 +754,16 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.search.set('');
     this.clearSelection();
     this.syncClientMessageMonitorPolling();
+    if (tab === 'aiProvider') {
+      this.loadAiProviderStatus();
+    }
   }
 
   loadAll(): void {
+    if (this.activeTab() === 'aiProvider') {
+      this.loadAiProviderStatus();
+      return;
+    }
     this.loading.set(true);
     this.error.set(null);
 
@@ -869,6 +901,65 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.loadActive();
   }
 
+  loadAiProviderStatus(): void {
+    this.loading.set(true);
+    this.aiProviderError.set(null);
+    this.reputationAiApi.status().subscribe({
+      next: (status) => {
+        this.aiProviderStatus.set(status);
+        this.loading.set(false);
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось загрузить настройки AI-провайдера');
+        this.aiProviderError.set(message);
+        this.loading.set(false);
+        this.toastService.error('AI-провайдер не загрузился', message);
+      }
+    });
+  }
+
+  selectAiProvider(provider: ReputationAiProvider): void {
+    if (this.switchingAiProvider() || this.aiProviderStatus()?.aiProvider === provider) {
+      return;
+    }
+
+    this.switchingAiProvider.set(true);
+    this.aiProviderError.set(null);
+    this.reputationAiApi.selectProvider(provider).subscribe({
+      next: (status) => {
+        this.aiProviderStatus.set(status);
+        this.switchingAiProvider.set(false);
+        this.toastService.success('AI-провайдер переключён', this.aiProviderDisplayName(provider));
+      },
+      error: (err: unknown) => {
+        const message = this.errorMessage(err, 'Не удалось переключить AI-провайдера');
+        this.aiProviderError.set(message);
+        this.switchingAiProvider.set(false);
+        this.toastService.error('AI-провайдер не переключён', message);
+      }
+    });
+  }
+
+  aiProviderDisplayName(provider: ReputationAiProvider): string {
+    return provider === 'deepseek' ? 'DeepSeek' : provider === 'yandexgpt' ? 'YandexGPT' : 'OpenAI';
+  }
+
+  aiProviderConfigured(provider: ReputationAiProvider, status: ReputationAiStatus): boolean {
+    return provider === 'deepseek'
+      ? status.deepSeekConfigured
+      : provider === 'yandexgpt'
+        ? status.yandexGptConfigured
+        : status.openAiConfigured;
+  }
+
+  aiProviderModel(provider: ReputationAiProvider, status: ReputationAiStatus): string {
+    return provider === 'deepseek'
+      ? status.deepSeekModel
+      : provider === 'yandexgpt'
+        ? status.yandexModel
+        : status.openAiModel;
+  }
+
   openActiveCreate(): void {
     if (this.activeTab() === 'categories') {
       this.openNewCategory();
@@ -971,7 +1062,11 @@ export class AdminDictionariesComponent implements OnDestroy {
 
   selectCity(city: AdminCity): void {
     this.selectedId.set(city.id);
-    this.cityForm.setValue({ title: city.title });
+    this.cityForm.setValue({
+      title: city.title,
+      latitude: city.latitude == null ? '' : String(city.latitude),
+      longitude: city.longitude == null ? '' : String(city.longitude)
+    });
     this.error.set(null);
   }
 
@@ -983,7 +1078,10 @@ export class AdminDictionariesComponent implements OnDestroy {
       categoryId: product.category?.id ?? this.defaultProductCategoryId(),
       photo: product.photo,
       requiresPerformer: product.requiresPerformer,
-      targetPlatform: product.targetPlatform || 'OTHER'
+      targetPlatform: product.targetPlatform || 'OTHER',
+      performerRewardPercent: product.performerRewardPercent ?? 0,
+      specialistRewardPercent: product.specialistRewardPercent ?? 0,
+      managerRewardPercent: product.managerRewardPercent ?? 0
     });
     this.error.set(null);
   }
@@ -1079,14 +1177,17 @@ export class AdminDictionariesComponent implements OnDestroy {
 
     this.categoryForm.reset({ title: '' });
     this.subCategoryForm.reset({ title: '', categoryId: this.activeCategoryId() ?? this.defaultCategoryId() });
-    this.cityForm.reset({ title: '' });
+    this.cityForm.reset({ title: '', latitude: '', longitude: '' });
     this.productForm.reset({
       title: '',
       price: '0',
       categoryId: this.defaultProductCategoryId(),
       photo: false,
       requiresPerformer: false,
-      targetPlatform: 'OTHER'
+      targetPlatform: 'OTHER',
+      performerRewardPercent: 0,
+      specialistRewardPercent: 0,
+      managerRewardPercent: 0
     });
     this.selectedPhone.set(null);
     this.phoneForm.reset({
@@ -1804,6 +1905,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       || activeTab === 'specialistTransfer'
       || activeTab === 'gamification'
       || activeTab === 'settings'
+      || activeTab === 'aiProvider'
       || activeTab === 'messageDictionary'
       || activeTab === 'autoresponder'
       || activeTab === 'autoresponderMonitor') {
@@ -1895,6 +1997,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       specialistTransfer: 0,
       gamification: this.gamificationTotal(),
       settings: this.settingsTotal(),
+      aiProvider: this.aiProviderStatus()?.aiAvailable ? 1 : 0,
       autoresponder: this.autoresponderTotal(),
       autoresponderMonitor: this.monitorTotal()
     }[tab];
@@ -1930,7 +2033,11 @@ export class AdminDictionariesComponent implements OnDestroy {
       REVIEW_PUBLISHED: 'Отзыв опубликован',
       ORDER_PAID: 'Заказ закрыт оплатой',
       BAD_REVIEW_TASK_DONE: 'Плохой отзыв выполнен',
-      REVIEW_RECOVERY_TASK_DONE: 'Восстановление выполнено'
+      REVIEW_RECOVERY_TASK_DONE: 'Восстановление выполнено',
+      WORKER_DAY_100: 'Специалист закрыл день на 100%',
+      WORKER_100_STREAK: 'Серия специалиста на 100%',
+      MANAGER_TEAM_DAY_100: 'Команда закрыла день на 100%',
+      MANAGER_TEAM_100_STREAK: 'Командная серия на 100%'
     }[eventType ?? ''] ?? (eventType || 'Событие');
   }
 
@@ -2482,6 +2589,9 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
         break;
+      case 'aiProvider':
+        this.loadAiProviderStatus();
+        return;
       case 'subcategories':
         request = this.dictionariesApi.getSubCategories(keyword);
         break;
@@ -2651,13 +2761,89 @@ export class AdminDictionariesComponent implements OnDestroy {
       return;
     }
 
-    const request: TitleRequest = { title: this.cityForm.controls.title.value.trim() };
+    const request: CityRequest = {
+      title: this.cityForm.controls.title.value.trim(),
+      latitude: this.coordinateValue(this.cityForm.controls.latitude.value),
+      longitude: this.coordinateValue(this.cityForm.controls.longitude.value)
+    };
+    if (!this.validCoordinate(request.latitude, -90, 90) || !this.validCoordinate(request.longitude, -180, 180)) {
+      this.error.set('Проверьте координаты: широта от -90 до 90, долгота от -180 до 180.');
+      return;
+    }
     const selectedId = this.selectedId();
     const call = selectedId == null
       ? this.dictionariesApi.createCity(request)
       : this.dictionariesApi.updateCity(selectedId, request);
 
     this.runSave(call, 'Город сохранен');
+  }
+
+  rebuildCityDistances(): void {
+    if (this.rebuildingCityDistances()) {
+      return;
+    }
+    this.rebuildingCityDistances.set(true);
+    this.dictionariesApi.rebuildCityDistances(150).subscribe({
+      next: (result) => {
+        this.toastService.success(
+          'Матрица расстояний пересчитана',
+          `городов: ${result.citiesWithCoordinates}, без координат: ${result.citiesWithoutCoordinates}, связей: ${result.distancesSaved}`
+        );
+        this.rebuildingCityDistances.set(false);
+        this.loadActive();
+      },
+      error: (err) => {
+        this.toastService.error('Матрица не пересчитана', this.errorMessage(err, 'Не удалось пересчитать расстояния'));
+        this.rebuildingCityDistances.set(false);
+      }
+    });
+  }
+
+  rebuildSelectedCityDistances(): void {
+    const selectedId = this.selectedId();
+    if (selectedId == null || this.rebuildingCityDistances()) {
+      return;
+    }
+    this.rebuildingCityDistances.set(true);
+    this.dictionariesApi.rebuildCityDistancesForCity(selectedId).subscribe({
+      next: (result) => {
+        this.toastService.success(
+          'Город пересчитан',
+          `городов: ${result.citiesWithCoordinates}, без координат: ${result.citiesWithoutCoordinates}, связей: ${result.distancesSaved}`
+        );
+        this.rebuildingCityDistances.set(false);
+        this.loadActive();
+      },
+      error: (err) => {
+        this.toastService.error('Город не пересчитан', this.errorMessage(err, 'Не удалось пересчитать расстояния города'));
+        this.rebuildingCityDistances.set(false);
+      }
+    });
+  }
+
+  importCityCoordinates(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || this.rebuildingCityDistances()) {
+      return;
+    }
+    this.rebuildingCityDistances.set(true);
+    this.dictionariesApi.importCityCoordinates(file).subscribe({
+      next: (result) => {
+        const errorTail = result.errors.length ? `, ошибок: ${result.errors.length}` : '';
+        this.toastService.success(
+          'Координаты загружены',
+          `обновлено: ${result.updated}, пропущено: ${result.skipped}${errorTail}, связей: ${result.distancesSaved}`
+        );
+        this.rebuildingCityDistances.set(false);
+        this.loadActive();
+      },
+      error: (err) => {
+        this.toastService.error('Координаты не загружены', this.errorMessage(err, 'Не удалось импортировать координаты'));
+        this.rebuildingCityDistances.set(false);
+      }
+    });
+    input.value = '';
   }
 
   private saveProduct(): void {
@@ -2673,7 +2859,10 @@ export class AdminDictionariesComponent implements OnDestroy {
       categoryId: raw.categoryId,
       photo: raw.photo,
       requiresPerformer: raw.requiresPerformer,
-      targetPlatform: raw.targetPlatform || 'OTHER'
+      targetPlatform: raw.targetPlatform || 'OTHER',
+      performerRewardPercent: Number(raw.performerRewardPercent || 0),
+      specialistRewardPercent: Number(raw.specialistRewardPercent || 0),
+      managerRewardPercent: Number(raw.managerRewardPercent || 0)
     };
     const selectedId = this.selectedId();
     const call = selectedId == null
@@ -2681,6 +2870,19 @@ export class AdminDictionariesComponent implements OnDestroy {
       : this.dictionariesApi.updateProduct(selectedId, request);
 
     this.runSave(call, 'Продукт сохранен');
+  }
+
+  private coordinateValue(value: string): number | null {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) {
+      return null;
+    }
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) ? numeric : Number.NaN;
+  }
+
+  private validCoordinate(value: number | null | undefined, min: number, max: number): boolean {
+    return value == null || (Number.isFinite(value) && value >= min && value <= max);
   }
 
   private savePhone(): void {
@@ -3220,6 +3422,13 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.botPageSize.set(response.size);
   }
 
+  private loadTrackedCityUnblockedAccountsSnapshot(): void {
+    this.dictionariesApi.getBotCityUnblockedCount(this.trackedBotCityId).subscribe({
+      next: (response) => this.trackedCityUnblockedAccounts.set(response.unblockedAccounts),
+      error: () => this.trackedCityUnblockedAccounts.set(null)
+    });
+  }
+
   private applyPromoManagement(response: PromoTextManagementResponse): void {
     this.promoTexts.set(response.texts);
     this.promoManagers.set(response.managers);
@@ -3617,6 +3826,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       'specialistTransfer',
       'gamification',
       'settings',
+      'aiProvider',
       'autoresponder',
       'autoresponderMonitor'
     ].includes(String(value));

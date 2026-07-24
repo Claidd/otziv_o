@@ -113,6 +113,9 @@ public class BusinessAuditService {
         if (path.startsWith("/api/manager") || path.startsWith("/api/review-check")) {
             return "manager_board";
         }
+        if (path.startsWith("/api/common-billing")) {
+            return "common_billing";
+        }
         if (path.startsWith("/api/admin")) {
             return "admin_api";
         }

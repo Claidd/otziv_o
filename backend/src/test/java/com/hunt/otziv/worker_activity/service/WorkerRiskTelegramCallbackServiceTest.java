@@ -173,28 +173,44 @@ class WorkerRiskTelegramCallbackServiceTest {
     }
 
     @Test
-    void explanationPromptCallbackFromWorkerGroupAllowsDelegateClick() {
+    void explanationPromptCallbackFromWorkerGroupAllowsOnlyAssignedWorkerWithoutForcingReplyForOthers() {
         WorkerRiskIncident incident = incident();
         User worker = user(2L, "worker", 888L, "ROLE_WORKER");
         worker.setWorkerTelegramGroupChatId(-100123L);
 
         when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(userService.findByChatId(888L)).thenReturn(Optional.of(worker));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 444L, "worker-risk-explain:77"));
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 888L, "worker-risk-explain:77"));
 
         assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), answer);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
         verify(incidentRepository).save(captor.capture());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
         assertEquals(WorkerRiskIncidentStatus.OPEN, captor.getValue().getStatus());
-        verify(telegramService).sendSelectiveForceReplyMessage(
-                eq(-100123L),
-                eq(888L),
-                contains("Код запроса: risk-77")
-        );
+        verify(telegramService).sendMessage(eq(-100123L), contains("Код запроса: risk-77"));
+        verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
         verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
+    }
+
+    @Test
+    void explanationPromptCallbackFromWorkerGroupRejectsAdminManagerOrOwner() {
+        WorkerRiskIncident incident = incident();
+        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        worker.setWorkerTelegramGroupChatId(-100123L);
+        User manager = user(9L, "manager", 999L, "ROLE_MANAGER");
+
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(userService.findByChatId(999L)).thenReturn(Optional.of(manager));
+
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 999L, "worker-risk-explain:77"));
+
+        assertEquals(Optional.of("Эта кнопка предназначена назначенному специалисту"), answer);
+        verify(incidentRepository, never()).save(any());
+        verify(telegramService, never()).sendMessage(anyLong(), any());
     }
 
     @Test
@@ -205,6 +221,7 @@ class WorkerRiskTelegramCallbackServiceTest {
 
         when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.handle(callbackFromGroup(-100123L, 444L, "worker-risk-explain:77"));

@@ -228,8 +228,8 @@ button.flow-action-button {
   flex: 0 0 auto;
   place-items: center;
   border-radius: 0.75rem;
-  color: var(--otziv-primary);
-  background: rgba(108, 155, 207, 0.14);
+  color: var(--otziv-action);
+  background: var(--otziv-action-soft);
 }
 
 button.flow-action-button.pack-action {
@@ -366,11 +366,11 @@ button {
   justify-content: center;
   gap: 0.45rem;
   min-height: 2.55rem;
-  border: 0;
+  border: 1px solid var(--otziv-action-border);
   border-radius: var(--otziv-small-radius);
   padding: 0 0.9rem;
-  color: var(--otziv-white);
-  background: var(--otziv-primary);
+  color: var(--otziv-action);
+  background: var(--otziv-field-background);
   font: inherit;
   font-size: 0.82rem;
   font-weight: 900;
@@ -1265,4 +1265,5 @@ li {
   .launch-details .count-grid {
     grid-template-columns: 1fr;
   }
+
 }

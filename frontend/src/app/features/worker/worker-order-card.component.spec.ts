@@ -248,6 +248,59 @@ describe('WorkerOrderCardComponent', () => {
     expect(component.canOpenInlineEdit()).toBe(true);
   });
 
+  it('allows only sending to review while the order waits for the client', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    const component = fixture.componentInstance;
+    let emittedStatus = '';
+    component.order = order({ status: 'Новый', waitingForClient: true });
+    component.permissions = {
+      ...DEFAULT_WORKER_PERMISSIONS,
+      canManageOrderStatuses: true
+    };
+    component.actions = [
+      { label: 'на проверку', status: 'На проверке', icon: 'manage_search' },
+      { label: 'архив', status: 'Архив', icon: 'archive' }
+    ];
+    component.statusUpdated.subscribe((action) => {
+      emittedStatus = action.status;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const buttons = Array.from(
+      element.querySelectorAll<HTMLButtonElement>('.order-status-actions button')
+    );
+    expect(buttons[0].disabled).toBe(false);
+    expect(buttons[0].title).toContain('отправить отзывы клиенту');
+    expect(buttons[1].disabled).toBe(true);
+    buttons[0].click();
+    expect(emittedStatus).toBe('На проверке');
+  });
+
+  it('shows a waiting client review action to the assigned specialist role', () => {
+    const fixture = TestBed.createComponent(WorkerOrderCardComponent);
+    const component = fixture.componentInstance;
+    component.order = order({ status: 'Новый', waitingForClient: true });
+    component.permissions = {
+      ...DEFAULT_WORKER_PERMISSIONS,
+      canWorkReviews: true,
+      canManageOrderStatuses: false
+    };
+    component.isOnlyWorkerRole = true;
+    component.actions = [
+      { label: 'на проверку', status: 'На проверке', icon: 'manage_search' },
+      { label: 'архив', status: 'Архив', icon: 'archive' }
+    ];
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const buttons = element.querySelectorAll<HTMLButtonElement>('.order-status-actions button');
+    expect(buttons.length).toBe(1);
+    expect(buttons[0].textContent?.trim()).toBe('на проверку');
+  });
+
   it('opens order editing from the worker name even while waiting for the client', () => {
     const fixture = TestBed.createComponent(WorkerOrderCardComponent);
     const component = fixture.componentInstance;

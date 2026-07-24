@@ -193,11 +193,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 // Обновляем isVigul на основе counter бота
                 updateReviewVigulBasedOnBotCounter(review, assignedBot);
                 if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
-                    accountWalkScheduleService.synchronizeAfterAccountChange(
-                            review,
-                            false,
-                            forceWalkDelayIfUnwalked
-                    );
+                    accountWalkScheduleService.synchronizeAfterAccountChange(review);
                 }
 
                 if (assignedBot != null && !STUB_BOT_ID.equals(assignedBot.getId())) {
@@ -476,10 +472,9 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 continue;
             }
 
-            boolean oldWalked = accountWalkScheduleService.isWalkedAccount(review.getBot());
             review.setBot(reserveBot);
             updateReviewVigulBasedOnBotCounter(review, reserveBot);
-            accountWalkScheduleService.synchronizeAfterAccountChange(review, oldWalked, forceWalkDelayIfUnwalked);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review);
             changedReviews.add(review);
         }
 
@@ -546,7 +541,7 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
                 continue;
             }
 
-            accountWalkScheduleService.synchronizeAfterAccountChange(review, false, false);
+            accountWalkScheduleService.synchronizeAfterAccountChange(review);
             promoted.add(review);
             businessAuditService.recordSafely(
                     "review_walk_readiness_promoted",

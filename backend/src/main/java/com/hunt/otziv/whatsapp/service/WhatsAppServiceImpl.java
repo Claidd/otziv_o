@@ -226,6 +226,38 @@ public class WhatsAppServiceImpl implements WhatsAppService {
     }
 
     @Override
+    public Optional<WhatsAppGroupInfo> resolveGroupByInvite(String clientId, String inviteLinkOrCode) {
+        if (!hasText(inviteLinkOrCode)) {
+            return Optional.empty();
+        }
+
+        try {
+            String url = baseUrl(clientId) + "/groups/resolve-invite";
+            HttpEntity<String> request = jsonEntity(Map.of("inviteLink", inviteLinkOrCode.trim()));
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            Optional<WhatsAppGroupInfo> group = parseResolvedGroup(response.getBody());
+            if (group.isEmpty()) {
+                log.warn("WhatsApp-клиент {} разрешил invite-ссылку без groupId", clientId);
+            }
+            return group;
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp invite-ссылка не разрешена: {}", e.getMessage());
+            return Optional.empty();
+        } catch (RestClientResponseException e) {
+            log.warn("WhatsApp API вернул HTTP {} при прямом поиске группы клиента {}. Ответ: {}",
+                    e.getStatusCode().value(), clientId, limit(e.getResponseBodyAsString(), 500));
+            return Optional.empty();
+        } catch (ResourceAccessException e) {
+            log.warn("WhatsApp-клиент {} недоступен при прямом поиске группы: {}", clientId, e.getMessage());
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("Не удалось напрямую найти WhatsApp-группу клиента {} по invite-ссылке: {}",
+                    clientId, e.getMessage(), e);
+            return Optional.empty();
+        }
+    }
+
+    @Override
     public WhatsAppClientStatusDto getClientStatus(String clientId) {
         try {
             String baseUrl = baseUrl(clientId);
@@ -390,6 +422,28 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             ));
         }
         return groups;
+    }
+
+    private Optional<WhatsAppGroupInfo> parseResolvedGroup(String rawBody) throws JsonProcessingException {
+        if (!hasText(rawBody)) {
+            return Optional.empty();
+        }
+
+        JsonNode root = MAPPER.readTree(rawBody);
+        JsonNode groupNode = root != null && root.path("group").isObject() ? root.path("group") : root;
+        if (groupNode == null || !groupNode.isObject()) {
+            return Optional.empty();
+        }
+
+        String groupId = firstText(groupNode, "groupId", "id", "chatId", "jid");
+        if (!hasText(groupId)) {
+            return Optional.empty();
+        }
+        return Optional.of(new WhatsAppGroupInfo(
+                groupId,
+                firstText(groupNode, "name", "title", "subject"),
+                firstText(groupNode, "inviteLink", "inviteCode", "invite", "link", "url")
+        ));
     }
 
     private JsonNode groupsNode(JsonNode root) {

@@ -35,6 +35,13 @@ public record ManagerPerformanceScoreResponse(
         int specialistRiskScore,
         int riskQualityScore,
         int controlDisciplineScore,
-        int stabilityScore
+        int stabilityScore,
+        long teamProgressEligibleDays,
+        long teamProgressReached100Days,
+        long teamProgressIncompleteDays,
+        double teamProgressReached100Rate,
+        double teamProgressAveragePercent,
+        long teamProgressMissedWorkerDays,
+        int teamCompletionScore
 ) {
 }

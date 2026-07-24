@@ -2,7 +2,11 @@ package com.hunt.otziv.reputationai.infrastructure.ai.openai.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicResult;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiRequest;
 import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiResponse;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiContentPackOptions;
@@ -54,8 +58,11 @@ public class OpenAiResponsesClient {
     }
 
     private final ReputationAiProperties properties;
+    private final ReputationAiProviderSelectionService providerSelectionService;
     private final ObjectMapper objectMapper;
     private final YandexGptProvider yandexGptProvider;
+    private final DeepSeekProvider deepSeekProvider;
+    private final DeepSeekAnthropicProvider deepSeekAnthropicProvider;
     private final AtomicReference<OpenAiLastCheck> lastCheck = new AtomicReference<>(
             new OpenAiLastCheck(null, null, "not_checked", "Проверка AI-провайдера ещё не запускалась.")
     );
@@ -73,6 +80,9 @@ public class OpenAiResponsesClient {
     }
 
     public boolean isAvailable() {
+        if (useDeepSeek()) {
+            return deepSeekProvider.isAvailable();
+        }
         if (useYandex()) {
             return yandexGptProvider.isAvailable();
         }
@@ -83,19 +93,28 @@ public class OpenAiResponsesClient {
     }
 
     public String activeProviderName() {
+        if (useDeepSeek()) {
+            return "deepseek";
+        }
         return useYandex() ? "yandexgpt" : "openai";
     }
 
     public String activeProviderDisplayName() {
+        if (useDeepSeek()) {
+            return "DeepSeek";
+        }
         return useYandex() ? (useYandexResponsesApi() ? "YandexGPT Responses" : "YandexGPT") : "OpenAI";
     }
 
     public String activeModel() {
+        if (useDeepSeek()) {
+            return properties.getDeepseek().getModel();
+        }
         return useYandex() ? properties.getYandex().getModel() : properties.getOpenai().getModel();
     }
 
     public boolean usesExternalSearchContext() {
-        return useYandex();
+        return useYandex() || useDeepSeek();
     }
 
     public OpenAiLastCheck lastCheck() {
@@ -103,6 +122,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiLastCheck checkConnection() {
+        if (useDeepSeek()) {
+            return checkDeepSeekConnection();
+        }
         if (useYandex()) {
             return checkYandexConnection();
         }
@@ -154,7 +176,40 @@ public class OpenAiResponsesClient {
         return rememberCheck("http_error", null, message);
     }
 
+    private OpenAiLastCheck checkDeepSeekConnection() {
+        if (!isAvailable()) {
+            return rememberCheck("not_configured", null, "DeepSeek не настроен: укажите DEEPSEEK_API_KEY.");
+        }
+        OpenAiResponseResult response = createDeepSeekResponse(
+                "provider-check",
+                "Ответь одним словом OK.",
+                "Проверка доступности DeepSeek.",
+                0.0,
+                false,
+                32,
+                Duration.ofSeconds(20)
+        );
+        if (!response.text().isBlank()) {
+            return rememberCheck("ok", 200, "DeepSeek доступен по текущему маршруту.");
+        }
+        String message = response.errorMessage().isBlank()
+                ? "DeepSeek не вернул текст проверки."
+                : response.errorMessage();
+        return rememberCheck("http_error", null, message);
+    }
+
     public OpenAiResponseResult createTextResponse(AiRequest request) {
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    request.task(),
+                    request.systemPrompt(),
+                    request.userPrompt(),
+                    request.temperature(),
+                    request.jsonObject(),
+                    request.maxTokens() == null ? properties.getDeepseek().getMaxTokens() : request.maxTokens(),
+                    request.timeout() == null ? properties.getDeepseek().getTimeout() : request.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     request.task(),
@@ -186,6 +241,12 @@ public class OpenAiResponsesClient {
     public OpenAiResponseResult createContentPackResponse(AiRequest request, String profileKey) {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    request.task(), request.systemPrompt(), request.userPrompt(), request.temperature(), request.jsonObject(),
+                    deepSeekMaxTokens(options.maxOutputTokens()), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     request.task(),
@@ -222,6 +283,12 @@ public class OpenAiResponsesClient {
     public OpenAiResponseResult createReviewTemplatesResponse(AiRequest request, String profileKey) {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    request.task(), request.systemPrompt(), request.userPrompt(), request.temperature(), request.jsonObject(),
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 9000)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     request.task(),
@@ -258,6 +325,12 @@ public class OpenAiResponsesClient {
     public OpenAiResponseResult createSingleReviewDraftResponse(AiRequest request, String profileKey) {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    request.task(), request.systemPrompt(), request.userPrompt(), request.temperature(), request.jsonObject(),
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 2400)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     request.task(),
@@ -300,6 +373,12 @@ public class OpenAiResponsesClient {
     public OpenAiResponseResult createBatchReviewDraftResponse(AiRequest request, String profileKey) {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    request.task(), request.systemPrompt(), request.userPrompt(), request.temperature(), request.jsonObject(),
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 9000)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     request.task(),
@@ -335,6 +414,12 @@ public class OpenAiResponsesClient {
     public OpenAiResponseResult createBatchReviewWritingGuideResponse(AiRequest request, String profileKey) {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    request.task(), request.systemPrompt(), request.userPrompt(), request.temperature(), request.jsonObject(),
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 3600)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     request.task(),
@@ -370,6 +455,12 @@ public class OpenAiResponsesClient {
     public OpenAiResponseResult createDeepResearchResponse(String instructions, String input) {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.DeepResearch deep = openai.getDeepResearch();
+        if (useDeepSeek()) {
+            return createDeepSeekResearchResponse(
+                    "company-deep-research-report", instructions, input,
+                    deepSeekMaxTokens(deep.getMaxOutputTokens()), deep.getTimeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     "company-deep-research-report",
@@ -410,6 +501,12 @@ public class OpenAiResponsesClient {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResearchResponse(
+                    "company-research-report", instructions, input,
+                    deepSeekMaxTokens(options.maxOutputTokens()), options.timeout()
+            );
+        }
         if (useYandex()) {
             OpenAiResearchReportOptions optionsForSchema = options;
             return createYandexResponse(
@@ -455,6 +552,12 @@ public class OpenAiResponsesClient {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResearchResponse(
+                    "company-research-sources-refresh", instructions, input,
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 6000)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-sources-refresh",
@@ -499,6 +602,12 @@ public class OpenAiResponsesClient {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResearchResponse(
+                    "company-research-gap-enrichment", instructions, input,
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 7000)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-gap-enrichment",
@@ -543,6 +652,12 @@ public class OpenAiResponsesClient {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    "company-research-report-rewrite", deepSeekResearchInstructions(instructions), input, 0.18, true,
+                    deepSeekMaxTokens(options.maxOutputTokens()), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-report-rewrite",
@@ -582,6 +697,12 @@ public class OpenAiResponsesClient {
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
+        if (useDeepSeek()) {
+            return createDeepSeekResponse(
+                    "company-research-section-rewrite", deepSeekResearchInstructions(instructions), input, 0.18, true,
+                    deepSeekMaxTokens(Math.min(options.maxOutputTokens(), 5000)), options.timeout()
+            );
+        }
         if (useYandex()) {
             return createYandexResponse(
                     "company-research-section-rewrite",
@@ -702,6 +823,133 @@ public class OpenAiResponsesClient {
             return new OpenAiResponseResult("", "", "yandexgpt", model, response.inputTokens(), response.outputTokens(), response.errorMessage());
         }
         return new OpenAiResponseResult("", response.text(), "yandexgpt", model, response.inputTokens(), response.outputTokens(), response.errorMessage());
+    }
+
+    private OpenAiResponseResult createDeepSeekResponse(
+            String task,
+            String instructions,
+            String input,
+            double temperature,
+            boolean jsonObject,
+            int maxTokens,
+            Duration timeout
+    ) {
+        String model = properties.getDeepseek().getModel();
+        AiResponse response = deepSeekProvider.generate(new AiRequest(
+                task,
+                instructions,
+                input,
+                temperature,
+                jsonObject,
+                deepSeekMaxTokens(maxTokens),
+                timeout == null ? properties.getDeepseek().getTimeout() : timeout
+        ));
+        return new OpenAiResponseResult(
+                "",
+                response.text(),
+                "deepseek",
+                model,
+                response.inputTokens(),
+                response.outputTokens(),
+                response.errorMessage()
+        );
+    }
+
+    private OpenAiResponseResult createDeepSeekResearchResponse(
+            String task,
+            String instructions,
+            String input,
+            int maxTokens,
+            Duration timeout
+    ) {
+        if (!deepSeekAnthropicProvider.isAvailable()) {
+            return createDeepSeekResponse(
+                    task,
+                    deepSeekResearchInstructions(instructions),
+                    input,
+                    0.2,
+                    true,
+                    maxTokens,
+                    timeout
+            );
+        }
+        DeepSeekAnthropicResult result = deepSeekAnthropicProvider.research(
+                task,
+                instructions,
+                input,
+                maxTokens,
+                timeout
+        );
+        String json = validJsonObject(result.text());
+        if (!json.isBlank()) {
+            return new OpenAiResponseResult(
+                    result.responseId(),
+                    json,
+                    "deepseek",
+                    properties.getDeepseek().getModel(),
+                    result.inputTokens(),
+                    result.outputTokens(),
+                    ""
+            );
+        }
+
+        String failure = result.errorMessage().isBlank()
+                ? "Anthropic Web Search не вернул валидный JSON-объект."
+                : result.errorMessage();
+        if (!properties.getDeepseek().isAnthropicFallbackEnabled()) {
+            return new OpenAiResponseResult(
+                    result.responseId(),
+                    "",
+                    "deepseek",
+                    properties.getDeepseek().getModel(),
+                    result.inputTokens(),
+                    result.outputTokens(),
+                    failure
+            );
+        }
+
+        log.warn("DeepSeek Anthropic research fallback task={}: {}", task, failure);
+        return createDeepSeekResponse(
+                task,
+                deepSeekResearchInstructions(instructions),
+                input,
+                0.2,
+                true,
+                maxTokens,
+                timeout
+        );
+    }
+
+    private String validJsonObject(String value) {
+        if (isBlank(value)) {
+            return "";
+        }
+        String clean = value.trim();
+        if (clean.startsWith("```")) {
+            int firstLineEnd = clean.indexOf('\n');
+            int closingFence = clean.lastIndexOf("```");
+            if (firstLineEnd >= 0 && closingFence > firstLineEnd) {
+                clean = clean.substring(firstLineEnd + 1, closingFence).trim();
+            }
+        }
+        int firstBrace = clean.indexOf('{');
+        int lastBrace = clean.lastIndexOf('}');
+        if (firstBrace < 0 || lastBrace <= firstBrace) {
+            return "";
+        }
+        String candidate = clean.substring(firstBrace, lastBrace + 1);
+        try {
+            return objectMapper.readTree(candidate).isObject() ? candidate : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String deepSeekResearchInstructions(String instructions) {
+        return instructions + "\n\n"
+                + "Важно: DeepSeek в этом запросе не выполняет встроенный живой веб-поиск. Используй только CRM-факты, "
+                + "ручные URL, сохранённые sources и выдержки, переданные во входных данных. "
+                + "Не утверждай неподтверждённые факты и не заявляй, что самостоятельно открыл страницу или выполнил новый поиск.";
     }
 
     private String yandexResearchInstructions(String instructions, boolean webSearch) {
@@ -860,6 +1108,10 @@ public class OpenAiResponsesClient {
 
     private int yandexMaxTokens(int desired) {
         return Math.max(1, Math.min(desired, properties.getYandex().getMaxTokens()));
+    }
+
+    private int deepSeekMaxTokens(int desired) {
+        return Math.max(1, Math.min(desired, properties.getDeepseek().getMaxTokens()));
     }
 
     private OpenAiResponseResult postYandexResponsesApi(Map<String, Object> body, Duration timeout) {
@@ -1825,14 +2077,11 @@ public class OpenAiResponsesClient {
     }
 
     private boolean useYandex() {
-        String provider = properties.getProvider();
-        if (provider == null) {
-            return false;
-        }
-        String normalized = provider.trim().toLowerCase(Locale.ROOT);
-        return "yandex".equals(normalized)
-                || "yandexgpt".equals(normalized)
-                || "yandex-gpt".equals(normalized);
+        return "yandexgpt".equals(providerSelectionService.activeProvider());
+    }
+
+    private boolean useDeepSeek() {
+        return "deepseek".equals(providerSelectionService.activeProvider());
     }
 
     private boolean useYandexResponsesApi() {

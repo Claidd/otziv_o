@@ -142,18 +142,31 @@ export type MobileOrderCopyKind = 'review' | 'payment';
         </span>
       </div>
 
-      @if (canManageOrderStatuses || canManageClientWaiting) {
+      @if (canManageOrderStatuses || canSubmitWaitingForReview || canManageClientWaiting) {
         <div class="lead-card-actions card-actions order-status-actions">
           @if (canManageOrderStatuses) {
             @for (action of statusActions; track action.status) {
               <button
                 type="button"
-                [disabled]="order.waitingForClient || isStatusMutating(action)"
+                [disabled]="!canRunStatusAction(action) || isStatusMutating(action)"
                 (click)="statusChange.emit(action)"
-                [attr.aria-label]="order.waitingForClient ? 'Сначала верните заказ в работу' : action.status"
+                [attr.aria-label]="statusActionLabel(action)"
               >
                 {{ action.label }}
               </button>
+            }
+          } @else if (canSubmitWaitingForReview) {
+            @for (action of statusActions; track action.status) {
+              @if (action.status === 'На проверке') {
+                <button
+                  type="button"
+                  [disabled]="isStatusMutating(action)"
+                  (click)="statusChange.emit(action)"
+                  [attr.aria-label]="statusActionLabel(action)"
+                >
+                  {{ action.label }}
+                </button>
+              }
             }
           }
           @if (canManageClientWaiting) {
@@ -807,6 +820,19 @@ export type MobileOrderCopyKind = 'review' | 'payment';
       font-size: 0.58rem;
       font-style: normal;
     }
+
+    :host-context(body.otziv-dark-theme) .mobile-order-card.order-mobile-card--common {
+      border-color: rgba(215, 189, 120, 0.34);
+      background: linear-gradient(180deg, rgba(48, 42, 28, 0.96) 0%, rgba(32, 37, 40, 0.98) 34%, rgba(24, 29, 33, 0.98) 100%);
+      box-shadow: none;
+    }
+
+    :host-context(body.otziv-dark-theme) .common-invoice-row span,
+    :host-context(body.otziv-dark-theme) .status-waiting {
+      border-color: rgba(215, 189, 120, 0.28) !important;
+      color: var(--otziv-warning) !important;
+      background: rgba(215, 189, 120, 0.12) !important;
+    }
   `]
 })
 export class MobileOrderCardComponent {
@@ -837,6 +863,7 @@ export class MobileOrderCardComponent {
   @Input() progress = 0;
   @Input() canSeePhoneAndPayment = true;
   @Input() canManageOrderStatuses = true;
+  @Input() canSubmitWaitingForReview = false;
   @Input() canManageClientWaiting = false;
   @Input() companyMode = false;
   @Input() showWaitingBadge = true;
@@ -1157,6 +1184,17 @@ export class MobileOrderCardComponent {
 
   isStatusMutating(action: MobileOrderStatusAction): boolean {
     return this.mutationKey === `order-${this.order.id}-${action.status}`;
+  }
+
+  canRunStatusAction(action: MobileOrderStatusAction): boolean {
+    return !this.order.waitingForClient || action.status === 'На проверке';
+  }
+
+  statusActionLabel(action: MobileOrderStatusAction): string {
+    if (this.order.waitingForClient && action.status === 'На проверке') {
+      return 'Текст получен: снять ожидание и отправить отзывы клиенту на проверку';
+    }
+    return this.order.waitingForClient ? 'Сначала верните заказ в работу' : action.status;
   }
 
   get isClientWaitingMutating(): boolean {

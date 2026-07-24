@@ -2,7 +2,10 @@ package com.hunt.otziv.reputationai.infrastructure.ai.openai.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
 import com.hunt.otziv.reputationai.infrastructure.ai.yandex.YandexGptProvider;
 import com.sun.net.httpserver.HttpServer;
@@ -14,6 +17,8 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class OpenAiResponsesClientYandexResponsesTest {
 
@@ -70,7 +75,17 @@ class OpenAiResponsesClientYandexResponsesTest {
         properties.getYandex().setSearchContextSize("high");
 
         YandexGptProvider yandexGptProvider = new YandexGptProvider(properties, objectMapper);
-        return new OpenAiResponsesClient(properties, objectMapper, yandexGptProvider);
+        DeepSeekProvider deepSeekProvider = new DeepSeekProvider(properties, objectMapper);
+        ReputationAiProviderSelectionService providerSelectionService = mock(ReputationAiProviderSelectionService.class);
+        when(providerSelectionService.activeProvider()).thenReturn("yandexgpt");
+        return new OpenAiResponsesClient(
+                properties,
+                providerSelectionService,
+                objectMapper,
+                yandexGptProvider,
+                deepSeekProvider,
+                mock(DeepSeekAnthropicProvider.class)
+        );
     }
 
     private HttpServer responsesServer(AtomicReference<String> requestBody) throws Exception {

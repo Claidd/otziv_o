@@ -154,6 +154,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<Object[]> getAllWorkersByRole();
 
     @Query("""
+        SELECT DISTINCT u.fio, u.workerTelegramGroupChatId
+        FROM User u
+        JOIN u.roles r
+        WHERE u.active = true
+          AND r.name = 'ROLE_WORKER'
+          AND u.workerTelegramGroupChatId IS NOT NULL
+    """)
+    List<Object[]> getAllWorkerTelegramGroups();
+
+    @Query("""
         SELECT DISTINCT u
         FROM User u
         LEFT JOIN FETCH u.image

@@ -137,6 +137,26 @@ export class DeepResearchReportViewComponent {
     return (this.report?.warnings ?? []).filter((warning) => !qualityDetails.has(warning));
   }
 
+  researchCoverageStatus(): 'complete' | 'partial' | 'insufficient_data' {
+    const explicit = this.report?.coverageStatus;
+    if (explicit === 'complete' || explicit === 'partial' || explicit === 'insufficient_data') {
+      return explicit;
+    }
+    const coverage = this.reportQualityChecks().find((check) => check.key === 'coverage');
+    const detail = coverage?.detail?.toLowerCase() ?? '';
+    if (coverage?.status === 'fail' || detail.includes('insufficient_data')) {
+      return 'insufficient_data';
+    }
+    if (coverage?.status === 'pass' && detail.includes('complete')) {
+      return 'complete';
+    }
+    return 'partial';
+  }
+
+  isInsufficientData(): boolean {
+    return this.researchCoverageStatus() === 'insufficient_data';
+  }
+
   reportQualitySummary(): { passed: number; total: number; label: string; tone: string; icon: string } {
     const checks = this.reportQualityChecks();
     const total = checks.length;

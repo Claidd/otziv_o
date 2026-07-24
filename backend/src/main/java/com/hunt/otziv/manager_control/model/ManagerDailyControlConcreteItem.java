@@ -115,6 +115,12 @@ public class ManagerDailyControlConcreteItem {
     @Column(name = "worker_explanation_by_user_id")
     private Long workerExplanationByUserId;
 
+    @Column(name = "worker_reminder_sent_at")
+    private LocalDateTime workerReminderSentAt;
+
+    @Column(name = "worker_reminder_count", nullable = false)
+    private int workerReminderCount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "item_status", nullable = false, length = 30)
     private ManagerDailyControlItemStatus status = ManagerDailyControlItemStatus.OPEN;

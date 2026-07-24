@@ -169,7 +169,15 @@ body.otziv-dark-theme app-admin-layout {
 }
 
 .sidebar-card a.active {
-  background: var(--otziv-light);
+  background: linear-gradient(90deg, var(--otziv-action-soft) 0%, var(--otziv-light) 72%, transparent 100%);
+}
+
+.sidebar-card a.active :where(strong, .material-icons-sharp) {
+  color: var(--otziv-action);
+  background: var(--otziv-action-fill);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .sidebar-card a.active::before {
@@ -180,7 +188,7 @@ body.otziv-dark-theme app-admin-layout {
   width: 6px;
   height: 18px;
   border-radius: 0 999px 999px 0;
-  background: var(--otziv-primary);
+  background: var(--otziv-action-fill);
   transform: translateY(-50%);
 }
 
@@ -287,7 +295,8 @@ body.otziv-dark-theme app-admin-layout {
 .whatsapp-profile-badge:hover,
 .whatsapp-profile-badge.active {
   color: white;
-  background: var(--otziv-primary);
+  border-color: var(--otziv-action);
+  background: var(--otziv-action-fill);
 }
 
 .whatsapp-profile-badge .material-icons-sharp {
@@ -338,7 +347,7 @@ body.otziv-dark-theme .whatsapp-profile-badge {
 .mode-switch button.active {
   border-radius: var(--otziv-small-radius);
   color: white;
-  background: var(--otziv-primary);
+  background: var(--otziv-theme-control);
 }
 
 .profile {
@@ -733,7 +742,7 @@ body.otziv-dark-theme .manager-performance-factor em {
 }
 
 .notification.blue .notification-icon {
-  background: var(--otziv-primary);
+  background: var(--otziv-action-fill);
 }
 
 .notification.warning .notification-icon {
@@ -1289,7 +1298,7 @@ body.otziv-dark-theme .manager-performance-factor em {
 
   app-admin-layout .admin-layout.mobile-viewport .mobile-shell-theme.mobile-shell-theme button.active {
     color: #fff;
-    background: var(--otziv-primary);
+    background: var(--otziv-theme-control);
   }
 
   .mobile-shell-theme .material-icons-sharp {

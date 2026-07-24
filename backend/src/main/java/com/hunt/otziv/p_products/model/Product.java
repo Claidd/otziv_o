@@ -34,6 +34,18 @@ public class Product {
     @Column(name = "product_target_platform")
     private String targetPlatform;
 
+    @Builder.Default
+    @Column(name = "product_performer_reward_percent", nullable = false)
+    private BigDecimal performerRewardPercent = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "product_specialist_reward_percent", nullable = false)
+    private BigDecimal specialistRewardPercent = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "product_manager_reward_percent", nullable = false)
+    private BigDecimal managerRewardPercent = BigDecimal.ZERO;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_category")
     @ToString.Exclude

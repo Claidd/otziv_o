@@ -258,7 +258,7 @@ select {
   place-items: center;
   border-radius: 0.75rem;
   color: white;
-  background: var(--otziv-primary);
+  background: var(--otziv-action-fill);
   box-shadow: 0 0.6rem 1.2rem rgba(108, 155, 207, 0.22);
   font-size: 1.15rem;
 }
@@ -764,7 +764,7 @@ select {
 
   .mobile-pager-action.active {
     color: var(--otziv-white);
-    background: var(--otziv-primary);
+    background: var(--otziv-action-fill);
   }
 
   .empty {

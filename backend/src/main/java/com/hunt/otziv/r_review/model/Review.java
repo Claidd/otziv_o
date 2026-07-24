@@ -47,6 +47,10 @@ public class Review {
     private boolean vigul;
     @Column(name = "review_account_walk_delay_days", nullable = false)
     private int accountWalkDelayDays;
+    @Column(name = "review_account_walk_delay_bot_id")
+    private Long accountWalkDelayBotId;
+    @Column(name = "review_account_walk_not_before")
+    private LocalDate accountWalkNotBefore;
     @Column(name = "review_publish")
     private boolean publish;
     @Column(name = "review_published_marked_at")

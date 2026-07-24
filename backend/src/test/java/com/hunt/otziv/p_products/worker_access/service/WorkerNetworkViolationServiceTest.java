@@ -55,7 +55,9 @@ class WorkerNetworkViolationServiceTest {
                 WorkerCellularAccessProperties.Mode.ENFORCE,
                 "NON_CELLULAR_NETWORK",
                 "Home ISP",
-                "192.0.2.0/24"
+                "192.0.2.0/24",
+                "client=capacitor;network=wifi",
+                true
         );
 
         verify(jdbcTemplate).update(anyString(), any(MapSqlParameterSource.class));
@@ -71,7 +73,9 @@ class WorkerNetworkViolationServiceTest {
                 WorkerCellularAccessProperties.Mode.AUDIT,
                 "UNKNOWN_NETWORK",
                 null,
-                "192.0.2.0/24"
+                "192.0.2.0/24",
+                "client=web-or-legacy",
+                false
         );
 
         verify(userRepository, never()).findByUsername(anyString());

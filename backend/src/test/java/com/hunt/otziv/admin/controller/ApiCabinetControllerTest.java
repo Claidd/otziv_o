@@ -25,7 +25,10 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import com.hunt.otziv.worker_performance.service.TeamPatternAnalysisService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.security.Principal;
 import java.time.LocalDate;
@@ -45,6 +48,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -63,6 +67,9 @@ class ApiCabinetControllerTest {
 
     @Mock
     private ManagerService managerService;
+
+    @Mock
+    private WorkerService workerService;
 
     @Mock
     private AnalyticsAggregateStatsService analyticsAggregateStatsService;
@@ -91,6 +98,9 @@ class ApiCabinetControllerTest {
     @Mock
     private WorkerNetworkViolationService workerNetworkViolationService;
 
+    @Mock
+    private TeamPatternAnalysisService teamPatternAnalysisService;
+
     private ApiCabinetController controller;
     private Principal principal;
     private Authentication authentication;
@@ -101,6 +111,7 @@ class ApiCabinetControllerTest {
                 personalService,
                 userService,
                 managerService,
+                workerService,
                 new PerformanceMetrics(new SimpleMeterRegistry()),
                 new ConcurrentMapCacheManager(),
                 analyticsAggregateStatsService,
@@ -111,7 +122,8 @@ class ApiCabinetControllerTest {
                 manualPaymentTaskService,
                 managerPerformanceService,
                 staffDailyProgressService,
-                workerNetworkViolationService
+                workerNetworkViolationService,
+                teamPatternAnalysisService
         );
         principal = () -> "alex";
         authentication = new UsernamePasswordAuthenticationToken(
@@ -243,6 +255,45 @@ class ApiCabinetControllerTest {
         ApiCabinetController.CabinetProfileResponse response = controller.profile(principal, DATE, true);
 
         assertEquals(150, response.workerZp().getSum1Month());
+    }
+
+    @Test
+    void profileIncludesTheSameDailyProgressForCurrentWorker() {
+        User user = user(10L, "Worker One");
+        Worker worker = Worker.builder().id(77L).user(user).build();
+        DailyWorkProgressResponse progress = new DailyWorkProgressResponse(
+                true,
+                "WORKER",
+                DATE,
+                0,
+                9,
+                9,
+                0,
+                false,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                0
+        );
+        ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);
+        when(userService.findByUserName("alex")).thenReturn(Optional.of(user));
+        when(personalService.getWorkerReviews(user, DATE)).thenReturn(workerStats(100));
+        when(staffDailyProgressService.progressEnabled()).thenReturn(true);
+        when(workerService.getWorkerByUserId(10L)).thenReturn(worker);
+        when(staffDailyProgressService.workerProgressByWorkers(List.of(worker), DATE))
+                .thenReturn(Map.of(77L, progress));
+
+        ApiCabinetController.CabinetProfileResponse response = controller.profile(principal, DATE, true);
+
+        assertSame(progress, response.dailyProgress());
     }
 
     @Test
@@ -443,7 +494,14 @@ class ApiCabinetControllerTest {
                 85,
                 90,
                 100,
-                100
+                100,
+                10,
+                8,
+                2,
+                80.0,
+                98.0,
+                2,
+                85
         );
     }
 

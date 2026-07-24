@@ -180,6 +180,7 @@ export interface DeepCompanyResearchReport {
   qualityChecks?: DeepResearchQualityCheck[];
   factSnapshot?: DeepResearchFactSnapshot | null;
   reviewIdeas?: string[];
+  coverageStatus?: 'complete' | 'partial' | 'insufficient_data' | string;
   createdAt: string;
 }
 
@@ -202,16 +203,24 @@ export interface DeepCompanyResearchJob {
   completedAt: string | null;
 }
 
+export type ReputationAiProvider = 'deepseek' | 'yandexgpt' | 'openai';
+
 export interface ReputationAiStatus {
-  aiProvider: string;
+  aiProvider: ReputationAiProvider;
   aiAvailable: boolean;
   searchProvider: string;
   searchAvailable: boolean;
   yandexGptConfigured: boolean;
   yandexSearchConfigured: boolean;
+  deepSeekConfigured: boolean;
+  deepSeekAnthropicWebSearchEnabled: boolean;
+  deepSeekAnthropicWebSearchMaxUses: number;
+  deepSeekAnthropicDeepSearchEnabled: boolean;
+  deepSeekAnthropicDeepSearchPasses: number;
   openAiConfigured: boolean;
   openAiProxyEnabled: boolean;
   yandexModel: string;
+  deepSeekModel: string;
   openAiModel: string;
   openAiResearchReportModel: string;
   openAiContentPackModel: string;
@@ -395,6 +404,10 @@ export class ReputationAiApi {
 
   status(): Observable<ReputationAiStatus> {
     return this.http.get<ReputationAiStatus>(`${this.baseUrl}/status`);
+  }
+
+  selectProvider(provider: ReputationAiProvider): Observable<ReputationAiStatus> {
+    return this.http.put<ReputationAiStatus>(`${this.baseUrl}/status/provider`, { provider });
   }
 
   checkOpenAiRoute(): Observable<OpenAiProviderDiagnostics> {

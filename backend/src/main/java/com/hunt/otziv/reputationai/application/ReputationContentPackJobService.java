@@ -170,6 +170,9 @@ public class ReputationContentPackJobService {
     }
 
     private String contentPackModel(ReputationContentPackRequest request) {
+        if (isDeepSeekActive()) {
+            return properties.getDeepseek().getModel();
+        }
         if (isYandexActive()) {
             return properties.getYandex().getModel();
         }
@@ -184,6 +187,10 @@ public class ReputationContentPackJobService {
     private boolean isYandexActive() {
         String provider = activeAiProvider();
         return "yandex".equalsIgnoreCase(provider) || "yandexgpt".equalsIgnoreCase(provider);
+    }
+
+    private boolean isDeepSeekActive() {
+        return "deepseek".equalsIgnoreCase(activeAiProvider());
     }
 
     private String writeJson(Object value) {

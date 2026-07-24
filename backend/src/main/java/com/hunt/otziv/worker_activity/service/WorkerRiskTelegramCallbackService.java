@@ -184,8 +184,8 @@ public class WorkerRiskTelegramCallbackService {
         syncManagerControlRiskExplanation(worker, incident);
 
         telegramService.sendMessage(chatId,
-                "Пояснение сохранено и отправлено менеджеру."
-                        + "\nСтатус: ответ отправлен менеджеру."
+                "🟢 ОТВЕТ ПОЛУЧЕН"
+                        + "\nПояснение сохранено и отправлено менеджеру."
                         + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                         + "\nОтзыв: #" + valueOrDash(incident.getReviewId()));
         updateOriginalRiskTelegramMessage(incident, "ответ отправлен менеджеру", false);
@@ -237,7 +237,8 @@ public class WorkerRiskTelegramCallbackService {
         if (incident.getTelegramNotificationChatId() == null || incident.getTelegramNotificationMessageId() == null) {
             return;
         }
-        String text = "Система заметила риск по действию специалиста."
+        String text = (waitingForExplanation ? "🟡 ОЖИДАЕМ ОТВЕТ" : "🟢 ОТВЕТ ПОЛУЧЕН")
+                + "\nСистема заметила риск по действию специалиста."
                 + "\nСтатус: " + status
                 + "\nСпециалист: " + html(firstNonBlank(incident.getWorkerName(), incident.getWorkerUsername()))
                 + "\nПричина: " + html(clean(incident.getTitle()))
@@ -323,21 +324,22 @@ public class WorkerRiskTelegramCallbackService {
             return Optional.of("Специалист не найден");
         }
 
+        if (actorTelegramId == null) {
+            return Optional.of("Не удалось определить пользователя");
+        }
+        User actor = userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
+        if (actor == null) {
+            return Optional.of("Telegram не привязан к пользователю");
+        }
+        if (!Objects.equals(actor.getId(), worker.getId())) {
+            return Optional.of("Эта кнопка предназначена назначенному специалисту");
+        }
+
         if (chatId != null && chatId < 0) {
             if (!Objects.equals(worker.getWorkerTelegramGroupChatId(), chatId)) {
                 return Optional.of("Эта группа не привязана к специалисту");
             }
         } else {
-            if (actorTelegramId == null) {
-                return Optional.of("Не удалось определить пользователя");
-            }
-            User actor = userService.findByChatId(actorTelegramId).orElse(null);
-            if (actor == null || !actor.isActive()) {
-                return Optional.of("Telegram не привязан к пользователю");
-            }
-            if (!Objects.equals(actor.getId(), incident.getWorkerUserId())) {
-                return Optional.of("Эта кнопка предназначена специалисту");
-            }
             chatId = chatId == null ? actor.getTelegramChatId() : chatId;
         }
 
@@ -367,10 +369,10 @@ public class WorkerRiskTelegramCallbackService {
     private void sendExplanationPrompt(long chatId, User worker, String text, Long incidentId) {
         if (chatId < 0) {
             String prompt = text
-                    + "\nНапишите пояснение следующим сообщением."
+                    + "\nОтветьте на это сообщение коротким пояснением."
                     + "\n" + GROUP_EXPLANATION_MARKER + incidentId;
             if (worker != null && worker.getTelegramChatId() != null) {
-                telegramService.sendSelectiveForceReplyMessage(chatId, worker.getTelegramChatId(), prompt);
+                telegramService.sendMessage(chatId, "Только назначенный специалист.\n" + prompt);
             } else {
                 telegramService.sendMessage(chatId,
                         text

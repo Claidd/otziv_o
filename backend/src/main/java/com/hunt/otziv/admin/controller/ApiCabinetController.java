@@ -34,8 +34,11 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.dto.TeamPatternAnalysisResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import com.hunt.otziv.worker_performance.service.TeamPatternAnalysisService;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -86,6 +89,7 @@ public class ApiCabinetController {
     private final PersonalService personalService;
     private final UserService userService;
     private final ManagerService managerService;
+    private final WorkerService workerService;
     private final PerformanceMetrics performanceMetrics;
     private final CacheManager cacheManager;
     private final AnalyticsAggregateStatsService analyticsAggregateStatsService;
@@ -97,6 +101,7 @@ public class ApiCabinetController {
     private final ManagerPerformanceService managerPerformanceService;
     private final StaffDailyProgressService staffDailyProgressService;
     private final WorkerNetworkViolationService workerNetworkViolationService;
+    private final TeamPatternAnalysisService teamPatternAnalysisService;
 
     @Value("${otziv.analytics.aggregates.read-enabled:false}")
     private boolean aggregateAnalyticsReadEnabled;
@@ -122,7 +127,8 @@ public class ApiCabinetController {
                                 selectedDate,
                                 personalService.getUserLK(principal),
                                 workerStats(selectedDate, user),
-                                managerPerformance(selectedDate, user, principal)
+                                managerPerformance(selectedDate, user, principal),
+                                workerDailyProgress(selectedDate, user)
                         );
                     }
             );
@@ -262,7 +268,8 @@ public class ApiCabinetController {
                                     List.of(),
                                     personalService.getMarketologsToManager(manager),
                                     personalService.gerWorkersToManager(manager),
-                                    personalService.gerOperatorsToManager(manager)
+                                    personalService.gerOperatorsToManager(manager),
+                                    null
                             );
                         }
 
@@ -292,11 +299,15 @@ public class ApiCabinetController {
                                 personalService.getManagers(),
                                 personalService.getMarketologs(),
                                 personalService.gerWorkers(),
-                                personalService.gerOperators()
+                                personalService.gerOperators(),
+                                null
                         ), selectedDate, canManageUsers), selectedMonth, canManageUsers);
                     }
             );
-            return withTeamNetworkViolations(response, selectedDate, selectedMonth);
+            return withTeamPatterns(
+                    withTeamNetworkViolations(response, selectedDate, selectedMonth),
+                    selectedMonth
+            );
         });
     }
 
@@ -494,7 +505,8 @@ public class ApiCabinetController {
                             team.managers(),
                             team.marketologs(),
                             team.workers(),
-                            team.operators()
+                            team.operators(),
+                            null
                     ))
                     .orElseGet(() -> ownerLegacyTeamResponse(selectedDate, role, managers, marketologs, workers, operators));
         }
@@ -519,7 +531,8 @@ public class ApiCabinetController {
                 managersToOwner(managers, selectedDate),
                 marketologsToOwner(marketologs, selectedDate),
                 workersToOwner(workers, selectedDate),
-                operatorsToOwner(operators, selectedDate)
+                operatorsToOwner(operators, selectedDate),
+                null
         );
     }
 
@@ -659,6 +672,38 @@ public class ApiCabinetController {
             ));
         });
         return response;
+    }
+
+    private TeamResponse withTeamPatterns(TeamResponse response, LocalDate selectedMonth) {
+        if (response == null
+                || !workerNetworkViolationService.statisticsVisibleForRole(response.role())
+                || response.workers() == null
+                || response.workers().isEmpty()) {
+            return response;
+        }
+        TeamPatternAnalysisResponse patterns = teamPatternAnalysisService.analyze(
+                response.workers().stream()
+                        .filter(worker -> worker.getId() != null && worker.getUserId() != null)
+                        .map(worker -> new TeamPatternAnalysisService.WorkerPatternSubject(
+                                worker.getId(),
+                                worker.getUserId(),
+                                firstNonBlank(worker.getFio(), worker.getLogin())
+                        ))
+                        .toList(),
+                selectedMonth
+        );
+        return new TeamResponse(
+                response.date(),
+                response.role(),
+                response.canEditUsers(),
+                response.canAddUsers(),
+                response.canOpenUserInfo(),
+                response.managers(),
+                response.marketologs(),
+                response.workers(),
+                response.operators(),
+                patterns
+        );
     }
 
     private ManagerWorkerProgressContext managerWorkerProgressContext(List<ManagersListDTO> managerDtos) {
@@ -844,11 +889,26 @@ public class ApiCabinetController {
                 .orElse(null);
     }
 
+    private DailyWorkProgressResponse workerDailyProgress(LocalDate selectedDate, User user) {
+        if (user == null || user.getId() == null || !staffDailyProgressService.progressEnabled()) {
+            return null;
+        }
+
+        Worker worker = workerService.getWorkerByUserId(user.getId());
+        if (worker == null || worker.getId() == null) {
+            return null;
+        }
+
+        return staffDailyProgressService.workerProgressByWorkers(List.of(worker), selectedDate)
+                .get(worker.getId());
+    }
+
     public record CabinetProfileResponse(
             LocalDate date,
             UserLKDTO user,
             UserStatDTO workerZp,
-            ManagerPerformanceScoreResponse managerPerformance
+            ManagerPerformanceScoreResponse managerPerformance,
+            DailyWorkProgressResponse dailyProgress
     ) {
     }
 
@@ -868,7 +928,8 @@ public class ApiCabinetController {
             List<ManagersListDTO> managers,
             List<MarketologsListDTO> marketologs,
             List<WorkersListDTO> workers,
-            List<OperatorsListDTO> operators
+            List<OperatorsListDTO> operators,
+            TeamPatternAnalysisResponse patterns
     ) {
     }
 

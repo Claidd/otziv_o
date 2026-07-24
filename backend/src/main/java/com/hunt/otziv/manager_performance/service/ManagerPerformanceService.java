@@ -5,11 +5,13 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlEventType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlGroup;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemType;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
+import com.hunt.otziv.manager_control.repository.ManagerDailyControlEventRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
@@ -24,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +45,7 @@ public class ManagerPerformanceService {
     private static final long CLIENT_REPLY_SLA_MINUTES = 30;
     private static final long RISK_SLA_HOURS = 2;
     private static final Duration SCORE_CACHE_TTL = Duration.ofMinutes(2);
+    private static final ZoneId PERFORMANCE_ZONE = ZoneId.of("Asia/Irkutsk");
     private static final Set<String> SPECIALIST_ENTITY_TYPES = Set.of(
             "WORKER_ORDER_NEW",
             "WORKER_ORDER_CORRECT",
@@ -55,8 +59,10 @@ public class ManagerPerformanceService {
     private final ManagerDailyControlRepository controlRepository;
     private final ManagerDailyControlItemRepository itemRepository;
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
+    private final ManagerDailyControlEventRepository controlEventRepository;
     private final ClientChatUnansweredItemRepository unansweredItemRepository;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
+    private final ManagerTeamProgressService managerTeamProgressService;
 
     private volatile LocalDate cachedScoreDate;
     private volatile Instant cachedScoreAt;
@@ -70,21 +76,32 @@ public class ManagerPerformanceService {
 
     @Transactional(readOnly = true)
     public List<ManagerPerformanceScoreResponse> score(LocalDate selectedDate) {
-        LocalDate date = selectedDate == null ? LocalDate.now() : selectedDate;
+        LocalDate today = LocalDate.now(PERFORMANCE_ZONE);
+        LocalDate date = selectedDate == null ? today : selectedDate;
         List<ManagerPerformanceScoreResponse> cached = cachedScoreIfFresh(date);
         if (cached != null) {
             return cached;
         }
         LocalDate fromDate = date.withDayOfMonth(1);
-        LocalDate toDate = date.withDayOfMonth(date.lengthOfMonth());
+        LocalDate toDate = date;
         LocalDateTime from = fromDate.atStartOfDay();
         LocalDateTime to = toDate.plusDays(1).atStartOfDay().minusNanos(1);
+        LocalDateTime evaluatedAt = date.equals(today) ? LocalDateTime.now(PERFORMANCE_ZONE) : to;
 
         List<Manager> managers = managerRepository.findAllWithUserAndImage();
         if (managers.isEmpty()) {
             return List.of();
         }
         managers = managerRepository.findAllManagersWorkers(managers);
+        LocalDate teamProgressTo = date.equals(today) ? date.minusDays(1) : date;
+        Map<Long, ManagerTeamProgressService.TeamProgressStats> teamProgressByManagerId =
+                teamProgressTo.isBefore(fromDate)
+                        ? Map.of()
+                        : managerTeamProgressService.statisticsByManagerIds(
+                                managers.stream().map(Manager::getId).filter(Objects::nonNull).toList(),
+                                fromDate,
+                                teamProgressTo
+                        );
 
         List<ManagerDailyControl> controls = controlRepository.findByControlDateBetween(fromDate, toDate);
         List<ManagerDailyControlItem> items = controls.isEmpty()
@@ -122,7 +139,12 @@ public class ManagerPerformanceService {
                         itemsByControlId,
                         concreteByControlId,
                         clientItemsByManagerId.getOrDefault(manager.getId(), List.of()),
-                        risksByWorkerUserId
+                        risksByWorkerUserId,
+                        evaluatedAt,
+                        teamProgressByManagerId.getOrDefault(
+                                manager.getId(),
+                                ManagerTeamProgressService.TeamProgressStats.empty()
+                        )
                 ))
                 .sorted(Comparator
                         .comparingInt(ManagerPerformanceScoreResponse::loadAdjustedPerformanceScore).reversed()
@@ -153,7 +175,9 @@ public class ManagerPerformanceService {
             Map<Long, List<ManagerDailyControlItem>> itemsByControlId,
             Map<Long, List<ManagerDailyControlConcreteItem>> concreteByControlId,
             List<ClientChatUnansweredItem> clientItems,
-            Map<Long, List<WorkerRiskIncident>> risksByWorkerUserId
+            Map<Long, List<WorkerRiskIncident>> risksByWorkerUserId,
+            LocalDateTime evaluatedAt,
+            ManagerTeamProgressService.TeamProgressStats teamProgress
     ) {
         List<ManagerDailyControlItem> items = controls.stream()
                 .map(ManagerDailyControl::getId)
@@ -192,7 +216,7 @@ public class ManagerPerformanceService {
                 .filter(control -> control.getMorningCompletedAt() != null)
                 .count();
         long closedCount = controls.stream()
-                .filter(control -> control.getClosedAt() != null)
+                .filter(control -> isEffectivelyClosed(control, itemsByControlId, concreteByControlId))
                 .count();
         long fastClickCount = controls.stream()
                 .filter(ManagerDailyControl::isFastClickRisk)
@@ -201,12 +225,12 @@ public class ManagerPerformanceService {
         SlaStats problemSla = concreteSla(concreteItems.stream()
                 .filter(item -> !"CLIENT_CHAT_UNANSWERED".equals(item.getEntityType()))
                 .filter(item -> !"RISK".equals(item.getEntityType()))
-                .toList(), Duration.ofHours(PROBLEM_SLA_HOURS));
+                .toList(), Duration.ofHours(PROBLEM_SLA_HOURS), evaluatedAt);
         SlaStats specialistSla = concreteSla(concreteItems.stream()
                 .filter(item -> SPECIALIST_ENTITY_TYPES.contains(item.getEntityType()))
-                .toList(), Duration.ofHours(PROBLEM_SLA_HOURS));
-        SlaStats clientSla = clientSla(clientItems);
-        SlaStats riskSla = riskSla(riskIncidents);
+                .toList(), Duration.ofHours(PROBLEM_SLA_HOURS), evaluatedAt);
+        SlaStats clientSla = clientSla(clientItems, evaluatedAt);
+        SlaStats riskSla = riskSla(riskIncidents, evaluatedAt);
 
         long workloadOrder = workloadCount(items, "ORDERS_WORKLOAD");
         long workloadWorker = workloadCount(items, "WORKER_WORKLOAD");
@@ -230,16 +254,18 @@ public class ManagerPerformanceService {
         );
 
         double averageOverdueAgeDays = averageOverdueAgeDays(concreteItems);
-        double orderBase = Math.max(1.0, Math.max(workloadOrder, avgDailyOverdue));
-        double overdueRate = round1(Math.min(100.0, (avgDailyOverdue * 100.0) / orderBase));
-        double reopenRate = round1(reopenRate(concreteItems));
+        double eligibleOrderEpisodes = workloadOrder * (double) periodDays;
+        double overdueBase = Math.max(1.0, Math.max(overdueOrderCount,
+                Math.max(actionTotal, eligibleOrderEpisodes)));
+        double overdueRate = round1(Math.min(100.0, (overdueOrderCount * 100.0) / overdueBase));
+        double reopenRate = round1(reopenRate(controls));
         double riskResolutionAvgHours = round1(averageRiskResolutionHours(riskIncidents));
         double clientReplyMedianMinutes = round1(clientReplyPercentileMinutes(clientItems, 0.50));
         double clientReplyP90Minutes = round1(clientReplyPercentileMinutes(clientItems, 0.90));
 
         int problemSpeedScore = slaSpeedScore(problemSla);
         int clientResponseScore = slaSpeedScore(clientSla);
-        int overdueControlScore = clampScore((int) Math.round(100 - overdueRate * 4 - averageOverdueAgeDays * 2));
+        int overdueControlScore = clampScore((int) Math.round(100 - overdueRate * 1.5 - averageOverdueAgeDays * 2));
         int riskQualityScore = riskQualityScore(riskIncidents);
         int specialistRiskScore = clampScore((int) Math.round(
                 (slaSpeedScore(specialistSla) * 0.40)
@@ -247,17 +273,24 @@ public class ManagerPerformanceService {
                         + (riskQualityScore * 0.25)
         ));
         int controlDisciplineScore = controlDisciplineScore(controls, acceptedCount, closedCount, fastClickCount);
-        int stabilityScore = clampScore((int) Math.round(100 - reopenRate * 2 - deferredRate(items) * 1.5));
-        int performanceScore = hasPerformanceData(controls, concreteItems, clientItems, riskIncidents)
+        int stabilityScore = clampScore((int) Math.round(100 - reopenRate - deferredRate(items) * 0.5));
+        boolean hasBasePerformanceData = hasPerformanceData(controls, concreteItems, clientItems, riskIncidents);
+        int basePerformanceScore = hasBasePerformanceData
                 ? clampScore((int) Math.round(
-                problemSpeedScore * 0.25
-                        + clientResponseScore * 0.20
-                        + overdueControlScore * 0.20
+                problemSpeedScore * 0.20
+                        + clientResponseScore * 0.25
+                        + overdueControlScore * 0.25
                         + specialistRiskScore * 0.15
                         + controlDisciplineScore * 0.10
-                        + stabilityScore * 0.10
+                        + stabilityScore * 0.05
         ))
                 : 0;
+        ManagerTeamProgressService.TeamProgressStats safeTeamProgress = teamProgress == null
+                ? ManagerTeamProgressService.TeamProgressStats.empty()
+                : teamProgress;
+        int performanceScore = safeTeamProgress.hasData()
+                ? clampScore((int) Math.round(basePerformanceScore * 0.85 + safeTeamProgress.score() * 0.15))
+                : basePerformanceScore;
         int loadAdjustedPerformanceScore = loadAdjustedPerformanceScore(performanceScore, workloadIndex, incomingProblemCount);
 
         return new ManagerPerformanceScoreResponse(
@@ -265,7 +298,7 @@ public class ManagerPerformanceService {
                 managerUserId(manager),
                 performanceScore,
                 loadAdjustedPerformanceScore,
-                grade(loadAdjustedPerformanceScore, controls),
+                grade(loadAdjustedPerformanceScore, !controls.isEmpty() || safeTeamProgress.hasData()),
                 workloadIndex,
                 workloadLevel(workloadIndex),
                 workloadTotal,
@@ -295,7 +328,14 @@ public class ManagerPerformanceService {
                 specialistRiskScore,
                 riskQualityScore,
                 controlDisciplineScore,
-                stabilityScore
+                stabilityScore,
+                safeTeamProgress.eligibleDays(),
+                safeTeamProgress.reached100Days(),
+                safeTeamProgress.incompleteDays(),
+                safeTeamProgress.reached100Rate(),
+                safeTeamProgress.averageProgressPercent(),
+                safeTeamProgress.missedWorkerDays(),
+                safeTeamProgress.score()
         );
     }
 
@@ -317,7 +357,11 @@ public class ManagerPerformanceService {
                 .collect(Collectors.groupingBy(WorkerRiskIncident::getWorkerUserId));
     }
 
-    private SlaStats concreteSla(List<ManagerDailyControlConcreteItem> items, Duration sla) {
+    private SlaStats concreteSla(
+            List<ManagerDailyControlConcreteItem> items,
+            Duration sla,
+            LocalDateTime evaluatedAt
+    ) {
         long total = 0;
         long inSla = 0;
         long speedScoreSum = 0;
@@ -325,9 +369,12 @@ public class ManagerPerformanceService {
             if (item.getCreatedAt() == null) {
                 continue;
             }
+            LocalDateTime actionAt = earliestNonNull(item.getLastManualTouchAt(), item.getResolvedAt());
+            Duration elapsed = slaElapsed(item.getCreatedAt(), actionAt, evaluatedAt);
+            if (elapsed == null) {
+                continue;
+            }
             total++;
-            LocalDateTime actionAt = firstNonNull(item.getLastManualTouchAt(), item.getResolvedAt());
-            Duration elapsed = slaElapsed(item.getCreatedAt(), actionAt);
             speedScoreSum += speedScore(elapsed, sla);
             if (elapsed != null && elapsed.compareTo(sla) <= 0) {
                 inSla++;
@@ -336,7 +383,7 @@ public class ManagerPerformanceService {
         return new SlaStats(total, inSla, speedScoreSum);
     }
 
-    private SlaStats clientSla(List<ClientChatUnansweredItem> items) {
+    private SlaStats clientSla(List<ClientChatUnansweredItem> items, LocalDateTime evaluatedAt) {
         long total = 0;
         long inSla = 0;
         long speedScoreSum = 0;
@@ -344,10 +391,13 @@ public class ManagerPerformanceService {
             if (item.getLastClientMessageAt() == null) {
                 continue;
             }
-            total++;
             LocalDateTime answerAt = item.getClosedAt();
             Duration sla = Duration.ofMinutes(CLIENT_REPLY_SLA_MINUTES);
-            Duration elapsed = slaElapsed(item.getLastClientMessageAt(), answerAt);
+            Duration elapsed = slaElapsed(item.getLastClientMessageAt(), answerAt, evaluatedAt);
+            if (elapsed == null) {
+                continue;
+            }
+            total++;
             speedScoreSum += speedScore(elapsed, sla);
             if (elapsed != null && elapsed.compareTo(sla) <= 0) {
                 inSla++;
@@ -356,7 +406,7 @@ public class ManagerPerformanceService {
         return new SlaStats(total, inSla, speedScoreSum);
     }
 
-    private SlaStats riskSla(List<WorkerRiskIncident> risks) {
+    private SlaStats riskSla(List<WorkerRiskIncident> risks, LocalDateTime evaluatedAt) {
         long total = 0;
         long inSla = 0;
         long speedScoreSum = 0;
@@ -364,13 +414,16 @@ public class ManagerPerformanceService {
             if (risk.getCreatedAt() == null) {
                 continue;
             }
-            total++;
-            LocalDateTime actionAt = firstNonNull(
+            LocalDateTime actionAt = earliestNonNull(
                     risk.getResolvedAt(),
                     risk.getExplanationRequestedAt()
             );
             Duration sla = Duration.ofHours(RISK_SLA_HOURS);
-            Duration elapsed = slaElapsed(risk.getCreatedAt(), actionAt);
+            Duration elapsed = slaElapsed(risk.getCreatedAt(), actionAt, evaluatedAt);
+            if (elapsed == null) {
+                continue;
+            }
+            total++;
             speedScoreSum += speedScore(elapsed, sla);
             if (elapsed != null && elapsed.compareTo(sla) <= 0) {
                 inSla++;
@@ -429,6 +482,9 @@ public class ManagerPerformanceService {
     private double averageOverdueAgeDays(List<ManagerDailyControlConcreteItem> items) {
         return items.stream()
                 .filter(item -> "ORDER".equals(item.getEntityType()))
+                .filter(item -> item.getParentItem() != null)
+                .filter(item -> "OVERDUE_ORDERS".equals(item.getParentItem().getReasonCode()))
+                .filter(item -> item.getStatus() == null || item.getStatus() == ManagerDailyControlItemStatus.OPEN)
                 .map(ManagerDailyControlConcreteItem::getAgeDays)
                 .filter(Objects::nonNull)
                 .mapToLong(Long::longValue)
@@ -436,17 +492,15 @@ public class ManagerPerformanceService {
                 .orElse(0);
     }
 
-    private double reopenRate(List<ManagerDailyControlConcreteItem> items) {
-        long handled = items.stream()
-                .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.OPEN)
-                .count();
-        if (handled == 0) {
+    private double reopenRate(List<ManagerDailyControl> controls) {
+        if (controls.isEmpty()) {
             return 0;
         }
-        long followUp = items.stream()
-                .filter(item -> item.getFollowUpAt() != null)
-                .count();
-        return (followUp * 100.0) / handled;
+        long reopened = controlEventRepository.countByControlInAndEventType(
+                controls,
+                ManagerDailyControlEventType.CONTROL_REOPENED
+        );
+        return Math.min(100.0, (reopened * 100.0) / controls.size());
     }
 
     private double deferredRate(List<ManagerDailyControlItem> items) {
@@ -465,6 +519,7 @@ public class ManagerPerformanceService {
     private double averageRiskResolutionHours(List<WorkerRiskIncident> risks) {
         return risks.stream()
                 .filter(risk -> risk.getCreatedAt() != null && risk.getResolvedAt() != null)
+                .filter(risk -> !risk.getResolvedAt().isBefore(risk.getCreatedAt()))
                 .mapToLong(risk -> Duration.between(risk.getCreatedAt(), risk.getResolvedAt()).toHours())
                 .average()
                 .orElse(0);
@@ -473,7 +528,8 @@ public class ManagerPerformanceService {
     private double clientReplyPercentileMinutes(List<ClientChatUnansweredItem> items, double percentile) {
         List<Long> durations = items.stream()
                 .filter(item -> item.getLastClientMessageAt() != null && item.getClosedAt() != null)
-                .map(item -> Math.max(0, Duration.between(item.getLastClientMessageAt(), item.getClosedAt()).toMinutes()))
+                .filter(item -> !item.getClosedAt().isBefore(item.getLastClientMessageAt()))
+                .map(item -> Duration.between(item.getLastClientMessageAt(), item.getClosedAt()).toMinutes())
                 .sorted()
                 .toList();
         if (durations.isEmpty()) {
@@ -602,20 +658,51 @@ public class ManagerPerformanceService {
         return 0;
     }
 
-    private Duration slaElapsed(LocalDateTime startedAt, LocalDateTime actionAt) {
+    private Duration slaElapsed(
+            LocalDateTime startedAt,
+            LocalDateTime actionAt,
+            LocalDateTime evaluatedAt
+    ) {
         if (startedAt == null) {
             return null;
         }
-        LocalDateTime effectiveActionAt = actionAt == null ? LocalDateTime.now() : actionAt;
+        LocalDateTime effectiveActionAt = actionAt == null ? evaluatedAt : actionAt;
+        if (effectiveActionAt == null || effectiveActionAt.isBefore(startedAt)) {
+            return null;
+        }
         return Duration.between(startedAt, effectiveActionAt);
+    }
+
+    private boolean isEffectivelyClosed(
+            ManagerDailyControl control,
+            Map<Long, List<ManagerDailyControlItem>> itemsByControlId,
+            Map<Long, List<ManagerDailyControlConcreteItem>> concreteByControlId
+    ) {
+        if (control.getClosedAt() != null) {
+            return true;
+        }
+        if (control.getId() == null) {
+            return false;
+        }
+        List<ManagerDailyControlItem> controlItems = itemsByControlId.getOrDefault(control.getId(), List.of());
+        boolean hasOpenActionItem = actionItems(controlItems).stream()
+                .anyMatch(item -> item.getStatus() == null || item.getStatus() == ManagerDailyControlItemStatus.OPEN);
+        if (hasOpenActionItem) {
+            return false;
+        }
+        return concreteByControlId.getOrDefault(control.getId(), List.of()).stream()
+                .filter(item -> item.getParentItem() != null)
+                .filter(item -> item.getParentItem().getGroup() == ManagerDailyControlGroup.ACTION)
+                .filter(item -> item.getParentItem().getItemType() != ManagerDailyControlItemType.ORDER_STATUS)
+                .noneMatch(item -> item.getStatus() == null || item.getStatus() == ManagerDailyControlItemStatus.OPEN);
     }
 
     private int clampScore(int value) {
         return Math.max(0, Math.min(100, value));
     }
 
-    private String grade(int score, List<ManagerDailyControl> controls) {
-        if (controls.isEmpty()) {
+    private String grade(int score, boolean hasData) {
+        if (!hasData) {
             return "-";
         }
         return ManagerPerformanceGrade.of(score);
@@ -653,13 +740,11 @@ public class ManagerPerformanceService {
         return manager == null || manager.getUser() == null ? null : manager.getUser().getId();
     }
 
-    private LocalDateTime firstNonNull(LocalDateTime... values) {
-        for (LocalDateTime value : values) {
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
+    private LocalDateTime earliestNonNull(LocalDateTime... values) {
+        return java.util.Arrays.stream(values)
+                .filter(Objects::nonNull)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
     }
 
     private double round1(double value) {

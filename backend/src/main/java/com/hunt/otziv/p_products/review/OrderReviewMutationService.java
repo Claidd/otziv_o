@@ -10,6 +10,7 @@ import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.bot.model.ReviewBotAssignmentMode;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class OrderReviewMutationService {
     private final BotAssignmentService botAssignmentService;
     private final ReviewService reviewService;
     private final CompanyService companyService;
+    private final ReviewAccountWalkScheduleService accountWalkScheduleService;
 
     @Transactional
     public boolean addNewReview(Long orderId) {
@@ -68,6 +70,7 @@ public class OrderReviewMutationService {
             );
             draftReview.setBot(selectedBot);
             botAssignmentService.updateReviewVigulBasedOnBotCounter(draftReview, selectedBot);
+            accountWalkScheduleService.synchronizeAfterAccountChange(draftReview);
             Review review = reviewService.save(draftReview);
             log.info("3. Создали новый отзыв");
 

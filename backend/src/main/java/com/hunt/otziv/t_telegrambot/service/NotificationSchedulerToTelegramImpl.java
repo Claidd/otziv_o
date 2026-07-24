@@ -5,6 +5,7 @@ import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,12 +63,12 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     }
 
     public void sendDailyReportToWorkers() {
-        Map<String, Long> workersTelegramIDs = userService.getAllWorkers();
+        Map<String, Long> workerGroupChatIds = userService.getAllWorkerTelegramGroups();
         Map<String, UserData> userDataMap = personalService.getPersonalsAndCountToMap();
 
-        sendWorkerReports(workersTelegramIDs, userDataMap);
+        sendWorkerReports(workerGroupChatIds, userDataMap);
         sendOwnerReports(userDataMap);
-        sendAdminReport(workersTelegramIDs, userDataMap);
+        sendAdminReport(userService.getAllWorkers(), userDataMap);
     }
 
     private void sendConfiguredReportIfDue(TelegramReportScheduleSettingsResponse settings, ReportKind kind) {
@@ -212,7 +213,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     private void sendWorkerReports(Map<String, Long> chatIds, Map<String, UserData> userDataMap) {
         userDataMap.forEach((fio, data) -> {
             Long chatId = chatIds.get(fio);
-            if (chatId != null && chatId > 0) {
+            if (chatId != null && chatId != 0) {
                 String message = generateMessageForRecipient(fio, data, userDataMap);
                 sendMessageSafe(chatId, message, fio);
             } else {
@@ -297,7 +298,8 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
                         "Заказы: новые <b>" + safeLong(userData.getNewOrders()) +
                         "</b>, коррекция <b>" + safeLong(userData.getCorrectOrders()) + "</b>\n" +
                         "Выгул: <b>" + safeLong(userData.getInVigul()) +
-                        "</b> | публикация: <b>" + safeLong(userData.getInPublish()) + "</b>";
+                        "</b> | публикация: <b>" + safeLong(userData.getInPublish()) + "</b>" +
+                        workerDailyProgressLines(userData);
             default:
                 return "Здравствуйте, " + escapeHtml(fio) + "!";
         }
@@ -354,6 +356,17 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
 
     private long safeLong(Long value) {
         return value == null ? 0L : value;
+    }
+
+    private String workerDailyProgressLines(UserData userData) {
+        DailyWorkProgressResponse progress = userData == null ? null : userData.getDailyProgress();
+        if (progress == null || !progress.visible()) {
+            return "";
+        }
+        return "\nПлохие: <b>" + safeLong(userData.getBadTasks()) +
+                "</b> | восстановление: <b>" + safeLong(userData.getRecoveryTasks()) + "</b>" +
+                "\nПрогресс дня: <b>" + progress.completed() + "/" + progress.total() +
+                " (" + progress.percent() + "%)</b>";
     }
 
     private String escapeHtml(String text) {

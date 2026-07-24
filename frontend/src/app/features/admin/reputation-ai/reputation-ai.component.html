@@ -973,9 +973,11 @@
           <span>Search: {{ providerStatus.searchProvider }} · {{ providerStatus.searchAvailable ? 'доступен' : 'не доступен' }}</span>
           <span>
             Модель:
-            {{ providerStatus.aiProvider === 'yandexgpt'
-              ? (providerStatus.yandexGptConfigured ? providerStatus.yandexModel : 'YandexGPT не настроен')
-              : (providerStatus.openAiConfigured ? providerStatus.openAiModel : 'OpenAI не настроен') }}
+            {{ providerStatus.aiProvider === 'deepseek'
+              ? (providerStatus.deepSeekConfigured ? providerStatus.deepSeekModel : 'DeepSeek не настроен')
+              : providerStatus.aiProvider === 'yandexgpt'
+                ? (providerStatus.yandexGptConfigured ? providerStatus.yandexModel : 'YandexGPT не настроен')
+                : (providerStatus.openAiConfigured ? providerStatus.openAiModel : 'OpenAI не настроен') }}
           </span>
           @if (providerStatus.openAiProxyEnabled) {
             <strong>proxy</strong>

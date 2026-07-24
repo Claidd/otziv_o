@@ -162,7 +162,7 @@ public class ApiManagerReviewController {
                 .comment(normalize(request.comment()))
                 .created(firstValue(request.created(), current.getCreated()))
                 .changed(firstValue(request.changed(), current.getChanged()))
-                .publishedDate(request.publishedDate())
+                .publishedDate(firstValue(request.publishedDate(), current.getPublishedDate()))
                 .publish(Boolean.TRUE.equals(request.publish()))
                 .vigul(Boolean.TRUE.equals(request.vigul()))
                 .botName(normalize(request.botName()))
@@ -394,9 +394,9 @@ public class ApiManagerReviewController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Смена аккаунта здесь доступна только для отзыва без рабочего аккаунта");
         }
 
-        reviewService.changeBot(reviewId, isSourceSection(source, "publish"));
+        reviewService.changeBot(reviewId);
         if (restrictedWorkerAccountRepair && reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
-            reviewService.assignNewAccount(reviewId, isSourceSection(source, "publish"));
+            reviewService.assignNewAccount(reviewId);
         }
         workerActivityService.recordSafely(
                 authentication,
@@ -426,7 +426,7 @@ public class ApiManagerReviewController {
         }
 
         try {
-            reviewService.assignNewAccount(reviewId, isSourceSection(source, "publish"));
+            reviewService.assignNewAccount(reviewId);
             workerActivityService.recordSafely(
                     authentication,
                     WorkerActivityAction.REVIEW_BOT_CHANGE,
@@ -460,7 +460,7 @@ public class ApiManagerReviewController {
                 && !reviewNeedsAccountAssignment(reviewService.getReviewById(reviewId))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Блокировка аккаунта здесь доступна только для отзыва без рабочего аккаунта");
         }
-        reviewService.deActivateAndChangeBot(reviewId, botId, isSourceSection(source, "publish"));
+        reviewService.deActivateAndChangeBot(reviewId, botId);
         workerActivityService.recordSafely(
                 authentication,
                 WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
@@ -772,7 +772,7 @@ public class ApiManagerReviewController {
                             HttpStatus.SERVICE_UNAVAILABLE,
                             firstNonBlank(
                                     result.safetyNotes().stream().findFirst().orElse(""),
-                                    "OpenAI не вернул текст для карточки заказа. Проверьте маршрут до OpenAI/proxy и повторите запрос."
+                                    "AI-провайдер не вернул текст для карточки заказа. Проверьте его настройку и повторите запрос."
                             )
                     );
                 }
@@ -873,7 +873,7 @@ public class ApiManagerReviewController {
                         HttpStatus.SERVICE_UNAVAILABLE,
                         firstNonBlank(
                                 result.safetyNotes().stream().findFirst().orElse(""),
-                                "OpenAI не вернул тексты для карточек заказа. Проверьте маршрут до OpenAI/proxy и повторите запрос."
+                                "AI-провайдер не вернул тексты для карточек заказа. Проверьте его настройку и повторите запрос."
                         )
                 );
             }
@@ -1191,12 +1191,6 @@ public class ApiManagerReviewController {
                 || section.equals("all")
                 || section.equals("new")
                 || section.equals("correction");
-    }
-
-    private boolean isSourceSection(ReviewActivitySourceRequest source, String section) {
-        return source != null
-                && section != null
-                && section.equalsIgnoreCase(normalize(source.sourceSection()));
     }
 
     private boolean reviewNeedsAccountAssignment(Review review) {

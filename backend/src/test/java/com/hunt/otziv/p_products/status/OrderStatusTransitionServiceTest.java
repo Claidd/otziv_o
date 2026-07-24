@@ -28,6 +28,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +42,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -470,6 +472,9 @@ class OrderStatusTransitionServiceTest {
     void toCheckWithoutClientDeliveryKeepsToCheckStatusAndReturnsTrue() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithCompanyManagerAndDetail(5L, "Новый", "Компания", " ");
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(LocalDateTime.of(2026, 7, 20, 10, 0));
+        order.setClientTextExpected(true);
         OrderStatus toCheck = status("В проверку");
 
         enableImmediateMessages();
@@ -490,6 +495,9 @@ class OrderStatusTransitionServiceTest {
         assertTrue(service.changeStatusForOrder(5L, "В проверку"));
 
         assertSame(toCheck, order.getStatus());
+        assertFalse(order.isWaitingForClient());
+        assertNull(order.getWaitingForClientChangedAt());
+        assertTrue(order.isClientTextExpected());
         verify(orderBotLifecycleService).assignBotsIfNeeded(order);
         verify(orderCompanyStatusService).autoManageCompanyStatus(order, "В проверку");
         verify(orderStatusNotificationService).sendMessageToClientChat(
@@ -808,7 +816,7 @@ class OrderStatusTransitionServiceTest {
         inOrder.verify(orderRepository).save(order);
         inOrder.verify(orderCorrectionTelegramNotifier).notifyWorkerCorrection(
                 7L,
-                700L,
+                -700L,
                 "Компания",
                 "заметка",
                 "комментарий"
@@ -882,7 +890,7 @@ class OrderStatusTransitionServiceTest {
                 eq(true)
         );
         verify(telegramService).sendMessage(
-                800L,
+                -800L,
                 "Компания. Новый заказ из Архива. \n https://o-ogo.ru/worker/new_orders"
         );
         verify(orderRepository).save(order);
@@ -1147,6 +1155,7 @@ class OrderStatusTransitionServiceTest {
     private User user(Long chatId) {
         User user = new User();
         user.setTelegramChatId(chatId);
+        user.setWorkerTelegramGroupChatId(-chatId);
         return user;
     }
 

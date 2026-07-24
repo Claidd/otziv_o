@@ -12,11 +12,13 @@ import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import java.time.LocalDate;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -25,6 +27,7 @@ import org.mockito.Mock;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -70,6 +73,9 @@ class OrderStatusCheckerServiceImplTest {
 
     @Mock
     private ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+
+    @Mock
+    private OrderPaymentIntegrityService orderPaymentIntegrityService;
 
     @Test
     void validateCounterConsistencySynchronizesExpectedSingleReviewChangeWithoutEmail() {
@@ -182,6 +188,24 @@ class OrderStatusCheckerServiceImplTest {
         verifyNoInteractions(orderStatusNotificationService, appSettingService, commonBillingService);
     }
 
+    @Test
+    void checkAndMarkOrderCompletedNeverReopensPaymentCycleForSettledOrder() throws Exception {
+        Order order = payableOrder(54L);
+        OrderStatus paidStatus = orderStatus(9L, "Оплачено");
+        order.setComplete(true);
+        order.setPayDay(LocalDate.of(2026, 7, 16));
+        order.setStatus(paidStatus);
+        when(orderRepository.findByIdForCounterUpdate(54L)).thenReturn(java.util.Optional.of(order));
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
+
+        service().checkAndMarkOrderCompleted(order);
+
+        assertEquals(paidStatus, order.getStatus());
+        verify(orderRepository, never()).save(order);
+        verify(paymentInvoiceRetryScheduler, never()).scheduleInitialInvoice(any(Order.class));
+        verifyNoInteractions(commonBillingService, appSettingService);
+    }
+
     private OrderStatusCheckerServiceImpl service() {
         return new OrderStatusCheckerServiceImpl(
                 emailService,
@@ -192,7 +216,8 @@ class OrderStatusCheckerServiceImplTest {
                 appSettingService,
                 commonBillingService,
                 recoveryGateService,
-                paymentLinkServiceProvider
+                paymentLinkServiceProvider,
+                orderPaymentIntegrityService
         );
     }
 

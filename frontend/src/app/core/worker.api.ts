@@ -291,23 +291,46 @@ export class WorkerApi {
     });
   }
 
+  logRecoveryTaskCopyClick(
+    taskId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/copy-click`, {
+      field,
+      ...source
+    });
+  }
+
   deleteBot(botId: number): Observable<void> {
     return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/worker/bots/${botId}`);
   }
 
-  updateReviewText(reviewId: number, orderId: number, text: string): Observable<void> {
-    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/text`, { orderId, text });
+  updateReviewText(reviewId: number, orderId: number, text: string, source?: WorkerActivitySource): Observable<void> {
+    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/text`, {
+      orderId,
+      text,
+      ...source
+    });
   }
 
   updateReviewBotName(reviewId: number, botName: string): Observable<void> {
     return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/bot-name`, { botName });
   }
 
-  updateReviewAnswer(reviewId: number, orderId: number, answer: string): Observable<void> {
-    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/answer`, { orderId, answer });
+  updateReviewAnswer(reviewId: number, orderId: number, answer: string, source?: WorkerActivitySource): Observable<void> {
+    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/answer`, {
+      orderId,
+      answer,
+      ...source
+    });
   }
 
-  updateReviewNote(reviewId: number, orderId: number, comment: string): Observable<void> {
-    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/note`, { orderId, comment });
+  updateReviewNote(reviewId: number, orderId: number, comment: string, source?: WorkerActivitySource): Observable<void> {
+    return this.http.put<void>(`${appEnvironment.apiBaseUrl}/api/worker/reviews/${reviewId}/note`, {
+      orderId,
+      comment,
+      ...source
+    });
   }
 }

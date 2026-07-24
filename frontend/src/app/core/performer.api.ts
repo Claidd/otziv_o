@@ -13,10 +13,14 @@ export interface PerformerAssignment {
   cityTitle: string;
   platform: string;
   status: string;
+  externalConfirmStatus: string;
+  externalConfirmScreenshotUrl: string;
   draftText: string;
   finalText: string;
   instruction: string;
   publicationUrl: string;
+  performerPublicationScreenshotUrl: string;
+  managerConfirmationScreenshotUrl: string;
   acceptedAt: string;
   walkedAt: string;
   publishAvailableAt: string;
@@ -37,6 +41,10 @@ export interface PerformerPublishRequest {
   finalText: string;
   publicationUrl?: string;
   comment?: string;
+}
+
+export interface AdminPerformerVerifyAssignmentRequest {
+  managerNote?: string;
 }
 
 export interface PerformerProblemRequest {
@@ -123,6 +131,15 @@ export class PerformerApi {
     return this.http.post<PerformerAssignment>(`${appEnvironment.apiBaseUrl}/api/performer/assignments/${assignmentId}/published`, request);
   }
 
+  uploadPublicationScreenshot(assignmentId: number, file: File): Observable<PerformerAssignment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<PerformerAssignment>(
+      `${appEnvironment.apiBaseUrl}/api/performer/assignments/${assignmentId}/publication-screenshot`,
+      formData
+    );
+  }
+
   reportProblem(assignmentId: number, request: PerformerProblemRequest): Observable<PerformerAssignment> {
     return this.http.post<PerformerAssignment>(`${appEnvironment.apiBaseUrl}/api/performer/assignments/${assignmentId}/problem`, request);
   }
@@ -139,8 +156,17 @@ export class PerformerApi {
     return this.http.post<AdminPerformer>(`${appEnvironment.apiBaseUrl}/api/admin/performers/${id}/status?${params.toString()}`, {});
   }
 
-  verifyAssignment(id: number): Observable<PerformerAssignment> {
-    return this.http.post<PerformerAssignment>(`${appEnvironment.apiBaseUrl}/api/admin/performers/assignments/${id}/verify`, {});
+  verifyAssignment(id: number, request: AdminPerformerVerifyAssignmentRequest = {}): Observable<PerformerAssignment> {
+    return this.http.post<PerformerAssignment>(`${appEnvironment.apiBaseUrl}/api/admin/performers/assignments/${id}/verify`, request);
+  }
+
+  uploadManagerConfirmationScreenshot(id: number, file: File): Observable<PerformerAssignment> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<PerformerAssignment>(
+      `${appEnvironment.apiBaseUrl}/api/admin/performers/assignments/${id}/confirmation-screenshot`,
+      formData
+    );
   }
 
   updateRollout(request: PerformerRolloutSettingsRequest): Observable<PerformerRolloutSettings> {

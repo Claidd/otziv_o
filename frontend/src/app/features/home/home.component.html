@@ -40,6 +40,15 @@
         </div>
       </section>
 
+      @if (cabinet()?.dailyProgress?.visible) {
+        <section class="cabinet-progress-strip" aria-label="Дневной прогресс специалиста">
+          <app-daily-progress-strip
+            [progress]="cabinet()?.dailyProgress"
+            label="Прогресс"
+          />
+        </section>
+      }
+
       @if (showManagerControl()) {
         <div class="manager-control-strip">
           <app-manager-control

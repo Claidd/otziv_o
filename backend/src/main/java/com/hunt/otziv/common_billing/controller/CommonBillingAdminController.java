@@ -3,6 +3,7 @@ package com.hunt.otziv.common_billing.controller;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
+import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import java.security.Principal;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CommonBillingAdminController {
 
     private final CommonBillingService commonBillingService;
+    private final CommonBillingPublicationApprovalFailureMarker publicationApprovalFailureMarker;
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/common-billing/accounts")
@@ -165,7 +167,12 @@ public class CommonBillingAdminController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/orders/approve-review")
     public CommonInvoiceDetailsResponse approveReviewOrders(@PathVariable Long invoiceId) {
-        return commonBillingService.approveReviewOrders(invoiceId);
+        try {
+            return commonBillingService.approveReviewOrders(invoiceId);
+        } catch (RuntimeException exception) {
+            publicationApprovalFailureMarker.markAttention(invoiceId, exception);
+            throw exception;
+        }
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

@@ -7,6 +7,8 @@ public record ReviewGenerationBrief(
         String city,
         String category,
         String businessType,
+        String researchStatus,
+        List<String> confirmedFacts,
         List<String> services,
         List<String> products,
         List<String> prices,
@@ -19,11 +21,37 @@ public record ReviewGenerationBrief(
         List<String> interestingFacts,
         List<String> allowedScenarioTypes
 ) {
+    public ReviewGenerationBrief(
+            String company,
+            String city,
+            String category,
+            String businessType,
+            List<String> services,
+            List<String> products,
+            List<String> prices,
+            List<String> advantages,
+            List<String> reviewIdeas,
+            List<String> travelFromCenter,
+            List<String> employees,
+            List<String> amenities,
+            List<String> parking,
+            List<String> interestingFacts,
+            List<String> allowedScenarioTypes
+    ) {
+        this(
+                company, city, category, businessType, "partial", List.of(), services, products, prices,
+                advantages, reviewIdeas, travelFromCenter, employees, amenities, parking, interestingFacts,
+                allowedScenarioTypes
+        );
+    }
+
     public ReviewGenerationBrief {
         company = company == null ? "" : company.trim();
         city = city == null ? "" : city.trim();
         category = category == null ? "" : category.trim();
         businessType = businessType == null || businessType.isBlank() ? "other" : businessType.trim();
+        researchStatus = researchStatus == null || researchStatus.isBlank() ? "partial" : researchStatus.trim();
+        confirmedFacts = clean(confirmedFacts, 24);
         services = clean(services, 18);
         products = clean(products, 18);
         prices = clean(prices, 12);

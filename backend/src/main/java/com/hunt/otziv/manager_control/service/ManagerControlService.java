@@ -65,9 +65,11 @@ import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
@@ -144,11 +146,13 @@ public class ManagerControlService {
     private static final String SOURCE_WORKER_TASK_REQUEST = "MANAGER_CONTROL_WORKER_TASK_REQUEST";
     private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
     private static final String ENTITY_PUBLISH_REVIEW = "PUBLISH_REVIEW";
+    private static final String ENTITY_PUBLICATION_DATE_REVIEW = "PUBLICATION_DATE_REVIEW";
     private static final String ENTITY_NAGUL_REVIEW = "NAGUL_REVIEW";
     private static final String ENTITY_WORKER_ORDER_NEW = "WORKER_ORDER_NEW";
     private static final String ENTITY_WORKER_ORDER_CORRECT = "WORKER_ORDER_CORRECT";
     private static final String ENTITY_TELEGRAM_CHAT = "TELEGRAM_CHAT";
     private static final String ENTITY_CLIENT_CHAT_UNANSWERED = "CLIENT_CHAT_UNANSWERED";
+    private static final String ENTITY_ORDER_PAYMENT_INTEGRITY = OrderPaymentIntegrityService.ENTITY_TYPE;
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
             "Архив",
@@ -257,9 +261,11 @@ public class ManagerControlService {
     private final OrderRepository orderRepository;
     private final CompanyRepository companyRepository;
     private final PaymentLinkRepository paymentLinkRepository;
+    private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final CommonInvoiceRepository commonInvoiceRepository;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
     private final CommonBillingService commonBillingService;
+    private final OrderPublicationApprovalService publicationApprovalService;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
@@ -639,6 +645,11 @@ public class ManagerControlService {
 
         ManagerDailyControlActionType actionType = parseActionType(request == null ? null : request.actionType());
         requireConcreteActionAllowed(concreteItem, actionType);
+        if ("COMMON_INVOICE".equals(concreteItem.getEntityType())
+                && actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
+            requireCommonInvoiceProblemResolved(concreteItem);
+            actionType = ManagerDailyControlActionType.RESOLVED;
+        }
         ManagerDailyControlItemStatus status = itemStatusForAction(actionType);
         String comment = limit(request == null ? null : request.comment(), 1000);
         boolean manualWorkerNotification = Boolean.TRUE.equals(request == null ? null : request.manualWorkerNotification());
@@ -974,8 +985,24 @@ public class ManagerControlService {
         if ("COMMON_INVOICE".equals(entityType)) {
             return repairCommonInvoiceConcreteItem(concreteItem, control, principal);
         }
+        if (ENTITY_PUBLICATION_DATE_REVIEW.equals(entityType)) {
+            return repairPublicationDateConcreteItem(concreteItem, control, principal);
+        }
         if (ENTITY_TELEGRAM_CHAT.equals(entityType)) {
             return repairTelegramChatConcreteItem(concreteItem, control, principal);
+        }
+        if (ENTITY_ORDER_PAYMENT_INTEGRITY.equals(entityType)) {
+            OrderPaymentIntegrityService.RepairResult result =
+                    orderPaymentIntegrityService.repair(concreteItem.getEntityId());
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Заказ возвращен в «Оплачено», лишних ссылок закрыто: " + result.expiredLinks()
+                            + ", платежных очередей закрыто: " + result.closedMessageStates()
+                            + ". Следующий заказ не изменялся.",
+                    principal,
+                    "Устранен повторный платежный цикл"
+            );
         }
         if (!ENTITY_WORKER_ORDER_NEW.equals(entityType)
                 && !ENTITY_WORKER_ORDER_CORRECT.equals(entityType)
@@ -987,7 +1014,12 @@ public class ManagerControlService {
         if (isChatBindingIssueConcrete(concreteItem)) {
             return repairChatBindingIssueConcreteItem(concreteItem, control, order, principal);
         }
-        if (!order.isWaitingForClient() && ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
+        boolean clientTextReminderRepair = order.isWaitingForClient()
+                && "Новый".equals(orderStatusTitle(order))
+                && (ENTITY_WORKER_ORDER_NEW.equals(entityType) || "ORDER".equals(entityType));
+        if (!clientTextReminderRepair
+                && !order.isWaitingForClient()
+                && ENTITY_WORKER_ORDER_NEW.equals(entityType)) {
             return resolveRepairedConcreteItem(
                     concreteItem,
                     control,
@@ -997,7 +1029,7 @@ public class ManagerControlService {
             );
         }
 
-        if (!ENTITY_WORKER_ORDER_NEW.equals(entityType) || !order.isWaitingForClient()) {
+        if (!clientTextReminderRepair) {
             return repairOrderAutomationConcreteItem(concreteItem, control, order, principal);
         }
 
@@ -1007,6 +1039,7 @@ public class ManagerControlService {
             order.setWaitingForClient(false);
             order.setWaitingForClientChangedAt(null);
             orderRepository.save(order);
+            scheduledClientMessageService.synchronizeClientTextReminderForOrder(order);
             return resolveRepairedConcreteItem(
                     concreteItem,
                     control,
@@ -1075,6 +1108,23 @@ public class ManagerControlService {
                     "Ошибка уведомления об оплате закрыта",
                     principal,
                     "Закрыта ошибка уведомления об оплате общего счета"
+            );
+        }
+        if (commonInvoiceReviewApprovalRepairable(invoice)) {
+            CommonInvoiceDetailsResponse details = commonBillingService.retryAttention(invoiceId);
+            String lastError = details == null || details.summary() == null ? "" : safe(details.summary().lastError());
+            if (!lastError.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Повторное одобрение не прошло: " + limit(lastError, 180)
+                );
+            }
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Даты назначены, заказы общего счета переведены в публикацию",
+                    principal,
+                    "Повторно выполнено массовое одобрение с назначением дат"
             );
         }
         if (commonInvoiceNextOrderRepairable(invoice)) {
@@ -1909,9 +1959,14 @@ public class ManagerControlService {
         long workerWorkloadCount = workerCounts.workloadTotal();
         long requiresAttention = orderCounts.getOrDefault("Требует внимания", 0);
         long commonInvoiceActionCount = commonInvoiceActionCount(manager);
+        long publicationDateIssueCount = reviewRepository.countPublicationDateIssuesByManager(manager);
         long chatBindingIssueCount = orderRepository.countManagerControlChatBindingIssuesByManager(
                 manager,
                 CommonInvoiceStatus.DISABLED
+        );
+        long paymentIntegrityIssueCount = orderRepository.countPaymentIntegrityIssuesByManager(
+                manager,
+                PAYMENT_AUTOMATION_STATUSES
         );
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
@@ -1925,6 +1980,8 @@ public class ManagerControlService {
         addProblem(problems, "OPEN_RISKS", "Риски", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
+        addProblem(problems, "PAYMENT_INTEGRITY", "Повторная оплата", paymentIntegrityIssueCount, "CRITICAL", "ACTION", "payments", ordersUrl(manager, null));
+        addProblem(problems, "PUBLICATION_DATE_ISSUES", "Публикация без даты", publicationDateIssueCount, "CRITICAL", "ACTION", "event_busy", ordersUrl(manager, "Публикация"));
         addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
@@ -1934,7 +1991,7 @@ public class ManagerControlService {
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + chatBindingIssueCount
+        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount
                 + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
         long warningCount = leadActionCount;
         long workloadCount = orderAttention + workerWorkloadCount + leadsInWork;
@@ -2209,7 +2266,9 @@ public class ManagerControlService {
                     saveEvent(saved, null, null, ManagerDailyControlEventType.CONTROL_CREATED, null, "Контроль дня стартовал автоматически");
                     return saved;
                 });
-
+        if (control.getId() != null) {
+            control = dailyControlRepository.findByIdForUpdate(control.getId()).orElse(control);
+        }
         Map<String, ManagerDailyControlItem> existing = dailyControlItemRepository.findByControl(control).stream()
                 .collect(Collectors.toMap(ManagerDailyControlItem::getItemKey, Function.identity(), (left, right) -> left));
         Set<String> activeKeys = new HashSet<>();
@@ -2271,7 +2330,9 @@ public class ManagerControlService {
                 item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
                 item.setResolvedAt(LocalDateTime.now());
                 item.setAutomaticResolution(true);
-                currentItems.add(dailyControlItemRepository.save(item));
+                ManagerDailyControlItem resolvedItem = dailyControlItemRepository.save(item);
+                resolveOpenConcreteItemsForResolvedParent(resolvedItem);
+                currentItems.add(resolvedItem);
                 saveEvent(control, item, null, ManagerDailyControlEventType.ITEM_RESOLVED, ManagerDailyControlActionType.RESOLVED, "Автоматически закрыто: пункт больше не требует внимания");
             } else if (!currentItems.contains(item)) {
                 currentItems.add(item);
@@ -2580,6 +2641,12 @@ public class ManagerControlService {
         if ("COMMON_INVOICES".equals(item.getReasonCode())) {
             return commonInvoiceExamples(manager, today, limit);
         }
+        if ("PAYMENT_INTEGRITY".equals(item.getReasonCode())) {
+            return paymentIntegrityIssueExamples(manager, today, limit);
+        }
+        if ("PUBLICATION_DATE_ISSUES".equals(item.getReasonCode())) {
+            return publicationDateIssueExamples(manager, limit);
+        }
         if ("CHAT_BINDING_ISSUES".equals(item.getReasonCode())) {
             return chatBindingIssueExamples(manager, today, limit);
         }
@@ -2637,7 +2704,7 @@ public class ManagerControlService {
         Map<String, ManagerDailyControlConcreteItem> storedByKey = storedExamples.stream()
                 .collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
         Set<String> freshKeys = freshByKey.keySet();
-        resolveStaleChatBindingConcreteItems(parentItem, storedByKey, freshKeys);
+        resolveStaleConcreteItems(parentItem, storedByKey, freshKeys);
         List<ManagerControlConcreteItemResponse> visibleStored = storedExamples.stream()
                 .filter(item -> item.getStatus() != ManagerDailyControlItemStatus.RESOLVED)
                 .filter(item -> !isClosedClientChatUnansweredConcrete(item))
@@ -2685,7 +2752,7 @@ public class ManagerControlService {
         Set<String> freshKeys = examples.stream()
                 .map(this::concreteEntityKey)
                 .collect(Collectors.toSet());
-        resolveStaleChatBindingConcreteItems(parentItem, existing, freshKeys);
+        resolveStaleConcreteItems(parentItem, existing, freshKeys);
         if (examples.isEmpty()) {
             return List.of();
         }
@@ -2736,13 +2803,12 @@ public class ManagerControlService {
         return synced;
     }
 
-    private void resolveStaleChatBindingConcreteItems(
+    private void resolveStaleConcreteItems(
             ManagerDailyControlItem parentItem,
             Map<String, ManagerDailyControlConcreteItem> existing,
             Set<String> freshKeys
     ) {
         if (parentItem == null
-                || !"CHAT_BINDING_ISSUES".equals(parentItem.getReasonCode())
                 || existing == null
                 || existing.isEmpty()) {
             return;
@@ -2757,7 +2823,28 @@ public class ManagerControlService {
             recordConcreteEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
             item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
             item.setActionType(ManagerDailyControlActionType.RESOLVED);
-            item.setComment("Группа привязана или проблема больше не актуальна");
+            item.setComment("Проблема больше не актуальна и закрыта автоматически");
+            item.setResolvedAt(now);
+            item.setAutomaticResolution(true);
+            item.setFollowUpAt(null);
+            item.setLastManualTouchAt(null);
+            dailyControlConcreteItemRepository.save(item);
+        }
+    }
+
+    private void resolveOpenConcreteItemsForResolvedParent(ManagerDailyControlItem parentItem) {
+        if (parentItem == null) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        for (ManagerDailyControlConcreteItem item : dailyControlConcreteItemRepository.findByParentItem(parentItem)) {
+            if (item == null || item.getStatus() != ManagerDailyControlItemStatus.OPEN) {
+                continue;
+            }
+            recordConcreteEpisode(item, ManagerDailyControlItemStatus.RESOLVED, true);
+            item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+            item.setActionType(ManagerDailyControlActionType.RESOLVED);
+            item.setComment("Родительский пункт больше не требует внимания");
             item.setResolvedAt(now);
             item.setAutomaticResolution(true);
             item.setFollowUpAt(null);
@@ -3266,6 +3353,50 @@ public class ManagerControlService {
         ).withSla(orderControlStartedAt(order), null, null, null);
     }
 
+    private List<ManagerControlConcreteItemResponse> paymentIntegrityIssueExamples(
+            Manager manager,
+            LocalDate today,
+            int limit
+    ) {
+        return orderRepository.findPaymentIntegrityIssuesByManager(
+                        manager,
+                        PAYMENT_AUTOMATION_STATUSES,
+                        PageRequest.of(0, Math.max(1, limit))
+                )
+                .stream()
+                .map(order -> {
+                    String status = order.getStatus() == null ? "" : safe(order.getStatus().getTitle());
+                    String paidAt = order.getPayDay() == null ? "ранее" : order.getPayDay().toString();
+                    String reason = "Проблема: заказ №" + order.getId() + " полностью оплачен " + paidAt
+                            + ", но повторно находится в статусе «" + status + "». "
+                            + "Есть риск повторного счета клиенту. Решение: нажмите «Починить» — "
+                            + "система остановит платежные очереди, закроет только лишние неоплаченные ссылки "
+                            + "и восстановит статус «Оплачено». Следующий заказ не изменяется.";
+                    return new ManagerControlConcreteItemResponse(
+                            null,
+                            ENTITY_ORDER_PAYMENT_INTEGRITY,
+                            order.getId(),
+                            orderTitle(order, "Заказ #" + order.getId()),
+                            "Оплачен " + paidAt + " · заказ №" + order.getId(),
+                            status,
+                            order.getPayDay() == null ? null : daysSince(order.getPayDay(), today),
+                            reason,
+                            orderTargetUrl(order),
+                            null,
+                            orderChatUrl(order),
+                            null,
+                            null,
+                            ManagerDailyControlItemStatus.OPEN.name(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            null
+                    ).withSla(order.getStatusChangedAt(), null, null, null);
+                })
+                .toList();
+    }
+
     private LocalDateTime orderControlStartedAt(OrderDTOList order) {
         if (order == null) {
             return null;
@@ -3314,8 +3445,17 @@ public class ManagerControlService {
             return "Почему в контроле: заказ попал в просрочку, но детали автоответчика недоступны.";
         }
         if (order.getClientMessageStatus() != null) {
-            String label = safe(order.getClientMessageStatus().label());
-            String error = safe(order.getClientMessageStatus().errorMessage());
+            var clientMessageStatus = order.getClientMessageStatus();
+            String label = safe(clientMessageStatus.label());
+            String errorCode = safe(clientMessageStatus.errorCode()).toLowerCase(Locale.ROOT);
+            String error = safe(clientMessageStatus.errorMessage());
+            if ("rate_limited".equals(errorCode)) {
+                String nextAttempt = clientMessageStatus.nextAttemptAt() == null
+                        ? "в ближайший разрешённый слот"
+                        : clientMessageStatus.nextAttemptAt().toString();
+                return "Почему в контроле: очередь автоответчика исправна и ожидает ограничения отправки. "
+                        + "Следующий слот отправки: " + nextAttempt + ".";
+            }
             if (!error.isBlank()) {
                 return clientMessageControlErrorReason(error);
             }
@@ -3658,6 +3798,8 @@ public class ManagerControlService {
         concreteItem.setWorkerExplanation(null);
         concreteItem.setWorkerExplanationAt(null);
         concreteItem.setWorkerExplanationByUserId(null);
+        concreteItem.setWorkerReminderSentAt(null);
+        concreteItem.setWorkerReminderCount(0);
     }
 
     private boolean notifyWorkerAboutTaskRequest(ManagerDailyControlConcreteItem concreteItem, ManagerDailyControl control) {
@@ -3678,6 +3820,8 @@ public class ManagerControlService {
         concreteItem.setWorkerExplanation(null);
         concreteItem.setWorkerExplanationAt(null);
         concreteItem.setWorkerExplanationByUserId(null);
+        concreteItem.setWorkerReminderSentAt(null);
+        concreteItem.setWorkerReminderCount(0);
         boolean explanationRequired = requiresWorkerExplanation(concreteItem);
         if (explanationRequired) {
             concreteItem.setWorkerExplanationRequestedAt(now);
@@ -3722,6 +3866,9 @@ public class ManagerControlService {
         Long orderId = orderIdForTask(concreteItem);
         String company = workerTaskCompanyTitle(concreteItem);
         List<String> lines = new ArrayList<>();
+        lines.add(explanationRequired
+                ? "🟡 ОЖИДАЕМ ОТВЕТ"
+                : "🔔 НАПОМИНАНИЕ");
         lines.add(explanationRequired
                 ? "Нужно пояснение: " + specialistProblemLabel(concreteItem) + "."
                 : "Напоминание: " + specialistProblemLabel(concreteItem) + ".");
@@ -4530,6 +4677,46 @@ public class ManagerControlService {
                 .toList();
     }
 
+    private List<ManagerControlConcreteItemResponse> publicationDateIssueExamples(Manager manager, int limit) {
+        return reviewRepository.findPublicationDateIssuesByManager(
+                        manager,
+                        PageRequest.of(0, Math.max(1, limit))
+                ).stream()
+                .map(this::publicationDateIssueExample)
+                .toList();
+    }
+
+    private ManagerControlConcreteItemResponse publicationDateIssueExample(Review review) {
+        Order order = reviewOrder(review);
+        LocalDateTime observedAt = order == null ? null : order.getStatusChangedAt();
+        String reason = "Проблема: заказ находится в «Публикации», но у неопубликованного отзыва не назначена дата. "
+                + "Решение: нажмите «Починить» — система проверит тексты и аккаунты и назначит даты. "
+                + "Если починка не пройдет, откройте заказ по ссылке и выполните указанную в ошибке рекомендацию.";
+        return new ManagerControlConcreteItemResponse(
+                null,
+                ENTITY_PUBLICATION_DATE_REVIEW,
+                review.getId(),
+                orderTitle(order, "Отзыв #" + review.getId()),
+                taskSubtitle("Публикация", review.getWorker(), null, LocalDate.now()),
+                "Нет даты публикации",
+                observedAt == null ? null : daysSince(observedAt.toLocalDate(), LocalDate.now()),
+                reason,
+                orderTargetUrl(order),
+                review.getOrderDetails() == null || review.getOrderDetails().getId() == null
+                        ? null
+                        : review.getOrderDetails().getId().toString(),
+                orderChatUrl(order),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null
+        ).withSla(observedAt, null, null, null);
+    }
+
     private ManagerControlConcreteItemResponse publishReviewExample(Review review, LocalDate today) {
         Order order = reviewOrder(review);
         return new ManagerControlConcreteItemResponse(
@@ -4807,6 +4994,80 @@ public class ManagerControlService {
         );
     }
 
+    private void requireCommonInvoiceProblemResolved(ManagerDailyControlConcreteItem concreteItem) {
+        Long invoiceId = concreteItem == null ? null : concreteItem.getEntityId();
+        if (invoiceId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У карточки общего счета нет ID счета");
+        }
+        CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        if (!isCommonInvoiceManagerControlProblem(invoice, LocalDateTime.now())) {
+            return;
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Общий счет все еще требует внимания: статус «"
+                        + commonInvoiceStatusLabel(invoice.getStatus())
+                        + "». Обновите счет в правой панели или используйте «Починить», если кнопка доступна."
+        );
+    }
+
+    private ManagerControlConcreteItemResponse repairPublicationDateConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Principal principal
+    ) {
+        Review review = reviewRepository.findById(concreteItem.getEntityId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв карточки контроля не найден"));
+        Order order = reviewOrder(review);
+        if (order == null || order.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "У отзыва не найден заказ");
+        }
+        publicationApprovalService.repairMissingDates(
+                order.getId(),
+                "source=manager_control;controlItemId=" + concreteItem.getId()
+        );
+        Review repaired = reviewRepository.findById(review.getId()).orElse(review);
+        if (!repaired.isPublish() && repaired.getPublishedDate() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Дата не назначена. Откройте заказ, проверьте тексты и аккаунты отзывов, затем повторите починку."
+            );
+        }
+        return resolveRepairedConcreteItem(
+                concreteItem,
+                control,
+                "Дата публикации назначена автоматически",
+                principal,
+                "Восстановлена отсутствующая дата публикации отзыва"
+        );
+    }
+
+    private boolean isCommonInvoiceManagerControlProblem(CommonInvoice invoice, LocalDateTime now) {
+        if (invoice == null) {
+            return false;
+        }
+        if (hasText(invoice.getLastError()) || hasText(invoice.getPaymentSuccessNotificationError())) {
+            return true;
+        }
+        CommonInvoiceStatus status = invoice.getStatus();
+        if (COMMON_INVOICE_CRITICAL_STATUSES.contains(status)) {
+            return true;
+        }
+        LocalDateTime updatedAt = invoice.getUpdatedAt();
+        LocalDateTime staleBefore = (now == null ? LocalDateTime.now() : now).minusDays(COMMON_INVOICE_STALE_DAYS);
+        if (!COMMON_INVOICE_STALE_STATUSES.contains(status)
+                || updatedAt == null
+                || updatedAt.isAfter(staleBefore)) {
+            return false;
+        }
+        if (status != CommonInvoiceStatus.PARTIALLY_PAID) {
+            return true;
+        }
+        return commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId()).stream()
+                .noneMatch(item -> item != null && !item.isReady());
+    }
+
     private List<Company> telegramChatIssueCompanies(Manager manager, int limit) {
         Map<Long, Company> companies = new LinkedHashMap<>();
         companyRepository.findTelegramChatIssueCompanies(manager, PageRequest.of(0, Math.max(1, limit)))
@@ -5065,6 +5326,15 @@ public class ManagerControlService {
         if (error.startsWith("next_order_failed")) {
             return "Платеж закрыт, но следующие заказы не создались. Рекомендация: нажмите «Починить», чтобы повторить создание следующих заказов.";
         }
+        if (error.startsWith("review_approval_failed:")) {
+            String problem = errorField(rawError, "problem");
+            String solution = errorField(rawError, "solution");
+            return "Массовое одобрение остановлено без частичных изменений. Проблема: "
+                    + (problem.isBlank() ? "не удалось назначить даты публикации" : problem)
+                    + ". Решение: "
+                    + (solution.isBlank() ? "проверьте заказы общего счета" : solution)
+                    + ". После исправления нажмите «Починить», чтобы безопасно повторить одобрение.";
+        }
         if (commonInvoiceTechnicalTailRepairable(invoice)) {
             return "У общего счета остался технический хвост. Рекомендация: нажмите «Починить», чтобы скрыть старую карточку из контроля.";
         }
@@ -5195,6 +5465,24 @@ public class ManagerControlService {
                 && error.startsWith("next_order_failed");
     }
 
+    private boolean commonInvoiceReviewApprovalRepairable(CommonInvoice invoice) {
+        return invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
+                && safe(invoice.getLastError()).toLowerCase(Locale.ROOT).startsWith("review_approval_failed:");
+    }
+
+    private String errorField(String rawError, String field) {
+        String source = safe(rawError);
+        String marker = field + "=";
+        int start = source.toLowerCase(Locale.ROOT).indexOf(marker.toLowerCase(Locale.ROOT));
+        if (start < 0) {
+            return "";
+        }
+        start += marker.length();
+        int end = source.indexOf(';', start);
+        return safe(end < 0 ? source.substring(start) : source.substring(start, end));
+    }
+
     private boolean hasText(String value) {
         return !safe(value).isBlank();
     }
@@ -5259,6 +5547,8 @@ public class ManagerControlService {
             case "OPEN_RISKS" -> "Есть открытые риски специалистов";
             case "REQUIRES_ATTENTION" -> "Есть заказы в статусе требует внимания";
             case "COMMON_INVOICES" -> "Есть общие счета с ошибкой или зависшим статусом";
+            case "PAYMENT_INTEGRITY" -> "Оплаченный заказ ошибочно вошел в повторный платежный цикл";
+            case "PUBLICATION_DATE_ISSUES" -> "Есть заказы в публикации с отзывами без назначенной даты";
             case "CHAT_BINDING_ISSUES" -> "Есть заказы с непривязанной группой соцсети";
             case "WORKER_ACTIONS" -> "Есть задачи специалистов, которые надо разобрать";
             case "ORDERS_WORKLOAD" -> "Общий объем рабочих заказов";

@@ -17,11 +17,18 @@ public class PerformerAssignmentScheduler {
             initialDelayString = "${performers.scheduler.initial-delay-ms:60000}"
     )
     public void tick() {
+        int created = assignmentService.createDueAssignments();
         int expired = assignmentService.expireOffers();
         int offered = assignmentService.offerQueuedAssignments();
         int ready = assignmentService.notifyReadyToPublish();
-        if (expired > 0 || offered > 0 || ready > 0) {
-            log.info("Performer scheduler tick: expired={}, offered={}, readyNotifications={}", expired, offered, ready);
+        if (created > 0 || expired > 0 || offered > 0 || ready > 0) {
+            log.info(
+                    "Performer scheduler tick: created={}, expired={}, offered={}, readyNotifications={}",
+                    created,
+                    expired,
+                    offered,
+                    ready
+            );
         }
     }
 }

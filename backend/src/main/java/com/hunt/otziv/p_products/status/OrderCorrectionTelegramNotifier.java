@@ -24,7 +24,7 @@ public class OrderCorrectionTelegramNotifier {
             String companyComments
     ) {
         if (chatId == null) {
-            log.warn("Telegram-уведомление о коррекции заказа ID {} не отправлено: у специалиста нет chatId", orderId);
+            log.warn("Telegram-уведомление о коррекции заказа ID {} не отправлено: у специалиста не привязана рабочая группа", orderId);
             return;
         }
 

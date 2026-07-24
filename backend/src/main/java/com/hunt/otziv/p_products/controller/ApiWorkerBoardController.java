@@ -10,6 +10,7 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.exceptions.BotTemplateNameException;
 import com.hunt.otziv.exceptions.NagulTooFastException;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
@@ -142,6 +143,7 @@ public class ApiWorkerBoardController {
     private final WorkerCredentialPreparationService credentialPreparationService;
     private final StaffDailyProgressService staffDailyProgressService;
     private final WorkerCellularAccessService workerCellularAccessService;
+    private final ScheduledClientMessageService scheduledClientMessageService;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -246,15 +248,18 @@ public class ApiWorkerBoardController {
 
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'WORKER')")
     public void updateOrderStatus(
             @PathVariable Long orderId,
             @RequestBody StatusChangeRequest request,
-            HttpServletRequest servletRequest
+            HttpServletRequest servletRequest,
+            Principal principal,
+            Authentication authentication
     ) throws Exception {
         String status = requireStatus(request);
         servletRequest.setAttribute("status", status);
         Order order = orderService.getOrder(orderId);
+        enforceWorkerWaitingReviewTransition(order, status, principal, authentication);
 
         if ("Опубликовано".equals(status) || "Оплачено".equals(status)) {
             requireCompleteCounter(order, status);
@@ -292,13 +297,20 @@ public class ApiWorkerBoardController {
         }
 
         if (order.isWaitingForClient() != waitingForClient) {
-            order.setWaitingForClientChangedAt(waitingForClient ? LocalDateTime.now() : null);
+            LocalDateTime changedAt = LocalDateTime.now();
+            order.setWaitingForClientChangedAt(waitingForClient ? changedAt : null);
+            if (!waitingForClient) {
+                // После ответа клиента задача снова становится доступной специалисту.
+                // Отсчет скорости и просрочки должен начинаться с этого момента.
+                order.setStatusChangedAt(changedAt);
+            }
         }
         order.setWaitingForClient(waitingForClient);
         if (waitingForClient) {
             order.setClientTextExpected(true);
         }
         orderService.save(order);
+        scheduledClientMessageService.synchronizeClientTextReminderForOrder(order);
     }
 
     @PutMapping("/orders/{orderId}/note")
@@ -364,11 +376,11 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
-        workerCellularAccessService.enforceProtectedAccess("review");
-        enforcePublicationSessionIfNeeded(source, principal, authentication);
         Review review = reviewService.getReviewById(reviewId);
+        enforceReviewSourceAccess(review, source == null ? null : source.sourceSection());
+        enforcePublicationSessionIfNeeded(source, principal, authentication);
         Long oldBotId = botId(review);
-        reviewService.changeBot(reviewId, isSourceSection(source, SECTION_PUBLISH));
+        reviewService.changeBot(reviewId);
         Long newBotId = botId(reviewService.getReviewById(reviewId));
         workerActivityService.recordCurrentAuthenticationSafely(
                 WorkerActivityAction.REVIEW_BOT_CHANGE,
@@ -392,10 +404,10 @@ public class ApiWorkerBoardController {
             Principal principal,
             Authentication authentication
     ) {
-        workerCellularAccessService.enforceProtectedAccess("review");
-        enforcePublicationSessionIfNeeded(source, principal, authentication);
         Review review = reviewService.getReviewById(reviewId);
-        reviewService.deActivateAndChangeBot(reviewId, botId, isSourceSection(source, SECTION_PUBLISH));
+        enforceReviewSourceAccess(review, source == null ? null : source.sourceSection());
+        enforcePublicationSessionIfNeeded(source, principal, authentication);
+        reviewService.deActivateAndChangeBot(reviewId, botId);
         workerActivityService.recordCurrentAuthenticationSafely(
                 WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
                 "review",
@@ -416,21 +428,20 @@ public class ApiWorkerBoardController {
     }
 
     @PostMapping("/reviews/{reviewId}/copy-click")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public void logReviewCredentialCopyClick(
+    public WorkerCredentialPreparationResponse logReviewCredentialCopyClick(
             @PathVariable Long reviewId,
             @RequestBody ReviewCopyClickRequest request,
             Principal principal,
             Authentication authentication
     ) {
-        workerCellularAccessService.enforceProtectedAccess("review");
-        enforcePublicationSessionIfNeeded(request, principal, authentication);
         String field = normalizeReviewCopyField(request);
         Review review = reviewService.getReviewById(reviewId);
         if (review == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден");
         }
+        enforceReviewSourceAccess(review, request.sourceSection());
+        enforcePublicationSessionIfNeeded(request, principal, authentication);
 
         Order order = review.getOrderDetails() != null ? review.getOrderDetails().getOrder() : null;
         Company company = order != null ? order.getCompany() : null;
@@ -454,7 +465,7 @@ public class ApiWorkerBoardController {
                 "copy",
                 withSource(credentialCopyDetails(field, bot), request)
         );
-        credentialPreparationService.recordCopy(
+        boolean preparationRecorded = credentialPreparationService.recordCopy(
                 authentication,
                 review,
                 field,
@@ -462,7 +473,50 @@ public class ApiWorkerBoardController {
                 request == null ? null : request.sourceEntry(),
                 request == null ? null : request.sourceSection()
         );
+        if (credentialPreparationRequired(request) && !preparationRecorded) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Сервер не подтвердил подготовку аккаунта. Обновите приложение и повторите копирование."
+            );
+        }
         recordPublicationActivityIfNeeded(request, principal, authentication);
+        return preparationRecorded
+                ? activeCredentialPreparation(authentication, request == null ? null : request.sourceSection())
+                : null;
+    }
+
+    @PostMapping("/recovery-tasks/{taskId}/copy-click")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void logRecoveryTaskCredentialCopyClick(
+            @PathVariable Long taskId,
+            @RequestBody ReviewCopyClickRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        String field = normalizeReviewCopyField(request);
+        ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
+
+        log.info(
+                "Специалист {} нажал кнопку \"{}\" для задачи восстановления ID {}, исходного отзыва ID {}, заказа ID {}, бота ID {}",
+                principalName(principal),
+                copyFieldLabel(field),
+                task.getId(),
+                reviewId(task),
+                orderId(task),
+                botId(task)
+        );
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "recovery_task",
+                task.getId(),
+                orderId(task),
+                reviewId(task),
+                SECTION_RECOVERY,
+                withSource(credentialCopyDetails(field, task.getBot()), request)
+        );
     }
 
     @PostMapping("/reviews/{reviewId}/publish")
@@ -773,7 +827,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewTextUpdateRequest request
     ) {
-        workerCellularAccessService.enforceProtectedAccess("review");
+        enforceReviewSourceAccess(reviewId, request == null ? null : request.sourceSection());
         if (request == null || request.text() == null || request.text().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
@@ -837,7 +891,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewAnswerUpdateRequest request
     ) {
-        workerCellularAccessService.enforceProtectedAccess("review");
+        enforceReviewSourceAccess(reviewId, request == null ? null : request.sourceSection());
         if (request == null || request.answer() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ответ на отзыв не указан");
         }
@@ -864,7 +918,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long reviewId,
             @RequestBody ReviewNoteUpdateRequest request
     ) {
-        workerCellularAccessService.enforceProtectedAccess("review");
+        enforceReviewSourceAccess(reviewId, request == null ? null : request.sourceSection());
         if (request == null || request.comment() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка отзыва не указана");
         }
@@ -1204,7 +1258,11 @@ public class ApiWorkerBoardController {
             Worker selectedWorker
     ) {
         List<WorkerMetricResponse> metrics = new ArrayList<>();
-        Map<String, Integer> orderCounts = countOrderMetrics(principal, authentication, selectedWorker);
+        // The counters describe what the user can see in every section. Orders that
+        // wait for a client remain visible in "New"/"Correction", so they must be
+        // included here as well. Actionable counts are still used separately for
+        // the publication flow lock below.
+        Map<String, Integer> orderCounts = countVisibleOrderMetrics(principal, authentication, selectedWorker);
         Map<String, Integer> reviewCounts = selectedWorker != null
                 ? Map.of(
                         SECTION_PUBLISH, reviewService.countOrdersByWorkerAndStatusPublish(selectedWorker, LocalDate.now()),
@@ -1227,7 +1285,11 @@ public class ApiWorkerBoardController {
         metrics.add(reviewMetric(reviewCounts, "Публикация", SECTION_PUBLISH, "published_with_changes", "green"));
         metrics.add(new WorkerMetricResponse("Плохие", badTaskCount, "money_off", "gray", SECTION_BAD));
         metrics.add(orderMetric(orderCounts, "Все", SECTION_ALL, "dashboard", "blue"));
-        syncWorkerFlowLockFromMetrics(principal, authentication, orderCounts);
+        syncWorkerFlowLockFromMetrics(
+                principal,
+                authentication,
+                countOrderMetrics(principal, authentication, selectedWorker)
+        );
 
         if (selectedWorker != null) {
             return metrics;
@@ -1346,6 +1408,37 @@ public class ApiWorkerBoardController {
         );
     }
 
+    private Map<String, Integer> countVisibleOrderMetrics(
+            Principal principal,
+            Authentication authentication,
+            Worker selectedWorker
+    ) {
+        if (selectedWorker != null) {
+            return withPaidStatusCount(
+                    orderService.countOrdersByStatusToWorker(selectedWorker),
+                    orderService.countOrdersByWorkerAndStatus(selectedWorker, ORDER_STATUS_PAID)
+            );
+        }
+        if (hasRole(authentication, "ADMIN")) {
+            return orderService.countOrdersByStatus();
+        }
+        if (hasRole(authentication, "OWNER")) {
+            return orderService.countOrdersByStatusToOwner(resolveOwnerManagers(principal));
+        }
+        if (hasRole(authentication, "MANAGER")) {
+            Manager manager = resolveManager(principal);
+            return withPaidStatusCount(
+                    orderService.countOrdersByStatusToManager(manager),
+                    orderService.getAllOrderDTOByStatusToManager(manager, ORDER_STATUS_PAID)
+            );
+        }
+        Worker worker = resolveWorker(principal);
+        return withPaidStatusCount(
+                orderService.countOrdersByStatusToWorker(worker),
+                orderService.countOrdersByWorkerAndStatus(worker, ORDER_STATUS_PAID)
+        );
+    }
+
     private Map<String, Integer> withPaidStatusCount(Map<String, Integer> counts, int paidCount) {
         Map<String, Integer> result = new LinkedHashMap<>();
         if (counts != null) {
@@ -1406,6 +1499,43 @@ public class ApiWorkerBoardController {
                 && !hasRole(authentication, "ADMIN")
                 && !hasRole(authentication, "OWNER")
                 && !hasRole(authentication, "MANAGER");
+    }
+
+    private void enforceReviewSourceAccess(Long reviewId, String sourceSection) {
+        enforceReviewSourceAccess(reviewService.getReviewById(reviewId), sourceSection);
+    }
+
+    private void enforceReviewSourceAccess(Review review, String sourceSection) {
+        String normalized = safe(sourceSection).trim().toLowerCase(Locale.ROOT);
+        String orderSection = reviewOrderSection(review);
+        if (orderSection != null) {
+            workerCellularAccessService.enforceSection(orderSection);
+            return;
+        }
+        if (WorkerCellularAccessService.PROTECTED_SECTIONS.contains(normalized)) {
+            workerCellularAccessService.enforceSection(normalized);
+            return;
+        }
+        workerCellularAccessService.enforceSection(
+                review != null && review.isVigul() ? SECTION_PUBLISH : SECTION_NAGUL
+        );
+    }
+
+    private String reviewOrderSection(Review review) {
+        if (review == null
+                || review.getOrderDetails() == null
+                || review.getOrderDetails().getOrder() == null
+                || review.getOrderDetails().getOrder().getStatus() == null) {
+            return null;
+        }
+        String status = safe(review.getOrderDetails().getOrder().getStatus().getTitle()).trim();
+        if (ORDER_STATUS_NEW.equalsIgnoreCase(status)) {
+            return SECTION_NEW;
+        }
+        if (ORDER_STATUS_CORRECT.equalsIgnoreCase(status)) {
+            return SECTION_CORRECT;
+        }
+        return null;
     }
 
     private void recordPublicationActivityIfNeeded(
@@ -1834,6 +1964,7 @@ public class ApiWorkerBoardController {
         order.setWaitingForClient(false);
         order.setWaitingForClientChangedAt(null);
         orderService.save(order);
+        scheduledClientMessageService.synchronizeClientTextReminderForOrder(order);
     }
 
     private WorkerSelection resolveWorkerSelection(
@@ -2004,6 +2135,14 @@ public class ApiWorkerBoardController {
         );
         LocalDate oldestDate = page.getContent().isEmpty() ? null : page.getContent().getFirst().getPublishedDate();
         return new ManagerOverdueStatusResponse(sectionLabel, page.getTotalElements(), daysSince(oldestDate, today));
+    }
+
+    private boolean credentialPreparationRequired(ReviewCopyClickRequest source) {
+        if (source == null) {
+            return false;
+        }
+        String section = safe(source.sourceSection()).trim().toLowerCase(Locale.ROOT);
+        return SECTION_PUBLISH.equals(section) || SECTION_NAGUL.equals(section);
     }
 
     private ManagerOverdueStatusResponse overdueRecoverySection(
@@ -2716,7 +2855,16 @@ public class ApiWorkerBoardController {
     public record CompanyNoteUpdateRequest(String companyComments) {
     }
 
-    public record ReviewTextUpdateRequest(Long orderId, String text) {
+    public record ReviewTextUpdateRequest(
+            Long orderId,
+            String text,
+            String sourcePage,
+            String sourceEntry,
+            String sourceSection
+    ) {
+        public ReviewTextUpdateRequest(Long orderId, String text) {
+            this(orderId, text, null, null, null);
+        }
     }
 
     public record ReviewBotNameUpdateRequest(String botName) {
@@ -2728,10 +2876,54 @@ public class ApiWorkerBoardController {
     public record RecoveryTaskUpdateRequest(String recoveryText, String recoveryAnswer, LocalDate scheduledDate) {
     }
 
-    public record ReviewAnswerUpdateRequest(Long orderId, String answer) {
+    public record ReviewAnswerUpdateRequest(
+            Long orderId,
+            String answer,
+            String sourcePage,
+            String sourceEntry,
+            String sourceSection
+    ) {
+        public ReviewAnswerUpdateRequest(Long orderId, String answer) {
+            this(orderId, answer, null, null, null);
+        }
     }
 
-    public record ReviewNoteUpdateRequest(Long orderId, String comment) {
+    private void enforceWorkerWaitingReviewTransition(
+            Order order,
+            String status,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER")) {
+            return;
+        }
+
+        Worker currentWorker = resolveWorker(principal);
+        Long currentWorkerId = currentWorker.getId();
+        Long assignedWorkerId = order != null && order.getWorker() != null ? order.getWorker().getId() : null;
+        boolean allowed = "В проверку".equals(status)
+                && order != null
+                && order.isWaitingForClient()
+                && currentWorkerId != null
+                && currentWorkerId.equals(assignedWorkerId);
+        if (!allowed) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Специалист может отправить на проверку только свой заказ, ожидающий клиента"
+            );
+        }
+    }
+
+    public record ReviewNoteUpdateRequest(
+            Long orderId,
+            String comment,
+            String sourcePage,
+            String sourceEntry,
+            String sourceSection
+    ) {
+        public ReviewNoteUpdateRequest(Long orderId, String comment) {
+            this(orderId, comment, null, null, null);
+        }
     }
 
     public record WorkerActionResponse(boolean success, String message) {

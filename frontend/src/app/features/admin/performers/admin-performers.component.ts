@@ -112,6 +112,28 @@ export class AdminPerformersComponent implements OnInit {
     });
   }
 
+  uploadManagerScreenshot(assignment: PerformerAssignment, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    const key = `manager-screenshot-${assignment.id}`;
+    this.saving.set(key);
+    this.api.uploadManagerConfirmationScreenshot(assignment.id, file).subscribe({
+      next: () => {
+        this.toast.success('Скриншот менеджера загружен', `#${assignment.id}`);
+        this.saving.set(null);
+        this.load();
+      },
+      error: (err) => {
+        this.toast.error('Скриншот не загружен', apiErrorMessage(err, 'Не удалось загрузить файл'));
+        this.saving.set(null);
+      }
+    });
+    input.value = '';
+  }
+
   createAssignmentsForOrder(): void {
     const orderId = Number(this.manualOrderId());
     if (!Number.isFinite(orderId) || orderId <= 0) {

@@ -24,6 +24,10 @@ export interface AdminSubCategory {
 export interface AdminCity {
   id: number;
   title: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  distanceMatrixReady: boolean;
+  distanceCount: number;
 }
 
 export interface AdminProduct {
@@ -33,6 +37,9 @@ export interface AdminProduct {
   photo: boolean;
   requiresPerformer: boolean;
   targetPlatform: PerformerTargetPlatform;
+  performerRewardPercent: number;
+  specialistRewardPercent: number;
+  managerRewardPercent: number;
   category?: DictionaryOption | null;
 }
 
@@ -48,6 +55,11 @@ export interface AdminBot {
   status?: DictionaryOption | null;
   worker?: DictionaryOption | null;
   city?: DictionaryOption | null;
+}
+
+export interface BotCityUnblockedCountResponse {
+  cityId: number;
+  unblockedAccounts: number;
 }
 
 export interface AdminPromoText {
@@ -609,6 +621,24 @@ export interface TitleRequest {
   title: string;
 }
 
+export interface CityRequest {
+  title: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface CityDistanceRebuildResponse {
+  citiesWithCoordinates: number;
+  citiesWithoutCoordinates: number;
+  distancesSaved: number;
+}
+
+export interface CityCoordinateImportResponse extends CityDistanceRebuildResponse {
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface SubCategoryRequest {
   title: string;
   categoryId: number | null;
@@ -621,6 +651,9 @@ export interface ProductRequest {
   photo: boolean;
   requiresPerformer: boolean;
   targetPlatform: PerformerTargetPlatform;
+  performerRewardPercent: number;
+  specialistRewardPercent: number;
+  managerRewardPercent: number;
 }
 
 export interface BotRequest {
@@ -730,16 +763,34 @@ export class AdminDictionariesApi {
     });
   }
 
-  createCity(request: TitleRequest): Observable<AdminCity> {
+  createCity(request: CityRequest): Observable<AdminCity> {
     return this.http.post<AdminCity>(`${this.baseUrl}/cities`, request);
   }
 
-  updateCity(id: number, request: TitleRequest): Observable<AdminCity> {
+  updateCity(id: number, request: CityRequest): Observable<AdminCity> {
     return this.http.put<AdminCity>(`${this.baseUrl}/cities/${id}`, request);
   }
 
   deleteCity(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/cities/${id}`);
+  }
+
+  rebuildCityDistances(minCityId = 150): Observable<CityDistanceRebuildResponse> {
+    return this.http.post<CityDistanceRebuildResponse>(
+      `${this.baseUrl}/cities/distances/rebuild`,
+      {},
+      { params: new HttpParams().set('minCityId', String(minCityId)) }
+    );
+  }
+
+  rebuildCityDistancesForCity(id: number): Observable<CityDistanceRebuildResponse> {
+    return this.http.post<CityDistanceRebuildResponse>(`${this.baseUrl}/cities/${id}/distances/rebuild`, {});
+  }
+
+  importCityCoordinates(file: File): Observable<CityCoordinateImportResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<CityCoordinateImportResponse>(`${this.baseUrl}/cities/coordinates/import`, formData);
   }
 
   getProducts(keyword = ''): Observable<ProductsResponse> {
@@ -771,6 +822,13 @@ export class AdminDictionariesApi {
 
   getBot(id: number): Observable<AdminBot> {
     return this.http.get<AdminBot>(`${this.baseUrl}/bots/${id}`);
+  }
+
+  getBotCityUnblockedCount(cityId: number): Observable<BotCityUnblockedCountResponse> {
+    const params = new HttpParams().set('cityId', String(cityId));
+    return this.http.get<BotCityUnblockedCountResponse>(`${this.baseUrl}/bots/unblocked-count`, {
+      params
+    });
   }
 
   createBot(request: BotRequest): Observable<AdminBot> {

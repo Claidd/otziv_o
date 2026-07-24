@@ -17,6 +17,7 @@ import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
@@ -82,7 +84,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
     }
 
     @Test
-    void riskExplanationButtonFromGroupTargetsAssignedWorkerTelegramOnly() {
+    void riskExplanationButtonFromGroupAllowsAssignedWorkerWithoutForcingReplyForOthers() {
         User worker = worker();
         WorkerRiskIncident incident = riskIncident();
         ManagerDailyControlConcreteItem item = riskConcreteItem();
@@ -90,20 +92,37 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         when(concreteItemRepository.findById(30L)).thenReturn(Optional.of(item));
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
-        when(userService.findByChatId(555L)).thenReturn(Optional.empty());
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
 
-        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 555L, "mc-task-risk-explain:30"));
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 444L, "mc-task-risk-explain:30"));
 
         assertEquals(Optional.of("Ответьте на сообщение бота с кодом запроса"), answer);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
         verify(riskIncidentRepository).save(captor.capture());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
-        verify(telegramService).sendSelectiveForceReplyMessage(
-                eq(-100123L),
-                eq(444L),
-                contains("Код запроса: risk-77")
-        );
+        verify(telegramService).sendMessage(eq(-100123L), contains("Код запроса: risk-77"));
+        verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
         verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
+    }
+
+    @Test
+    void riskExplanationButtonFromGroupRejectsAdminManagerOrOwner() {
+        User worker = worker();
+        User manager = new User();
+        manager.setId(9L);
+        manager.setActive(true);
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+
+        when(concreteItemRepository.findById(30L)).thenReturn(Optional.of(item));
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(riskIncident()));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+        when(userService.findByChatId(999L)).thenReturn(Optional.of(manager));
+
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 999L, "mc-task-risk-explain:30"));
+
+        assertEquals(Optional.of("Эта кнопка предназначена назначенному специалисту"), answer);
+        verify(riskIncidentRepository).findById(77L);
+        verify(telegramService, never()).sendMessage(anyLong(), any());
     }
 
     @Test
@@ -175,7 +194,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
 
         when(concreteItemRepository.findById(31L)).thenReturn(Optional.of(item));
         when(reviewRepository.findById(88L)).thenReturn(Optional.of(review));
-        when(userService.findByChatId(444L)).thenReturn(Optional.empty());
+        when(userService.findByChatId(444L)).thenReturn(Optional.of(workerUser));
 
         service.handle(callbackFromGroup(-100123L, 444L, "mc-task-explain:31"));
 
@@ -206,6 +225,53 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 eq(30L)
         );
         verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
+    }
+
+    @Test
+    void pendingReminderIsYellowBeforeThreeHoursAndKeepsExplanationButton() {
+        User worker = worker();
+        WorkerRiskIncident incident = riskIncident();
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerNotificationSentAt(sentAt);
+
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+        when(telegramService.sendMessageWithInlineKeyboard(eq(-100123L), any(), eq(null), any())).thenReturn(true);
+
+        boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(1));
+
+        assertTrue(sent);
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessageWithInlineKeyboard(eq(-100123L), textCaptor.capture(), eq(null), any());
+        assertTrue(textCaptor.getValue().startsWith("🟡 ОЖИДАЕМ ОТВЕТ"));
+        assertEquals(1, item.getWorkerReminderCount());
+        assertEquals(sentAt.plusHours(1), item.getWorkerReminderSentAt());
+    }
+
+    @Test
+    void pendingReminderTurnsRedAfterThreeHoursAndRequestsDirectReply() {
+        User worker = worker();
+        WorkerRiskIncident incident = riskIncident();
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerExplanationPromptedAt(sentAt.plusMinutes(5));
+        item.setWorkerNotificationSentAt(sentAt);
+
+        when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
+        when(telegramService.sendMessage(eq(-100123L), any())).thenReturn(true);
+
+        boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(3));
+
+        assertTrue(sent);
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-100123L), textCaptor.capture());
+        assertTrue(textCaptor.getValue().startsWith("🔴 ПРОСРОЧЕНО"));
+        assertTrue(textCaptor.getValue().contains("Код запроса: risk-77"));
+        verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
     }
 
     private CallbackQuery callbackFromGroup(long groupChatId, long actorTelegramId, String data) {

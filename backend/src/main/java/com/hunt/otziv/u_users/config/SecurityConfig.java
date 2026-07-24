@@ -157,6 +157,7 @@ public class SecurityConfig {
     private void configureApiAuthorization(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
         auth.requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll();
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
+        auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
         auth.requestMatchers("/api/manager-activity/**").authenticated();
         auth.requestMatchers("/api/mobile/**").authenticated();

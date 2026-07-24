@@ -25,6 +25,7 @@ import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
@@ -53,6 +54,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,6 +103,8 @@ class ScheduledClientMessageServiceTest {
     private ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     @Mock
     private CommonBillingService commonBillingService;
+    @Mock
+    private OrderPaymentIntegrityService orderPaymentIntegrityService;
 
     @InjectMocks
     private ScheduledClientMessageService service;
@@ -363,9 +367,9 @@ class ScheduledClientMessageServiceTest {
 
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
         when(appSettingService.getInt(
-                AppSettingService.CLIENT_MESSAGES_WHATSAPP_AUTH_RETRY_HOURS,
-                ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS
-        )).thenReturn(ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS);
+                AppSettingService.CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES,
+                ScheduledClientMessageService.DEFAULT_TRANSIENT_RETRY_MINUTES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_TRANSIENT_RETRY_MINUTES);
         when(appSettingService.getString(
                 AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
                 ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
@@ -381,7 +385,7 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
         assertEquals("not_ready", state.getLastErrorCode());
         assertEquals(1, state.getConsecutiveFailures());
-        assertEquals(now.plusHours(ScheduledClientMessageService.DEFAULT_WHATSAPP_AUTH_RETRY_HOURS), state.getNextAttemptAt());
+        assertEquals(now.plusMinutes(ScheduledClientMessageService.DEFAULT_TRANSIENT_RETRY_MINUTES), state.getNextAttemptAt());
         verify(whatsAppAuthAlertService, never()).notifyAuthIssue(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
@@ -485,7 +489,7 @@ class ScheduledClientMessageServiceTest {
         verify(messageSender, never()).send(any(), any(), any(), anyString());
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
         assertEquals("review_recovery_active", state.getLastErrorCode());
-        assertEquals(now.plusDays(1), state.getNextAttemptAt());
+        assertEquals(now.plusMinutes(10), state.getNextAttemptAt());
     }
 
     @Test
@@ -583,6 +587,80 @@ class ScheduledClientMessageServiceTest {
         assertTrue(messageCaptor.getValue().contains("заказу №16"));
         assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
         assertNotNull(state.getNextAttemptAt());
+    }
+
+    @Test
+    void synchronizingClientWaitingCreatesCurrentCycleAndClosesPreviousCycle() {
+        LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 7, 24, 20, 37, 52);
+        ScheduledClientMessageState staleState = ScheduledClientMessageState.builder()
+                .id(4_200L)
+                .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("client-text:25442:2026-07-18T14:50:19")
+                .orderId(25_442L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(LocalDateTime.of(2026, 7, 24, 20, 54, 6))
+                .build();
+        Company company = new Company();
+        company.setId(2_155L);
+        Order order = new Order();
+        order.setId(25_442L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        order.setWaitingForClient(true);
+        order.setWaitingForClientChangedAt(waitingChangedAt);
+
+        when(stateRepository.findByOrderIdIn(List.of(25_442L))).thenReturn(List.of(staleState));
+        when(stateRepository.findByScenarioAndTargetKey(
+                ClientMessageScenario.CLIENT_TEXT_REMINDER,
+                "client-text:25442:2026-07-24T20:37:52"
+        )).thenReturn(java.util.Optional.empty());
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES,
+                ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_INTERVAL_DAYS,
+                ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_INTERVAL_DAYS
+        )).thenReturn(2);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertTrue(service.synchronizeClientTextReminderForOrder(order));
+
+        ArgumentCaptor<ScheduledClientMessageState> states = ArgumentCaptor.forClass(ScheduledClientMessageState.class);
+        verify(stateRepository, times(2)).save(states.capture());
+        assertEquals(ScheduledMessageStateStatus.DONE, staleState.getStatus());
+        ScheduledClientMessageState currentState = states.getAllValues().get(1);
+        assertEquals("client-text:25442:2026-07-24T20:37:52", currentState.getTargetKey());
+        assertEquals(waitingChangedAt.plusDays(2), currentState.getNextAttemptAt());
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, currentState.getStatus());
+    }
+
+    @Test
+    void paymentQueueIsSuppressedBeforeSendingWhenOrderIsAlreadySettled() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(901L)
+                .scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24572:payment")
+                .companyId(20L)
+                .orderId(24572L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Order order = new Order();
+        order.setId(24572L);
+        LocalDateTime now = LocalDateTime.of(2026, 7, 24, 20, 30);
+        when(stateRepository.findById(901L)).thenReturn(java.util.Optional.of(state));
+        when(orderRepository.findByIdForMutation(24572L)).thenReturn(java.util.Optional.of(order));
+        when(orderPaymentIntegrityService.hasSettledPaymentEvidence(order)).thenReturn(true);
+
+        ReflectionTestUtils.invokeMethod(service, "processState", 901L, now);
+
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertNull(state.getNextAttemptAt());
+        verify(stateRepository).save(state);
+        verify(messageSender, never()).send(any(), any(), any(), any());
+        verify(paymentLinkService, never()).createForOrder(any());
     }
 
     @Test
@@ -913,6 +991,49 @@ class ScheduledClientMessageServiceTest {
                 any()
         );
         verify(paymentInvoiceRetryScheduler, never()).scheduleBadReviewAutoBan(any());
+    }
+
+    @Test
+    void paymentOverdueAutomationDefersToActiveCommonInvoice() throws Exception {
+        LocalDateTime changedAt = LocalDateTime.of(2026, 4, 20, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(922L)
+                .scenario(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:122:2026-04-20T10:00")
+                .companyId(222L)
+                .orderId(122L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .build();
+        Order order = new Order();
+        order.setId(122L);
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        order.setStatusChangedAt(changedAt);
+
+        when(orderRepository.findByIdForMutation(122L)).thenReturn(java.util.Optional.of(order));
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_CLOSED_ORDER_STATUSES,
+                ScheduledClientMessageService.DEFAULT_CLOSED_ORDER_STATUSES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_CLOSED_ORDER_STATUSES);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_STATUSES,
+                ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_STATUSES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_STATUSES);
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInActiveCommonInvoice(122L)).thenReturn(true);
+
+        ReflectionTestUtils.invokeMethod(service, "escalateOverduePayment", state, now);
+
+        assertEquals(ScheduledMessageStateStatus.DONE, state.getStatus());
+        assertNull(state.getNextAttemptAt());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
+        assertEquals("common_billing_managed", attemptCaptor.getValue().getErrorCode());
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
+        verify(stateRepository).save(state);
     }
 
     @Test

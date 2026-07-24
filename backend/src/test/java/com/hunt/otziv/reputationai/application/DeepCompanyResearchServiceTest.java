@@ -5,12 +5,24 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchReport;
+import com.hunt.otziv.reputationai.domain.CompanySource;
+import com.hunt.otziv.reputationai.domain.ResearchSnapshot;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
+import com.hunt.otziv.reputationai.infrastructure.ai.dto.AiRequest;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class DeepCompanyResearchServiceTest {
 
@@ -58,8 +70,16 @@ class DeepCompanyResearchServiceTest {
                         "amenities",
                         "card_readiness",
                         "risks",
-                        "offers"
+                        "offers",
+                        "coverage"
                 );
+        assertThat(report.qualityChecks())
+                .filteredOn(check -> "coverage".equals(check.key()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.status()).isEqualTo("warn");
+                    assertThat(check.detail()).startsWith("partial:");
+                });
         assertThat(report.factSnapshot().confirmedFacts()).extracting(DeepCompanyResearchReport.FactItem::label)
                 .contains("Компания", "Источники отчёта");
         assertThat(report.factSnapshot().uncertainFacts()).extracting(DeepCompanyResearchReport.FactItem::label)
@@ -94,6 +114,13 @@ class DeepCompanyResearchServiceTest {
                 .containsExactly("Краткая сводка", "Цены");
         assertThat(report.reportMarkdown()).contains("## Цены", "Прайс.");
         assertThat(report.qualityChecks()).isNotEmpty();
+        assertThat(report.qualityChecks())
+                .filteredOn(check -> "coverage".equals(check.key()))
+                .singleElement()
+                .satisfies(check -> {
+                    assertThat(check.status()).isEqualTo("fail");
+                    assertThat(check.detail()).startsWith("insufficient_data:");
+                });
         assertThat(report.factSnapshot().uncertainFacts()).isNotEmpty();
     }
 
@@ -210,6 +237,95 @@ class DeepCompanyResearchServiceTest {
         assertThat(economy.shouldEnrichCollectionGaps()).isTrue();
         assertThat(quality.shouldEnrichCollectionGaps()).isTrue();
         assertThat(maximumDisabled.shouldEnrichCollectionGaps()).isFalse();
+    }
+
+    @Test
+    void generatesReviewIdeasOnlyAfterGapEnrichmentFromFinalReport() {
+        com.hunt.otziv.c_companies.repository.CompanyRepository companyRepository = mock(
+                com.hunt.otziv.c_companies.repository.CompanyRepository.class);
+        com.hunt.otziv.reputationai.infrastructure.ai.openai.service.OpenAiResponsesClient client = mock(
+                com.hunt.otziv.reputationai.infrastructure.ai.openai.service.OpenAiResponsesClient.class);
+        CompanyResearchService companyResearchService = mock(CompanyResearchService.class);
+        ReputationAiPromptService promptService = mock(ReputationAiPromptService.class);
+        DeepCompanyResearchService researchService = new DeepCompanyResearchService(
+                companyRepository, client, companyResearchService, new ObjectMapper(), promptService);
+        Company company = Company.builder().id(7L).title("Тест").city("Иркутск").build();
+        when(companyRepository.findByIdForReputationAi(7L)).thenReturn(java.util.Optional.of(company));
+        when(client.isAvailable()).thenReturn(true);
+        when(client.usesExternalSearchContext()).thenReturn(true);
+        when(client.activeProviderDisplayName()).thenReturn("DeepSeek");
+        when(companyResearchService.createSnapshot(eq(7L), any(ReputationResearchRequest.class))).thenReturn(
+                new ResearchSnapshot(
+                        7L, "Тест", "Иркутск", "https://example.org", "Спецтехника", "Продажа", "",
+                        List.of("продажа спецтехники"), List.of(), List.of(), List.of(), List.of(),
+                        List.of(new CompanySource(
+                                "search:company_profile",
+                                "Карточка на карте",
+                                "https://2gis.ru/irkutsk/firm/example",
+                                "Тест, Иркутск, подтверждённая карточка"
+                        )),
+                        "yandex", true,
+                        List.of("Тест Иркутск site:2gis.ru"), 1, 1, List.of(), java.time.LocalDateTime.now()
+                )
+        );
+        when(promptService.content(anyString())).thenReturn("Верни валидный JSON.");
+        when(client.createResearchReportResponse(anyString(), anyString(), anyString())).thenReturn(
+                new OpenAiResponseResult(
+                        "main",
+                        """
+                                {"sections":[
+                                  {"title":"Краткая сводка","body":"Подтверждённая услуга: подбор техники."},
+                                  {"title":"Что ещё собирать","body":"1. Проверить условия доставки по официальным страницам."},
+                                  {"title":"Идеи для отзывов","body":"1. Старая преждевременная идея про лизинг."},
+                                  {"title":"Риски","body":"Не переносить данные конкурентов."}
+                                ],"sources":[
+                                  {"title":"Сайт","url":"https://example.org","confidence":"high"},
+                                  {"title":"Карточка","url":"https://maps.example.org/card","confidence":"medium"}
+                                ],"warnings":[],"reviewIdeas":["Старая преждевременная идея про лизинг"]}
+                                """,
+                        "deepseek", "deepseek-v4-pro", 10, 10, ""
+                )
+        );
+        when(client.createResearchGapEnrichmentResponse(anyString(), anyString(), anyString())).thenReturn(
+                new OpenAiResponseResult(
+                        "gap",
+                        """
+                                {"section":{"title":"Автодосбор по рекомендациям","body":"Условия доставки подтверждены официальной страницей."},
+                                 "sources":[],"warnings":[]}
+                                """,
+                        "deepseek", "deepseek-v4-pro", 10, 10, ""
+                )
+        );
+        when(client.createTextResponse(any(AiRequest.class))).thenReturn(
+                new OpenAiResponseResult(
+                        "ideas",
+                        "{\"reviewIdeas\":[\"условиях доставки после согласования комплектации\"],\"warnings\":[]}",
+                        "deepseek", "deepseek-v4-pro", 10, 10, ""
+                )
+        );
+
+        DeepCompanyResearchReport report = researchService.createReport(7L, request("quality", true));
+
+        verify(companyResearchService).createSnapshot(eq(7L), any(ReputationResearchRequest.class));
+        InOrder order = inOrder(client);
+        ArgumentCaptor<String> researchInput = ArgumentCaptor.forClass(String.class);
+        order.verify(client).createResearchReportResponse(anyString(), researchInput.capture(), eq("quality"));
+        order.verify(client).createResearchGapEnrichmentResponse(anyString(), anyString(), eq("quality"));
+        ArgumentCaptor<AiRequest> finalRequest = ArgumentCaptor.forClass(AiRequest.class);
+        order.verify(client).createTextResponse(finalRequest.capture());
+        assertThat(finalRequest.getValue().task()).isEqualTo("company-review-ideas-final");
+        assertThat(researchInput.getValue())
+                .contains("Дополнительный независимый сборщик: yandex")
+                .contains("https://2gis.ru/irkutsk/firm/example")
+                .contains("подтверждённая карточка");
+        assertThat(finalRequest.getValue().userPrompt())
+                .contains("Условия доставки подтверждены официальной страницей")
+                .doesNotContain("Старая преждевременная идея про лизинг");
+        assertThat(report.reviewIdeas())
+                .containsExactly("условиях доставки после согласования комплектации");
+        assertThat(report.sections()).extracting(DeepCompanyResearchReport.Section::title)
+                .containsSubsequence("Автодосбор по рекомендациям", "Идеи для отзывов");
+        assertThat(report.reportMarkdown()).doesNotContain("Старая преждевременная идея про лизинг");
     }
 
     private ReputationResearchRequest request(String profile, Boolean enrichCollectionGaps) {

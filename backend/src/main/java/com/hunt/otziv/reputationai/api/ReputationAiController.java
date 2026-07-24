@@ -12,6 +12,7 @@ import com.hunt.otziv.reputationai.api.dto.ReputationReviewTemplatesApplyRequest
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewTemplatesRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationSingleReviewDraftRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiPromptUpdateRequest;
+import com.hunt.otziv.reputationai.api.dto.ReputationAiProviderUpdateRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewReplyRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewReplyResponse;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewRewriteRequest;
@@ -22,6 +23,7 @@ import com.hunt.otziv.reputationai.application.DeepCompanyResearchService;
 import com.hunt.otziv.reputationai.application.ReputationAiMarkdownExportService;
 import com.hunt.otziv.reputationai.application.ReputationAiPdfExportService;
 import com.hunt.otziv.reputationai.application.ReputationAiPromptService;
+import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackJobService;
 import com.hunt.otziv.reputationai.application.ReputationReviewTemplateService;
@@ -90,6 +92,7 @@ public class ReputationAiController {
     private final ReviewReplyService reviewReplyService;
     private final ReviewSafetyService reviewSafetyService;
     private final ReputationAiPromptService promptService;
+    private final ReputationAiProviderSelectionService providerSelectionService;
     private final AiProviderRouter aiProviderRouter;
     private final SearchProviderRouter searchProviderRouter;
     private final OpenAiResponsesClient openAiResponsesClient;
@@ -103,16 +106,24 @@ public class ReputationAiController {
                 && !isBlank(properties.getYandex().getFolderId());
         boolean yandexSearchConfigured = !isBlank(properties.getSearch().getYandex().getApiKey())
                 && !isBlank(properties.getSearch().getYandex().getFolderId());
+        boolean deepSeekConfigured = !isBlank(properties.getDeepseek().getApiKey())
+                && !isBlank(properties.getDeepseek().getBaseUrl())
+                && !isBlank(properties.getDeepseek().getModel());
         boolean openAiConfigured = !isBlank(properties.getOpenai().getApiKey())
                 && !isBlank(properties.getOpenai().getModel());
         boolean openAiProxyEnabled = properties.getOpenai().getProxy().isEnabled()
                 && !isBlank(properties.getOpenai().getProxy().getHost());
         List<String> warnings = new ArrayList<>();
         if (!aiAvailable || "local".equalsIgnoreCase(aiProviderRouter.activeProviderName())) {
-            warnings.add("Генерация работает через локальный шаблон или AI-провайдер недоступен. Для YandexGPT укажите REPUTATION_AI_PROVIDER=yandexgpt, YANDEX_AI_API_KEY и YANDEX_FOLDER_ID.");
+            warnings.add("AI-провайдер недоступен. Для DeepSeek укажите REPUTATION_AI_PROVIDER=deepseek и DEEPSEEK_API_KEY.");
         }
-        if (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName())) {
+        if (isYandexProvider()
+                && (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName()))) {
             warnings.add("Публичный поиск выключен. Для Yandex Search укажите REPUTATION_SEARCH_PROVIDER=yandex и ключи.");
+        }
+        if (isDeepSeekProvider()
+                && (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName()))) {
+            warnings.add("Дополнительный сборщик карт и сайтов недоступен. DeepSeek Web Search продолжит работать, но охват 2ГИС, Яндекс Карт и Google Maps может быть ниже.");
         }
         if (isYandexProvider() && "completion".equalsIgnoreCase(properties.getYandex().getApiMode())) {
             warnings.add("YandexGPT работает через legacy completion API без встроенного Web Search. Для полного отчёта используйте YANDEX_GPT_API_MODE=responses.");
@@ -128,9 +139,15 @@ public class ReputationAiController {
                 searchAvailable,
                 yandexGptConfigured,
                 yandexSearchConfigured,
+                deepSeekConfigured,
+                properties.getDeepseek().isAnthropicWebSearchEnabled(),
+                properties.getDeepseek().getAnthropicWebSearchMaxUses(),
+                properties.getDeepseek().isAnthropicDeepSearchEnabled(),
+                properties.getDeepseek().getAnthropicDeepSearchPasses(),
                 openAiConfigured,
                 openAiProxyEnabled,
                 properties.getYandex().getModel(),
+                properties.getDeepseek().getModel(),
                 properties.getOpenai().getModel(),
                 properties.getOpenai().getResearchReport().getModel(),
                 ContentPackProfile.QUALITY.model(),
@@ -145,6 +162,17 @@ public class ReputationAiController {
     public OpenAiProviderDiagnostics checkOpenAiRoute() {
         openAiResponsesClient.checkConnection();
         return openAiDiagnostics();
+    }
+
+    @PutMapping("/status/provider")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ReputationAiStatus selectProvider(@RequestBody ReputationAiProviderUpdateRequest request) {
+        try {
+            providerSelectionService.select(request == null ? null : request.provider());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+        return status();
     }
 
     @GetMapping("/prompts")
@@ -204,34 +232,51 @@ public class ReputationAiController {
 
     private List<ReputationAiModelProfile> deepResearchProfiles() {
         boolean yandex = isYandexProvider();
+        boolean deepSeek = isDeepSeekProvider();
         return DeepResearchProfile.all().stream()
                 .map(profile -> new ReputationAiModelProfile(
                         profile.key(),
                         profile.label(),
-                        yandex ? properties.getYandex().getModel() : profile.model(),
+                        deepSeek ? properties.getDeepseek().getModel()
+                                : yandex ? properties.getYandex().getModel() : profile.model(),
                         profile.description(),
-                        yandex ? properties.getYandex().getMaxToolCalls() : profile.maxToolCalls(),
-                        yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
-                        yandex ? "off" : profile.reasoningEffort(),
-                        yandex ? yandexSearchMode() : profile.searchContextSize()
+                        deepSeek ? 0 : yandex ? properties.getYandex().getMaxToolCalls() : profile.maxToolCalls(),
+                        deepSeek ? Math.min(profile.maxOutputTokens(), properties.getDeepseek().getMaxTokens())
+                                : yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
+                        deepSeek ? deepSeekReasoningMode() : yandex ? "off" : profile.reasoningEffort(),
+                        deepSeek ? "web_search+snapshot:" + searchProviderRouter.activeProviderName()
+                                : yandex ? yandexSearchMode() : profile.searchContextSize()
                 ))
                 .toList();
     }
 
     private List<ReputationAiModelProfile> contentPackProfiles() {
         boolean yandex = isYandexProvider();
+        boolean deepSeek = isDeepSeekProvider();
         return ContentPackProfile.all().stream()
                 .map(profile -> new ReputationAiModelProfile(
                         profile.key(),
                         profile.label(),
-                        yandex ? properties.getYandex().getModel() : profile.model(),
+                        deepSeek ? properties.getDeepseek().getModel()
+                                : yandex ? properties.getYandex().getModel() : profile.model(),
                         profile.description(),
                         0,
-                        yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
-                        yandex ? "off" : profile.reasoningEffort(),
+                        deepSeek ? Math.min(profile.maxOutputTokens(), properties.getDeepseek().getMaxTokens())
+                                : yandex ? Math.min(profile.maxOutputTokens(), properties.getYandex().getMaxTokens()) : profile.maxOutputTokens(),
+                        deepSeek ? deepSeekReasoningMode() : yandex ? "off" : profile.reasoningEffort(),
                         "off"
                 ))
                 .toList();
+    }
+
+    private boolean isDeepSeekProvider() {
+        return "deepseek".equalsIgnoreCase(aiProviderRouter.activeProviderName());
+    }
+
+    private String deepSeekReasoningMode() {
+        return properties.getDeepseek().isThinkingEnabled()
+                ? properties.getDeepseek().getReasoningEffort()
+                : "off";
     }
 
     private boolean isYandexProvider() {
@@ -539,6 +584,28 @@ public class ReputationAiController {
     }
 
     private OpenAiProviderDiagnostics openAiDiagnostics() {
+        if ("deepseek".equalsIgnoreCase(aiProviderRouter.activeProviderName())) {
+            ReputationAiProperties.DeepSeek deepSeek = properties.getDeepseek();
+            boolean configured = !isBlank(deepSeek.getApiKey())
+                    && !isBlank(deepSeek.getBaseUrl())
+                    && !isBlank(deepSeek.getModel());
+            OpenAiResponsesClient.OpenAiLastCheck lastCheck = openAiResponsesClient.lastCheck();
+            return new OpenAiProviderDiagnostics(
+                    deepSeek.isAnthropicWebSearchEnabled() ? deepSeek.getAnthropicBaseUrl() : deepSeek.getBaseUrl(),
+                    configured,
+                    false,
+                    false,
+                    false,
+                    "",
+                    0,
+                    false,
+                    deepSeek.isAnthropicWebSearchEnabled() ? "anthropic-web-search" : "direct",
+                    lastCheck.status(),
+                    lastCheck.httpStatus(),
+                    lastCheck.message(),
+                    lastCheck.checkedAt()
+            );
+        }
         if ("yandexgpt".equalsIgnoreCase(aiProviderRouter.activeProviderName())
                 || "yandex".equalsIgnoreCase(aiProviderRouter.activeProviderName())) {
             ReputationAiProperties.YandexGpt yandex = properties.getYandex();

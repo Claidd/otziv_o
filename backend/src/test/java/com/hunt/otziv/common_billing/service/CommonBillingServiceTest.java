@@ -28,6 +28,7 @@ import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
+import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
@@ -67,6 +68,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -86,6 +88,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -152,6 +155,10 @@ class CommonBillingServiceTest {
     private PlatformTransactionManager transactionManager;
     @Mock
     private ReviewRecoveryGateService recoveryGateService;
+    @Mock
+    private OrderPublicationApprovalService publicationApprovalService;
+    @Mock
+    private ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
 
     @InjectMocks
     private CommonBillingService service;
@@ -161,6 +168,7 @@ class CommonBillingServiceTest {
         ReflectionTestUtils.setField(service, "orderTransactionService", orderTransactionService);
         ReflectionTestUtils.setField(service, "orderStatusTransitionService", orderStatusTransitionService);
         ReflectionTestUtils.setField(service, "nextOrderRequestService", nextOrderRequestService);
+        lenient().when(publicationApprovalServiceProvider.getObject()).thenReturn(publicationApprovalService);
     }
 
     @AfterEach
@@ -311,9 +319,57 @@ class CommonBillingServiceTest {
 
         service.approveReviewOrders(10L);
 
-        verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Публикация");
-        verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(102L, "Публикация");
-        verify(orderStatusTransitionService, never()).changeStatusForCommonBillingOrder(103L, "Публикация");
+        verify(publicationApprovalService).validateExistingOrder(101L);
+        verify(publicationApprovalService).validateExistingOrder(102L);
+        verify(publicationApprovalService).approveExistingOrder(
+                101L,
+                "invoiceId=10;source=approve_all"
+        );
+        verify(publicationApprovalService).approveExistingOrder(
+                102L,
+                "invoiceId=10;source=approve_all"
+        );
+        verify(publicationApprovalService, never()).approveExistingOrder(
+                eq(103L),
+                any()
+        );
+    }
+
+    @Test
+    void approveReviewOrdersPrevalidatesEveryOrderBeforeChangingAnyOrder() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        Order firstOrder = order(101L);
+        firstOrder.setStatus(status("В проверку"));
+        Order secondOrder = order(102L);
+        secondOrder.setStatus(status("На проверке"));
+        List<CommonInvoiceOrder> items = List.of(
+                item(invoice, firstOrder),
+                item(invoice, secondOrder)
+        );
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        doAnswer(invocation -> {
+            Long orderId = invocation.getArgument(0);
+            if (Long.valueOf(102L).equals(orderId)) {
+                throw new com.hunt.otziv.p_products.review.PublicationApprovalException(
+                        102L,
+                        "есть пустой текст",
+                        "заполните текст"
+                );
+            }
+            return null;
+        }).when(publicationApprovalService).validateExistingOrder(any());
+
+        assertThrows(
+                com.hunt.otziv.p_products.review.PublicationApprovalException.class,
+                () -> service.approveReviewOrders(10L)
+        );
+
+        verify(publicationApprovalService).validateExistingOrder(101L);
+        verify(publicationApprovalService).validateExistingOrder(102L);
+        verify(publicationApprovalService, never()).approveExistingOrder(any(), any());
     }
 
     @Test

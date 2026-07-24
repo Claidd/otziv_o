@@ -176,6 +176,15 @@ describe('WorkerBoardActionFacade', () => {
     expect(toastMessages).toContain('success:Статус изменен:Acme: Архив');
   });
 
+  it('sends a waiting client order through review-link delivery', () => {
+    const { facade, calls } = createFacade();
+    const action: StatusAction = { label: 'на проверку', status: 'На проверке', icon: 'manage_search' };
+
+    facade.updateOrderStatus(order({ id: 32, waitingForClient: true }), action);
+
+    expect(calls).toEqual(['status:32:В проверку', 'load-board']);
+  });
+
   it('toggles client waiting for an order', () => {
     const { facade, calls, mutationKey, toastMessages } = createFacade();
 

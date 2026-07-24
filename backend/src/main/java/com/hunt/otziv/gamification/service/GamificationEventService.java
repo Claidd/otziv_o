@@ -54,6 +54,10 @@ public class GamificationEventService {
     public static final String MANAGER_QUEUE_CLEARED = "MANAGER_QUEUE_CLEARED";
     public static final String MANAGER_DAY_COMPLETED = "MANAGER_DAY_COMPLETED";
     public static final String MANAGER_IDEAL_DAY = "MANAGER_IDEAL_DAY";
+    public static final String WORKER_DAY_100 = "WORKER_DAY_100";
+    public static final String WORKER_100_STREAK = "WORKER_100_STREAK";
+    public static final String MANAGER_TEAM_DAY_100 = "MANAGER_TEAM_DAY_100";
+    public static final String MANAGER_TEAM_100_STREAK = "MANAGER_TEAM_100_STREAK";
 
     private final GamificationEventRepository repository;
     private final GamificationSettingsService settingsService;
@@ -220,12 +224,46 @@ public class GamificationEventService {
             LocalDateTime occurredAt,
             String payload
     ) {
-        if (!Set.of(MANAGER_QUEUE_CLEARED, MANAGER_DAY_COMPLETED, MANAGER_IDEAL_DAY).contains(eventType)
+        if (!Set.of(
+                MANAGER_QUEUE_CLEARED,
+                MANAGER_DAY_COMPLETED,
+                MANAGER_IDEAL_DAY,
+                MANAGER_TEAM_DAY_100,
+                MANAGER_TEAM_100_STREAK
+        ).contains(eventType)
                 || manager == null || uniqueKey == null || uniqueKey.isBlank()) return;
         GamificationEvent event = baseManagerEvent(eventType, manager, uniqueKey, "manager-daily-summary", occurredAt, payload);
         event.setTimelinessBucket("ON_TIME");
         event.setTimelinessMultiplier(BigDecimal.ONE);
         event.setDelayDays(0);
+        saveSafely(event);
+    }
+
+    public void recordWorkerMilestone(
+            String eventType,
+            Worker worker,
+            String uniqueKey,
+            LocalDateTime occurredAt,
+            String payload
+    ) {
+        if (!Set.of(WORKER_DAY_100, WORKER_100_STREAK).contains(eventType)
+                || worker == null || uniqueKey == null || uniqueKey.isBlank()) return;
+        GamificationEvent event = GamificationEvent.builder()
+                .eventType(eventType)
+                .actorRole(ROLE_WORKER)
+                .actorUserId(userId(worker))
+                .actorName(userName(worker))
+                .workerId(id(worker))
+                .source("end-of-day-achievement")
+                .uniqueEventKey(eventType + ":" + uniqueKey)
+                .payload(payload)
+                .createdAt(occurredAt)
+                .timelinessBucket("ON_TIME")
+                .timelinessMultiplier(BigDecimal.ONE)
+                .delayDays(0)
+                .plannedDate(occurredAt == null ? null : occurredAt.toLocalDate())
+                .actualDate(occurredAt == null ? null : occurredAt.toLocalDate())
+                .build();
         saveSafely(event);
     }
 
@@ -528,6 +566,10 @@ public class GamificationEventService {
         counts.put(MANAGER_QUEUE_CLEARED, 0L);
         counts.put(MANAGER_DAY_COMPLETED, 0L);
         counts.put(MANAGER_IDEAL_DAY, 0L);
+        counts.put(WORKER_DAY_100, 0L);
+        counts.put(WORKER_100_STREAK, 0L);
+        counts.put(MANAGER_TEAM_DAY_100, 0L);
+        counts.put(MANAGER_TEAM_100_STREAK, 0L);
         for (Object[] row : repository.countByEventType(fromInclusive, toExclusive)) {
             if (row == null || row.length < 2) {
                 continue;

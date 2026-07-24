@@ -226,7 +226,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate) {
-        ReviewRecoveryTask task = requireTask(taskId);
+        ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Можно редактировать только активную задачу восстановления");
         }
@@ -249,7 +249,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask completeTask(Long taskId, User completedBy) {
-        ReviewRecoveryTask task = requireTask(taskId);
+        ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() == ReviewRecoveryTaskStatus.DONE) {
             return task;
         }
@@ -279,7 +279,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask cancelTask(Long taskId) {
-        ReviewRecoveryTask task = requireTask(taskId);
+        ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() == ReviewRecoveryTaskStatus.CANCELLED) {
             return task;
         }
@@ -302,7 +302,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public ReviewRecoveryTask changeTaskBot(Long taskId) {
-        ReviewRecoveryTask task = requireTask(taskId);
+        ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Аккаунт можно менять только у активной задачи восстановления");
         }
@@ -323,7 +323,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     @Override
     @Transactional
     public ReviewRecoveryTask deactivateAndChangeTaskBot(Long taskId, Long botId) {
-        ReviewRecoveryTask task = requireTask(taskId);
+        ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Аккаунт можно блокировать только у активной задачи восстановления");
         }
@@ -868,8 +868,16 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
             throw new EntityNotFoundException("Задача восстановления не найдена");
         }
 
+        return taskRepository.findById(taskId)
+                .orElseThrow(() -> new EntityNotFoundException("Задача восстановления не найдена: " + taskId));
+    }
+
+    private ReviewRecoveryTask requireTaskForMutation(Long taskId) {
+        if (taskId == null || taskId <= 0) {
+            throw new EntityNotFoundException("Задача восстановления не найдена");
+        }
+
         return taskRepository.findByIdForMutation(taskId)
-                .or(() -> taskRepository.findById(taskId))
                 .orElseThrow(() -> new EntityNotFoundException("Задача восстановления не найдена: " + taskId));
     }
 
@@ -1128,6 +1136,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         review.setBot(bot);
+        accountWalkScheduleService.synchronizeAfterAccountChange(review);
         reviewRepository.save(review);
     }
 

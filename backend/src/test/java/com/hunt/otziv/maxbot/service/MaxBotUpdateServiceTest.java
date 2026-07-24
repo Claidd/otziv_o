@@ -3,12 +3,15 @@ package com.hunt.otziv.maxbot.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -118,6 +121,29 @@ class MaxBotUpdateServiceTest {
         verify(publicationProgressPreferenceService).handleMaxCommand(-200L, "включить уведомления");
         verify(maxBotClient).sendMessageToChat(-200L, "Оповещения о публикациях включены.");
         verifyNoMoreInteractions(maxGroupLinkService);
+    }
+
+    @Test
+    void tracksMediaOnlyMessageWithProviderId() throws Exception {
+        MaxBotUpdateService service = service();
+        JsonNode update = MAPPER.readTree("""
+                {
+                  "update_type": "message_created",
+                  "message": {
+                    "mid": "max-media-1",
+                    "recipient": { "chat_id": -200 },
+                    "sender": { "user_id": 303, "name": "Клиент" },
+                    "body": { "attachments": [{ "type": "image" }] }
+                  }
+                }
+                """);
+
+        service.handleUpdate(update);
+
+        ArgumentCaptor<ClientChatMessageCommand> captor = ArgumentCaptor.forClass(ClientChatMessageCommand.class);
+        verify(clientChatMessageTrackerService).track(captor.capture());
+        assertEquals("max-media-1", captor.getValue().externalMessageId());
+        assertEquals("[Вложение: image]", captor.getValue().messageText());
     }
 
     private MaxBotUpdateService service() {

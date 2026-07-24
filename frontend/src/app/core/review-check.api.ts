@@ -1,7 +1,7 @@
 import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
+import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 import { appEnvironment } from './app-environment';
 
 export interface ReviewCheckPermissions {
@@ -73,8 +73,7 @@ export interface ReviewCheckNotes {
 @Injectable({ providedIn: 'root' })
 export class ReviewCheckApi {
   private readonly publicContext = new HttpContext()
-    .set(SKIP_AUTH_REDIRECT_ON_401, true)
-    .set(SKIP_AUTH_TOKEN, true);
+    .set(SKIP_AUTH_REDIRECT_ON_401, true);
 
   constructor(private readonly http: HttpClient) {}
 

@@ -1,6 +1,7 @@
 package com.hunt.otziv.client_messages.service;
 
 import com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse;
+import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
@@ -11,6 +12,7 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -58,20 +60,20 @@ public class ClientMessageOrderStatusService {
 
         recoverMissingChatBindings(orders);
 
-        Map<Long, ClientMessageOrderStatusResponse> statuses = stateRepository.findByOrderIdIn(orderIds).stream()
+        Map<Long, List<ScheduledClientMessageState>> statesByOrder = stateRepository.findByOrderIdIn(orderIds).stream()
                 .filter(state -> state.getOrderId() != null)
                 .collect(Collectors.groupingBy(
                         ScheduledClientMessageState::getOrderId,
                         LinkedHashMap::new,
-                        Collectors.collectingAndThen(
-                                Collectors.toList(),
-                                states -> toResponse(selectRelevantState(states))
-                        )
+                        Collectors.toList()
                 ));
 
         orders.forEach(order -> {
             ClientMessageOrderStatusResponse bindingStatus = missingChatBindingStatus(order);
-            ClientMessageOrderStatusResponse savedStatus = statuses.get(order.getId());
+            ClientMessageOrderStatusResponse savedStatus = toResponse(selectRelevantState(
+                    order,
+                    statesByOrder.get(order.getId())
+            ));
             ClientMessageOrderStatusResponse missingStateStatus = savedStatus == null ? missingScheduledStateStatus(order) : null;
             if (bindingStatus == null && savedStatus == null && missingStateStatus != null) {
                 savedStatus = recoverMissingScheduledState(order);
@@ -207,32 +209,56 @@ public class ClientMessageOrderStatusService {
         }
         try {
             scheduledClientMessageService.recoverMissingClientMessageStateForOrderId(order.getId());
-            return latestStatusForOrder(order.getId());
+            return latestStatusForOrder(order);
         } catch (Exception e) {
             log.warn("Не удалось автоматически восстановить очередь автоответчика для заказа {}", order.getId(), e);
             return null;
         }
     }
 
-    private ClientMessageOrderStatusResponse latestStatusForOrder(Long orderId) {
-        if (orderId == null || orderId <= 0) {
+    private ClientMessageOrderStatusResponse latestStatusForOrder(OrderDTOList order) {
+        if (order == null || order.getId() == null || order.getId() <= 0) {
             return null;
         }
-        return toResponse(selectRelevantState(stateRepository.findByOrderIdIn(List.of(orderId))));
+        return toResponse(selectRelevantState(
+                order,
+                stateRepository.findByOrderIdIn(List.of(order.getId()))
+        ));
     }
 
-    private ScheduledClientMessageState selectRelevantState(Collection<ScheduledClientMessageState> states) {
+    private ScheduledClientMessageState selectRelevantState(
+            OrderDTOList order,
+            Collection<ScheduledClientMessageState> states
+    ) {
         if (states == null || states.isEmpty()) {
             return null;
         }
 
         return states.stream()
                 .filter(Objects::nonNull)
+                .filter(state -> isCurrentStateForOrder(order, state))
                 .max(Comparator
                         .comparingInt(this::priority)
                         .thenComparing(latestActivity(), Comparator.nullsFirst(Comparator.naturalOrder()))
                         .thenComparing(state -> state.getId() == null ? 0L : state.getId()))
                 .orElse(null);
+    }
+
+    private boolean isCurrentStateForOrder(OrderDTOList order, ScheduledClientMessageState state) {
+        if (state.getScenario() != ClientMessageScenario.CLIENT_TEXT_REMINDER) {
+            return true;
+        }
+        if (order == null
+                || !order.isWaitingForClient()
+                || order.getId() == null
+                || order.getWaitingForClientChangedAt() == null) {
+            return false;
+        }
+        String currentTargetKey = "client-text:"
+                + order.getId()
+                + ":"
+                + order.getWaitingForClientChangedAt().withNano(0);
+        return currentTargetKey.equals(state.getTargetKey());
     }
 
     private int priority(ScheduledClientMessageState state) {
@@ -285,6 +311,10 @@ public class ClientMessageOrderStatusService {
             statusState = "waiting_recovery";
             tone = "wait";
             label = "Ждём восстановления отзывов";
+        } else if (isRateLimitedWait(state)) {
+            statusState = "scheduled";
+            tone = "wait";
+            label = "Ожидает отправки";
         } else if (requiresManualControl(state)) {
             statusState = "manual_control";
             tone = "danger";
@@ -303,16 +333,28 @@ public class ClientMessageOrderStatusService {
             label = terminalLabel(state);
         }
 
+        LocalDateTime nextAttemptAt = state.getNextAttemptAt();
+        String errorMessage = state.getLastErrorMessage();
+        if (isRateLimitedWait(state)) {
+            LocalDateTime effectiveNextAttemptAt = scheduledClientMessageService.effectiveNextAttemptAt(nextAttemptAt);
+            if (effectiveNextAttemptAt != null) {
+                nextAttemptAt = effectiveNextAttemptAt;
+            }
+            errorMessage = nextAttemptAt == null
+                    ? errorMessage
+                    : "Следующий слот отправки: " + nextAttemptAt;
+        }
+
         return new ClientMessageOrderStatusResponse(
                 statusState,
                 label,
                 tone,
                 state.getScenario() == null ? null : state.getScenario().name(),
                 state.getLastErrorCode(),
-                state.getLastErrorMessage(),
+                errorMessage,
                 state.getLastAttemptAt(),
                 state.getLastSuccessAt(),
-                state.getNextAttemptAt(),
+                nextAttemptAt,
                 state.getConsecutiveFailures(),
                 state.getSentCount()
         );
@@ -332,6 +374,13 @@ public class ClientMessageOrderStatusService {
         return state != null
                 && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
                 && normalize(state.getLastErrorCode()).equals("review_recovery_active");
+    }
+
+    private boolean isRateLimitedWait(ScheduledClientMessageState state) {
+        return state != null
+                && state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                && state.getNextAttemptAt() != null
+                && normalize(state.getLastErrorCode()).equals("rate_limited");
     }
 
     private boolean requiresManualControl(ScheduledClientMessageState state) {
@@ -396,6 +445,7 @@ public class ClientMessageOrderStatusService {
 
     private boolean isOperationalSkip(String code) {
         return code.contains("dry_run")
+                || code.contains("rate_limited")
                 || code.contains("review_recovery_active")
                 || code.contains("order_status_changed")
                 || code.contains("status_change")
@@ -500,11 +550,19 @@ public class ClientMessageOrderStatusService {
         if (clientTextReminderEnabled()
                 && order.isWaitingForClient()
                 && listSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, ScheduledClientMessageService.DEFAULT_CLIENT_TEXT_REMINDER_STATUSES).contains(status)
-                && unchangedDays >= clientTextReminderIntervalDays()) {
+                && clientTextWaitingDays(order, unchangedDays) >= clientTextReminderIntervalDays()) {
             return missingStateResponse("Ожидание текста клиента");
         }
 
         return null;
+    }
+
+    private int clientTextWaitingDays(OrderDTOList order, int fallbackDays) {
+        LocalDateTime waitingChangedAt = order == null ? null : order.getWaitingForClientChangedAt();
+        if (waitingChangedAt == null) {
+            return fallbackDays;
+        }
+        return Math.max(0, (int) ChronoUnit.DAYS.between(waitingChangedAt, LocalDateTime.now()));
     }
 
     private ClientMessageOrderStatusResponse missingPaymentInvoiceRetryResponse() {

@@ -34,6 +34,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
+import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.services.service.OrderTransactionService;
@@ -282,6 +283,7 @@ public class CommonBillingService {
     private final TbankClient tbankClient;
     private final TbankTokenSigner tokenSigner;
     private final ReviewRecoveryGateService recoveryGateService;
+    private final ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -876,6 +878,13 @@ public class CommonBillingService {
         ensureCommonInvoiceNotNeedsAttention(invoice);
         ensureCommonInvoiceCanChangePositions(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+        return approveReviewOrders(invoiceId, items);
+    }
+
+    private CommonInvoiceDetailsResponse approveReviewOrders(
+            Long invoiceId,
+            List<CommonInvoiceOrder> items
+    ) {
         List<CommonInvoiceOrder> candidates = items.stream()
                 .filter(item -> item.getOrder() != null
                         && REVIEW_APPROVAL_STATUSES.contains(statusTitle(item.getOrder())))
@@ -887,24 +896,21 @@ public class CommonBillingService {
             );
         }
 
-        List<String> failures = new ArrayList<>();
+        for (CommonInvoiceOrder item : candidates) {
+            publicationApprovalService().validateExistingOrder(item.getOrder().getId());
+        }
         for (CommonInvoiceOrder item : candidates) {
             Order order = item.getOrder();
-            try {
-                orderStatusTransitionService.changeStatusForCommonBillingOrder(order.getId(), STATUS_TO_PUBLISH);
-            } catch (Exception e) {
-                failures.add(orderFailureLabel(item));
-                log.warn("Не удалось одобрить заказ {} из общего счета {}",
-                        order == null ? null : order.getId(), invoiceId, e);
-            }
-        }
-        if (!failures.isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Не все заказы общего счета удалось одобрить: " + String.join(", ", failures)
+            publicationApprovalService().approveExistingOrder(
+                    order.getId(),
+                    "invoiceId=" + invoiceId + ";source=approve_all"
             );
         }
         return invoice(invoiceId);
+    }
+
+    private OrderPublicationApprovalService publicationApprovalService() {
+        return publicationApprovalServiceProvider.getObject();
     }
 
     @Transactional
@@ -977,6 +983,11 @@ public class CommonBillingService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         ensureCommonInvoiceVisibleForCurrentUser(invoice);
         ensureCommonInvoiceNeedsAttention(invoice);
+        if (attentionError(invoice).startsWith(CommonBillingPublicationApprovalFailureMarker.ERROR_PREFIX)) {
+            List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
+            resolveAttentionByCurrentItems(invoice, items);
+            return approveReviewOrders(invoiceId, items);
+        }
         ensureAttentionCanBeRetried(invoice);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         closePaidInvoice(invoice, items);

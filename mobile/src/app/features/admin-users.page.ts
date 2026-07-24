@@ -181,10 +181,25 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
                     </div>
                   </div>
 
-                  <label class="sheet-field sheet-field--inline">
-                    <span>Включен</span>
-                    <input name="enabled" type="checkbox" [ngModel]="draft.enabled" (ngModelChange)="setDraft('enabled', $event)">
-                  </label>
+                  @if (!draft.id) {
+                    <label class="sheet-field sheet-field--inline">
+                      <span>Включен</span>
+                      <input name="enabled" type="checkbox" [ngModel]="draft.enabled" (ngModelChange)="setDraft('enabled', $event)">
+                    </label>
+                  } @else {
+                    <section class="employment-card" [class.inactive]="!draft.enabled">
+                      <span class="material-icons-sharp">{{ draft.enabled ? 'person_off' : 'person_add' }}</span>
+                      <div>
+                        <strong>{{ draft.enabled ? 'Работает · доступ включён' : 'Уволен · доступ отключён' }}</strong>
+                        <small>Профиль, заказы, отзывы и статистика сохраняются.</small>
+                      </div>
+                      @if (!isDraftAdmin()) {
+                        <button type="button" [class.restore]="!draft.enabled" (click)="changeEmploymentStatus(!draft.enabled)" [disabled]="saving()">
+                          {{ draft.enabled ? 'Уволить' : 'Вернуть в штат' }}
+                        </button>
+                      }
+                    </section>
+                  }
                   <label class="sheet-field sheet-field--inline">
                     <span>Email подтвержден</span>
                     <input name="emailVerified" type="checkbox" [ngModel]="draft.emailVerified" (ngModelChange)="setDraft('emailVerified', $event)">
@@ -324,6 +339,7 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
     .user-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem}.user-meta-grid span{display:grid;gap:.12rem;min-width:0;border:1px solid rgba(103,116,131,.13);border-radius:.72rem;padding:.48rem;background:rgba(255,255,255,.7)}.user-meta-grid b{overflow:hidden;color:var(--otziv-dark);font-size:.75rem;text-overflow:ellipsis;white-space:nowrap}
     .role-row,.user-card footer,.role-editor div,.assignment-grid section{display:flex;flex-wrap:wrap;gap:.42rem}.role-row span,.ghost,.danger-link,.role-editor button,.assignment-grid button{min-height:1.9rem;border:1px solid rgba(103,116,131,.18);border-radius:999px;padding:0 .68rem;background:var(--otziv-white);color:var(--otziv-dark);font-size:.65rem;font-weight:1000}.ghost{display:inline-flex;align-items:center;justify-content:center;gap:.25rem;color:var(--otziv-primary)}.danger-link{color:var(--otziv-danger)}.upload{position:relative;overflow:hidden}.upload input{position:absolute;inset:0;opacity:0}
     .role-editor{display:grid;gap:.35rem}.role-editor>span,.assignment-grid h3{margin:0;color:var(--otziv-info);font-size:.66rem;font-weight:1000}.role-editor button.active,.assignment-grid button.active{border-color:rgba(74,198,177,.38);color:#16735f;background:rgba(74,198,177,.12)}
+    .employment-card{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.55rem;border:1px solid rgba(232,48,103,.24);border-radius:.9rem;padding:.65rem;background:rgba(255,240,244,.62)}.employment-card.inactive{border-color:rgba(47,159,149,.28);background:rgba(237,250,245,.72)}.employment-card>.material-icons-sharp{display:grid;place-items:center;width:2.1rem;height:2.1rem;border-radius:.7rem;color:var(--otziv-danger);background:rgba(232,48,103,.1)}.employment-card.inactive>.material-icons-sharp{color:#238879;background:rgba(47,159,149,.12)}.employment-card div{min-width:0}.employment-card strong,.employment-card small{display:block}.employment-card strong{font-size:.72rem}.employment-card small{margin-top:.12rem;color:var(--otziv-info);font-size:.6rem;line-height:1.25}.employment-card button{grid-column:1 / -1;min-height:2.2rem;border-color:rgba(232,48,103,.3);color:var(--otziv-danger);background:#fff5f7}.employment-card button.restore{border-color:rgba(47,159,149,.32);color:#238879;background:#f2fbf6}
     .assignment-grid{display:grid;grid-template-columns:1fr;gap:.7rem}.assignment-grid section{flex-direction:column;border:1px solid rgba(103,116,131,.13);border-radius:.85rem;padding:.65rem;background:rgba(255,255,255,.62)}
     :host-context(body.otziv-dark-theme) .admin-users-top,:host-context(body.otziv-dark-theme) .admin-users-search,:host-context(body.otziv-dark-theme) .user-card,:host-context(body.otziv-dark-theme) .empty-card{background:linear-gradient(155deg,rgba(31,38,41,.98),rgba(22,27,29,.96));box-shadow:none}
   `]
@@ -487,6 +503,33 @@ export class AdminUsersPage implements OnInit {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  async changeEmploymentStatus(active: boolean): Promise<void> {
+    const draft = this.userDraft();
+    if (!draft?.id || this.isDraftAdmin() || draft.enabled === active || this.saving()) {
+      return;
+    }
+    const original = this.users().find((user) => user.id === draft.id);
+    if (!original) {
+      return;
+    }
+    const confirmed = await this.confirm.confirm({
+      title: active ? 'Вернуть сотрудника в штат' : 'Уволить сотрудника',
+      message: active
+        ? `Восстановить доступ сотруднику ${original.fio || original.username}?`
+        : `Закрыть доступ сотруднику ${original.fio || original.username}? Профиль и история работы сохранятся.`,
+      confirmText: active ? 'Вернуть' : 'Уволить',
+      danger: !active
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    // Кадровое действие не должно сохранить незавершённые правки формы.
+    this.openEditUser(original);
+    this.setDraft('enabled', active);
+    await this.saveUser();
   }
 
   async deleteUser(user: AdminUser): Promise<void> {

@@ -258,7 +258,6 @@ public class ExternalReviewCheckService {
         review.setExternalConfirmScreenshotUrl(check.getScreenshotUrl());
         if (status == ExternalReviewCheckStatus.CONFIRMED) {
             review.setExternalConfirmedAt(check.getCheckedAt() != null ? check.getCheckedAt() : LocalDateTime.now());
-            performerAssignmentService.markVerifiedByReview(review.getId());
         } else {
             review.setExternalConfirmedAt(null);
         }

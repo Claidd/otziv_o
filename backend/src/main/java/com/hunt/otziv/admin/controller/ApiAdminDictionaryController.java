@@ -14,6 +14,7 @@ import com.hunt.otziv.c_categories.repository.ProductCategoryRepository;
 import com.hunt.otziv.c_categories.repository.SubCategoryRepository;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_cities.repository.CityRepository;
+import com.hunt.otziv.c_cities.service.CityDistanceService;
 import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.client_messages.service.ClientMessageSlotPlanner;
@@ -40,10 +41,13 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.WorkerRepository;
+import com.hunt.otziv.uploads.service.FileUploadGuard;
 import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsRequest;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupSyncSettingsResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -98,6 +102,8 @@ public class ApiAdminDictionaryController {
     private final ScheduledClientMessageService scheduledClientMessageService;
     private final BotAssignmentService botAssignmentService;
     private final ReviewRepository reviewRepository;
+    private final CityDistanceService cityDistanceService;
+    private final FileUploadGuard fileUploadGuard;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -204,22 +210,113 @@ public class ApiAdminDictionaryController {
     @PostMapping("/cities")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public CityResponse createCity(@RequestBody TitleRequest request) {
+    public CityResponse createCity(@RequestBody CityRequest request) {
         City city = City.builder()
                 .title(requiredTitle(request.title()))
+                .latitude(normalizeCoordinate(request.latitude(), "Широта", -90, 90))
+                .longitude(normalizeCoordinate(request.longitude(), "Долгота", -180, 180))
                 .build();
-        return toCityResponse(cityRepository.save(city));
+        City saved = cityRepository.save(city);
+        rebuildCityDistancesIfReady(saved);
+        return toCityResponse(saved);
     }
 
     @PutMapping("/cities/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public CityResponse updateCity(@PathVariable Long id, @RequestBody TitleRequest request) {
+    public CityResponse updateCity(@PathVariable Long id, @RequestBody CityRequest request) {
         City city = cityRepository.findById(id);
         if (city == null) {
             throw notFound("Город не найден");
         }
         city.setTitle(requiredTitle(request.title()));
-        return toCityResponse(cityRepository.save(city));
+        city.setLatitude(normalizeCoordinate(request.latitude(), "Широта", -90, 90));
+        city.setLongitude(normalizeCoordinate(request.longitude(), "Долгота", -180, 180));
+        City saved = cityRepository.save(city);
+        rebuildCityDistancesIfReady(saved);
+        return toCityResponse(saved);
+    }
+
+    @PostMapping("/cities/distances/rebuild")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public CityDistanceRebuildResponse rebuildCityDistances(
+            @RequestParam(defaultValue = "150") long minCityId
+    ) {
+        CityDistanceService.RebuildResult result = cityDistanceService.rebuildForCityIdsFrom(Math.max(1, minCityId));
+        return new CityDistanceRebuildResponse(
+                result.citiesWithCoordinates(),
+                result.citiesWithoutCoordinates(),
+                result.distancesSaved()
+        );
+    }
+
+    @PostMapping("/cities/{id}/distances/rebuild")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public CityDistanceRebuildResponse rebuildCityDistancesForCity(@PathVariable Long id) {
+        CityDistanceService.RebuildResult result = cityDistanceService.rebuildForCity(id);
+        return new CityDistanceRebuildResponse(
+                result.citiesWithCoordinates(),
+                result.citiesWithoutCoordinates(),
+                result.distancesSaved()
+        );
+    }
+
+    @PostMapping("/cities/coordinates/import")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
+    public CityCoordinateImportResponse importCityCoordinates(@RequestParam("file") MultipartFile file) {
+        String extension = fileUploadGuard.requireSupportedImportFile(file);
+        if (!"csv".equals(extension) && !"tsv".equals(extension)) {
+            throw badRequest("Для координат поддерживаются только CSV или TSV");
+        }
+        int updated = 0;
+        int skipped = 0;
+        List<String> errors = new ArrayList<>();
+        String content = readTextFile(file);
+        String[] lines = content.split("\\R");
+        for (int index = 0; index < lines.length; index++) {
+            String line = lines[index].trim();
+            if (line.isBlank()) {
+                continue;
+            }
+            String delimiter = "tsv".equals(extension) ? "\t" : delimiterForCsv(line);
+            String[] columns = line.split(delimiter);
+            if (index == 0 && columns.length > 0 && !cleanCsv(columns[0]).matches("\\d+")) {
+                continue;
+            }
+            if (columns.length < 3) {
+                skipped++;
+                errors.add("Строка " + (index + 1) + ": нужно city_id, latitude, longitude");
+                continue;
+            }
+            try {
+                Long cityId = Long.valueOf(cleanCsv(columns[0]));
+                BigDecimal latitude = normalizeCoordinate(new BigDecimal(cleanCsv(columns[1])), "Широта", -90, 90);
+                BigDecimal longitude = normalizeCoordinate(new BigDecimal(cleanCsv(columns[2])), "Долгота", -180, 180);
+                City city = cityRepository.findById(cityId);
+                if (city == null) {
+                    skipped++;
+                    errors.add("Строка " + (index + 1) + ": город #" + cityId + " не найден");
+                    continue;
+                }
+                city.setLatitude(latitude);
+                city.setLongitude(longitude);
+                city.setDistanceMatrixReady(false);
+                cityRepository.save(city);
+                updated++;
+            } catch (Exception exception) {
+                skipped++;
+                errors.add("Строка " + (index + 1) + ": " + exception.getMessage());
+            }
+        }
+        CityDistanceService.RebuildResult result = cityDistanceService.rebuildForCityIdsFrom(150);
+        return new CityCoordinateImportResponse(
+                updated,
+                skipped,
+                errors.stream().limit(20).toList(),
+                result.citiesWithCoordinates(),
+                result.citiesWithoutCoordinates(),
+                result.distancesSaved()
+        );
     }
 
     @DeleteMapping("/cities/{id}")
@@ -261,6 +358,9 @@ public class ApiAdminDictionaryController {
                 .photo(request.photo())
                 .requiresPerformer(request.requiresPerformer())
                 .targetPlatform(normalizePerformerPlatform(request.targetPlatform()))
+                .performerRewardPercent(normalizePercent(request.performerRewardPercent()))
+                .specialistRewardPercent(normalizePercent(request.specialistRewardPercent()))
+                .managerRewardPercent(normalizePercent(request.managerRewardPercent()))
                 .productCategory(category)
                 .build();
 
@@ -282,6 +382,9 @@ public class ApiAdminDictionaryController {
         product.setPhoto(request.photo());
         product.setRequiresPerformer(request.requiresPerformer());
         product.setTargetPlatform(normalizePerformerPlatform(request.targetPlatform()));
+        product.setPerformerRewardPercent(normalizePercent(request.performerRewardPercent()));
+        product.setSpecialistRewardPercent(normalizePercent(request.specialistRewardPercent()));
+        product.setManagerRewardPercent(normalizePercent(request.managerRewardPercent()));
         product.setProductCategory(category);
 
         return toProductResponse(productRepository.save(product));
@@ -323,6 +426,15 @@ public class ApiAdminDictionaryController {
                 botPage.getNumber(),
                 botPage.getSize(),
                 botPage.getTotalPages()
+        );
+    }
+
+    @GetMapping("/bots/unblocked-count")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public BotCityUnblockedCountResponse getBotCityUnblockedCount(@RequestParam Long cityId) {
+        return new BotCityUnblockedCountResponse(
+                cityId,
+                botsRepository.countActiveByCityId(cityId)
         );
     }
 
@@ -822,7 +934,14 @@ public class ApiAdminDictionaryController {
     }
 
     private CityResponse toCityResponse(City city) {
-        return new CityResponse(city.getId(), safe(city.getTitle()));
+        return new CityResponse(
+                city.getId(),
+                safe(city.getTitle()),
+                city.getLatitude(),
+                city.getLongitude(),
+                city.isDistanceMatrixReady(),
+                cityDistanceService.distanceCountFrom(city.getId())
+        );
     }
 
     private ProductResponse toProductResponse(Product product) {
@@ -834,6 +953,9 @@ public class ApiAdminDictionaryController {
                 Boolean.TRUE.equals(product.getPhoto()),
                 product.isRequiresPerformer(),
                 safe(product.getTargetPlatform()),
+                product.getPerformerRewardPercent() == null ? BigDecimal.ZERO : product.getPerformerRewardPercent(),
+                product.getSpecialistRewardPercent() == null ? BigDecimal.ZERO : product.getSpecialistRewardPercent(),
+                product.getManagerRewardPercent() == null ? BigDecimal.ZERO : product.getManagerRewardPercent(),
                 category == null ? null : new OptionResponse(category.getId(), safe(category.getTitle()))
         );
     }
@@ -844,6 +966,20 @@ public class ApiAdminDictionaryController {
             case "YANDEX", "GOOGLE", "GIS", "OTHER" -> platform;
             default -> "OTHER";
         };
+    }
+
+    private BigDecimal normalizePercent(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        if (value.compareTo(BigDecimal.ZERO) < 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal hundred = BigDecimal.valueOf(100);
+        if (value.compareTo(hundred) > 0) {
+            return hundred;
+        }
+        return value;
     }
 
     private BotResponse toBotResponse(Bot bot) {
@@ -1393,6 +1529,45 @@ public class ApiAdminDictionaryController {
         return value;
     }
 
+    private BigDecimal normalizeCoordinate(BigDecimal value, String title, int min, int max) {
+        if (value == null) {
+            return null;
+        }
+        if (value.compareTo(BigDecimal.valueOf(min)) < 0 || value.compareTo(BigDecimal.valueOf(max)) > 0) {
+            throw badRequest(title + ": значение должно быть от " + min + " до " + max);
+        }
+        return value;
+    }
+
+    private void rebuildCityDistancesIfReady(City city) {
+        if (city.getLatitude() != null && city.getLongitude() != null) {
+            cityDistanceService.rebuildForCity(city.getId());
+        } else {
+            city.setDistanceMatrixReady(false);
+            cityRepository.save(city);
+        }
+    }
+
+    private String readTextFile(MultipartFile file) {
+        try {
+            return new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw badRequest("Файл координат не удалось прочитать");
+        }
+    }
+
+    private String cleanCsv(String value) {
+        String result = safe(value).trim();
+        if (result.length() >= 2 && result.startsWith("\"") && result.endsWith("\"")) {
+            result = result.substring(1, result.length() - 1);
+        }
+        return result.trim().replace(',', '.');
+    }
+
+    private String delimiterForCsv(String line) {
+        return line.contains(";") ? ";" : ",";
+    }
+
     private boolean matchesBot(String keyword, BotsRepository.AdminBotRow bot) {
         return matches(keyword, String.valueOf(bot.getId()))
                 || matches(keyword, bot.getLogin())
@@ -1531,6 +1706,9 @@ public class ApiAdminDictionaryController {
     public record TitleRequest(String title) {
     }
 
+    public record CityRequest(String title, BigDecimal latitude, BigDecimal longitude) {
+    }
+
     public record CategoryResponse(
             Long id,
             String title,
@@ -1549,7 +1727,31 @@ public class ApiAdminDictionaryController {
     ) {
     }
 
-    public record CityResponse(Long id, String title) {
+    public record CityResponse(
+            Long id,
+            String title,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            boolean distanceMatrixReady,
+            long distanceCount
+    ) {
+    }
+
+    public record CityDistanceRebuildResponse(
+            long citiesWithCoordinates,
+            long citiesWithoutCoordinates,
+            int distancesSaved
+    ) {
+    }
+
+    public record CityCoordinateImportResponse(
+            int updated,
+            int skipped,
+            List<String> errors,
+            long citiesWithCoordinates,
+            long citiesWithoutCoordinates,
+            int distancesSaved
+    ) {
     }
 
     public record ProductRequest(
@@ -1558,7 +1760,10 @@ public class ApiAdminDictionaryController {
             Long categoryId,
             boolean photo,
             boolean requiresPerformer,
-            String targetPlatform
+            String targetPlatform,
+            BigDecimal performerRewardPercent,
+            BigDecimal specialistRewardPercent,
+            BigDecimal managerRewardPercent
     ) {
     }
 
@@ -1569,6 +1774,9 @@ public class ApiAdminDictionaryController {
             boolean photo,
             boolean requiresPerformer,
             String targetPlatform,
+            BigDecimal performerRewardPercent,
+            BigDecimal specialistRewardPercent,
+            BigDecimal managerRewardPercent,
             OptionResponse category
     ) {
     }
@@ -1613,6 +1821,12 @@ public class ApiAdminDictionaryController {
             int page,
             int size,
             int totalPages
+    ) {
+    }
+
+    public record BotCityUnblockedCountResponse(
+            Long cityId,
+            long unblockedAccounts
     ) {
     }
 

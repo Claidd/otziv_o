@@ -475,6 +475,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/mobile-update',
+    loadComponent: () => import('./features/admin/mobile-update/mobile-update.component')
+      .then((m) => m.MobileUpdateComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'admin/users',
     loadComponent: () => import('./features/admin/users/users-admin.component')
       .then((m) => m.UsersAdminComponent),

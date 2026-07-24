@@ -192,6 +192,7 @@ small {
   order: 3;
 }
 
+.cabinet-progress-strip,
 .manager-control-strip {
   display: block;
   box-sizing: border-box;
@@ -201,6 +202,7 @@ small {
   padding-inline: clamp(0.35rem, 0.8vw, 0.75rem);
 }
 
+.cabinet-progress-strip app-daily-progress-strip,
 .manager-control-strip app-manager-control {
   display: block;
   min-width: 0;

@@ -25,6 +25,7 @@ import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
@@ -148,6 +149,7 @@ public class ScheduledClientMessageService {
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
     private final ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
+    private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final Clock clock = Clock.systemDefaultZone();
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
@@ -272,6 +274,49 @@ public class ScheduledClientMessageService {
     }
 
     @Transactional
+    public boolean synchronizeClientTextReminderForOrder(Order order) {
+        if (order == null || order.getId() == null || order.getId() <= 0) {
+            return false;
+        }
+
+        String currentTargetKey = order.isWaitingForClient()
+                ? clientTextWaitingTargetKey(order.getId(), clientTextWaitingChangedAt(order))
+                : null;
+        closeObsoleteClientTextReminderStates(order.getId(), currentTargetKey);
+
+        if (!order.isWaitingForClient()) {
+            return false;
+        }
+        return ensureClientTextReminderForOrderOnSchedule(order);
+    }
+
+    public LocalDateTime effectiveNextAttemptAt(LocalDateTime nextAttemptAt) {
+        if (nextAttemptAt == null) {
+            return null;
+        }
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime desired = nextAttemptAt.isBefore(nowStorage) ? nowStorage : nextAttemptAt;
+        return scheduleAtStorage(desired);
+    }
+
+    private void closeObsoleteClientTextReminderStates(Long orderId, String currentTargetKey) {
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        stateRepository.findByOrderIdIn(List.of(orderId)).stream()
+                .filter(Objects::nonNull)
+                .filter(state -> state.getScenario() == ClientMessageScenario.CLIENT_TEXT_REMINDER)
+                .filter(state -> state.getStatus() == ScheduledMessageStateStatus.ACTIVE)
+                .filter(state -> currentTargetKey == null || !currentTargetKey.equals(state.getTargetKey()))
+                .forEach(state -> markDone(
+                        state,
+                        nowStorage,
+                        "client_text_cycle_changed",
+                        currentTargetKey == null
+                                ? "Ожидание текста клиента снято"
+                                : "Заказ перешел в новый цикл ожидания текста клиента"
+                ));
+    }
+
+    @Transactional
     public Optional<ClientMessageScenario> ensureOrderAutomationForOrder(Order order) {
         Optional<ClientMessageScenario> scenario = orderAutomationScenario(order);
         if (scenario.isEmpty()) {
@@ -333,7 +378,7 @@ public class ScheduledClientMessageService {
             return false;
         }
 
-        boolean eligible = ensureClientTextReminderForOrderOnSchedule(order);
+        boolean eligible = synchronizeClientTextReminderForOrder(order);
         Optional<ClientMessageScenario> scenario = orderAutomationScenario(order);
         if (scenario.isPresent()) {
             ensureOrderStateOnSchedule(scenario.get(), order);
@@ -486,7 +531,7 @@ public class ScheduledClientMessageService {
             int intervalDays = clientTextReminderIntervalDays();
             clientTextReminderCandidates = ensureClientTextWaitingStates(
                     listSetting(AppSettingService.CLIENT_MESSAGES_CLIENT_TEXT_REMINDER_STATUSES, DEFAULT_CLIENT_TEXT_REMINDER_STATUSES),
-                    nowStorage.minusDays(intervalDays),
+                    nowStorage,
                     intervalDays
             );
         }
@@ -566,6 +611,7 @@ public class ScheduledClientMessageService {
             LocalDateTime waitingChangedAt = order.getStatusChangedAt();
             LocalDateTime baseDueAt = waitingChangedAt.plusDays(intervalDays);
             String targetKey = clientTextWaitingTargetKey(order.getId(), waitingChangedAt);
+            closeObsoleteClientTextReminderStates(order.getId(), targetKey);
 
             if (ensureState(
                     ClientMessageScenario.CLIENT_TEXT_REMINDER,
@@ -697,6 +743,9 @@ public class ScheduledClientMessageService {
     private void processState(Long stateId, LocalDateTime nowStorage) {
         ScheduledClientMessageState state = stateRepository.findById(stateId).orElse(null);
         if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+            return;
+        }
+        if (isPaymentScenario(state.getScenario()) && suppressDuplicatePaymentMessage(state, nowStorage)) {
             return;
         }
 
@@ -1120,12 +1169,48 @@ public class ScheduledClientMessageService {
         }
     }
 
+    private boolean suppressDuplicatePaymentMessage(
+            ScheduledClientMessageState state,
+            LocalDateTime nowStorage
+    ) {
+        if (state.getOrderId() == null) {
+            return false;
+        }
+        Order order = orderRepository.findByIdForMutation(state.getOrderId()).orElse(null);
+        if (!orderPaymentIntegrityService.hasSettledPaymentEvidence(order)) {
+            return false;
+        }
+        markDone(
+                state,
+                nowStorage,
+                OrderPaymentIntegrityService.SUPPRESSED_ERROR_CODE,
+                "Отправка повторного счета остановлена: заказ уже полностью оплачен"
+        );
+        log.warn("Duplicate payment message suppressed: orderId={}, stateId={}, scenario={}",
+                state.getOrderId(), state.getId(), state.getScenario());
+        return true;
+    }
+
+    private boolean isPaymentScenario(ClientMessageScenario scenario) {
+        return scenario == ClientMessageScenario.PAYMENT_INVOICE_RETRY
+                || scenario == ClientMessageScenario.PAYMENT_REMINDER
+                || scenario == ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION;
+    }
+
     private boolean refreshCommonInvoiceForLinkedOrder(Order order) {
         if (order == null || order.getId() == null) {
             return false;
         }
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
         return commonBillingService != null && commonBillingService.refreshLinkedOrderAmount(order.getId());
+    }
+
+    private boolean isManagedByActiveCommonInvoice(Order order) {
+        if (order == null || order.getId() == null) {
+            return false;
+        }
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        return commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId());
     }
 
     private boolean completePaymentMessageForCommonBillingLinkedOrder(
@@ -1241,6 +1326,15 @@ public class ScheduledClientMessageService {
         }
         if (!isCurrentOrderCycle(state, order)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
+            return;
+        }
+        if (isManagedByActiveCommonInvoice(order)) {
+            markDone(
+                    state,
+                    nowStorage,
+                    "common_billing_managed",
+                    "Просрочка оплаты этого заказа управляется общим счетом"
+            );
             return;
         }
 

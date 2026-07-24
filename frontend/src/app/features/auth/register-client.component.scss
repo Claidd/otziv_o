@@ -61,20 +61,21 @@
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
-  border: 0;
+  border: 1px solid var(--otziv-action-border);
   border-radius: 1rem;
   padding: 0 2rem;
-  color: white;
-  background: var(--otziv-primary);
+  color: var(--otziv-action);
+  background: var(--otziv-field-background);
   font-family: inherit;
   font-size: 1.2rem;
   font-weight: 900;
   cursor: pointer;
-  box-shadow: 0 1rem 2rem rgba(108, 155, 207, 0.24);
+  box-shadow: none;
 }
 
 .login-button:hover {
-  box-shadow: none;
+  border-color: var(--otziv-action);
+  background: var(--otziv-action-soft);
 }
 
 @media (max-width: 760px) {

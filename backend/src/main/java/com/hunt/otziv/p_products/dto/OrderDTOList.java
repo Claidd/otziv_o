@@ -69,6 +69,8 @@ public class OrderDTOList {
 
     private boolean waitingForClient;
 
+    private LocalDateTime waitingForClientChangedAt;
+
     private boolean firstOrderForCompany;
 
     private String workerUserFio;

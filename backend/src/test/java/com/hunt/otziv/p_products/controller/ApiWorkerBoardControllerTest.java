@@ -10,12 +10,15 @@ import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
 import com.hunt.otziv.p_products.board.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
+import com.hunt.otziv.p_products.model.OrderDetails;
+import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
@@ -35,11 +38,14 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
+import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
 import com.hunt.otziv.worker_activity.service.WorkerActivityService;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -75,6 +81,7 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -145,6 +152,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private WorkerCellularAccessService workerCellularAccessService;
 
+    @Mock
+    private ScheduledClientMessageService scheduledClientMessageService;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -194,7 +204,8 @@ class ApiWorkerBoardControllerTest {
                 workerActivityService,
                 credentialPreparationService,
                 staffDailyProgressService,
-                workerCellularAccessService
+                workerCellularAccessService,
+                scheduledClientMessageService
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
@@ -210,6 +221,7 @@ class ApiWorkerBoardControllerTest {
         lenient().when(credentialPreparationService.blockUntilReady(any(), any(), any(), any(), anyInt()))
                 .thenReturn(Optional.empty());
         lenient().when(orderService.countActionableOrdersByStatusToWorker(worker)).thenReturn(Map.of());
+        lenient().when(orderService.countOrdersByStatusToWorker(worker)).thenReturn(Map.of());
         lenient().when(orderService.countActionableOrdersByStatusToWorkerChangedOnOrBefore(
                 eq(worker),
                 anySet(),
@@ -288,6 +300,71 @@ class ApiWorkerBoardControllerTest {
                 eq(""),
                 any(Pageable.class)
         )).thenReturn(Page.empty());
+    }
+
+    @Test
+    void workerCanSubmitOwnWaitingOrderForClientReview() throws Exception {
+        Order order = new Order();
+        order.setId(32L);
+        order.setWorker(worker);
+        order.setWaitingForClient(true);
+        when(orderService.getOrder(32L)).thenReturn(order);
+        when(orderService.changeStatusForOrder(32L, "В проверку")).thenReturn(true);
+
+        controller.updateOrderStatus(
+                32L,
+                new ApiWorkerBoardController.StatusChangeRequest("В проверку"),
+                mock(HttpServletRequest.class),
+                principal,
+                workerAuth
+        );
+
+        verify(orderService).changeStatusForOrder(32L, "В проверку");
+        assertFalse(order.isWaitingForClient());
+        verify(orderService).save(order);
+    }
+
+    @Test
+    void enablingClientWaitingImmediatelySynchronizesReminderCycle() {
+        Order order = new Order();
+        order.setId(25_442L);
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        order.setWaitingForClient(false);
+        when(orderService.getOrder(25_442L)).thenReturn(order);
+
+        controller.updateOrderClientWaiting(
+                25_442L,
+                new ApiWorkerBoardController.ClientWaitingRequest(true)
+        );
+
+        assertTrue(order.isWaitingForClient());
+        assertTrue(order.isClientTextExpected());
+        assertTrue(order.getWaitingForClientChangedAt() != null);
+        verify(orderService).save(order);
+        verify(scheduledClientMessageService).synchronizeClientTextReminderForOrder(order);
+    }
+
+    @Test
+    void workerCannotChangeStatusOfNonWaitingOrder() throws Exception {
+        Order order = new Order();
+        order.setId(32L);
+        order.setWorker(worker);
+        order.setWaitingForClient(false);
+        when(orderService.getOrder(32L)).thenReturn(order);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.updateOrderStatus(
+                        32L,
+                        new ApiWorkerBoardController.StatusChangeRequest("В проверку"),
+                        mock(HttpServletRequest.class),
+                        principal,
+                        workerAuth
+                )
+        );
+
+        assertEquals(403, error.getStatusCode().value());
+        verify(orderService, never()).changeStatusForOrder(any(), anyString());
     }
 
     @Test
@@ -789,6 +866,91 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void correctionMetricIncludesOrderWaitingForClient() {
+        when(orderService.countOrdersByStatusToWorker(worker))
+                .thenReturn(Map.of("Коррекция", 1));
+        when(orderService.countActionableOrdersByStatusToWorker(worker))
+                .thenReturn(Map.of());
+
+        ApiWorkerBoardController.WorkerBoardResponse response = getBoard("correct");
+
+        ApiWorkerBoardController.WorkerMetricResponse correction = response.metrics().stream()
+                .filter(metric -> "correct".equals(metric.section()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, correction.value());
+        verify(orderService).countOrdersByStatusToWorker(worker);
+    }
+
+    @Test
+    void genericReviewActionUsesUnprotectedNewSourceSection() {
+        Review review = new Review();
+        review.setId(15L);
+        Order order = new Order();
+        order.setStatus(OrderStatus.builder().title("Новый").build());
+        OrderDetails details = new OrderDetails();
+        details.setOrder(order);
+        review.setOrderDetails(details);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+
+        controller.changeReviewBot(
+                15L,
+                new ApiWorkerBoardController.WorkerActivitySourceRequest("worker-board", null, "new"),
+                principal,
+                workerAuth
+        );
+
+        verify(workerCellularAccessService).enforceSection("new");
+        verify(workerCellularAccessService, never()).enforceProtectedAccess("review");
+    }
+
+    @Test
+    void genericReviewActionUsesProtectedSourceSection() {
+        Review review = new Review();
+        review.setId(15L);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+
+        controller.changeReviewBot(
+                15L,
+                new ApiWorkerBoardController.WorkerActivitySourceRequest("worker-board", null, "nagul"),
+                principal,
+                workerAuth
+        );
+
+        verify(workerCellularAccessService).enforceSection("nagul");
+        verify(workerCellularAccessService, never()).enforceProtectedAccess("review");
+    }
+
+    @Test
+    void genericReviewActionIgnoresSpoofedNewSectionForProtectedReview() {
+        Review review = new Review();
+        review.setId(15L);
+        review.setVigul(true);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+
+        controller.changeReviewBot(
+                15L,
+                new ApiWorkerBoardController.WorkerActivitySourceRequest("worker-board", null, "new"),
+                principal,
+                workerAuth
+        );
+
+        verify(workerCellularAccessService).enforceSection("publish");
+    }
+
+    @Test
+    void legacyReviewActionFallsBackToReviewState() {
+        Review review = new Review();
+        review.setId(15L);
+        review.setVigul(true);
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+
+        controller.changeReviewBot(15L, null, principal, workerAuth);
+
+        verify(workerCellularAccessService).enforceSection("publish");
+    }
+
+    @Test
     void workerNagulActionIsRejectedWhenCredentialPreparationIsNotReady() {
         Review review = new Review();
         review.setId(15L);
@@ -1072,6 +1234,85 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void mobileNagulCopyReturnsServerCredentialPreparation() {
+        Bot bot = new Bot();
+        bot.setId(100L);
+        Review review = new Review();
+        review.setId(15L);
+        review.setBot(bot);
+        ApiWorkerBoardController.ReviewCopyClickRequest request =
+                new ApiWorkerBoardController.ReviewCopyClickRequest(
+                        "password",
+                        "mobile-worker-board",
+                        null,
+                        "nagul"
+                );
+        WorkerCredentialPreparationResponse expected = new WorkerCredentialPreparationResponse(
+                "NAGUL",
+                15L,
+                100L,
+                "2026-07-17T17:00:00",
+                "2026-07-17T17:00:01",
+                "2026-07-17T17:00:01",
+                true,
+                true,
+                false,
+                180,
+                180
+        );
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+        when(credentialPreparationService.recordCopy(
+                workerAuth,
+                review,
+                "password",
+                "mobile-worker-board",
+                null,
+                "nagul"
+        )).thenReturn(true);
+        when(credentialPreparationService.active(workerAuth, WorkerCredentialPreparationScope.NAGUL))
+                .thenReturn(expected);
+
+        WorkerCredentialPreparationResponse actual = controller.logReviewCredentialCopyClick(
+                15L,
+                request,
+                principal,
+                workerAuth
+        );
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    void credentialCopyDoesNotReturnFalseSuccessForUnknownMobileSource() {
+        Review review = new Review();
+        review.setId(15L);
+        ApiWorkerBoardController.ReviewCopyClickRequest request =
+                new ApiWorkerBoardController.ReviewCopyClickRequest(
+                        "login",
+                        "unexpected-mobile-board",
+                        null,
+                        "nagul"
+                );
+        when(reviewService.getReviewById(15L)).thenReturn(review);
+        when(credentialPreparationService.recordCopy(
+                workerAuth,
+                review,
+                "login",
+                "unexpected-mobile-board",
+                null,
+                "nagul"
+        )).thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.logReviewCredentialCopyClick(15L, request, principal, workerAuth)
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertTrue(exception.getReason().contains("не подтвердил подготовку аккаунта"));
+    }
+
+    @Test
     void logReviewCredentialCopyClickRejectsUnsupportedField() {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -1085,6 +1326,60 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals("Кнопка для логирования не поддерживается", exception.getReason());
         verify(reviewService, never()).getReviewById(15L);
+    }
+
+    @Test
+    void logRecoveryTaskCredentialCopyClickUsesTaskWithoutLoadingArchivedReview() {
+        Bot bot = new Bot();
+        bot.setId(81L);
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder()
+                .id(92L)
+                .archiveReviewId(143065L)
+                .archiveOrderId(19362L)
+                .bot(bot)
+                .build();
+        when(reviewRecoveryTaskService.getTask(92L)).thenReturn(task);
+
+        controller.logRecoveryTaskCredentialCopyClick(
+                92L,
+                new ApiWorkerBoardController.ReviewCopyClickRequest(
+                        "password",
+                        "worker-board",
+                        "worker-board",
+                        "recovery"
+                ),
+                principal,
+                workerAuth
+        );
+
+        verify(reviewRecoveryTaskService).getTask(92L);
+        verify(reviewService, never()).getReviewById(143065L);
+        verify(workerActivityService).recordSafely(
+                eq(workerAuth),
+                eq(WorkerActivityAction.REVIEW_COPY_PASSWORD),
+                eq("recovery_task"),
+                eq(92L),
+                eq(19362L),
+                eq(143065L),
+                eq("recovery"),
+                anyString()
+        );
+    }
+
+    @Test
+    void logRecoveryTaskCredentialCopyClickRejectsUnsupportedFieldBeforeLoadingTask() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.logRecoveryTaskCredentialCopyClick(
+                        92L,
+                        new ApiWorkerBoardController.ReviewCopyClickRequest("text"),
+                        principal,
+                        workerAuth
+                )
+        );
+
+        assertEquals("Кнопка для логирования не поддерживается", exception.getReason());
+        verify(reviewRecoveryTaskService, never()).getTask(92L);
     }
 
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section) {

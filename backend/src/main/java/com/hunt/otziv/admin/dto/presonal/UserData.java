@@ -1,6 +1,7 @@
 package com.hunt.otziv.admin.dto.presonal;
 
 import com.hunt.otziv.u_users.model.Image;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -43,5 +44,10 @@ public class UserData {
     private Long orderInWaitingPay1;
     private Long orderInWaitingPay2;
     private Long orderNoPay;
+
+    // Текущий прогресс специалиста за день, включая разбивку по рабочим подразделам.
+    private DailyWorkProgressResponse dailyProgress;
+    private Long badTasks;
+    private Long recoveryTasks;
 
 }

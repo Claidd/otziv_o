@@ -92,6 +92,7 @@ export interface CabinetProfile {
   user: UserLk;
   workerZp: UserStat;
   managerPerformance?: ManagerPerformanceScore | null;
+  dailyProgress?: DailyWorkProgress | null;
 }
 
 export interface ManagerManualPaymentSettings {
@@ -174,6 +175,7 @@ export interface WorkerNetworkViolationDetail {
   scope: string;
   attemptCount: number;
   provider?: string | null;
+  clientEvidence?: string | null;
   blocked: boolean;
 }
 
@@ -187,6 +189,45 @@ export interface TeamResponse {
   marketologs: TeamMember[];
   workers: TeamMember[];
   operators: TeamMember[];
+  patterns?: TeamPatternAnalysis | null;
+}
+
+export type TeamPatternConfidence = 'INSUFFICIENT' | 'LIMITED' | 'MODERATE';
+export type TeamPatternTone = 'NEUTRAL' | 'INFO' | 'WARNING' | 'POSITIVE';
+
+export interface TeamPatternInsight {
+  code: string;
+  tone: TeamPatternTone;
+  confidence: TeamPatternConfidence;
+  title: string;
+  message: string;
+}
+
+export interface WorkerPatternAnalysis {
+  userId: number;
+  publicationCount: number;
+  blockedAccountCount: number;
+  recoveryCount: number;
+  networkEpisodeCount: number;
+  blockRate: number;
+  recoveryRate: number;
+  networkRate: number;
+  teamMedianBlockRate: number;
+  teamMedianRecoveryRate: number;
+  teamMedianNetworkRate: number;
+  confidence: TeamPatternConfidence;
+  insights: TeamPatternInsight[];
+}
+
+export interface TeamPatternAnalysis {
+  visible: boolean;
+  from: string;
+  to: string;
+  confidence: TeamPatternConfidence;
+  workerCount: number;
+  publicationCount: number;
+  insights: TeamPatternInsight[];
+  workers: Record<string, WorkerPatternAnalysis>;
 }
 
 export interface ScoreUser {
@@ -246,6 +287,13 @@ export interface ManagerPerformanceScore {
   riskQualityScore: number;
   controlDisciplineScore: number;
   stabilityScore: number;
+  teamProgressEligibleDays: number;
+  teamProgressReached100Days: number;
+  teamProgressIncompleteDays: number;
+  teamProgressReached100Rate: number;
+  teamProgressAveragePercent: number;
+  teamProgressMissedWorkerDays: number;
+  teamCompletionScore: number;
 }
 
 export interface ScoreResponse {

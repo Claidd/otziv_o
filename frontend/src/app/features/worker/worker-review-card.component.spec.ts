@@ -417,6 +417,23 @@ describe('WorkerReviewCardComponent', () => {
     expect(repairMessage).toContain('нет логина или пароля');
   });
 
+  it('disables login and password in the new section', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review();
+    component.activeSection = 'new';
+
+    fixture.detectChanges();
+
+    const buttons = (fixture.nativeElement as HTMLElement)
+      .querySelectorAll<HTMLButtonElement>('.review-actions button');
+    expect(buttons[1]?.disabled).toBe(true);
+    expect(buttons[2]?.disabled).toBe(true);
+    expect(buttons[1]?.title).toBe('В разделе «Новые» логин и пароль недоступны');
+    expect(component.reviewCredentialCopyDisabled('login')).toBe(true);
+    expect(component.reviewCredentialCopyDisabled('password')).toBe(true);
+  });
+
   it('blocks publication while credential wait timer is active', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     fixture.componentInstance.review = review();
@@ -541,7 +558,7 @@ describe('WorkerReviewCardComponent', () => {
     expect(editOpened).toBe(true);
   });
 
-  it('locks account actions in publication until credentials are copied', () => {
+  it('keeps account change available but locks blocking until credentials are copied', () => {
     const render = (credentialsCopied: boolean): NodeListOf<HTMLButtonElement> => {
       const fixture = TestBed.createComponent(WorkerReviewCardComponent);
       const component = fixture.componentInstance;
@@ -554,9 +571,10 @@ describe('WorkerReviewCardComponent', () => {
     };
 
     let buttons = render(false);
-    expect(buttons[5]?.disabled).toBe(true);
+    expect(buttons[5]?.disabled).toBe(false);
     expect(buttons[6]?.disabled).toBe(true);
-    expect(buttons[5]?.title).toBe('Сначала скопируйте логин и пароль аккаунта');
+    expect(buttons[5]?.title).toBe('Сменить аккаунт');
+    expect(buttons[6]?.title).toBe('Сначала скопируйте логин и пароль аккаунта');
 
     buttons = render(true);
     expect(buttons[5]?.disabled).toBe(false);

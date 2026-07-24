@@ -3,9 +3,11 @@
 }
 
 .panel {
-  margin-top: 1.6rem;
-  border-radius: var(--otziv-card-radius);
-  padding: var(--otziv-card-padding);
+  width: 100%;
+  margin-top: 1rem;
+  border: 1px solid rgba(103, 116, 131, 0.1);
+  border-radius: 1.35rem;
+  padding: clamp(1.25rem, 2.4vw, 2rem);
   background: var(--otziv-white);
   box-shadow: var(--otziv-shadow);
 }
@@ -13,12 +15,63 @@
 .performer-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.2rem;
+  align-items: start;
+  gap: 1.15rem clamp(1.15rem, 2vw, 2rem);
+}
+
+.performer-form label {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.performer-form label > span {
+  margin: 0;
+  color: var(--otziv-dark);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.performer-form :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  border: 1px solid rgba(103, 116, 131, 0.28);
+  border-radius: 0.65rem;
+  outline: 0;
+  padding: 0 0.85rem;
+  color: var(--otziv-dark);
+  background: var(--otziv-field-background);
+  font: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.performer-form select {
+  cursor: pointer;
+}
+
+.performer-form :is(input, select):focus {
+  border-color: var(--otziv-action);
+  box-shadow: 0 0 0 0.2rem var(--otziv-action-soft);
+}
+
+.performer-form :is(input, select).ng-invalid.ng-touched {
+  border-color: rgba(255, 0, 96, 0.48);
 }
 
 .actions,
 .error {
   grid-column: 1 / -1;
+}
+
+.error {
+  margin: 0;
+}
+
+.actions {
+  margin-top: 0.25rem;
+  border-top: 1px solid rgba(103, 116, 131, 0.12);
+  padding-top: 1.15rem;
 }
 
 .registration-success {
@@ -78,11 +131,11 @@ dd {
   align-items: center;
   justify-content: center;
   gap: 0.65rem;
-  border: 0;
+  border: 1px solid var(--otziv-action-border);
   border-radius: 0.8rem;
   padding: 0 1.4rem;
-  color: white;
-  background: var(--otziv-primary);
+  color: var(--otziv-action);
+  background: var(--otziv-field-background);
   font-family: inherit;
   font-weight: 900;
   text-decoration: none;
@@ -90,7 +143,14 @@ dd {
 }
 
 .telegram-link {
-  background: #229ed9;
+  border-color: var(--otziv-action-border);
+  color: var(--otziv-action);
+}
+
+.telegram-link:hover,
+.login-button:hover {
+  border-color: var(--otziv-action);
+  background: var(--otziv-action-soft);
 }
 
 @media (max-width: 760px) {
@@ -100,7 +160,12 @@ dd {
   }
 
   .actions {
-    align-items: flex-start;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .actions :is(.button, button) {
+    width: 100%;
+    min-height: 2.8rem;
   }
 }

@@ -6,6 +6,7 @@ import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
@@ -40,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -88,6 +91,9 @@ class OrderDeletionServiceTest {
     @Mock
     private EntityManager entityManager;
 
+    @Mock
+    private BusinessAuditService businessAuditService;
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
@@ -132,6 +138,16 @@ class OrderDeletionServiceTest {
         inOrder.verify(entityManager).flush();
         inOrder.verify(entityManager).clear();
         inOrder.verify(orderRepository).deleteById(10L);
+        verify(businessAuditService).recordSafely(
+                eq("order_deleted"),
+                eq("order"),
+                eq(10L),
+                eq(10L),
+                isNull(),
+                eq("Архив"),
+                eq("deleted"),
+                anyString()
+        );
     }
 
     @Test
@@ -154,20 +170,22 @@ class OrderDeletionServiceTest {
     }
 
     @Test
-    void managerCannotDeleteCorrectionOrder() {
+    void managerCanDeleteCorrectionOrder() {
         OrderDeletionService service = service();
         Order order = order(11L, "Коррекция");
 
         authenticateWithRole("ROLE_manager");
         when(orderRepository.findById(11L)).thenReturn(Optional.of(order));
+        when(orderDetailsService.findByOrderId(11L)).thenReturn(List.of());
 
         boolean result = service.deleteOrder(11L, () -> "manager");
 
-        assertFalse(result);
-        verify(orderDetailsService, never()).findByOrderId(11L);
+        assertTrue(result);
+        verify(orderDetailsService).deleteAllByOrderId(11L);
         verifyNoInteractions(reviewService);
-        verifyNoInteractions(entityManager);
-        verify(orderRepository, never()).deleteById(11L);
+        verify(entityManager).flush();
+        verify(entityManager).clear();
+        verify(orderRepository).deleteById(11L);
     }
 
     @Test
@@ -273,7 +291,8 @@ class OrderDeletionServiceTest {
                 paymentLinkArchiveService,
                 companyService,
                 companyStatusService,
-                entityManager
+                entityManager,
+                businessAuditService
         );
     }
 

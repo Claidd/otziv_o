@@ -28,6 +28,13 @@ import {
 import { AuthService } from '../core/auth.service';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
+import {
+  MANAGER_TEAM_PROGRESS_RULE,
+  managerPerformanceCompact,
+  managerPerformanceFactorRows,
+  managerPerformanceRows,
+  managerTeamProgressDetails
+} from './manager-performance.helpers';
 
 @Component({
   selector: 'app-manager-control-mobile',
@@ -113,6 +120,10 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
                     <strong>{{ managerStatusLabel(manager) }}</strong>
                     <span>{{ manager.totalAttentionCount }} к действию</span>
                     <small>{{ manager.openItemCount }} открыто · {{ manager.handledItemCount }} обработано</small>
+                    @if ((manager.actionTotalCount ?? 0) > 0) {
+                      <i class="action-progress"><b [style.width.%]="manager.actionProgressPercent ?? 0"></b></i>
+                      <small>{{ actionBalanceLabel(manager) }}</small>
+                    }
                   </div>
 
                   <div class="manager-numbers">
@@ -135,24 +146,26 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
                       <span [class.red]="performance.loadAdjustedPerformanceScore < 60" [class.yellow]="performance.loadAdjustedPerformanceScore >= 60 && performance.loadAdjustedPerformanceScore < 80">
                         {{ performance.grade }} · {{ performance.loadAdjustedPerformanceScore }}
                       </span>
-                      <small>SLA проблем {{ percent(performance.problemSlaRate) }} · SLA клиентов {{ percent(performance.clientSlaRate) }}</small>
+                      <small>{{ performanceCompact(performance) }}</small>
                     </div>
                   }
 
                   @if (hasActionRows(manager)) {
                     <div class="overview-chips compact">
                       @for (problem of actionProblems(manager); track problem.code) {
-                        <button type="button" class="overview-chip critical" [class.handled]="isHandledStatus(problem.itemStatus)" (click)="openDetails(manager)">
+                        <button type="button" class="overview-chip critical" [class.handled]="isHandledStatus(problem.itemStatus)" [attr.data-sla]="slaTimerClass(problem)" (click)="openDetails(manager)">
                           <span class="material-icons-sharp">{{ problem.icon || 'priority_high' }}</span>
                           <strong>{{ problem.count }}</strong>
                           <small>{{ problem.label }}</small>
+                          @if (slaTimer(problem)) { <em>{{ slaTimer(problem) }}</em> }
                         </button>
                       }
                       @for (section of actionSections(manager); track section.code) {
-                        <button type="button" class="overview-chip" [class.handled]="isHandledStatus(section.itemStatus)" (click)="openDetails(manager)">
+                        <button type="button" class="overview-chip" [class.handled]="isHandledStatus(section.itemStatus)" [attr.data-sla]="slaTimerClass(section)" (click)="openDetails(manager)">
                           <span class="material-icons-sharp">assignment</span>
                           <strong>{{ section.count }}</strong>
                           <small>{{ section.label }}</small>
+                          @if (slaTimer(section)) { <em>{{ slaTimer(section) }}</em> }
                         </button>
                       }
                     </div>
@@ -198,21 +211,45 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
                     </article>
                   }
                 </div>
+                <section class="performance-factors" aria-label="Факторы рейтинга">
+                  <header>
+                    <div>
+                      <p class="eyebrow">ФАКТОРЫ РЕЙТИНГА</p>
+                      <h3>Из чего складывается оценка</h3>
+                    </div>
+                    <span>100%</span>
+                  </header>
+                  <div class="factor-grid">
+                    @for (factor of performanceFactorRows(performance); track factor.key) {
+                      <article [class.team]="factor.key === 'team'">
+                        <strong>{{ factor.score }}/100</strong>
+                        <small>{{ factor.label }} · {{ factor.weight }}%</small>
+                      </article>
+                    }
+                  </div>
+                  <p class="team-progress-details">{{ teamProgressDetails(performance) }}</p>
+                  <p class="team-progress-rule">
+                    <span class="material-icons-sharp">schedule</span>
+                    <span>{{ teamProgressRule }}</span>
+                  </p>
+                </section>
               }
 
               <div class="overview-chips">
                 @for (problem of actionProblems(manager); track problem.code) {
-                  <button type="button" class="overview-chip critical" [class.handled]="isHandledStatus(problem.itemStatus)" (click)="openLink(problem.targetUrl)">
+                  <button type="button" class="overview-chip critical" [class.handled]="isHandledStatus(problem.itemStatus)" [attr.data-sla]="slaTimerClass(problem)" (click)="openLink(problem.targetUrl)">
                     <span class="material-icons-sharp">{{ problem.icon || 'priority_high' }}</span>
                     <strong>{{ problem.count }}</strong>
                     <small>{{ problem.label }}</small>
+                    @if (slaTimer(problem)) { <em>{{ slaTimer(problem) }}</em> }
                   </button>
                 }
                 @for (section of actionSections(manager); track section.code) {
-                  <button type="button" class="overview-chip" [class.handled]="isHandledStatus(section.itemStatus)" (click)="openLink(section.targetUrl)">
+                  <button type="button" class="overview-chip" [class.handled]="isHandledStatus(section.itemStatus)" [attr.data-sla]="slaTimerClass(section)" (click)="openLink(section.targetUrl)">
                     <span class="material-icons-sharp">assignment</span>
                     <strong>{{ section.count }}</strong>
                     <small>{{ section.label }}</small>
+                    @if (slaTimer(section)) { <em>{{ slaTimer(section) }}</em> }
                   </button>
                 }
                 @for (overdue of openOverdueStatuses(manager); track overdue.status) {
@@ -269,7 +306,7 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
                 @for (stat of current.workerExplanationStats; track stat.workerUserId || stat.workerName) {
                   <article>
                     <strong>{{ stat.workerName }}</strong>
-                    <span>{{ stat.requestCount }} запросов · {{ stat.unansweredCount }} без ответа · {{ stat.overdueCount }} просрочено</span>
+                    <span>{{ stat.requestCount }} запросов · {{ stat.unansweredCount }} без ответа · {{ stat.overdueCount }} просрочено · {{ stat.hardBreachCount || 0 }} более 3 ч</span>
                   </article>
                 }
               </section>
@@ -287,10 +324,26 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
                   </header>
 
                   @for (card of item.examples; track trackCard($index, card)) {
-                    <article class="control-card" [class.resolved]="isHandled(card)" [class.danger]="card.workerNotificationFailureReason">
+                    <article
+                      class="control-card"
+                      [class.resolved]="isHandled(card)"
+                      [class.danger]="card.workerNotificationFailureReason"
+                      [class.reply-answered]="workerReplyState(card) === 'answered'"
+                      [class.reply-pending]="workerReplyState(card) === 'pending'"
+                      [class.reply-overdue]="workerReplyState(card) === 'overdue'"
+                      [attr.data-sla]="slaTimerClass(card)"
+                    >
                       <header>
                         <strong>{{ card.title || item.label }}</strong>
-                        <span>{{ card.status || statusLabel(card) }}</span>
+                        <div class="card-badges">
+                          <span>{{ card.status || statusLabel(card) }}</span>
+                          @if (canRequestWorkerTask(card)) {
+                            <em class="reply-badge {{ workerReplyState(card) }}">{{ workerReplyLabel(card) }}</em>
+                          }
+                          @if (slaTimer(card)) {
+                            <em class="sla-timer {{ slaTimerClass(card) }}">{{ slaTimer(card) }}</em>
+                          }
+                        </div>
                       </header>
 
                       <div class="card-grid">
@@ -346,10 +399,12 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
                             Починить
                           </button>
                         }
-                        <button type="button" class="warning" (click)="requestWorker(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
-                          <span class="material-icons-sharp">contact_support</span>
-                          {{ card.workerNotificationSentAt ? 'Напомнить' : 'Запросить' }}
-                        </button>
+                        @if (canRequestWorkerTask(card)) {
+                          <button type="button" class="warning" (click)="requestWorker(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId || isWorkerWaitingForExplanation(card) || !!card.workerExplanationAt">
+                            <span class="material-icons-sharp">contact_support</span>
+                            {{ workerRequestButtonLabel(card) }}
+                          </button>
+                        }
                         <button type="button" class="success" (click)="markResolved(card)" [disabled]="!card.controlEntityId || mutatingId() === card.controlEntityId">
                           <span class="material-icons-sharp">task_alt</span>
                           Проверено
@@ -512,6 +567,8 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
     .manager-card-status strong { color:var(--otziv-dark); font-size:.72rem; font-weight:1000; }
     .manager-card-status span { color:var(--otziv-dark); font-size:.72rem; font-weight:1000; text-align:right; }
     .manager-card-status small { grid-column:1 / -1; }
+    .action-progress { display:block; overflow:hidden; grid-column:1 / -1; height:.38rem; border-radius:999px; background:rgba(136,150,169,.2); }
+    .action-progress b { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#ed647e,#eab759,#49aa8c); }
     .manager-numbers { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; }
     .metric { display:grid; min-width:0; min-height:3.15rem; align-content:center; justify-items:center; border:1px solid rgba(108,155,207,.18); border-radius:.72rem; padding:.38rem; background:var(--control-surface); text-align:center; }
     .metric.urgent { border-color:rgba(237,45,91,.25); }
@@ -539,14 +596,28 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
     .performance-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; }
     .performance-grid article { display:grid; min-width:0; gap:.05rem; border:1px solid rgba(108,155,207,.18); border-radius:.72rem; padding:.42rem; background:var(--control-surface); }
     .performance-grid strong { color:var(--otziv-dark); font-size:.74rem; font-weight:1000; }
+    .performance-factors { display:grid; gap:.45rem; border:1px solid rgba(108,155,207,.18); border-radius:.82rem; padding:.55rem; background:var(--control-surface); }
+    .performance-factors>header { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.42rem; }
+    .performance-factors>header>span { display:inline-flex; min-height:1.65rem; align-items:center; border-radius:999px; padding:0 .55rem; color:var(--otziv-primary); background:var(--control-chip-surface); font-size:.58rem; font-weight:1000; }
+    .factor-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.35rem; }
+    .factor-grid article { display:grid; gap:.05rem; border:1px solid rgba(108,155,207,.16); border-radius:.68rem; padding:.4rem; background:var(--control-soft-surface); }
+    .factor-grid article.team { border-color:rgba(47,159,149,.3); background:var(--control-success-surface); }
+    .factor-grid strong { color:var(--otziv-dark); font-size:.7rem; font-weight:1000; }
+    .team-progress-details { margin:0; color:var(--otziv-dark); font-size:.62rem; font-weight:900; line-height:1.35; }
+    .team-progress-rule { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:.35rem; margin:0; border:1px dashed rgba(108,155,207,.24); border-radius:.68rem; padding:.48rem; color:var(--otziv-info); background:var(--control-chip-surface); font-size:.6rem; font-weight:800; line-height:1.35; }
+    .team-progress-rule .material-icons-sharp { color:var(--otziv-primary); font-size:.92rem; }
     .overview-chips { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.38rem; }
     .overview-chip { display:grid; grid-template-columns:auto auto minmax(0,1fr); align-items:center; gap:.3rem; min-height:2.25rem; border:1px solid rgba(108,155,207,.2); border-radius:.75rem; padding:.35rem .45rem; color:var(--otziv-primary); background:var(--control-surface); text-align:left; }
     .overview-chip.critical { border-color:rgba(237,45,91,.28); color:var(--otziv-danger); }
     .overview-chip.warning { border-color:rgba(231,180,52,.34); color:var(--control-warning-color); }
     .overview-chip.handled { opacity:.64; }
+    .overview-chip[data-sla="sla-target"] { border-color:rgba(47,159,149,.38); background:var(--control-success-surface); }
+    .overview-chip[data-sla="sla-late"] { border-color:rgba(231,180,52,.55); background:var(--control-warning-surface); }
+    .overview-chip[data-sla="sla-overdue"] { border-color:rgba(237,45,91,.52); background:var(--control-danger-surface); }
     .overview-chip .material-icons-sharp { font-size:.95rem; }
     .overview-chip strong { font-size:.75rem; }
     .overview-chip small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .overview-chip em { grid-column:1 / -1; color:currentColor; font-size:.55rem; font-style:normal; font-weight:1000; }
     .detail-actions { display:grid; gap:.38rem; }
     .control-note { margin:0; border:1px solid rgba(108,155,207,.22); border-radius:.85rem; padding:.62rem; color:var(--otziv-info); background:var(--control-chip-surface); font-size:.66rem; font-weight:900; }
     .warning-note { border-color:rgba(231,180,52,.3); color:var(--control-warning-color); background:var(--control-warning-surface); }
@@ -560,7 +631,19 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
     .count-pill,.control-card>header span { display:inline-flex; min-height:1.55rem; align-items:center; border:1px solid rgba(47,159,149,.22); border-radius:999px; padding:0 .58rem; color:var(--control-success-color); background:var(--control-success-surface); font-size:.58rem; font-weight:1000; }
     .control-card { display:grid; gap:.5rem; padding:.62rem; }
     .control-card.danger { border-color:rgba(237,45,91,.38); }
+    .control-card.reply-answered { border-color:rgba(47,159,149,.48); background:linear-gradient(155deg,var(--control-success-surface),var(--control-surface)); }
+    .control-card.reply-pending { border-color:rgba(231,180,52,.5); background:linear-gradient(155deg,var(--control-warning-surface),var(--control-surface)); }
+    .control-card.reply-overdue { border-color:rgba(237,45,91,.55); background:linear-gradient(155deg,var(--control-danger-surface),var(--control-surface)); box-shadow:0 0 0 2px rgba(237,45,91,.08),0 .8rem 1.45rem rgba(132,139,200,.1); }
+    .control-card[data-sla="sla-target"]:not(.reply-answered):not(.reply-pending):not(.reply-overdue) { border-color:rgba(47,159,149,.38); }
+    .control-card[data-sla="sla-late"]:not(.reply-answered):not(.reply-pending):not(.reply-overdue) { border-color:rgba(231,180,52,.5); }
+    .control-card[data-sla="sla-overdue"]:not(.reply-answered):not(.reply-pending):not(.reply-overdue) { border-color:rgba(237,45,91,.52); }
     .control-card.resolved { opacity:.72; }
+    .card-badges { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.25rem; }
+    .card-badges>span,.card-badges>em { display:inline-flex; min-height:1.55rem; align-items:center; border:1px solid rgba(47,159,149,.22); border-radius:999px; padding:0 .58rem; font-size:.56rem; font-style:normal; font-weight:1000; }
+    .reply-badge.answered,.sla-timer.sla-target { border-color:rgba(47,159,149,.3); color:var(--control-success-color); background:var(--control-success-surface); }
+    .reply-badge.pending,.sla-timer.sla-late { border-color:rgba(231,180,52,.36); color:var(--control-warning-color); background:var(--control-warning-surface); }
+    .reply-badge.overdue,.reply-badge.failed,.sla-timer.sla-overdue { border-color:rgba(237,45,91,.34); color:var(--control-danger-color); background:var(--control-danger-surface); }
+    .reply-badge.idle { color:var(--otziv-info); background:var(--control-chip-surface); }
     .card-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; }
     .card-grid button,.card-grid div { display:grid; min-width:0; align-content:center; justify-items:center; border-radius:.72rem; padding:.34rem; color:var(--otziv-dark); background:var(--control-surface); }
     .card-grid span { color:var(--otziv-info); font-size:.55rem; font-weight:800; }
@@ -596,6 +679,7 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
 })
 export class ManagerControlPage implements OnInit, OnDestroy {
   private routeSubscription?: Subscription;
+  private clockTimer?: ReturnType<typeof setInterval>;
 
   readonly summary = signal<ManagerControlSummary | null>(null);
   readonly detail = signal<ManagerControlManagerDetail | null>(null);
@@ -603,6 +687,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   readonly loading = signal(false);
   readonly mutating = signal(false);
   readonly mutatingId = signal<number | null>(null);
+  readonly teamProgressRule = MANAGER_TEAM_PROGRESS_RULE;
   readonly mutatingItemId = signal<number | null>(null);
   readonly error = signal<string | null>(null);
   readonly notice = signal<string | null>(null);
@@ -610,6 +695,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   readonly itemComments = signal<Record<number, string>>({});
   readonly replies = signal<Record<number, string>>({});
   readonly preparedContactItemIds = signal<Set<number>>(new Set());
+  readonly clock = signal(Date.now());
 
   readonly managers = computed(() => this.summary()?.managers ?? []);
   readonly selectedManager = computed(() => {
@@ -627,6 +713,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.clockTimer = setInterval(() => this.clock.set(Date.now()), 30_000);
     this.routeSubscription = this.route.paramMap.subscribe(() => {
       void this.load();
     });
@@ -634,6 +721,9 @@ export class ManagerControlPage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.routeSubscription?.unsubscribe();
+    if (this.clockTimer) {
+      clearInterval(this.clockTimer);
+    }
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -724,14 +814,19 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   }
 
   performanceRows(performance: ManagerPerformanceScore): Array<{ label: string; value: string }> {
-    return [
-      { label: 'SLA проблем', value: this.percent(performance.problemSlaRate) },
-      { label: 'SLA клиентов', value: this.percent(performance.clientSlaRate) },
-      { label: 'Просрочки', value: this.percent(performance.overdueRate) },
-      { label: 'Нагрузка', value: `${this.number(performance.workloadOrder)} / ${this.number(performance.workloadWorker)}` },
-      { label: 'Ответ p50/p90', value: `${this.number(performance.clientReplyMedianMinutes)} / ${this.number(performance.clientReplyP90Minutes)} мин.` },
-      { label: 'Бэклог', value: this.number(performance.backlogCount) }
-    ];
+    return managerPerformanceRows(performance);
+  }
+
+  performanceFactorRows(performance: ManagerPerformanceScore) {
+    return managerPerformanceFactorRows(performance);
+  }
+
+  performanceCompact(performance: ManagerPerformanceScore): string {
+    return managerPerformanceCompact(performance);
+  }
+
+  teamProgressDetails(performance: ManagerPerformanceScore): string {
+    return managerTeamProgressDetails(performance);
   }
 
   managerStatusLabel(manager: ManagerControlManager): string {
@@ -805,6 +900,131 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     return card.itemStatus === 'RESOLVED' ? 'закрыто' : card.itemStatus === 'DEFERRED' ? 'отложено' : 'открыто';
   }
 
+  actionBalanceLabel(manager: ManagerControlManager): string {
+    return `Выполнено ${manager.actionCompletedCount ?? 0}/${manager.actionTotalCount ?? 0} · осталось: просрочки ${manager.actionOverdueRemainingCount ?? 0}, риски ${manager.actionRiskRemainingCount ?? 0}, без ответа ${manager.actionUnansweredRemainingCount ?? 0}`;
+  }
+
+  slaTimer(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): string {
+    this.clock();
+    if (item.itemStatus && item.itemStatus !== 'OPEN') {
+      return '';
+    }
+    const startedAt = this.slaStartedAt(item);
+    return startedAt === null ? '' : `Без решения: ${this.elapsedShort(Date.now() - startedAt)}`;
+  }
+
+  slaTimerClass(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): string {
+    this.clock();
+    if (item.itemStatus && item.itemStatus !== 'OPEN') {
+      return '';
+    }
+    const target = this.dateTimeMs(item.targetDeadlineAt);
+    const hard = this.dateTimeMs(item.hardDeadlineAt) ?? target;
+    if (target === null && hard === null) {
+      return '';
+    }
+    if (hard !== null && Date.now() > hard) {
+      return 'sla-overdue';
+    }
+    if (target !== null && Date.now() > target) {
+      return 'sla-late';
+    }
+    return 'sla-target';
+  }
+
+  canRequestWorkerTask(card: ManagerControlConcreteItem): boolean {
+    return card.type === 'RISK'
+      || card.type === 'BAD_REVIEW_TASK'
+      || card.type === 'RECOVERY_TASK'
+      || card.type === 'PUBLISH_REVIEW'
+      || card.type === 'NAGUL_REVIEW'
+      || card.type === 'WORKER_ORDER_NEW'
+      || card.type === 'WORKER_ORDER_CORRECT';
+  }
+
+  workerRequiresExplanation(card: ManagerControlConcreteItem): boolean {
+    return card.type === 'RISK' || (this.canRequestWorkerTask(card) && (card.ageDays == null || card.ageDays >= 2));
+  }
+
+  isWorkerWaitingForExplanation(card: ManagerControlConcreteItem): boolean {
+    return this.canRequestWorkerTask(card)
+      && !!card.workerNotificationSentAt
+      && this.workerRequiresExplanation(card)
+      && !card.workerExplanationAt;
+  }
+
+  isWorkerExplanationOverdue(card: ManagerControlConcreteItem): boolean {
+    this.clock();
+    if (!this.isWorkerWaitingForExplanation(card) || !card.workerNotificationSentAt) {
+      return false;
+    }
+    const sentAt = Date.parse(card.workerNotificationSentAt);
+    return Number.isFinite(sentAt) && Date.now() - sentAt >= 3 * 60 * 60 * 1000;
+  }
+
+  workerReplyState(card: ManagerControlConcreteItem): 'answered' | 'pending' | 'overdue' | 'failed' | 'idle' {
+    if (card.workerExplanationAt) {
+      return 'answered';
+    }
+    if (this.isWorkerExplanationOverdue(card)) {
+      return 'overdue';
+    }
+    if (this.isWorkerWaitingForExplanation(card)) {
+      return 'pending';
+    }
+    if (card.workerNotificationAttemptedAt && !card.workerNotificationSentAt) {
+      return 'failed';
+    }
+    return 'idle';
+  }
+
+  workerReplyLabel(card: ManagerControlConcreteItem): string {
+    switch (this.workerReplyState(card)) {
+      case 'answered': return 'Ответ получен';
+      case 'overdue': return 'Ответ просрочен';
+      case 'pending': return 'Ждём ответ';
+      case 'failed': return 'Не доставлено';
+      default: return card.workerNotificationSentAt ? 'Напомнили' : 'Не отправлен';
+    }
+  }
+
+  workerRequestButtonLabel(card: ManagerControlConcreteItem): string {
+    if (!this.workerRequiresExplanation(card)) {
+      return card.workerNotificationSentAt ? 'Напомнили' : 'Напомнить';
+    }
+    if (card.workerExplanationAt) {
+      return 'Ответ получен';
+    }
+    if (this.isWorkerWaitingForExplanation(card)) {
+      return 'Ждём ответ';
+    }
+    return card.workerNotificationAttemptedAt ? 'Повторить запрос' : 'Запросить пояснение';
+  }
+
+  private slaStartedAt(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): number | null {
+    const direct = this.dateTimeMs(item.firstObservedAt);
+    if (direct !== null) return direct;
+    const target = this.dateTimeMs(item.targetDeadlineAt);
+    if (target !== null) return target - 30 * 60_000;
+    const hard = this.dateTimeMs(item.hardDeadlineAt);
+    return hard === null ? null : hard - 60 * 60_000;
+  }
+
+  private dateTimeMs(value: string | null | undefined): number | null {
+    if (!value) return null;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+
+  private elapsedShort(milliseconds: number): string {
+    const minutes = Math.max(0, Math.floor(milliseconds / 60_000));
+    if (minutes < 1) return 'меньше 1 мин';
+    if (minutes < 60) return `${minutes} мин`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest > 0 ? `${hours} ч ${rest} мин` : `${hours} ч`;
+  }
+
   controlAutoCloseStatus(detail: ManagerControlManagerDetail): string {
     if (detail.closedAt) {
       return `Контроль закрыт: ${this.formatDateTime(detail.closedAt)}`;
@@ -849,7 +1069,11 @@ export class ManagerControlPage implements OnInit, OnDestroy {
 
   showRepair(card: ManagerControlConcreteItem): boolean {
     const text = `${card.type} ${card.reason || ''}`.toLowerCase();
-    return text.includes('invoice') || text.includes('telegram') || text.includes('автоответчик') || text.includes('очеред');
+    return card.type === 'ORDER_PAYMENT_INTEGRITY'
+      || text.includes('invoice')
+      || text.includes('telegram')
+      || text.includes('автоответчик')
+      || text.includes('очеред');
   }
 
   commentText(card: ManagerControlConcreteItem): string {
@@ -938,9 +1162,11 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   async requestWorker(card: ManagerControlConcreteItem): Promise<void> {
     await this.actionCard(card, {
       actionType: 'ACTION_TAKEN',
-      comment: this.commentText(card) || 'Запрошено пояснение специалиста.',
+      comment: this.commentText(card) || (this.workerRequiresExplanation(card)
+        ? 'Запрошено пояснение специалиста.'
+        : 'Специалисту отправлено напоминание.'),
       manualWorkerNotification: true
-    }, 'Запрос специалисту отправлен.');
+    }, this.workerRequiresExplanation(card) ? 'Запрос специалисту отправлен.' : 'Напоминание специалисту отправлено.');
   }
 
   async markResolved(card: ManagerControlConcreteItem): Promise<void> {

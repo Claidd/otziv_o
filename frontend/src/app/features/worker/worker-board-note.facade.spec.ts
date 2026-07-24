@@ -139,7 +139,8 @@ function createFacade(sourceBoard = board()) {
     loadBoard: () => {
       calls.push('load-board');
     },
-    errorMessage: (_err, fallback) => fallback
+    errorMessage: (_err, fallback) => fallback,
+    reviewActionSource: () => ({ sourcePage: 'worker-board', sourceSection: sourceBoard.section })
   };
 
   return {

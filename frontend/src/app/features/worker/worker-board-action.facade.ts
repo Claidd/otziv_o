@@ -9,7 +9,7 @@ import type {
 } from '../../core/worker.api';
 import type { ToastService } from '../../shared/toast.service';
 import type { StatusAction, WorkerBoardTabKey } from './worker-board.config';
-import { workerBotChangeMessage } from './worker-board.config';
+import { workerBotChangeMessage, workerOrderTargetStatus } from './worker-board.config';
 
 type WorkerBoardActionApi = Pick<
   WorkerApi,
@@ -49,11 +49,12 @@ export class WorkerBoardActionFacade {
 
   updateOrderStatus(order: OrderCardItem, action: StatusAction): void {
     const key = `order-${order.id}-${action.status}`;
+    const targetStatus = workerOrderTargetStatus(order, action);
     this.deps.mutationKey.set(key);
 
-    this.deps.workerApi.updateOrderStatus(order.id, action.status).subscribe({
+    this.deps.workerApi.updateOrderStatus(order.id, targetStatus).subscribe({
       next: () => {
-        this.patchOrder(order.id, { status: action.status });
+        this.patchOrder(order.id, { status: targetStatus, waitingForClient: false });
         this.deps.mutationKey.set(null);
         this.deps.toastService.success('Статус изменен', `${order.companyTitle}: ${action.status}`);
         this.deps.loadBoard();

@@ -460,6 +460,93 @@ class ReputationSingleReviewDraftServiceTest {
     }
 
     @Test
+    void insufficientResearchDoesNotTurnHypotheticalIdeasIntoReviewFacts() {
+        DeepCompanyResearchReport report = new DeepCompanyResearchReport(
+                7L,
+                "ВСМ",
+                "Благовещенск",
+                "deepseek",
+                "deepseek-v4-pro",
+                "resp-insufficient",
+                "Публичных подтверждений профиля компании нет.",
+                List.of(new DeepCompanyResearchReport.Section(
+                        "Идеи для честных отзывов",
+                        "1. Замена масла и комплексное ТО.\n2. Покупка экскаватора JCB в лизинг."
+                )),
+                List.of(new DeepCompanyResearchReport.Source(
+                        "Сомнительная геоточка",
+                        "https://2gis.ru/example",
+                        "Совпадение не подтверждено",
+                        "map",
+                        List.of("identity"),
+                        "low"
+                )),
+                List.of(),
+                List.of(new DeepCompanyResearchReport.QualityCheck(
+                        "coverage",
+                        "Покрытие исследования",
+                        "fail",
+                        "insufficient_data: нет подтверждённых публичных источников."
+                )),
+                new DeepCompanyResearchReport.FactSnapshot(
+                        List.of(new DeepCompanyResearchReport.FactItem(
+                                "Категория",
+                                "Спецтехника / Продажа",
+                                "CRM-карточка",
+                                "high"
+                        )),
+                        List.of(),
+                        List.of()
+                ),
+                List.of(
+                        "замене масла или комплексном ТО",
+                        "покупке экскаватора JCB в лизинг",
+                        "trade-in бульдозера Doosan"
+                ),
+                LocalDateTime.now()
+        );
+        when(contentPackJobRepository.findByCompanyId(7L)).thenReturn(Optional.empty());
+        when(deepReportJobRepository.findByCompanyIdOrderByCreatedAtDesc(7L))
+                .thenReturn(List.of(deepReportEntity(report)));
+        when(aiSingleReviewDraftFactory.createBatch(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(Optional.empty());
+
+        service.generateBatch(
+                7L,
+                new ReputationBatchReviewDraftRequest(
+                        null, null, "живой", "разные клиенты", "без смайлов", "", "mixed", "quality",
+                        List.of(new ReputationBatchReviewDraftTarget(
+                                1L,
+                                "Выбор спецтехники по задаче клиента",
+                                "",
+                                "Товар/услуга отзыва: продажа спецтехники"
+                        ))
+                )
+        );
+
+        ArgumentCaptor<ReviewGenerationBrief> briefCaptor = ArgumentCaptor.forClass(ReviewGenerationBrief.class);
+        ArgumentCaptor<List<ReviewGenerationSlot>> slotsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(aiSingleReviewDraftFactory).createBatch(
+                any(), any(), any(), any(), any(), briefCaptor.capture(), slotsCaptor.capture());
+
+        ReviewGenerationBrief brief = briefCaptor.getValue();
+        assertThat(brief.researchStatus()).isEqualTo("insufficient_data");
+        assertThat(brief.businessType()).isEqualTo("equipment_sales");
+        assertThat(brief.reviewIdeas()).isEmpty();
+        assertThat(brief.services()).isEmpty();
+        assertThat(String.join(" ", brief.products()))
+                .contains("продажа спецтехники")
+                .doesNotContain("масла", "JCB", "лизинг", "trade-in", "Doosan");
+        assertThat(slotsCaptor.getValue().getFirst().theme())
+                .isEqualTo("Выбор спецтехники по задаче клиента");
+        assertThat(slotsCaptor.getValue().getFirst().mustUse())
+                .noneMatch(value -> value.contains("масла")
+                        || value.contains("JCB")
+                        || value.contains("лизинг")
+                        || value.contains("Doosan"));
+    }
+
+    @Test
     void batchSanitizesEmployeeNamesThatRequireConfirmationBeforePrompt() {
         DeepCompanyResearchReport report = new DeepCompanyResearchReport(
                 7L,

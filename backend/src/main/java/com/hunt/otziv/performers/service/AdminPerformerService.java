@@ -5,6 +5,7 @@ import com.hunt.otziv.c_cities.repository.CityRepository;
 import com.hunt.otziv.performers.dto.AdminPerformerControlResponse;
 import com.hunt.otziv.performers.dto.AdminPerformerManualRunResponse;
 import com.hunt.otziv.performers.dto.AdminPerformerResponse;
+import com.hunt.otziv.performers.dto.AdminPerformerVerifyAssignmentRequest;
 import com.hunt.otziv.performers.dto.PerformerAssignmentResponse;
 import com.hunt.otziv.performers.dto.PerformerCityReportResponse;
 import com.hunt.otziv.performers.model.PerformerAssignmentStatus;
@@ -17,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -34,6 +36,7 @@ public class AdminPerformerService {
     private final PerformerAssignmentMapper assignmentMapper;
     private final PerformerAssignmentService assignmentService;
     private final PerformerRolloutService rolloutService;
+    private final PerformerAssignmentScreenshotStorage screenshotStorage;
 
     @Transactional(readOnly = true)
     public AdminPerformerControlResponse control() {
@@ -60,11 +63,17 @@ public class AdminPerformerService {
     }
 
     @Transactional
-    public PerformerAssignmentResponse verifyAssignment(Long assignmentId) {
+    public PerformerAssignmentResponse verifyAssignment(Long assignmentId, AdminPerformerVerifyAssignmentRequest request) {
         ReviewPerformerAssignment assignment = assignmentRepository.findByIdForDetails(assignmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Задание не найдено"));
         if (assignment.getReview() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У задания нет отзыва");
+        }
+        if (request != null) {
+            if (hasText(request.getManagerNote())) {
+                assignment.setManagerNote(trimToNull(request.getManagerNote()));
+                assignmentRepository.save(assignment);
+            }
         }
         if (assignment.getStatus() != PerformerAssignmentStatus.PUBLISHED_CLAIMED
                 && assignment.getStatus() != PerformerAssignmentStatus.VERIFIED) {
@@ -79,6 +88,21 @@ public class AdminPerformerService {
     }
 
     @Transactional
+    public PerformerAssignmentResponse uploadManagerConfirmationScreenshot(Long assignmentId, MultipartFile file) {
+        ReviewPerformerAssignment assignment = assignmentRepository.findByIdForDetails(assignmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Задание не найдено"));
+        String url = screenshotStorage.store(
+                file,
+                assignment.getId(),
+                PerformerAssignmentScreenshotStorage.ScreenshotKind.MANAGER_CONFIRMATION,
+                assignment.getManagerConfirmationScreenshotUrl()
+        );
+        assignment.setManagerConfirmationScreenshotUrl(url);
+        assignmentRepository.save(assignment);
+        return assignmentMapper.toResponse(assignment);
+    }
+
+    @Transactional
     public AdminPerformerManualRunResponse createAssignmentsForOrder(Long orderId) {
         int created = assignmentService.createAssignmentsForOrder(orderId);
         return new AdminPerformerManualRunResponse(created, 0, 0, 0);
@@ -86,10 +110,11 @@ public class AdminPerformerService {
 
     @Transactional
     public AdminPerformerManualRunResponse runSchedulerOnce() {
+        int created = assignmentService.createDueAssignments();
         int expired = assignmentService.expireOffers();
         int offered = assignmentService.offerQueuedAssignments();
         int ready = assignmentService.notifyReadyToPublish();
-        return new AdminPerformerManualRunResponse(0, expired, offered, ready);
+        return new AdminPerformerManualRunResponse(created, expired, offered, ready);
     }
 
     private AdminPerformerResponse toResponse(PerformerProfile performer) {
@@ -142,5 +167,13 @@ public class AdminPerformerService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String trimToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

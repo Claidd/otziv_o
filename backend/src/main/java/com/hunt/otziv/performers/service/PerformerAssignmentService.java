@@ -1,6 +1,7 @@
 package com.hunt.otziv.performers.service;
 
 import com.hunt.otziv.c_cities.model.City;
+import com.hunt.otziv.c_cities.service.CityDistanceService;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
@@ -18,11 +19,16 @@ import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +37,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 @Slf4j
@@ -48,6 +55,7 @@ public class PerformerAssignmentService {
     private final ReviewRepository reviewRepository;
     private final UserRepository userRepository;
     private final PerformerProfileRepository performerProfileRepository;
+    private final PerformerCityRepository performerCityRepository;
     private final ReviewPerformerAssignmentRepository assignmentRepository;
     private final ReviewPerformerOfferRepository offerRepository;
     private final PerformerTaskEvidenceRepository evidenceRepository;
@@ -56,6 +64,8 @@ public class PerformerAssignmentService {
     private final PerformerTelegramNotificationService telegramNotificationService;
     private final OrderStatusTransitionService orderStatusTransitionService;
     private final PerformerRolloutService rolloutService;
+    private final PerformerAssignmentScreenshotStorage screenshotStorage;
+    private final CityDistanceService cityDistanceService;
 
     @Value("${performers.offer.ttl-minutes:10}")
     private int offerTtlMinutes;
@@ -63,8 +73,17 @@ public class PerformerAssignmentService {
     @Value("${performers.offer.batch-size:20}")
     private int offerBatchSize;
 
+    @Value("${performers.offer.candidate-pool-size:500}")
+    private int offerCandidatePoolSize;
+
     @Value("${performers.publish.delay-days:2}")
     private int publishDelayDays;
+
+    @Value("${performers.assignment.create-lead-days:2}")
+    private int assignmentCreateLeadDays;
+
+    @Value("${performers.assignment.batch-size:100}")
+    private int assignmentBatchSize;
 
     @Value("${performers.payout.default-amount:0}")
     private BigDecimal defaultPayoutAmount;
@@ -74,40 +93,36 @@ public class PerformerAssignmentService {
         Order order = orderRepository.findByIdForOrderDto(orderId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         List<Review> reviews = reviewRepository.getAllByOrderId(orderId);
+        LocalDate cutoffDate = assignmentCutoffDate();
         int created = 0;
 
         for (Review review : reviews) {
-            Product product = product(review);
-            if (product == null || !product.isRequiresPerformer()) {
-                continue;
+            if (createAssignmentIfEligible(order, review, cutoffDate)) {
+                created++;
             }
-            Filial filial = filial(order, review);
-            City city = filial != null ? filial.getCity() : null;
-            if (!rolloutService.isAllowed(product, city)) {
-                continue;
-            }
-            if (assignmentRepository.existsByReviewId(review.getId())) {
-                continue;
-            }
-
-            ReviewPerformerAssignment assignment = ReviewPerformerAssignment.builder()
-                    .order(order)
-                    .orderDetails(review.getOrderDetails())
-                    .review(review)
-                    .city(city)
-                    .filial(filial)
-                    .platform(platform(product, filial))
-                    .status(PerformerAssignmentStatus.CREATED)
-                    .payoutAmount(payoutAmount(review, product))
-                    .clientApprovedTextSnapshot(review.getText())
-                    .instruction(instruction(order, filial))
-                    .build();
-            assignmentRepository.save(assignment);
-            created++;
         }
 
         if (created > 0) {
             log.info("Созданы задания исполнителям для заказа {}: {}", orderId, created);
+        }
+        return created;
+    }
+
+    @Transactional
+    public int createDueAssignments() {
+        LocalDate cutoffDate = assignmentCutoffDate();
+        List<Review> reviews = reviewRepository.findPerformerAssignmentCandidates(
+                cutoffDate,
+                PageRequest.of(0, assignmentBatchSize)
+        );
+        int created = 0;
+        for (Review review : reviews) {
+            if (createAssignmentIfEligible(order(review), review, cutoffDate)) {
+                created++;
+            }
+        }
+        if (created > 0) {
+            log.info("Созданы задания исполнителям по датам публикации до {}: {}", cutoffDate, created);
         }
         return created;
     }
@@ -175,9 +190,9 @@ public class PerformerAssignmentService {
                 ).stream().map(mapper::toResponse).toList(),
                 assignmentRepository.findByPerformerForBoard(performer.getId(), List.of(PerformerAssignmentStatus.WAITING_PUBLICATION))
                         .stream().map(mapper::toResponse).toList(),
-                assignmentRepository.findByPerformerForBoard(performer.getId(), List.of(PerformerAssignmentStatus.PUBLISHED_CLAIMED, PerformerAssignmentStatus.VERIFIED))
+                assignmentRepository.findByPerformerForBoard(performer.getId(), List.of(PerformerAssignmentStatus.PUBLISHED_CLAIMED))
                         .stream().map(mapper::toResponse).toList(),
-                assignmentRepository.findByPerformerForBoard(performer.getId(), List.of(PerformerAssignmentStatus.PAID))
+                assignmentRepository.findByPerformerForBoard(performer.getId(), List.of(PerformerAssignmentStatus.VERIFIED, PerformerAssignmentStatus.PAID))
                         .stream().map(mapper::toResponse).toList()
         );
     }
@@ -274,6 +289,26 @@ public class PerformerAssignmentService {
     }
 
     @Transactional
+    public PerformerAssignmentResponse uploadPublicationScreenshot(Long assignmentId, String username, MultipartFile file) {
+        PerformerProfile performer = performer(username);
+        ReviewPerformerAssignment assignment = assignmentForPerformer(assignmentId, performer);
+        if (assignment.getStatus() == PerformerAssignmentStatus.REJECTED
+                || assignment.getStatus() == PerformerAssignmentStatus.CANCELLED
+                || assignment.getStatus() == PerformerAssignmentStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "К этому заданию уже нельзя загрузить скриншот");
+        }
+        String url = screenshotStorage.store(
+                file,
+                assignment.getId(),
+                PerformerAssignmentScreenshotStorage.ScreenshotKind.PERFORMER_PUBLICATION,
+                assignment.getPerformerPublicationScreenshotUrl()
+        );
+        assignment.setPerformerPublicationScreenshotUrl(url);
+        assignmentRepository.save(assignment);
+        return mapper.toResponse(assignment);
+    }
+
+    @Transactional
     public PerformerAssignmentResponse reportProblem(Long assignmentId, String username, PerformerProblemRequest request) {
         PerformerProfile performer = performer(username);
         ReviewPerformerAssignment assignment = assignmentForPerformer(assignmentId, performer);
@@ -332,15 +367,16 @@ public class PerformerAssignmentService {
         List<PerformerProfile> candidates = performerProfileRepository.findOfferCandidates(
                 assignment.getCity().getId(),
                 assignment.getOrder().getId(),
+                assignment.getOrder().getCompany() != null ? assignment.getOrder().getCompany().getId() : null,
                 assignment.getId(),
                 PerformerProfileStatus.ACTIVE,
-                PageRequest.of(0, 1)
+                PageRequest.of(0, Math.max(1, offerCandidatePoolSize))
         );
         if (candidates.isEmpty()) {
             return false;
         }
 
-        PerformerProfile performer = candidates.getFirst();
+        PerformerProfile performer = bestCandidate(assignment.getCity().getId(), candidates);
         LocalDateTime now = LocalDateTime.now();
         ReviewPerformerOffer offer = ReviewPerformerOffer.builder()
                 .assignment(assignment)
@@ -361,6 +397,81 @@ public class PerformerAssignmentService {
                     offerRepository.save(offer);
                 });
         return true;
+    }
+
+    private PerformerProfile bestCandidate(Long cityId, List<PerformerProfile> candidates) {
+        Map<Long, Integer> distanceByCity = cityDistanceService.distancesFrom(cityId);
+        Map<Long, List<Long>> cityIdsByPerformer = cityIdsByPerformer(candidates);
+        return candidates.stream()
+                .min(Comparator
+                        .comparingInt((PerformerProfile performer) -> cityBucket(performer, cityId, distanceByCity, cityIdsByPerformer))
+                        .thenComparingInt(performer -> cityDistance(performer, cityId, distanceByCity, cityIdsByPerformer))
+                        .thenComparing(PerformerProfile::getRating, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(PerformerProfile::getReliabilityScore, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(PerformerProfile::getCompletedCount, Comparator.reverseOrder())
+                        .thenComparing(PerformerProfile::getId))
+                .orElse(candidates.getFirst());
+    }
+
+    private Map<Long, List<Long>> cityIdsByPerformer(List<PerformerProfile> candidates) {
+        List<Long> performerIds = candidates.stream()
+                .map(PerformerProfile::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (performerIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<Long>> result = new HashMap<>();
+        performerCityRepository.findActiveCityIdsByPerformerIds(performerIds)
+                .forEach(row -> result.computeIfAbsent(row.getPerformerId(), ignored -> new ArrayList<>()).add(row.getCityId()));
+        return result;
+    }
+
+    private int cityBucket(
+            PerformerProfile performer,
+            Long cityId,
+            Map<Long, Integer> distanceByCity,
+            Map<Long, List<Long>> cityIdsByPerformer
+    ) {
+        List<Long> performerCityIds = performerCityIds(performer, cityIdsByPerformer);
+        if (performerCityIds.isEmpty()) {
+            return 2;
+        }
+        if (performerCityIds.stream().anyMatch(candidateCityId -> Objects.equals(candidateCityId, cityId))) {
+            return 0;
+        }
+        return performerCityIds.stream().anyMatch(distanceByCity::containsKey) ? 1 : 2;
+    }
+
+    private int cityDistance(
+            PerformerProfile performer,
+            Long cityId,
+            Map<Long, Integer> distanceByCity,
+            Map<Long, List<Long>> cityIdsByPerformer
+    ) {
+        List<Long> performerCityIds = performerCityIds(performer, cityIdsByPerformer);
+        if (performerCityIds.isEmpty()) {
+            return Integer.MAX_VALUE;
+        }
+        if (performerCityIds.stream().anyMatch(candidateCityId -> Objects.equals(candidateCityId, cityId))) {
+            return 0;
+        }
+        return performerCityIds.stream()
+                .map(candidateCityId -> distanceByCity.getOrDefault(candidateCityId, Integer.MAX_VALUE))
+                .min(Integer::compareTo)
+                .orElse(Integer.MAX_VALUE);
+    }
+
+    private List<Long> performerCityIds(PerformerProfile performer, Map<Long, List<Long>> cityIdsByPerformer) {
+        if (performer == null) {
+            return List.of();
+        }
+        List<Long> result = new ArrayList<>();
+        if (performer.getCity() != null && performer.getCity().getId() != null) {
+            result.add(performer.getCity().getId());
+        }
+        result.addAll(cityIdsByPerformer.getOrDefault(performer.getId(), List.of()));
+        return result.stream().filter(Objects::nonNull).distinct().toList();
     }
 
     private PerformerAssignmentResponse acceptOfferInternal(Long offerId, Long performerId) {
@@ -425,6 +536,45 @@ public class PerformerAssignmentService {
         }
     }
 
+    private boolean createAssignmentIfEligible(Order order, Review review, LocalDate cutoffDate) {
+        if (order == null || review == null || review.getId() == null) {
+            return false;
+        }
+        Product product = product(review);
+        if (product == null || !product.isRequiresPerformer()) {
+            return false;
+        }
+        if (review.isPublish()) {
+            return false;
+        }
+        if (review.getPublishedDate() == null || review.getPublishedDate().isAfter(cutoffDate)) {
+            return false;
+        }
+        Filial filial = filial(order, review);
+        City city = filial != null ? filial.getCity() : null;
+        if (!rolloutService.isAllowed(product, city)) {
+            return false;
+        }
+        if (assignmentRepository.existsByReviewId(review.getId())) {
+            return false;
+        }
+
+        ReviewPerformerAssignment assignment = ReviewPerformerAssignment.builder()
+                .order(order)
+                .orderDetails(review.getOrderDetails())
+                .review(review)
+                .city(city)
+                .filial(filial)
+                .platform(platform(product, filial))
+                .status(PerformerAssignmentStatus.CREATED)
+                .payoutAmount(payoutAmount(review, product))
+                .clientApprovedTextSnapshot(review.getText())
+                .instruction(instruction(order, filial))
+                .build();
+        assignmentRepository.save(assignment);
+        return true;
+    }
+
     private void approvePayout(ReviewPerformerAssignment assignment) {
         if (assignment.getPerformer() == null || payoutRepository.existsByAssignmentId(assignment.getId())) {
             return;
@@ -485,6 +635,11 @@ public class PerformerAssignmentService {
         return details != null ? details.getProduct() : null;
     }
 
+    private Order order(Review review) {
+        OrderDetails details = review != null ? review.getOrderDetails() : null;
+        return details != null ? details.getOrder() : null;
+    }
+
     private Filial filial(Order order, Review review) {
         if (order != null && order.getFilial() != null) {
             return order.getFilial();
@@ -515,6 +670,17 @@ public class PerformerAssignmentService {
     }
 
     private BigDecimal payoutAmount(Review review, Product product) {
+        if (product != null && product.isRequiresPerformer()) {
+            BigDecimal percent = product.getPerformerRewardPercent() == null
+                    ? BigDecimal.ZERO
+                    : product.getPerformerRewardPercent();
+            BigDecimal price = product.getPrice() == null ? BigDecimal.ZERO : product.getPrice();
+            if (percent.compareTo(BigDecimal.ZERO) <= 0 || price.compareTo(BigDecimal.ZERO) <= 0) {
+                return defaultPayoutAmount;
+            }
+            return price.multiply(percent)
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        }
         if (review != null && review.getPrice() != null) {
             return review.getPrice();
         }
@@ -522,6 +688,10 @@ public class PerformerAssignmentService {
             return product.getPrice();
         }
         return defaultPayoutAmount;
+    }
+
+    private LocalDate assignmentCutoffDate() {
+        return LocalDate.now().plusDays(Math.max(0, assignmentCreateLeadDays));
     }
 
     private String instruction(Order order, Filial filial) {

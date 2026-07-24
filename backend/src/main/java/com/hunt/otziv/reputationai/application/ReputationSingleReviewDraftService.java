@@ -266,8 +266,9 @@ public class ReputationSingleReviewDraftService {
     }
 
     private PackEnvelope reportOnlyPack(DeepCompanyResearchReport report) {
-        List<String> reviewIdeas = reviewIdeasFromReport(report);
-        List<String> advantages = report.sections().stream()
+        boolean insufficientResearch = isInsufficientResearch(report);
+        List<String> reviewIdeas = insufficientResearch ? List.of() : reviewIdeasFromReport(report);
+        List<String> advantages = insufficientResearch ? List.of() : report.sections().stream()
                 .filter(section -> importantSection(section.title(), section.body()))
                 .map(section -> shortText(section.title() + ": " + section.body(), 240))
                 .filter(value -> !value.isBlank())
@@ -450,35 +451,40 @@ public class ReputationSingleReviewDraftService {
         LinkedHashSet<String> prices = new LinkedHashSet<>();
         LinkedHashSet<String> advantages = new LinkedHashSet<>();
         LinkedHashSet<String> ideas = new LinkedHashSet<>();
+        boolean insufficientResearch = isInsufficientResearch(report);
+        boolean legacyResearch = !hasCoverageCheck(report);
 
-        if (pack != null && pack.researchSnapshot() != null) {
+        if (!insufficientResearch && pack != null && pack.researchSnapshot() != null) {
             addBriefValues(products, pack.researchSnapshot().products(), 120);
             addBriefValues(advantages, pack.researchSnapshot().advantages(), 140);
         }
-        if (pack != null && pack.companyProfile() != null) {
+        if (!insufficientResearch && pack != null && pack.companyProfile() != null) {
             addBriefValues(services, pack.companyProfile().products(), 120);
             addBriefValues(advantages, pack.companyProfile().advantages(), 140);
         }
-        if (pack != null) {
+        if (!insufficientResearch && pack != null) {
             addBriefValues(advantages, pack.utp(), 160);
         }
 
-        List<String> reportIdeas = reviewIdeasFromReport(report);
-        reportIdeas.forEach(value -> addIdeaValue(ideas, value, 180));
-        reportIdeas.forEach(value -> addBriefValues(services, serviceHintsFromIdea(value), 80));
-
-        priceFactsFromReport(report).forEach(value -> addPriceFactValues(prices, value));
-        commercialFacts(report, "").forEach(value -> {
-            addPriceFactValues(prices, value);
-            if (!isCustomerFacingBriefFact(value)) {
-                return;
+        if (!insufficientResearch) {
+            List<String> reportIdeas = reviewIdeasFromReport(report);
+            reportIdeas.forEach(value -> addIdeaValue(ideas, value, 180));
+            if (legacyResearch) {
+                reportIdeas.forEach(value -> addBriefValues(services, serviceHintsFromIdea(value), 80));
             }
-            if (commercialDetail(value) && isConcreteCommercialItem(value)) {
-                addBriefValue(products, value, 180);
-            } else {
-                addBriefValue(services, value, 140);
-            }
-        });
+            priceFactsFromReport(report).forEach(value -> addPriceFactValues(prices, value));
+            commercialFacts(report, "").forEach(value -> {
+                addPriceFactValues(prices, value);
+                if (!isCustomerFacingBriefFact(value)) {
+                    return;
+                }
+                if (commercialDetail(value) && isConcreteCommercialItem(value)) {
+                    addBriefValue(products, value, 180);
+                } else {
+                    addBriefValue(services, value, 140);
+                }
+            });
+        }
 
         if (requestTargets != null) {
             for (ReputationBatchReviewDraftTarget target : requestTargets) {
@@ -490,29 +496,29 @@ public class ReputationSingleReviewDraftService {
             }
         }
 
-        List<String> travelFromCenter = reportFactsByKeywords(
+        List<String> travelFromCenter = insufficientResearch ? List.of() : reportFactsByKeywords(
                 report,
                 List.of("от центра", "ехать", "минут", "дорог", "останов", "метро", "район"),
                 8
         );
-        List<String> employees = reportFactsByKeywords(
+        List<String> employees = insufficientResearch ? List.of() : reportFactsByKeywords(
                 report,
                 List.of("сотрудник", "мастер", "менеджер", "администратор", "специалист"),
                 10
         ).stream()
                 .filter(value -> !value.toLowerCase(Locale.ROOT).replace('ё', 'е').contains("не раскрыт"))
                 .toList();
-        List<String> amenities = reportFactsByKeywords(
+        List<String> amenities = insufficientResearch ? List.of() : reportFactsByKeywords(
                 report,
                 List.of("зал ожид", "удобств", "кофе", "чай", "диван", "wi-fi", "wifi", "туалет", "детская", "комната"),
                 12
         );
-        List<String> parking = reportFactsByKeywords(
+        List<String> parking = insufficientResearch ? List.of() : reportFactsByKeywords(
                 report,
                 List.of("парков", "стоян"),
                 8
         );
-        List<String> interestingFacts = reportFactsByKeywords(
+        List<String> interestingFacts = insufficientResearch ? List.of() : reportFactsByKeywords(
                 report,
                 List.of("филиал", "вход", "этаж", "запись", "режим", "график", "рядом", "удобно", "наличии"),
                 16
@@ -529,22 +535,27 @@ public class ReputationSingleReviewDraftService {
         String category = firstNonBlank(
                 pack == null || pack.researchSnapshot() == null ? "" : pack.researchSnapshot().subCategory(),
                 pack == null || pack.researchSnapshot() == null ? "" : pack.researchSnapshot().category(),
-                pack == null || pack.companyProfile() == null ? "" : pack.companyProfile().category()
+                pack == null || pack.companyProfile() == null ? "" : pack.companyProfile().category(),
+                confirmedFactValue(report, "категория"),
+                confirmedFactValue(report, "подкатегория")
         );
         String businessType = businessType(
                 category,
                 services,
                 products,
-                advantages,
-                ideas,
-                report
+                report,
+                legacyResearch
         );
+        String researchStatus = researchStatus(report);
+        List<String> confirmedFacts = confirmedReviewFacts(report);
 
         return new ReviewGenerationBrief(
                 company,
                 city,
                 category,
                 businessType,
+                researchStatus,
+                confirmedFacts,
                 services.stream().limit(18).toList(),
                 products.stream().limit(18).toList(),
                 prices.stream().limit(12).toList(),
@@ -563,21 +574,18 @@ public class ReputationSingleReviewDraftService {
             String category,
             LinkedHashSet<String> services,
             LinkedHashSet<String> products,
-            LinkedHashSet<String> advantages,
-            LinkedHashSet<String> ideas,
-            DeepCompanyResearchReport report
+            DeepCompanyResearchReport report,
+            boolean includeLegacyContext
     ) {
         StringBuilder builder = new StringBuilder();
         builder.append(category == null ? "" : category).append(' ');
-        List.of(services, products, advantages, ideas).forEach(values -> {
+        List.of(services, products).forEach(values -> {
             if (values != null) {
                 values.stream().limit(24).forEach(value -> builder.append(value).append(' '));
             }
         });
-        if (report != null) {
-            builder.append(report.companyName()).append(' ')
-                    .append(report.city()).append(' ')
-                    .append(shortText(report.reportMarkdown(), 1200));
+        if (includeLegacyContext && report != null) {
+            builder.append(shortText(report.reportMarkdown(), 1200));
         }
         String text = builder.toString().toLowerCase(Locale.ROOT).replace('ё', 'е');
         if (containsAny(text, List.of(
@@ -585,6 +593,12 @@ public class ReputationSingleReviewDraftService {
                 "детский праздник", "хоррор", "прятки", "нерф", "развлеч"
         ))) {
             return "entertainment";
+        }
+        if (containsAny(text, List.of(
+                "спецтехник", "экскаватор", "погрузчик", "бульдозер", "автокран",
+                "дорожн техника", "строительн техника", "коммунальн техника"
+        ))) {
+            return "equipment_sales";
         }
         if (containsAny(text, List.of(
                 "автосервис", "авто-сервис", "ремонт авто", "ремонт автомобил",
@@ -664,6 +678,10 @@ public class ReputationSingleReviewDraftService {
                     "выбор товара", "консультация", "наличие", "доставка",
                     "самовывоз", "оплата", "возврат или гарантия"
             );
+            case "equipment_sales" -> List.of(
+                    "выбор техники", "консультация", "наличие и комплектация",
+                    "документы", "условия поставки", "доставка", "сервисный вопрос"
+            );
             case "b2b" -> List.of(
                     "поставка", "согласование", "договор", "документы",
                     "сроки", "монтаж", "повторный заказ"
@@ -716,6 +734,10 @@ public class ReputationSingleReviewDraftService {
             case "shop" -> {
                 addConfirm(values, "конкретный товар, бренд или модель");
                 addConfirm(values, "наличие, цену, доставку, возврат или гарантию");
+            }
+            case "equipment_sales" -> {
+                addConfirm(values, "конкретный вид, марку и модель техники");
+                addConfirm(values, "комплектацию, наличие, документы, цену и условия поставки");
             }
             case "b2b" -> {
                 addConfirm(values, "сроки, объем работ или поставки");
@@ -814,8 +836,11 @@ public class ReputationSingleReviewDraftService {
         for (int index = 0; index < targets.size(); index++) {
             ReputationBatchReviewDraftTarget target = targets.get(index);
             String reportIdea = pick(randomizedIdeas, index);
-            String theme = firstNonBlank(
+            String theme = "insufficient_data".equals(brief.researchStatus())
+                    ? firstNonBlank(safeSlotTheme(target.idea()), "живой отзыв по фактам заказа")
+                    : firstNonBlank(
                     safeSlotTheme(reportIdea),
+                    safeSlotTheme(target.idea()),
                     "живой отзыв по фактам заказа"
             );
             List<String> themeServiceHints = serviceHintsFromIdea(theme);
@@ -1310,6 +1335,16 @@ public class ReputationSingleReviewDraftService {
                 || lower.contains("http")
                 || lower.contains("не найден")
                 || lower.contains("не подтвержден")
+                || lower.contains("не подтверждено")
+                || lower.contains("не подтверждён")
+                || lower.contains("не подтверждено")
+                || lower.contains("предположительно")
+                || lower.contains("предполагается")
+                || lower.contains("гипотез")
+                || lower.contains("не раскрыт")
+                || lower.contains("не указан")
+                || lower.contains("не установ")
+                || lower.contains("отсутствует")
                 || lower.contains("после подтвержд")
                 || lower.contains("подтвердить ")
                 || lower.contains("подтвердить:")
@@ -3694,6 +3729,9 @@ public class ReputationSingleReviewDraftService {
     }
 
     private List<String> reviewIdeasFromReport(DeepCompanyResearchReport report) {
+        if (isInsufficientResearch(report)) {
+            return List.of();
+        }
         List<String> explicitIdeas = report.reviewIdeas().stream()
                 .filter(value -> !value.isBlank())
                 .filter(value -> !isWeakTheme(value))
@@ -3709,6 +3747,66 @@ public class ReputationSingleReviewDraftService {
                 .filter(value -> !isWeakTheme(value))
                 .distinct()
                 .limit(30)
+                .toList();
+    }
+
+    private boolean isInsufficientResearch(DeepCompanyResearchReport report) {
+        return "insufficient_data".equals(researchStatus(report));
+    }
+
+    private boolean hasCoverageCheck(DeepCompanyResearchReport report) {
+        return report != null
+                && report.qualityChecks() != null
+                && report.qualityChecks().stream().anyMatch(check -> "coverage".equals(check.key()));
+    }
+
+    private String researchStatus(DeepCompanyResearchReport report) {
+        if (report == null || report.qualityChecks() == null) {
+            return "legacy";
+        }
+        return report.qualityChecks().stream()
+                .filter(check -> "coverage".equals(check.key()))
+                .map(check -> {
+                    String detail = check.detail() == null ? "" : check.detail().toLowerCase(Locale.ROOT);
+                    if (detail.contains("insufficient_data") || "fail".equals(check.status())) {
+                        return "insufficient_data";
+                    }
+                    if (detail.contains("complete") && "pass".equals(check.status())) {
+                        return "complete";
+                    }
+                    return "partial";
+                })
+                .findFirst()
+                .orElse("legacy");
+    }
+
+    private String confirmedFactValue(DeepCompanyResearchReport report, String labelPart) {
+        if (report == null || report.factSnapshot() == null || labelPart == null) {
+            return "";
+        }
+        String expected = labelPart.toLowerCase(Locale.ROOT);
+        return report.factSnapshot().confirmedFacts().stream()
+                .filter(item -> item.label().toLowerCase(Locale.ROOT).contains(expected))
+                .map(DeepCompanyResearchReport.FactItem::value)
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElse("");
+    }
+
+    private List<String> confirmedReviewFacts(DeepCompanyResearchReport report) {
+        if (report == null || report.factSnapshot() == null) {
+            return List.of();
+        }
+        return report.factSnapshot().confirmedFacts().stream()
+                .filter(item -> !item.value().isBlank())
+                .filter(item -> !"low".equalsIgnoreCase(item.confidence()))
+                .filter(item -> !containsAny(item.label().toLowerCase(Locale.ROOT), List.of(
+                        "компания", "источник", "коммерческие детали"
+                )))
+                .map(item -> item.label() + ": " + item.value())
+                .filter(this::isCustomerFacingBriefFact)
+                .distinct()
+                .limit(24)
                 .toList();
     }
 

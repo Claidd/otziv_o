@@ -1,12 +1,15 @@
 package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
+import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -26,12 +29,16 @@ import static org.mockito.Mockito.when;
 class ReviewAccountWalkScheduleServiceTest {
 
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-07-16T04:00:00Z"), BUSINESS_ZONE);
 
     @Mock
     private ReviewRepository reviewRepository;
 
     @Mock
     private AppSettingService appSettingService;
+
+    @Mock
+    private BusinessAuditService businessAuditService;
 
     @Test
     void counterTwoIsWalkedAndCounterOneIsNotWalked() {
@@ -61,10 +68,10 @@ class ReviewAccountWalkScheduleServiceTest {
     void walkedToUnwalkedShiftsOnlyFollowingReviewsThatBecomeTooClose() {
         ReviewAccountWalkScheduleService service = service();
         OrderDetails details = details(100L);
-        Review previous = review(1L, details, LocalDate.of(2026, 5, 30), false);
-        Review trigger = review(2L, details, LocalDate.of(2026, 6, 1), false);
-        Review closeFollowing = review(3L, details, LocalDate.of(2026, 6, 3), false);
-        Review farFollowing = review(4L, details, LocalDate.of(2026, 6, 8), false);
+        Review previous = review(1L, details, LocalDate.of(2026, 7, 14), false);
+        Review trigger = review(2L, details, LocalDate.of(2026, 7, 16), false);
+        Review closeFollowing = review(3L, details, LocalDate.of(2026, 7, 18), false);
+        Review farFollowing = review(4L, details, LocalDate.of(2026, 7, 25), false);
         trigger.setBot(bot(1));
 
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
@@ -72,21 +79,23 @@ class ReviewAccountWalkScheduleServiceTest {
         when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(100L))
                 .thenReturn(List.of(previous, trigger, closeFollowing, farFollowing));
 
-        service.synchronizeAfterAccountChange(trigger, true);
+        service.synchronizeAfterAccountChange(trigger);
 
         assertFalse(trigger.isVigul());
-        assertEquals(2, trigger.getAccountWalkDelayDays());
-        assertEquals(2, closeFollowing.getAccountWalkDelayDays());
+        assertEquals(3, trigger.getAccountWalkDelayDays());
+        assertEquals(3, closeFollowing.getAccountWalkDelayDays());
         assertEquals(0, farFollowing.getAccountWalkDelayDays());
-        assertEquals(LocalDate.of(2026, 5, 30), previous.getPublishedDate());
-        assertEquals(LocalDate.of(2026, 6, 3), trigger.getPublishedDate());
-        assertEquals(LocalDate.of(2026, 6, 5), closeFollowing.getPublishedDate());
-        assertEquals(LocalDate.of(2026, 6, 8), farFollowing.getPublishedDate());
+        assertEquals(LocalDate.of(2026, 7, 14), previous.getPublishedDate());
+        assertEquals(LocalDate.of(2026, 7, 19), trigger.getPublishedDate());
+        assertEquals(LocalDate.of(2026, 7, 21), closeFollowing.getPublishedDate());
+        assertEquals(LocalDate.of(2026, 7, 25), farFollowing.getPublishedDate());
+        assertEquals(11L, trigger.getAccountWalkDelayBotId());
+        assertEquals(LocalDate.of(2026, 7, 19), trigger.getAccountWalkNotBefore());
         verify(reviewRepository).saveAll(List.of(previous, trigger, closeFollowing, farFollowing));
     }
 
     @Test
-    void unwalkedToWalkedRemovesStoredDelayWhereSpacingAllows() {
+    void completedWalkKeepsReservedPublicationDates() {
         ReviewAccountWalkScheduleService service = service();
         OrderDetails details = details(200L);
         LocalDate restoredTriggerDate = futureBusinessDate(10);
@@ -96,23 +105,23 @@ class ReviewAccountWalkScheduleServiceTest {
         Review untouched = review(12L, details, restoredFollowingDate.plusDays(5), false);
         trigger.setAccountWalkDelayDays(2);
         following.setAccountWalkDelayDays(2);
+        trigger.setAccountWalkDelayBotId(11L);
+        trigger.setAccountWalkNotBefore(restoredTriggerDate.plusDays(2));
         trigger.setBot(bot(3));
 
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
-        when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(200L))
-                .thenReturn(List.of(trigger, following, untouched));
-
-        service.synchronizeAfterAccountChange(trigger, false);
+        service.synchronizeAfterAccountChange(trigger);
 
         assertTrue(trigger.isVigul());
         assertEquals(0, trigger.getAccountWalkDelayDays());
-        assertEquals(0, following.getAccountWalkDelayDays());
+        assertEquals(2, following.getAccountWalkDelayDays());
         assertEquals(0, untouched.getAccountWalkDelayDays());
-        assertEquals(restoredTriggerDate, trigger.getPublishedDate());
-        assertEquals(restoredFollowingDate, following.getPublishedDate());
+        assertEquals(restoredTriggerDate.plusDays(2), trigger.getPublishedDate());
+        assertEquals(restoredFollowingDate.plusDays(2), following.getPublishedDate());
         assertEquals(restoredFollowingDate.plusDays(5), untouched.getPublishedDate());
-        verify(reviewRepository).saveAll(List.of(trigger, following, untouched));
+        assertEquals(null, trigger.getAccountWalkDelayBotId());
+        assertEquals(null, trigger.getAccountWalkNotBefore());
+        verify(reviewRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -125,16 +134,12 @@ class ReviewAccountWalkScheduleServiceTest {
         trigger.setBot(bot(6));
 
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
-        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
-        when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(250L))
-                .thenReturn(List.of(trigger));
-
-        service.synchronizeAfterAccountChange(trigger, false);
+        service.synchronizeAfterAccountChange(trigger);
 
         assertTrue(trigger.isVigul());
         assertEquals(0, trigger.getAccountWalkDelayDays());
         assertEquals(currentFutureDate, trigger.getPublishedDate());
-        verify(reviewRepository).saveAll(List.of(trigger));
+        verify(reviewRepository, never()).saveAll(anyList());
     }
 
     @Test
@@ -146,7 +151,7 @@ class ReviewAccountWalkScheduleServiceTest {
 
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
 
-        service.synchronizeAfterAccountChange(trigger, true);
+        service.synchronizeAfterAccountChange(trigger);
 
         assertTrue(trigger.isVigul());
         assertEquals(0, trigger.getAccountWalkDelayDays());
@@ -156,11 +161,11 @@ class ReviewAccountWalkScheduleServiceTest {
     }
 
     @Test
-    void forcedUnwalkedAssignmentFromPublicationShiftsDatesEvenWhenOldAccountWasUnwalked() {
+    void everyUnwalkedAssignmentShiftsDatesWithoutUiSourceFlag() {
         ReviewAccountWalkScheduleService service = service();
         OrderDetails details = details(400L);
-        Review trigger = review(30L, details, LocalDate.of(2026, 7, 6), false);
-        Review following = review(31L, details, LocalDate.of(2026, 7, 8), false);
+        Review trigger = review(30L, details, LocalDate.of(2026, 7, 16), false);
+        Review following = review(31L, details, LocalDate.of(2026, 7, 18), false);
         trigger.setBot(bot(0));
 
         when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
@@ -168,18 +173,101 @@ class ReviewAccountWalkScheduleServiceTest {
         when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(400L))
                 .thenReturn(List.of(trigger, following));
 
-        service.synchronizeAfterAccountChange(trigger, false, true);
+        service.synchronizeAfterAccountChange(trigger);
 
         assertFalse(trigger.isVigul());
-        assertEquals(2, trigger.getAccountWalkDelayDays());
-        assertEquals(2, following.getAccountWalkDelayDays());
-        assertEquals(LocalDate.of(2026, 7, 8), trigger.getPublishedDate());
-        assertEquals(LocalDate.of(2026, 7, 10), following.getPublishedDate());
+        assertEquals(3, trigger.getAccountWalkDelayDays());
+        assertEquals(3, following.getAccountWalkDelayDays());
+        assertEquals(LocalDate.of(2026, 7, 19), trigger.getPublishedDate());
+        assertEquals(LocalDate.of(2026, 7, 21), following.getPublishedDate());
         verify(reviewRepository).saveAll(List.of(trigger, following));
     }
 
+    @Test
+    void repeatedUnwalkedAssignmentDoesNotApplyWalkDelayTwice() {
+        ReviewAccountWalkScheduleService service = service();
+        OrderDetails details = details(500L);
+        Review trigger = review(40L, details, LocalDate.of(2026, 7, 19), false);
+        trigger.setAccountWalkDelayDays(3);
+        trigger.setBot(bot(0));
+        trigger.setAccountWalkDelayBotId(trigger.getBot().getId());
+        trigger.setAccountWalkNotBefore(LocalDate.of(2026, 7, 19));
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
+
+        service.synchronizeAfterAccountChange(trigger);
+
+        assertFalse(trigger.isVigul());
+        assertEquals(3, trigger.getAccountWalkDelayDays());
+        assertEquals(LocalDate.of(2026, 7, 19), trigger.getPublishedDate());
+        verify(reviewRepository, never()).findAllByOrderIdForAccountWalkSchedule(500L);
+        verify(reviewRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void anotherUnwalkedAccountOnSameDayDoesNotStackAnotherDelay() {
+        ReviewAccountWalkScheduleService service = service();
+        OrderDetails details = details(600L);
+        Review trigger = review(50L, details, LocalDate.of(2026, 7, 19), false);
+        trigger.setBot(bot(1));
+        trigger.setAccountWalkDelayBotId(999L);
+        trigger.setAccountWalkNotBefore(LocalDate.of(2026, 7, 19));
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
+
+        service.synchronizeAfterAccountChange(trigger);
+
+        assertEquals(LocalDate.of(2026, 7, 19), trigger.getPublishedDate());
+        assertEquals(trigger.getBot().getId(), trigger.getAccountWalkDelayBotId());
+        assertEquals(LocalDate.of(2026, 7, 19), trigger.getAccountWalkNotBefore());
+        verify(reviewRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void laterReplacementOnlyAddsMissingTimeForNewAccount() {
+        Clock nextDayClock = Clock.fixed(Instant.parse("2026-07-21T04:00:00Z"), BUSINESS_ZONE);
+        ReviewAccountWalkScheduleService service = new ReviewAccountWalkScheduleService(
+                reviewRepository,
+                appSettingService,
+                businessAuditService,
+                nextDayClock
+        );
+        OrderDetails details = details(700L);
+        Review trigger = review(60L, details, LocalDate.of(2026, 7, 22), false);
+        trigger.setBot(bot(0));
+        trigger.setAccountWalkDelayBotId(999L);
+        trigger.setAccountWalkNotBefore(LocalDate.of(2026, 7, 22));
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS, 2)).thenReturn(2);
+        when(reviewRepository.findAllByOrderIdForAccountWalkSchedule(700L)).thenReturn(List.of(trigger));
+
+        service.synchronizeAfterAccountChange(trigger);
+
+        assertEquals(LocalDate.of(2026, 7, 23), trigger.getPublishedDate());
+        assertEquals(1, trigger.getAccountWalkDelayDays());
+        assertEquals(LocalDate.of(2026, 7, 23), trigger.getAccountWalkNotBefore());
+        verify(reviewRepository).saveAll(List.of(trigger));
+    }
+
+    @Test
+    void manualDateGuardUsesStoredWindowInsteadOfLegacyAccumulatedDays() {
+        ReviewAccountWalkScheduleService service = service();
+        Review review = review(70L, details(800L), LocalDate.of(2026, 7, 19), false);
+        review.setBot(bot(0));
+        review.setAccountWalkDelayDays(10);
+        review.setAccountWalkDelayBotId(review.getBot().getId());
+        review.setAccountWalkNotBefore(LocalDate.of(2026, 7, 19));
+
+        when(appSettingService.getInt(AppSettingService.REVIEW_ACCOUNT_WALKED_COUNTER_THRESHOLD, 2)).thenReturn(3);
+
+        assertEquals(LocalDate.of(2026, 7, 19), service.minimumPublicationDateForCurrentAccount(review));
+    }
+
     private ReviewAccountWalkScheduleService service() {
-        return new ReviewAccountWalkScheduleService(reviewRepository, appSettingService);
+        return new ReviewAccountWalkScheduleService(reviewRepository, appSettingService, businessAuditService, CLOCK);
     }
 
     private Review review(Long id, OrderDetails details, LocalDate publishedDate, boolean publish) {

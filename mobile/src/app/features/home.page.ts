@@ -17,6 +17,8 @@ import {
   ScoreUser,
   TeamMember,
   TeamResponse,
+  WorkerNetworkViolationDetail,
+  WorkerNetworkViolationStats,
   ApiService
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
@@ -719,6 +721,32 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                                 <div><dt>{{ row.label }}</dt><dd>{{ row.value }}</dd></div>
                               }
                             </dl>
+                            @if (section.key === 'workers' && networkViolations(member); as violations) {
+                              @if (violations.visible && violations.episodeCount > 0) {
+                                <details class="network-violations" [class.critical]="violations.severity === 'CRITICAL'">
+                                  <summary>
+                                    <span class="material-icons-sharp">wifi_off</span>
+                                    <strong>Нарушения сети: {{ violations.episodeCount }}</strong>
+                                  </summary>
+                                  <p>
+                                    {{ violations.attemptCount }} попыток
+                                    @if (teamProgressMode() === 'month') {
+                                      · {{ violations.daysWithViolations }} дн. с нарушениями
+                                    }
+                                  </p>
+                                  @for (detail of violations.details; track detail.firstSeenAt + detail.reason + detail.scope) {
+                                    <article>
+                                      <strong>{{ networkViolationReason(detail.reason) }}</strong>
+                                      <small>{{ networkViolationTime(detail) }} · {{ networkViolationScope(detail.scope) }}</small>
+                                      @if (detail.provider) {
+                                        <small>{{ detail.provider }}</small>
+                                      }
+                                      <span>{{ detail.attemptCount }} попыток · {{ detail.blocked ? 'заблокировано' : 'режим аудита' }}</span>
+                                    </article>
+                                  }
+                                </details>
+                              }
+                            }
                           </article>
                         } @empty {
                           <p class="empty-note">Нет данных.</p>
@@ -2070,6 +2098,48 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       background: var(--otziv-white);
     }
 
+    .network-violations {
+      grid-column: 1 / -1;
+      border: 1px solid rgba(235, 178, 58, 0.42);
+      border-radius: 0.78rem;
+      padding: 0.5rem;
+      background: rgba(255, 249, 232, 0.84);
+    }
+
+    .network-violations.critical {
+      border-color: rgba(232, 48, 103, 0.42);
+      background: rgba(255, 240, 244, 0.86);
+    }
+
+    .network-violations summary {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: #9a6809;
+      cursor: pointer;
+      list-style: none;
+    }
+
+    .network-violations.critical summary { color: var(--otziv-danger); }
+    .network-violations summary::-webkit-details-marker { display: none; }
+    .network-violations summary .material-icons-sharp { font-size: 1rem; }
+    .network-violations summary strong { font-size: 0.66rem; }
+    .network-violations > p { margin: 0.32rem 0 0; color: var(--otziv-info); font-size: 0.59rem; font-weight: 850; }
+    .network-violations article { display: grid; gap: 0.12rem; margin-top: 0.42rem; border-top: 1px solid rgba(103, 116, 131, 0.14); padding-top: 0.42rem; }
+    .network-violations article strong { font-size: 0.64rem; }
+    .network-violations article small,
+    .network-violations article span { color: var(--otziv-info); font-size: 0.57rem; font-weight: 800; white-space: normal; }
+
+    :host-context(body.otziv-dark-theme) .network-violations {
+      border-color: rgba(215, 189, 120, 0.3);
+      background: linear-gradient(155deg, rgba(48, 42, 28, 0.96) 0%, rgba(32, 37, 40, 0.98) 100%);
+    }
+
+    :host-context(body.otziv-dark-theme) .network-violations.critical {
+      border-color: rgba(255, 91, 143, 0.32);
+      background: linear-gradient(155deg, rgba(50, 32, 43, 0.96) 0%, rgba(32, 37, 40, 0.98) 100%);
+    }
+
     dd {
       margin: 0.12rem 0 0;
       color: var(--otziv-dark);
@@ -2954,6 +3024,39 @@ export class HomePage implements OnInit, OnDestroy {
       : member.dailyProgress ?? null;
   }
 
+  networkViolations(member: TeamMember): WorkerNetworkViolationStats | null {
+    return this.teamProgressMode() === 'month'
+      ? member.monthlyNetworkViolations ?? null
+      : member.dailyNetworkViolations ?? null;
+  }
+
+  networkViolationReason(reason: string): string {
+    switch (reason) {
+      case 'NON_CELLULAR_NETWORK': return 'Домашняя сеть или Wi-Fi';
+      case 'VPN_PROXY_OR_DATACENTER': return 'VPN, прокси или анонимная сеть';
+      case 'DESKTOP_OR_UNKNOWN_DEVICE': return 'Компьютер или неподдерживаемое устройство';
+      case 'UNKNOWN_NETWORK': return 'Не удалось определить сеть';
+      default: return 'Нарушение требований подключения';
+    }
+  }
+
+  networkViolationScope(scope: string): string {
+    switch ((scope || '').toLowerCase()) {
+      case 'nagul': return 'Выгул';
+      case 'publish': return 'Публикация';
+      case 'recovery': return 'Восстановление';
+      case 'bad': return 'Плохие';
+      case 'review': return 'Отзывы';
+      default: return 'Раздел специалиста';
+    }
+  }
+
+  networkViolationTime(detail: WorkerNetworkViolationDetail): string {
+    const start = this.formatNetworkDateTime(detail.firstSeenAt);
+    const end = this.formatNetworkDateTime(detail.lastSeenAt);
+    return !end || start === end ? start : `${start}–${end.split(' ').at(-1)}`;
+  }
+
   teamProgressLabel(): string {
     return this.teamProgressMode() === 'month' ? 'Месяц' : 'Сегодня';
   }
@@ -3084,6 +3187,13 @@ export class HomePage implements OnInit, OnDestroy {
         rows.push({ label: 'В работе', value: this.count((member.newOrder || 0) + (member.inCorrect || 0) + (member.intVigul || 0) + (member.publish || 0)) });
       }
       this.appendProgressRows(rows, progress);
+      const violations = this.networkViolations(member);
+      if (violations?.visible && violations.episodeCount > 0) {
+        rows.push({
+          label: violations.severity === 'CRITICAL' ? 'Сеть · критично' : 'Нарушения сети',
+          value: `${violations.episodeCount} / ${violations.attemptCount}`
+        });
+      }
       return rows;
     }
 
@@ -3476,6 +3586,21 @@ export class HomePage implements OnInit, OnDestroy {
 
   private formatDate(value: string): string {
     return value ? value.split('-').reverse().join('.') : '-';
+  }
+
+  private formatNetworkDateTime(value: string | null | undefined): string {
+    if (!value) {
+      return '';
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString('ru-RU', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
   }
 
   private defaultPeriodFromIso(dateIso: string): string {

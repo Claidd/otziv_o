@@ -88,6 +88,40 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     Optional<Order> findByIdForMutation(@Param("orderId") Long orderId);
 
     @Query("""
+        SELECT COUNT(o.id)
+        FROM Order o
+        JOIN o.status s
+        WHERE o.manager = :manager
+          AND o.complete = true
+          AND o.payDay IS NOT NULL
+          AND s.title IN :paymentCycleStatuses
+    """)
+    long countPaymentIntegrityIssuesByManager(
+            @Param("manager") Manager manager,
+            @Param("paymentCycleStatuses") Collection<String> paymentCycleStatuses
+    );
+
+    @Query("""
+        SELECT DISTINCT o
+        FROM Order o
+        JOIN FETCH o.status s
+        LEFT JOIN FETCH o.company c
+        LEFT JOIN FETCH o.filial f
+        LEFT JOIN FETCH o.manager m
+        LEFT JOIN FETCH m.user
+        WHERE o.manager = :manager
+          AND o.complete = true
+          AND o.payDay IS NOT NULL
+          AND s.title IN :paymentCycleStatuses
+        ORDER BY o.statusChangedAt DESC, o.id DESC
+    """)
+    List<Order> findPaymentIntegrityIssuesByManager(
+            @Param("manager") Manager manager,
+            @Param("paymentCycleStatuses") Collection<String> paymentCycleStatuses,
+            Pageable pageable
+    );
+
+    @Query("""
         SELECT o.id AS id,
                c.id AS companyId,
                o.statusChangedAt AS statusChangedAt
@@ -324,7 +358,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                 ELSE false
             END,
             c.groupId,
-            o.statusChangedAt
+            o.statusChangedAt,
+            o.waitingForClientChangedAt
         FROM Order o
         LEFT JOIN o.details d
         LEFT JOIN o.status s

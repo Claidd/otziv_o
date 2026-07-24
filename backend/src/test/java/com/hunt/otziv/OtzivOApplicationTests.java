@@ -140,11 +140,19 @@ class OtzivOApplicationTests {
 		jdbcTemplate.update("""
 			INSERT INTO reviews (review_text, review_publish, review_publish_date, review_vigul, review_worker, review_bot)
 			VALUES ('worker report review', 0, ?, 0, ?, ?)
-		""", reportDate, workerId, botId);
+			""", reportDate, workerId, botId);
+		jdbcTemplate.update("""
+			INSERT INTO reviews (review_text, review_publish, review_publish_date, review_vigul, review_worker, review_bot)
+			VALUES ('worker publish report review', 0, ?, 1, ?, ?)
+			""", reportDate, workerId, botId);
 		jdbcTemplate.update("""
 			INSERT INTO reviews (review_text, review_publish, review_publish_date, review_vigul, review_order_details, review_bot)
 			VALUES ('manager report review', 0, ?, 0, ?, ?)
-		""", reportDate, detailId, botId);
+			""", reportDate, detailId, botId);
+		jdbcTemplate.update("""
+			INSERT INTO reviews (review_text, review_publish, review_publish_date, review_vigul, review_order_details, review_bot)
+			VALUES ('manager publish report review', 0, ?, 1, ?, ?)
+			""", reportDate, detailId, botId);
 
 		var result = reviewService.getAllPublishAndVigul(firstDayOfMonth, reportDate);
 

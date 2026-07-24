@@ -44,3 +44,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Android release signing. Back up these files outside the repository.
+/android/keystore.properties
+/android/*.jks
+/android/*.keystore

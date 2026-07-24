@@ -10,12 +10,14 @@ import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
 import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
 import com.hunt.otziv.payments.service.PaymentLinkService;
+import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryGateService;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
@@ -31,6 +33,7 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     private final CommonBillingService commonBillingService;
     private final ReviewRecoveryGateService recoveryGateService;
     private final ObjectProvider<PaymentLinkService> paymentLinkServiceProvider;
+    private final OrderPaymentIntegrityService orderPaymentIntegrityService;
 
     private static final String STATUS_PUBLIC = "Опубликовано";
     public static final String STATUS_TO_PAY = "Выставлен счет";
@@ -77,17 +80,26 @@ public class OrderStatusCheckerServiceImpl implements OrderStatusCheckerService 
     }
 
     @Override
+    @Transactional
     public void checkAndMarkOrderCompleted(Order order) throws Exception {
         if (order == null || order.getId() == null) {
             return;
         }
-        if (order.getAmount() <= order.getCounter() && !recoveryGateService.hasActiveRecoveryTasks(order.getId())) {
-            String newStatus = handlePublicStatus(order);
-            log.info("Счётчик достиг лимита. Статус заказа {} изменён на {}", order.getId(), newStatus);
-        } else if (order.getAmount() <= order.getCounter()) {
-            log.info("Счётчик заказа {} достиг лимита, но есть активные восстановления. Статус не изменён", order.getId());
+        Order currentOrder = orderRepository.findByIdForCounterUpdate(order.getId()).orElse(order);
+        if (orderPaymentIntegrityService.hasSettledPaymentEvidence(currentOrder)) {
+            log.warn(
+                    "Повторный платежный цикл предотвращен: заказ {} уже оплачен, статус не изменен",
+                    currentOrder.getId()
+            );
+            return;
+        }
+        if (currentOrder.getAmount() <= currentOrder.getCounter() && !recoveryGateService.hasActiveRecoveryTasks(currentOrder.getId())) {
+            String newStatus = handlePublicStatus(currentOrder);
+            log.info("Счётчик достиг лимита. Статус заказа {} изменён на {}", currentOrder.getId(), newStatus);
+        } else if (currentOrder.getAmount() <= currentOrder.getCounter()) {
+            log.info("Счётчик заказа {} достиг лимита, но есть активные восстановления. Статус не изменён", currentOrder.getId());
         } else {
-            log.info("Счётчик заказа {} не достиг лимита. Статус не изменён", order.getId());
+            log.info("Счётчик заказа {} не достиг лимита. Статус не изменён", currentOrder.getId());
         }
     }
 

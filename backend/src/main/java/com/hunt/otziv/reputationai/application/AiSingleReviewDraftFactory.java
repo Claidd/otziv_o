@@ -26,7 +26,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -390,6 +389,7 @@ public class AiSingleReviewDraftFactory {
     private final ObjectMapper objectMapper;
     private final ReviewSafetyService reviewSafetyService;
     private final ReputationAiProperties properties;
+    private final ReputationAiProviderSelectionService providerSelectionService;
 
     public boolean isOpenAiAvailable() {
         return openAiProvider.isAvailable();
@@ -751,8 +751,12 @@ public class AiSingleReviewDraftFactory {
                 Все тексты должны отличаться: тема, первое предложение, длина, тон, порядок мыслей, бытовая деталь и финал.
                 Не делай серию по шаблону "обратился/заехал - сделали - объяснили - итог".
                 Не вставляй название компании в draft вообще. Адрес используй только если карточка прямо про дорогу, вход или локацию.
-                Подтверждённые факты бери только из reviewGenerationBrief и конкретного reviewSlot.
-                Используй reviewGenerationBrief.businessType как мягкую отраслевую подсказку. Если theme/mustCover/mayCover задают конкретную ситуацию, следуй им.
+                Подтверждёнными считай только reviewGenerationBrief.confirmedFacts и конкретные данные заказа в reviewSlot.
+                services/products/prices/advantages/reviewIdeas — рабочие подсказки, а не доказательство реального клиентского опыта.
+                Если reviewGenerationBrief.researchStatus="insufficient_data", не используй идеи отчёта и не придумывай отрасль,
+                услуги, товары, марки, модели, условия или сценарий. Опирайся только на confirmedFacts и явный контекст карточки заказа.
+                Используй reviewGenerationBrief.businessType только как мягкую языковую подсказку, но не как факт.
+                Если theme/mustCover/mayCover задают конкретную ситуацию, используй её лишь когда она явно пришла из карточки заказа.
                 У каждой карточки есть theme, mustCover и mayCover. Draft этой карточки должен естественно покрыть тему и не обязан перечислять всё.
                 Если в mustCover/mayCover есть конкретное название квеста, товара, пакета, услуги, длительность или стоимость, используй это только когда оно подходит теме карточки.
                 Если используешь точную цену из входа, добавь её в clientMustConfirm/safetyNotes как деталь для проверки перед публикацией.
@@ -830,6 +834,8 @@ public class AiSingleReviewDraftFactory {
         briefPayload.put("city", brief.city());
         briefPayload.put("category", brief.category());
         briefPayload.put("businessType", brief.businessType());
+        briefPayload.put("researchStatus", brief.researchStatus());
+        briefPayload.put("confirmedFacts", brief.confirmedFacts());
         briefPayload.put("services", brief.services());
         briefPayload.put("products", brief.products());
         briefPayload.put("prices", brief.prices());
@@ -871,6 +877,7 @@ public class AiSingleReviewDraftFactory {
                 "Если используешь точную цену из входа, добавь её в clientMustConfirm и safetyNotes: цена должна быть актуальна на момент публикации.",
                 "Не выдумывай точные имена, возраст, количество участников, цены, сроки, гарантии и сотрудников, если их нет во входе.",
                 "businessType и allowedScenarioTypes только помогают выбрать лексику; тема карточки, mustCover и mayCover важнее.",
+                "При researchStatus=insufficient_data запрещено превращать reviewIdeas, businessType или allowedScenarioTypes в факты. Используй только confirmedFacts и явные данные заказа.",
                 "Не пиши название компании из reviewGenerationBrief.company в draft.",
                 "Не начинай draft с пересказа служебной темы. Сразу пиши сам отзыв от лица клиента.",
                 "Не выводи в draft reviewId, названия полей, цену как поле, категорию как поле или формулировки задания.",
@@ -889,6 +896,8 @@ public class AiSingleReviewDraftFactory {
     ) throws Exception {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("businessType", brief.businessType());
+        payload.put("researchStatus", brief.researchStatus());
+        payload.put("confirmedFacts", conciseSlotFacts(brief.confirmedFacts(), 20, 130));
         payload.put("category", brief.category());
         payload.put("city", brief.city());
         payload.put("services", conciseSlotFacts(brief.services(), 14, 90));
@@ -3006,6 +3015,9 @@ public class AiSingleReviewDraftFactory {
     }
 
     private String modelLabel(String profileKey) {
+        if (isDeepSeekActive()) {
+            return properties.getDeepseek().getModel();
+        }
         if (isYandexActive()) {
             return properties.getYandex().getModel();
         }
@@ -3014,12 +3026,11 @@ public class AiSingleReviewDraftFactory {
     }
 
     private boolean isYandexActive() {
-        String provider = properties.getProvider();
-        if (provider == null) {
-            return false;
-        }
-        String normalized = provider.trim().toLowerCase(Locale.ROOT);
-        return "yandex".equals(normalized) || "yandexgpt".equals(normalized) || "yandex-gpt".equals(normalized);
+        return "yandexgpt".equals(providerSelectionService.activeProvider());
+    }
+
+    private boolean isDeepSeekActive() {
+        return "deepseek".equals(providerSelectionService.activeProvider());
     }
 
     private String limit(String value, int limit) {

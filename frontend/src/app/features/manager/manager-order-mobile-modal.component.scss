@@ -9,10 +9,13 @@
 }
 
 :host .order-edit-modal {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
 :host .order-edit-modal .lead-edit-form {
+  flex: 1 1 auto;
   min-height: 0;
   grid-template-rows: minmax(0, 1fr) auto;
   overflow: hidden;

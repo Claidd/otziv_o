@@ -92,7 +92,7 @@ class NotificationSchedulerToTelegramImplTest {
         Map<String, com.hunt.otziv.admin.dto.presonal.UserData> allData = Map.of("Виктория Викторовна", mixedData);
         Map<String, com.hunt.otziv.admin.dto.presonal.UserData> workerOnlyData = Map.of("Виктория Викторовна", workerData);
 
-        when(userService.getAllWorkers()).thenReturn(Map.of("Виктория Викторовна", 123L));
+        when(userService.getAllWorkerTelegramGroups()).thenReturn(Map.of("Виктория Викторовна", -123L));
         when(personalService.getPersonalsAndCountToMap()).thenReturn(allData);
         when(userService.findByFio("Виктория Викторовна")).thenReturn(Optional.of(shallowUser));
         when(userService.findByUserNameWithAssignments("victoria")).thenReturn(Optional.of(workerUser));
@@ -102,7 +102,7 @@ class NotificationSchedulerToTelegramImplTest {
 
         scheduler.sendDailyReportToWorkers();
 
-        verify(telegramService).sendMessage(eq(123L), eq("worker-only report"), eq("HTML"));
+        verify(telegramService).sendMessage(eq(-123L), eq("worker-only report"), eq("HTML"));
     }
 
     private NotificationSchedulerToTelegramImpl schedulerAt(String instant) {

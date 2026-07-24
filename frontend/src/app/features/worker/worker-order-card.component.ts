@@ -167,6 +167,21 @@ export class WorkerOrderCardComponent {
     return this.order.waitingForClient ? 'Вернуть заказ в работу специалиста' : 'Заказ ждет текст от клиента';
   }
 
+  canRunStatusAction(action: StatusAction): boolean {
+    return !this.order.waitingForClient || action.status === 'На проверке';
+  }
+
+  canSubmitWaitingForReview(): boolean {
+    return this.isOnlyWorkerRole && this.permissions.canWorkReviews && this.order.waitingForClient === true;
+  }
+
+  statusActionTitle(action: StatusAction): string {
+    if (this.order.waitingForClient && action.status === 'На проверке') {
+      return 'Текст получен: снять ожидание и отправить отзывы клиенту на проверку';
+    }
+    return this.order.waitingForClient ? 'Сначала верните заказ в работу' : action.status;
+  }
+
   isClientWaitingEligible(): boolean {
     return this.order.status === 'Новый' || this.order.status === 'Коррекция' || !!this.order.waitingForClient;
   }

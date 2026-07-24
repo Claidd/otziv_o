@@ -337,6 +337,14 @@ export class GamificationMeCardComponent {
         return 'Восстановления';
       case 'WORKER_RISK_PENALTY':
         return 'Штрафы';
+      case 'WORKER_DAY_100':
+        return 'Дни на 100%';
+      case 'WORKER_100_STREAK':
+        return 'Серии на 100%';
+      case 'MANAGER_TEAM_DAY_100':
+        return 'Команда на 100%';
+      case 'MANAGER_TEAM_100_STREAK':
+        return 'Командные серии';
       default:
         return eventType || 'Событие';
     }

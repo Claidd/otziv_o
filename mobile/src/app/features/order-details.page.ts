@@ -7,7 +7,8 @@ import {
   IonModal,
   IonRefresher,
   IonRefresherContent,
-  RefresherCustomEvent
+  RefresherCustomEvent,
+  ToastController
 } from '@ionic/angular/standalone';
 import { Observable, Subscription, firstValueFrom } from 'rxjs';
 import {
@@ -946,6 +947,7 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     ion-content { --overflow: hidden; }
 
     .order-details-mobile-page {
+      --otziv-detail-card-width: min(calc(100vw - 1.36rem), 46.64rem);
       display: flex;
       flex-direction: column;
       gap: var(--otziv-page-gap, 0.58rem);
@@ -2017,23 +2019,41 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
     }
 
     .order-details-actions {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      display: flex;
+      width: 100%;
+      max-width: 100%;
+      flex: 0 0 auto;
+      flex-wrap: nowrap;
+      align-items: center;
       gap: 0.46rem;
-      padding: 0.52rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.42rem;
       font-family: var(--otziv-font-family);
-      touch-action: manipulation;
+      scroll-padding-inline: 0.42rem;
+      scroll-snap-type: x proximity;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      touch-action: pan-x;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .order-details-actions::-webkit-scrollbar {
+      display: none;
     }
 
     .order-details-actions button {
       display: inline-flex;
+      flex: 0 0 auto;
       align-items: center;
       justify-content: center;
       gap: 0.26rem;
-      min-width: 0;
+      width: auto;
+      min-width: max-content;
       min-height: 2.2rem;
-      padding: 0 0.48rem;
+      padding: 0 0.68rem;
       overflow: hidden;
+      scroll-snap-align: start;
       text-overflow: ellipsis;
       white-space: nowrap;
       touch-action: manipulation;
@@ -2182,7 +2202,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly confirm: MobileConfirmService,
-    private readonly media: MobileMediaService
+    private readonly media: MobileMediaService,
+    private readonly toastController: ToastController
   ) {
     effect(() => {
       const message = this.error();
@@ -3801,6 +3822,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.api.updateManagerOrderStatus(orderId, 'В проверку').subscribe({
       next: () => {
         this.mutationKey.set(null);
+        void this.presentSendToCheckSuccessToast();
         this.loadDetails();
       },
       error: (err) => {
@@ -3808,6 +3830,23 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.mutationKey.set(null);
       }
     });
+  }
+
+  private async presentSendToCheckSuccessToast(): Promise<void> {
+    const toast = await this.toastController.create({
+      message: 'Заказ отправлен в проверку и клиенту',
+      duration: 3500,
+      position: 'top',
+      color: 'success',
+      icon: 'checkmark-circle',
+      buttons: [{
+        side: 'end',
+        icon: 'close',
+        role: 'cancel',
+        htmlAttributes: { 'aria-label': 'Закрыть уведомление' }
+      }]
+    });
+    await toast.present();
   }
 
   openReviewCheck(): void {

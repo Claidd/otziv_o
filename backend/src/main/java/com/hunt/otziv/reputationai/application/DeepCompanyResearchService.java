@@ -70,15 +70,18 @@ public class DeepCompanyResearchService {
             report = repairAndParseReport(company, response, exception);
         }
         report = expandThinYandexReportIfNeeded(company, safeRequest, sourceSnapshot, report);
+        report = withoutReviewIdeas(company, report);
         if (!safeRequest.shouldEnrichCollectionGaps()) {
-            return reportWithCollectionGapEnrichmentStatus(
+            report = reportWithCollectionGapEnrichmentStatus(
                     company,
                     report,
                     "info",
                     "Автодосбор по рекомендациям пропущен настройкой запуска."
             );
+        } else {
+            report = enrichCollectionGaps(company, safeRequest, report);
         }
-        return enrichCollectionGaps(company, safeRequest, report);
+        return generateReviewIdeasLast(company, safeRequest, report);
     }
 
     public DeepCompanyResearchReport refreshSources(
@@ -126,7 +129,7 @@ public class DeepCompanyResearchService {
                     .filter(detail -> detail != null && !detail.isBlank())
                     .toList());
 
-            return new DeepCompanyResearchReport(
+            DeepCompanyResearchReport refreshedReport = new DeepCompanyResearchReport(
                     company.getId(),
                     company.getTitle(),
                     company.getCity(),
@@ -141,6 +144,7 @@ public class DeepCompanyResearchService {
                     factSnapshot,
                     LocalDateTime.now()
             );
+            return generateReviewIdeasLast(company, safeRequest, withoutReviewIdeas(company, refreshedReport));
         } catch (Exception exception) {
             throw new IllegalStateException(activeProviderDisplayName() + " вернул источники не в ожидаемом JSON-формате.", exception);
         }
@@ -174,13 +178,15 @@ public class DeepCompanyResearchService {
         ensureResponseText(response, activeProviderDisplayName() + " не вернул пересобранный текст отчёта.");
 
         try {
-            return parseReport(
+            DeepCompanyResearchReport rebuiltReport = parseReport(
                     company,
                     response,
                     List.of("Текст отчёта пересобран без нового web search: использованы только сохранённые источники и факты базового отчёта.")
             );
+            return generateReviewIdeasLast(company, safeRequest, withoutReviewIdeas(company, rebuiltReport));
         } catch (ReportParseException exception) {
-            return repairAndParseReport(company, response, exception);
+            DeepCompanyResearchReport repairedReport = repairAndParseReport(company, response, exception);
+            return generateReviewIdeasLast(company, safeRequest, withoutReviewIdeas(company, repairedReport));
         }
     }
 
@@ -251,7 +257,7 @@ public class DeepCompanyResearchService {
                     .filter(detail -> detail != null && !detail.isBlank())
                     .toList());
 
-            return new DeepCompanyResearchReport(
+            DeepCompanyResearchReport rebuiltReport = new DeepCompanyResearchReport(
                     company.getId(),
                     company.getTitle(),
                     company.getCity(),
@@ -266,6 +272,7 @@ public class DeepCompanyResearchService {
                     factSnapshot,
                     LocalDateTime.now()
             );
+            return generateReviewIdeasLast(company, safeRequest, withoutReviewIdeas(company, rebuiltReport));
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -274,7 +281,9 @@ public class DeepCompanyResearchService {
     }
 
     private String instructions() {
-        return promptService.content(ReputationAiPromptKeys.DEEP_REPORT_INSTRUCTIONS);
+        return promptService.content(ReputationAiPromptKeys.DEEP_REPORT_INSTRUCTIONS) + "\n\n"
+                + "На этом проходе НЕ генерируй идеи для отзывов: верни reviewIdeas=[] и не добавляй раздел идей для отзывов. "
+                + "Идеи будут сформированы отдельным последним проходом после полного поиска, проверки и автодосбора.";
     }
 
     private String researchInput(Company company, ReputationResearchRequest request, ResearchSnapshot sourceSnapshot) {
@@ -298,7 +307,8 @@ public class DeepCompanyResearchService {
                 Режим отчёта: БЫСТРО / gpt-5.4-mini.
                 Сожми исследование: сначала официальный сайт и CRM/карты, затем только 4-6 самых релевантных подтверждающих источников.
                 Не делай полный проход по 15-20 результатам выдачи. Если официальные источники, карты и несколько качественных страниц уже дали картину, остановись и отметь ограничения в warnings.
-                Верни компактный отчёт на 6-8 секций: профиль, услуги/цены, филиалы/логистика, удобства, репутационные сигналы, риски/что уточнить, идеи для постов и идеи для отзывов.
+                Верни компактный отчёт на 6-8 секций: профиль, услуги/цены, филиалы/логистика, удобства, репутационные сигналы, риски/что уточнить и идеи для постов.
+                Идеи для отзывов на этом проходе не генерируй: они формируются отдельно в самом конце.
                 Не растягивай таблицы и списки; спорные и слабые сведения помечай коротко.
                 """;
     }
@@ -341,7 +351,7 @@ public class DeepCompanyResearchService {
                 Краткое содержание базового отчёта, чтобы понять, какие факты нужно перепроверить:
                 %s
 
-                Свежий публичный сбор через локальный/Yandex Search:
+                Дополнительный внешний слепок выбранного маршрута (если передан):
                 %s
                 """.formatted(
                 companyFacts(company),
@@ -369,7 +379,7 @@ public class DeepCompanyResearchService {
         if (snapshot == null) {
             return "";
         }
-        return "\n\nПредварительно собранные публичные источники и выдержки через локальный/Yandex Search:\n"
+        return "\n\nПредварительно собранные публичные источники и выдержки выбранного поискового маршрута:\n"
                 + snapshotToPrompt(snapshot);
     }
 
@@ -378,6 +388,7 @@ public class DeepCompanyResearchService {
             return "-";
         }
         String answers = snapshot.researchAnswers().stream()
+                .filter(this::isHybridSafeAnswer)
                 .limit(24)
                 .map(this::researchAnswerToPrompt)
                 .filter(value -> !value.isBlank())
@@ -396,7 +407,7 @@ public class DeepCompanyResearchService {
         return """
                 Компания: %s
                 Город: %s
-                Провайдер поиска: %s, доступен: %s, результатов: %d, страниц сайта прочитано: %d
+                Дополнительный независимый сборщик: %s, доступен: %s, результатов: %d, страниц прочитано: %d
                 Поисковые запросы:
                 %s
 
@@ -424,6 +435,29 @@ public class DeepCompanyResearchService {
                 sources,
                 listToText(snapshot.warnings())
         );
+    }
+
+    private boolean isHybridSafeAnswer(CompanyResearchAnswer answer) {
+        if (answer == null || answer.key() == null) {
+            return false;
+        }
+        return Set.of(
+                "branch_address",
+                "activity",
+                "business_age",
+                "offers",
+                "products_prices",
+                "entrance",
+                "amenities",
+                "staff",
+                "promotions",
+                "real_review_quotes",
+                "booking_process",
+                "guarantees",
+                "wait_time",
+                "travel_time",
+                "source_quality"
+        ).contains(answer.key());
     }
 
     private String researchAnswerToPrompt(CompanyResearchAnswer answer) {
@@ -569,7 +603,7 @@ public class DeepCompanyResearchService {
                 - "Услуги, товары и цены" обязательно в markdown-таблице с колонками "Позиция", "Описание", "Условия/сроки", "Цена", "Источник/уверенность";
                 - отдельно раскрой УТП, клиентские сценарии, цены/пакеты/доплаты, сотрудников/имена из отзывов, удобства, риски, доверие, что уточнить менеджеру;
                 - если точных цен, сотрудников или услуг не найдено, не оставляй раздел коротким: напиши, какие источники проверены, какие сигналы есть, какие поля отсутствуют и что надо дозвонить;
-                - идеи для отзывов верни ровно 30 пунктов.
+                - идеи для отзывов на этом проходе не возвращай: они будут пересобраны отдельным последним запросом.
                 Не добавляй новые URL вне sources из входа и не выдумывай факты.
                 Если среди sources есть одноименный источник, который противоречит CRM-городу, адресу, категории, филиалу или типу бизнеса, не смешивай его с компанией: вынеси его в warnings как сомнительный и не строй на нем услуги, цены, УТП или выводы.
                 """.stripIndent().trim();
@@ -793,6 +827,207 @@ public class DeepCompanyResearchService {
                 Верни только валидный JSON без markdown-обёртки.
                 В section.body сделай markdown с тремя блоками: "Что удалось проверить публично", "Что публично не найдено", "Что спросить у владельца". По каждому пункту дай короткий ответ и источник/причину.
                 """.stripIndent().trim();
+    }
+
+    private DeepCompanyResearchReport generateReviewIdeasLast(
+            Company company,
+            ReputationResearchRequest request,
+            DeepCompanyResearchReport report
+    ) {
+        DeepCompanyResearchReport cleanReport = withoutReviewIdeas(company, report);
+        if (isInsufficientCoverage(cleanReport)) {
+            return reportWithWarnings(cleanReport, List.of(
+                    "Идеи для отзывов не сгенерированы: недостаточно подтверждённых публичных данных (insufficient_data)."
+            ));
+        }
+
+        OpenAiResponseResult response = openAiResponsesClient.createTextResponse(new AiRequest(
+                "company-review-ideas-final",
+                reviewIdeasFinalInstructions(),
+                reviewIdeasFinalInput(company, request, cleanReport),
+                0.2,
+                true,
+                4500,
+                null
+        ));
+        if (response.text().isBlank()) {
+            String detail = response.errorMessage().isBlank()
+                    ? activeProviderDisplayName() + " не вернул финальный список идей."
+                    : response.errorMessage();
+            return reportWithWarnings(cleanReport, List.of(
+                    "Финальный проход идей для отзывов не выполнен: " + detail
+            ));
+        }
+
+        try {
+            JsonNode root = readReportJson(response.text());
+            List<String> ideas = parseReviewIdeas(root.path("reviewIdeas"));
+            if (ideas.isEmpty()) {
+                return reportWithWarnings(cleanReport, List.of(
+                        "Финальный проход не добавил идей: подтверждённых данных оказалось недостаточно для конкретных тем."
+                ));
+            }
+            List<String> warnings = new ArrayList<>(cleanReport.warnings());
+            warnings.addAll(parseWarnings(root.path("warnings")));
+            return withFinalReviewIdeas(company, cleanReport, ideas, warnings);
+        } catch (Exception exception) {
+            return reportWithWarnings(cleanReport, List.of(
+                    "Финальный проход идей вернул повреждённый JSON: " + exception.getMessage()
+            ));
+        }
+    }
+
+    private String reviewIdeasFinalInstructions() {
+        return """
+                Ты выполняешь ПОСЛЕДНИЙ этап уже завершённого исследования компании.
+                Поиск, проверка источников, синтез отчёта и автодосбор уже закончены.
+                Сформируй идеи для честных отзывов только из итоговых подтверждённых фактов и явных ручных данных.
+
+                Строгие правила:
+                - не превращай гипотезы, рекомендации, «что спросить», «не найдено» и отраслевые примеры в факты;
+                - не придумывай услуги, товары, марки, модели, цены, сроки, сотрудников, гарантии и клиентские ситуации;
+                - uncertainFacts можно использовать только как повод для ручной проверки, но не как основу идеи;
+                - каждая идея должна быть темой реального клиентского опыта, который клиент сможет подтвердить;
+                - идеи должны различаться по ситуации и акценту, но не расширять фактический профиль компании;
+                - если подтверждённых данных мало, верни меньше идей; качество и достоверность важнее количества;
+                - максимум 30 идей, без готовых текстов отзывов.
+
+                Верни только JSON:
+                {"reviewIdeas":["тема честного отзыва"],"warnings":["ограничения набора"]}
+                """;
+    }
+
+    private String reviewIdeasFinalInput(
+            Company company,
+            ReputationResearchRequest request,
+            DeepCompanyResearchReport report
+    ) {
+        return """
+                CRM-факты компании:
+                %s
+
+                Явное ручное описание:
+                %s
+
+                Явно указанные товары/услуги:
+                %s
+
+                Подтверждённые факты итогового отчёта:
+                %s
+
+                Сомнительные факты — НЕ использовать как основу идей:
+                %s
+
+                Все итоговые разделы после автодосбора:
+                %s
+
+                Проверенные источники:
+                %s
+
+                Предупреждения и ограничения:
+                %s
+                """.formatted(
+                companyFacts(company),
+                blankToDash(request.manualDescription()),
+                listToText(request.productsOrServices()),
+                factsToPrompt(report.factSnapshot().confirmedFacts()),
+                factsToPrompt(report.factSnapshot().uncertainFacts()),
+                sectionsToPrompt(report.sections(), report.reportMarkdown(), 32000),
+                sourcesToPrompt(report.sources()),
+                listToText(report.warnings())
+        );
+    }
+
+    private List<String> parseReviewIdeas(JsonNode node) {
+        LinkedHashSet<String> ideas = new LinkedHashSet<>();
+        if (node != null && node.isArray()) {
+            for (JsonNode item : node) {
+                addFinalReviewIdea(ideas, item.asText(""));
+                if (ideas.size() >= 30) {
+                    break;
+                }
+            }
+        } else if (node != null && node.isTextual()) {
+            for (String line : node.asText("").split("\\R")) {
+                addFinalReviewIdea(ideas, line);
+                if (ideas.size() >= 30) {
+                    break;
+                }
+            }
+        }
+        return List.copyOf(ideas);
+    }
+
+    private void addFinalReviewIdea(LinkedHashSet<String> ideas, String value) {
+        String clean = value == null ? "" : value
+                .replaceFirst("^\\s*(?:[-*•]|\\d+[.)])\\s*", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+        String normalized = clean.toLowerCase(Locale.ROOT).replace('ё', 'е');
+        if (clean.length() < 10
+                || containsAny(normalized,
+                "не найден", "не подтверж", "предполож", "гипотез", "нужно уточнить", "требует проверки")) {
+            return;
+        }
+        ideas.add(clean.length() <= 500 ? clean : clean.substring(0, 500).trim());
+    }
+
+    private DeepCompanyResearchReport withoutReviewIdeas(Company company, DeepCompanyResearchReport report) {
+        List<DeepCompanyResearchReport.Section> sections = report.sections().stream()
+                .filter(section -> !isReviewIdeasSection(section.title()))
+                .toList();
+        if (sections.size() == report.sections().size() && report.reviewIdeas().isEmpty()) {
+            return report;
+        }
+        String markdown = sectionsToMarkdown(sections);
+        List<DeepCompanyResearchReport.QualityCheck> qualityChecks = reportQualityChecks(
+                company, sections, report.sources(), markdown);
+        DeepCompanyResearchReport.FactSnapshot factSnapshot = factSnapshot(
+                company, sections, report.sources(), qualityChecks, markdown);
+        return new DeepCompanyResearchReport(
+                report.companyId(), report.companyName(), report.city(), report.provider(), report.model(),
+                report.responseId(), markdown, sections, report.sources(), report.warnings(), qualityChecks,
+                factSnapshot, List.of(), report.createdAt()
+        );
+    }
+
+    private DeepCompanyResearchReport withFinalReviewIdeas(
+            Company company,
+            DeepCompanyResearchReport report,
+            List<String> ideas,
+            List<String> warnings
+    ) {
+        List<DeepCompanyResearchReport.Section> sections = new ArrayList<>(report.sections());
+        StringBuilder body = new StringBuilder();
+        for (int index = 0; index < ideas.size(); index++) {
+            body.append(index + 1).append(". ").append(ideas.get(index)).append('\n');
+        }
+        sections.add(new DeepCompanyResearchReport.Section("Идеи для отзывов", body.toString().trim()));
+        String markdown = sectionsToMarkdown(sections);
+        List<DeepCompanyResearchReport.QualityCheck> qualityChecks = reportQualityChecks(
+                company, sections, report.sources(), markdown);
+        DeepCompanyResearchReport.FactSnapshot factSnapshot = factSnapshot(
+                company, sections, report.sources(), qualityChecks, markdown);
+        return new DeepCompanyResearchReport(
+                report.companyId(), report.companyName(), report.city(), report.provider(), report.model(),
+                report.responseId(), markdown, sections, report.sources(), warnings, qualityChecks,
+                factSnapshot, ideas, LocalDateTime.now()
+        );
+    }
+
+    private boolean isReviewIdeasSection(String title) {
+        String normalized = title == null ? "" : title.toLowerCase(Locale.ROOT).replace('ё', 'е');
+        return normalized.contains("иде")
+                && normalized.contains("отзыв")
+                && !normalized.contains("пост")
+                && !normalized.contains("карточ");
+    }
+
+    private boolean isInsufficientCoverage(DeepCompanyResearchReport report) {
+        return report.qualityChecks().stream()
+                .filter(check -> "coverage".equals(check.key()))
+                .anyMatch(check -> "fail".equals(check.status())
+                        || check.detail().toLowerCase(Locale.ROOT).contains("insufficient_data"));
     }
 
     private String collectionGapEnrichmentInput(
@@ -1732,6 +1967,36 @@ public class DeepCompanyResearchService {
                     "Услуги и цены",
                     "pass",
                     "В отчёте есть блоки про услуги, товары, цены или предложения."
+            ));
+        }
+
+        long crediblePublicSources = sources.stream()
+                .filter(source -> !source.url().isBlank() && isLikelyPublicUrl(source.url()))
+                .filter(source -> !"low".equalsIgnoreCase(source.confidence()))
+                .count();
+        if (crediblePublicSources == 0) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "coverage",
+                    "Покрытие исследования",
+                    "fail",
+                    "insufficient_data: нет ни одного публичного источника средней или высокой уверенности. "
+                            + "Гипотезы и идеи отчёта нельзя использовать как факты для отзывов."
+            ));
+        } else if (crediblePublicSources < 2) {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "coverage",
+                    "Покрытие исследования",
+                    "warn",
+                    "partial: найден только один публичный источник средней или высокой уверенности. "
+                            + "Конкретные услуги, цены и клиентские сценарии требуют подтверждения владельца."
+            ));
+        } else {
+            checks.add(new DeepCompanyResearchReport.QualityCheck(
+                    "coverage",
+                    "Покрытие исследования",
+                    "pass",
+                    "complete: найдено публичных источников средней/высокой уверенности: "
+                            + crediblePublicSources + "."
             ));
         }
 

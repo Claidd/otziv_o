@@ -148,6 +148,7 @@ public class AppSettingService {
     public static final String PERFORMERS_ROLLOUT_ENABLED = "performers.rollout.enabled";
     public static final String PERFORMERS_ROLLOUT_CITY_IDS = "performers.rollout.city-ids";
     public static final String PERFORMERS_ROLLOUT_PRODUCT_IDS = "performers.rollout.product-ids";
+    public static final String ZP_PRODUCT_REWARD_PERCENT_ENABLED = "zp.product-reward-percent.enabled";
     public static final String MONITORING_DISK_LAST_LEVEL = "monitoring.disk.last-level";
     public static final String MONITORING_DISK_LAST_ALERT_AT = "monitoring.disk.last-alert-at";
 

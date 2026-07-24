@@ -66,18 +66,31 @@
     </div>
   </div>
 
-  @if (permissions.canManageOrderStatuses || canManageClientWaiting()) {
+  @if (permissions.canManageOrderStatuses || canSubmitWaitingForReview() || canManageClientWaiting()) {
     <div class="card-actions order-status-actions">
       @if (permissions.canManageOrderStatuses) {
         @for (action of actions; track trackAction($index, action)) {
           <button
             type="button"
-            [disabled]="order.waitingForClient || isMutating('order-' + order.id + '-' + action.status)"
+            [disabled]="!canRunStatusAction(action) || isMutating('order-' + order.id + '-' + action.status)"
             (click)="statusUpdated.emit(action)"
-            [title]="order.waitingForClient ? 'Сначала верните заказ в работу' : action.status"
+            [title]="statusActionTitle(action)"
           >
             {{ action.label }}
           </button>
+        }
+      } @else if (canSubmitWaitingForReview()) {
+        @for (action of actions; track trackAction($index, action)) {
+          @if (action.status === 'На проверке') {
+            <button
+              type="button"
+              [disabled]="isMutating('order-' + order.id + '-' + action.status)"
+              (click)="statusUpdated.emit(action)"
+              [title]="statusActionTitle(action)"
+            >
+              {{ action.label }}
+            </button>
+          }
         }
       }
 

@@ -473,6 +473,7 @@ class OrderStatusNotificationServiceTest {
     private User user(Long telegramChatId) {
         User user = new User();
         user.setTelegramChatId(telegramChatId);
+        user.setWorkerTelegramGroupChatId(-telegramChatId);
         return user;
     }
 

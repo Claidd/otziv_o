@@ -325,7 +325,7 @@ public class OrderStatusNotificationService {
             return order != null
                     && order.getWorker() != null
                     && order.getWorker().getUser() != null
-                    && order.getWorker().getUser().getTelegramChatId() != null
+                    && order.getWorker().getUser().getWorkerTelegramGroupChatId() != null
                     && hasDetails(order)
                     && order.getCompany() != null;
         } catch (Exception e) {

@@ -22,6 +22,7 @@ public record WorkerNetworkViolationStatsResponse(
             String scope,
             long attemptCount,
             String provider,
+            String clientEvidence,
             boolean blocked
     ) {
     }

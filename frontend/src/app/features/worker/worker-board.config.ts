@@ -34,6 +34,14 @@ export type SideNoteField = 'order' | 'company';
 export type ReviewEditItem = WorkerReviewItem | OrderReviewItem;
 export type ReviewEditDraft = ReviewUpdateRequest;
 export type ReviewCopyKind = 'url' | 'login' | 'password' | 'text' | 'answer' | 'vk';
+export type WorkerCredentialCopyTarget = { resource: 'review' | 'recovery-task'; id: number };
+
+export function workerCredentialCopyTarget(review: WorkerReviewItem): WorkerCredentialCopyTarget {
+  if (review.recoveryTask && review.recoveryTaskId) {
+    return { resource: 'recovery-task', id: review.recoveryTaskId };
+  }
+  return { resource: 'review', id: review.id };
+}
 
 export const WORKER_SECTIONS: SectionTab[] = [
   { key: 'new', label: 'Новые', icon: 'fiber_new' },
@@ -57,6 +65,12 @@ export const WORKER_ORDER_STATUS_ACTIONS: StatusAction[] = [
   { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
   { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
 ];
+
+export function workerOrderTargetStatus(order: Pick<OrderCardItem, 'waitingForClient'>, action: StatusAction): string {
+  return order.waitingForClient && action.status === 'На проверке'
+    ? 'В проверку'
+    : action.status;
+}
 
 export const WORKER_PAGE_SIZE_OPTIONS = [5, 10, 15];
 

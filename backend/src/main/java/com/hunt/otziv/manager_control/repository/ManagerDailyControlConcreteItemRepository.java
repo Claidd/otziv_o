@@ -7,6 +7,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 
@@ -50,5 +53,20 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
 
     List<ManagerDailyControlConcreteItem> findByWorkerNotificationUserIdAndWorkerExplanationRequestedAtIsNotNullAndWorkerExplanationAtIsNullOrderByWorkerExplanationPromptedAtDesc(
             Long workerNotificationUserId
+    );
+
+    @Query("""
+            SELECT item
+            FROM ManagerDailyControlConcreteItem item
+            WHERE item.workerExplanationRequestedAt IS NOT NULL
+              AND item.workerNotificationSentAt IS NOT NULL
+              AND item.workerNotificationSentAt <= :cutoff
+              AND item.workerExplanationAt IS NULL
+              AND (item.workerReminderSentAt IS NULL OR item.workerReminderSentAt <= :cutoff)
+            ORDER BY item.workerNotificationSentAt ASC
+            """)
+    List<ManagerDailyControlConcreteItem> findPendingWorkerExplanationReminders(
+            @Param("cutoff") LocalDateTime cutoff,
+            Pageable pageable
     );
 }

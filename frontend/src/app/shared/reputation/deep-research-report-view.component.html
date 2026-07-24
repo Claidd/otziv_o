@@ -41,6 +41,16 @@
       }
     </section>
 
+    @if (isInsufficientData()) {
+      <section class="coverage-warning" role="status">
+        <span class="material-icons-sharp">gpp_maybe</span>
+        <div>
+          <strong>Недостаточно подтверждённых публичных данных</strong>
+          <span>Идеи и гипотезы отчёта не передаются в генерацию отзывов. AI использует только подтверждённые факты и явные данные карточки заказа.</span>
+        </div>
+      </section>
+    }
+
     @if (reviewIdeas().length > 0 || editingReviewIdeas) {
       <section class="review-ideas-panel">
         <header>

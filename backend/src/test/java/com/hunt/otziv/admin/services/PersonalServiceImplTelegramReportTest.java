@@ -1,6 +1,7 @@
 package com.hunt.otziv.admin.services;
 
 import com.hunt.otziv.admin.dto.presonal.UserData;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -11,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PersonalServiceImplTelegramReportTest {
 
     private final PersonalServiceImpl service = new PersonalServiceImpl(
-            null, null, null, null, null, null, null, null, null, null, null, null, null
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
     );
 
     @Test
@@ -47,6 +48,8 @@ class PersonalServiceImplTelegramReportTest {
                 .contains("👷 <b>Люба Р.</b>")
                 .contains("ЗП: <b>14 542 руб.</b>")
                 .contains("Выгул: <b>1</b> | публикация: <b>148</b>")
+                .contains("Плохие: <b>4</b> | восстановление: <b>2</b>")
+                .contains("Прогресс дня: <b>19/34 (56%)</b>")
                 .doesNotContain("<b>Итоги</b>")
                 .doesNotContain("*")
                 .doesNotContain("`");
@@ -84,7 +87,22 @@ class PersonalServiceImplTelegramReportTest {
                 .correctOrders(0L)
                 .inVigul(1L)
                 .inPublish(148L)
+                .badTasks(4L)
+                .recoveryTasks(2L)
+                .dailyProgress(dailyProgress())
                 .build();
+    }
+
+    private DailyWorkProgressResponse dailyProgress() {
+        return new DailyWorkProgressResponse(
+                true, "WORKER", java.time.LocalDate.of(2026, 7, 16),
+                19, 15, 34, 56, false,
+                null, null, 0, 0, 0,
+                null, null, 0, 0, 0, 0, 0,
+                34, 10, 3, 3, 2, 1, 0,
+                0, 0, 0, 0, 0, 0, 0,
+                false, null, null, "DAY", 0, 0, 0, false
+        );
     }
 
     private UserData marketolog(String fio) {

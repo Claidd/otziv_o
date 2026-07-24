@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import {
@@ -51,12 +51,15 @@ import {
   DEFAULT_WORKER_SECTION,
   EMPTY_ORDER_PAGE,
   EMPTY_REVIEW_PAGE,
+  MOBILE_WORKER_ACTIVITY_SOURCE_PAGE,
   ORDER_STATUS_ACTIONS,
   WORKER_SECTIONS,
+  formatCredentialWaitSeconds,
   isWorkerReviewSection,
   workerDefaultSortDirection,
   workerReviewTitle,
   workerReviewToneClass,
+  workerOrderTargetStatus,
   workerSectionIcon,
   workerSectionLabel,
   type ReviewCopyKind,
@@ -64,6 +67,7 @@ import {
   type SideNoteField,
   type WorkerStatusAction
 } from './worker/worker-board.helpers';
+import { MobileWorkerReviewEditSheetComponent } from './worker/mobile-worker-review-edit-sheet.component';
 
 type PublishCredentialPreparation = {
   reviewId: number | null;
@@ -103,6 +107,7 @@ type CredentialWaitSection = 'publish' | 'nagul';
     MobileRemindersComponent,
     MobileReviewCardShellComponent,
     MobileReviewFieldEditorComponent,
+    MobileWorkerReviewEditSheetComponent,
     MobileSearchBarComponent,
     MobileStatusSliderComponent
   ],
@@ -210,6 +215,7 @@ type CredentialWaitSection = 'publish' | 'nagul';
                   [noteBadge]="orderNoteBadge(order)"
                   [canSeePhoneAndPayment]="permissions().canSeePhoneAndPayment"
                   [canManageOrderStatuses]="permissions().canManageOrderStatuses"
+                  [canSubmitWaitingForReview]="isOnlyWorkerRole() && permissions().canWorkReviews && order.waitingForClient === true"
                   [canManageClientWaiting]="canManageClientWaiting(order)"
                   [noteEditorId]="'workerOrderNote' + order.id"
                   [noteValue]="orderNoteValue(order)"
@@ -352,8 +358,41 @@ type CredentialWaitSection = 'publish' | 'nagul';
                     </section>
                   }
 
-                  <div class="bot-line" [class.empty]="hasUnavailableBot(review)" [class.template]="reviewHasTemplateBot(review)">
-                    <span>{{ botLabel(review) }}</span>
+                  <div
+                    class="bot-line"
+                    [class.empty]="hasUnavailableBot(review)"
+                    [class.template]="reviewHasTemplateBot(review)"
+                    [class.editable]="canEditBotNameInline(review)"
+                    [class.editing]="editingBotNameReviewId() === review.id"
+                  >
+                    @if (editingBotNameReviewId() === review.id) {
+                      <input
+                        class="bot-name-input"
+                        type="text"
+                        maxlength="255"
+                        autocomplete="name"
+                        [ngModel]="botNameDraft()"
+                        (ngModelChange)="botNameDraft.set($event)"
+                        (keydown.enter)="$event.preventDefault(); saveBotName(review)"
+                        (keydown.escape)="$event.preventDefault(); cancelBotNameEdit()"
+                        [disabled]="isMutating(reviewBotNameMutationKey(review))"
+                        aria-label="Имя аккаунта"
+                      >
+                      <span class="bot-name-actions">
+                        <button type="button" (click)="cancelBotNameEdit()" [disabled]="isMutating(reviewBotNameMutationKey(review))" aria-label="Отменить">
+                          <span class="material-icons-sharp">close</span>
+                        </button>
+                        <button type="button" (click)="saveBotName(review)" [disabled]="!canSaveBotName(review) || isMutating(reviewBotNameMutationKey(review))" aria-label="Сохранить">
+                          <span class="material-icons-sharp">check</span>
+                        </button>
+                      </span>
+                    } @else if (canEditBotNameInline(review)) {
+                      <button class="bot-name-button" type="button" (click)="startBotNameEdit(review, $event)" [disabled]="isMutating(reviewBotNameMutationKey(review))" title="Изменить имя аккаунта">
+                        {{ botLabel(review) }}
+                      </button>
+                    } @else {
+                      <span>{{ botLabel(review) }}</span>
+                    }
                   </div>
 
                   <div class="card-actions review-actions">
@@ -552,6 +591,12 @@ type CredentialWaitSection = 'publish' | 'nagul';
             </section>
           }
         }
+
+        <app-mobile-worker-review-edit-sheet
+          [review]="reviewEditTarget()"
+          (closed)="closeReviewEdit()"
+          (changed)="handleReviewEditChanged()"
+        />
       </ion-content>
     </div>
   `,
@@ -861,8 +906,10 @@ type CredentialWaitSection = 'publish' | 'nagul';
     }
 
     .bot-line {
+      display: grid;
       min-width: 0;
       min-height: 1.9rem;
+      align-items: center;
       overflow: hidden;
       border: 1px solid rgba(103, 116, 131, 0.22);
       border-radius: 999px;
@@ -875,6 +922,91 @@ type CredentialWaitSection = 'publish' | 'nagul';
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+
+    .bot-line.editable {
+      cursor: text;
+    }
+
+    .bot-line.editing {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.28rem;
+      min-height: 2.18rem;
+      overflow: visible;
+      padding: 0.12rem 0.18rem 0.12rem 0.42rem;
+      position: relative;
+      z-index: 3;
+    }
+
+    .bot-name-button,
+    .bot-name-input {
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      height: 1.62rem;
+      border: 0;
+      outline: 0;
+      padding: 0 0.28rem;
+      color: inherit;
+      background: transparent;
+      font: inherit;
+      text-align: center;
+    }
+
+    .bot-name-button {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: text;
+    }
+
+    .bot-name-input {
+      border: 1px solid var(--otziv-primary);
+      border-radius: 6px;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+    }
+
+    .bot-name-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+
+    .bot-name-actions button {
+      display: grid;
+      width: 1.86rem;
+      min-width: 1.86rem;
+      height: 1.86rem;
+      min-height: 1.86rem;
+      place-items: center;
+      border: 1px solid rgba(103, 116, 131, 0.24);
+      border-radius: 50%;
+      padding: 0;
+      color: var(--otziv-dark);
+      background: var(--otziv-white);
+      cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+    }
+
+    .bot-name-actions .material-icons-sharp {
+      display: block;
+      width: 1rem;
+      overflow: hidden;
+      color: inherit;
+      font-family: 'Material Icons Sharp' !important;
+      font-feature-settings: 'liga' !important;
+      font-size: 1rem !important;
+      font-style: normal !important;
+      font-weight: 400 !important;
+      letter-spacing: 0 !important;
+      line-height: 1 !important;
+      text-transform: none !important;
+      white-space: nowrap;
+    }
+
+    .bot-name-actions button:first-child { color: var(--otziv-danger); }
+    .bot-name-actions button:last-child { color: var(--otziv-success); }
 
     .card-actions {
       display: grid;
@@ -1425,6 +1557,13 @@ type CredentialWaitSection = 'publish' | 'nagul';
       background: rgba(27, 156, 133, 0.18) !important;
     }
 
+    :host-context(body.otziv-dark-theme) .bot-name-input,
+    :host-context(body.otziv-dark-theme) .bot-name-actions button {
+      border-color: rgba(122, 167, 220, 0.38);
+      color: var(--otziv-dark);
+      background: rgba(20, 25, 32, 0.96);
+    }
+
     @media (max-width: 360px) {
       .metric-tile {
         flex-basis: 7.1rem;
@@ -1485,6 +1624,9 @@ export class WorkerPage implements OnInit, OnDestroy {
   readonly reviewNoteDrafts = signal<Record<number, string>>({});
   readonly sideNoteDrafts = signal<Record<string, string>>({});
   readonly uploadingPhotoReviewId = signal<number | null>(null);
+  readonly reviewEditTarget = signal<WorkerReviewItem | null>(null);
+  readonly editingBotNameReviewId = signal<number | null>(null);
+  readonly botNameDraft = signal('');
   readonly publishCredentialPreparation = signal<PublishCredentialPreparation>({
     reviewId: null,
     invalidated: {}
@@ -1696,7 +1838,8 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   async updateOrderStatus(order: OrderItem, action: WorkerStatusAction): Promise<void> {
     const key = this.orderMutationKey(order, action.status);
-    await this.runMutation(key, () => this.api.updateWorkerOrderStatus(order.id, action.status), 'Не удалось изменить статус заказа.');
+    const targetStatus = workerOrderTargetStatus(order, action);
+    await this.runMutation(key, () => this.api.updateWorkerOrderStatus(order.id, targetStatus), 'Не удалось изменить статус заказа.');
   }
 
   async toggleOrderClientWaiting(order: OrderItem): Promise<void> {
@@ -1837,9 +1980,9 @@ export class WorkerPage implements OnInit, OnDestroy {
           recoveryAnswer
         ));
       } else if (field === 'text') {
-        await firstValueFrom(this.api.updateWorkerReviewText(review.id, review.orderId, value));
+        await firstValueFrom(this.api.updateWorkerReviewText(review.id, review.orderId, value, this.workerActivitySource()));
       } else {
-        await firstValueFrom(this.api.updateWorkerReviewAnswer(review.id, review.orderId, value));
+        await firstValueFrom(this.api.updateWorkerReviewAnswer(review.id, review.orderId, value, this.workerActivitySource()));
       }
       this.patchReview(review.id, { [field]: value } as Partial<WorkerReviewItem>);
       this.savedReviewFieldKey.set(this.reviewFieldKey(review, field));
@@ -1883,7 +2026,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     const key = this.reviewNoteMutationKey(review);
     this.mutationKey.set(key);
     try {
-      await firstValueFrom(this.api.updateWorkerReviewNote(review.id, review.orderId, value));
+      await firstValueFrom(this.api.updateWorkerReviewNote(review.id, review.orderId, value, this.workerActivitySource()));
       this.patchReview(review.id, { comment: value });
     } catch (error) {
       this.error.set(this.apiErrorMessage(error, 'Заметка отзыва не сохранилась.'));
@@ -1997,18 +2140,20 @@ export class WorkerPage implements OnInit, OnDestroy {
         return;
       }
 
-      if (!(await this.logReviewCredentialCopyClick(review, kind))) {
-        return;
-      }
-      this.markPublishCredentialCopied(review, kind);
+      await this.logReviewCredentialCopyClick(review, kind);
     }
   }
 
   reviewCredentialCopyDisabled(review: WorkerReviewItem, kind: ReviewCopyKind): boolean {
-    return (kind === 'login' || kind === 'password') && this.cannotCompleteBecauseBotUnavailable(review);
+    return (kind === 'login' || kind === 'password')
+      && (this.activeSection() === 'new' || this.cannotCompleteBecauseBotUnavailable(review));
   }
 
   reviewCredentialCopyTitle(review: WorkerReviewItem, kind: ReviewCopyKind): string {
+    if ((kind === 'login' || kind === 'password') && this.activeSection() === 'new') {
+      return 'В разделе «Новые» логин и пароль недоступны';
+    }
+
     return this.reviewCredentialCopyDisabled(review, kind)
       ? this.accountRepairTitle(review)
       : 'Скопировать';
@@ -2024,38 +2169,19 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
 
     try {
-      await firstValueFrom(this.api.logWorkerReviewCopyClick(review.id, kind, this.workerActivitySource()));
+      const preparation = await firstValueFrom(
+        this.api.logWorkerReviewCopyClick(review.id, kind, this.workerActivitySource())
+      );
+      if (!preparation) {
+        this.error.set('Данные скопированы, но сервер не подтвердил подготовку аккаунта. Повторите копирование.');
+        return false;
+      }
+      this.applyServerCredentialPreparation(preparation);
       return true;
     } catch {
       this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
       return false;
     }
-  }
-
-  private markPublishCredentialCopied(review: WorkerReviewItem, kind: ReviewCopyKind): void {
-    if ((kind !== 'login' && kind !== 'password') || !this.shouldUsePublishCredentialWait()) {
-      return;
-    }
-
-    this.publishCredentialPreparation.update((current) => {
-      const botId = review.botId ?? null;
-      const sameReviewBot = current.reviewId === review.id && current.botId === botId;
-      const invalidated = { ...current.invalidated };
-
-      if (current.reviewId !== null && !sameReviewBot) {
-        invalidated[current.reviewId] = { botId: current.botId ?? null };
-      }
-      delete invalidated[review.id];
-
-      const base = sameReviewBot ? current : { reviewId: review.id, botId };
-      return {
-        ...base,
-        invalidated,
-        [kind === 'login' ? 'loginAt' : 'passwordAt']: Date.now()
-      };
-    });
-    this.refreshPublishCredentialWaitTimer();
-    this.storePublishCredentialPreparation();
   }
 
   publishCredentialWaitLeftSeconds(review: WorkerReviewItem): number {
@@ -2153,9 +2279,18 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   private workerActivitySource(): WorkerActivitySource {
     return {
-      sourcePage: 'worker-board',
+      sourcePage: MOBILE_WORKER_ACTIVITY_SOURCE_PAGE,
       sourceSection: this.activeSection()
     };
+  }
+
+  @HostListener('document:visibilitychange')
+  handleCredentialWaitVisibilityChange(): void {
+    if (document.hidden || !this.shouldUsePublishCredentialWait()) {
+      return;
+    }
+    this.publishCredentialWaitNow.set(Date.now());
+    this.refreshPublishCredentialWaitTimer();
   }
 
   botBrowserUrlById(botId: number): string {
@@ -2192,6 +2327,49 @@ export class WorkerPage implements OnInit, OnDestroy {
         ? () => this.api.changeWorkerBadReviewTaskBot(review.badTaskId!)
         : () => this.api.changeWorkerReviewBot(review.id, this.workerActivitySource());
     await this.runMutation(key, request, 'Не удалось заменить аккаунт.');
+  }
+
+  canEditBotNameInline(review: WorkerReviewItem): boolean {
+    return this.permissions().canWorkReviews
+      && this.activeSection() === 'nagul'
+      && Boolean(review.botId)
+      && !this.hasUnavailableBot(review);
+  }
+
+  startBotNameEdit(review: WorkerReviewItem, event?: Event): void {
+    if (!this.canEditBotNameInline(review) || this.isMutating(this.reviewBotNameMutationKey(review))) {
+      return;
+    }
+    event?.stopPropagation();
+    this.editingBotNameReviewId.set(review.id);
+    this.botNameDraft.set((review.botFio ?? '').trim());
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>('.bot-line.editing .bot-name-input')?.focus();
+      document.querySelector<HTMLInputElement>('.bot-line.editing .bot-name-input')?.select();
+    });
+  }
+
+  cancelBotNameEdit(): void {
+    this.editingBotNameReviewId.set(null);
+    this.botNameDraft.set('');
+  }
+
+  canSaveBotName(review: WorkerReviewItem): boolean {
+    const value = this.botNameDraft().trim();
+    return Boolean(value) && value !== (review.botFio ?? '').trim();
+  }
+
+  async saveBotName(review: WorkerReviewItem): Promise<void> {
+    if (this.editingBotNameReviewId() !== review.id || !this.canSaveBotName(review)) {
+      return;
+    }
+    const botName = this.botNameDraft().trim();
+    await this.runMutation(
+      this.reviewBotNameMutationKey(review),
+      () => this.api.updateWorkerReviewBotName(review.id, botName),
+      'Не удалось изменить имя аккаунта.',
+      () => this.cancelBotNameEdit()
+    );
   }
 
   async deactivateReviewBot(review: WorkerReviewItem): Promise<void> {
@@ -2333,16 +2511,22 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   handleReviewFooterClick(review: WorkerReviewItem): void {
-    if (this.isRecoveryTask(review) || this.isBadTask(review)) {
-      this.startReviewFieldEdit(review, 'text');
-      window.setTimeout(() => {
-        const selector = `article[data-review-id="${review.id}"] textarea`;
-        document.querySelector<HTMLTextAreaElement>(selector)?.focus();
-      });
+    this.openReviewEdit(review);
+  }
+
+  openReviewEdit(review: WorkerReviewItem): void {
+    if (!this.permissions().canWorkReviews || !review.orderId) {
       return;
     }
+    this.reviewEditTarget.set(review);
+  }
 
-    this.openReviewDetails(review);
+  closeReviewEdit(): void {
+    this.reviewEditTarget.set(null);
+  }
+
+  handleReviewEditChanged(): void {
+    void this.load();
   }
 
   orderTitle(order: OrderItem): string {
@@ -2645,9 +2829,12 @@ export class WorkerPage implements OnInit, OnDestroy {
     return workerReviewTitle(review, this.activeSection());
   }
 
+  isOnlyWorkerRole(): boolean {
+    return this.auth.hasRealmRole('WORKER') && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
+  }
+
   reviewFooterLabel(review: WorkerReviewItem): string {
-    const workerOnly = this.auth.hasRealmRole('WORKER') && !this.auth.hasAnyRealmRole(['ADMIN', 'OWNER', 'MANAGER']);
-    return workerOnly ? (review.filialCity?.trim() || 'город') : (review.workerFio?.trim() || 'специалист');
+    return this.isOnlyWorkerRole() ? (review.filialCity?.trim() || 'город') : (review.workerFio?.trim() || 'специалист');
   }
 
   reviewCity(review: WorkerReviewItem): string {
@@ -2780,6 +2967,10 @@ export class WorkerPage implements OnInit, OnDestroy {
       }
       return 'СМЕНИТЕ АККАУНТ';
     }
+    const waitSeconds = this.publishCredentialWaitLeftSeconds(review);
+    if (waitSeconds > 0) {
+      return `ЖДИТЕ ${formatCredentialWaitSeconds(waitSeconds)}`;
+    }
     return this.activeSection() === 'nagul' ? 'ВЫГУЛЯЛ' : 'ОПУБЛИКОВАЛ';
   }
 
@@ -2816,6 +3007,10 @@ export class WorkerPage implements OnInit, OnDestroy {
 
   money(value?: number): string {
     return `${Math.round(Number(value ?? 0)).toLocaleString('ru-RU')} руб.`;
+  }
+
+  reviewBotNameMutationKey(review: WorkerReviewItem): string {
+    return `review-${review.id}-bot-name`;
   }
 
   private clampPercent(value?: number | null): number {

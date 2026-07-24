@@ -5,6 +5,7 @@ import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.text_generator.config.PromptFactory;
@@ -59,6 +60,9 @@ class AutoTextServiceImplTest {
     @Mock
     private WebsiteParserService websiteParserService;
 
+    @Mock
+    private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
     private AutoTextServiceImpl service;
 
     @BeforeEach
@@ -72,7 +76,8 @@ class AutoTextServiceImplTest {
                 filialService,
                 reviewGenerationManager,
                 promptFactory,
-                websiteParserService
+                websiteParserService,
+                accountWalkScheduleService
         );
     }
 

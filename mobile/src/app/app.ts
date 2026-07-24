@@ -5,16 +5,19 @@ import { MobileNativeService } from './core/mobile-native.service';
 import { MobilePushService } from './core/mobile-push.service';
 import { MobileConfirmHostComponent } from './shared/mobile-confirm-host.component';
 import { MobileNativeStatusComponent } from './shared/mobile-native-status.component';
+import { MobileUpdateHostComponent } from './shared/mobile-update-host.component';
+import { MobileUpdateService } from './core/mobile-update.service';
 import { MobileThemeService } from './shared/mobile-theme.service';
 
 @Component({
   selector: 'app-root',
-  imports: [IonApp, IonRouterOutlet, MobileConfirmHostComponent, MobileNativeStatusComponent],
+  imports: [IonApp, IonRouterOutlet, MobileConfirmHostComponent, MobileNativeStatusComponent, MobileUpdateHostComponent],
   template: `
     <ion-app>
       <ion-router-outlet />
       <app-mobile-confirm-host />
       <app-mobile-native-status />
+      <app-mobile-update-host />
     </ion-app>
   `,
   styles: []
@@ -24,6 +27,7 @@ export class App {
   private readonly mobileTheme = inject(MobileThemeService);
   private readonly mobileNative = inject(MobileNativeService);
   private readonly mobilePush = inject(MobilePushService);
+  private readonly mobileUpdate = inject(MobileUpdateService);
 
   private readonly pushRegistration = effect(() => {
     if (this.auth.status() === 'authenticated') {
@@ -33,5 +37,6 @@ export class App {
 
   constructor() {
     this.mobileNative.initialize();
+    this.mobileUpdate.initialize();
   }
 }

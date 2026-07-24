@@ -77,4 +77,20 @@ class ManagerSummaryFormatterTest {
         assertTrue(message.contains("Предварительные данные на 03:00"));
         assertTrue(message.contains("Предварительный результат"));
     }
+
+    @Test
+    void rendersProblemRemainderSoBreakdownMatchesTotal() {
+        ManagerDailySummaryResponse row = new ManagerDailySummaryResponse(
+                LocalDate.of(2026, 7, 17), 1L, 10L, "Анжелика", 21, "H",
+                15, 12, 0, 3, 2, 9, 1, 0, BigDecimal.valueOf(80), 0, 0, 0, 0,
+                13, 0, 0, 0, 0, 15, 0, 0,
+                7, 2, 4, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, "NOT_COMPLETED", 0,
+                "VERIFIED", java.time.LocalDateTime.of(2026, 7, 17, 23, 0)
+        );
+
+        String message = formatter.format(List.of(row), false);
+
+        assertTrue(message.contains("отложено/прочее: 1"));
+    }
 }

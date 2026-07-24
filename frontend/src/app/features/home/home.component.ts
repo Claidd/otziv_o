@@ -28,6 +28,7 @@ import {
 } from '../cabinet/cabinet-chart.helpers';
 import { CabinetLineChartComponent } from '../cabinet/cabinet-line-chart.component';
 import { ManagerControlComponent } from '../admin/manager-control/manager-control.component';
+import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 
 type DashboardAction = {
   label: string;
@@ -82,7 +83,8 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     RouterLink,
     CabinetBarChartComponent,
     CabinetLineChartComponent,
-    ManagerControlComponent
+    ManagerControlComponent,
+    DailyProgressStripComponent
   ],
   templateUrl: './home.component.html',
   styleUrl: './home.component.scss'

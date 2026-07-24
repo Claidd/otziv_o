@@ -69,7 +69,7 @@ public class PerformerRegistrationService {
         createRequest.setFio(trimToNull(request.getFio()));
         createRequest.setPhoneNumber("+" + phone);
         createRequest.setPassword(temporaryPassword);
-        createRequest.setTemporaryPassword(true);
+        createRequest.setTemporaryPassword(false);
         createRequest.setEnabled(true);
         createRequest.setEmailVerified(false);
         createRequest.setRoles(new LinkedHashSet<>(Set.of(PERFORMER_ROLE)));

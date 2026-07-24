@@ -369,7 +369,7 @@ public class TelegramService extends TelegramLongPollingBot {
                     message.getMessageId() == null ? null : String.valueOf(message.getMessageId()),
                     from == null || from.getId() == null ? null : String.valueOf(from.getId()),
                     telegramSenderName(from),
-                    message.getText(),
+                    telegramMessageText(message),
                     telegramMessageTime(message.getDate())
             ));
         } catch (Exception e) {

@@ -13,6 +13,7 @@ import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -642,6 +643,33 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
+    void repairCompanyLinkResolvesInviteDirectlyWhenGroupListIsBroken() {
+        WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_vika");
+        client.setUrl("http://whatsapp_vika:3000");
+        properties.setClients(List.of(client));
+
+        Company company = new Company();
+        company.setId(3063L);
+        company.setTitle("Drivevision");
+        company.setUrlChat("https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw?s=cl&p=i");
+
+        when(whatsAppService.resolveGroupByInvite("whatsapp_vika", company.getUrlChat()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo(
+                        "1203633063@g.us",
+                        "Drivevision",
+                        "https://chat.whatsapp.com/LcXNWVfU4RpHayV7wJOFZw"
+                )));
+
+        WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult result = service.repairCompanyLink(company);
+
+        assertTrue(result.linked());
+        assertEquals("1203633063@g.us", company.getGroupId());
+        verify(companyRepository).save(company);
+        verify(whatsAppService, never()).listGroups("whatsapp_vika", true);
+    }
+
+    @Test
     void updateSettingsPersistsIntervalAndEnabledFlag() {
         when(appSettingService.getBoolean(AppSettingService.WHATSAPP_GROUP_SYNC_ENABLED, true)).thenReturn(false);
         when(appSettingService.getInt(AppSettingService.WHATSAPP_GROUP_SYNC_INTERVAL_MINUTES, 30)).thenReturn(45);
@@ -688,6 +716,49 @@ class WhatsAppGroupLinkSyncServiceTest {
 
         verify(sharedChatLinkSyncService).syncSharedChatIds();
         verify(appSettingService).setInt(AppSettingService.WHATSAPP_GROUP_SYNC_LAST_LINKED_COUNT, 3);
+    }
+
+    @Test
+    void repairsDifferentInviteLinksThatIncorrectlyShareOneStoredGroupId() {
+        WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika");
+        client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+
+        Company bestShop = company(1180L, "The best shop");
+        bestShop.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
+        bestShop.setGroupId("120363418727005154@g.us");
+        Company elitDovatora = company(1181L, "Элит");
+        elitDovatora.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
+        elitDovatora.setGroupId("120363418727005154@g.us");
+        Company elitInterPlaza = company(1739L, "Элит Интер Плаза");
+        elitInterPlaza.setUrlChat("https://chat.whatsapp.com/KO22O6sHRyuJyOyD9JrU8P");
+        elitInterPlaza.setGroupId("120363418727005154@g.us");
+
+        when(companyRepository.findAllWithChatUrl())
+                .thenReturn(List.of(bestShop, elitDovatora, elitInterPlaza));
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", bestShop.getUrlChat()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo(
+                        "120363381641202026@g.us",
+                        "The Best Shop и Элит. Отзывы",
+                        bestShop.getUrlChat()
+                )));
+        when(whatsAppService.resolveGroupByInvite("whatsapp_lika", elitInterPlaza.getUrlChat()))
+                .thenReturn(Optional.of(new WhatsAppGroupInfo(
+                        "120363418727005154@g.us",
+                        "Элит. Отзывы",
+                        elitInterPlaza.getUrlChat()
+                )));
+
+        int repaired = service.repairConflictingInviteGroupIds(properties.getClients(), "test");
+
+        assertEquals(2, repaired);
+        assertEquals("120363381641202026@g.us", bestShop.getGroupId());
+        assertEquals("120363381641202026@g.us", elitDovatora.getGroupId());
+        assertEquals("120363418727005154@g.us", elitInterPlaza.getGroupId());
+        verify(companyRepository).save(bestShop);
+        verify(companyRepository).save(elitDovatora);
+        verify(companyRepository, never()).save(elitInterPlaza);
     }
 
     private static Company company(Long id, String title) {

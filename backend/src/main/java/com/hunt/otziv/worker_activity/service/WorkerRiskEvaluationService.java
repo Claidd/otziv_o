@@ -124,8 +124,8 @@ public class WorkerRiskEvaluationService {
     @Value("${worker.risk.nagul.hour-limit:15}")
     private int nagulHourLimit = 15;
 
-    @Value("${worker.risk.nagul.day-limit:50}")
-    private int nagulDayLimit = 50;
+    @Value("${worker.risk.nagul.day-limit:100}")
+    private int nagulDayLimit = 100;
 
     @Value("${worker.risk.text-actions.hour-limit:30}")
     private int textActionHourLimit = 30;

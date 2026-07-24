@@ -47,6 +47,7 @@ class WorkerTaskCompletionMonitorServiceTest {
     void plainWorkerThresholdCreatesWarningsForWorkerManagersAndOwners() {
         WorkerTaskCompletionMonitorService service = service();
         User worker = user(1L, "worker", "Иван Работник", 101L);
+        worker.setWorkerTelegramGroupChatId(-101L);
         User managerUser = user(2L, "manager", "Мария Менеджер", 102L);
         User ownerUser = user(3L, "owner", "Ольга Владелец", 103L);
         Manager manager = new Manager();
@@ -68,7 +69,7 @@ class WorkerTaskCompletionMonitorServiceTest {
                 eq(1L),
                 isNull()
         );
-        verify(telegramService).sendMessage(eq(101L), org.mockito.ArgumentMatchers.contains("массовое закрытие задач"));
+        verify(telegramService).sendMessage(eq(-101L), org.mockito.ArgumentMatchers.contains("массовое закрытие задач"));
         verify(telegramService).sendMessage(eq(102L), org.mockito.ArgumentMatchers.contains("Иван Работник"));
         verify(telegramService).sendMessage(eq(103L), org.mockito.ArgumentMatchers.contains("Иван Работник"));
     }

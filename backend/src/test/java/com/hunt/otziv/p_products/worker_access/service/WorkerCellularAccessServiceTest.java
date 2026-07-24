@@ -17,7 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class WorkerCellularAccessServiceTest {
@@ -43,19 +46,15 @@ class WorkerCellularAccessServiceTest {
     }
 
     @Test
-    void deniesWorkerOnWifiOrDesktop() {
+    void doesNotBlockUnknownNetworkOrLegacyDesktopByDefault() {
         WorkerCellularAccessService service = service(WorkerCellularAccessProperties.Mode.ENFORCE);
         authenticate("ROLE_WORKER");
         request("192.168.1.20", MOBILE_USER_AGENT);
 
-        ResponseStatusException wifi = assertThrows(
-                ResponseStatusException.class,
-                () -> service.enforceSection("nagul")
-        );
-        assertEquals(403, wifi.getStatusCode().value());
+        assertDoesNotThrow(() -> service.enforceSection("nagul"));
 
         request("100.64.10.20", DESKTOP_USER_AGENT);
-        assertThrows(ResponseStatusException.class, () -> service.enforceProtectedAccess("bad"));
+        assertDoesNotThrow(() -> service.enforceProtectedAccess("bad"));
     }
 
     @Test
@@ -109,18 +108,166 @@ class WorkerCellularAccessServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
     }
 
+    @Test
+    void nativeAppRequiresCellularConnectionReportedByPhysicalDevice() {
+        WorkerCellularAccessService service = service(WorkerCellularAccessProperties.Mode.ENFORCE);
+        authenticate("ROLE_WORKER");
+
+        MockHttpServletRequest wifi = request("100.64.10.20", MOBILE_USER_AGENT);
+        nativeTelemetry(wifi, "wifi", "false");
+        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+
+        MockHttpServletRequest emulator = request("100.64.10.20", MOBILE_USER_AGENT);
+        nativeTelemetry(emulator, "cellular", "true");
+        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+
+        MockHttpServletRequest phone = request("100.64.10.20", MOBILE_USER_AGENT);
+        nativeTelemetry(phone, "cellular", "false");
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+
+        MockHttpServletRequest nativeRequestWithDesktopUserAgent = request("100.64.10.20", DESKTOP_USER_AGENT);
+        nativeTelemetry(nativeRequestWithDesktopUserAgent, "cellular", "false");
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+
+        MockHttpServletRequest nativeRequestWithoutUserAgent = request("100.64.10.20", "");
+        nativeTelemetry(nativeRequestWithoutUserAgent, "cellular", "false");
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+    }
+
+    @Test
+    void nativeAppWithUnknownNetworkIsRecordedButNotBlockedByDefault() {
+        WorkerCellularAccessService service = service(WorkerCellularAccessProperties.Mode.ENFORCE);
+        authenticate("ROLE_WORKER");
+        MockHttpServletRequest request = request("100.64.10.20", MOBILE_USER_AGENT);
+        nativeTelemetry(request, "unknown", "false");
+
+        assertDoesNotThrow(() -> service.enforceSection("bad"));
+    }
+
+    @Test
+    void canExplicitlyEnforceLegacyDesktopReason() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of("100.64.0.0/10"));
+        properties.setEnforcedReasons(java.util.Set.of("DESKTOP_OR_UNKNOWN_DEVICE"));
+        WorkerCellularAccessService service = new WorkerCellularAccessService(
+                properties,
+                unavailableIntelligenceClient(),
+                mock(WorkerNetworkViolationService.class)
+        );
+        authenticate("ROLE_WORKER");
+        request("100.64.10.20", DESKTOP_USER_AGENT);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.enforceSection("publish")
+        );
+        assertEquals(403, exception.getStatusCode().value());
+    }
+
+    @Test
+    void selectiveEnforcementStoresWhetherViolationWasActuallyBlocked() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of("100.64.0.0/10"));
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(
+                properties,
+                unavailableIntelligenceClient(),
+                violations
+        );
+        authenticate("ROLE_WORKER");
+        request("100.64.10.20", DESKTOP_USER_AGENT);
+
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        verify(violations).recordViolation(
+                eq("worker"),
+                eq("publish"),
+                eq(WorkerCellularAccessProperties.Mode.ENFORCE),
+                eq("DESKTOP_OR_UNKNOWN_DEVICE"),
+                anyString(),
+                anyString(),
+                eq("client=web-or-legacy"),
+                eq(false)
+        );
+    }
+
+    @Test
+    void verifiedMegafonNatRangesAllowMobileBrowserButDoNotConfirmDesktopUserAgent() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of("178.177.216.0/22", "178.177.220.0/22"));
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup(anyString())).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "PJSC MegaFon", "ipquery")
+        );
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+        authenticate("ROLE_WORKER");
+
+        request("178.177.216.42", MOBILE_USER_AGENT);
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        verifyNoInteractions(violations);
+
+        request("178.177.223.42", DESKTOP_USER_AGENT);
+        assertDoesNotThrow(() -> service.enforceSection("nagul"));
+        verify(violations).recordViolation(
+                eq("worker"),
+                eq("nagul"),
+                eq(WorkerCellularAccessProperties.Mode.ENFORCE),
+                eq("DESKTOP_OR_UNKNOWN_DEVICE"),
+                eq("PJSC MegaFon"),
+                eq("178.177.223.0/24"),
+                eq("client=web-or-legacy"),
+                eq(false)
+        );
+    }
+
+    @Test
+    void verifiedMtsIrkutskMobileRangeOverridesFalseFixedNetworkClassificationButNotVpnRisk() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of("91.78.236.0/22"));
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+        authenticate("ROLE_WORKER");
+        request("91.78.236.152", MOBILE_USER_AGENT);
+
+        when(client.lookup("91.78.236.152")).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "MTS PJSC", "ipquery")
+        );
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        verifyNoInteractions(violations);
+
+        when(client.lookup("91.78.236.152")).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, true, "MTS PJSC", "ipquery")
+        );
+        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+        verify(violations).recordViolation(
+                eq("worker"),
+                eq("publish"),
+                eq(WorkerCellularAccessProperties.Mode.ENFORCE),
+                eq("VPN_PROXY_OR_DATACENTER"),
+                eq("MTS PJSC"),
+                eq("91.78.236.0/24"),
+                eq("client=web-or-legacy"),
+                eq(true)
+        );
+    }
+
     private WorkerCellularAccessService service(WorkerCellularAccessProperties.Mode mode) {
         WorkerCellularAccessProperties properties = properties(mode);
         properties.setAllowedCidrs(List.of("100.64.0.0/10", "2a00:1fa0::/32"));
+        return new WorkerCellularAccessService(
+                properties,
+                unavailableIntelligenceClient(),
+                mock(WorkerNetworkViolationService.class)
+        );
+    }
+
+    private WorkerIpIntelligenceClient unavailableIntelligenceClient() {
         WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
         when(client.lookup(anyString())).thenReturn(
                 new WorkerIpIntelligenceClient.IpIntelligence(false, false, false, "", "unavailable")
         );
-        return new WorkerCellularAccessService(
-                properties,
-                client,
-                mock(WorkerNetworkViolationService.class)
-        );
+        return client;
     }
 
     private WorkerCellularAccessProperties properties(WorkerCellularAccessProperties.Mode mode) {
@@ -138,10 +285,22 @@ class WorkerCellularAccessServiceTest {
         );
     }
 
-    private void request(String remoteAddress, String userAgent) {
+    private MockHttpServletRequest request(String remoteAddress, String userAgent) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setRemoteAddr(remoteAddress);
         request.addHeader("User-Agent", userAgent);
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+        return request;
+    }
+
+    private void nativeTelemetry(MockHttpServletRequest request, String network, String virtual) {
+        request.addHeader("X-Otziv-App-Client", "capacitor");
+        request.addHeader("X-Otziv-Device-Platform", "android");
+        request.addHeader("X-Otziv-Device-Model", "Pixel 8");
+        request.addHeader("X-Otziv-Device-Virtual", virtual);
+        request.addHeader("X-Otziv-Network-Type", network);
+        request.addHeader("X-Otziv-App-Version", "1.0.54");
+        request.addHeader("X-Otziv-App-Build", "54");
+        request.addHeader("X-Otziv-Installation-Id", "install-1234567890");
     }
 }

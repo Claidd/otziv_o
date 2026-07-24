@@ -14,6 +14,7 @@ public interface WhatsAppService {
     default List<WhatsAppGroupInfo> listGroups(String clientId, boolean forceRefresh) {
         return listGroups(clientId);
     }
+    Optional<WhatsAppGroupInfo> resolveGroupByInvite(String clientId, String inviteLinkOrCode);
     WhatsAppClientStatusDto getClientStatus(String clientId);
     Optional<WhatsAppUserStatusDto> getUserStatusWithLastSeen(String id, String phone);
 }

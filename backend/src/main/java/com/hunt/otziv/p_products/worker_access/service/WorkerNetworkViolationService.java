@@ -48,7 +48,9 @@ public class WorkerNetworkViolationService {
             WorkerCellularAccessProperties.Mode mode,
             String reason,
             String provider,
-            String ipPrefix
+            String ipPrefix,
+            String clientEvidence,
+            boolean blocked
     ) {
         if (!properties.isViolationStatisticsEnabled()
                 || (!properties.isCountUnknownNetworkViolations() && "UNKNOWN_NETWORK".equals(reason))) {
@@ -65,20 +67,21 @@ public class WorkerNetworkViolationService {
                         .addValue("reason", trim(reason, 64))
                         .addValue("scope", trim(scope, 64))
                         .addValue("mode", mode.name())
-                        .addValue("result", mode == WorkerCellularAccessProperties.Mode.ENFORCE ? "BLOCKED" : "AUDIT_ALLOWED")
+                        .addValue("result", blocked ? "BLOCKED" : "AUDIT_ALLOWED")
                         .addValue("episodeSlot", episodeSlot)
                         .addValue("now", now)
                         .addValue("provider", nullableTrim(provider, 180))
-                        .addValue("ipPrefix", nullableTrim(ipPrefix, 80));
+                        .addValue("ipPrefix", nullableTrim(ipPrefix, 80))
+                        .addValue("clientEvidence", nullableTrim(clientEvidence, 500));
                 jdbcTemplate.update("""
                         INSERT INTO worker_network_violation_episodes (
                             worker_user_id, worker_username, reason_code, scope_code,
                             access_mode, access_result, episode_slot, first_seen_at, last_seen_at,
-                            attempt_count, provider, ip_prefix
+                            attempt_count, provider, ip_prefix, client_evidence
                         ) VALUES (
                             :userId, :username, :reason, :scope,
                             :mode, :result, :episodeSlot, :now, :now,
-                            1, :provider, :ipPrefix
+                            1, :provider, :ipPrefix, :clientEvidence
                         )
                         ON DUPLICATE KEY UPDATE
                             last_seen_at = VALUES(last_seen_at),
@@ -86,7 +89,8 @@ public class WorkerNetworkViolationService {
                             access_mode = VALUES(access_mode),
                             access_result = VALUES(access_result),
                             provider = VALUES(provider),
-                            ip_prefix = VALUES(ip_prefix)
+                            ip_prefix = VALUES(ip_prefix),
+                            client_evidence = VALUES(client_evidence)
                         """, parameters);
             });
         } catch (RuntimeException exception) {
@@ -116,11 +120,12 @@ public class WorkerNetworkViolationService {
                     .addValue("to", toExclusive.atStartOfDay());
             List<ViolationRow> rows = jdbcTemplate.query("""
                     SELECT worker_user_id, first_seen_at, last_seen_at, reason_code, scope_code,
-                           attempt_count, provider, access_result
+                           attempt_count, provider, client_evidence, access_result
                     FROM worker_network_violation_episodes
                     WHERE worker_user_id IN (:userIds)
                       AND last_seen_at >= :from
                       AND first_seen_at < :to
+                      AND access_result <> 'INVALIDATED'
                     ORDER BY last_seen_at DESC
                     """, parameters, (resultSet, rowNumber) -> new ViolationRow(
                     resultSet.getLong("worker_user_id"),
@@ -130,6 +135,7 @@ public class WorkerNetworkViolationService {
                     resultSet.getString("scope_code"),
                     resultSet.getLong("attempt_count"),
                     resultSet.getString("provider"),
+                    resultSet.getString("client_evidence"),
                     "BLOCKED".equals(resultSet.getString("access_result"))
             ));
             return aggregate(safeUserIds, rows);
@@ -165,6 +171,7 @@ public class WorkerNetworkViolationService {
                             row.scope(),
                             row.attemptCount(),
                             row.provider(),
+                            row.clientEvidence(),
                             row.blocked()
                     ))
                     .toList();
@@ -205,6 +212,7 @@ public class WorkerNetworkViolationService {
             String scope,
             long attemptCount,
             String provider,
+            String clientEvidence,
             boolean blocked
     ) {
     }

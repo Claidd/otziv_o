@@ -118,7 +118,7 @@ public class KeycloakAdminClient {
         }
 
         List<KeycloakRoleRepresentation> roles = roleNames.stream()
-                .map(this::getRealmRole)
+                .map(this::getOrCreateRealmRole)
                 .toList();
 
         try {
@@ -271,15 +271,43 @@ public class KeycloakAdminClient {
         }
     }
 
-    private KeycloakRoleRepresentation getRealmRole(String roleName) {
+    private KeycloakRoleRepresentation getOrCreateRealmRole(String roleName) {
         try {
-            return restClient.get()
-                    .uri(adminUri("roles", roleName))
-                    .headers(this::setBearerAuth)
-                    .retrieve()
-                    .body(KeycloakRoleRepresentation.class);
+            return getRealmRole(roleName);
         } catch (RestClientResponseException e) {
-            throw keycloakException("Failed to read Keycloak realm role: " + roleName, e);
+            if (e.getStatusCode().value() != NOT_FOUND.value()) {
+                throw keycloakException("Failed to read Keycloak realm role: " + roleName, e);
+            }
+            createRealmRoleIfMissing(roleName);
+            return getRealmRole(roleName);
+        }
+    }
+
+    private KeycloakRoleRepresentation getRealmRole(String roleName) {
+        return restClient.get()
+                .uri(adminUri("roles", roleName))
+                .headers(this::setBearerAuth)
+                .retrieve()
+                .body(KeycloakRoleRepresentation.class);
+    }
+
+    private void createRealmRoleIfMissing(String roleName) {
+        try {
+            restClient.post()
+                    .uri(adminUri("roles"))
+                    .headers(this::setBearerAuth)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of(
+                            "name", roleName,
+                            "description", "Managed by otziv backend"
+                    ))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException e) {
+            if (e.getStatusCode().value() == CONFLICT.value()) {
+                return;
+            }
+            throw keycloakException("Failed to create Keycloak realm role: " + roleName, e);
         }
     }
 

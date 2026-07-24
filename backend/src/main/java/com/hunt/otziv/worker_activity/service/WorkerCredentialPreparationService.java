@@ -31,7 +31,7 @@ public class WorkerCredentialPreparationService {
     private final WorkerActivityService workerActivityService;
 
     @Transactional
-    public void recordCopy(
+    public boolean recordCopy(
             Authentication authentication,
             Review review,
             String field,
@@ -40,17 +40,17 @@ public class WorkerCredentialPreparationService {
             String sourceSection
     ) {
         if (!workerActivityService.isPlainWorker(authentication) || review == null || review.getId() == null) {
-            return;
+            return true;
         }
 
         WorkerCredentialPreparationScope scope = scope(sourcePage, sourceEntry, sourceSection);
         if (scope == null) {
-            return;
+            return false;
         }
 
         User workerUser = currentUser(authentication);
         if (workerUser == null || workerUser.getId() == null) {
-            return;
+            return false;
         }
 
         Long botId = botId(review.getBot());
@@ -75,13 +75,14 @@ public class WorkerCredentialPreparationService {
         } else if ("password".equals(field)) {
             preparation.setPasswordCopiedAt(now);
         } else {
-            return;
+            return false;
         }
         preparation.setSourcePage(limit(sourcePage));
         preparation.setSourceEntry(limit(sourceEntry));
         preparation.setSourceSection(limit(sourceSection));
         preparation.setUpdatedAt(now);
         repository.save(preparation);
+        return true;
     }
 
     @Transactional
@@ -146,16 +147,20 @@ public class WorkerCredentialPreparationService {
         String entry = normalize(sourceEntry);
         String section = normalize(sourceSection);
 
-        if ("worker-board".equals(page) && "publish".equals(section)) {
+        if (isWorkerBoard(page) && "publish".equals(section)) {
             return WorkerCredentialPreparationScope.PUBLISH;
         }
-        if ("worker-board".equals(page) && "nagul".equals(section)) {
+        if (isWorkerBoard(page) && "nagul".equals(section)) {
             return WorkerCredentialPreparationScope.NAGUL;
         }
         if ("order-details".equals(page) && "worker-all".equals(entry)) {
             return WorkerCredentialPreparationScope.PUBLISH;
         }
         return null;
+    }
+
+    private boolean isWorkerBoard(String page) {
+        return "worker-board".equals(page) || "mobile-worker-board".equals(page);
     }
 
     private WorkerCredentialPreparationResponse toResponse(WorkerCredentialPreparation preparation, int waitSeconds) {

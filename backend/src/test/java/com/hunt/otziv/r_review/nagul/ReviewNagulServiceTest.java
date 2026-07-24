@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -63,6 +64,7 @@ class ReviewNagulServiceTest {
         User user = workerUser();
         Worker worker = new Worker();
         Review review = reviewWithBotName("Иван Петров");
+        review.setPublishedDate(LocalDate.of(2026, 7, 19));
 
         when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
         when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
@@ -72,6 +74,7 @@ class ReviewNagulServiceTest {
         service.performNagulWithExceptions(15L, "worker");
 
         assertTrue(review.isVigul());
+        assertEquals(LocalDate.of(2026, 7, 19), review.getPublishedDate());
         assertTrue(worker.getLastNagulTime() != null);
         verify(workerService).save(worker);
         verify(reviewRepository).save(review);

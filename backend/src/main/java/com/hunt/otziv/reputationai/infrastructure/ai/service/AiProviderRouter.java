@@ -1,21 +1,20 @@
 package com.hunt.otziv.reputationai.infrastructure.ai.service;
 
-import com.hunt.otziv.reputationai.config.ReputationAiProperties;
+import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 public class AiProviderRouter {
 
-    private final ReputationAiProperties properties;
+    private final ReputationAiProviderSelectionService providerSelectionService;
     private final List<AiProvider> providers;
 
     public AiProvider activeProvider() {
-        String selected = properties.getProvider().toLowerCase(Locale.ROOT);
+        String selected = providerSelectionService.activeProvider();
         return providers.stream()
                 .filter(provider -> provider.providerName().equalsIgnoreCase(selected))
                 .findFirst()

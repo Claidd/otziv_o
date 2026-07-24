@@ -7,12 +7,14 @@ import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.*;
 import com.hunt.otziv.admin.model.Quadruple;
+import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.RegistrationUserDTO;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.services.service.*;
@@ -22,6 +24,8 @@ import com.hunt.otziv.z_zp.model.PaymentCheck;
 import com.hunt.otziv.z_zp.model.Zp;
 import com.hunt.otziv.z_zp.services.PaymentCheckService;
 import com.hunt.otziv.z_zp.services.ZpService;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
@@ -61,6 +65,9 @@ public class PersonalServiceImpl implements PersonalService {
     private final CompanyService companyService;
     private final ImageService imageService;
     private final PerformanceMetrics performanceMetrics;
+    private final StaffDailyProgressService staffDailyProgressService;
+    private final BadReviewTaskService badReviewTaskService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
 
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ROLE_OWNER = "ROLE_OWNER";
@@ -707,8 +714,10 @@ public class PersonalServiceImpl implements PersonalService {
 
             // Сохраняем все данные в карту
             result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
-                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay, null, null, null));
         });
+
+        attachWorkerReportDetails(result, workerService.getAllWorkers(), localDate);
 
 //        System.out.println(result);
         // Возвращаем результат
@@ -866,6 +875,47 @@ public class PersonalServiceImpl implements PersonalService {
                 .append("</b>, коррекция <b>").append(safeLong(user.getCorrectOrders())).append("</b>\n");
         report.append("Выгул: <b>").append(safeLong(user.getInVigul()))
                 .append("</b> | публикация: <b>").append(safeLong(user.getInPublish())).append("</b>\n");
+        if (ROLE_WORKER.equals(user.getRole())) {
+            report.append("Плохие: <b>").append(safeLong(user.getBadTasks()))
+                    .append("</b> | восстановление: <b>").append(safeLong(user.getRecoveryTasks())).append("</b>\n");
+            appendWorkerDailyProgress(report, user.getDailyProgress());
+        }
+    }
+
+    private void appendWorkerDailyProgress(StringBuilder report, DailyWorkProgressResponse progress) {
+        if (progress == null || !progress.visible()) {
+            return;
+        }
+        report.append("Прогресс дня: <b>").append(progress.completed()).append("/")
+                .append(progress.total()).append(" (").append(progress.percent()).append("%)</b>\n");
+    }
+
+    private void attachWorkerReportDetails(
+            Map<String, UserData> result,
+            Collection<Worker> workers,
+            LocalDate date
+    ) {
+        if (result == null || result.isEmpty() || workers == null || workers.isEmpty()) {
+            return;
+        }
+        try {
+            Map<Long, DailyWorkProgressResponse> progressByWorker = staffDailyProgressService.progressEnabled()
+                    ? staffDailyProgressService.workerProgressByWorkers(workers, date)
+                    : Map.of();
+            for (Worker worker : workers) {
+                if (worker == null || worker.getId() == null || worker.getUser() == null) {
+                    continue;
+                }
+                UserData userData = result.get(worker.getUser().getFio());
+                if (userData != null) {
+                    userData.setDailyProgress(progressByWorker.get(worker.getId()));
+                    userData.setBadTasks((long) badReviewTaskService.countDueTasksToWorker(worker, date));
+                    userData.setRecoveryTasks((long) reviewRecoveryTaskService.countDueTasksToWorker(worker, date));
+                }
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось добавить дневной прогресс в Telegram-отчет: {}", exception.getMessage());
+        }
     }
 
     private long safeLong(Long value) {
@@ -1017,7 +1067,7 @@ public class PersonalServiceImpl implements PersonalService {
 
             return new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, newOrderCount, correctOrders,
                     inVigul, inPublishCount, imageId, userId, ordersCount, reviewsCount, leadsNew, leadsInWork, percentInWork,
-                    0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L);
+                    0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, null, null, null);
         }).toList());
     }
 
@@ -1086,7 +1136,7 @@ public class PersonalServiceImpl implements PersonalService {
 
             // Сохраняем все данные в карту
             result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
-                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay, null, null, null));
         });
 
 //        System.out.println(result);
@@ -1164,7 +1214,7 @@ public class PersonalServiceImpl implements PersonalService {
 
             // Сохраняем все данные в карту
             result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
-                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay, null, null, null));
         });
 
 //        System.out.println(result);
@@ -1249,7 +1299,7 @@ public class PersonalServiceImpl implements PersonalService {
 
             // Сохраняем все данные в карту
             result.put(fio, new UserData(fio, role, pair.getSecond(), totalSum, zpTotal, newCompanyCount, orderInNew, orderInCorrect, inVigul, inPublishCount, 1L,0L, 0L, 0L, leadsNew, null, null,
-                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay));
+                    orderInNew, orderToCheck, orderInCheck, orderInCorrect, orderInPublished, orderInWaitingPay1, orderInWaitingPay2, orderNoPay, null, null, null));
         });
 
 //        System.out.println(result);
@@ -1268,6 +1318,11 @@ public class PersonalServiceImpl implements PersonalService {
         Map<String, UserData> filteredResult = result.entrySet().stream()
                 .filter(entry -> allowedFio.contains(entry.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        Worker worker = workerService.getWorkerByUserId(userId);
+        if (worker != null) {
+            attachWorkerReportDetails(filteredResult, List.of(worker), localDate);
+        }
 
         return filteredResult;
 

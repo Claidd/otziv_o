@@ -504,10 +504,15 @@ export class WorkerReviewCardComponent {
   }
 
   reviewCredentialCopyDisabled(kind: ReviewCopyKind): boolean {
-    return (kind === 'login' || kind === 'password') && this.cannotCompleteBecauseBotUnavailable();
+    return (kind === 'login' || kind === 'password')
+      && (this.activeSection === 'new' || this.cannotCompleteBecauseBotUnavailable());
   }
 
   reviewCredentialCopyTitle(kind: ReviewCopyKind): string {
+    if ((kind === 'login' || kind === 'password') && this.activeSection === 'new') {
+      return 'В разделе «Новые» логин и пароль недоступны';
+    }
+
     return this.reviewCredentialCopyDisabled(kind)
       ? this.accountRepairTitle()
       : 'Скопировать';

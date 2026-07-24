@@ -88,7 +88,10 @@ describe('WorkerReviewEditModalComponent', () => {
     expect(element.querySelector('#review-edit-title')?.textContent?.trim()).toBe('Редактирование отзыва');
     expect(element.querySelector<HTMLTextAreaElement>('textarea[name="reviewText"]')?.value).toBe('Review text');
     expect(element.querySelector<HTMLInputElement>('input[name="reviewBotPassword"]')?.value).toBe('bot-password');
-    expect(element.querySelector<HTMLButtonElement>('.lead-edit-delete.review-delete-action')).not.toBeNull();
+    const deleteButton = element.querySelector<HTMLButtonElement>('.lead-edit-delete.review-delete-action');
+    expect(deleteButton?.textContent?.trim()).toBe('delete');
+    expect(deleteButton?.getAttribute('aria-label')).toBe('Удалить отзыв');
+    expect(element.querySelector<HTMLButtonElement>('.lead-edit-close')?.textContent?.trim()).toBe('close');
     expect(element.querySelector<HTMLInputElement>('input[type="file"]')).not.toBeNull();
   });
 

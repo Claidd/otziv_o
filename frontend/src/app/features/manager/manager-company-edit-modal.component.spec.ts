@@ -123,9 +123,28 @@ describe('ManagerCompanyEditModalComponent', () => {
     expect(element.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Company');
     expect(element.querySelector<HTMLInputElement>('input[name="urlSite"]')?.value).toBe('https://company.example.test');
     expect(element.querySelector<HTMLInputElement>('input[name="allowWorkerPublicationDateEdit"]')?.checked).toBe(false);
+    expect(element.querySelector<HTMLInputElement>('input[name="publicationProgressReportsEnabled"]')?.checked).toBe(true);
+    expect(element.textContent).toContain('Оповещения о каждой публикации');
+    expect(element.textContent).toContain('Сейчас включены');
+    expect(element.textContent).toContain('нажмите «Сохранить»');
     expect(element.textContent).toContain('Разрешить специалистам изменять даты публикации');
     expect(element.textContent).toContain('Worker 6');
     expect(element.textContent).toContain('City: Filial 7');
+  });
+
+  it('clearly shows when publication alerts are disabled', async () => {
+    const fixture = TestBed.createComponent(ManagerCompanyEditModalComponent);
+    fixture.componentInstance.company = company({ publicationProgressReportsEnabled: false });
+    fixture.componentInstance.draft = draft({ publicationProgressReportsEnabled: false });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector<HTMLInputElement>('input[name="publicationProgressReportsEnabled"]')?.checked).toBe(false);
+    expect(element.textContent).toContain('Сейчас отключены');
+    expect(element.textContent).toContain('Это не отвязывает WhatsApp-группу');
+    expect(element.textContent).toContain('итоговые сообщения по заказу продолжат работать');
   });
 
   it('emits form and delete actions', async () => {

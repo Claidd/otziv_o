@@ -23,6 +23,11 @@ import static org.springframework.http.HttpStatus.FORBIDDEN;
 public class WorkerCellularAccessService {
 
     public static final Set<String> PROTECTED_SECTIONS = Set.of("nagul", "publish", "recovery", "bad");
+    private static final String REASON_ALLOWED = "ALLOWED";
+    private static final String REASON_NON_CELLULAR = "NON_CELLULAR_NETWORK";
+    private static final String REASON_VPN = "VPN_PROXY_OR_DATACENTER";
+    private static final String REASON_DESKTOP = "DESKTOP_OR_UNKNOWN_DEVICE";
+    private static final String REASON_UNKNOWN = "UNKNOWN_NETWORK";
     private static final Set<String> ELEVATED_ROLES = Set.of("ROLE_ADMIN", "ROLE_OWNER", "ROLE_MANAGER");
     private static final String DENIED_MESSAGE =
             "Этот подраздел доступен специалистам только с мобильного телефона через мобильный интернет. "
@@ -70,20 +75,24 @@ public class WorkerCellularAccessService {
 
         HttpServletRequest request = currentRequest();
         String clientIp = request == null ? null : request.getRemoteAddr();
-        boolean mobileDevice = !properties.isRequireMobileDevice() || isMobilePhone(request);
+        ClientTelemetry telemetry = ClientTelemetry.from(request);
+        boolean mobileDevice = mobileDevice(request, telemetry);
         boolean cidrMatch = cidrMatcher.matches(clientIp);
         WorkerIpIntelligenceClient.IpIntelligence intelligence = ipIntelligenceClient.lookup(clientIp);
-        boolean cellularNetwork = !intelligence.risky() && (cidrMatch || intelligence.mobile());
-        boolean allowed = mobileDevice && cellularNetwork;
-        String reason = accessReason(mobileDevice, cellularNetwork, intelligence);
+        boolean serverCellularNetwork = !intelligence.risky() && (cidrMatch || intelligence.mobile());
+        String reason = accessReason(mobileDevice, serverCellularNetwork, telemetry, intelligence);
+        boolean allowed = REASON_ALLOWED.equals(reason);
+        boolean blocked = !allowed
+                && mode == WorkerCellularAccessProperties.Mode.ENFORCE
+                && shouldEnforce(reason, telemetry);
 
         log.info(
                 "Worker cellular access: user={}, scope={}, mode={}, result={}, reason={}, mobileDevice={}, cidrMatch={}, "
-                        + "intelKnown={}, intelMobile={}, intelRisky={}, intelOrg={}, ipPrefix={}",
+                        + "intelKnown={}, intelMobile={}, intelRisky={}, intelOrg={}, clientTelemetry={}, ipPrefix={}",
                 authentication.getName(),
                 normalizeScope(scope),
                 mode,
-                allowed ? "ALLOW" : mode == WorkerCellularAccessProperties.Mode.AUDIT ? "AUDIT_ALLOW" : "DENY",
+                allowed ? "ALLOW" : blocked ? "DENY" : "AUDIT_ALLOW",
                 reason,
                 mobileDevice,
                 cidrMatch,
@@ -91,6 +100,7 @@ public class WorkerCellularAccessService {
                 intelligence.mobile(),
                 intelligence.risky(),
                 logValue(intelligence.organization()),
+                telemetry.evidence(),
                 maskedAddress(clientIp)
         );
 
@@ -101,30 +111,69 @@ public class WorkerCellularAccessService {
                     mode,
                     reason,
                     intelligence.organization(),
-                    maskedAddress(clientIp)
+                    maskedAddress(clientIp),
+                    telemetry.evidence(),
+                    blocked
             );
         }
 
-        if (!allowed && mode == WorkerCellularAccessProperties.Mode.ENFORCE) {
+        if (blocked) {
             throw new ResponseStatusException(FORBIDDEN, DENIED_MESSAGE);
         }
     }
 
+    private boolean mobileDevice(HttpServletRequest request, ClientTelemetry telemetry) {
+        if (!properties.isRequireMobileDevice()) {
+            return true;
+        }
+        if (telemetry.nativeApp()) {
+            return telemetry.physicalSupportedDevice();
+        }
+        return isMobilePhone(request);
+    }
+
     private String accessReason(
             boolean mobileDevice,
-            boolean cellularNetwork,
+            boolean serverCellularNetwork,
+            ClientTelemetry telemetry,
             WorkerIpIntelligenceClient.IpIntelligence intelligence
     ) {
-        if (!mobileDevice) {
-            return "DESKTOP_OR_UNKNOWN_DEVICE";
-        }
         if (intelligence.risky()) {
-            return "VPN_PROXY_OR_DATACENTER";
+            return REASON_VPN;
         }
-        if (!cellularNetwork) {
-            return intelligence.known() ? "NON_CELLULAR_NETWORK" : "UNKNOWN_NETWORK";
+        if (properties.isRequireMobileDevice() && telemetry.virtualDevice()) {
+            return REASON_DESKTOP;
         }
-        return "ALLOWED";
+        if (telemetry.nativeApp() && "wifi".equals(telemetry.networkType())) {
+            return REASON_NON_CELLULAR;
+        }
+        if (telemetry.nativeApp() && !"cellular".equals(telemetry.networkType())) {
+            return REASON_UNKNOWN;
+        }
+        if (!serverCellularNetwork) {
+            return intelligence.known() ? REASON_NON_CELLULAR : REASON_UNKNOWN;
+        }
+        if (!mobileDevice) {
+            return REASON_DESKTOP;
+        }
+        return REASON_ALLOWED;
+    }
+
+    private boolean shouldEnforce(String reason, ClientTelemetry telemetry) {
+        if (REASON_DESKTOP.equals(reason)
+                && telemetry.virtualDevice()
+                && properties.isEnforceNativeVirtualDevice()) {
+            return true;
+        }
+        Set<String> configured = properties.getEnforcedReasons();
+        if (configured == null || configured.isEmpty()) {
+            return false;
+        }
+        String normalizedReason = normalizeSection(reason).toUpperCase(Locale.ROOT);
+        return configured.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(value -> value.trim().toUpperCase(Locale.ROOT))
+                .anyMatch(normalizedReason::equals);
     }
 
     private boolean isWorkerOnly(Authentication authentication) {
@@ -201,5 +250,75 @@ public class WorkerCellularAccessService {
     private String logValue(String value) {
         String normalized = safe(value).replace(',', ' ').replaceAll("\\s+", " ").trim();
         return normalized.isEmpty() ? "unknown" : normalized;
+    }
+
+    private record ClientTelemetry(
+            boolean nativeApp,
+            String platform,
+            String model,
+            String virtual,
+            String networkType,
+            String appVersion,
+            String appBuild,
+            String installationId
+    ) {
+        private static ClientTelemetry from(HttpServletRequest request) {
+            if (request == null || !"capacitor".equalsIgnoreCase(header(request, "X-Otziv-App-Client"))) {
+                return new ClientTelemetry(false, "unknown", "unknown", "unknown", "unknown", "unknown", "unknown", "unknown");
+            }
+            return new ClientTelemetry(
+                    true,
+                    normalizedHeader(request, "X-Otziv-Device-Platform", 24),
+                    normalizedHeader(request, "X-Otziv-Device-Model", 80),
+                    normalizedHeader(request, "X-Otziv-Device-Virtual", 12),
+                    normalizedHeader(request, "X-Otziv-Network-Type", 24).toLowerCase(Locale.ROOT),
+                    normalizedHeader(request, "X-Otziv-App-Version", 32),
+                    normalizedHeader(request, "X-Otziv-App-Build", 32),
+                    normalizedHeader(request, "X-Otziv-Installation-Id", 80)
+            );
+        }
+
+        private boolean virtualDevice() {
+            return nativeApp && "true".equalsIgnoreCase(virtual);
+        }
+
+        private boolean physicalSupportedDevice() {
+            if (!nativeApp || !"false".equalsIgnoreCase(virtual)) {
+                return false;
+            }
+            return "android".equalsIgnoreCase(platform) || "ios".equalsIgnoreCase(platform);
+        }
+
+        private String evidence() {
+            if (!nativeApp) {
+                return "client=web-or-legacy";
+            }
+            return "client=capacitor;platform=" + platform
+                    + ";model=" + model
+                    + ";virtual=" + virtual
+                    + ";network=" + networkType
+                    + ";app=" + appVersion + "(" + appBuild + ")"
+                    + ";install=" + shortInstallationId(installationId);
+        }
+
+        private static String shortInstallationId(String value) {
+            if (value == null || value.isBlank() || "unknown".equalsIgnoreCase(value)) {
+                return "unknown";
+            }
+            return value.length() <= 12 ? value : value.substring(0, 12);
+        }
+
+        private static String normalizedHeader(HttpServletRequest request, String name, int maxLength) {
+            String value = header(request, name).replace(';', ' ').replaceAll("[\\r\\n]", " ").trim();
+            if (value.isEmpty()) {
+                return "unknown";
+            }
+            return value.length() <= maxLength ? value : value.substring(0, maxLength);
+        }
+
+        private static String header(HttpServletRequest request, String name) {
+            String value = request.getHeader(name);
+            return value == null ? "" : value;
+        }
     }
 }

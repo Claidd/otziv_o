@@ -85,7 +85,7 @@ input[type='date'] {
 }
 
 .period-control button.active {
-  background: var(--otziv-primary);
+  background: var(--otziv-action-fill);
   color: var(--otziv-white);
 }
 
@@ -103,7 +103,11 @@ input[type='date'] {
 }
 
 .section-title span {
-  color: var(--otziv-primary);
+  color: var(--otziv-action);
+  background: var(--otziv-action-fill);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   font-size: 2rem;
 }
 
@@ -160,6 +164,13 @@ input[type='date'] {
 
 .blue {
   color: var(--otziv-primary);
+}
+
+.metric-card.blue strong {
+  background: var(--otziv-action-fill);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .yellow {

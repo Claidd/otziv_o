@@ -25,6 +25,22 @@ describe('DeepResearchReportViewComponent', () => {
     expect(component.deepReportBlocks().map((block) => block.title)).toEqual(['Идеи для постов и карточки']);
     expect(component.deepReportBlocks().map((block) => block.sectionIndex)).toEqual([1]);
   });
+
+  it('recognizes insufficient data from the coverage quality check', () => {
+    const component = new DeepResearchReportViewComponent();
+    component.report = {
+      ...reportWithSections([{ title: 'Краткая сводка', body: 'Данных мало.' }]),
+      qualityChecks: [{
+        key: 'coverage',
+        label: 'Покрытие исследования',
+        status: 'fail',
+        detail: 'insufficient_data: нет подтверждённых публичных источников.'
+      }]
+    };
+
+    expect(component.researchCoverageStatus()).toBe('insufficient_data');
+    expect(component.isInsufficientData()).toBe(true);
+  });
 });
 
 function reportWithSections(
