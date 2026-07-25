@@ -820,3 +820,31 @@ select {
     grid-template-rows: auto auto auto auto auto;
   }
 }
+
+.risk-access-lock {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  max-width: 48rem;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  border: 1px solid rgba(214, 143, 34, 0.35);
+  border-radius: 1.25rem;
+  color: #6b4307;
+  background: #fff8e8;
+  box-shadow: 0 0.75rem 2rem rgba(88, 57, 9, 0.08);
+}
+
+.risk-access-lock > .material-icons-sharp {
+  font-size: 2rem;
+}
+
+.risk-access-lock strong,
+.risk-access-lock p,
+.risk-access-lock small {
+  display: block;
+}
+
+.risk-access-lock p {
+  margin: 0.45rem 0;
+}

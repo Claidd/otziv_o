@@ -115,7 +115,7 @@ public class OrderStatusTransitionService {
             Order order = orderRepository.findByIdForMutation(orderID)
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
-            ensureCommonBillingFinancialStatusAllowed(order, title, allowCommonBillingFinancialStatus);
+            ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
             String oldStatus = safeStatusTitle(order);
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
@@ -146,21 +146,39 @@ public class OrderStatusTransitionService {
         }
     }
 
-    private void ensureCommonBillingFinancialStatusAllowed(
+    private void ensureCommonBillingStatusTransitionAllowed(
             Order order,
             String title,
             boolean allowCommonBillingFinancialStatus
     ) {
-        if (allowCommonBillingFinancialStatus || !COMMON_BILLING_FINANCIAL_STATUSES.contains(title)) {
+        if (allowCommonBillingFinancialStatus) {
             return;
         }
+
+        String currentStatus = safeStatusTitle(order);
+        boolean targetsFinancialStatus = COMMON_BILLING_FINANCIAL_STATUSES.contains(title);
+        boolean leavesFinancialStatus = COMMON_BILLING_FINANCIAL_STATUSES.contains(currentStatus)
+                && !safeString(currentStatus).equals(safeString(title));
+        if (!targetsFinancialStatus && !leavesFinancialStatus) {
+            return;
+        }
+
         CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
-        if (commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId())) {
+        if (commonBillingService == null || !commonBillingService.isOrderInActiveCommonInvoice(order.getId())) {
+            return;
+        }
+
+        if (targetsFinancialStatus) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Финансовый статус заказа внутри общего счета меняется только через общий счет"
             );
         }
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Заказ уже включен в активный общий счет и не может быть возвращен в рабочий статус"
+        );
     }
 
     private void recordStatusAudit(Order order, String oldStatus, String newStatus, String requestedStatus, boolean changed) {

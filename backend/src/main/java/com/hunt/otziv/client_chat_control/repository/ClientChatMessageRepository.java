@@ -2,6 +2,7 @@ package com.hunt.otziv.client_chat_control.repository;
 
 import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import java.util.Optional;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,6 +25,13 @@ public interface ClientChatMessageRepository extends JpaRepository<ClientChatMes
             Long managerId,
             LocalDateTime from,
             LocalDateTime to
+    );
+
+    Optional<ClientChatMessage> findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+            ClientChatPlatform platform,
+            String chatId,
+            ClientChatSenderRole senderRole,
+            LocalDateTime messageAt
     );
 
     @Modifying

@@ -131,6 +131,14 @@ export interface WorkerPublicationSession {
   closeReason?: string | null;
 }
 
+export interface WorkerAccessRestriction {
+  restricted: boolean;
+  pendingCount: number;
+  oldestIncidentId?: number | null;
+  oldestDueAt?: string | null;
+  message: string;
+}
+
 export interface WorkerBoard {
   section: WorkerSection;
   title: string;
@@ -148,6 +156,7 @@ export interface WorkerBoard {
   credentialPreparation?: WorkerCredentialPreparation | null;
   publicationSession?: WorkerPublicationSession | null;
   dailyProgress?: DailyWorkProgress | null;
+  accessRestriction?: WorkerAccessRestriction | null;
 }
 
 export interface WorkerActionResponse {

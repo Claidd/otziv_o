@@ -818,6 +818,21 @@ public class ApiAdminDictionaryController {
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED,
                 request.unansweredAutoIgnoreEnabled() == null || request.unansweredAutoIgnoreEnabled()
         );
+        appSettingService.setBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
+                request.unansweredResolutionEnforcementEnabled() == null
+                        || request.unansweredResolutionEnforcementEnabled()
+        );
+        appSettingService.setBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED,
+                request.unansweredFastClickGuardEnabled() != null
+                        && request.unansweredFastClickGuardEnabled()
+        );
+        appSettingService.setBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_REPLY_QUALITY_SHADOW_ENABLED,
+                request.unansweredReplyQualityShadowEnabled() == null
+                        || request.unansweredReplyQualityShadowEnabled()
+        );
 
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS, request.reviewCheckIntervalDays(), 1, 365, "Интервал проверки отзывов");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_DAYS, request.reviewCheckAutoArchiveDays(), 1, 3650, "Автоархив проверки отзывов");
@@ -848,6 +863,34 @@ public class ApiAdminDictionaryController {
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_WHATSAPP_GAP_SECONDS, request.whatsAppGapSeconds(), 30, 86400, "Пауза WhatsApp");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_TELEGRAM_GAP_SECONDS, request.telegramGapSeconds(), 30, 86400, "Пауза Telegram");
         saveIntSetting(AppSettingService.CLIENT_MESSAGES_MAX_GAP_SECONDS, request.maxGapSeconds(), 30, 86400, "Пауза MAX");
+        saveIntSetting(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT,
+                request.unansweredFastClickWarningCount(),
+                3,
+                100,
+                "Предупреждение быстрых закрытий"
+        );
+        saveIntSetting(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS,
+                request.unansweredFastClickWarningSeconds(),
+                3,
+                300,
+                "Окно предупреждения быстрых закрытий"
+        );
+        saveIntSetting(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT,
+                request.unansweredFastClickCriticalCount(),
+                3,
+                500,
+                "Критический порог быстрых закрытий"
+        );
+        saveIntSetting(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS,
+                request.unansweredFastClickCriticalSeconds(),
+                3,
+                3600,
+                "Критическое окно быстрых закрытий"
+        );
         saveIntSetting(
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH,
                 request.unansweredAutoIgnoreMaxLength(),
@@ -1251,6 +1294,34 @@ public class ApiAdminDictionaryController {
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ARCHIVE_REORDER_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_ERROR_PROTECTION_ENABLED, true),
                 appSettingService.getBoolean(AppSettingService.MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED, true),
+                appSettingService.getBoolean(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
+                        true
+                ),
+                appSettingService.getBoolean(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED,
+                        false
+                ),
+                appSettingService.getBoolean(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_REPLY_QUALITY_SHADOW_ENABLED,
+                        true
+                ),
+                appSettingService.getInt(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT,
+                        3
+                ),
+                appSettingService.getInt(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS,
+                        10
+                ),
+                appSettingService.getInt(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT,
+                        10
+                ),
+                appSettingService.getInt(
+                        AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS,
+                        60
+                ),
                 appSettingService.getInt(
                         AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
                         ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
@@ -1940,6 +2011,13 @@ public class ApiAdminDictionaryController {
             boolean archiveReorderEnabled,
             boolean errorProtectionEnabled,
             Boolean unansweredAutoIgnoreEnabled,
+            Boolean unansweredResolutionEnforcementEnabled,
+            Boolean unansweredFastClickGuardEnabled,
+            Boolean unansweredReplyQualityShadowEnabled,
+            Integer unansweredFastClickWarningCount,
+            Integer unansweredFastClickWarningSeconds,
+            Integer unansweredFastClickCriticalCount,
+            Integer unansweredFastClickCriticalSeconds,
             Integer reviewCheckIntervalDays,
             Integer reviewCheckAutoArchiveDays,
             Integer clientTextReminderIntervalDays,
@@ -2012,6 +2090,13 @@ public class ApiAdminDictionaryController {
             boolean archiveReorderEnabled,
             boolean errorProtectionEnabled,
             boolean unansweredAutoIgnoreEnabled,
+            boolean unansweredResolutionEnforcementEnabled,
+            boolean unansweredFastClickGuardEnabled,
+            boolean unansweredReplyQualityShadowEnabled,
+            int unansweredFastClickWarningCount,
+            int unansweredFastClickWarningSeconds,
+            int unansweredFastClickCriticalCount,
+            int unansweredFastClickCriticalSeconds,
             int reviewCheckIntervalDays,
             int reviewCheckAutoArchiveDays,
             int clientTextReminderIntervalDays,

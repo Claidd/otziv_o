@@ -36,6 +36,14 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
             LocalDateTime cutoff
     );
 
+    long countByManagerAndResolvedByUserIdAndClosedAtAfter(
+            Manager manager,
+            Long resolvedByUserId,
+            LocalDateTime cutoff
+    );
+
+    long countByManagerAndAuditRequiredTrue(Manager manager);
+
     @Query("""
         SELECT item
         FROM ClientChatUnansweredItem item
@@ -55,6 +63,19 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
     @Query("""
         SELECT item
         FROM ClientChatUnansweredItem item
+        LEFT JOIN FETCH item.company
+        WHERE item.manager = :manager
+          AND item.auditRequired = true
+        ORDER BY item.closedAt DESC, item.id DESC
+    """)
+    List<ClientChatUnansweredItem> findAuditRequiredByManager(
+            @Param("manager") Manager manager,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT item
+        FROM ClientChatUnansweredItem item
         WHERE item.manager IN :managers
           AND (
                 item.createdAt BETWEEN :from AND :to
@@ -64,6 +85,26 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
     """)
     List<ClientChatUnansweredItem> findPerformanceItems(
             @Param("managers") Collection<Manager> managers,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("openStatus") ClientChatUnansweredStatus openStatus
+    );
+
+    @Query("""
+        SELECT DISTINCT item
+        FROM ClientChatUnansweredItem item
+        LEFT JOIN FETCH item.company
+        LEFT JOIN FETCH item.resolutionMessage
+        WHERE item.manager.id = :managerId
+          AND (
+                item.createdAt BETWEEN :from AND :to
+                OR item.closedAt BETWEEN :from AND :to
+                OR (item.status = :openStatus AND item.lastClientMessageAt <= :to)
+          )
+        ORDER BY item.lastClientMessageAt DESC, item.id DESC
+    """)
+    List<ClientChatUnansweredItem> findDailyReportItems(
+            @Param("managerId") Long managerId,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             @Param("openStatus") ClientChatUnansweredStatus openStatus

@@ -155,6 +155,9 @@ class ApiWorkerBoardControllerTest {
     @Mock
     private ScheduledClientMessageService scheduledClientMessageService;
 
+    @Mock
+    private com.hunt.otziv.worker_activity.service.WorkerRiskAccessPolicy workerRiskAccessPolicy;
+
     private ApiWorkerBoardController controller;
     private Principal principal;
     private Authentication workerAuth;
@@ -205,10 +208,13 @@ class ApiWorkerBoardControllerTest {
                 credentialPreparationService,
                 staffDailyProgressService,
                 workerCellularAccessService,
-                scheduledClientMessageService
+                scheduledClientMessageService,
+                workerRiskAccessPolicy
         );
 
         lenient().when(userService.findByUserName("worker")).thenReturn(Optional.of(user));
+        lenient().when(workerRiskAccessPolicy.status("worker"))
+                .thenReturn(com.hunt.otziv.worker_activity.service.WorkerRiskAccessPolicy.Status.allowed());
         lenient().when(workerService.getWorkerByUserId(77L)).thenReturn(worker);
         lenient().when(publicationSessionService.evaluateEntry(any(Worker.class), anyBoolean())).thenReturn(
                 WorkerPublicationSessionService.SessionDecision.allowed(

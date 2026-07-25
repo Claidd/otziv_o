@@ -12,6 +12,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -62,6 +63,9 @@ public class WorkerRiskIncident {
     @Column(name = "worker_name", length = 200)
     private String workerName;
 
+    @Column(name = "assigned_manager_id")
+    private Long assignedManagerId;
+
     @Column(name = "activity_event_id")
     private Long activityEventId;
 
@@ -95,6 +99,12 @@ public class WorkerRiskIncident {
     @Column(name = "explanation_prompted_at")
     private LocalDateTime explanationPromptedAt;
 
+    @Column(name = "response_due_at")
+    private LocalDateTime responseDueAt;
+
+    @Column(name = "explanation_reminder_at")
+    private LocalDateTime explanationReminderAt;
+
     @Column(name = "worker_explanation", columnDefinition = "TEXT")
     private String workerExplanation;
 
@@ -103,6 +113,34 @@ public class WorkerRiskIncident {
 
     @Column(name = "worker_explanation_by_user_id")
     private Long workerExplanationByUserId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "explanation_quality", length = 32)
+    private WorkerRiskExplanationQuality explanationQuality;
+
+    @Column(name = "explanation_quality_confidence", precision = 5, scale = 4)
+    private BigDecimal explanationQualityConfidence;
+
+    @Column(name = "explanation_quality_reason", length = 1000)
+    private String explanationQualityReason;
+
+    @Column(name = "explanation_clarification_question", length = 1000)
+    private String explanationClarificationQuestion;
+
+    @Column(name = "explanation_evaluated_at")
+    private LocalDateTime explanationEvaluatedAt;
+
+    @Column(name = "explanation_accepted_at")
+    private LocalDateTime explanationAcceptedAt;
+
+    @Column(name = "explanation_attempt_count", nullable = false)
+    private int explanationAttemptCount;
+
+    @Column(name = "section_restricted_at")
+    private LocalDateTime sectionRestrictedAt;
+
+    @Column(name = "section_restriction_released_at")
+    private LocalDateTime sectionRestrictionReleasedAt;
 
     @Column(name = "telegram_notification_chat_id")
     private Long telegramNotificationChatId;
@@ -122,6 +160,18 @@ public class WorkerRiskIncident {
 
     @Column(name = "resolved_by_username", length = 150)
     private String resolvedByUsername;
+
+    @Column(name = "manager_resolution_comment", length = 1000)
+    private String managerResolutionComment;
+
+    @Column(name = "decision_quality", length = 32)
+    private String decisionQuality;
+
+    @Column(name = "decision_quality_reason", length = 1000)
+    private String decisionQualityReason;
+
+    @Column(name = "audit_required", nullable = false)
+    private boolean auditRequired;
 
     @Column(name = "penalty_points", nullable = false)
     private int penaltyPoints;

@@ -27,10 +27,10 @@ public class ManagerDailySummaryScheduler {
         }
     }
 
-    @Scheduled(cron = "${manager.summary.delivery-cron:0 0 23 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
+    @Scheduled(cron = "${manager.summary.delivery-cron:0 0 0 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
     public void finalizeAndSend() {
         try {
-            LocalDate date = LocalDate.now();
+            LocalDate date = LocalDate.now(SUMMARY_ZONE).minusDays(1);
             var summaries = summaryService.calculate(date, true);
             int sent = notificationService.send(date, summaries);
             log.info("Manager daily summary finalized: date={}, managers={}, recipients={}", date, summaries.size(), sent);

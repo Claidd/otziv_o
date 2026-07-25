@@ -1,6 +1,7 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
@@ -13,6 +14,8 @@ import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
+import com.hunt.otziv.worker_activity.model.WorkerRiskEventType;
+import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
 import com.hunt.otziv.worker_activity.repository.WorkerCredentialPreparationRepository;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
@@ -81,6 +84,8 @@ public class WorkerRiskEvaluationService {
     private final TelegramService telegramService;
     private final OrderRepository orderRepository;
     private final PlatformTransactionManager transactionManager;
+    private final AppSettingService appSettingService;
+    private final WorkerRiskEventService riskEventService;
 
     @Value("${worker.risk.duplicate-window-minutes:30}")
     private int duplicateWindowMinutes = 30;
@@ -641,6 +646,7 @@ public class WorkerRiskEvaluationService {
         incident.setWorkerUserId(event.getWorkerUserId());
         incident.setWorkerUsername(event.getWorkerUsername());
         incident.setWorkerName(event.getWorkerName());
+        incident.setAssignedManagerId(assignedManagerId(workerUser, event.getOrderId()));
         incident.setActivityEventId(event.getId());
         incident.setAction(event.getAction().name());
         incident.setEntityType(event.getEntityType());
@@ -651,6 +657,18 @@ public class WorkerRiskEvaluationService {
         incident.setMessage(limit(message(event, finding), DETAILS_LIMIT));
         incident.setDetails(limit(finding.details() + sourceContextText(event), DETAILS_LIMIT));
         WorkerRiskIncident savedIncident = incidentRepository.save(incident);
+        riskEventService.record(
+                savedIncident,
+                WorkerRiskEventType.INCIDENT_CREATED,
+                null,
+                "SYSTEM",
+                "risk-evaluation",
+                Map.of(
+                        "ruleCode", savedIncident.getRuleCode(),
+                        "score", savedIncident.getScore(),
+                        "action", clean(savedIncident.getAction())
+                )
+        );
 
         notifySafely(() -> notifyManagers(workerUser, savedIncident), workerUser.getId(), savedIncident.getId());
         notifySafely(() -> notifyWorkerGroup(workerUser, savedIncident), workerUser.getId(), savedIncident.getId());
@@ -719,8 +737,26 @@ public class WorkerRiskEvaluationService {
     private void notifyWorkerGroup(User workerUser, WorkerRiskIncident incident) {
         notifyWorkerAboutPublicationDateRisk(workerUser, incident);
 
-        Long groupChatId = workerUser == null ? null : workerUser.getWorkerTelegramGroupChatId();
-        if (groupChatId == null) {
+        if (!appSettingService.getBoolean(
+                AppSettingService.WORKER_RISK_EXPLANATION_AUTO_REQUEST_ENABLED,
+                true
+        )) {
+            return;
+        }
+        Long chatId = workerUser == null
+                ? null
+                : workerUser.getWorkerTelegramGroupChatId() != null
+                        ? workerUser.getWorkerTelegramGroupChatId()
+                        : workerUser.getTelegramChatId();
+        if (chatId == null) {
+            riskEventService.record(
+                    incident,
+                    WorkerRiskEventType.EXPLANATION_REQUEST_FAILED,
+                    incident.getWorkerUserId(),
+                    "WORKER",
+                    "telegram",
+                    Map.of("reason", "Telegram специалиста не привязан")
+            );
             return;
         }
 
@@ -730,19 +766,85 @@ public class WorkerRiskEvaluationService {
                 + "\nПричина: " + html(clean(incident.getTitle()))
                 + "\nРиск: " + incident.getScore()
                 + incidentContextHtml(incident)
-                + "\n\nЕсли действие выполнено корректно, нажмите «Пояснить причину» "
-                + "и отправьте пояснение следующим сообщением в эту группу.";
+                + "\n\nОтветьте на это сообщение: что произошло и почему это объясняет замечание."
+                + "\nКод запроса: risk-" + incident.getId();
 
-        telegramService.sendMessageWithInlineKeyboardMessageId(
-                groupChatId,
+        Optional<Integer> sentMessageId = telegramService.sendMessageWithInlineKeyboardMessageId(
+                chatId,
                 telegramText,
                 "HTML",
-                WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
-        ).ifPresent(messageId -> {
-            incident.setTelegramNotificationChatId(groupChatId);
+                null
+        );
+        if (sentMessageId.isEmpty()) {
+            riskEventService.record(
+                    incident,
+                    WorkerRiskEventType.EXPLANATION_REQUEST_FAILED,
+                    incident.getWorkerUserId(),
+                    "WORKER",
+                    "telegram",
+                    Map.of("reason", "Telegram не подтвердил отправку", "chatId", chatId)
+            );
+            return;
+        }
+        sentMessageId.ifPresent(messageId -> {
+            LocalDateTime now = LocalDateTime.now();
+            int deadlineMinutes = Math.max(1, appSettingService.getInt(
+                    AppSettingService.WORKER_RISK_EXPLANATION_DEADLINE_MINUTES,
+                    180
+            ));
+            incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+            incident.setExplanationRequestedAt(now);
+            incident.setExplanationPromptedAt(now);
+            incident.setResponseDueAt(now.plusMinutes(deadlineMinutes));
+            incident.setTelegramNotificationChatId(chatId);
             incident.setTelegramNotificationMessageId(messageId);
             incidentRepository.save(incident);
+            riskEventService.record(
+                    incident,
+                    WorkerRiskEventType.EXPLANATION_REQUEST_SENT,
+                    incident.getWorkerUserId(),
+                    "WORKER",
+                    "telegram",
+                    Map.of(
+                            "chatId", chatId,
+                            "messageId", messageId,
+                            "responseDueAt", incident.getResponseDueAt().toString()
+                    )
+            );
         });
+    }
+
+    private Long assignedManagerId(User workerUser, Long orderId) {
+        if (orderId != null) {
+            try {
+                Long managerId = orderRepository.findById(orderId)
+                        .map(order -> order.getManager() != null
+                                ? order.getManager().getId()
+                                : order.getCompany() != null && order.getCompany().getManager() != null
+                                        ? order.getCompany().getManager().getId()
+                                        : null)
+                        .orElse(null);
+                if (managerId != null) {
+                    return managerId;
+                }
+            } catch (RuntimeException exception) {
+                log.debug("Не удалось определить менеджера риска по заказу orderId={}", orderId);
+            }
+        }
+        if (workerUser == null || workerUser.getManagers() == null) {
+            return null;
+        }
+        return workerUser.getManagers().stream()
+                .filter(Objects::nonNull)
+                .filter(manager -> manager.getId() != null)
+                .filter(manager -> manager.getUser() != null && manager.getUser().isActive())
+                .filter(manager -> manager.getUser().getRoles() != null
+                        && manager.getUser().getRoles().stream()
+                        .anyMatch(role -> "ROLE_MANAGER".equals(role.getName())))
+                .map(Manager::getId)
+                .sorted()
+                .findFirst()
+                .orElse(null);
     }
 
     private void notifyWorkerAboutPublicationDateRisk(User workerUser, WorkerRiskIncident incident) {

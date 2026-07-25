@@ -1239,12 +1239,62 @@ export class ManagerControlComponent implements OnInit {
     this.markConcreteItem(example, 'ACTION_TAKEN', { manualWorkerNotification: true });
   }
 
-  markUnansweredAnswered(example: ManagerControlConcreteItem): void {
-    this.markConcreteItem(example, 'ACTION_TAKEN', { comment: 'Ответ клиенту проверен вручную' });
+  markUnansweredNoResponseNeeded(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    const comment = itemId ? this.detailConcreteComment(itemId).trim() : '';
+    this.markConcreteItem(example, 'ACKNOWLEDGED', {
+      comment: comment || 'Сообщение клиента не требует ответа'
+    });
   }
 
-  markUnansweredNoResponseNeeded(example: ManagerControlConcreteItem): void {
-    this.markConcreteItem(example, 'ACKNOWLEDGED', { comment: 'Сообщение клиента не требует ответа' });
+  deferUnansweredMessage(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    const comment = itemId ? this.detailConcreteComment(itemId).trim() : '';
+    this.markConcreteItem(example, 'DEFERRED', {
+      comment: comment || 'Нужно продолжить обработку сообщения клиента'
+    });
+  }
+
+  completeUnansweredAction(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    const comment = itemId ? this.detailConcreteComment(itemId).trim() : '';
+    if (!comment) {
+      this.toast.error('Опишите результат', 'Укажите, что именно сделано по просьбе клиента');
+      return;
+    }
+    this.markConcreteItem(example, 'RESOLVED', { comment });
+  }
+
+  markUnansweredAsStaffMessage(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    const comment = this.detailConcreteComment(itemId).trim();
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.api.markClientMessageAsStaff(itemId, comment).subscribe({
+      next: (updated) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        const merged = this.patchDetailConcreteItem(example, updated);
+        this.toast.success('Отправитель сохранён', 'Следующие сообщения сотрудника не попадут в клиентские');
+        if (this.shouldHideConcreteItemAfterAction(merged)) {
+          this.removeConcreteItemFromDetail(merged);
+        }
+        this.load({ silent: true });
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Не удалось исправить отправителя', apiErrorMessage(err, 'Повторите действие'));
+      }
+    });
   }
 
   unansweredReplyDraft(itemId: number | null | undefined): string {
@@ -1256,6 +1306,33 @@ export class ManagerControlComponent implements OnInit {
       return;
     }
     this.unansweredReplyDrafts.update((drafts) => ({ ...drafts, [itemId]: value }));
+  }
+
+  suggestUnansweredReply(example: ManagerControlConcreteItem): void {
+    const itemId = example.controlEntityId;
+    if (!itemId || this.isConcreteUpdating(itemId)) {
+      return;
+    }
+    this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
+    this.api.suggestClientReply(itemId).subscribe({
+      next: (suggestion) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.updateUnansweredReplyDraft(itemId, suggestion.message);
+        this.toast.success('Черновик подготовлен', 'Проверьте факты и отредактируйте ответ перед отправкой');
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        this.toast.error('Черновик не подготовлен', apiErrorMessage(err, 'Введите ответ вручную'));
+      }
+    });
   }
 
   sendUnansweredReply(example: ManagerControlConcreteItem): void {
@@ -1505,12 +1582,16 @@ export class ManagerControlComponent implements OnInit {
   isConcreteActionDisabled(example: ManagerControlConcreteItem, actionType: ManagerControlActionType): boolean {
     return this.isConcreteUpdating(example.controlEntityId)
       || this.requiresPreparedContact(example, actionType)
-      || this.requiresWorkerExplanationBeforeDone(example, actionType);
+      || this.requiresWorkerExplanationBeforeDone(example, actionType)
+      || this.requiresClientAuditComment(example, actionType);
   }
 
   concreteActionTitle(example: ManagerControlConcreteItem, actionType: ManagerControlActionType, fallback: string): string {
     if (example.type === 'COMMON_INVOICE' && actionType === 'ACTION_TAKEN') {
       return 'Проверить текущее состояние счёта и закрыть карточку, если проблема устранена';
+    }
+    if (example.type === 'CLIENT_CHAT_AUDIT' && actionType === 'ACTION_TAKEN') {
+      return 'Укажите в комментарии найденный ответ или выполненное действие';
     }
     if (this.requiresPreparedContact(example, actionType)) {
       return 'Сначала нажмите «Текст» и отправьте сообщение клиенту';
@@ -1522,6 +1603,17 @@ export class ManagerControlComponent implements OnInit {
       return 'Ответ специалиста получен, скрыть до повторной проверки';
     }
     return fallback;
+  }
+
+  private requiresClientAuditComment(
+    example: ManagerControlConcreteItem,
+    actionType: ManagerControlActionType
+  ): boolean {
+    if (example.type !== 'CLIENT_CHAT_AUDIT' || actionType !== 'ACTION_TAKEN') {
+      return false;
+    }
+    const itemId = example.controlEntityId;
+    return !itemId || !this.detailConcreteComment(itemId).trim();
   }
 
   markConcreteDone(example: ManagerControlConcreteItem): void {

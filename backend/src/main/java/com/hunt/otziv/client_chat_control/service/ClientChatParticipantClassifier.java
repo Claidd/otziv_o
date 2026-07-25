@@ -22,6 +22,7 @@ public class ClientChatParticipantClassifier {
 
     private final UserRepository userRepository;
     private final AppSettingService appSettingService;
+    private final ClientChatIdentityService identityService;
 
     public ClientChatSenderRole classify(
             ClientChatPlatform platform,
@@ -38,8 +39,26 @@ public class ClientChatParticipantClassifier {
             String senderName,
             Company company
     ) {
+        return classify(platform, direction, null, senderExternalId, senderName, company);
+    }
+
+    public ClientChatSenderRole classify(
+            ClientChatPlatform platform,
+            ClientChatDirection direction,
+            String chatId,
+            String senderExternalId,
+            String senderName,
+            Company company
+    ) {
         if (platform == null) {
             return ClientChatSenderRole.CLIENT;
+        }
+        var knownRole = identityService.knownRole(platform, chatId, senderExternalId, senderName);
+        if (knownRole.isPresent()) {
+            return knownRole.get();
+        }
+        if (platform == ClientChatPlatform.TELEGRAM && isAnonymousTelegramAdmin(senderExternalId, senderName)) {
+            return ClientChatSenderRole.STAFF;
         }
         return switch (platform) {
             case TELEGRAM -> isKnownTelegramUser(senderExternalId) || isKnownCompanyStaffName(senderName, company)
@@ -52,6 +71,12 @@ public class ClientChatParticipantClassifier {
                     ? ClientChatSenderRole.STAFF
                     : ClientChatSenderRole.CLIENT;
         };
+    }
+
+    private boolean isAnonymousTelegramAdmin(String senderExternalId, String senderName) {
+        String external = senderExternalId == null ? "" : senderExternalId.trim();
+        String normalized = normalizedName(senderName);
+        return "1087968824".equals(external) || normalized.contains("groupanonymousbot");
     }
 
     private boolean isKnownTelegramUser(String senderExternalId) {

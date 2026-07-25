@@ -23,11 +23,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.ArgumentCaptor;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class ClientChatMessageTrackerServiceTest {
@@ -39,6 +43,7 @@ class ClientChatMessageTrackerServiceTest {
     @Mock private ClientChatCompanyResolutionService companyResolutionService;
     @Mock private AppSettingService appSettingService;
     @Mock private GamificationEventService gamificationEventService;
+    @Mock private ClientChatIdentityService identityService;
 
     private ClientChatMessageTrackerService service;
 
@@ -51,17 +56,24 @@ class ClientChatMessageTrackerServiceTest {
                 autoIgnoreService,
                 companyResolutionService,
                 appSettingService,
-                gamificationEventService
+                gamificationEventService,
+                identityService,
+                new ClientChatResolutionPolicy(),
+                new ClientChatReplyQualityService()
         );
-        when(appSettingService.getBoolean("manager-control.unanswered-client-messages.enabled", true)).thenReturn(true);
-        when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(any(), any(), any()))
+        lenient().when(appSettingService.getBoolean("manager-control.unanswered-client-messages.enabled", true)).thenReturn(true);
+        lenient().when(appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED,
+                false
+        )).thenReturn(false);
+        lenient().when(messageRepository.findByPlatformAndChatIdAndExternalMessageId(any(), any(), any()))
                 .thenReturn(Optional.empty());
         Company company = new Company();
         company.setTitle("Компания");
         Manager manager = new Manager();
-        when(companyResolutionService.resolve(ClientChatPlatform.WHATSAPP, "12001@g.us"))
+        lenient().when(companyResolutionService.resolve(ClientChatPlatform.WHATSAPP, "12001@g.us"))
                 .thenReturn(new ClientChatCompanyResolutionService.Resolution(company, manager, List.of(company), false));
-        when(messageRepository.save(any(ClientChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(messageRepository.save(any(ClientChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -79,7 +91,65 @@ class ClientChatMessageTrackerServiceTest {
 
         assertEquals(ClientChatUnansweredStatus.ANSWERED, open.getStatus());
         assertEquals("Ответ сотрудника", open.getCloseReason());
+        assertEquals(ClientChatSenderRole.STAFF, open.getResolutionMessage().getSenderRole());
         verify(unansweredRepository).save(open);
+    }
+
+    @Test
+    void questionCannotBeMarkedAsNoResponseNeeded() {
+        ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
+        when(unansweredRepository.findById(55L)).thenReturn(Optional.of(open));
+        when(appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
+                true
+        )).thenReturn(true);
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> service.markFromManagerControl(
+                        55L,
+                        com.hunt.otziv.manager_control.model.ManagerDailyControlActionType.ACKNOWLEDGED,
+                        "Сообщение клиента не требует ответа",
+                        10L,
+                        false
+                )
+        );
+        assertEquals(ClientChatUnansweredStatus.OPEN, open.getStatus());
+    }
+
+    @Test
+    void acknowledgementCanBeMarkedAsNoResponseNeeded() {
+        ClientChatUnansweredItem open = openItem("Спасибо большое");
+        when(unansweredRepository.findById(56L)).thenReturn(Optional.of(open));
+        when(appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
+                true
+        )).thenReturn(true);
+
+        service.markFromManagerControl(
+                56L,
+                com.hunt.otziv.manager_control.model.ManagerDailyControlActionType.ACKNOWLEDGED,
+                "Подтверждение клиента",
+                10L,
+                false
+        );
+
+        assertEquals(ClientChatUnansweredStatus.NO_RESPONSE_NEEDED, open.getStatus());
+    }
+
+    @Test
+    void genericConfirmedReplyIsClosedButQueuedForQualityAudit() {
+        ClientChatUnansweredItem open = openItem("Почему до сих пор не работает ссылка?");
+        when(unansweredRepository.findById(57L)).thenReturn(Optional.of(open));
+        when(appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_REPLY_QUALITY_SHADOW_ENABLED,
+                true
+        )).thenReturn(true);
+
+        service.markConfirmedReply(57L, "Ответ отправлен", 10L, "Проверим");
+
+        assertEquals(ClientChatUnansweredStatus.ANSWERED, open.getStatus());
+        assertTrue(open.isAuditRequired());
     }
 
     @Test
@@ -128,5 +198,13 @@ class ClientChatMessageTrackerServiceTest {
                 "Ответ менеджера",
                 LocalDateTime.now()
         );
+    }
+
+    private static ClientChatUnansweredItem openItem(String text) {
+        ClientChatUnansweredItem item = new ClientChatUnansweredItem();
+        item.setStatus(ClientChatUnansweredStatus.OPEN);
+        item.setLastMessageText(text);
+        item.setLastClientMessageAt(LocalDateTime.now().minusMinutes(5));
+        return item;
     }
 }

@@ -6,16 +6,18 @@ import {
   ManagerPage,
   WorkerRiskIncident,
   WorkerRiskIncidentLevel,
+  WorkerRiskAuditDecision,
   WorkerRiskResolutionAction,
-  WorkerRiskIncidentStatus
+  WorkerRiskTabStatus
 } from '../../core/manager.api';
+import { AuthService } from '../../core/auth.service';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { PersonalRemindersService } from '../../shared/personal-reminders.service';
 import { ToastService } from '../../shared/toast.service';
 
 type RiskStatusTab = {
-  key: WorkerRiskIncidentStatus;
+  key: WorkerRiskTabStatus;
   label: string;
   icon: string;
 };
@@ -40,18 +42,22 @@ export class WorkerRiskComponent {
   private readonly managerApi = inject(ManagerApi);
   private readonly remindersService = inject(PersonalRemindersService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
 
   readonly tabs: RiskStatusTab[] = [
     { key: 'OPEN', label: 'Открытые', icon: 'warning' },
     { key: 'RESOLVED', label: 'Проверенные', icon: 'task_alt' },
     { key: 'IGNORED', label: 'Игнор', icon: 'visibility_off' },
-    { key: 'VIOLATION', label: 'Нарушения', icon: 'gpp_bad' }
+    { key: 'VIOLATION', label: 'Нарушения', icon: 'gpp_bad' },
+    { key: 'AUDIT', label: 'Нужен аудит', icon: 'fact_check' }
   ];
-  readonly status = signal<WorkerRiskIncidentStatus>('OPEN');
+  readonly status = signal<WorkerRiskTabStatus>('OPEN');
   readonly page = signal<ManagerPage<WorkerRiskIncident>>(EMPTY_PAGE);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
   readonly mutatingId = signal<number | null>(null);
+  readonly decisionComments = signal<Record<number, string>>({});
+  readonly canReviewAudit = this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
 
   readonly incidents = computed(() => this.page().content ?? []);
   readonly highRiskCount = computed(() => this.incidents().filter((incident) => incident.level === 'HIGH_RISK').length);
@@ -61,7 +67,7 @@ export class WorkerRiskComponent {
     this.load();
   }
 
-  setStatus(status: WorkerRiskIncidentStatus): void {
+  setStatus(status: WorkerRiskTabStatus): void {
     if (this.status() === status) {
       return;
     }
@@ -177,10 +183,45 @@ export class WorkerRiskComponent {
     return incident.id;
   }
 
+  decisionComment(incidentId: number): string {
+    return this.decisionComments()[incidentId] ?? '';
+  }
+
+  setDecisionComment(incidentId: number, value: string): void {
+    this.decisionComments.update((comments) => ({ ...comments, [incidentId]: value }));
+  }
+
+  reviewAudit(incident: WorkerRiskIncident, decision: WorkerRiskAuditDecision): void {
+    if (!this.canReviewAudit || this.mutatingId()) {
+      return;
+    }
+    const comment = this.decisionComment(incident.id).trim();
+    if (comment.length < 10) {
+      this.toast.error('Нужно обоснование', 'Укажите результат проверки и подтверждённые факты');
+      return;
+    }
+    this.mutatingId.set(incident.id);
+    this.managerApi.reviewWorkerRiskAudit(incident.id, decision, comment).subscribe({
+      next: () => {
+        this.toast.success('Аудит завершён');
+        this.mutatingId.set(null);
+        this.load();
+      },
+      error: (error) => {
+        this.toast.error(apiErrorMessage(error, 'Аудит не завершён'));
+        this.mutatingId.set(null);
+      }
+    });
+  }
+
   private load(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.managerApi.getWorkerRiskIncidents(this.status()).subscribe({
+    const selectedStatus = this.status();
+    const request = selectedStatus === 'AUDIT'
+      ? this.managerApi.getWorkerRiskAuditIncidents()
+      : this.managerApi.getWorkerRiskIncidents(selectedStatus);
+    request.subscribe({
       next: (page) => {
         this.page.set(page);
         this.loading.set(false);
@@ -196,14 +237,39 @@ export class WorkerRiskComponent {
     return incident.resolutionAction === 'EXPLANATION_REQUESTED' || incident.resolutionAction === 'WORKER_WARNED';
   }
 
+  explanationQualityLabel(incident: WorkerRiskIncident): string {
+    switch (incident.explanationQuality) {
+      case 'LOGICAL':
+        return 'Ответ по существу';
+      case 'PARTIAL':
+        return 'Ответ неполный';
+      case 'CONTRADICTORY':
+        return 'Есть противоречия';
+      case 'IRRELEVANT':
+        return 'Не отвечает на замечание';
+      default:
+        return 'Нужна ручная проверка';
+    }
+  }
+
   private updateIncident(incident: WorkerRiskIncident, action: WorkerRiskResolutionAction, penaltyPoints?: number): void {
     if (this.mutatingId()) {
       return;
     }
 
+    const finalAction = action !== 'EXPLANATION_REQUESTED' && action !== 'WORKER_WARNED';
+    let comment: string | null = null;
+    if (finalAction && incident.explanationQuality !== 'LOGICAL') {
+      comment = this.decisionComment(incident.id).trim();
+      if (comment.length < 10) {
+        this.toast.error('Нужно обоснование', 'Укажите конкретные проверенные факты перед принятием решения');
+        return;
+      }
+    }
+
     this.mutatingId.set(incident.id);
 
-    this.managerApi.setWorkerRiskIncidentResolution(incident.id, action, penaltyPoints).subscribe({
+    this.managerApi.setWorkerRiskIncidentResolution(incident.id, action, penaltyPoints, comment).subscribe({
       next: () => {
         this.toast.success(this.toastTitle(action));
         this.mutatingId.set(null);

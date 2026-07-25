@@ -152,6 +152,7 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly pageSizeOptions = WORKER_PAGE_SIZE_OPTIONS;
 
   readonly board = signal<WorkerBoard | null>(null);
+  readonly accessRestricted = computed(() => this.board()?.accessRestriction?.restricted === true);
   readonly activeSection = signal<WorkerBoardTabKey>('new');
   readonly keyword = signal('');
   readonly pageNumber = signal(0);

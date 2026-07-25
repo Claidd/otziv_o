@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 import com.hunt.otziv.manager_daily_summary.dto.ManagerDailySummaryResponse;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerPerformanceDailyRepository;
@@ -26,7 +27,11 @@ class ManagerSummaryFormatterTest {
 
     @BeforeEach
     void setUp() {
-        formatter = new ManagerSummaryFormatter(dailyRepository);
+        formatter = new ManagerSummaryFormatter(
+                dailyRepository,
+                mock(ManagerCommunicationDailyReportSectionService.class),
+                mock(ManagerRiskDailyReportSectionService.class)
+        );
         when(dailyRepository.findTopByManager_IdAndSummaryDateLessThanOrderBySummaryDateDesc(anyLong(), any()))
                 .thenReturn(Optional.empty());
         when(dailyRepository.findByManager_IdAndSummaryDateBetween(anyLong(), any(), any())).thenReturn(List.of());

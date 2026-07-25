@@ -2,6 +2,7 @@ package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.gamification.model.GamificationScoreLedger;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
@@ -16,6 +17,8 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
+import com.hunt.otziv.worker_activity.model.WorkerRiskEventType;
+import com.hunt.otziv.worker_activity.model.WorkerRiskExplanationQuality;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import java.time.LocalDateTime;
@@ -30,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
@@ -55,6 +59,10 @@ public class WorkerRiskTelegramCallbackService {
     private final TelegramService telegramService;
     private final ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
     private final OrderRepository orderRepository;
+    private final WorkerRiskExplanationQualityService explanationQualityService;
+    private final WorkerRiskEventService riskEventService;
+    private final AppSettingService appSettingService;
+    private final WorkerRiskDecisionPolicy decisionPolicy;
 
     public static List<List<InlineKeyboardButton>> keyboard(Long incidentId) {
         return List.of(
@@ -121,6 +129,11 @@ public class WorkerRiskTelegramCallbackService {
             return Optional.of("Инцидент уже обработан");
         }
 
+        try {
+            decisionPolicy.requireAllowed(incident, command.get().action(), "");
+        } catch (ResponseStatusException exception) {
+            return Optional.of("Сначала получите содержательный ответ или примите решение с обоснованием в разделе «Риски» на сайте");
+        }
         applyResolution(incident, command.get().action(), actor);
         return Optional.of(answerFor(command.get().action()));
     }
@@ -163,7 +176,7 @@ public class WorkerRiskTelegramCallbackService {
                 ? null
                 : userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
         if (actor == null || actor.getId() == null || !Objects.equals(actor.getId(), worker.getId())
-                || incident.getExplanationRequestedAt() == null || incident.getWorkerExplanationAt() != null) {
+                || incident.getExplanationRequestedAt() == null || incident.getExplanationAcceptedAt() != null) {
             return false;
         }
         return saveWorkerExplanation(chatId, worker, actor, incident, messageText);
@@ -176,16 +189,121 @@ public class WorkerRiskTelegramCallbackService {
             WorkerRiskIncident incident,
             String messageText
     ) {
+        LocalDateTime now = LocalDateTime.now();
+        int attempt = incident.getExplanationAttemptCount() + 1;
+        incident.setExplanationAttemptCount(attempt);
         incident.setWorkerExplanation(limit(clean(messageText), 2000));
-        incident.setWorkerExplanationAt(LocalDateTime.now());
+        incident.setWorkerExplanationAt(now);
         incident.setWorkerExplanationByUserId(actor != null && actor.getId() != null ? actor.getId() : worker.getId());
+        incident.setExplanationAcceptedAt(null);
+        incidentRepository.save(incident);
+        riskEventService.record(
+                incident,
+                WorkerRiskEventType.EXPLANATION_RECEIVED,
+                incident.getWorkerExplanationByUserId(),
+                "WORKER",
+                chatId < 0 ? "telegram-group" : "telegram-private",
+                Map.of("attempt", attempt, "text", incident.getWorkerExplanation())
+        );
+
+        WorkerRiskExplanationQualityService.Result assessment =
+                explanationQualityService.assess(incident, incident.getWorkerExplanation());
+        incident.setExplanationQuality(assessment.quality());
+        incident.setExplanationQualityConfidence(assessment.confidence());
+        incident.setExplanationQualityReason(limit(assessment.reason(), 1000));
+        incident.setExplanationClarificationQuestion(limit(assessment.clarificationQuestion(), 1000));
+        incident.setExplanationEvaluatedAt(LocalDateTime.now());
+        riskEventService.record(
+                incident,
+                WorkerRiskEventType.EXPLANATION_ASSESSED,
+                null,
+                "SYSTEM",
+                assessment.provider(),
+                Map.of(
+                        "quality", assessment.quality().name(),
+                        "confidence", assessment.confidence(),
+                        "reason", assessment.reason(),
+                        "model", assessment.model(),
+                        "inputTokens", assessment.inputTokens(),
+                        "outputTokens", assessment.outputTokens()
+                )
+        );
+
+        int maxClarifications = Math.max(0, Math.min(3, appSettingService.getInt(
+                AppSettingService.WORKER_RISK_EXPLANATION_MAX_CLARIFICATIONS,
+                1
+        )));
+        boolean answerNotAccepted = assessment.quality() != WorkerRiskExplanationQuality.LOGICAL
+                && assessment.quality() != WorkerRiskExplanationQuality.NEEDS_REVIEW;
+        if (answerNotAccepted) {
+            incident.setExplanationPromptedAt(LocalDateTime.now());
+            incidentRepository.save(incident);
+            String question = firstNonBlank(
+                    assessment.clarificationQuestion(),
+                    "Уточните, что именно произошло и как это объясняет замечание"
+            );
+            if (attempt <= maxClarifications) {
+                riskEventService.record(
+                        incident,
+                        WorkerRiskEventType.CLARIFICATION_REQUESTED,
+                        null,
+                        "SYSTEM",
+                        "deepseek",
+                        Map.of("attempt", attempt, "question", question)
+                );
+                sendExplanationPrompt(
+                        chatId,
+                        worker,
+                        "🟡 ОТВЕТ НУЖНО УТОЧНИТЬ"
+                                + "\n" + assessment.reason()
+                                + "\n\n" + question,
+                        incident.getId()
+                );
+                updateOriginalRiskTelegramMessage(incident, "нужно уточнение ответа", true);
+            } else {
+                incidentRepository.save(incident);
+                riskEventService.record(
+                        incident,
+                        WorkerRiskEventType.MANUAL_REVIEW_REQUIRED,
+                        null,
+                        "SYSTEM",
+                        "deepseek",
+                        Map.of("attempt", attempt, "reason", assessment.reason())
+                );
+                telegramService.sendMessage(
+                        chatId,
+                        "🔴 ОТВЕТ НЕ ПРИНЯТ"
+                                + "\n" + assessment.reason()
+                                + "\nРиск передан менеджеру на ручной разбор. Вы можете прислать более конкретное пояснение."
+                );
+                syncManagerControlRiskExplanation(worker, incident);
+                notifyReviewersAboutExplanation(worker, incident);
+                updateOriginalRiskTelegramMessage(incident, "нужен ручной разбор", true);
+            }
+            return true;
+        }
+
+        incident.setExplanationAcceptedAt(LocalDateTime.now());
+        if (incident.getSectionRestrictedAt() != null
+                && incident.getSectionRestrictionReleasedAt() == null) {
+            incident.setSectionRestrictionReleasedAt(LocalDateTime.now());
+            riskEventService.record(
+                    incident,
+                    WorkerRiskEventType.SPECIALIST_SECTION_RELEASED,
+                    incident.getWorkerExplanationByUserId(),
+                    "WORKER",
+                    "telegram",
+                    Map.of("reason", "meaningful-response-received")
+            );
+        }
         incidentRepository.save(incident);
         personalReminderService.deleteSystemReminderBySource(worker, SOURCE_MANAGER_WARNING, incident.getId());
         syncManagerControlRiskExplanation(worker, incident);
 
         telegramService.sendMessage(chatId,
                 "🟢 ОТВЕТ ПОЛУЧЕН"
-                        + "\nПояснение сохранено и отправлено менеджеру."
+                        + "\nПояснение проверено и отправлено менеджеру."
+                        + "\nОценка: " + qualityLabel(assessment.quality())
                         + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                         + "\nОтзыв: #" + valueOrDash(incident.getReviewId()));
         updateOriginalRiskTelegramMessage(incident, "ответ отправлен менеджеру", false);
@@ -283,7 +401,7 @@ public class WorkerRiskTelegramCallbackService {
 
     private Optional<WorkerRiskIncident> findPendingWorkerExplanation(User worker) {
         return incidentRepository
-                .findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
+                .findFirstByWorkerUserIdAndStatusAndResolutionActionAndExplanationAcceptedAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
                         worker.getId(),
                         WorkerRiskIncidentStatus.OPEN,
                         WorkerRiskResolutionAction.EXPLANATION_REQUESTED
@@ -314,7 +432,7 @@ public class WorkerRiskTelegramCallbackService {
         if (incident == null) {
             return Optional.of("Инцидент не найден");
         }
-        if (incident.getWorkerExplanationAt() != null) {
+        if (incident.getExplanationAcceptedAt() != null) {
             return Optional.of("Пояснение уже отправлено");
         }
 
@@ -349,6 +467,7 @@ public class WorkerRiskTelegramCallbackService {
             incident.setExplanationRequestedAt(now);
         }
         incident.setExplanationPromptedAt(now);
+        ensureResponseDueAt(incident, now);
         rememberPromptMessage(incident, chatId, callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getMessageId());
         incidentRepository.save(incident);
 
@@ -454,10 +573,17 @@ public class WorkerRiskTelegramCallbackService {
     private void applyResolution(WorkerRiskIncident incident, WorkerRiskResolutionAction action, User actor) {
         incident.setStatus(statusFor(action));
         incident.setResolutionAction(action);
-        incident.setResolvedAt(LocalDateTime.now());
+        incident.setResolvedAt(decisionPolicy.isFinalAction(action) ? LocalDateTime.now() : null);
         incident.setResolvedByUserId(actor.getId());
         incident.setResolvedByUsername(actor.getUsername());
         incident.setPenaltyPoints(action == WorkerRiskResolutionAction.VIOLATION_CONFIRMED ? DEFAULT_PENALTY_POINTS : 0);
+        decisionPolicy.applyDecisionEvidence(incident, action, "");
+        boolean restrictionReleased = decisionPolicy.isFinalAction(action)
+                && incident.getSectionRestrictedAt() != null
+                && incident.getSectionRestrictionReleasedAt() == null;
+        if (restrictionReleased) {
+            incident.setSectionRestrictionReleasedAt(LocalDateTime.now());
+        }
 
         if (action == WorkerRiskResolutionAction.EXPLANATION_REQUESTED) {
             requestWorkerExplanation(incident);
@@ -467,6 +593,24 @@ public class WorkerRiskTelegramCallbackService {
         }
 
         WorkerRiskIncident savedIncident = incidentRepository.save(incident);
+        riskEventService.record(
+                savedIncident,
+                WorkerRiskEventType.MANAGER_DECISION,
+                actor.getId(),
+                hasRole(actor, "ROLE_ADMIN") ? "ADMIN" : hasRole(actor, "ROLE_OWNER") ? "OWNER" : "MANAGER",
+                "telegram",
+                Map.of("action", action.name(), "status", savedIncident.getStatus().name())
+        );
+        if (restrictionReleased) {
+            riskEventService.record(
+                    savedIncident,
+                    WorkerRiskEventType.SPECIALIST_SECTION_RELEASED,
+                    actor.getId(),
+                    hasRole(actor, "ROLE_ADMIN") ? "ADMIN" : hasRole(actor, "ROLE_OWNER") ? "OWNER" : "MANAGER",
+                    "telegram",
+                    Map.of("reason", "manager-final-decision")
+            );
+        }
         deleteResolvedRiskReminders(savedIncident);
     }
 
@@ -505,7 +649,9 @@ public class WorkerRiskTelegramCallbackService {
         if (worker == null || !worker.isActive()) {
             return;
         }
-        incident.setExplanationRequestedAt(LocalDateTime.now());
+        if (incident.getExplanationRequestedAt() == null) {
+            incident.setExplanationRequestedAt(LocalDateTime.now());
+        }
 
         String text = "Менеджер проверил подозрительное действие и просит дать пояснение."
                 + "\nСтатус: ждем пояснение"
@@ -517,8 +663,8 @@ public class WorkerRiskTelegramCallbackService {
                 + "\n\nПожалуйста, напишите менеджеру, что произошло, и подтвердите фактическое выполнение. "
                 + "Рабочие кнопки нужно нажимать только после реального выполнения задачи.";
 
-        if (!personalReminderService.hasOpenSystemReminder(worker, SOURCE_MANAGER_WARNING, incident.getId())) {
-            try {
+        try {
+            if (!personalReminderService.hasOpenSystemReminder(worker, SOURCE_MANAGER_WARNING, incident.getId())) {
                 personalReminderService.createSystemReminderDueNow(
                         worker,
                         "Нужно пояснение по действию",
@@ -527,21 +673,59 @@ public class WorkerRiskTelegramCallbackService {
                         incident.getId(),
                         incident.getOrderId()
                 );
-                if (worker.getWorkerTelegramGroupChatId() != null) {
-                    telegramService.sendMessageWithInlineKeyboard(
-                            worker.getWorkerTelegramGroupChatId(),
+            }
+            if (incident.getResponseDueAt() == null) {
+                Long telegramChatId = worker.getWorkerTelegramGroupChatId() != null
+                        ? worker.getWorkerTelegramGroupChatId()
+                        : worker.getTelegramChatId();
+                if (telegramChatId != null) {
+                    boolean sent = telegramService.sendMessageWithInlineKeyboard(
+                            telegramChatId,
                             text,
                             null,
                             explanationKeyboard(incident.getId())
                     );
+                    if (sent) {
+                        LocalDateTime now = LocalDateTime.now();
+                        incident.setExplanationPromptedAt(now);
+                        ensureResponseDueAt(incident, now);
+                        riskEventService.record(
+                                incident,
+                                WorkerRiskEventType.EXPLANATION_REQUEST_SENT,
+                                worker.getId(),
+                                "WORKER",
+                                "telegram",
+                                Map.of("chatId", telegramChatId, "responseDueAt", incident.getResponseDueAt().toString())
+                        );
+                    } else {
+                        recordExplanationDeliveryFailure(incident, worker, "Telegram не отправил сообщение");
+                    }
+                } else {
+                    recordExplanationDeliveryFailure(incident, worker, "Telegram специалиста не привязан");
                 }
-            } catch (RuntimeException exception) {
-                log.warn("Не удалось отправить запрос пояснения по риск-инциденту incidentId={}, workerUserId={}",
-                        incident.getId(),
-                        incident.getWorkerUserId(),
-                        exception);
             }
+        } catch (RuntimeException exception) {
+            recordExplanationDeliveryFailure(incident, worker, "Ошибка отправки Telegram: " + exception.getMessage());
+            log.warn("Не удалось отправить запрос пояснения по риск-инциденту incidentId={}, workerUserId={}",
+                    incident.getId(),
+                    incident.getWorkerUserId(),
+                    exception);
         }
+    }
+
+    private void recordExplanationDeliveryFailure(
+            WorkerRiskIncident incident,
+            User worker,
+            String reason
+    ) {
+        riskEventService.record(
+                incident,
+                WorkerRiskEventType.EXPLANATION_REQUEST_FAILED,
+                worker == null ? null : worker.getId(),
+                "WORKER",
+                "telegram",
+                Map.of("reason", firstNonBlank(reason, "Неизвестная ошибка доставки"))
+        );
     }
 
     private void notifyReviewersAboutExplanation(User worker, WorkerRiskIncident incident) {
@@ -706,6 +890,30 @@ public class WorkerRiskTelegramCallbackService {
 
     private String valueOrDash(Object value) {
         return value == null ? "-" : String.valueOf(value);
+    }
+
+    private String qualityLabel(WorkerRiskExplanationQuality quality) {
+        if (quality == null) {
+            return "нужна проверка";
+        }
+        return switch (quality) {
+            case LOGICAL -> "ответ по существу";
+            case PARTIAL -> "частичный ответ";
+            case CONTRADICTORY -> "есть противоречия";
+            case IRRELEVANT -> "ответ не по существу";
+            case NEEDS_REVIEW -> "нужна ручная проверка";
+        };
+    }
+
+    private void ensureResponseDueAt(WorkerRiskIncident incident, LocalDateTime requestedAt) {
+        if (incident == null || incident.getResponseDueAt() != null) {
+            return;
+        }
+        int deadlineMinutes = Math.max(1, appSettingService.getInt(
+                AppSettingService.WORKER_RISK_EXPLANATION_DEADLINE_MINUTES,
+                180
+        ));
+        incident.setResponseDueAt(requestedAt.plusMinutes(deadlineMinutes));
     }
 
     private record CallbackCommand(Long incidentId, WorkerRiskResolutionAction action) {

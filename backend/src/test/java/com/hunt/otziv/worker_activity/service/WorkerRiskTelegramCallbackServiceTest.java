@@ -3,6 +3,7 @@ package com.hunt.otziv.worker_activity.service;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -15,11 +16,13 @@ import com.hunt.otziv.worker_activity.service.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
+import com.hunt.otziv.worker_activity.model.WorkerRiskExplanationQuality;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,11 +34,14 @@ import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +69,15 @@ class WorkerRiskTelegramCallbackServiceTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private WorkerRiskExplanationQualityService explanationQualityService;
+
+    @Mock
+    private WorkerRiskEventService riskEventService;
+
+    @Mock
+    private AppSettingService appSettingService;
+
     private WorkerRiskTelegramCallbackService service;
 
     @BeforeEach
@@ -74,7 +89,23 @@ class WorkerRiskTelegramCallbackServiceTest {
                 personalReminderService,
                 telegramService,
                 managerControlConcreteItemRepository,
-                orderRepository
+                orderRepository,
+                explanationQualityService,
+                riskEventService,
+                appSettingService,
+                new WorkerRiskDecisionPolicy()
+        );
+        lenient().when(explanationQualityService.assess(any(), any())).thenReturn(
+                new WorkerRiskExplanationQualityService.Result(
+                        WorkerRiskExplanationQuality.LOGICAL,
+                        BigDecimal.ONE,
+                        "Ответ относится к замечанию",
+                        "",
+                        "deepseek",
+                        "test",
+                        10,
+                        5
+                )
         );
     }
 
@@ -137,7 +168,7 @@ class WorkerRiskTelegramCallbackServiceTest {
         manager.setUser(managerUser);
         worker.setManagers(Set.of(manager));
 
-        when(incidentRepository.findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
+        when(incidentRepository.findFirstByWorkerUserIdAndStatusAndResolutionActionAndExplanationAcceptedAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
                 2L,
                 WorkerRiskIncidentStatus.OPEN,
                 WorkerRiskResolutionAction.EXPLANATION_REQUESTED
@@ -152,7 +183,7 @@ class WorkerRiskTelegramCallbackServiceTest {
 
         assertEquals(true, handled);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
-        verify(incidentRepository).save(captor.capture());
+        verify(incidentRepository, times(2)).save(captor.capture());
         assertEquals("Аккаунт был заблокирован, поэтому деактивировала.", captor.getValue().getWorkerExplanation());
         assertEquals(2L, captor.getValue().getWorkerExplanationByUserId());
         verify(personalReminderService).createSystemReminderDueNow(
@@ -265,7 +296,7 @@ class WorkerRiskTelegramCallbackServiceTest {
 
         assertEquals(true, handled);
         ArgumentCaptor<WorkerRiskIncident> captor = ArgumentCaptor.forClass(WorkerRiskIncident.class);
-        verify(incidentRepository).save(captor.capture());
+        verify(incidentRepository, times(2)).save(captor.capture());
         assertEquals("Тест.", captor.getValue().getWorkerExplanation());
         assertEquals(2L, captor.getValue().getWorkerExplanationByUserId());
         verify(personalReminderService).deleteSystemReminderBySource(
@@ -299,8 +330,47 @@ class WorkerRiskTelegramCallbackServiceTest {
     }
 
     @Test
+    void genericWorkerAnswerRemainsPendingAndDoesNotReachManager() {
+        WorkerRiskIncident incident = incident();
+        incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        incident.setExplanationPromptedAt(java.time.LocalDateTime.now());
+        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        when(incidentRepository
+                .findFirstByWorkerUserIdAndStatusAndResolutionActionAndExplanationAcceptedAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
+                        2L,
+                        WorkerRiskIncidentStatus.OPEN,
+                        WorkerRiskResolutionAction.EXPLANATION_REQUESTED
+                )).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(explanationQualityService.assess(any(), any())).thenReturn(
+                new WorkerRiskExplanationQualityService.Result(
+                        WorkerRiskExplanationQuality.PARTIAL,
+                        BigDecimal.ONE,
+                        "Ответ слишком общий",
+                        "Что именно было сделано?",
+                        "rules",
+                        "",
+                        0,
+                        0
+                )
+        );
+
+        assertEquals(true, service.handleWorkerTextMessage(888L, worker, "большой заказ"));
+
+        assertNull(incident.getExplanationAcceptedAt());
+        assertEquals(WorkerRiskExplanationQuality.PARTIAL, incident.getExplanationQuality());
+        assertEquals(false, incident.isAuditRequired());
+        verify(personalReminderService, never()).deleteSystemReminderBySource(
+                any(),
+                eq("WORKER_RISK_MANAGER_WARNING"),
+                eq(77L)
+        );
+    }
+
+    @Test
     void verifiedCallbackDeletesOpenRiskReminder() {
         WorkerRiskIncident incident = incident();
+        incident.setExplanationQuality(WorkerRiskExplanationQuality.LOGICAL);
         User admin = user(1L, "admin", 777L, "ROLE_ADMIN");
 
         when(userService.findByChatId(777L)).thenReturn(Optional.of(admin));

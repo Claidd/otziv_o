@@ -203,7 +203,7 @@
       @if (canManageDailySummary()) {
         <button type="button" class="summary-preview-button" (click)="buildDailySummaryPreview()" [disabled]="dailySummaryPreviewLoading()">
           <span class="material-icons-sharp">preview</span>
-          {{ dailySummaryPreviewLoading() ? 'Формирую…' : 'Предпросмотр сводки 23:00' }}
+          {{ dailySummaryPreviewLoading() ? 'Формирую…' : 'Предпросмотр ночной сводки' }}
         </button>
       }
       @for (manager of topManagers(); track trackManager($index, manager)) {
@@ -1119,16 +1119,6 @@
                               }
                               <button
                                 type="button"
-                                class="review-action done"
-                                (click)="markUnansweredAnswered(example)"
-                                [disabled]="isConcreteUpdating(example.controlEntityId)"
-                                title="Клиенту уже ответили"
-                              >
-                                <span class="material-icons-sharp">task_alt</span>
-                                Отвечено
-                              </button>
-                              <button
-                                type="button"
                                 class="review-action secondary-action"
                                 (click)="markUnansweredNoResponseNeeded(example)"
                                 [disabled]="isConcreteUpdating(example.controlEntityId)"
@@ -1136,6 +1126,36 @@
                               >
                                 <span class="material-icons-sharp">visibility_off</span>
                                 Не требует ответа
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="deferUnansweredMessage(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Оставить сообщение в работе и назначить повторную проверку"
+                              >
+                                <span class="material-icons-sharp">schedule</span>
+                                В работу
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="completeUnansweredAction(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Закрыть после выполненного действия; результат укажите в комментарии"
+                              >
+                                <span class="material-icons-sharp">assignment_turned_in</span>
+                                Действие выполнено
+                              </button>
+                              <button
+                                type="button"
+                                class="review-action secondary-action"
+                                (click)="markUnansweredAsStaffMessage(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Это сообщение написал сотрудник, а не клиент"
+                              >
+                                <span class="material-icons-sharp">badge</span>
+                                Это сотрудник
                               </button>
                               <small>{{ example.contactText || 'Последнее сообщение клиента сохранено в карточке' }}</small>
                               <div class="unanswered-reply">
@@ -1145,6 +1165,16 @@
                                   (ngModelChange)="updateUnansweredReplyDraft(example.controlEntityId, $event)"
                                   placeholder="Ответ клиенту"
                                 ></textarea>
+                                <button
+                                  type="button"
+                                  class="review-action secondary-action"
+                                  (click)="suggestUnansweredReply(example)"
+                                  [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                  title="Подготовить безопасный черновик; факты нужно проверить перед отправкой"
+                                >
+                                  <span class="material-icons-sharp">auto_awesome</span>
+                                  Подсказать
+                                </button>
                                 <button
                                   type="button"
                                   class="review-action send-action"
@@ -1188,7 +1218,7 @@
                                 >
                                   <span class="material-icons-sharp">task_alt</span>
                                 </button>
-                              } @else if (example.type !== 'RISK') {
+                              } @else if (example.type !== 'RISK' && !isUnansweredClientMessage(example)) {
                                 <button
                                   type="button"
                                   class="action-done"

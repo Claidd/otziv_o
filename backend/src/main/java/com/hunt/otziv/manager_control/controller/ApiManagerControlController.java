@@ -4,6 +4,7 @@ import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
+import com.hunt.otziv.manager_control.dto.ManagerControlClientReplySuggestionResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlManagerDetailResponse;
@@ -118,6 +119,38 @@ public class ApiManagerControlController {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-reply",
                 () -> managerControlService.replyToClientMessage(concreteItemId, request, principal, authentication)
+        );
+    }
+
+    @GetMapping("/concrete-items/{concreteItemId}/reply-suggestion")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlClientReplySuggestionResponse suggestClientReply(
+            @PathVariable Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-reply-suggestion",
+                () -> managerControlService.suggestClientReply(concreteItemId, principal, authentication)
+        );
+    }
+
+    @PostMapping("/concrete-items/{concreteItemId}/mark-staff-message")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ManagerControlConcreteItemResponse markClientMessageMisclassified(
+            @PathVariable Long concreteItemId,
+            @RequestBody(required = false) ManagerControlItemActionRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.concrete-item-mark-staff-message",
+                () -> managerControlService.markClientMessageMisclassified(
+                        concreteItemId,
+                        request,
+                        principal,
+                        authentication
+                )
         );
     }
 

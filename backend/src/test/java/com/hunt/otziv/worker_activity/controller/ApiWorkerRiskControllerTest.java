@@ -8,14 +8,18 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskIncidentResponse;
+import com.hunt.otziv.worker_activity.dto.WorkerRiskAuditRequest;
 import com.hunt.otziv.worker_activity.dto.WorkerRiskResolutionRequest;
 import com.hunt.otziv.worker_activity.service.WorkerRiskEvaluationService;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentLevel;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
+import com.hunt.otziv.worker_activity.model.WorkerRiskExplanationQuality;
 import com.hunt.otziv.worker_activity.model.WorkerRiskResolutionAction;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import com.hunt.otziv.worker_activity.service.WorkerRiskRollbackService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskEventService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskDecisionPolicy;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -59,6 +64,9 @@ class ApiWorkerRiskControllerTest {
     @Mock
     private ManagerDailyControlConcreteItemRepository managerControlConcreteItemRepository;
 
+    @Mock
+    private WorkerRiskEventService riskEventService;
+
     private ApiWorkerRiskController controller;
 
     @BeforeEach
@@ -70,7 +78,10 @@ class ApiWorkerRiskControllerTest {
                 personalReminderService,
                 telegramService,
                 rollbackService,
-                managerControlConcreteItemRepository
+                managerControlConcreteItemRepository,
+                riskEventService,
+                new WorkerRiskDecisionPolicy(),
+                mock(com.hunt.otziv.config.settings.service.AppSettingService.class)
         );
     }
 
@@ -83,6 +94,8 @@ class ApiWorkerRiskControllerTest {
         when(userService.findByUserName("worker")).thenReturn(Optional.of(user(2L, "worker", 101L)));
         when(personalReminderService.hasOpenSystemReminder(any(), eq("WORKER_RISK_MANAGER_WARNING"), eq(77L)))
                 .thenReturn(false);
+        when(telegramService.sendMessageWithInlineKeyboard(eq(101L), any(), eq(null), any()))
+                .thenReturn(true);
 
         WorkerRiskIncidentResponse response = controller.resolution(
                 77L,
@@ -93,6 +106,7 @@ class ApiWorkerRiskControllerTest {
         assertEquals(WorkerRiskIncidentStatus.OPEN, response.status());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, response.resolutionAction());
         assertEquals(0, response.penaltyPoints());
+        assertNotNull(response.responseDueAt());
         verify(personalReminderService).createSystemReminderDueNow(
                 any(),
                 eq("Нужно пояснение по действию"),
@@ -117,13 +131,18 @@ class ApiWorkerRiskControllerTest {
 
         WorkerRiskIncidentResponse response = controller.resolution(
                 77L,
-                new WorkerRiskResolutionRequest("VIOLATION_CONFIRMED", 3, null),
+                new WorkerRiskResolutionRequest(
+                        "VIOLATION_CONFIRMED",
+                        3,
+                        "Проверено: специалист не выполнил обязательный шаг"
+                ),
                 adminAuth()
         );
 
         assertEquals(WorkerRiskIncidentStatus.VIOLATION, response.status());
         assertEquals(WorkerRiskResolutionAction.VIOLATION_CONFIRMED, response.resolutionAction());
         assertEquals(3, response.penaltyPoints());
+        assertEquals(true, response.auditRequired());
 
         ArgumentCaptor<GamificationScoreLedger> ledgerCaptor = ArgumentCaptor.forClass(GamificationScoreLedger.class);
         verify(scoreLedgerRepository).save(ledgerCaptor.capture());
@@ -142,6 +161,7 @@ class ApiWorkerRiskControllerTest {
     @Test
     void verifiedDeletesOpenRiskReminder() {
         WorkerRiskIncident incident = incident();
+        incident.setExplanationQuality(WorkerRiskExplanationQuality.LOGICAL);
         when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
@@ -157,6 +177,38 @@ class ApiWorkerRiskControllerTest {
                 WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
                 77L
         );
+    }
+
+    @Test
+    void ownerReturnFromAuditReopensForManagerWithoutKeepingWorkerRestricted() {
+        WorkerRiskIncident incident = incident();
+        incident.setStatus(WorkerRiskIncidentStatus.RESOLVED);
+        incident.setResolutionAction(WorkerRiskResolutionAction.VERIFIED);
+        incident.setResolvedAt(java.time.LocalDateTime.now());
+        incident.setResolvedByUserId(5L);
+        incident.setResolvedByUsername("manager");
+        incident.setAuditRequired(true);
+        incident.setResponseDueAt(java.time.LocalDateTime.now().minusHours(1));
+        incident.setSectionRestrictedAt(java.time.LocalDateTime.now().minusMinutes(30));
+
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
+
+        WorkerRiskIncidentResponse response = controller.reviewAudit(
+                77L,
+                new WorkerRiskAuditRequest(
+                        "RETURNED",
+                        "Решение не подтверждено фактами, менеджеру нужно проверить заказ"
+                ),
+                adminAuth()
+        );
+
+        assertEquals(WorkerRiskIncidentStatus.OPEN, response.status());
+        assertEquals(null, response.resolutionAction());
+        assertEquals(null, response.responseDueAt());
+        assertNotNull(response.sectionRestrictionReleasedAt());
+        assertEquals(false, response.auditRequired());
     }
 
     private WorkerRiskIncident incident() {

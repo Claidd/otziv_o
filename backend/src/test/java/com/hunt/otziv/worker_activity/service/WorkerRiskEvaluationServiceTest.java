@@ -1,6 +1,7 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -66,6 +67,12 @@ class WorkerRiskEvaluationServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private AppSettingService appSettingService;
+
+    @Mock
+    private WorkerRiskEventService riskEventService;
 
     @Test
     void publishWithoutCredentialCopyCreatesIncidentAndWarnings() {
@@ -590,6 +597,14 @@ class WorkerRiskEvaluationServiceTest {
     private WorkerRiskEvaluationService service() {
         lenient().when(credentialPreparationRepository.findByWorkerUserIdAndScope(anyLong(), any()))
                 .thenReturn(Optional.empty());
+        lenient().when(appSettingService.getBoolean(
+                AppSettingService.WORKER_RISK_EXPLANATION_AUTO_REQUEST_ENABLED,
+                true
+        )).thenReturn(true);
+        lenient().when(appSettingService.getInt(
+                AppSettingService.WORKER_RISK_EXPLANATION_DEADLINE_MINUTES,
+                180
+        )).thenReturn(180);
         return new WorkerRiskEvaluationService(
                 eventRepository,
                 incidentRepository,
@@ -598,7 +613,9 @@ class WorkerRiskEvaluationServiceTest {
                 userService,
                 telegramService,
                 orderRepository,
-                transactionManager()
+                transactionManager(),
+                appSettingService,
+                riskEventService
         );
     }
 

@@ -146,6 +146,26 @@
                 <small>{{ incident.workerExplanationAt | date:'dd.MM.yyyy HH:mm' }}</small>
               }
             </p>
+            <p class="explanation-quality" [class.good]="incident.explanationQuality === 'LOGICAL'">
+              <strong>{{ explanationQualityLabel(incident) }}</strong>
+              @if (incident.explanationQualityReason) {
+                <span>{{ incident.explanationQualityReason }}</span>
+              }
+            </p>
+          } @else if (incident.responseDueAt) {
+            <p class="explanation-quality">
+              <strong>Ждём ответ до {{ incident.responseDueAt | date:'dd.MM.yyyy HH:mm' }}</strong>
+              @if (incident.sectionRestrictedAt && !incident.sectionRestrictionReleasedAt) {
+                <span>Раздел «Специалист» ограничен до содержательного ответа в Telegram.</span>
+              }
+            </p>
+          }
+
+          @if (incident.auditRequired) {
+            <p class="audit-note">
+              <strong>Нужен аудит</strong>
+              Решение принято по неполному или автоматически не подтверждённому ответу.
+            </p>
           }
 
           @if (incident.rollbackMessage) {
@@ -155,14 +175,25 @@
 
         @if (status() === 'OPEN') {
           <footer>
+            @if (incident.explanationQuality !== 'LOGICAL') {
+              <label class="decision-comment">
+                <span>Проверенные факты и обоснование решения</span>
+                <textarea
+                  rows="3"
+                  [value]="decisionComment(incident.id)"
+                  (input)="setDecisionComment(incident.id, $any($event.target).value)"
+                  placeholder="Что проверено в заказе и почему выбран этот результат"
+                ></textarea>
+              </label>
+            }
             <button type="button" class="secondary" (click)="ignore(incident)" [disabled]="mutatingId() === incident.id" title="Правило сработало лишний раз">
               <span class="material-icons-sharp">visibility_off</span>
               Игнорировать
             </button>
             @if (explanationRequested(incident)) {
               <button type="button" class="secondary warning-action" disabled title="Запрос уже отправлен, карточка остается открытой">
-                <span class="material-icons-sharp">{{ incident.workerExplanation ? 'mark_chat_read' : 'hourglass_top' }}</span>
-                {{ incident.workerExplanation ? 'Ответ получен' : 'Ждем разъяснение' }}
+                <span class="material-icons-sharp">{{ incident.explanationAcceptedAt ? 'mark_chat_read' : 'hourglass_top' }}</span>
+                {{ incident.explanationAcceptedAt ? 'Ответ получен' : (incident.workerExplanation ? 'Нужно уточнение' : 'Ждем разъяснение') }}
               </button>
             } @else {
               <button type="button" class="secondary warning-action" (click)="requestExplanation(incident)" [disabled]="mutatingId() === incident.id" title="Отправить специалисту запрос разъяснения">
@@ -178,6 +209,31 @@
               <span class="material-icons-sharp">task_alt</span>
               Проверено
             </button>
+          </footer>
+        } @else if (status() === 'AUDIT') {
+          <footer>
+            <label class="decision-comment">
+              <span>Результат проверки владельца</span>
+              <textarea
+                rows="3"
+                [value]="decisionComment(incident.id)"
+                (input)="setDecisionComment(incident.id, $any($event.target).value)"
+                placeholder="Какие факты проверены и почему решение подтверждается или возвращается"
+              ></textarea>
+            </label>
+            @if (canReviewAudit) {
+              <button type="button" class="secondary" (click)="reviewAudit(incident, 'SYSTEM_ERROR')" [disabled]="mutatingId() === incident.id">
+                Ошибка системы
+              </button>
+              <button type="button" class="secondary warning-action" (click)="reviewAudit(incident, 'RETURNED')" [disabled]="mutatingId() === incident.id">
+                Вернуть менеджеру
+              </button>
+              <button type="button" (click)="reviewAudit(incident, 'CONFIRMED')" [disabled]="mutatingId() === incident.id">
+                Решение подтверждено
+              </button>
+            } @else {
+              <span class="manual-only">Завершить аудит может владелец или администратор</span>
+            }
           </footer>
         } @else if (status() === 'VIOLATION') {
           <footer>

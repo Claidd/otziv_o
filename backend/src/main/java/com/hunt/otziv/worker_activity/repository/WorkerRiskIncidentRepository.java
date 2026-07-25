@@ -52,6 +52,57 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
 
     Page<WorkerRiskIncident> findByStatusOrderByCreatedAtDesc(WorkerRiskIncidentStatus status, Pageable pageable);
 
+    Page<WorkerRiskIncident> findByAuditRequiredTrueOrderByResolvedAtDescCreatedAtDesc(Pageable pageable);
+
+    Page<WorkerRiskIncident> findByWorkerUserIdInAndAuditRequiredTrueOrderByResolvedAtDescCreatedAtDesc(
+            Collection<Long> workerUserIds,
+            Pageable pageable
+    );
+
+    Page<WorkerRiskIncident> findByAssignedManagerIdInAndAuditRequiredTrueOrderByResolvedAtDescCreatedAtDesc(
+            Collection<Long> managerIds,
+            Pageable pageable
+    );
+
+    Page<WorkerRiskIncident> findByAssignedManagerIdInAndStatusOrderByCreatedAtDesc(
+            Collection<Long> managerIds,
+            WorkerRiskIncidentStatus status,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT i
+            FROM WorkerRiskIncident i
+            WHERE i.status = :status
+              AND (
+                    i.assignedManagerId IN :managerIds
+                    OR (i.assignedManagerId IS NULL AND i.workerUserId IN :workerUserIds)
+              )
+            ORDER BY i.createdAt DESC
+            """)
+    Page<WorkerRiskIncident> findVisibleForManager(
+            @Param("managerIds") Collection<Long> managerIds,
+            @Param("workerUserIds") Collection<Long> workerUserIds,
+            @Param("status") WorkerRiskIncidentStatus status,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT i
+            FROM WorkerRiskIncident i
+            WHERE i.auditRequired = true
+              AND (
+                    i.assignedManagerId IN :managerIds
+                    OR (i.assignedManagerId IS NULL AND i.workerUserId IN :workerUserIds)
+              )
+            ORDER BY i.resolvedAt DESC, i.createdAt DESC
+            """)
+    Page<WorkerRiskIncident> findAuditVisibleForManager(
+            @Param("managerIds") Collection<Long> managerIds,
+            @Param("workerUserIds") Collection<Long> workerUserIds,
+            Pageable pageable
+    );
+
     Page<WorkerRiskIncident> findByWorkerUserIdInAndStatusOrderByCreatedAtDesc(
             Collection<Long> workerUserIds,
             WorkerRiskIncidentStatus status,
@@ -80,10 +131,46 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             @Param("openStatus") WorkerRiskIncidentStatus openStatus
     );
 
-    Optional<WorkerRiskIncident> findFirstByWorkerUserIdAndStatusAndResolutionActionAndWorkerExplanationAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
+    @Query("""
+            SELECT i
+            FROM WorkerRiskIncident i
+            WHERE i.assignedManagerId IN :managerIds
+              AND (
+                    i.createdAt BETWEEN :from AND :to
+                    OR i.resolvedAt BETWEEN :from AND :to
+                    OR i.status = :openStatus
+              )
+            """)
+    List<WorkerRiskIncident> findPerformanceIncidentsByAssignedManagerId(
+            @Param("managerIds") Collection<Long> managerIds,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("openStatus") WorkerRiskIncidentStatus openStatus
+    );
+
+    Optional<WorkerRiskIncident> findFirstByWorkerUserIdAndStatusAndResolutionActionAndExplanationAcceptedAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
             Long workerUserId,
             WorkerRiskIncidentStatus status,
             WorkerRiskResolutionAction resolutionAction
+    );
+
+    List<WorkerRiskIncident> findByWorkerUserIdAndStatusAndResponseDueAtLessThanEqualAndExplanationAcceptedAtIsNullOrderByResponseDueAtAsc(
+            Long workerUserId,
+            WorkerRiskIncidentStatus status,
+            LocalDateTime responseDueAt
+    );
+
+    @Query("""
+            SELECT i
+            FROM WorkerRiskIncident i
+            WHERE i.status = :status
+              AND i.responseDueAt IS NOT NULL
+              AND i.explanationAcceptedAt IS NULL
+            ORDER BY i.responseDueAt ASC
+            """)
+    List<WorkerRiskIncident> findPendingResponseSla(
+            @Param("status") WorkerRiskIncidentStatus status,
+            Pageable pageable
     );
 
     @Query("""
@@ -91,7 +178,7 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             FROM WorkerRiskIncident i
             WHERE i.status = :status
               AND i.resolutionAction = :resolutionAction
-              AND i.workerExplanationAt IS NULL
+              AND i.explanationAcceptedAt IS NULL
               AND i.explanationPromptedAt IS NOT NULL
               AND EXISTS (
                     SELECT 1

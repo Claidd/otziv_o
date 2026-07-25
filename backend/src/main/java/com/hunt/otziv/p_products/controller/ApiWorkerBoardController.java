@@ -42,6 +42,7 @@ import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.dto.WorkerCredentialPreparationResponse;
 import com.hunt.otziv.worker_activity.model.WorkerCredentialPreparationScope;
 import com.hunt.otziv.worker_activity.service.WorkerCredentialPreparationService;
+import com.hunt.otziv.worker_activity.service.WorkerRiskAccessPolicy;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -144,6 +145,7 @@ public class ApiWorkerBoardController {
     private final StaffDailyProgressService staffDailyProgressService;
     private final WorkerCellularAccessService workerCellularAccessService;
     private final ScheduledClientMessageService scheduledClientMessageService;
+    private final WorkerRiskAccessPolicy workerRiskAccessPolicy;
 
     @GetMapping("/board")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -164,6 +166,34 @@ public class ApiWorkerBoardController {
             List<WorkerMetricResponse> metrics = null;
             WorkerSelection workerSelection = resolveWorkerSelection(principal, authentication, workerId);
             Worker selectedWorker = workerSelection.selectedWorker();
+            WorkerRiskAccessPolicy.Status accessRestriction = workerRiskAccessPolicy.status(principal.getName());
+            if (accessRestriction == null) {
+                accessRestriction = WorkerRiskAccessPolicy.Status.allowed();
+            }
+
+            if (accessRestriction.restricted()) {
+                int safePageNumber = Math.max(pageNumber, 0);
+                int safePageSize = Math.max(1, Math.min(pageSize, MAX_PAGE_SIZE));
+                return new WorkerBoardResponse(
+                        normalizedSection,
+                        title(normalizedSection),
+                        toPageResponse(emptyPage(safePageNumber, safePageSize)),
+                        emptyReviewResponsePage(safePageNumber, safePageSize),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        buildPermissions(authentication),
+                        workerSelection.options(),
+                        workerId(selectedWorker),
+                        workerSelection.available(),
+                        accessRestriction.message(),
+                        true,
+                        null,
+                        null,
+                        null,
+                        accessRestriction
+                );
+            }
 
             if (isCurrentSectionRequest(section)) {
                 metrics = buildMetrics(principal, authentication, selectedWorker);
@@ -211,7 +241,8 @@ public class ApiWorkerBoardController {
                     warning,
                     activeCredentialPreparation(authentication, normalizedSection),
                     workerPublicationGateService.sessionState(principal, authentication),
-                    workerDailyProgress(principal, authentication, selectedWorker)
+                    workerDailyProgress(principal, authentication, selectedWorker),
+                    accessRestriction
             );
         });
     }
@@ -2699,7 +2730,8 @@ public class ApiWorkerBoardController {
             boolean warning,
             WorkerCredentialPreparationResponse credentialPreparation,
             WorkerPublicationSessionService.SessionState publicationSession,
-            DailyWorkProgressResponse dailyProgress
+            DailyWorkProgressResponse dailyProgress,
+            WorkerRiskAccessPolicy.Status accessRestriction
     ) {
     }
 

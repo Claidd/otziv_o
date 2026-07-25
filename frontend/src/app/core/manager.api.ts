@@ -682,8 +682,16 @@ export interface ManagerArchiveOrdersQuery {
 }
 
 export type WorkerRiskIncidentStatus = 'OPEN' | 'RESOLVED' | 'IGNORED' | 'VIOLATION';
+export type WorkerRiskTabStatus = WorkerRiskIncidentStatus | 'AUDIT';
+export type WorkerRiskAuditDecision = 'CONFIRMED' | 'RETURNED' | 'SYSTEM_ERROR';
 export type WorkerRiskIncidentLevel = 'WARNING' | 'MANAGER_REVIEW' | 'HIGH_RISK';
 export type WorkerRiskRollbackStatus = 'APPLIED' | 'NOT_APPLICABLE';
+export type WorkerRiskExplanationQuality =
+  | 'LOGICAL'
+  | 'PARTIAL'
+  | 'CONTRADICTORY'
+  | 'IRRELEVANT'
+  | 'NEEDS_REVIEW';
 export type WorkerRiskResolutionAction =
   | 'VERIFIED'
   | 'FALSE_POSITIVE'
@@ -702,6 +710,7 @@ export interface WorkerRiskIncident {
   workerUserId: number;
   workerUsername: string;
   workerName: string;
+  assignedManagerId?: number | null;
   activityEventId?: number | null;
   action?: string | null;
   entityType?: string | null;
@@ -713,13 +722,28 @@ export interface WorkerRiskIncident {
   details?: string | null;
   explanationRequestedAt?: string | null;
   explanationPromptedAt?: string | null;
+  responseDueAt?: string | null;
+  explanationReminderAt?: string | null;
   workerExplanation?: string | null;
   workerExplanationAt?: string | null;
   workerExplanationByUserId?: number | null;
+  explanationQuality?: WorkerRiskExplanationQuality | null;
+  explanationQualityConfidence?: number | null;
+  explanationQualityReason?: string | null;
+  explanationClarificationQuestion?: string | null;
+  explanationEvaluatedAt?: string | null;
+  explanationAcceptedAt?: string | null;
+  explanationAttemptCount: number;
+  sectionRestrictedAt?: string | null;
+  sectionRestrictionReleasedAt?: string | null;
   resolutionAction?: WorkerRiskResolutionAction | null;
   resolvedAt?: string | null;
   resolvedByUserId?: number | null;
   resolvedByUsername?: string | null;
+  managerResolutionComment?: string | null;
+  decisionQuality?: string | null;
+  decisionQualityReason?: string | null;
+  auditRequired: boolean;
   penaltyPoints: number;
   rollbackStatus?: WorkerRiskRollbackStatus | null;
   rolledBackAt?: string | null;
@@ -772,6 +796,30 @@ export class ManagerApi {
     return this.http.get<ManagerPage<WorkerRiskIncident>>(
       `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents`,
       { params }
+    );
+  }
+
+  getWorkerRiskAuditIncidents(
+    page = 0,
+    size = 50
+  ): Observable<ManagerPage<WorkerRiskIncident>> {
+    const params = new HttpParams()
+      .set('page', String(page))
+      .set('size', String(size));
+    return this.http.get<ManagerPage<WorkerRiskIncident>>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/audit`,
+      { params }
+    );
+  }
+
+  reviewWorkerRiskAudit(
+    incidentId: number,
+    decision: WorkerRiskAuditDecision,
+    comment: string
+  ): Observable<WorkerRiskIncident> {
+    return this.http.post<WorkerRiskIncident>(
+      `${appEnvironment.apiBaseUrl}/api/manager/worker-risk/incidents/${incidentId}/audit`,
+      { decision, comment }
     );
   }
 

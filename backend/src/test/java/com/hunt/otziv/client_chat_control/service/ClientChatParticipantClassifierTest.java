@@ -9,6 +9,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,12 +27,20 @@ class ClientChatParticipantClassifierTest {
     private UserRepository userRepository;
     @Mock
     private AppSettingService appSettingService;
+    @Mock
+    private ClientChatIdentityService identityService;
 
     private ClientChatParticipantClassifier classifier;
 
     @BeforeEach
     void setUp() {
-        classifier = new ClientChatParticipantClassifier(userRepository, appSettingService);
+        classifier = new ClientChatParticipantClassifier(userRepository, appSettingService, identityService);
+        lenient().when(identityService.knownRole(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class)
+        )).thenReturn(Optional.empty());
         lenient().when(userRepository.findAllActiveUsersWithPhoneNumbers()).thenReturn(List.of());
         lenient().when(appSettingService.getString(
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES,
@@ -50,6 +59,39 @@ class ClientChatParticipantClassifierTest {
                 "79991112233@c.us",
                 "Мария",
                 companyWithManager(managerUser)
+        );
+
+        assertEquals(ClientChatSenderRole.STAFF, role);
+    }
+
+    @Test
+    void telegramAnonymousAdministratorIsStaff() {
+        ClientChatSenderRole role = classifier.classify(
+                ClientChatPlatform.TELEGRAM,
+                ClientChatDirection.INCOMING,
+                "1087968824",
+                "@GroupAnonymousBot",
+                new Company()
+        );
+
+        assertEquals(ClientChatSenderRole.STAFF, role);
+    }
+
+    @Test
+    void verifiedIdentityOverridesHeuristics() {
+        when(identityService.knownRole(
+                ClientChatPlatform.MAX,
+                null,
+                "employee-1",
+                "Мия О"
+        )).thenReturn(Optional.of(ClientChatSenderRole.STAFF));
+
+        ClientChatSenderRole role = classifier.classify(
+                ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING,
+                "employee-1",
+                "Мия О",
+                new Company()
         );
 
         assertEquals(ClientChatSenderRole.STAFF, role);

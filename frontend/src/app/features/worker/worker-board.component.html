@@ -1,13 +1,16 @@
 <app-admin-layout [title]="title()" active="worker" rightPanelMode="custom" (activeLinkClicked)="handleActiveShellLink($event)">
   <section class="worker-workspace">
-    <app-mobile-status-slider
-      class="mobile-board-status"
-      [items]="mobileStatusItems()"
-      [activeKey]="activeSection()"
-      ariaLabel="Разделы специалиста"
-      (select)="selectMobileSection($event)"
-    />
+    @if (!accessRestricted()) {
+      <app-mobile-status-slider
+        class="mobile-board-status"
+        [items]="mobileStatusItems()"
+        [activeKey]="activeSection()"
+        ariaLabel="Разделы специалиста"
+        (select)="selectMobileSection($event)"
+      />
+    }
 
+    @if (!accessRestricted()) {
     <div class="worker-controls">
       <header class="worker-toolbar">
         <nav class="worker-dropdowns" aria-label="Меню специалиста">
@@ -79,9 +82,24 @@
         }
       </header>
     </div>
+    }
 
     @if (error()) {
       <app-load-error-card title="Специалист не загрузился" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadBoard()" />
+    }
+
+    @if (accessRestricted()) {
+      <article class="risk-access-lock" role="alert">
+        <span class="material-icons-sharp">lock_clock</span>
+        <div>
+          <strong>Раздел «Специалист» временно ограничен</strong>
+          <p>{{ board()?.accessRestriction?.message }}</p>
+          <small>
+            Просроченных замечаний: {{ board()?.accessRestriction?.pendingCount }}.
+            Ответьте по существу в Telegram — доступ восстановится автоматически.
+          </small>
+        </div>
+      </article>
     }
 
     @if (boardNoticeVisible() && board()?.message) {
@@ -104,13 +122,15 @@
       </article>
     }
 
-    <h2 class="workspace-title">{{ title() }}</h2>
+    @if (!accessRestricted()) {
+      <h2 class="workspace-title">{{ title() }}</h2>
+    }
 
-    @if (isRiskSection()) {
+    @if (!accessRestricted() && isRiskSection()) {
       <app-worker-risk />
     }
 
-    @if (isOrderSection()) {
+    @if (!accessRestricted() && isOrderSection()) {
       <section class="worker-cards order-cards">
         @for (order of currentOrders(); track trackOrder($index, order)) {
           <app-worker-order-card
@@ -148,7 +168,7 @@
       </section>
     }
 
-    @if (isReviewSection()) {
+    @if (!accessRestricted() && isReviewSection()) {
       <section class="worker-cards review-cards">
         @for (review of currentReviews(); track trackReview($index, review)) {
           <app-worker-review-card

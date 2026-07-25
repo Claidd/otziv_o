@@ -20,6 +20,11 @@ export interface ManagerControlClientReplyPayload {
   message: string;
 }
 
+export interface ManagerControlClientReplySuggestion {
+  message: string;
+  reasonCode: string;
+}
+
 export interface ManagerControlStagePayload {
   stage: 'MORNING_DONE' | 'FINAL_CHECK';
   comment?: string | null;
@@ -396,6 +401,19 @@ export class ManagerControlApi {
     return this.http.post<ManagerControlConcreteItem>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/reply`,
       payload
+    );
+  }
+
+  suggestClientReply(concreteItemId: number): Observable<ManagerControlClientReplySuggestion> {
+    return this.http.get<ManagerControlClientReplySuggestion>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/reply-suggestion`
+    );
+  }
+
+  markClientMessageAsStaff(concreteItemId: number, comment?: string | null): Observable<ManagerControlConcreteItem> {
+    return this.http.post<ManagerControlConcreteItem>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/concrete-items/${concreteItemId}/mark-staff-message`,
+      { actionType: 'RESOLVED', comment: comment ?? null, manualWorkerNotification: null }
     );
   }
 

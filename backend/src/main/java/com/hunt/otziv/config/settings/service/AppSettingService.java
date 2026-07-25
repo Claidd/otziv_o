@@ -136,6 +136,38 @@ public class AppSettingService {
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH = "manager-control.unanswered-client-messages.auto-ignore-max-length";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES = "manager-control.unanswered-client-messages.auto-ignore-phrases";
     public static final String MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES = "manager-control.unanswered-client-messages.staff-name-aliases";
+    public static final String MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED =
+            "manager-control.unanswered-client-messages.resolution-enforcement-enabled";
+    public static final String MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED =
+            "manager-control.unanswered-client-messages.fast-click-guard-enabled";
+    public static final String MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT =
+            "manager-control.unanswered-client-messages.fast-click-warning-count";
+    public static final String MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS =
+            "manager-control.unanswered-client-messages.fast-click-warning-seconds";
+    public static final String MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT =
+            "manager-control.unanswered-client-messages.fast-click-critical-count";
+    public static final String MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS =
+            "manager-control.unanswered-client-messages.fast-click-critical-seconds";
+    public static final String MANAGER_CONTROL_UNANSWERED_REPLY_QUALITY_SHADOW_ENABLED =
+            "manager-control.unanswered-client-messages.reply-quality-shadow-enabled";
+    public static final String WORKER_RISK_EXPLANATION_AUTO_REQUEST_ENABLED =
+            "worker-risk.explanation.auto-request-enabled";
+    public static final String WORKER_RISK_EXPLANATION_QUALITY_ENABLED =
+            "worker-risk.explanation.quality-enabled";
+    public static final String WORKER_RISK_EXPLANATION_REMINDER_MINUTES =
+            "worker-risk.explanation.reminder-minutes";
+    public static final String WORKER_RISK_EXPLANATION_DEADLINE_MINUTES =
+            "worker-risk.explanation.deadline-minutes";
+    public static final String WORKER_RISK_EXPLANATION_MAX_CLARIFICATIONS =
+            "worker-risk.explanation.max-clarifications";
+    public static final String WORKER_RISK_EXPLANATION_AI_TIMEOUT_SECONDS =
+            "worker-risk.explanation.ai-timeout-seconds";
+    public static final String WORKER_RISK_SPECIALIST_SECTION_RESTRICTION_ENABLED =
+            "worker-risk.specialist-section-restriction-enabled";
+    public static final String MANAGER_SUMMARY_AI_ANALYSIS_ENABLED =
+            "manager.summary.ai-analysis-enabled";
+    public static final String MANAGER_SUMMARY_AI_ANALYSIS_TIMEOUT_SECONDS =
+            "manager.summary.ai-analysis-timeout-seconds";
     public static final String PAYMENTS_TBANK_RUNTIME_MODE = "payments.tbank.runtime-mode";
     public static final String PAYMENTS_TBANK_ENABLED = "payments.tbank.enabled";
     public static final String PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED = "payments.tbank.payment-links-enabled";

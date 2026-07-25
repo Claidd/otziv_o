@@ -21,6 +21,7 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncident;
 import com.hunt.otziv.worker_activity.model.WorkerRiskIncidentStatus;
+import com.hunt.otziv.worker_activity.model.WorkerRiskExplanationQuality;
 import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -130,7 +131,7 @@ public class ManagerPerformanceService {
                 .filter(item -> item.getManager() != null && item.getManager().getId() != null)
                 .collect(Collectors.groupingBy(item -> item.getManager().getId()));
 
-        Map<Long, List<WorkerRiskIncident>> risksByWorkerUserId = riskIncidentsByWorkerUserId(managers, from, to);
+        RiskAssignments riskAssignments = riskAssignments(managers, from, to);
 
         List<ManagerPerformanceScoreResponse> result = managers.stream()
                 .map(manager -> managerScore(
@@ -139,7 +140,7 @@ public class ManagerPerformanceService {
                         itemsByControlId,
                         concreteByControlId,
                         clientItemsByManagerId.getOrDefault(manager.getId(), List.of()),
-                        risksByWorkerUserId,
+                        riskAssignments,
                         evaluatedAt,
                         teamProgressByManagerId.getOrDefault(
                                 manager.getId(),
@@ -175,7 +176,7 @@ public class ManagerPerformanceService {
             Map<Long, List<ManagerDailyControlItem>> itemsByControlId,
             Map<Long, List<ManagerDailyControlConcreteItem>> concreteByControlId,
             List<ClientChatUnansweredItem> clientItems,
-            Map<Long, List<WorkerRiskIncident>> risksByWorkerUserId,
+            RiskAssignments riskAssignments,
             LocalDateTime evaluatedAt,
             ManagerTeamProgressService.TeamProgressStats teamProgress
     ) {
@@ -189,8 +190,14 @@ public class ManagerPerformanceService {
                 .filter(Objects::nonNull)
                 .flatMap(controlId -> concreteByControlId.getOrDefault(controlId, List.of()).stream())
                 .toList();
-        List<WorkerRiskIncident> riskIncidents = workerUserIds(manager).stream()
-                .flatMap(workerUserId -> risksByWorkerUserId.getOrDefault(workerUserId, List.of()).stream())
+        List<WorkerRiskIncident> riskIncidents = java.util.stream.Stream.concat(
+                        riskAssignments.byManagerId().getOrDefault(manager.getId(), List.of()).stream(),
+                        workerUserIds(manager).stream()
+                                .flatMap(workerUserId -> riskAssignments.legacyByWorkerUserId()
+                                        .getOrDefault(workerUserId, List.of())
+                                        .stream())
+                )
+                .filter(distinctByIncidentId())
                 .toList();
 
         long actionTotal = actionItems(items).stream()
@@ -266,7 +273,7 @@ public class ManagerPerformanceService {
         int problemSpeedScore = slaSpeedScore(problemSla);
         int clientResponseScore = slaSpeedScore(clientSla);
         int overdueControlScore = clampScore((int) Math.round(100 - overdueRate * 1.5 - averageOverdueAgeDays * 2));
-        int riskQualityScore = riskQualityScore(riskIncidents);
+        int riskQualityScore = riskQualityScore(riskIncidents, evaluatedAt);
         int specialistRiskScore = clampScore((int) Math.round(
                 (slaSpeedScore(specialistSla) * 0.40)
                         + (slaSpeedScore(riskSla) * 0.35)
@@ -339,7 +346,7 @@ public class ManagerPerformanceService {
         );
     }
 
-    private Map<Long, List<WorkerRiskIncident>> riskIncidentsByWorkerUserId(
+    private RiskAssignments riskAssignments(
             List<Manager> managers,
             LocalDateTime from,
             LocalDateTime to
@@ -348,13 +355,41 @@ public class ManagerPerformanceService {
                 .flatMap(manager -> workerUserIds(manager).stream())
                 .distinct()
                 .toList();
-        if (workerUserIds.isEmpty()) {
-            return Map.of();
-        }
-        return riskIncidentRepository
-                .findPerformanceIncidents(workerUserIds, from, to, WorkerRiskIncidentStatus.OPEN)
-                .stream()
+        List<Long> managerIds = managers.stream()
+                .map(Manager::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        List<WorkerRiskIncident> byWorkers = workerUserIds.isEmpty()
+                ? List.of()
+                : riskIncidentRepository.findPerformanceIncidents(
+                        workerUserIds,
+                        from,
+                        to,
+                        WorkerRiskIncidentStatus.OPEN
+                );
+        List<WorkerRiskIncident> byManagers = managerIds.isEmpty()
+                ? List.of()
+                : riskIncidentRepository.findPerformanceIncidentsByAssignedManagerId(
+                        managerIds,
+                        from,
+                        to,
+                        WorkerRiskIncidentStatus.OPEN
+                );
+        Map<Long, List<WorkerRiskIncident>> legacyByWorker = byWorkers.stream()
+                .filter(risk -> risk.getAssignedManagerId() == null)
                 .collect(Collectors.groupingBy(WorkerRiskIncident::getWorkerUserId));
+        Map<Long, List<WorkerRiskIncident>> byManager = java.util.stream.Stream
+                .concat(byWorkers.stream(), byManagers.stream())
+                .filter(risk -> risk.getAssignedManagerId() != null)
+                .filter(distinctByIncidentId())
+                .collect(Collectors.groupingBy(WorkerRiskIncident::getAssignedManagerId));
+        return new RiskAssignments(legacyByWorker, byManager);
+    }
+
+    private java.util.function.Predicate<WorkerRiskIncident> distinctByIncidentId() {
+        Set<Object> seen = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        return risk -> seen.add(risk.getId() == null ? risk : risk.getId());
     }
 
     private SlaStats concreteSla(
@@ -543,35 +578,44 @@ public class ManagerPerformanceService {
         return items == null ? 0 : items.size();
     }
 
-    private int riskQualityScore(List<WorkerRiskIncident> risks) {
+    private int riskQualityScore(List<WorkerRiskIncident> risks, LocalDateTime evaluatedAt) {
         if (risks.isEmpty()) {
             return 100;
         }
         double average = risks.stream()
-                .mapToInt(this::riskQualityItemScore)
+                .mapToInt(risk -> riskQualityItemScore(risk, evaluatedAt))
                 .average()
                 .orElse(100);
         return clampScore((int) Math.round(average));
     }
 
-    private int riskQualityItemScore(WorkerRiskIncident risk) {
+    private int riskQualityItemScore(WorkerRiskIncident risk, LocalDateTime evaluatedAt) {
         if (risk == null) {
             return 0;
         }
-        if (risk.getStatus() == WorkerRiskIncidentStatus.RESOLVED
-                || risk.getStatus() == WorkerRiskIncidentStatus.IGNORED) {
-            return 100;
+        if (risk.isAuditRequired()) {
+            return risk.getManagerResolutionComment() == null
+                    || risk.getManagerResolutionComment().isBlank() ? 15 : 45;
         }
-        if (risk.getStatus() == WorkerRiskIncidentStatus.VIOLATION) {
-            return 90;
+        if (risk.getExplanationQuality() == WorkerRiskExplanationQuality.LOGICAL) {
+            if (risk.getStatus() == WorkerRiskIncidentStatus.RESOLVED
+                    || risk.getStatus() == WorkerRiskIncidentStatus.IGNORED
+                    || risk.getStatus() == WorkerRiskIncidentStatus.VIOLATION) {
+                return 100;
+            }
+            return 75;
         }
-        return switch (risk.getResolutionAction() == null ? "" : risk.getResolutionAction().name()) {
-            case "VIOLATION_CONFIRMED" -> 85;
-            case "WORKER_WARNED" -> 70;
-            case "EXPLANATION_REQUESTED" -> 60;
-            case "VERIFIED", "FALSE_POSITIVE", "NORMAL_ACCOUNT_SELECTION" -> 100;
-            default -> risk.getExplanationRequestedAt() != null ? 50 : 0;
-        };
+        if (risk.getExplanationQuality() == WorkerRiskExplanationQuality.NEEDS_REVIEW) {
+            return risk.getStatus() == WorkerRiskIncidentStatus.OPEN ? 60 : 50;
+        }
+        if (risk.getExplanationQuality() != null) {
+            return risk.getStatus() == WorkerRiskIncidentStatus.OPEN ? 35 : 25;
+        }
+        if (risk.getExplanationRequestedAt() != null) {
+            return risk.getResponseDueAt() != null
+                    && risk.getResponseDueAt().isBefore(evaluatedAt) ? 25 : 60;
+        }
+        return 20;
     }
 
     private int controlDisciplineScore(
@@ -759,5 +803,11 @@ public class ManagerPerformanceService {
         double averageSpeedScore() {
             return total == 0 ? 100 : speedScoreSum / (double) total;
         }
+    }
+
+    private record RiskAssignments(
+            Map<Long, List<WorkerRiskIncident>> legacyByWorkerUserId,
+            Map<Long, List<WorkerRiskIncident>> byManagerId
+    ) {
     }
 }

@@ -15,6 +15,7 @@ import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
+import com.hunt.otziv.client_chat_control.service.ClientChatReplySuggestionService;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
@@ -130,6 +131,8 @@ class ManagerControlServiceTest {
     private ClientChatMessageSender clientChatMessageSender;
     @Mock
     private ClientChatMessageTrackerService clientChatMessageTrackerService;
+    @Mock
+    private ClientChatReplySuggestionService clientChatReplySuggestionService;
     @Mock
     private ClientChatUnansweredItemRepository clientChatUnansweredItemRepository;
     @Mock
@@ -519,7 +522,9 @@ class ManagerControlServiceTest {
         verify(clientChatMessageTrackerService).markFromManagerControl(
                 101L,
                 ManagerDailyControlActionType.ACTION_TAKEN,
-                "Ответ клиенту проверен вручную"
+                "Ответ клиенту проверен вручную",
+                1L,
+                false
         );
     }
 

@@ -54,3 +54,17 @@ describe('training account assignment tab', () => {
     expect(blockText).toContain('Не исправляйте назначения прямым редактированием таблиц');
   });
 });
+
+describe('manager problem handling training', () => {
+  const managerText = TRAINING_TABS.manager.blocks
+    .flatMap((block) => [block.title, ...block.items])
+    .join(' ');
+
+  it('documents the risk workflow without extra forms', () => {
+    expect(managerText).toContain('Работа с проблемами');
+    expect(managerText).toContain('DeepSeek');
+    expect(managerText).toContain('На ответ даётся 3 часа');
+    expect(managerText).toContain('раздел "Специалист" будет ограничен');
+    expect(managerText).toContain('просто переслать пояснение владельцу вместо решения нельзя');
+  });
+});

@@ -34,6 +34,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
@@ -188,6 +190,46 @@ class OrderStatusTransitionServiceTest {
         );
         verify(orderStatusService, never()).getOrderStatusByTitle("Выставлен счет");
         verify(orderRepository, never()).save(order);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"В проверку", "На проверке", "Коррекция", "Публикация", "Опубликовано", "Архив", "Новый"})
+    void financialOrderInsideActiveCommonInvoiceCannotReturnToWorkingStatus(String targetStatus) {
+        OrderStatusTransitionService service = service();
+        Order order = order(94L, "Напоминание");
+
+        when(orderRepository.findByIdForMutation(94L)).thenReturn(Optional.of(order));
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInActiveCommonInvoice(94L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(94L, targetStatus)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Заказ уже включен в активный общий счет и не может быть возвращен в рабочий статус",
+                exception.getReason()
+        );
+        verify(orderStatusService, never()).getOrderStatusByTitle(targetStatus);
+        verify(orderRepository, never()).save(order);
+    }
+
+    @Test
+    void workingOrderInsideCollectingCommonInvoiceCanContinueWorkflow() throws Exception {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithCompanyManagerAndDetail(95L, "В проверку", "Компания", "Комментарий");
+        OrderStatus inCheck = status("На проверке");
+
+        when(orderRepository.findByIdForMutation(95L)).thenReturn(Optional.of(order));
+        when(orderStatusService.getOrderStatusByTitle("На проверке")).thenReturn(inCheck);
+
+        assertTrue(service.changeStatusForOrder(95L, "На проверке"));
+
+        verifyNoInteractions(commonBillingServiceProvider);
+        assertSame(inCheck, order.getStatus());
+        verify(orderRepository).save(order);
     }
 
     @Test

@@ -279,6 +279,13 @@ export interface AdminClientMessageSettings {
   archiveReorderEnabled: boolean;
   errorProtectionEnabled: boolean;
   unansweredAutoIgnoreEnabled: boolean;
+  unansweredResolutionEnforcementEnabled: boolean;
+  unansweredFastClickGuardEnabled: boolean;
+  unansweredReplyQualityShadowEnabled: boolean;
+  unansweredFastClickWarningCount: number;
+  unansweredFastClickWarningSeconds: number;
+  unansweredFastClickCriticalCount: number;
+  unansweredFastClickCriticalSeconds: number;
   reviewCheckIntervalDays: number;
   reviewCheckAutoArchiveDays: number;
   clientTextReminderIntervalDays: number;

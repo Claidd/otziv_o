@@ -76,6 +76,36 @@ public class ClientChatUnansweredItem {
     @Column(name = "close_reason", length = 255)
     private String closeReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resolution_type", length = 32)
+    private ClientChatResolutionType resolutionType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "resolution_message_id")
+    private ClientChatMessage resolutionMessage;
+
+    @Column(name = "resolution_reason_code", length = 60)
+    private String resolutionReasonCode;
+
+    @Column(name = "resolution_comment", length = 1000)
+    private String resolutionComment;
+
+    @Column(name = "resolved_by_user_id")
+    private Long resolvedByUserId;
+
+    @Column(name = "manual_override", nullable = false)
+    private boolean manualOverride;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reply_quality", length = 24)
+    private ClientChatReplyQuality replyQuality;
+
+    @Column(name = "reply_quality_reason", length = 500)
+    private String replyQualityReason;
+
+    @Column(name = "audit_required", nullable = false)
+    private boolean auditRequired;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

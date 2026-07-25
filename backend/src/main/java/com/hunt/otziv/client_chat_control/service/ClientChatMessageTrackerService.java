@@ -7,6 +7,8 @@ import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
 import com.hunt.otziv.client_chat_control.model.ClientChatMessage;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
+import com.hunt.otziv.client_chat_control.model.ClientChatReplyQuality;
+import com.hunt.otziv.client_chat_control.model.ClientChatResolutionType;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatMessageRepository;
@@ -25,12 +27,13 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +51,9 @@ public class ClientChatMessageTrackerService {
     private final ClientChatCompanyResolutionService companyResolutionService;
     private final AppSettingService appSettingService;
     private final GamificationEventService gamificationEventService;
+    private final ClientChatIdentityService identityService;
+    private final ClientChatResolutionPolicy resolutionPolicy;
+    private final ClientChatReplyQualityService replyQualityService;
 
     @Transactional
     public void track(ClientChatMessageCommand command) {
@@ -90,6 +96,7 @@ public class ClientChatMessageTrackerService {
                 ? participantClassifier.classify(
                         command.platform(),
                         direction,
+                        command.chatId(),
                         command.senderExternalId(),
                         command.senderName(),
                         company
@@ -121,7 +128,13 @@ public class ClientChatMessageTrackerService {
             return;
         }
         if (senderRole == ClientChatSenderRole.STAFF) {
-            closeOpenItems(command.platform(), command.chatId(), ClientChatUnansweredStatus.ANSWERED, "Ответ сотрудника");
+            closeOpenItems(
+                    command.platform(),
+                    command.chatId(),
+                    ClientChatUnansweredStatus.ANSWERED,
+                    "Ответ сотрудника",
+                    savedMessage
+            );
             return;
         }
         if (direction == ClientChatDirection.OUTGOING) {
@@ -148,22 +161,7 @@ public class ClientChatMessageTrackerService {
     }
 
     private ClientChatSenderRole normalizeSenderRole(ClientChatMessageCommand command, ClientChatSenderRole senderRole) {
-        if (isKnownSystemSender(command)) {
-            return ClientChatSenderRole.BOT;
-        }
         return senderRole == null ? ClientChatSenderRole.UNKNOWN : senderRole;
-    }
-
-    private boolean isKnownSystemSender(ClientChatMessageCommand command) {
-        if (command == null) {
-            return false;
-        }
-        String senderExternalId = safe(command.senderExternalId());
-        String senderName = safe(command.senderName()).toLowerCase(Locale.ROOT);
-        if (command.platform() == ClientChatPlatform.TELEGRAM) {
-            return "1087968824".equals(senderExternalId) || senderName.contains("groupanonymousbot");
-        }
-        return false;
     }
 
     @Transactional(readOnly = true)
@@ -195,8 +193,39 @@ public class ClientChatMessageTrackerService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public long countAuditRequired(Manager manager) {
+        if (!enabled() || manager == null) {
+            return 0;
+        }
+        return unansweredRepository.countByManagerAndAuditRequiredTrue(manager);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClientChatUnansweredExample> auditExamples(Manager manager, int requestedLimit) {
+        if (!enabled() || manager == null) {
+            return List.of();
+        }
+        int limit = Math.max(1, Math.min(requestedLimit, appSettingService.getInt(EXAMPLE_LIMIT, 50)));
+        LocalDateTime now = LocalDateTime.now();
+        return unansweredRepository.findAuditRequiredByManager(manager, PageRequest.of(0, limit)).stream()
+                .map(item -> example(item, now))
+                .toList();
+    }
+
     @Transactional
     public void markFromManagerControl(Long unansweredItemId, ManagerDailyControlActionType actionType, String comment) {
+        markFromManagerControl(unansweredItemId, actionType, comment, null, false);
+    }
+
+    @Transactional
+    public void markFromManagerControl(
+            Long unansweredItemId,
+            ManagerDailyControlActionType actionType,
+            String comment,
+            Long resolvedByUserId,
+            boolean administrativeOverride
+    ) {
         if (unansweredItemId == null) {
             return;
         }
@@ -204,11 +233,124 @@ public class ClientChatMessageTrackerService {
             if (item.getStatus() != ClientChatUnansweredStatus.OPEN) {
                 return;
             }
-            ClientChatUnansweredStatus status = actionType == ManagerDailyControlActionType.ACKNOWLEDGED
-                    ? ClientChatUnansweredStatus.NO_RESPONSE_NEEDED
-                    : ClientChatUnansweredStatus.ANSWERED;
-            close(item, status, hasText(comment) ? comment : "Закрыто из контроля менеджера");
+            if (actionType == ManagerDailyControlActionType.DEFERRED) {
+                item.setResolutionType(ClientChatResolutionType.DEFERRED);
+                item.setResolutionReasonCode("FOLLOW_UP_SCHEDULED");
+                item.setResolutionComment(limit(comment, 1000));
+                item.setResolvedByUserId(resolvedByUserId);
+                unansweredRepository.save(item);
+                return;
+            }
+            assertResolutionRateAllowed(item, resolvedByUserId);
+            if (actionType == ManagerDailyControlActionType.ACKNOWLEDGED) {
+                markNoResponseNeeded(item, comment, resolvedByUserId, administrativeOverride);
+                return;
+            }
+            if (actionType == ManagerDailyControlActionType.RESOLVED) {
+                if (!hasText(comment)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Опишите выполненное действие по сообщению клиента"
+                    );
+                }
+                close(
+                        item,
+                        ClientChatUnansweredStatus.ACTION_COMPLETED,
+                        "Действие по сообщению клиента выполнено",
+                        ClientChatResolutionType.ACTION_COMPLETED,
+                        null,
+                        "ACTION_CONFIRMED",
+                        comment,
+                        resolvedByUserId,
+                        false,
+                        ClientChatReplyQuality.NOT_APPLICABLE,
+                        "Карточка закрыта выполненным действием"
+                );
+                return;
+            }
+            markAnsweredWithEvidence(item, comment, resolvedByUserId, administrativeOverride);
         });
+    }
+
+    @Transactional
+    public void markConfirmedReply(
+            Long unansweredItemId,
+            String comment,
+            Long resolvedByUserId,
+            String replyText
+    ) {
+        ClientChatUnansweredItem item = unansweredRepository.findById(unansweredItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
+        if (item.getStatus() != ClientChatUnansweredStatus.OPEN) {
+            return;
+        }
+        assertResolutionRateAllowed(item, resolvedByUserId);
+        ClientChatReplyQualityService.Result quality = quality(item.getLastMessageText(), replyText);
+        close(
+                item,
+                ClientChatUnansweredStatus.ANSWERED,
+                hasText(comment) ? comment : "Ответ отправлен из контроля менеджера",
+                ClientChatResolutionType.ANSWERED,
+                null,
+                "CONFIRMED_SEND",
+                comment,
+                resolvedByUserId,
+                false,
+                quality.quality(),
+                quality.reason()
+        );
+    }
+
+    @Transactional
+    public void markMisclassified(Long unansweredItemId, Long resolvedByUserId, String comment) {
+        ClientChatUnansweredItem item = unansweredRepository.findById(unansweredItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
+        if (item.getStatus() != ClientChatUnansweredStatus.OPEN) {
+            return;
+        }
+        ClientChatMessage message = item.getLastClientMessage();
+        if (message == null
+                || message.getPlatform() == null
+                || !hasText(message.getChatId())
+                || (!hasText(message.getSenderExternalId()) && !hasText(message.getSenderName()))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Не удалось определить отправителя исходного сообщения"
+            );
+        }
+        identityService.registerStaff(message, resolvedByUserId);
+        close(
+                item,
+                ClientChatUnansweredStatus.MISCLASSIFIED,
+                "Отправитель подтверждён как сотрудник",
+                ClientChatResolutionType.MISCLASSIFIED,
+                message,
+                "STAFF_IDENTITY_REGISTERED",
+                comment,
+                resolvedByUserId,
+                false,
+                ClientChatReplyQuality.NOT_APPLICABLE,
+                "Сообщение исключено из клиентских"
+        );
+    }
+
+    @Transactional
+    public void markAuditReviewed(Long unansweredItemId, Long resolvedByUserId, String comment) {
+        ClientChatUnansweredItem item = unansweredRepository.findById(unansweredItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Закрытое сообщение не найдено"));
+        if (!item.isAuditRequired()) {
+            return;
+        }
+        if (!hasMeaningfulOverrideComment(comment)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Укажите, где найден ответ или какое действие выполнено после сообщения клиента"
+            );
+        }
+        item.setAuditRequired(false);
+        item.setResolutionComment(limit(comment, 1000));
+        item.setResolvedByUserId(resolvedByUserId);
+        unansweredRepository.save(item);
     }
 
     private void openOrRefresh(ClientChatMessage message, Company company, Manager manager) {
@@ -236,22 +378,96 @@ public class ClientChatMessageTrackerService {
         item.setLastClientMessageAt(message.getMessageAt());
         item.setClosedAt(null);
         item.setCloseReason(null);
+        item.setResolutionType(null);
+        item.setResolutionMessage(null);
+        item.setResolutionReasonCode(null);
+        item.setResolutionComment(null);
+        item.setResolvedByUserId(null);
+        item.setManualOverride(false);
+        item.setReplyQuality(null);
+        item.setReplyQualityReason(null);
+        item.setAuditRequired(false);
         unansweredRepository.save(item);
     }
 
-    private void closeOpenItems(ClientChatPlatform platform, String chatId, ClientChatUnansweredStatus status, String reason) {
+    private void closeOpenItems(
+            ClientChatPlatform platform,
+            String chatId,
+            ClientChatUnansweredStatus status,
+            String reason,
+            ClientChatMessage resolutionMessage
+    ) {
         unansweredRepository.findByPlatformAndChatIdAndStatus(
                         platform,
                         limit(chatId, 160),
                         ClientChatUnansweredStatus.OPEN
-                ).forEach(item -> close(item, status, reason));
+                ).forEach(item -> {
+                    ClientChatReplyQualityService.Result quality =
+                            quality(item.getLastMessageText(), resolutionMessage == null ? null : resolutionMessage.getMessageText());
+                    close(
+                            item,
+                            status,
+                            reason,
+                            ClientChatResolutionType.ANSWERED,
+                            resolutionMessage,
+                            "OUTGOING_STAFF_MESSAGE",
+                            null,
+                            null,
+                            false,
+                            quality.quality(),
+                            quality.reason()
+                    );
+                });
     }
 
     private void close(ClientChatUnansweredItem item, ClientChatUnansweredStatus status, String reason) {
+        close(
+                item,
+                status,
+                reason,
+                status == ClientChatUnansweredStatus.ANSWERED
+                        ? ClientChatResolutionType.ANSWERED
+                        : ClientChatResolutionType.NO_RESPONSE_NEEDED,
+                null,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null
+        );
+    }
+
+    private void close(
+            ClientChatUnansweredItem item,
+            ClientChatUnansweredStatus status,
+            String reason,
+            ClientChatResolutionType resolutionType,
+            ClientChatMessage resolutionMessage,
+            String reasonCode,
+            String comment,
+            Long resolvedByUserId,
+            boolean manualOverride,
+            ClientChatReplyQuality replyQuality,
+            String replyQualityReason
+    ) {
         LocalDateTime closedAt = LocalDateTime.now();
         item.setStatus(status);
         item.setClosedAt(closedAt);
         item.setCloseReason(limit(reason, 255));
+        item.setResolutionType(resolutionType);
+        item.setResolutionMessage(resolutionMessage);
+        item.setResolutionReasonCode(limit(reasonCode, 60));
+        item.setResolutionComment(limit(comment, 1000));
+        item.setResolvedByUserId(resolvedByUserId);
+        item.setManualOverride(manualOverride);
+        item.setReplyQuality(replyQuality);
+        item.setReplyQualityReason(limit(replyQualityReason, 500));
+        item.setAuditRequired(
+                manualOverride
+                        || replyQuality == ClientChatReplyQuality.PARTIAL
+                        || replyQuality == ClientChatReplyQuality.SUSPICIOUS
+        );
         unansweredRepository.save(item);
         if (status == ClientChatUnansweredStatus.ANSWERED) {
             gamificationEventService.recordManagerClientReply(
@@ -387,6 +603,156 @@ public class ClientChatMessageTrackerService {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is unavailable", e);
         }
+    }
+
+    private void markNoResponseNeeded(
+            ClientChatUnansweredItem item,
+            String comment,
+            Long resolvedByUserId,
+            boolean administrativeOverride
+    ) {
+        ClientChatResolutionPolicy.Assessment assessment = resolutionPolicy.assess(item.getLastMessageText());
+        boolean enforce = appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
+                true
+        );
+        boolean overrideUsed = !assessment.safeNoResponse() && administrativeOverride;
+        if (enforce && !assessment.safeNoResponse() && !overrideUsed) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Сообщение похоже на вопрос, проблему или поручение. Ответьте клиенту, выполните действие или отложите карточку"
+            );
+        }
+        if (overrideUsed && !hasMeaningfulOverrideComment(comment)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Для административного закрытия укажите конкретную причину"
+            );
+        }
+        close(
+                item,
+                ClientChatUnansweredStatus.NO_RESPONSE_NEEDED,
+                "Сообщение клиента не требует ответа",
+                overrideUsed ? ClientChatResolutionType.ADMIN_OVERRIDE : ClientChatResolutionType.NO_RESPONSE_NEEDED,
+                null,
+                assessment.reasonCode(),
+                comment,
+                resolvedByUserId,
+                overrideUsed,
+                ClientChatReplyQuality.NOT_APPLICABLE,
+                "Ответ не требуется по правилу " + assessment.reasonCode()
+        );
+    }
+
+    private void markAnsweredWithEvidence(
+            ClientChatUnansweredItem item,
+            String comment,
+            Long resolvedByUserId,
+            boolean administrativeOverride
+    ) {
+        ClientChatMessage evidence = messageRepository
+                .findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
+                        item.getPlatform(),
+                        item.getChatId(),
+                        ClientChatSenderRole.STAFF,
+                        item.getLastClientMessageAt()
+                )
+                .orElse(null);
+        boolean enforce = appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_RESOLUTION_ENFORCEMENT_ENABLED,
+                true
+        );
+        boolean overrideUsed = evidence == null && administrativeOverride;
+        if (evidence == null && enforce && !overrideUsed) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Исходящий ответ после сообщения клиента не найден. Ответьте из карточки или откройте чат и дождитесь синхронизации"
+            );
+        }
+        if (overrideUsed && !hasMeaningfulOverrideComment(comment)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Для административного закрытия без найденного ответа укажите причину"
+            );
+        }
+        ClientChatReplyQualityService.Result quality =
+                quality(item.getLastMessageText(), evidence == null ? null : evidence.getMessageText());
+        close(
+                item,
+                ClientChatUnansweredStatus.ANSWERED,
+                evidence == null ? "Ответ подтверждён администратором" : "Ответ сотрудника найден",
+                overrideUsed ? ClientChatResolutionType.ADMIN_OVERRIDE : ClientChatResolutionType.ANSWERED,
+                evidence,
+                overrideUsed
+                        ? "ADMIN_OVERRIDE_WITHOUT_MESSAGE"
+                        : evidence == null ? "LEGACY_MANUAL_CONFIRMATION" : "OUTGOING_STAFF_MESSAGE",
+                comment,
+                resolvedByUserId,
+                overrideUsed,
+                quality.quality(),
+                quality.reason()
+        );
+    }
+
+    private void assertResolutionRateAllowed(ClientChatUnansweredItem item, Long resolvedByUserId) {
+        if (!appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_GUARD_ENABLED,
+                false
+        ) || item.getManager() == null || resolvedByUserId == null) {
+            return;
+        }
+        int warningSeconds = Math.max(3, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS,
+                10
+        ));
+        int warningCount = Math.max(3, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT,
+                3
+        ));
+        int criticalSeconds = Math.max(warningSeconds, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS,
+                60
+        ));
+        int criticalCount = Math.max(warningCount, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT,
+                10
+        ));
+        long warningWindowClosures = unansweredRepository.countByManagerAndResolvedByUserIdAndClosedAtAfter(
+                item.getManager(),
+                resolvedByUserId,
+                LocalDateTime.now().minusSeconds(warningSeconds)
+        );
+        long criticalWindowClosures = unansweredRepository.countByManagerAndResolvedByUserIdAndClosedAtAfter(
+                item.getManager(),
+                resolvedByUserId,
+                LocalDateTime.now().minusSeconds(criticalSeconds)
+        );
+        if (warningWindowClosures >= warningCount - 1L || criticalWindowClosures >= criticalCount - 1L) {
+            throw new ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "Слишком много быстрых закрытий. Перечитайте сообщение и повторите действие через несколько секунд"
+            );
+        }
+    }
+
+    private ClientChatReplyQualityService.Result quality(String clientMessage, String replyText) {
+        if (!appSettingService.getBoolean(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_REPLY_QUALITY_SHADOW_ENABLED,
+                true
+        )) {
+            return new ClientChatReplyQualityService.Result(
+                    ClientChatReplyQuality.NOT_APPLICABLE,
+                    "Теневая проверка качества выключена"
+            );
+        }
+        return replyQualityService.assess(clientMessage, replyText);
+    }
+
+    private boolean hasMeaningfulOverrideComment(String comment) {
+        String value = safe(comment);
+        return value.length() >= 10
+                && !"Ответ клиенту проверен вручную".equalsIgnoreCase(value)
+                && !"Сообщение клиента не требует ответа".equalsIgnoreCase(value);
     }
 
     private static String safe(String value) {

@@ -16,6 +16,8 @@ public class ManagerSummaryFormatter {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy");
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
     private final ManagerPerformanceDailyRepository dailyRepository;
+    private final ManagerCommunicationDailyReportSectionService communicationSectionService;
+    private final ManagerRiskDailyReportSectionService riskSectionService;
 
     public String format(List<ManagerDailySummaryResponse> managers, boolean testMode) {
         if (managers == null || managers.isEmpty()) {
@@ -38,7 +40,7 @@ public class ManagerSummaryFormatter {
         if (provisional) {
             result.append("⏳ <b>Предварительные данные")
                     .append(snapshotAt == null ? "" : " на " + snapshotAt.format(TIME))
-                    .append(".</b> Итог фиксируется в 23:00.\n\n");
+                    .append(".</b> Итог фиксируется в 00:00 за завершившийся день.\n\n");
         }
         result.append("📊 <b>Итоги рабочего дня — ")
                 .append(managers.getFirst().date().format(DATE)).append("</b>\n\n")
@@ -95,6 +97,8 @@ public class ManagerSummaryFormatter {
                 + problemOtherLine(row)
                 + "├ осталось открыто: " + row.problemOpenCount() + "\n"
                 + "└ среднее окончательного решения: " + duration(row.problemResolutionAverageSeconds()) + "\n"
+                + communicationSectionService.format(row.managerId(), row.date()) + "\n"
+                + riskSectionService.format(row.managerId(), row.date()) + "\n"
                 + "⚠️ Просрочки: " + row.overdueCount() + " · риски: " + row.riskCount() + " · без ответа: " + row.unansweredCount() + "\n"
                 + "🎮 " + (provisional ? "Предварительный результат" : "Итог дня") + ": <b>" + stars(row.dayStars())
                 + "</b> · под контролем " + duration(row.controlledSeconds())

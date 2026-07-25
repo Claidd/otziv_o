@@ -10,6 +10,7 @@ import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
 import com.hunt.otziv.client_chat_control.dto.ClientChatUnansweredExample;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
+import com.hunt.otziv.client_chat_control.service.ClientChatReplySuggestionService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
@@ -28,6 +29,7 @@ import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
+import com.hunt.otziv.manager_control.dto.ManagerControlClientReplySuggestionResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
@@ -152,6 +154,7 @@ public class ManagerControlService {
     private static final String ENTITY_WORKER_ORDER_CORRECT = "WORKER_ORDER_CORRECT";
     private static final String ENTITY_TELEGRAM_CHAT = "TELEGRAM_CHAT";
     private static final String ENTITY_CLIENT_CHAT_UNANSWERED = "CLIENT_CHAT_UNANSWERED";
+    private static final String ENTITY_CLIENT_CHAT_AUDIT = "CLIENT_CHAT_AUDIT";
     private static final String ENTITY_ORDER_PAYMENT_INTEGRITY = OrderPaymentIntegrityService.ENTITY_TYPE;
     private static final Set<String> OVERDUE_IGNORED_STATUSES = Set.of(
             "Оплачено",
@@ -253,6 +256,7 @@ public class ManagerControlService {
     private final AppSettingService appSettingService;
     private final ClientChatMessageSender clientChatMessageSender;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
+    private final ClientChatReplySuggestionService clientChatReplySuggestionService;
     private final ClientChatUnansweredItemRepository clientChatUnansweredItemRepository;
     private final BadReviewTaskService badReviewTaskService;
     private final ReviewRecoveryTaskService reviewRecoveryTaskService;
@@ -655,6 +659,7 @@ public class ManagerControlService {
         boolean manualWorkerNotification = Boolean.TRUE.equals(request == null ? null : request.manualWorkerNotification());
         boolean specialistActionConcrete = isSpecialistActionConcrete(concreteItem);
         boolean clientChatUnansweredConcrete = ENTITY_CLIENT_CHAT_UNANSWERED.equals(concreteItem.getEntityType());
+        boolean clientChatAuditConcrete = ENTITY_CLIENT_CHAT_AUDIT.equals(concreteItem.getEntityType());
         if (manualWorkerNotification && specialistActionConcrete && safe(comment).isBlank()) {
             comment = manualWorkerNotificationComment(concreteItem);
         }
@@ -720,15 +725,37 @@ public class ManagerControlService {
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
                 movedToReminder = movePaymentOrderToReminderAfterManualSend(concreteItem);
             }
-        } else if (clientChatUnansweredConcrete) {
+        } else if (clientChatAuditConcrete) {
             concreteItem.setLastManualTouchAt(now);
             concreteItem.setFollowUpAt(null);
-            clientChatMessageTrackerService.markFromManagerControl(concreteItem.getEntityId(), actionType, comment);
+            clientChatMessageTrackerService.markAuditReviewed(
+                    concreteItem.getEntityId(),
+                    actorUserId(principal),
+                    comment
+            );
+            concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+            concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
+            concreteItem.setResolvedAt(now);
+            status = ManagerDailyControlItemStatus.RESOLVED;
+            actionType = ManagerDailyControlActionType.RESOLVED;
+        } else if (clientChatUnansweredConcrete) {
+            concreteItem.setLastManualTouchAt(now);
+            clientChatMessageTrackerService.markFromManagerControl(
+                    concreteItem.getEntityId(),
+                    actionType,
+                    comment,
+                    actorUserId(principal),
+                    canOverrideWorkerExplanation(authentication)
+            );
             if (actionType == ManagerDailyControlActionType.ACTION_TAKEN
-                    || actionType == ManagerDailyControlActionType.ACKNOWLEDGED) {
+                    || actionType == ManagerDailyControlActionType.ACKNOWLEDGED
+                    || actionType == ManagerDailyControlActionType.RESOLVED) {
                 concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
                 concreteItem.setResolvedAt(now);
+                concreteItem.setFollowUpAt(null);
                 status = ManagerDailyControlItemStatus.RESOLVED;
+            } else if (actionType == ManagerDailyControlActionType.DEFERRED) {
+                concreteItem.setFollowUpAt(nextDayFollowUpAt(now));
             }
         } else if (specialistActionConcrete
                 && status != ManagerDailyControlItemStatus.RESOLVED
@@ -945,10 +972,11 @@ public class ManagerControlService {
         concreteItem.setComment(limit("Ответ отправлен через " + safe(result.channel()) + ": " + message, 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
 
-        clientChatMessageTrackerService.markFromManagerControl(
+        clientChatMessageTrackerService.markConfirmedReply(
                 unansweredItem.getId(),
-                ManagerDailyControlActionType.ACTION_TAKEN,
-                "Ответ отправлен из контроля менеджера через " + safe(result.channel())
+                "Ответ отправлен из контроля менеджера через " + safe(result.channel()),
+                actorUserId(principal),
+                message
         );
         updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
 
@@ -970,6 +998,92 @@ public class ManagerControlService {
         );
 
         return concreteItemResponse(savedConcreteItem, message);
+    }
+
+    @Transactional(readOnly = true)
+    public ManagerControlClientReplySuggestionResponse suggestClientReply(
+            Long concreteItemId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        requireControlAccess(concreteItem.getControl(), principal, authentication);
+        if (!ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()))
+                || concreteItem.getEntityId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Подсказка доступна только для неотвеченного сообщения"
+            );
+        }
+        ClientChatUnansweredItem item = clientChatUnansweredItemRepository.findById(concreteItem.getEntityId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
+        ClientChatReplySuggestionService.Suggestion suggestion =
+                clientChatReplySuggestionService.suggest(item.getLastMessageText());
+        return new ManagerControlClientReplySuggestionResponse(
+                suggestion.message(),
+                suggestion.reasonCode()
+        );
+    }
+
+    @Transactional
+    public ManagerControlConcreteItemResponse markClientMessageMisclassified(
+            Long concreteItemId,
+            ManagerControlItemActionRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (concreteItemId == null || concreteItemId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная карточка контроля");
+        }
+        ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
+        ManagerDailyControl control = concreteItem.getControl();
+        requireControlAccess(control, principal, authentication);
+        if (!ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()))
+                || concreteItem.getEntityId() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Исправление отправителя доступно только для клиентских сообщений"
+            );
+        }
+
+        String comment = limit(request == null ? null : request.comment(), 1000);
+        LocalDateTime now = LocalDateTime.now();
+        clientChatMessageTrackerService.markMisclassified(
+                concreteItem.getEntityId(),
+                actorUserId(principal),
+                comment
+        );
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
+        concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
+        concreteItem.setComment(hasText(comment) ? comment : "Отправитель подтверждён как сотрудник");
+        concreteItem.setResolvedAt(now);
+        concreteItem.setLastManualTouchAt(now);
+        concreteItem.setFollowUpAt(null);
+        concreteItem.setAutomaticResolution(false);
+        ManagerDailyControlConcreteItem saved = dailyControlConcreteItemRepository.save(concreteItem);
+        updateParentItemFromConcreteItems(saved.getParentItem());
+
+        if (control.getStartedAt() == null) {
+            control.setStartedAt(now);
+        }
+        control.setLastActivityAt(now);
+        control.setStatus(recalculateControlStatus(control));
+        dailyControlRepository.save(control);
+        saveEvent(
+                control,
+                saved.getParentItem(),
+                actorUserId(principal),
+                ManagerDailyControlEventType.ITEM_RESOLVED,
+                ManagerDailyControlActionType.RESOLVED,
+                "Исправлена роль отправителя клиентского сообщения: " + saved.getTitle()
+        );
+        return concreteItemResponse(saved);
     }
 
     @Transactional
@@ -1915,15 +2029,51 @@ public class ManagerControlService {
 
     private boolean hasFastClickRisk(ManagerDailyControl control) {
         List<ManagerDailyControlEvent> actions = dailyControlEventRepository.findByControlOrderByCreatedAtDesc(control).stream()
-                .filter(event -> event.getEventType() == ManagerDailyControlEventType.ITEM_ACTION)
+                .filter(event -> event.getEventType() == ManagerDailyControlEventType.ITEM_ACTION
+                        || event.getEventType() == ManagerDailyControlEventType.ITEM_RESOLVED)
+                .filter(event -> event.getActorUserId() != null)
                 .filter(event -> event.getCreatedAt() != null)
+                .sorted(Comparator.comparing(ManagerDailyControlEvent::getCreatedAt))
                 .toList();
         if (actions.size() < 3) {
             return false;
         }
-        LocalDateTime first = actions.stream().map(ManagerDailyControlEvent::getCreatedAt).min(LocalDateTime::compareTo).orElse(null);
-        LocalDateTime last = actions.stream().map(ManagerDailyControlEvent::getCreatedAt).max(LocalDateTime::compareTo).orElse(null);
-        return first != null && last != null && ChronoUnit.SECONDS.between(first, last) <= 20;
+        int warningCount = Math.max(3, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_COUNT,
+                3
+        ));
+        int warningSeconds = Math.max(3, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_WARNING_SECONDS,
+                10
+        ));
+        int criticalCount = Math.max(warningCount, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_COUNT,
+                10
+        ));
+        int criticalSeconds = Math.max(warningSeconds, appSettingService.getInt(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_FAST_CLICK_CRITICAL_SECONDS,
+                60
+        ));
+        return hasActionBurst(actions, warningCount, warningSeconds)
+                || hasActionBurst(actions, criticalCount, criticalSeconds);
+    }
+
+    private boolean hasActionBurst(
+            List<ManagerDailyControlEvent> actions,
+            int count,
+            int seconds
+    ) {
+        if (actions == null || actions.size() < count) {
+            return false;
+        }
+        for (int index = count - 1; index < actions.size(); index++) {
+            LocalDateTime first = actions.get(index - count + 1).getCreatedAt();
+            LocalDateTime last = actions.get(index).getCreatedAt();
+            if (first != null && last != null && ChronoUnit.SECONDS.between(first, last) <= seconds) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<ManagerControlEventResponse> events(ManagerDailyControl control) {
@@ -1970,6 +2120,7 @@ public class ManagerControlService {
         );
         long telegramChatIssueCount = telegramChatIssueCompanies(manager, 10_000).size();
         long unansweredClientMessages = clientChatMessageTrackerService.countDue(manager);
+        long suspiciousClientClosures = clientChatMessageTrackerService.countAuditRequired(manager);
         long leadActionCount = leadsRepository.countByLidStatusAndManager("Новый", manager)
                 + leadsRepository.countByLidStatusAndManager("В работу", manager)
                 + leadsRepository.countByLidStatusAndManagerAndDateNewTryLessThanEqual("Напоминание", manager, today);
@@ -1985,6 +2136,7 @@ public class ManagerControlService {
         addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
+        addProblem(problems, "SUSPICIOUS_CLIENT_CLOSURES", "Возможно закрыто без ответа", suspiciousClientClosures, "CRITICAL", "ACTION", "fact_check", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "LEADS", "Лиды требуют действия", leadActionCount, "WARNING", "ACTION", "person_search", "/leads");
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
         addProblem(problems, "LEADS_WORKLOAD", "Лиды в работе", leadsInWork, "INFO", "WORKLOAD", "groups", "/leads");
@@ -1992,7 +2144,7 @@ public class ManagerControlService {
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
         long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount
-                + telegramChatIssueCount + unansweredClientMessages + workerActionCount;
+                + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
         long warningCount = leadActionCount;
         long workloadCount = orderAttention + workerWorkloadCount + leadsInWork;
         DailyControlSyncResult controlSync = persist
@@ -2656,6 +2808,9 @@ public class ManagerControlService {
         if ("UNANSWERED_CLIENT_MESSAGES".equals(item.getReasonCode())) {
             return unansweredClientMessageExamples(manager, limit);
         }
+        if ("SUSPICIOUS_CLIENT_CLOSURES".equals(item.getReasonCode())) {
+            return suspiciousClientClosureExamples(manager, limit);
+        }
         if ("OPEN_RISKS".equals(item.getReasonCode()) || "risk".equals(item.getSectionCode())) {
             return riskExamples(manager, limit);
         }
@@ -2737,7 +2892,8 @@ public class ManagerControlService {
     private boolean isClosedClientChatUnansweredConcrete(ManagerDailyControlConcreteItem item) {
         return item != null
                 && ENTITY_CLIENT_CHAT_UNANSWERED.equals(item.getEntityType())
-                && item.getStatus() != ManagerDailyControlItemStatus.OPEN;
+                && item.getStatus() != ManagerDailyControlItemStatus.OPEN
+                && item.getStatus() != ManagerDailyControlItemStatus.DEFERRED;
     }
 
     private List<ManagerControlConcreteItemResponse> syncConcreteExamples(
@@ -5463,6 +5619,47 @@ public class ManagerControlService {
         return invoice != null
                 && invoice.getStatus() == CommonInvoiceStatus.NEEDS_ATTENTION
                 && error.startsWith("next_order_failed");
+    }
+
+    private List<ManagerControlConcreteItemResponse> suspiciousClientClosureExamples(Manager manager, int limit) {
+        return clientChatMessageTrackerService.auditExamples(manager, limit).stream()
+                .map(this::suspiciousClientClosureExample)
+                .toList();
+    }
+
+    private ManagerControlConcreteItemResponse suspiciousClientClosureExample(ClientChatUnansweredExample example) {
+        String companyTitle = safe(example.companyTitle()).isBlank()
+                ? "Компания не определена"
+                : example.companyTitle();
+        String sender = safe(example.senderName()).isBlank() ? "Клиент" : example.senderName();
+        return new ManagerControlConcreteItemResponse(
+                null,
+                ENTITY_CLIENT_CHAT_AUDIT,
+                example.id(),
+                companyTitle,
+                platformLabel(example.platform()) + " · перепроверьте закрытие",
+                "Нужен аудит",
+                Math.max(0, example.waitingMinutes() / (60L * 24L)),
+                sender + ": " + compact(example.lastMessageText(), 300)
+                        + ". Укажите в комментарии найденный ответ или выполненное действие.",
+                example.targetUrl(),
+                null,
+                example.chatUrl(),
+                null,
+                null,
+                ManagerDailyControlItemStatus.OPEN.name(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                compact(example.lastMessageText(), 1000),
+                example.specialistName()
+        );
     }
 
     private boolean commonInvoiceReviewApprovalRepairable(CommonInvoice invoice) {

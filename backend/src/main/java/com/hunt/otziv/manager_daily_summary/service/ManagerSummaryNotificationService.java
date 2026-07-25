@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +30,6 @@ public class ManagerSummaryNotificationService {
     private final ManagerSummaryFormatter formatter;
     private final ManagerSummaryDeliveryLogRepository deliveryRepository;
 
-    @Transactional
     public int send(LocalDate date, List<ManagerDailySummaryResponse> managers) {
         if (!appSettingService.getBoolean("manager.summary.enabled", false)) {
             log.info("Manager daily summary is calculated but delivery is disabled");
@@ -107,6 +105,9 @@ public class ManagerSummaryNotificationService {
         String remaining = text;
         while (remaining.length() > limit) {
             int split = remaining.lastIndexOf("\n\n", limit);
+            if (split < limit / 2) {
+                split = remaining.lastIndexOf("\n", limit);
+            }
             if (split < limit / 2) split = limit;
             result.add(remaining.substring(0, split));
             remaining = remaining.substring(split).stripLeading();
