@@ -3,6 +3,8 @@ package com.hunt.otziv.t_telegrambot.service;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class TelegramGroupLinkService {
 
     private static final String PAYLOAD_PREFIX = "c";
     private static final String WORKER_PAYLOAD_PREFIX = "u";
+    private static final String MANAGER_AUDIT_PAYLOAD_PREFIX = "m";
     private static final int SIGNATURE_LENGTH = 12;
     private static final Pattern TELEGRAM_PUBLIC_CHAT_URL = Pattern.compile(
             "(?i)^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/@?([A-Za-z0-9_]{5,32})(?:[/?#].*)?$"
@@ -36,6 +39,7 @@ public class TelegramGroupLinkService {
 
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final ManagerRepository managerRepository;
 
     @Value("${telegram.bot.username:}")
     private String botUsername;
@@ -103,6 +107,21 @@ public class TelegramGroupLinkService {
         return "https://t.me/" + username + "?startgroup=" + payloadForWorker(user.getId());
     }
 
+    public String buildManagerAuditInviteUrl(Manager manager) {
+        if (manager == null
+                || manager.getId() == null
+                || !isTelegramChatUrl(manager.getAuditTelegramGroupUrl())
+                || isTelegramGroupLinked(manager.getAuditTelegramGroupChatId())) {
+            return "";
+        }
+        String username = normalizedBotUsername();
+        if (!hasText(username)) {
+            log.warn("Telegram manager audit group invite link is unavailable: telegram.bot.username is empty");
+            return "";
+        }
+        return "https://t.me/" + username + "?startgroup=" + payloadForManagerAudit(manager.getId());
+    }
+
     public Optional<String> handleBotAddedToGroup(long chatId, String chatUsername, String chatTitle) {
         if (chatId > 0 || !hasText(chatUsername)) {
             return Optional.empty();
@@ -141,7 +160,9 @@ public class TelegramGroupLinkService {
 
     public Optional<String> handleGroupStartCommand(long chatId, String messageText) {
         String payload = extractStartPayload(messageText);
-        if (!hasText(payload) || (!payload.startsWith(PAYLOAD_PREFIX) && !payload.startsWith(WORKER_PAYLOAD_PREFIX))) {
+        if (!hasText(payload) || (!payload.startsWith(PAYLOAD_PREFIX)
+                && !payload.startsWith(WORKER_PAYLOAD_PREFIX)
+                && !payload.startsWith(MANAGER_AUDIT_PAYLOAD_PREFIX))) {
             return Optional.empty();
         }
 
@@ -151,6 +172,9 @@ public class TelegramGroupLinkService {
 
         if (payload.startsWith(WORKER_PAYLOAD_PREFIX)) {
             return handleWorkerGroupStartCommand(chatId, payload);
+        }
+        if (payload.startsWith(MANAGER_AUDIT_PAYLOAD_PREFIX)) {
+            return handleManagerAuditGroupStartCommand(chatId, payload);
         }
 
         Long companyId = parsePayloadId(payload, PAYLOAD_PREFIX);
@@ -192,6 +216,30 @@ public class TelegramGroupLinkService {
         return Optional.of("Готово: Telegram-группа привязана к специалисту \"" + title + "\".");
     }
 
+    private Optional<String> handleManagerAuditGroupStartCommand(long chatId, String payload) {
+        Long managerId = parsePayloadId(payload, MANAGER_AUDIT_PAYLOAD_PREFIX);
+        if (managerId == null || !payload.equals(payloadForManagerAudit(managerId))) {
+            log.warn("Telegram manager audit group link rejected: invalid payload '{}', chatId={}", payload, chatId);
+            return Optional.of("Не удалось привязать группу аудита менеджера: ссылка устарела или неверная.");
+        }
+        Manager manager = managerRepository.findByIdWithUser(managerId).orElse(null);
+        if (manager == null || manager.getUser() == null) {
+            return Optional.of("Не удалось привязать группу аудита: менеджер не найден.");
+        }
+        Manager occupied = managerRepository.findByAuditTelegramGroupChatId(chatId).orElse(null);
+        if (occupied != null && !occupied.getId().equals(managerId)) {
+            return Optional.of("Эта группа уже привязана к аудиту другого менеджера.");
+        }
+        manager.setAuditTelegramGroupChatId(chatId);
+        managerRepository.save(manager);
+        String title = hasText(manager.getUser().getFio())
+                ? manager.getUser().getFio().trim()
+                : manager.getUser().getUsername();
+        log.info("Telegram group chatId={} linked to manager audit managerId={} username='{}'",
+                chatId, managerId, manager.getUser().getUsername());
+        return Optional.of("Готово: Telegram-группа привязана к аудиту менеджера \"" + title + "\".");
+    }
+
     private Company matchCompanyByPublicUsername(String username, List<Company> candidates) {
         if (candidates.size() == 1 && username.equals(telegramPublicUsername(candidates.getFirst().getUrlChat()).orElse(null))) {
             return candidates.getFirst();
@@ -226,6 +274,13 @@ public class TelegramGroupLinkService {
 
     private String payloadForWorker(Long userId) {
         return WORKER_PAYLOAD_PREFIX + userId + "_" + signature("telegram-worker-group:", userId);
+    }
+
+    private String payloadForManagerAudit(Long managerId) {
+        return MANAGER_AUDIT_PAYLOAD_PREFIX
+                + managerId
+                + "_"
+                + signature("telegram-manager-audit-group:", managerId);
     }
 
     private Long parsePayloadId(String payload, String prefix) {

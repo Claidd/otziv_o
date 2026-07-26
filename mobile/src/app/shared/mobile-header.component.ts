@@ -10,6 +10,7 @@ import {
   type MobileRoleSet
 } from '../core/mobile-permissions';
 import { MobileThemeMode, MobileThemeService } from './mobile-theme.service';
+import { ManagerReportReviewAccessService } from '../core/manager-report-review-access.service';
 
 interface MobileHeaderLink {
   label: string;
@@ -30,6 +31,7 @@ const HEADER_LINKS: MobileHeaderLink[] = [
   { label: 'Оператор', icon: 'support_agent', path: '/tabs/operator', roles: rolesForAction(MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view) },
   { label: 'Т Банк', icon: 'account_balance_wallet', path: '/tabs/tbank', roles: rolesForAction(MOBILE_SECTIONS.tbank, MOBILE_ACTIONS.view) },
   { label: 'Пользователи', icon: 'admin_panel_settings', path: '/tabs/users', roles: rolesForAction(MOBILE_SECTIONS.adminUsers, MOBILE_ACTIONS.view) },
+  { label: 'Обучение', icon: 'school', path: '/tabs/training', roles: rolesForAction(MOBILE_SECTIONS.training, MOBILE_ACTIONS.view) },
   { label: 'WhatsApp', icon: 'qr_code_2', path: '/tabs/whatsapp', roles: ['MANAGER'] },
   { label: 'Профиль', icon: 'account_circle', path: '/tabs/profile', roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
 ];
@@ -340,10 +342,23 @@ export class MobileHeaderComponent {
 
   readonly auth = inject(AuthService);
   readonly theme = inject(MobileThemeService);
+  readonly reportReview = inject(ManagerReportReviewAccessService);
   readonly menuOpen = signal(false);
 
   visibleLinks(): MobileHeaderLink[] {
-    return HEADER_LINKS.filter((link) => link.roles.length === 0 || this.auth.hasAnyRealmRole(link.roles));
+    return HEADER_LINKS.filter((link) => {
+      if (link.roles.length > 0 && !this.auth.hasAnyRealmRole(link.roles)) {
+        return false;
+      }
+      if (!this.workLocked()) {
+        return true;
+      }
+      return link.path === '/tabs/home' || link.path === '/tabs/profile';
+    });
+  }
+
+  workLocked(): boolean {
+    return this.auth.hasRealmRole('MANAGER') && this.reportReview.state()?.restricted === true;
   }
 
   username(): string {

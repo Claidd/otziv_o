@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -133,6 +134,19 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     WHERE m.clientId = :clientId
 """)
     List<Manager> findAllByClientIdWithUser(@Param("clientId") String clientId);
+
+    Optional<Manager> findByAuditTelegramGroupChatId(Long auditTelegramGroupChatId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Manager m
+        SET m.auditTelegramGroupChatId = :newChatId
+        WHERE m.auditTelegramGroupChatId = :oldChatId
+    """)
+    int updateAuditTelegramGroupChatId(
+            @Param("oldChatId") Long oldChatId,
+            @Param("newChatId") Long newChatId
+    );
 
     @Query("""
     SELECT m.user.id

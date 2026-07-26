@@ -17,6 +17,10 @@ public record ManagerQueueStateResponse(
         long currentControlledStreakSeconds,
         int controlTargetHours,
         int controlPercent,
+        long activeWorkSeconds,
+        long averageDailyWorkSeconds,
+        long averageReactionSeconds,
+        long reactionCount,
         LocalDateTime observedAt
 ) {
 }

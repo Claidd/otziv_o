@@ -10,6 +10,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 import java.net.SocketTimeoutException;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,6 +53,20 @@ class TelegramServiceSendRetryTest {
         assertEquals("-1003538237871", service.chatIds[1]);
         assertEquals(-5209142005L, migrationService.oldChatId);
         assertEquals(-1003538237871L, migrationService.newChatId);
+    }
+
+    @Test
+    void protectedAuditMessageSetsTelegramContentProtectionFlag() {
+        ProtectedTelegramService service = new ProtectedTelegramService();
+
+        service.sendProtectedMessageWithInlineKeyboardMessageId(
+                794146111L,
+                "Защищённый аудит",
+                "HTML",
+                List.of()
+        );
+
+        assertTrue(service.protectContent);
     }
 
     private static final class RetryableTelegramService extends TelegramService {
@@ -126,6 +141,36 @@ class TelegramServiceSendRetryTest {
         }
     }
 
+    private static final class ProtectedTelegramService extends TelegramService {
+        private boolean protectContent;
+
+        private ProtectedTelegramService() {
+            super(new DefaultBotOptions(),
+                    "123456:abcdefghijklmnopqrstuvwxyz",
+                    "test_bot",
+                    true,
+                    "",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        @Override
+        Message executeTelegramMessage(SendMessage message) {
+            protectContent = Boolean.TRUE.equals(message.getProtectContent());
+            Message result = new Message();
+            result.setMessageId(1);
+            return result;
+        }
+    }
+
     private static TelegramApiRequestException migratedException(long newChatId) {
         return new TelegramApiRequestException("Bad Request: group chat was upgraded to a supergroup chat") {
             @Override
@@ -140,14 +185,14 @@ class TelegramServiceSendRetryTest {
         private Long newChatId;
 
         private CapturingMigrationService() {
-            super(null, null);
+            super(null, null, null);
         }
 
         @Override
         public TelegramChatMigrationResult migrateChatId(Long oldChatId, Long newChatId) {
             this.oldChatId = oldChatId;
             this.newChatId = newChatId;
-            return new TelegramChatMigrationResult(oldChatId, newChatId, 1, 0);
+            return new TelegramChatMigrationResult(oldChatId, newChatId, 1, 0, 0);
         }
     }
 }

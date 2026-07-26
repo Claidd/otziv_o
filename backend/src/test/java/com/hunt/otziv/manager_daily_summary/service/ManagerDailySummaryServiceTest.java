@@ -69,14 +69,17 @@ class ManagerDailySummaryServiceTest {
     void setUp() {
         service = new ManagerDailySummaryService(
                 managerRepository, performanceService, controlRepository, itemRepository, concreteItemRepository,
-                messageRepository, activityRepository, dailyRepository, appSettingService, jdbcTemplate,
+                messageRepository,
+                new ManagerActivityMetricsService(activityRepository, messageRepository, appSettingService),
+                dailyRepository, appSettingService, jdbcTemplate,
                 queueStateService, managerControlService, new ManagerActionBalanceService(), scoreLedgerRepository, gamificationEventService
         );
         when(appSettingService.getInt(anyString(), anyInt())).thenAnswer(invocation -> invocation.getArgument(1));
         when(dailyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(dailyRepository.findBySummaryDateBetweenOrderByManager_IdAscSummaryDateAsc(any(), any())).thenReturn(List.of());
         when(queueStateService.aggregate(any(), any(), any())).thenAnswer(invocation -> new ManagerQueueStateResponse(
-                false, invocation.getArgument(1), "NOT_OBSERVED", 0, 0, 0, 0, 0, 0, 0, 0, 14, 0, null));
+                false, invocation.getArgument(1), "NOT_OBSERVED", 0, 0, 0, 0, 0, 0, 0, 0, 14, 0,
+                0, 0, 0, 0, null));
     }
 
     @Test
@@ -242,6 +245,44 @@ class ManagerDailySummaryServiceTest {
         assertEquals(600, response.problemResolutionAverageSeconds());
     }
 
+    @Test
+    void progressIncludesTasksClosedAutomatically() {
+        LocalDate date = LocalDate.of(2026, 7, 16);
+        Manager manager = manager();
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(100L);
+        control.setControlDate(date);
+        control.setManager(manager);
+
+        ManagerDailyControlItem parent = new ManagerDailyControlItem();
+        parent.setId(101L);
+        parent.setControl(control);
+        parent.setGroup(ManagerDailyControlGroup.ACTION);
+        parent.setItemType(ManagerDailyControlItemType.PROBLEM);
+        parent.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        parent.setCount(15);
+        parent.setResolvedEpisodeCount(6);
+        parent.setAutoClosedEpisodeCount(9);
+
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(performanceService.score(date)).thenReturn(List.of());
+        when(controlRepository.findByControlDateAndManager(date, manager)).thenReturn(Optional.of(control));
+        when(itemRepository.findByControl(control)).thenReturn(List.of(parent));
+        when(concreteItemRepository.findByControl(control)).thenReturn(List.of());
+        when(dailyRepository.findBySummaryDateAndManager_Id(date, manager.getId())).thenReturn(Optional.empty());
+        when(activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(any(), any(), any())).thenReturn(List.of());
+        when(messageRepository.findByManager_IdAndMessageAtBetweenOrderByMessageAtAscIdAsc(any(), any(), any()))
+                .thenReturn(List.of());
+
+        var response = service.calculate(date, false).getFirst();
+
+        assertEquals(15, response.taskTotal());
+        assertEquals(6, response.taskCompleted());
+        assertEquals(9, response.taskAutoClosed());
+        assertEquals(0, response.taskOpen());
+        assertEquals(0, response.taskProgressPercent().compareTo(java.math.BigDecimal.valueOf(100)));
+    }
+
     private Manager manager() {
         User user = new User();
         user.setId(10L);
@@ -274,6 +315,12 @@ class ManagerDailySummaryServiceTest {
         message.setChatId(chatId);
         message.setDirection(ClientChatDirection.INCOMING);
         message.setSenderRole(role);
+        if (role == ClientChatSenderRole.STAFF) {
+            User actor = new User();
+            actor.setId(10L);
+            actor.setActive(true);
+            message.setActorUser(actor);
+        }
         message.setMessageAt(at);
         return message;
     }

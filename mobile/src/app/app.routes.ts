@@ -279,10 +279,15 @@ export const routes: Routes = [
         data: { roles: rolesForAction(MOBILE_SECTIONS.botBrowser, MOBILE_ACTIONS.view) }
       },
       {
-        path: 'profile',
-        loadComponent: () => import('./features/profile.page').then((m) => m.ProfilePage),
+        path: 'training',
+        loadComponent: () => import('./features/training.page').then((m) => m.TrainingPage),
         canActivate: [roleGuard],
-        data: { roles: rolesForAction(MOBILE_SECTIONS.home, MOBILE_ACTIONS.view) }
+        data: { roles: rolesForAction(MOBILE_SECTIONS.training, MOBILE_ACTIONS.view) }
+      },
+      {
+        path: 'profile',
+        pathMatch: 'full',
+        redirectTo: 'home/profile'
       },
       {
         path: 'whatsapp',

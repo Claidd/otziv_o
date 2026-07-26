@@ -56,7 +56,10 @@ function statusErrorDetail(err: unknown): string | null {
   }
 
   if (status === 403) {
-    return 'Ошибка: у вашей учётной записи нет доступа к этому действию. Как исправить: обновите страницу; если действие должно быть доступно, попросите администратора проверить вашу роль.';
+    const endpoint = apiEndpoint(err);
+    return endpoint
+      ? `API ${endpoint} отклонил запрос (403) после обновления сессии. Проверьте назначенного менеджера и права вашей роли.`
+      : 'API отклонил запрос (403) после обновления сессии. Проверьте назначенного менеджера и права вашей роли.';
   }
 
   if (status === 404) {
@@ -137,6 +140,23 @@ function httpStatus(err: unknown): number {
   }
 
   return statusFromText(err) ?? -1;
+}
+
+function apiEndpoint(err: unknown): string | null {
+  if (typeof err !== 'object' || err === null || !('url' in err)) {
+    return null;
+  }
+  const rawUrl = (err as { url?: unknown }).url;
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return null;
+  }
+  try {
+    const parsed = new URL(rawUrl, window.location.origin);
+    return parsed.pathname.startsWith('/api/') ? parsed.pathname : null;
+  } catch {
+    const path = rawUrl.split('?')[0]?.trim();
+    return path?.startsWith('/api/') ? path : null;
+  }
 }
 
 function isServerError(err: unknown): boolean {

@@ -87,13 +87,22 @@ describe('manager-board config helpers', () => {
     ]);
   });
 
-  it('builds order actions from status without changing the legacy flow', () => {
-    expect(managerOrderActions(order({ status: 'В проверку' }), false).map((action) => action.status)).toEqual(['На проверке']);
+  it('builds order actions and only permits manual archive from review statuses', () => {
+    expect(managerOrderActions(order({ status: 'В проверку' }), false).map((action) => action.status)).toEqual([
+      'На проверке',
+      'Архив'
+    ]);
     expect(managerOrderActions(order({ status: 'На проверке' }), false).map((action) => action.status)).toEqual([
       'Коррекция',
       'Архив',
       'Публикация'
     ]);
+    expect(managerOrderActions(order({ status: 'Коррекция' }), false).map((action) => action.status)).toEqual([
+      'Архив',
+      'Публикация'
+    ]);
+    expect(managerOrderActions(order({ status: 'Новый' }), true).map((action) => action.status)).not.toContain('Архив');
+    expect(managerOrderActions(order({ status: 'Публикация' }), true).map((action) => action.status)).not.toContain('Архив');
     expect(managerOrderActions(order({ status: 'Выставлен счет' }), false).map((action) => action.status)).toEqual([
       'Напоминание',
       'Не оплачено',

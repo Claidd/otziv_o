@@ -1,0 +1,49 @@
+package com.hunt.otziv.manager_daily_summary.dto;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record ManagerReportReviewResponse(
+        Long reviewId,
+        LocalDate summaryDate,
+        Long managerId,
+        Long managerUserId,
+        String managerName,
+        boolean testMode,
+        Long testOwnerUserId,
+        String status,
+        int currentQuestionIndex,
+        int issueCount,
+        int questionCount,
+        int answerAttemptCount,
+        int acceptedAnswerCount,
+        int minimumReadSeconds,
+        long readSeconds,
+        long totalReviewSeconds,
+        boolean quickReview,
+        String questionsSource,
+        boolean aiVerificationPaused,
+        long aiUnavailableSeconds,
+        int suspiciousAnswerCount,
+        String answerQuality,
+        String answerQualityReason,
+        String actionPlan,
+        boolean auditRequired,
+        boolean autoCompleted,
+        String disputeText,
+        LocalDateTime deliveredAt,
+        LocalDateTime startedAt,
+        LocalDateTime readingConfirmedAt,
+        LocalDateTime deadlineStartedAt,
+        LocalDateTime completedAt,
+        LocalDateTime disputedAt,
+        LocalDateTime reminderOneSentAt,
+        LocalDateTime reminderThreeSentAt,
+        LocalDateTime restrictedAt,
+        LocalDateTime restrictionReleasedAt,
+        int openDisputeCount,
+        List<ManagerReportReviewIssueResponse> issues,
+        List<ManagerReportReviewEventResponse> events
+) {
+}

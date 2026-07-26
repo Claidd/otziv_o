@@ -3,6 +3,8 @@ package com.hunt.otziv.t_telegrambot.service;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +23,9 @@ class TelegramGroupLinkServiceTest {
 
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
-    private final TelegramGroupLinkService service = new TelegramGroupLinkService(companyRepository, userRepository);
+    private final ManagerRepository managerRepository = mock(ManagerRepository.class);
+    private final TelegramGroupLinkService service =
+            new TelegramGroupLinkService(companyRepository, userRepository, managerRepository);
 
     @Test
     void linksBotAddedEventByPublicTelegramUsername() {
@@ -86,6 +90,30 @@ class TelegramGroupLinkServiceTest {
         assertTrue(response.orElse("").contains("Специалист"));
         assertEquals(-1001234567891L, worker.getWorkerTelegramGroupChatId());
         verify(userRepository).save(worker);
+    }
+
+    @Test
+    void linksManagerAuditGroupByStartCommandPayload() {
+        User user = new User();
+        user.setId(17L);
+        user.setUsername("lika");
+        user.setFio("Анжелика Б.");
+        Manager manager = Manager.builder()
+                .id(9L)
+                .user(user)
+                .auditTelegramGroupUrl("https://t.me/+manager-audit")
+                .build();
+        setField(service, "botUsername", "O_Company_Bot");
+        when(managerRepository.findByIdWithUser(9L)).thenReturn(Optional.of(manager));
+        when(managerRepository.findByAuditTelegramGroupChatId(-100900L)).thenReturn(Optional.empty());
+
+        String inviteUrl = service.buildManagerAuditInviteUrl(manager);
+        String payload = inviteUrl.substring(inviteUrl.indexOf("startgroup=") + "startgroup=".length());
+        Optional<String> response = service.handleGroupStartCommand(-100900L, "/start " + payload);
+
+        assertTrue(response.orElse("").contains("Анжелика"));
+        assertEquals(-100900L, manager.getAuditTelegramGroupChatId());
+        verify(managerRepository).save(manager);
     }
 
     @Test

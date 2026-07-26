@@ -2869,6 +2869,94 @@
                 </p>
               </div>
 
+              @if (canApplyMaintenance()) {
+                <div class="settings-section worker-access-settings">
+                  <div class="section-head">
+                    <div>
+                      <h3>Контроль мобильного доступа</h3>
+                      <p class="settings-hint">
+                        Только для специалистов и только в подразделах
+                        @for (section of workerCellularAccessSettings()?.protectedSections || []; track section) {
+                          <strong>{{ workerProtectedSectionLabel(section) }}</strong>@if (!$last) {, }
+                        }.
+                      </p>
+                    </div>
+                    <span
+                      class="worker-access-mode"
+                      [class.worker-access-mode--enforce]="settingsForm.controls.workerCellularAccessMode.value === 'ENFORCE'"
+                    >
+                      {{ workerCellularAccessModeLabel(settingsForm.controls.workerCellularAccessMode.value) }}
+                    </span>
+                  </div>
+
+                  <label appTooltip="OFF выключает проверки, AUDIT только записывает нарушения, ENFORCE отклоняет выбранные ниже причины.">
+                    <span>Режим работы</span>
+                    <select formControlName="workerCellularAccessMode">
+                      <option value="OFF">Выключено</option>
+                      <option value="AUDIT">Аудит — только наблюдение</option>
+                      <option value="ENFORCE">Боевой режим — блокировка</option>
+                    </select>
+                  </label>
+
+                  <div class="worker-access-reasons">
+                    <label class="checkbox" appTooltip="Домашний провайдер или Wi-Fi. В боевом режиме запрос будет отклонён.">
+                      <input class="switch" type="checkbox" formControlName="blockNonCellularNetwork">
+                      <span>Блокировать домашнюю сеть или Wi-Fi</span>
+                    </label>
+
+                    <label class="checkbox" appTooltip="VPN, proxy, Tor и дата-центры блокируются даже внутри разрешённого мобильного диапазона.">
+                      <input class="switch" type="checkbox" formControlName="blockVpnProxyOrDatacenter">
+                      <span>Блокировать VPN, прокси, Tor и дата-центры</span>
+                    </label>
+
+                    <label class="checkbox" appTooltip="Может затронуть телефон с включённой «Версией для ПК». Рекомендуется оставить только в аудите.">
+                      <input class="switch" type="checkbox" formControlName="blockDesktopOrUnknownDevice">
+                      <span>Блокировать компьютер или неопределённое устройство</span>
+                    </label>
+
+                    <label class="checkbox" appTooltip="Может сработать при временной недоступности бесплатного сервиса определения сети. Рекомендуется оставить только в аудите.">
+                      <input class="switch" type="checkbox" formControlName="blockUnknownNetwork">
+                      <span>Блокировать сеть, которую не удалось определить</span>
+                    </label>
+
+                    <label class="checkbox" appTooltip="Нативное приложение передаёт признак эмулятора. Физический телефон с обычной версией приложения проходит проверку.">
+                      <input class="switch" type="checkbox" formControlName="enforceNativeVirtualDevice">
+                      <span>Всегда блокировать эмулятор приложения</span>
+                    </label>
+                  </div>
+
+                  @if (
+                    settingsForm.controls.workerCellularAccessMode.value === 'ENFORCE'
+                    && (
+                      settingsForm.controls.blockDesktopOrUnknownDevice.value
+                      || settingsForm.controls.blockUnknownNetwork.value
+                    )
+                  ) {
+                    <p class="settings-hint worker-access-warning">
+                      Осторожно: блокировка неопределённого устройства или сети может дать ложный отказ.
+                      Для первого этапа безопаснее блокировать только Wi-Fi и VPN.
+                    </p>
+                  }
+
+                  <div class="worker-access-readonly">
+                    <p>
+                      Проверка телефона:
+                      <strong>{{ workerCellularAccessSettings()?.requireMobileDevice ? 'включена' : 'выключена' }}</strong>.
+                      IP-классификатор:
+                      <strong>{{ workerCellularAccessSettings()?.ipIntelligenceEnabled ? 'включён' : 'выключен' }}</strong>.
+                    </p>
+                    <p class="settings-hint">
+                      Подтверждённые мобильные CIDR доступны только для просмотра и меняются через деплой:
+                    </p>
+                    <div class="worker-access-cidrs">
+                      @for (cidr of workerCellularAccessSettings()?.allowedCidrs || []; track cidr) {
+                        <code>{{ cidr }}</code>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+
               <div class="settings-section">
                 <h3>Telegram-рассылки</h3>
                 <label class="checkbox" appTooltip="Включает ежедневный утренний Telegram-отчет по расписанию.">

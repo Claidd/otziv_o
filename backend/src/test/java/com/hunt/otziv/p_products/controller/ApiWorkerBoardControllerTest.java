@@ -1073,6 +1073,66 @@ class ApiWorkerBoardControllerTest {
     }
 
     @Test
+    void managerCanReassignBadTaskToWorkerFromOwnTeam() {
+        Principal managerPrincipal = () -> "manager";
+        Authentication managerAuth = auth("ROLE_MANAGER");
+        User managerUser = new User();
+        managerUser.setId(11L);
+        Manager manager = new Manager();
+        manager.setId(22L);
+        Worker targetWorker = workerOption(101L, "Анна Специалист");
+        Order order = new Order();
+        order.setManager(manager);
+        BadReviewTask task = BadReviewTask.builder().order(order).build();
+
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(11L)).thenReturn(manager);
+        when(workerService.getAllWorkersToManager(manager)).thenReturn(List.of(targetWorker));
+        when(badReviewTaskService.getTask(15L)).thenReturn(task);
+
+        controller.reassignBadReviewTask(
+                15L,
+                new ApiWorkerBoardController.WorkerAssignmentRequest(101L),
+                managerPrincipal,
+                managerAuth
+        );
+
+        verify(badReviewTaskService).reassignTask(15L, targetWorker);
+    }
+
+    @Test
+    void managerCannotReassignTaskFromAnotherManager() {
+        Principal managerPrincipal = () -> "manager";
+        Authentication managerAuth = auth("ROLE_MANAGER");
+        User managerUser = new User();
+        managerUser.setId(11L);
+        Manager currentManager = new Manager();
+        currentManager.setId(22L);
+        Manager anotherManager = new Manager();
+        anotherManager.setId(23L);
+        Order order = new Order();
+        order.setManager(anotherManager);
+        BadReviewTask task = BadReviewTask.builder().order(order).build();
+
+        when(userService.findByUserName("manager")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(11L)).thenReturn(currentManager);
+        when(badReviewTaskService.getTask(15L)).thenReturn(task);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.reassignBadReviewTask(
+                        15L,
+                        new ApiWorkerBoardController.WorkerAssignmentRequest(101L),
+                        managerPrincipal,
+                        managerAuth
+                )
+        );
+
+        assertEquals(403, exception.getStatusCode().value());
+        verify(badReviewTaskService, never()).reassignTask(any(), any());
+    }
+
+    @Test
     void workerCannotChangeRecoveryTaskScheduledDate() {
         LocalDate currentDate = LocalDate.now();
         ReviewRecoveryTask task = ReviewRecoveryTask.builder()

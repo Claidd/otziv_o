@@ -17,6 +17,7 @@ import com.hunt.otziv.config.cache.CacheConfig;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
+import com.hunt.otziv.manager_daily_summary.service.ManagerActivityMetricsService;
 import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManagerManualPaymentSettingsResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
@@ -99,6 +100,7 @@ public class ApiCabinetController {
     private final PaymentProfileService paymentProfileService;
     private final ManualPaymentTaskService manualPaymentTaskService;
     private final ManagerPerformanceService managerPerformanceService;
+    private final ManagerActivityMetricsService managerActivityMetricsService;
     private final StaffDailyProgressService staffDailyProgressService;
     private final WorkerNetworkViolationService workerNetworkViolationService;
     private final TeamPatternAnalysisService teamPatternAnalysisService;
@@ -128,7 +130,8 @@ public class ApiCabinetController {
                                 personalService.getUserLK(principal),
                                 workerStats(selectedDate, user),
                                 managerPerformance(selectedDate, user, principal),
-                                workerDailyProgress(selectedDate, user)
+                                workerDailyProgress(selectedDate, user),
+                                managerTeamDailyProgress(selectedDate, user, principal)
                         );
                     }
             );
@@ -259,18 +262,18 @@ public class ApiCabinetController {
 
                         if ("ROLE_MANAGER".equals(role)) {
                             Manager manager = managerService.getManagerByUserId(user.getId());
-                            return new TeamResponse(
+                            return withTeamMonthlyProgress(withTeamDailyProgress(new TeamResponse(
                                     selectedDate,
                                     shortRole(role),
                                     canManageUsers,
                                     false,
                                     false,
                                     List.of(),
-                                    personalService.getMarketologsToManager(manager),
+                                    List.of(),
                                     personalService.gerWorkersToManager(manager),
                                     personalService.gerOperatorsToManager(manager),
                                     null
-                            );
+                            ), selectedDate, true), selectedMonth, true);
                         }
 
                         if ("ROLE_OWNER".equals(role)) {
@@ -574,6 +577,14 @@ public class ApiCabinetController {
         response.workers().forEach(worker ->
                 worker.setDailyProgress(workerProgress.get(worker.getId()))
         );
+        Map<Long, Long> workerAverageDailyActivity =
+                staffDailyProgressService.averageDailyActiveWorkSecondsByWorkerIds(
+                        workerSubjectsById.keySet(),
+                        selectedDate
+                );
+        response.workers().forEach(worker -> worker.setAverageDailyActiveWorkSeconds(
+                workerAverageDailyActivity.getOrDefault(worker.getId(), 0L)
+        ));
         response.managers().forEach(manager -> {
             List<DailyWorkProgressResponse> teamProgress = managerWorkerContext.workerIdsByManagerId()
                     .getOrDefault(manager.getId(), List.of()).stream()
@@ -582,12 +593,24 @@ public class ApiCabinetController {
                     .toList();
             List<Long> teamWorkerIds = managerWorkerContext.workerIdsByManagerId()
                     .getOrDefault(manager.getId(), List.of());
-            manager.setDailyProgress(staffDailyProgressService.aggregateTeamProgressResponses(
+            DailyWorkProgressResponse teamProgressResponse = staffDailyProgressService.aggregateTeamProgressResponses(
                     teamProgress,
                     teamWorkerIds,
                     selectedDate,
                     "WORKER_TEAM"
+            );
+            ManagerActivityMetricsService.DailyAndAverage managerActivity =
+                    managerActivityMetricsService.calculateDailyAndMonthAverage(
+                            manager.getId(),
+                            selectedDate,
+                            selectedDate.equals(LocalDate.now(CABINET_ZONE))
+                                    ? java.time.LocalDateTime.now(CABINET_ZONE)
+                                    : selectedDate.plusDays(1).atStartOfDay()
+                    );
+            manager.setDailyProgress(teamProgressResponse.withActiveWorkSeconds(
+                    managerActivity.daily().confirmedSeconds()
             ));
+            manager.setAverageDailyActiveWorkSeconds(managerActivity.averageDailyConfirmedSeconds());
         });
         return response;
     }
@@ -624,10 +647,22 @@ public class ApiCabinetController {
                     .map(workerProgress::get)
                     .filter(Objects::nonNull)
                     .toList();
-            manager.setMonthlyProgress(staffDailyProgressService.aggregateProgressResponses(
+            DailyWorkProgressResponse teamProgressResponse = staffDailyProgressService.aggregateProgressResponses(
                     teamProgress,
                     monthStart,
                     "WORKER_TEAM_MONTH"
+            );
+            LocalDate currentMonth = LocalDate.now(CABINET_ZONE).withDayOfMonth(1);
+            java.time.LocalDateTime activityUntil = monthStart.equals(currentMonth)
+                    ? java.time.LocalDateTime.now(CABINET_ZONE)
+                    : monthStart.plusMonths(1).atStartOfDay();
+            ManagerActivityMetricsService.Metrics managerActivity = managerActivityMetricsService.calculate(
+                    manager.getId(),
+                    monthStart.atStartOfDay(),
+                    activityUntil
+            );
+            manager.setMonthlyProgress(teamProgressResponse.withActiveWorkSeconds(
+                    managerActivity.confirmedSeconds()
             ));
         });
         return response;
@@ -903,12 +938,51 @@ public class ApiCabinetController {
                 .get(worker.getId());
     }
 
+    private DailyWorkProgressResponse managerTeamDailyProgress(
+            LocalDate selectedDate,
+            User user,
+            Principal principal
+    ) {
+        if (user == null
+                || user.getId() == null
+                || !(principal instanceof Authentication authentication)
+                || !hasAnyRole(authentication, "ROLE_MANAGER")
+                || !staffDailyProgressService.progressEnabled()) {
+            return null;
+        }
+
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        List<WorkersListDTO> workers = personalService.gerWorkersToManager(manager);
+        List<StaffDailyProgressService.WorkerProgressSubject> subjects = workers.stream()
+                .filter(worker -> worker.getId() != null)
+                .map(worker -> new StaffDailyProgressService.WorkerProgressSubject(
+                        worker.getId(),
+                        worker.getUserId(),
+                        firstNonBlank(worker.getFio(), worker.getLogin())
+                ))
+                .toList();
+        Map<Long, DailyWorkProgressResponse> progress = staffDailyProgressService.workerProgressBySubjects(
+                subjects,
+                selectedDate
+        );
+        List<Long> workerIds = subjects.stream()
+                .map(StaffDailyProgressService.WorkerProgressSubject::workerId)
+                .toList();
+        return staffDailyProgressService.aggregateTeamProgressResponses(
+                progress.values(),
+                workerIds,
+                selectedDate,
+                "WORKER_TEAM"
+        );
+    }
+
     public record CabinetProfileResponse(
             LocalDate date,
             UserLKDTO user,
             UserStatDTO workerZp,
             ManagerPerformanceScoreResponse managerPerformance,
-            DailyWorkProgressResponse dailyProgress
+            DailyWorkProgressResponse dailyProgress,
+            DailyWorkProgressResponse teamDailyProgress
     ) {
     }
 

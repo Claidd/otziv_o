@@ -37,7 +37,7 @@ class ManagerPersonalDayResultServiceTest {
     void persistsPersonalResultAndSendsSiteActivityToManager() {
         User user = User.builder().id(80L).telegramChatId(800L).build();
         Manager manager = Manager.builder().id(8L).user(user).build();
-        ManagerDailySummaryResponse summary = summary(8L, 80L, 14, 14, 0, 100, 7260);
+        ManagerDailySummaryResponse summary = summary(8L, 80L, 14, 14, 0, 0, 100, 7260);
         EndOfDayAchievementService.AchievementResult result =
                 new EndOfDayAchievementService.AchievementResult(
                         DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
@@ -58,7 +58,7 @@ class ManagerPersonalDayResultServiceTest {
     @Test
     void unfinishedManagerTasksDoNotCountAsHundredPercentDay() {
         Manager manager = Manager.builder().id(8L).user(User.builder().id(80L).build()).build();
-        ManagerDailySummaryResponse summary = summary(8L, 80L, 14, 11, 3, 78.57, 600);
+        ManagerDailySummaryResponse summary = summary(8L, 80L, 14, 11, 0, 3, 78.57, 600);
         EndOfDayAchievementService.AchievementResult result =
                 new EndOfDayAchievementService.AchievementResult(
                         DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
@@ -75,18 +75,39 @@ class ManagerPersonalDayResultServiceTest {
         verify(achievementService).notifyManagerWorkday(manager, result, 600);
     }
 
+    @Test
+    void automaticallyClosedTasksCountTowardCompletedDay() {
+        Manager manager = Manager.builder().id(8L).user(User.builder().id(80L).build()).build();
+        ManagerDailySummaryResponse summary = summary(8L, 80L, 15, 6, 9, 0, 100, 600);
+        EndOfDayAchievementService.AchievementResult result =
+                new EndOfDayAchievementService.AchievementResult(
+                        DATE, EndOfDayAchievementService.ROLE_MANAGER_WORKDAY, 8L,
+                        15, 15, 100, 0, true, 3, false
+                );
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(achievementService.saveResult(
+                eq(DATE), eq(EndOfDayAchievementService.ROLE_MANAGER_WORKDAY), eq(8L), eq(80L),
+                eq(15L), eq(15L), eq(100.0), eq(0L), eq(true)
+        )).thenReturn(result);
+
+        service.send(DATE, List.of(summary));
+
+        verify(achievementService).notifyManagerWorkday(manager, result, 600);
+    }
+
     private ManagerDailySummaryResponse summary(
             Long managerId,
             Long userId,
             long total,
             long completed,
+            long autoClosed,
             long open,
             double percent,
             long siteActiveSeconds
     ) {
         return new ManagerDailySummaryResponse(
                 DATE, managerId, userId, "Менеджер", 80, "B",
-                total, completed, open, 0, completed, 0, 0, 0, BigDecimal.valueOf(percent),
+                total, completed, open, autoClosed, completed, 0, 0, 0, BigDecimal.valueOf(percent),
                 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0,

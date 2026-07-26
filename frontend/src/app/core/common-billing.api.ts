@@ -30,6 +30,9 @@ export interface CommonInvoiceSummaryResponse {
   sentAt?: string | null;
   lastReminderAt?: string | null;
   nextReminderAt?: string | null;
+  closedAt?: string | null;
+  closedBy?: string | null;
+  closeReason?: string | null;
   lastError?: string | null;
   paymentSuccessNotificationError?: string | null;
 }
@@ -70,12 +73,99 @@ export interface CommonInvoiceOrderResponse {
   unpaid: boolean;
   detachable: boolean;
   paidAt?: string | null;
+  paymentMethod?: 'TBANK' | 'MANUAL' | 'MIXED' | 'MANUAL_LEGACY' | null;
+  paidBy?: string | null;
+  paymentComment?: string | null;
+  paymentReceiptUrl?: string | null;
+}
+
+export interface CommonInvoiceNextCycleResponse {
+  sourceOrderId: number;
+  orderId: number;
+  invoiceId?: number | null;
+  invoiceStatus?: string | null;
+  companyTitle: string;
+  filialTitle?: string | null;
+  orderStatus: string;
+}
+
+export interface ManualPaymentConfirmationRequest {
+  comment: string;
+  receiptUrl: string;
 }
 
 export interface CommonInvoiceDetailsResponse {
   summary: CommonInvoiceSummaryResponse;
   orders: CommonInvoiceOrderResponse[];
   orderCards: OrderCardItem[];
+  nextCycleOrders: CommonInvoiceNextCycleResponse[];
+}
+
+export interface CommonInvoiceArchiveOrderPreview {
+  orderId: number;
+  companyTitle: string;
+  status: string;
+  allowed: boolean;
+  blockers: string[];
+}
+
+export interface CommonInvoiceArchivePreviewResponse {
+  invoiceId: number;
+  allowed: boolean;
+  totalOrders: number;
+  orders: CommonInvoiceArchiveOrderPreview[];
+  blockers: string[];
+}
+
+export interface CommonInvoiceArchiveListItem {
+  id: number;
+  accountName: string;
+  title: string;
+  status: 'ARCHIVED' | 'BAN' | 'PAID' | string;
+  amountKopecks: number;
+  paidKopecks: number;
+  orderCount: number;
+  closedAt?: string | null;
+  closedBy?: string | null;
+  closeReason?: string | null;
+  archivedAt?: string | null;
+  source: 'live' | 'archive';
+  restorable: boolean;
+}
+
+export interface CommonInvoiceArchiveOrderItem {
+  orderId: number;
+  companyTitle: string;
+  filialTitle: string;
+  status: string;
+  archiveSourceStatus: string;
+  amountKopecks: number;
+  paid: boolean;
+}
+
+export interface CommonInvoiceArchiveDetailsResponse {
+  invoice: CommonInvoiceArchiveListItem;
+  orders: CommonInvoiceArchiveOrderItem[];
+}
+
+export interface CommonInvoiceArchiveRestoreResult {
+  invoiceId: number;
+  status: string;
+  source: 'live' | 'archive';
+  restoredAt: string;
+  restoredBy: string;
+  orderIds: number[];
+  message: string;
+}
+
+export interface CommonInvoiceArchivePage {
+  content: CommonInvoiceArchiveListItem[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -142,10 +232,10 @@ export class CommonBillingApi {
     );
   }
 
-  markPaid(invoiceId: number): Observable<CommonInvoiceDetailsResponse> {
+  markPaid(invoiceId: number, request: ManualPaymentConfirmationRequest): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/paid`,
-      {}
+      request
     );
   }
 
@@ -212,10 +302,60 @@ export class CommonBillingApi {
     );
   }
 
-  markOrderPaid(invoiceId: number, orderId: number): Observable<CommonInvoiceDetailsResponse> {
+  archivePreview(invoiceId: number): Observable<CommonInvoiceArchivePreviewResponse> {
+    return this.http.get<CommonInvoiceArchivePreviewResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/archive-preview`
+    );
+  }
+
+  archiveInvoice(invoiceId: number, comment = ''): Observable<CommonInvoiceDetailsResponse> {
+    return this.http.post<CommonInvoiceDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/archive`,
+      { confirm: true, comment }
+    );
+  }
+
+  archiveInvoices(query: {
+    keyword?: string;
+    pageNumber?: number;
+    pageSize?: number;
+    sortDirection?: 'asc' | 'desc';
+  } = {}): Observable<CommonInvoiceArchivePage> {
+    return this.http.get<CommonInvoiceArchivePage>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/archive/invoices`,
+      {
+        params: {
+          keyword: query.keyword ?? '',
+          pageNumber: query.pageNumber ?? 0,
+          pageSize: query.pageSize ?? 10,
+          sortDirection: query.sortDirection ?? 'desc'
+        }
+      }
+    );
+  }
+
+  archiveInvoiceDetails(invoiceId: number): Observable<CommonInvoiceArchiveDetailsResponse> {
+    return this.http.get<CommonInvoiceArchiveDetailsResponse>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/archive/invoices/${invoiceId}`
+    );
+  }
+
+  restoreArchiveInvoice(invoiceId: number): Observable<CommonInvoiceArchiveRestoreResult> {
+    return this.http.post<CommonInvoiceArchiveRestoreResult>(
+      `${appEnvironment.apiBaseUrl}/api/common-billing/archive/invoices/${invoiceId}/restore`,
+      {},
+      { params: { confirm: true } }
+    );
+  }
+
+  markOrderPaid(
+    invoiceId: number,
+    orderId: number,
+    request: ManualPaymentConfirmationRequest
+  ): Observable<CommonInvoiceDetailsResponse> {
     return this.http.post<CommonInvoiceDetailsResponse>(
       `${appEnvironment.apiBaseUrl}/api/common-billing/invoices/${invoiceId}/orders/${orderId}/paid`,
-      {}
+      request
     );
   }
 

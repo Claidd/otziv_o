@@ -34,6 +34,29 @@ class ClientChatResolutionPolicyTest {
     }
 
     @Test
+    void reciprocalAcknowledgementsCanBeClosedWithoutResponse() {
+        for (String message : new String[]{
+                "Вам спасибо",
+                "И вам спасибо!",
+                "Взаимно",
+                "Хорошо спасибо большое"
+        }) {
+            var assessment = policy.assess(message);
+
+            assertFalse(assessment.responseRequired(), message);
+            assertTrue(assessment.safeNoResponse(), message);
+        }
+    }
+
+    @Test
+    void acknowledgementWithAdditionalRequestStillRequiresReview() {
+        var assessment = policy.assess("Хорошо, спасибо, пришлите чек");
+
+        assertTrue(assessment.responseRequired());
+        assertFalse(assessment.safeNoResponse());
+    }
+
+    @Test
     void attachmentRequiresReview() {
         var assessment = policy.assess("[Вложение: image]");
 
@@ -41,4 +64,3 @@ class ClientChatResolutionPolicyTest {
         assertTrue(assessment.actionRequired());
     }
 }
-

@@ -54,6 +54,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -218,6 +219,51 @@ public class ScheduledClientMessageService {
             return 0;
         }
         return stateRepository.releaseReviewRecoveryHolds(orderId, LocalDateTime.now(clock));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ManualRetryResult retryNow(Long stateId) {
+        if (stateId == null || stateId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная задача автоматизации");
+        }
+        ScheduledClientMessageState state = stateRepository.findById(stateId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Задача автоматизации не найдена"
+                ));
+        if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+            return manualRetryResult(state, false);
+        }
+        if (!appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автоматизация сообщений выключена в настройках"
+            );
+        }
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        LocalDateTime pausedUntil = clientMessagesPausedUntil();
+        if (pausedUntil != null && pausedUntil.isAfter(nowStorage)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Автоматизация сообщений приостановлена до " + pausedUntil
+            );
+        }
+        if (!lockState(state, nowStorage)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Задача уже обрабатывается. Повторите через несколько секунд."
+            );
+        }
+
+        if ("payment_instruction_failed".equalsIgnoreCase(
+                state.getLastErrorCode() == null ? "" : state.getLastErrorCode().trim()
+        )
+                && state.getOrderId() != null) {
+            paymentLinkService.reconcileActiveLinkForOrder(state.getOrderId());
+        }
+        processState(state.getId(), nowStorage);
+        ScheduledClientMessageState refreshed = stateRepository.findById(state.getId()).orElse(state);
+        return manualRetryResult(refreshed, true);
     }
 
     @Transactional
@@ -1167,6 +1213,18 @@ public class ScheduledClientMessageService {
         if (summary != null && summary.pending() == 0 && summary.done() > 0) {
             paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
         }
+    }
+
+    private ManualRetryResult manualRetryResult(ScheduledClientMessageState state, boolean attempted) {
+        return new ManualRetryResult(
+                state.getId(),
+                attempted,
+                state.getStatus(),
+                state.getLastErrorCode(),
+                state.getLastErrorMessage(),
+                state.getConsecutiveFailures(),
+                state.getNextAttemptAt()
+        );
     }
 
     private boolean suppressDuplicatePaymentMessage(
@@ -2522,6 +2580,17 @@ public class ScheduledClientMessageService {
 
     private boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    public record ManualRetryResult(
+            Long stateId,
+            boolean attempted,
+            ScheduledMessageStateStatus status,
+            String errorCode,
+            String errorMessage,
+            int consecutiveFailures,
+            LocalDateTime nextAttemptAt
+    ) {
     }
 
     private record ClientMessageReconcileSummary(

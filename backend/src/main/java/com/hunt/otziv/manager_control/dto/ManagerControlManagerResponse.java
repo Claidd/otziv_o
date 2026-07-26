@@ -52,6 +52,10 @@ public record ManagerControlManagerResponse(
         List<ManagerControlSectionResponse> workerSections,
         List<ManagerControlOverdueStatusResponse> overdueStatuses,
         List<ManagerControlWorkerExplanationStatsResponse> workerExplanationStats,
+        long activeWorkSeconds,
+        long averageDailyWorkSeconds,
+        long averageReactionSeconds,
+        long reactionCount,
         ManagerPerformanceScoreResponse managerPerformance
 ) {
 }

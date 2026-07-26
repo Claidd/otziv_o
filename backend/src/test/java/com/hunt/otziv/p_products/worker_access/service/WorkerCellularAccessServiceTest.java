@@ -100,12 +100,28 @@ class WorkerCellularAccessServiceTest {
         when(client.lookup("203.0.113.10")).thenReturn(
                 new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "Home ISP", "ipquery")
         );
-        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+        ResponseStatusException fixedNetwork = assertThrows(
+                ResponseStatusException.class,
+                () -> service.enforceSection("publish")
+        );
+        assertEquals(
+                "Доступ заблокирован: обнаружена домашняя сеть или Wi-Fi. "
+                        + "Отключите Wi-Fi, включите мобильный интернет и повторите действие.",
+                fixedNetwork.getReason()
+        );
 
         when(client.lookup("203.0.113.10")).thenReturn(
                 new WorkerIpIntelligenceClient.IpIntelligence(true, true, true, "VPN provider", "ipquery")
         );
-        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
+        ResponseStatusException vpn = assertThrows(
+                ResponseStatusException.class,
+                () -> service.enforceSection("publish")
+        );
+        assertEquals(
+                "Доступ заблокирован: обнаружен VPN, прокси, Tor или сеть дата-центра. "
+                        + "Отключите VPN или прокси и повторите действие через мобильный интернет.",
+                vpn.getReason()
+        );
     }
 
     @Test
@@ -221,22 +237,39 @@ class WorkerCellularAccessServiceTest {
     }
 
     @Test
-    void verifiedMtsIrkutskMobileRangeOverridesFalseFixedNetworkClassificationButNotVpnRisk() {
+    void verifiedMtsMobileBroadbandRangesOverrideFalseFixedNetworkClassificationButNotVpnRisk() {
         WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
-        properties.setAllowedCidrs(List.of("91.78.236.0/22"));
+        properties.setAllowedCidrs(List.of(
+                "91.78.236.0/22",
+                "91.78.216.0/21",
+                "91.78.224.0/21",
+                "91.79.216.0/21",
+                "91.79.224.0/21",
+                "91.79.232.0/22"
+        ));
         WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
         WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
         WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
         authenticate("ROLE_WORKER");
-        request("91.78.236.152", MOBILE_USER_AGENT);
 
-        when(client.lookup("91.78.236.152")).thenReturn(
+        when(client.lookup(anyString())).thenReturn(
                 new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "MTS PJSC", "ipquery")
         );
-        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        for (String address : List.of(
+                "91.78.236.152",
+                "91.78.223.254",
+                "91.78.231.254",
+                "91.79.223.254",
+                "91.79.231.254",
+                "91.79.235.254"
+        )) {
+            request(address, MOBILE_USER_AGENT);
+            assertDoesNotThrow(() -> service.enforceSection("publish"));
+        }
         verifyNoInteractions(violations);
 
-        when(client.lookup("91.78.236.152")).thenReturn(
+        request("91.79.235.254", MOBILE_USER_AGENT);
+        when(client.lookup("91.79.235.254")).thenReturn(
                 new WorkerIpIntelligenceClient.IpIntelligence(true, false, true, "MTS PJSC", "ipquery")
         );
         assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
@@ -246,10 +279,68 @@ class WorkerCellularAccessServiceTest {
                 eq(WorkerCellularAccessProperties.Mode.ENFORCE),
                 eq("VPN_PROXY_OR_DATACENTER"),
                 eq("MTS PJSC"),
-                eq("91.78.236.0/24"),
+                eq("91.79.235.0/24"),
                 eq("client=web-or-legacy"),
                 eq(true)
         );
+    }
+
+    @Test
+    void verifiedBeelineTetheringRangeOverridesFalseFixedNetworkClassification() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of("89.113.30.0/23"));
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup(anyString())).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(
+                        true,
+                        false,
+                        false,
+                        "PJSC \"Vimpelcom\"",
+                        "ipquery"
+                )
+        );
+        WorkerNetworkViolationService violations = mock(WorkerNetworkViolationService.class);
+        WorkerCellularAccessService service = new WorkerCellularAccessService(properties, client, violations);
+        authenticate("ROLE_WORKER");
+
+        request("89.113.31.42", MOBILE_USER_AGENT);
+
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        verifyNoInteractions(violations);
+    }
+
+    @Test
+    void appliesRuntimeModeWithoutRestartingTheService() {
+        WorkerCellularAccessProperties properties = properties(WorkerCellularAccessProperties.Mode.ENFORCE);
+        properties.setAllowedCidrs(List.of());
+        WorkerIpIntelligenceClient client = mock(WorkerIpIntelligenceClient.class);
+        when(client.lookup("203.0.113.10")).thenReturn(
+                new WorkerIpIntelligenceClient.IpIntelligence(true, false, false, "Home ISP", "ipquery")
+        );
+        WorkerCellularAccessRuntimeSettingsService runtime = mock(WorkerCellularAccessRuntimeSettingsService.class);
+        when(runtime.currentPolicy()).thenReturn(
+                new WorkerCellularAccessRuntimeSettingsService.AccessPolicy(
+                        WorkerCellularAccessProperties.Mode.AUDIT,
+                        java.util.Set.of("NON_CELLULAR_NETWORK"),
+                        true
+                ),
+                new WorkerCellularAccessRuntimeSettingsService.AccessPolicy(
+                        WorkerCellularAccessProperties.Mode.ENFORCE,
+                        java.util.Set.of("NON_CELLULAR_NETWORK"),
+                        true
+                )
+        );
+        WorkerCellularAccessService service = new WorkerCellularAccessService(
+                properties,
+                client,
+                mock(WorkerNetworkViolationService.class),
+                runtime
+        );
+        authenticate("ROLE_WORKER");
+        request("203.0.113.10", MOBILE_USER_AGENT);
+
+        assertDoesNotThrow(() -> service.enforceSection("publish"));
+        assertThrows(ResponseStatusException.class, () -> service.enforceSection("publish"));
     }
 
     private WorkerCellularAccessService service(WorkerCellularAccessProperties.Mode mode) {

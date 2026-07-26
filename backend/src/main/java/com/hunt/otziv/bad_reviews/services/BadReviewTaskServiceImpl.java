@@ -477,6 +477,23 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
 
     @Override
     @Transactional
+    public BadReviewTask reassignTask(Long taskId, Worker worker) {
+        BadReviewTask task = requireTask(taskId);
+        if (task.getStatus() != BadReviewTaskStatus.NEW) {
+            throw new IllegalStateException("Специалиста можно менять только у активной плохой задачи");
+        }
+        if (worker == null || worker.getId() == null) {
+            throw new IllegalStateException("Специалист не указан");
+        }
+
+        task.setWorker(worker);
+        BadReviewTask savedTask = badReviewTaskRepository.save(task);
+        log.info("Плохая задача {} назначена специалисту {}", taskId, worker.getId());
+        return savedTask;
+    }
+
+    @Override
+    @Transactional
     public BadReviewTask cancelTask(Long taskId) {
         BadReviewTask task = requireTask(taskId);
         if (isPaid(task)) {

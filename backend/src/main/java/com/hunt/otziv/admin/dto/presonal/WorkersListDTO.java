@@ -28,6 +28,7 @@ public class WorkersListDTO {
     private int inCorrect;
     private int intVigul;
     private int publish;
+    private long averageDailyActiveWorkSeconds;
     private DailyWorkProgressResponse dailyProgress;
     private DailyWorkProgressResponse monthlyProgress;
     private WorkerNetworkViolationStatsResponse dailyNetworkViolations;

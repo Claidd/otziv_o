@@ -20,9 +20,7 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlItemReposito
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlRepository;
 import com.hunt.otziv.manager_daily_summary.dto.ManagerDailySummaryResponse;
 import com.hunt.otziv.manager_daily_summary.model.ManagerPerformanceDaily;
-import com.hunt.otziv.manager_daily_summary.model.ManagerSiteActivityEvent;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerPerformanceDailyRepository;
-import com.hunt.otziv.manager_daily_summary.repository.ManagerSiteActivityEventRepository;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceGrade;
@@ -54,7 +52,6 @@ public class ManagerDailySummaryService {
 
     public static final String FORMULA_VERSION = "manager-v5";
     private static final long REPLY_SLA_SECONDS = Duration.ofMinutes(30).toSeconds();
-    private static final long EVENT_TAIL_SECONDS = 60;
 
     private final ManagerRepository managerRepository;
     private final ManagerPerformanceService performanceService;
@@ -62,7 +59,7 @@ public class ManagerDailySummaryService {
     private final ManagerDailyControlItemRepository itemRepository;
     private final ManagerDailyControlConcreteItemRepository concreteItemRepository;
     private final ClientChatMessageRepository messageRepository;
-    private final ManagerSiteActivityEventRepository activityRepository;
+    private final ManagerActivityMetricsService activityMetricsService;
     private final ManagerPerformanceDailyRepository dailyRepository;
     private final AppSettingService appSettingService;
     private final JdbcTemplate jdbcTemplate;
@@ -134,7 +131,13 @@ public class ManagerDailySummaryService {
                 to
         );
         ProblemStats problems = problemStats(concrete);
-        ActivityStats activity = activityStats(manager.getId(), from, to, dayMessages);
+        ManagerActivityMetricsService.Metrics activity = activityMetricsService.calculate(
+                manager.getId(),
+                manager.getUser() == null ? null : manager.getUser().getId(),
+                from,
+                to,
+                dayMessages
+        );
         ManagerPerformanceDaily daily = dailyRepository.findBySummaryDateAndManager_Id(date, manager.getId())
                 .orElseGet(ManagerPerformanceDaily::new);
         daily.setSummaryDate(date);
@@ -153,7 +156,10 @@ public class ManagerDailySummaryService {
         daily.setTaskActionTaken(tasks.actionTaken());
         daily.setTaskDeferred(tasks.deferred());
         daily.setTaskAcknowledged(tasks.acknowledged());
-        daily.setTaskProgressPercent(percent(tasks.handledByManager(), tasks.total()));
+        daily.setTaskProgressPercent(percent(
+                tasks.handledByManager() + tasks.autoClosed(),
+                tasks.total()
+        ));
         daily.setOverdueCount(tasks.overdueRemaining());
         daily.setRiskCount(tasks.riskRemaining());
         daily.setUnansweredCount(tasks.unansweredRemaining());
@@ -262,64 +268,6 @@ public class ManagerDailySummaryService {
         long total = resolvedDurations.stream().mapToLong(Long::longValue).sum();
         return new ProblemStats(problems.size(), resolvedDurations.size(), actionTaken, open, total,
                 resolvedDurations.isEmpty() ? 0 : Math.round(total / (double) resolvedDurations.size()));
-    }
-
-    private ActivityStats activityStats(Long managerId, LocalDateTime from, LocalDateTime to, List<ClientChatMessage> messages) {
-        int idleMinutes = Math.max(1, appSettingService.getInt("manager.summary.activity-idle-minutes", 15));
-        Duration idle = Duration.ofMinutes(idleMinutes);
-        List<LocalDateTime> sitePoints = activityRepository
-                .findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(managerId, from, to).stream()
-                .map(ManagerSiteActivityEvent::getOccurredAt).filter(Objects::nonNull).toList();
-        List<LocalDateTime> messengerPoints = messages.stream()
-                .filter(message -> message.getSenderRole() == ClientChatSenderRole.STAFF)
-                .map(ClientChatMessage::getMessageAt).filter(Objects::nonNull).sorted().toList();
-        List<Interval> site = sessions(sitePoints, idle, to);
-        List<Interval> messenger = sessions(messengerPoints, idle, to);
-        long siteSeconds = duration(site);
-        long messengerSeconds = duration(messenger);
-        long confirmedSeconds = duration(merge(StreamLists.concat(site, messenger)));
-        long overlap = siteSeconds + messengerSeconds - confirmedSeconds;
-        return new ActivityStats(siteSeconds, Math.max(0, messengerSeconds - overlap), confirmedSeconds);
-    }
-
-    private List<Interval> sessions(List<LocalDateTime> source, Duration idle, LocalDateTime limit) {
-        List<LocalDateTime> points = source.stream().filter(Objects::nonNull).sorted().toList();
-        if (points.isEmpty()) return List.of();
-        List<Interval> intervals = new ArrayList<>();
-        LocalDateTime start = points.getFirst();
-        LocalDateTime last = start;
-        for (int i = 1; i < points.size(); i++) {
-            LocalDateTime point = points.get(i);
-            if (Duration.between(last, point).compareTo(idle) > 0) {
-                intervals.add(new Interval(start, min(last.plusSeconds(EVENT_TAIL_SECONDS), limit)));
-                start = point;
-            }
-            last = point;
-        }
-        intervals.add(new Interval(start, min(last.plusSeconds(EVENT_TAIL_SECONDS), limit)));
-        return merge(intervals);
-    }
-
-    private List<Interval> merge(List<Interval> source) {
-        if (source.isEmpty()) return List.of();
-        List<Interval> sorted = source.stream().sorted(Comparator.comparing(Interval::start)).toList();
-        List<Interval> merged = new ArrayList<>();
-        Interval current = sorted.getFirst();
-        for (int i = 1; i < sorted.size(); i++) {
-            Interval next = sorted.get(i);
-            if (!next.start().isAfter(current.end())) {
-                current = new Interval(current.start(), max(current.end(), next.end()));
-            } else {
-                merged.add(current);
-                current = next;
-            }
-        }
-        merged.add(current);
-        return merged;
-    }
-
-    private long duration(List<Interval> intervals) {
-        return intervals.stream().mapToLong(interval -> Math.max(0, Duration.between(interval.start(), interval.end()).toSeconds())).sum();
     }
 
     private Distribution distribution(List<Long> source) {
@@ -495,8 +443,6 @@ public class ManagerDailySummaryService {
                 daily.getAggregationStatus(), daily.getSnapshotAt());
     }
 
-    private LocalDateTime min(LocalDateTime left, LocalDateTime right) { return left.isBefore(right) ? left : right; }
-    private LocalDateTime max(LocalDateTime left, LocalDateTime right) { return left.isAfter(right) ? left : right; }
     private long number(Long value) { return value == null ? 0L : value; }
 
     private record ReplyStats(Distribution first, Distribution all) {}
@@ -513,16 +459,4 @@ public class ManagerDailySummaryService {
             long totalResolutionSeconds,
             long averageResolutionSeconds
     ) {}
-    private record ActivityStats(long siteSeconds, long messengerOutsideSiteSeconds, long confirmedSeconds) {}
-    private record Interval(LocalDateTime start, LocalDateTime end) {}
-
-    private static final class StreamLists {
-        private StreamLists() {}
-        static <T> List<T> concat(List<T> first, List<T> second) {
-            List<T> result = new ArrayList<>(first.size() + second.size());
-            result.addAll(first);
-            result.addAll(second);
-            return result;
-        }
-    }
 }

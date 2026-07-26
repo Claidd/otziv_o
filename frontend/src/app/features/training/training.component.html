@@ -65,7 +65,10 @@
 
       <section class="training-grid" aria-label="Подробное обучение">
         @for (block of tab.blocks; track trackBlock($index, block)) {
-          <article class="training-card">
+          <article
+            class="training-card"
+            [class.training-card--wide]="block.wide"
+          >
             <div class="training-card__title">
               <span class="material-icons-sharp">{{ block.icon }}</span>
               <h2>{{ block.title }}</h2>
@@ -91,6 +94,24 @@
                 <li>{{ item }}</li>
               }
             </ul>
+
+            @if (block.subsections?.length) {
+              <div class="training-card__subsections">
+                @for (subsection of block.subsections; track subsection.title) {
+                  <section class="training-subsection">
+                    <div class="training-subsection__title">
+                      <span class="material-icons-sharp">{{ subsection.icon }}</span>
+                      <h3>{{ subsection.title }}</h3>
+                    </div>
+                    <ul>
+                      @for (item of subsection.items; track trackItem($index, item)) {
+                        <li>{{ item }}</li>
+                      }
+                    </ul>
+                  </section>
+                }
+              </div>
+            }
           </article>
         }
       </section>

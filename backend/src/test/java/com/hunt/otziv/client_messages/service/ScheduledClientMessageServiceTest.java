@@ -37,6 +37,7 @@ import com.hunt.otziv.whatsapp.service.WhatsAppAuthAlertService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -1033,6 +1034,38 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
         assertEquals("common_billing_managed", attemptCaptor.getValue().getErrorCode());
         verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void retryNowReconcilesPaymentBeforeProcessingFailedPaymentTask() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(501L)
+                .scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:77:2026-07-20T10:00")
+                .orderId(77L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("payment_instruction_failed")
+                .lastErrorMessage("Старая платежная ссылка")
+                .consecutiveFailures(3)
+                .build();
+
+        when(stateRepository.findById(501L)).thenReturn(Optional.of(state));
+        when(stateRepository.lockDueState(eq(501L), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(1);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true))
+                .thenReturn(true);
+        when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL, null))
+                .thenReturn(null);
+        when(orderRepository.findByIdForMutation(77L)).thenReturn(Optional.empty());
+
+        ScheduledClientMessageService.ManualRetryResult result = service.retryNow(501L);
+
+        assertTrue(result.attempted());
+        assertEquals(ScheduledMessageStateStatus.DISABLED, result.status());
+        assertEquals("company_missing", result.errorCode());
+        verify(paymentLinkService).reconcileActiveLinkForOrder(77L);
         verify(stateRepository).save(state);
     }
 

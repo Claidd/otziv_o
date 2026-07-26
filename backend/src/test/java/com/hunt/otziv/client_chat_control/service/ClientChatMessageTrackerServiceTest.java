@@ -13,6 +13,7 @@ import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRep
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -23,8 +24,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -96,6 +99,86 @@ class ClientChatMessageTrackerServiceTest {
     }
 
     @Test
+    void storesActualStaffUserInsteadOfAssumingCompanyManager() {
+        User actualAuthor = User.builder().id(88L).active(true).build();
+        when(participantClassifier.resolveStaffUser(
+                org.mockito.ArgumentMatchers.eq(ClientChatPlatform.WHATSAPP),
+                org.mockito.ArgumentMatchers.eq("12001@g.us"),
+                org.mockito.ArgumentMatchers.eq("12001@g.us"),
+                org.mockito.ArgumentMatchers.eq("Менеджер"),
+                org.mockito.ArgumentMatchers.any(Company.class)
+        )).thenReturn(Optional.of(actualAuthor));
+
+        service.track(command("actual-author-1"), ClientChatSenderRole.STAFF);
+
+        ArgumentCaptor<ClientChatMessage> captor = ArgumentCaptor.forClass(ClientChatMessage.class);
+        verify(messageRepository).save(captor.capture());
+        assertSame(actualAuthor, captor.getValue().getActorUser());
+    }
+
+    @Test
+    void laterMeaningfulStaffReplyAutomaticallyClearsExistingAudit() {
+        ClientChatUnansweredItem audit = openItem("Когда отправите готовые тексты?");
+        audit.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        audit.setAuditRequired(true);
+        when(unansweredRepository.findByPlatformAndChatIdAndAuditRequiredTrue(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us"
+        )).thenReturn(List.of(audit));
+        ClientChatMessageCommand source = command("follow-up-1");
+        ClientChatMessageCommand meaningfulReply = new ClientChatMessageCommand(
+                source.platform(),
+                source.direction(),
+                source.chatId(),
+                source.chatTitle(),
+                source.externalMessageId(),
+                source.senderExternalId(),
+                source.senderName(),
+                "Отправим готовые тексты сегодня до 18:00",
+                source.messageAt()
+        );
+
+        service.track(meaningfulReply, ClientChatSenderRole.STAFF);
+
+        assertFalse(audit.isAuditRequired());
+        assertEquals("AUDIT_AUTO_CLEARED_BY_FOLLOW_UP", audit.getResolutionReasonCode());
+        assertEquals("Отправим готовые тексты сегодня до 18:00", audit.getResolutionReplyText());
+        assertEquals(
+                com.hunt.otziv.client_chat_control.model.ClientChatReplyQuality.GOOD,
+                audit.getReplyQuality()
+        );
+        verify(unansweredRepository).save(audit);
+    }
+
+    @Test
+    void laterGenericStaffReplyDoesNotClearProblemAudit() {
+        ClientChatUnansweredItem audit = openItem("Почему ссылка не работает?");
+        audit.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        audit.setAuditRequired(true);
+        when(unansweredRepository.findByPlatformAndChatIdAndAuditRequiredTrue(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us"
+        )).thenReturn(List.of(audit));
+        ClientChatMessageCommand source = command("follow-up-2");
+        ClientChatMessageCommand genericReply = new ClientChatMessageCommand(
+                source.platform(),
+                source.direction(),
+                source.chatId(),
+                source.chatTitle(),
+                source.externalMessageId(),
+                source.senderExternalId(),
+                source.senderName(),
+                "Спасибо",
+                source.messageAt()
+        );
+
+        service.track(genericReply, ClientChatSenderRole.STAFF);
+
+        assertTrue(audit.isAuditRequired());
+        verify(unansweredRepository, never()).save(audit);
+    }
+
+    @Test
     void questionCannotBeMarkedAsNoResponseNeeded() {
         ClientChatUnansweredItem open = openItem("Когда опубликуете отзывы?");
         when(unansweredRepository.findById(55L)).thenReturn(Optional.of(open));
@@ -149,7 +232,31 @@ class ClientChatMessageTrackerServiceTest {
         service.markConfirmedReply(57L, "Ответ отправлен", 10L, "Проверим");
 
         assertEquals(ClientChatUnansweredStatus.ANSWERED, open.getStatus());
+        assertEquals("Проверим", open.getResolutionReplyText());
         assertTrue(open.isAuditRequired());
+    }
+
+    @Test
+    void correctiveReplyClosesAuditAndStoresActualText() {
+        ClientChatUnansweredItem closed = openItem("Когда исправите ошибку?");
+        closed.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        closed.setAuditRequired(true);
+        when(unansweredRepository.findById(58L)).thenReturn(Optional.of(closed));
+
+        service.markAuditReplySent(
+                58L,
+                10L,
+                "Сейчас проверим ошибку и сообщим подтвержденный срок исправления",
+                "WhatsApp"
+        );
+
+        assertFalse(closed.isAuditRequired());
+        assertEquals(
+                "Сейчас проверим ошибку и сообщим подтвержденный срок исправления",
+                closed.getResolutionReplyText()
+        );
+        assertEquals("AUDIT_FOLLOW_UP_SENT", closed.getResolutionReasonCode());
+        verify(unansweredRepository).save(closed);
     }
 
     @Test

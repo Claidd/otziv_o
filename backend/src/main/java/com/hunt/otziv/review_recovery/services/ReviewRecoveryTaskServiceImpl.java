@@ -248,6 +248,26 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
     @Override
     @Transactional
+    public ReviewRecoveryTask reassignTask(Long taskId, Worker worker) {
+        ReviewRecoveryTask task = requireTaskForMutation(taskId);
+        if (task.getStatus() != ReviewRecoveryTaskStatus.PLANNED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Специалиста можно менять только у активной задачи восстановления"
+            );
+        }
+        if (worker == null || worker.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не указан");
+        }
+
+        task.setWorker(worker);
+        ReviewRecoveryTask savedTask = taskRepository.save(task);
+        log.info("Задача восстановления {} назначена специалисту {}", taskId, worker.getId());
+        return savedTask;
+    }
+
+    @Override
+    @Transactional
     public ReviewRecoveryTask completeTask(Long taskId, User completedBy) {
         ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() == ReviewRecoveryTaskStatus.DONE) {

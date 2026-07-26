@@ -151,7 +151,7 @@ public class EndOfDayAchievementService {
         }
     }
 
-    public boolean notifyManagerWorkday(Manager manager, AchievementResult result, long siteActiveSeconds) {
+    public boolean notifyManagerWorkday(Manager manager, AchievementResult result, long confirmedActiveSeconds) {
         if (manager == null || result == null || result.notified()) {
             return false;
         }
@@ -161,12 +161,18 @@ public class EndOfDayAchievementService {
             return false;
         }
         String name = user == null ? "Менеджер" : firstNonBlank(user.getFio(), user.getUsername(), "Менеджер");
-        String text = managerWorkdayText(name, result, siteActiveSeconds);
+        String text = managerWorkdayText(name, result, confirmedActiveSeconds);
         if (!telegramService.sendMessage(chatId, text, "HTML")) {
             return false;
         }
         markNotified(result);
         return true;
+    }
+
+    public void markManagerWorkdayNotified(AchievementResult result) {
+        if (result != null) {
+            markNotified(result);
+        }
     }
 
     private int calculateStreak(LocalDate date, String actorRole, Long actorId) {
@@ -296,7 +302,7 @@ public class EndOfDayAchievementService {
                 + "\nЗавтра можно начать новую серию.";
     }
 
-    private String managerWorkdayText(String name, AchievementResult result, long siteActiveSeconds) {
+    private String managerWorkdayText(String name, AchievementResult result, long confirmedActiveSeconds) {
         StringBuilder text = new StringBuilder();
         if (result.eligibleCount() <= 0) {
             text.append("📊 <b>Итоги рабочего дня</b>\n\n")
@@ -317,8 +323,8 @@ public class EndOfDayAchievementService {
                     .append("📌 Осталось к действию: <b>").append(remaining).append("</b>.\n")
                     .append("🔥 Счётчик дней на 100%: <b>0 дней</b>.\n");
         }
-        text.append("⏱ Активная работа на сайте: <b>")
-                .append(duration(siteActiveSeconds)).append("</b>.");
+        text.append("⏱ Активная работа на сайте и в соцсетях: <b>")
+                .append(duration(confirmedActiveSeconds)).append("</b>.");
         return text.toString();
     }
 

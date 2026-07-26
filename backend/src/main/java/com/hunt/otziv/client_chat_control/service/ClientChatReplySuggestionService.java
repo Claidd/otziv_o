@@ -21,7 +21,7 @@ public class ClientChatReplySuggestionService {
         }
         if (message.contains("оплатил") || message.contains("оплатила") || message.contains("оплатили")) {
             return new Suggestion(
-                    "Здравствуйте! Спасибо, проверим поступление оплаты и сообщим результат.",
+                    "Здравствуйте! Спасибо, информацию об оплате получили. Проверим поступление и подтвердим результат.",
                     "PAYMENT_CHECK"
             );
         }
@@ -49,6 +49,18 @@ public class ClientChatReplySuggestionService {
                     "QUESTION_REQUIRES_FACTS"
             );
         }
+        if ("ATTACHMENT_REQUIRES_REVIEW".equals(assessment.reasonCode())) {
+            if (message.contains("чек") || message.contains("квитанц")) {
+                return new Suggestion(
+                        "Здравствуйте! Спасибо, чек получили и приняли. Проверим поступление оплаты и подтвердим результат.",
+                        "PAYMENT_RECEIPT"
+                );
+            }
+            return new Suggestion(
+                    "Здравствуйте! Спасибо, документ получили и приняли. Проверим его и вернёмся к вам с подтверждением.",
+                    "DOCUMENT_RECEIVED"
+            );
+        }
         return new Suggestion("Здравствуйте! Спасибо за сообщение.", "GENERAL");
     }
 
@@ -59,4 +71,3 @@ public class ClientChatReplySuggestionService {
     public record Suggestion(String message, String reasonCode) {
     }
 }
-

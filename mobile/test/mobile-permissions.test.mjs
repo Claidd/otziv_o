@@ -28,3 +28,10 @@ test('allows the same functional sections as the backend role model', () => {
   assert.equal(canUseAction(['OPERATOR'], MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view), false);
   assert.equal(canUseAction(['WORKER'], MOBILE_SECTIONS.botBrowser, MOBILE_ACTIONS.view), true);
 });
+
+test('makes audit training available to managers and management only', () => {
+  assert.equal(canUseAction(['MANAGER'], MOBILE_SECTIONS.training, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['ADMIN'], MOBILE_SECTIONS.training, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['OWNER'], MOBILE_SECTIONS.training, MOBILE_ACTIONS.view), true);
+  assert.equal(canUseAction(['WORKER'], MOBILE_SECTIONS.training, MOBILE_ACTIONS.view), false);
+});

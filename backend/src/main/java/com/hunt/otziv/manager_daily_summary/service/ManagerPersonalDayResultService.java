@@ -22,6 +22,7 @@ public class ManagerPersonalDayResultService {
 
     private final ManagerRepository managerRepository;
     private final EndOfDayAchievementService achievementService;
+    private final ManagerReportReviewTelegramService reportReviewService;
 
     @Transactional
     public int send(LocalDate date, List<ManagerDailySummaryResponse> summaries) {
@@ -50,12 +51,17 @@ public class ManagerPersonalDayResultService {
                     summary.managerId(),
                     summary.managerUserId(),
                     summary.taskTotal(),
-                    summary.taskCompleted(),
+                    summary.taskCompleted() + summary.taskAutoClosed(),
                     percent(summary.taskProgressPercent()),
                     0,
                     reached100
             );
-            if (achievementService.notifyManagerWorkday(manager, result, summary.siteActiveSeconds())) {
+            if (reportReviewService != null && reportReviewService.enabled()) {
+                if (reportReviewService.deliver(manager, summary)) {
+                    achievementService.markManagerWorkdayNotified(result);
+                    sent++;
+                }
+            } else if (achievementService.notifyManagerWorkday(manager, result, summary.confirmedActiveSeconds())) {
                 sent++;
             }
         }

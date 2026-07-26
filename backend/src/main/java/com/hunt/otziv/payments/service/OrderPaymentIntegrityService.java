@@ -136,19 +136,20 @@ public class OrderPaymentIntegrityService {
 
         RepairResult result = new RepairResult(orderId, oldStatus, duplicateLinks.size(), paymentStates.size());
         businessAuditService.recordSafely(
-                "DUPLICATE_PAYMENT_CYCLE_REPAIRED",
+                "SETTLED_ORDER_STATUS_RESTORED",
                 ENTITY_TYPE,
                 orderId,
                 orderId,
                 null,
                 oldStatus,
                 STATUS_PAID,
-                "Закрыто лишних ссылок: " + result.expiredLinks()
+                "Денежная операция не выполнялась. Восстановлен статус ранее оплаченного заказа. "
+                        + "Закрыто лишних ссылок: " + result.expiredLinks()
                         + "; закрыто очередей: " + result.closedMessageStates()
                         + "; следующий заказ не изменялся"
         );
         log.warn(
-                "Duplicate payment cycle repaired: orderId={}, oldStatus={}, expiredLinks={}, closedStates={}",
+                "Settled order status restored without a money operation: orderId={}, oldStatus={}, expiredLinks={}, closedStates={}",
                 orderId,
                 oldStatus,
                 result.expiredLinks(),

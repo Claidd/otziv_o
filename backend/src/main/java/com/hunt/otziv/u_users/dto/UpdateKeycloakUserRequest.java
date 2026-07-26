@@ -24,6 +24,8 @@ public class UpdateKeycloakUserRequest {
 
     private String workerChatUrl;
 
+    private String managerAuditChatUrl;
+
     private boolean enabled = true;
 
     @NotEmpty

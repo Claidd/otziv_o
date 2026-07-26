@@ -170,7 +170,7 @@ class EndOfDayAchievementServiceTest {
         verify(telegramService).sendMessage(eq(800L), text.capture(), eq("HTML"));
         assertTrue(text.getValue().contains("День менеджера закрыт на 100%"));
         assertTrue(text.getValue().contains("4 дня подряд на 100%"));
-        assertTrue(text.getValue().contains("Активная работа на сайте: <b>3 ч 17 мин</b>"));
+        assertTrue(text.getValue().contains("Активная работа на сайте и в соцсетях: <b>3 ч 17 мин</b>"));
         assertTrue(text.getValue().contains("Анна &lt;М&gt;"));
     }
 
@@ -192,7 +192,7 @@ class EndOfDayAchievementServiceTest {
         assertTrue(text.getValue().contains("Выполнено на <b>75%</b>"));
         assertTrue(text.getValue().contains("Осталось к действию: <b>3</b>"));
         assertTrue(text.getValue().contains("Счётчик дней на 100%: <b>0 дней</b>"));
-        assertTrue(text.getValue().contains("Активная работа на сайте: <b>2 мин</b>"));
+        assertTrue(text.getValue().contains("Активная работа на сайте и в соцсетях: <b>2 мин</b>"));
     }
 
     @Test

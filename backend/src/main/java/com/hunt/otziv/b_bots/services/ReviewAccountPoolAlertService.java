@@ -30,7 +30,9 @@ public class ReviewAccountPoolAlertService {
     static final int STATE_ID = 1;
     static final List<Integer> ALERT_THRESHOLDS = List.of(50, 40, 30, 20, 10, 0);
     static final String SOURCE_TYPE = "REVIEW_ACCOUNT_POOL_LOW";
+    static final String LOW_UNBLOCKED_SOURCE_TYPE = "REVIEW_ACCOUNT_CITY_LOW";
     private static final long POOL_CITY_ID = 325L;
+    private static final int LOW_UNBLOCKED_THRESHOLD = 100;
     private static final String POOL_ACCOUNT_NAME = "Впиши Имя Фамилию";
     private static final String READY_STATUS = "Новый";
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Irkutsk");
@@ -55,6 +57,8 @@ public class ReviewAccountPoolAlertService {
                 LocalDate.now(BUSINESS_ZONE)
         ));
         int required = Math.toIntExact(botsRepository.countUnpublishedStubReviews());
+        int unblocked = Math.toIntExact(botsRepository.countActiveByCityId(POOL_CITY_ID));
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
 
         Integer previous = state.getLastRemainingCount();
         int previousRequired = state.getLastRequiredCount();
@@ -77,6 +81,8 @@ public class ReviewAccountPoolAlertService {
         boolean reminderDue = shortage && (state.getLastNotifiedAt() == null
                 || !now.isBefore(state.getLastNotifiedAt().plusHours(SHORTAGE_REMINDER_HOURS)));
         boolean shouldNotify = !reached.isEmpty() || shortageStarted || reminderDue;
+        boolean shouldNotifyLowUnblocked = unblocked < LOW_UNBLOCKED_THRESHOLD
+                && !today.equals(state.getLastLowUnblockedNotifiedOn());
 
         state.setNotifiedThresholdMask(mask);
         state.setLastRemainingCount(remaining);
@@ -84,11 +90,15 @@ public class ReviewAccountPoolAlertService {
         if (shouldNotify) {
             state.setLastNotifiedAt(now);
         }
+        if (shouldNotifyLowUnblocked) {
+            state.setLastLowUnblockedNotifiedOn(today);
+        }
         stateRepository.save(state);
 
         long cycleNumber = state.getCycleNumber();
         Integer reachedThreshold = reached.isEmpty() ? null : reached.get(reached.size() - 1);
         notifyAfterCommit(shouldNotify, reachedThreshold, remaining, required, cycleNumber, now);
+        notifyLowUnblockedAfterCommit(shouldNotifyLowUnblocked, unblocked, today);
         return remaining;
     }
 
@@ -104,6 +114,23 @@ public class ReviewAccountPoolAlertService {
             return;
         }
         Runnable notification = () -> notifyRecipients(threshold, remaining, required, cycleNumber, notifiedAt);
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            notification.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notification.run();
+            }
+        });
+    }
+
+    private void notifyLowUnblockedAfterCommit(boolean shouldNotify, int unblocked, LocalDate notifiedOn) {
+        if (!shouldNotify) {
+            return;
+        }
+        Runnable notification = () -> notifyLowUnblockedRecipients(unblocked, notifiedOn);
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             notification.run();
             return;
@@ -167,9 +194,22 @@ public class ReviewAccountPoolAlertService {
         long sourceId = (cycleNumber + 1) * 10_000_000L
                 + notifiedAt.atZone(BUSINESS_ZONE).toEpochSecond() / 3600L;
 
-        recipients().values().forEach(user -> notifyUser(user, title, text, sourceId));
+        recipients().values().forEach(user -> notifyUser(user, title, text, SOURCE_TYPE, sourceId));
         log.warn("Отправлено уведомление о пуле аккаунтов: threshold={}, remaining={}, required={}, deficit={}, cycle={}",
                 threshold, remaining, required, deficit, cycleNumber);
+    }
+
+    private void notifyLowUnblockedRecipients(int unblocked, LocalDate notifiedOn) {
+        String title = "В городе 325 заканчиваются аккаунты";
+        String text = "Незаблокированных аккаунтов в городе 325 осталось: " + unblocked + "."
+                + "\nПорог ежедневного уведомления: меньше " + LOW_UNBLOCKED_THRESHOLD + "."
+                + "\n\nНеобходимо добавить аккаунты.";
+        long sourceId = notifiedOn.toEpochDay();
+
+        recipients().values().forEach(user ->
+                notifyUser(user, title, text, LOW_UNBLOCKED_SOURCE_TYPE, sourceId));
+        log.warn("Отправлено ежедневное уведомление о незаблокированных аккаунтах: cityId={}, count={}",
+                POOL_CITY_ID, unblocked);
     }
 
     private Map<Long, User> recipients() {
@@ -188,13 +228,19 @@ public class ReviewAccountPoolAlertService {
                 .forEach(user -> recipients.putIfAbsent(user.getId(), user));
     }
 
-    private void notifyUser(User user, String title, String text, long sourceId) {
+    private void notifyUser(
+            User user,
+            String title,
+            String text,
+            String sourceType,
+            long sourceId
+    ) {
         try {
             personalReminderService.createSystemReminderDueNow(
                     user,
                     title,
                     text,
-                    SOURCE_TYPE,
+                    sourceType,
                     sourceId,
                     null
             );

@@ -23,6 +23,16 @@ describe('apiErrorMessage', () => {
     );
   });
 
+  it('shows the concrete API endpoint when a 403 remains after token refresh', () => {
+    expect(apiErrorMessage({
+      status: 403,
+      url: 'https://o-ogo.ru/api/manager/board?page=0',
+      error: { message: 'У вас нет доступа к этому действию.' }
+    }, 'Менеджер не загрузился')).toBe(
+      'Менеджер не загрузился. API /api/manager/board отклонил запрос (403) после обновления сессии. Проверьте назначенного менеджера и права вашей роли.'
+    );
+  });
+
   it('keeps readable service-unavailable messages from backend', () => {
     expect(apiErrorMessage({
       status: 503,

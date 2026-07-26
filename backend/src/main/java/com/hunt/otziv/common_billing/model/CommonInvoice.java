@@ -91,6 +91,33 @@ public class CommonInvoice {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
+    @Column(name = "closed_by", length = 160)
+    private String closedBy;
+
+    @Column(name = "close_reason", length = 32)
+    private String closeReason;
+
+    @Column(name = "previous_status", length = 32)
+    private String previousStatus;
+
+    @Column(name = "payment_method", length = 32)
+    private String paymentMethod;
+
+    @Column(name = "manual_paid_by", length = 160)
+    private String manualPaidBy;
+
+    @Column(name = "manual_payment_comment", length = 1000)
+    private String manualPaymentComment;
+
+    @Column(name = "manual_payment_receipt_url", length = 1024)
+    private String manualPaymentReceiptUrl;
+
+    @Column(name = "manual_confirmed_at")
+    private LocalDateTime manualConfirmedAt;
+
     @Column(name = "payment_success_notified_at")
     private LocalDateTime paymentSuccessNotifiedAt;
 

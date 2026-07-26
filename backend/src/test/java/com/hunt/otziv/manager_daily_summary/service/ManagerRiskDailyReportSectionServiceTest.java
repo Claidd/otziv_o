@@ -46,10 +46,10 @@ class ManagerRiskDailyReportSectionServiceTest {
 
         String report = new ManagerRiskDailyReportSectionService(repository).format(10L, date);
 
-        assertTrue(report.contains("Ответы специалистов: по существу 0 · неполные 1"));
+        assertTrue(report.contains("Пояснения: по существу 0 · неполные 1"));
         assertTrue(report.contains("«Проверим»"));
         assertTrue(report.contains("Ответ слишком общий"));
-        assertTrue(report.contains("Конкретные случаи:"));
-        assertTrue(report.contains("не принимайте «Хорошо», «Проверим»"));
+        assertTrue(report.contains("Примеры для разбора"));
+        assertTrue(report.contains("Не принимайте «Хорошо» и «Проверим»"));
     }
 }

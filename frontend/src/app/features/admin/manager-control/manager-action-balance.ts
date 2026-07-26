@@ -4,6 +4,7 @@ export type ManagerActionBalanceView = {
   total: number;
   handled: number;
   autoClosed: number;
+  completed: number;
   remaining: number;
   resolved: number;
   actionTaken: number;
@@ -36,6 +37,7 @@ export function managerActionBalanceView(manager: ManagerControlManager): Manage
     total,
     handled,
     autoClosed,
+    completed: handled + autoClosed,
     remaining,
     resolved,
     actionTaken,

@@ -101,7 +101,8 @@ export const MANAGER_COMMON_INVOICE_ACTIONS: StatusAction[] = [
   { label: 'напомнить', status: 'Напоминание', icon: 'notifications_active' },
   { label: 'не опл.', status: 'Не оплачено', icon: 'money_off' },
   { label: 'в бан', status: 'Бан', icon: 'block' },
-  { label: 'оплатили', status: 'Оплачено', icon: 'payments' }
+  { label: 'оплатили', status: 'Оплачено', icon: 'payments' },
+  { label: 'в архив', status: 'Архив', icon: 'archive' }
 ];
 
 export const MANAGER_PAGE_SIZE_OPTIONS = [5, 10, 15];
@@ -512,6 +513,15 @@ function withoutBanAction(actions: StatusAction[], order: OrderCardItem, canForc
   return actions.filter((action) => action.status !== 'Бан');
 }
 
+const MANUAL_ARCHIVE_SOURCE_STATUSES = new Set(['В проверку', 'На проверке', 'Коррекция']);
+
+function withArchivePolicy(actions: StatusAction[], order: OrderCardItem): StatusAction[] {
+  if (MANUAL_ARCHIVE_SOURCE_STATUSES.has(order.status)) {
+    return actions;
+  }
+  return actions.filter((action) => action.status !== 'Архив');
+}
+
 export function managerOrderActions(order: OrderCardItem, showAllActions: boolean, canForceBan = false): StatusAction[] {
   if (order.commonInvoice) {
     if (order.status === 'Требует внимания') {
@@ -520,6 +530,10 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
 
     if (order.status === 'Опубликовано') {
       return [MANAGER_COMMON_INVOICE_ACTIONS[0]];
+    }
+
+    if (order.status === 'Ожидает общего счета') {
+      return [MANAGER_COMMON_INVOICE_ACTIONS[5]];
     }
 
     if (order.status === 'Выставлен счет' || order.status === 'Напоминание') {
@@ -542,7 +556,10 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
   }
 
   if (showAllActions) {
-    return withoutBanAction(MANAGER_ORDER_ACTIONS, order, canForceBan);
+    return withArchivePolicy(
+      withoutBanAction(MANAGER_ORDER_ACTIONS, order, canForceBan),
+      order
+    );
   }
 
   const actions: StatusAction[] = [];
@@ -553,6 +570,9 @@ export function managerOrderActions(order: OrderCardItem, showAllActions: boolea
 
   if (order.status === 'На проверке') {
     actions.push(MANAGER_ORDER_ACTIONS[1]);
+  }
+
+  if (MANUAL_ARCHIVE_SOURCE_STATUSES.has(order.status)) {
     actions.push(MANAGER_ORDER_ACTIONS[3]);
   }
 

@@ -20,8 +20,13 @@ public class ManagerRiskDailyReportSectionService {
 
     @Transactional(readOnly = true)
     public String format(Long managerId, LocalDate date) {
+        return section(managerId, date).combined();
+    }
+
+    @Transactional(readOnly = true)
+    public ManagerReportSection section(Long managerId, LocalDate date) {
         if (managerId == null || date == null) {
-            return "";
+            return new ManagerReportSection("", "");
         }
         LocalDateTime dayFrom = date.atStartOfDay();
         LocalDateTime dayTo = date.plusDays(1).atStartOfDay();
@@ -65,60 +70,62 @@ public class ManagerRiskDailyReportSectionService {
                 .count();
         long averageDecisionMinutes = averageDecisionMinutes(today);
 
-        StringBuilder result = new StringBuilder();
-        result.append("\n🛡 <b>Работа с рисками</b>\n")
-                .append("Сегодня назначено: <b>").append(today.size()).append("</b>")
-                .append(" · решений: ").append(decisionsToday)
-                .append(" · открыто: ").append(open).append("\n")
-                .append("Ответы специалистов: по существу ").append(logical)
-                .append(" · неполные ").append(partial)
-                .append(" · противоречивые ").append(contradictory)
-                .append(" · не по теме ").append(irrelevant);
-        if (manualReview > 0) {
-            result.append(" · ручная проверка ").append(manualReview);
-        }
-        result.append("\nSLA: просрочено ").append(overdue)
-                .append(" · ограничений ").append(restricted)
-                .append(" · среднее решение ").append(duration(averageDecisionMinutes)).append("\n")
-                .append("Обоснованные решения без подтверждённого ответа: ").append(justified)
-                .append(" · ждут аудита: <b>").append(audit).append("</b>\n")
-                .append("За 7 дней: рисков ").append(week.size())
-                .append(" · сомнительных ответов ").append(weekQuestionable);
-
         List<WorkerRiskIncident> examples = today.stream()
                 .filter(item -> item.isAuditRequired()
                         || item.getExplanationQuality() == WorkerRiskExplanationQuality.PARTIAL
                         || item.getExplanationQuality() == WorkerRiskExplanationQuality.CONTRADICTORY
                         || item.getExplanationQuality() == WorkerRiskExplanationQuality.IRRELEVANT)
-                .limit(3)
+                .limit(2)
                 .toList();
+        StringBuilder analysis = new StringBuilder("🛡 <b>Работа с рисками</b>\n");
+        if (partial + contradictory + irrelevant > 0) {
+            analysis.append("<b>Вывод.</b> Часть пояснений не доказывает, что проблема действительно проверена и решена.\n")
+                    .append("<b>Рекомендация.</b> Не принимайте «Хорошо» и «Проверим»: просите назвать действие, результат и проверяемый факт.");
+        } else if (overdue > 0) {
+            analysis.append("<b>Вывод.</b> Качество пояснений приемлемое, но разбор рисков затягивается.\n")
+                    .append("<b>Рекомендация.</b> Запрашивайте пояснение раньше и завершайте решение до истечения SLA.");
+        } else if (audit > 0) {
+            analysis.append("<b>Вывод.</b> Есть решения, которым не хватает подтверждённых фактов.\n")
+                    .append("<b>Рекомендация.</b> Проверьте очередь аудита и зафиксируйте основание каждого решения.");
+        } else if (!today.isEmpty()) {
+            analysis.append("<b>Прогресс.</b> Сегодняшние риски разобраны без обнаруженных формальных отписок.");
+        } else {
+            analysis.append("<b>Вывод.</b> Новых рисков за день не было.");
+        }
         if (!examples.isEmpty()) {
-            result.append("\nКонкретные случаи:");
+            analysis.append("\n<b>Примеры для разбора</b>");
             for (WorkerRiskIncident example : examples) {
-                result.append("\n• «").append(escape(shortText(example.getTitle(), 140))).append("»");
+                analysis.append("\n• «").append(escape(shortText(example.getTitle(), 110))).append("»");
                 if (hasText(example.getWorkerExplanation())) {
-                    result.append(" — ответ «")
-                            .append(escape(shortText(example.getWorkerExplanation(), 120)))
+                    analysis.append(" → «")
+                            .append(escape(shortText(example.getWorkerExplanation(), 90)))
                             .append("»");
                 }
                 if (hasText(example.getExplanationQualityReason())) {
-                    result.append(". ").append(escape(shortText(example.getExplanationQualityReason(), 220)));
+                    analysis.append(". ").append(escape(shortText(example.getExplanationQualityReason(), 140)));
                 }
                 if (example.isAuditRequired()) {
-                    result.append(" Решение требует аудита владельца.");
+                    analysis.append(" Нужен аудит владельца.");
                 }
             }
         }
-        if (partial + contradictory + irrelevant > 0) {
-            result.append("\nСовет: не принимайте «Хорошо», «Проверим» и другие общие ответы — просите назвать действие, результат и проверяемый факт.");
-        } else if (overdue > 0) {
-            result.append("\nСовет: запросите пояснение раньше и завершите разбор до истечения трёхчасового SLA.");
-        } else if (audit > 0) {
-            result.append("\nСовет: разберите очередь аудита и зафиксируйте, какие факты подтверждают каждое решение.");
-        } else if (!today.isEmpty()) {
-            result.append("\nПрогресс: ответы по сегодняшним рискам разобраны без обнаруженных формальных отписок.");
-        }
-        return result.toString();
+
+        String metrics = "Риски: назначено " + today.size()
+                + " · решений " + decisionsToday
+                + " · открыто " + open
+                + " · ждут аудита " + audit
+                + "\nПояснения: по существу " + logical
+                + " · неполные " + partial
+                + " · противоречивые " + contradictory
+                + " · не по теме " + irrelevant
+                + (manualReview > 0 ? " · ручная проверка " + manualReview : "")
+                + "\nSLA: просрочено " + overdue
+                + " · ограничений " + restricted
+                + " · среднее решение " + duration(averageDecisionMinutes)
+                + " · решений без подтверждённого ответа " + justified
+                + "\n7 дней: рисков " + week.size()
+                + " · сомнительных пояснений " + weekQuestionable;
+        return new ManagerReportSection(analysis.toString(), metrics);
     }
 
     private long responses(List<WorkerRiskIncident> incidents, WorkerRiskExplanationQuality quality) {

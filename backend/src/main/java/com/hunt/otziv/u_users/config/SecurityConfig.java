@@ -1,6 +1,7 @@
 package com.hunt.otziv.u_users.config;
 
 import com.hunt.otziv.config.jwt.service.JwtAuthFilter;
+import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewRestrictionFilter;
 import com.hunt.otziv.u_users.services.UserServiceImpl;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
@@ -48,6 +50,7 @@ public class SecurityConfig {
     private final BCryptPasswordEncoder passwordEncoder;
     private final RequestValidationFilter requestValidationFilter;
     private final JwtAuthFilter jwtAuthFilter;
+    private final ManagerReportReviewRestrictionFilter managerReportReviewRestrictionFilter;
 
     @Value("${otziv.legacy.enabled:false}")
     private boolean legacyEnabled;
@@ -63,6 +66,7 @@ public class SecurityConfig {
         }
 
         http.addFilterBefore(requestValidationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAfter(managerReportReviewRestrictionFilter, BearerTokenAuthenticationFilter.class);
 
         return http.build();
     }
@@ -159,6 +163,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
+        auth.requestMatchers("/api/manager-report-review/access-state", "/api/manager-report-review/check-in").authenticated();
         auth.requestMatchers("/api/manager-activity/**").authenticated();
         auth.requestMatchers("/api/mobile/**").authenticated();
         auth.requestMatchers("/api/gamification/me").authenticated();

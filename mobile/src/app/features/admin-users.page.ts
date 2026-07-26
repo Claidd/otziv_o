@@ -27,6 +27,9 @@ interface UserDraft {
   fio: string;
   phoneNumber: string;
   coefficient: number | null;
+  managerAuditChatUrl: string;
+  managerAuditTelegramGroupChatId: number | null;
+  managerAuditTelegramBotInviteUrl: string;
   password: string;
   temporaryPassword: boolean;
   enabled: boolean;
@@ -181,6 +184,34 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
                     </div>
                   </div>
 
+                  @if (draft.roles.includes('MANAGER')) {
+                    <section class="telegram-audit-card">
+                      <label class="sheet-field">
+                        <span>Группа аудита менеджера</span>
+                        <input
+                          name="managerAuditChatUrl"
+                          type="url"
+                          placeholder="https://t.me/..."
+                          [ngModel]="draft.managerAuditChatUrl"
+                          (ngModelChange)="setDraft('managerAuditChatUrl', $event)"
+                        >
+                      </label>
+                      <small>{{ managerAuditStatus(draft) }}</small>
+                      @if (draft.managerAuditTelegramBotInviteUrl) {
+                        <a
+                          class="telegram-audit-link"
+                          [href]="draft.managerAuditTelegramBotInviteUrl"
+                          target="_blank"
+                          rel="noopener"
+                        >
+                          <span class="material-icons-sharp">hub</span>
+                          Привязать Telegram
+                        </a>
+                      }
+                      <p>Внутренняя группа менеджера и владельца. Клиентскую группу здесь указывать нельзя.</p>
+                    </section>
+                  }
+
                   @if (!draft.id) {
                     <label class="sheet-field sheet-field--inline">
                       <span>Включен</span>
@@ -334,6 +365,7 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
     .admin-users-search{display:grid;grid-template-columns:minmax(0,1fr);padding:.48rem}.admin-users-search label{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.45rem;min-height:2.42rem;border:1px solid rgba(103,116,131,.14);border-radius:.82rem;padding:0 .7rem;color:var(--otziv-info);background:var(--otziv-white)}.admin-users-search input{min-width:0;border:0;outline:0;background:transparent;color:var(--otziv-dark);font:900 .82rem/1 var(--otziv-font-family)}
     .inline-alert{border:1px solid rgba(255,0,96,.24);border-radius:.85rem;padding:.65rem .75rem;color:#9a2737;background:rgba(255,0,96,.06);font-size:.78rem;font-weight:900}
     .admin-users-list{display:flex;flex:1 1 0;min-height:0;flex-direction:column;gap:.62rem;overflow-y:auto;padding:.02rem .02rem .35rem}.admin-users-list::-webkit-scrollbar{display:none}
+    .telegram-audit-card{display:grid;gap:.55rem;padding:.72rem;border:1px solid rgba(238,49,89,.18);border-radius:.9rem;background:rgba(238,49,89,.04)}.telegram-audit-card small,.telegram-audit-card p{margin:0;color:var(--otziv-info);font-size:.7rem;font-weight:850}.telegram-audit-link{display:flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.45rem;border:1px solid rgba(238,49,89,.3);border-radius:.75rem;color:var(--otziv-red);font-weight:1000;text-decoration:none}
     .empty-card{display:grid;min-height:8rem;place-items:center;color:var(--otziv-info);font-weight:900}
     .user-card{display:flex;flex-direction:column;gap:.65rem;padding:.75rem}.user-card.disabled{opacity:.76}.user-card header{display:grid;grid-template-columns:auto minmax(0,1fr)auto;align-items:center;gap:.62rem}.avatar{display:grid;place-items:center;width:2.35rem;height:2.35rem;border-radius:.8rem;color:var(--otziv-primary);background:rgba(116,154,207,.14);font-weight:1000}.user-card h2{overflow:hidden;margin:0;color:var(--otziv-dark);font-size:1rem;text-overflow:ellipsis;white-space:nowrap}.user-card small{color:var(--otziv-info);font-size:.66rem;font-weight:900}.status-pill{border-radius:999px;padding:.35rem .55rem;color:var(--otziv-info);background:rgba(135,151,178,.12);font-size:.62rem;font-weight:1000}.status-pill.active{color:#16735f;background:rgba(74,198,177,.14)}
     .user-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem}.user-meta-grid span{display:grid;gap:.12rem;min-width:0;border:1px solid rgba(103,116,131,.13);border-radius:.72rem;padding:.48rem;background:rgba(255,255,255,.7)}.user-meta-grid b{overflow:hidden;color:var(--otziv-dark);font-size:.75rem;text-overflow:ellipsis;white-space:nowrap}
@@ -406,6 +438,9 @@ export class AdminUsersPage implements OnInit {
       fio: '',
       phoneNumber: '',
       coefficient: null,
+      managerAuditChatUrl: '',
+      managerAuditTelegramGroupChatId: null,
+      managerAuditTelegramBotInviteUrl: '',
       password: '',
       temporaryPassword: false,
       enabled: true,
@@ -423,6 +458,9 @@ export class AdminUsersPage implements OnInit {
       fio: user.fio ?? '',
       phoneNumber: user.phoneNumber ?? '',
       coefficient: user.coefficient ?? null,
+      managerAuditChatUrl: user.managerAuditChatUrl ?? '',
+      managerAuditTelegramGroupChatId: user.managerAuditTelegramGroupChatId ?? null,
+      managerAuditTelegramBotInviteUrl: user.managerAuditTelegramBotInviteUrl ?? '',
       password: '',
       temporaryPassword: false,
       enabled: user.active,
@@ -491,6 +529,7 @@ export class AdminUsersPage implements OnInit {
           fio: draft.fio.trim(),
           phoneNumber: draft.phoneNumber.trim(),
           coefficient: draft.coefficient ?? undefined,
+          managerAuditChatUrl: draft.managerAuditChatUrl.trim() || undefined,
           enabled: draft.enabled,
           roles: draft.roles
         };
@@ -503,6 +542,21 @@ export class AdminUsersPage implements OnInit {
     } finally {
       this.saving.set(false);
     }
+  }
+
+  managerAuditStatus(draft: UserDraft): string {
+    if (!draft.managerAuditChatUrl.trim()) {
+      return 'Ссылка на группу не указана.';
+    }
+    const saved = draft.id === null
+      ? null
+      : this.users().find((user) => user.id === draft.id);
+    if ((saved?.managerAuditChatUrl ?? '').trim() !== draft.managerAuditChatUrl.trim()) {
+      return 'Сначала сохраните ссылку, затем появится кнопка привязки.';
+    }
+    return draft.managerAuditTelegramGroupChatId
+      ? 'Telegram-группа привязана.'
+      : 'Telegram-группа пока не привязана.';
   }
 
   async changeEmploymentStatus(active: boolean): Promise<void> {

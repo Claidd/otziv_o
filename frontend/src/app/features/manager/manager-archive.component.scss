@@ -99,6 +99,85 @@
   padding: 0 0.85rem 0 2.35rem;
 }
 
+.common-invoice-archive {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 99, 71, 0.24);
+  border-radius: var(--otziv-card-border-radius);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.common-invoice-archive > header,
+.common-invoice-archive > header > div,
+.common-invoice-card__head,
+.common-invoice-card__amount,
+.common-invoice-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.common-invoice-archive > header > div {
+  justify-content: flex-start;
+}
+
+.common-invoice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.65rem;
+}
+
+.common-invoice-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(103, 116, 131, 0.2);
+  border-radius: var(--otziv-small-radius);
+  background: var(--otziv-white);
+}
+
+.common-invoice-card--ban {
+  border-color: rgba(219, 53, 69, 0.42);
+}
+
+.common-invoice-card__head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.common-invoice-orders {
+  display: grid;
+  gap: 0.3rem;
+  max-height: 9rem;
+  overflow: auto;
+  padding: 0.45rem;
+  border-radius: 0.4rem;
+  background: var(--otziv-light);
+}
+
+.common-invoice-orders > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+}
+
+.common-invoice-card__actions button {
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(103, 116, 131, 0.25);
+  border-radius: 0.4rem;
+  background: var(--otziv-white);
+}
+
+.common-invoice-empty {
+  margin: 0;
+  color: var(--otziv-info-dark);
+}
+
 .archive-search select {
   padding: 0 0.65rem;
 }

@@ -1,6 +1,7 @@
 package com.hunt.otziv.client_chat_control.repository;
 
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.model.ClientChatResolutionType;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.u_users.model.Manager;
@@ -28,6 +29,11 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
             ClientChatPlatform platform,
             String chatId,
             ClientChatUnansweredStatus status
+    );
+
+    List<ClientChatUnansweredItem> findByPlatformAndChatIdAndAuditRequiredTrue(
+            ClientChatPlatform platform,
+            String chatId
     );
 
     long countByManagerAndStatusAndLastClientMessageAtLessThanEqual(
@@ -108,6 +114,27 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             @Param("openStatus") ClientChatUnansweredStatus openStatus
+    );
+
+    @Query("""
+        SELECT DISTINCT item
+        FROM ClientChatUnansweredItem item
+        JOIN item.manager manager
+        JOIN manager.user managerUser
+        LEFT JOIN FETCH item.company
+        LEFT JOIN FETCH item.resolutionMessage
+        WHERE manager.id = :managerId
+          AND item.resolvedByUserId = managerUser.id
+          AND item.closedAt >= :from
+          AND item.closedAt < :to
+          AND item.resolutionType IN :resolutionTypes
+        ORDER BY item.closedAt ASC, item.id ASC
+    """)
+    List<ClientChatUnansweredItem> findManagerResolvedForDailyAudit(
+            @Param("managerId") Long managerId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("resolutionTypes") Collection<ClientChatResolutionType> resolutionTypes
     );
 
     @Modifying

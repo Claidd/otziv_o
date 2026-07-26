@@ -10,5 +10,6 @@ public enum CommonInvoiceStatus {
     PAID,
     UNPAID,
     BAN,
+    ARCHIVED,
     DISABLED
 }

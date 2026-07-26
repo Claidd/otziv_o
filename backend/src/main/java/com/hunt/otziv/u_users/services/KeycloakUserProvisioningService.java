@@ -205,6 +205,16 @@ public class KeycloakUserProvisioningService {
         user.setAuthProvider(hasText(user.getKeycloakId()) ? KEYCLOAK_AUTH_PROVIDER : LOCAL_AUTH_PROVIDER);
 
         updateRoleAssignments(user, oldLocalRoleNames, newLocalRoles);
+        Manager manager = managerService.getManagerByUserId(user.getId());
+        if (manager != null) {
+            String oldManagerAuditChatUrl = trimToNull(manager.getAuditTelegramGroupUrl());
+            String newManagerAuditChatUrl = trimToNull(request.getManagerAuditChatUrl());
+            manager.setAuditTelegramGroupUrl(newManagerAuditChatUrl);
+            if (!Objects.equals(oldManagerAuditChatUrl, newManagerAuditChatUrl)) {
+                manager.setAuditTelegramGroupChatId(null);
+            }
+            managerService.save(manager);
+        }
         userRepository.flush();
 
         if (hasText(user.getKeycloakId())) {
@@ -699,6 +709,9 @@ public class KeycloakUserProvisioningService {
 
     private AdminUserResponse toAdminResponse(User user) {
         Set<String> roles = toKeycloakRoles(user.getRoles());
+        Manager manager = roles.contains("MANAGER")
+                ? managerService.getManagerByUserId(user.getId())
+                : null;
 
         return AdminUserResponse.builder()
                 .id(user.getId())
@@ -713,6 +726,13 @@ public class KeycloakUserProvisioningService {
                 .workerChatUrl(user.getWorkerChatUrl())
                 .workerTelegramGroupChatId(user.getWorkerTelegramGroupChatId())
                 .workerTelegramBotInviteUrl(telegramGroupLinkService.buildWorkerInviteUrl(user))
+                .managerAuditChatUrl(manager == null ? null : manager.getAuditTelegramGroupUrl())
+                .managerAuditTelegramGroupChatId(
+                        manager == null ? null : manager.getAuditTelegramGroupChatId()
+                )
+                .managerAuditTelegramBotInviteUrl(
+                        telegramGroupLinkService.buildManagerAuditInviteUrl(manager)
+                )
                 .imageId(user.getImage() == null ? null : user.getImage().getId())
                 .active(user.isActive())
                 .createTime(user.getCreateTime())

@@ -119,12 +119,10 @@ public class OrderArchiveDryRunService {
         LocalDateTime startedAt = LocalDateTime.now(clock);
 
         long eligibleOrders = repository.countEligibleOrders(cutoffDate);
-        ArchiveCandidateCounts selected = repository.countSelected(cutoffDate, resolvedBatchLimit);
-        long missingClosedAnalyticsMonths = repository.countMissingClosedAnalyticsMonths(
-                cutoffDate,
-                resolvedBatchLimit,
-                currentMonthStart
-        );
+        repository.prepareCandidateOrders(cutoffDate, resolvedBatchLimit);
+        ArchiveCandidateCounts selected = repository.countPreparedCandidates();
+        long missingClosedAnalyticsMonths =
+                repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(currentMonthStart);
 
         String archiveReason = normalizeReason(reason);
         String message = "dry-run only"
@@ -261,7 +259,7 @@ public class OrderArchiveDryRunService {
         return repository.lockStatus(ARCHIVE_LOCK_NAME);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ArchiveCandidatesPreview previewCandidates(Integer retentionDays, Integer batchLimit, Integer previewLimit) {
         int resolvedRetentionDays = positiveOrDefault(retentionDays, defaultRetentionDays, 90);
         int resolvedBatchLimit = batchLimit(batchLimit);
@@ -271,12 +269,10 @@ public class OrderArchiveDryRunService {
         LocalDate currentMonthStart = today.withDayOfMonth(1);
 
         long eligibleOrders = repository.countEligibleOrders(cutoffDate);
-        ArchiveCandidateCounts selected = repository.countSelected(cutoffDate, resolvedBatchLimit);
-        long missingClosedAnalyticsMonths = repository.countMissingClosedAnalyticsMonths(
-                cutoffDate,
-                resolvedBatchLimit,
-                currentMonthStart
-        );
+        repository.prepareCandidateOrders(cutoffDate, resolvedBatchLimit);
+        ArchiveCandidateCounts selected = repository.countPreparedCandidates();
+        long missingClosedAnalyticsMonths =
+                repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(currentMonthStart);
 
         return new ArchiveCandidatesPreview(
                 cutoffDate,
@@ -285,7 +281,7 @@ public class OrderArchiveDryRunService {
                 eligibleOrders,
                 selected,
                 missingClosedAnalyticsMonths,
-                repository.findCandidateOrders(cutoffDate, resolvedBatchLimit, resolvedPreviewLimit)
+                repository.findPreparedCandidateOrders(resolvedPreviewLimit)
         );
     }
 

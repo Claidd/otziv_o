@@ -594,6 +594,39 @@ export class WorkerBoardComponent implements OnDestroy {
     this.actionFacade.deactivateReviewBot(review);
   }
 
+  reassignTaskWorker(review: WorkerReviewItem, workerId: number): void {
+    if (!this.workerFilterAvailable() || this.mutationKey()) {
+      return;
+    }
+
+    const taskId = review.recoveryTask ? review.recoveryTaskId : review.badTaskId;
+    if (!taskId) {
+      this.toastService.error('Специалист не изменен', 'Не удалось определить задачу');
+      return;
+    }
+
+    const mutationKey = `task-worker-${taskId}`;
+    const request = review.recoveryTask
+      ? this.workerApi.reassignRecoveryTask(taskId, workerId)
+      : this.workerApi.reassignBadReviewTask(taskId, workerId);
+
+    this.mutationKey.set(mutationKey);
+    request.subscribe({
+      next: () => {
+        this.mutationKey.set(null);
+        this.toastService.success('Специалист изменен', 'Задача переназначена');
+        this.loadBoard();
+      },
+      error: (err) => {
+        this.mutationKey.set(null);
+        this.toastService.error(
+          'Специалист не изменен',
+          this.errorMessage(err, 'Не удалось переназначить задачу')
+        );
+      }
+    });
+  }
+
   markReviewDone(review: WorkerReviewItem): void {
     if (this.publishLockedByCredentialWait(review)) {
       this.toastService.info(this.activeWorkerSection() === 'nagul' ? 'Выгул подождет' : 'Публикация подождет', this.publishCredentialWaitTitle(review));

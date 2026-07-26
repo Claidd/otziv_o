@@ -116,6 +116,12 @@ public class OrderStatusTransitionService {
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
+            if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "В архив можно перевести заказ только из статусов \"В проверку\", \"На проверке\" или \"Коррекция\""
+                );
+            }
             String oldStatus = safeStatusTitle(order);
             boolean changed = switch (title) {
                 case STATUS_PAYMENT -> handlePaymentStatus(order);
@@ -159,7 +165,8 @@ public class OrderStatusTransitionService {
         boolean targetsFinancialStatus = COMMON_BILLING_FINANCIAL_STATUSES.contains(title);
         boolean leavesFinancialStatus = COMMON_BILLING_FINANCIAL_STATUSES.contains(currentStatus)
                 && !safeString(currentStatus).equals(safeString(title));
-        if (!targetsFinancialStatus && !leavesFinancialStatus) {
+        boolean targetsArchive = STATUS_ARCHIVE.equals(title);
+        if (!targetsFinancialStatus && !leavesFinancialStatus && !targetsArchive) {
             return;
         }
 
@@ -175,9 +182,16 @@ public class OrderStatusTransitionService {
             );
         }
 
+        if (leavesFinancialStatus) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ уже включен в активный общий счет и не может быть возвращен в рабочий статус"
+            );
+        }
+
         throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Заказ уже включен в активный общий счет и не может быть возвращен в рабочий статус"
+                "Заказ внутри общего счета архивируется только вместе с общим счетом"
         );
     }
 

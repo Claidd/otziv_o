@@ -126,8 +126,11 @@ public class DeepSeekProvider implements AiProvider {
         body.put("messages", messages(request));
         body.put("stream", false);
         body.put("max_tokens", maxTokens(request, deepSeek));
-        body.put("thinking", Map.of("type", deepSeek.isThinkingEnabled() ? "enabled" : "disabled"));
-        if (deepSeek.isThinkingEnabled()) {
+        boolean thinkingEnabled = request.thinkingEnabled() == null
+                ? deepSeek.isThinkingEnabled()
+                : request.thinkingEnabled();
+        body.put("thinking", Map.of("type", thinkingEnabled ? "enabled" : "disabled"));
+        if (thinkingEnabled) {
             body.put("reasoning_effort", deepSeek.getReasoningEffort());
         } else {
             body.put("temperature", request.temperature());

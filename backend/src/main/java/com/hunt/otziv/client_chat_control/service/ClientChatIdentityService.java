@@ -5,6 +5,7 @@ import com.hunt.otziv.client_chat_control.model.ClientChatParticipantIdentity;
 import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.model.ClientChatSenderRole;
 import com.hunt.otziv.client_chat_control.repository.ClientChatParticipantIdentityRepository;
+import com.hunt.otziv.u_users.model.User;
 import java.util.Locale;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -24,15 +25,48 @@ public class ClientChatIdentityService {
             String externalId,
             String senderName
     ) {
-        if (platform == null || safe(chatId).isBlank()) {
+        return knownIdentity(platform, chatId, externalId, senderName)
+                .map(ClientChatParticipantIdentity::getSenderRole);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<User> knownUser(
+            ClientChatPlatform platform,
+            String chatId,
+            String externalId,
+            String senderName
+    ) {
+        return knownIdentity(platform, chatId, externalId, senderName)
+                .filter(identity -> identity.getSenderRole() == ClientChatSenderRole.STAFF)
+                .map(ClientChatParticipantIdentity::getLinkedUser);
+    }
+
+    private Optional<ClientChatParticipantIdentity> knownIdentity(
+            ClientChatPlatform platform,
+            String chatId,
+            String externalId,
+            String senderName
+    ) {
+        if (platform == null
+                || (safe(externalId).isBlank() && normalizeName(senderName).isBlank())) {
             return Optional.empty();
         }
-        return repository.findByPlatformAndChatIdAndIdentityKeyAndActiveTrue(
+        String key = identityKey(externalId, senderName);
+        Optional<ClientChatParticipantIdentity> localIdentity = safe(chatId).isBlank()
+                ? Optional.empty()
+                : repository.findByPlatformAndChatIdAndIdentityKeyAndActiveTrue(
+                                platform,
+                                limit(safe(chatId), 160),
+                                key);
+        if (localIdentity.isPresent() || safe(externalId).isBlank()) {
+            return localIdentity;
+        }
+        return repository
+                .findFirstByPlatformAndIdentityKeyAndSenderRoleAndActiveTrueOrderByUpdatedAtDesc(
                         platform,
-                        limit(safe(chatId), 160),
-                        identityKey(externalId, senderName)
-                )
-                .map(ClientChatParticipantIdentity::getSenderRole);
+                        key,
+                        ClientChatSenderRole.STAFF
+                );
     }
 
     @Transactional

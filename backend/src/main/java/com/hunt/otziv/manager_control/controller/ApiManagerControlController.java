@@ -13,6 +13,8 @@ import com.hunt.otziv.manager_control.dto.ManagerControlSummaryResponse;
 import com.hunt.otziv.manager_control.service.ManagerControlService;
 import com.hunt.otziv.manager_control.service.ManagerQueueStateService;
 import com.hunt.otziv.manager_control.dto.ManagerQueueStateResponse;
+import com.hunt.otziv.manager_daily_summary.dto.SiteActivityRequest;
+import com.hunt.otziv.manager_daily_summary.service.ManagerSiteActivityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -33,6 +35,7 @@ public class ApiManagerControlController {
     private final ManagerControlService managerControlService;
     private final PerformanceMetrics performanceMetrics;
     private final ManagerQueueStateService queueStateService;
+    private final ManagerSiteActivityService managerSiteActivityService;
 
     @GetMapping("/queue-state/me")
     @PreAuthorize("hasRole('MANAGER')")
@@ -91,7 +94,15 @@ public class ApiManagerControlController {
     ) {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-action",
-                () -> managerControlService.actionConcreteItem(concreteItemId, request, principal, authentication)
+                () -> {
+                    ManagerControlConcreteItemResponse response =
+                            managerControlService.actionConcreteItem(concreteItemId, request, principal, authentication);
+                    if (Boolean.TRUE.equals(request == null ? null : request.manualWorkerNotification())
+                            && response.workerNotificationSentAt() != null) {
+                        recordManagerMessageActivity(principal, "WORKER_MESSAGE_SENT");
+                    }
+                    return response;
+                }
         );
     }
 
@@ -104,7 +115,12 @@ public class ApiManagerControlController {
     ) {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-send-client-message",
-                () -> managerControlService.sendClientMessage(concreteItemId, principal, authentication)
+                () -> {
+                    ManagerControlConcreteItemResponse response =
+                            managerControlService.sendClientMessage(concreteItemId, principal, authentication);
+                    recordManagerMessageActivity(principal, "CLIENT_MESSAGE_SENT");
+                    return response;
+                }
         );
     }
 
@@ -118,7 +134,19 @@ public class ApiManagerControlController {
     ) {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.concrete-item-reply",
-                () -> managerControlService.replyToClientMessage(concreteItemId, request, principal, authentication)
+                () -> {
+                    ManagerControlConcreteItemResponse response =
+                            managerControlService.replyToClientMessage(concreteItemId, request, principal, authentication);
+                    recordManagerMessageActivity(principal, "CLIENT_MESSAGE_SENT");
+                    return response;
+                }
+        );
+    }
+
+    private void recordManagerMessageActivity(Principal principal, String activityType) {
+        managerSiteActivityService.record(
+                principal,
+                new SiteActivityRequest(activityType, "/admin/manager-control", null)
         );
     }
 

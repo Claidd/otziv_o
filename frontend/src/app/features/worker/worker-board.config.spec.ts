@@ -59,6 +59,13 @@ describe('worker-board config helpers', () => {
     expect(workerErrorMessage({}, 'fallback')).toBe('fallback');
   });
 
+  it('preserves a network restriction explanation for the worker toast', () => {
+    const message = 'Доступ заблокирован: обнаружена домашняя сеть или Wi-Fi. '
+      + 'Отключите Wi-Fi, включите мобильный интернет и повторите действие.';
+
+    expect(workerErrorMessage({ status: 403, error: { message } }, 'Не удалось загрузить раздел')).toBe(message);
+  });
+
   it('tracks list items by stable identifiers', () => {
     expect(trackWorkerOrder(0, { id: 12 } as never)).toBe(12);
     expect(trackWorkerReview(0, { id: 13 } as never)).toBe(13);

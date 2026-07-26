@@ -222,6 +222,13 @@ export class TeamComponent implements OnDestroy {
     }
   }
 
+  visibleSections(): TeamSection[] {
+    if (this.team()?.role === 'MANAGER') {
+      return this.sections.filter((section) => section.key === 'worker' || section.key === 'operator');
+    }
+    return this.sections;
+  }
+
   memberProgress(member: TeamMember): DailyWorkProgress | null | undefined {
     return memberProgressForMode(member, this.progressMode());
   }
@@ -389,7 +396,7 @@ export class TeamComponent implements OnDestroy {
     return `${values['model'] || values['platform'] || 'Мобильное приложение'} · ${virtual} · ${networkLabels[values['network']] || values['network'] || 'сеть не определена'} · версия ${values['app'] || 'неизвестна'}`;
   }
 
-  progressDetails(member: TeamMember): ProgressDetailRow[] {
+  progressDetails(role: TeamRole, member: TeamMember): ProgressDetailRow[] {
     const progress = this.memberProgress(member);
     if (!progress?.visible) {
       return [];
@@ -502,17 +509,34 @@ export class TeamComponent implements OnDestroy {
     this.pushScoreRow(rows, 'Дисциплина', progress.disciplineScore, monthMode ? 'Средняя месячная оценка 0–100 по отсутствию просрочек.' : 'Оценка 0–100 по отсутствию просрочек.');
     this.pushScoreRow(rows, 'Нагрузка', progress.workloadScore, monthMode ? 'Средняя месячная оценка 0–100 по объёму выполненных задач.' : 'Оценка 0–100 по объёму выполненных задач относительно дневного норматива.');
 
-    this.pushDurationRow(
-      rows,
-      'Активно',
-      progress.activeWorkSeconds,
-      monthMode
-        ? 'Сумма примерного активного рабочего времени за выбранный месяц.'
-        : 'Примерное активное рабочее время: сумма сессий по действиям. Пауза больше 15 минут начинает новую сессию.'
-    );
+    if (monthMode) {
+      this.pushDurationRow(
+        rows,
+        role === 'manager' ? 'Активность менеджера' : 'Активно за месяц',
+        progress.activeWorkSeconds,
+        role === 'manager'
+          ? 'Подтверждённая активность менеджера на сайте и в соцсетях за выбранный месяц.'
+          : 'Сумма примерного активного рабочего времени специалиста за выбранный месяц.'
+      );
+    } else {
+      rows.push({
+        label: 'Время работы сегодня',
+        value: this.formatActivityDuration(progress.activeWorkSeconds),
+        tone: 'neutral',
+        hint: role === 'manager'
+          ? 'Подтверждённая активность менеджера на сайте и в соцсетях за выбранный день.'
+          : 'Примерное активное рабочее время специалиста за выбранный день: сумма сессий по действиям. Пауза больше 15 минут начинает новую сессию.'
+      });
+      rows.push({
+        label: 'Среднее в день',
+        value: this.formatActivityDuration(member.averageDailyActiveWorkSeconds),
+        tone: 'neutral',
+        hint: `Среднее активное рабочее время в день с начала месяца по ${this.formatSelectedDate()}. Сумма дневной активности делится на количество календарных дней, включая дни без действий.`
+      });
+    }
 
     const activityWindow = this.formatTimeWindow(progress.firstActivityAt, progress.lastActivityAt);
-    if (activityWindow) {
+    if (activityWindow && role !== 'manager') {
       rows.push({
         label: 'Окно',
         value: activityWindow,
@@ -531,7 +555,7 @@ export class TeamComponent implements OnDestroy {
     }
 
     this.pushDurationRow(rows, 'Медиана', progress.medianCloseSeconds, monthMode ? 'Средняя месячная медиана скорости закрытия задач.' : 'Типичная скорость закрытия: половина задач закрыта быстрее этого времени.');
-    this.pushDurationRow(rows, 'Среднее', progress.averageCloseSeconds, monthMode ? 'Среднее время закрытия задачи по агрегированным дням месяца.' : 'Среднее время закрытия задачи за день.');
+    this.pushDurationRow(rows, 'Ср. закрытие', progress.averageCloseSeconds, monthMode ? 'Среднее время закрытия задачи по агрегированным дням месяца.' : 'Среднее время закрытия задачи за день.');
     this.pushDurationRow(rows, 'P90', progress.p90CloseSeconds, monthMode ? 'Средний месячный P90 по скорости закрытия задач.' : '90% задач закрыты быстрее этого времени. Помогает увидеть длинные задержки.');
 
     const firstCompletedAt = this.formatTime(progress.firstCompletedAt);
@@ -719,6 +743,15 @@ export class TeamComponent implements OnDestroy {
     if (value) {
       rows.push({ label, value, tone: 'neutral', hint });
     }
+  }
+
+  private formatActivityDuration(seconds: number | null | undefined): string {
+    return this.formatDuration(seconds) || '0 мин';
+  }
+
+  private formatSelectedDate(): string {
+    return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' })
+      .format(new Date(`${this.selectedDate()}T00:00:00`));
   }
 
   private pushCountRow(rows: ProgressDetailRow[], label: string, count: number | null | undefined, hint: string): void {

@@ -5,6 +5,7 @@ import com.hunt.otziv.admin.dto.personal_stat.UserLKDTO;
 import com.hunt.otziv.admin.dto.personal_stat.UserStatDTO;
 import com.hunt.otziv.admin.dto.presonal.ManagersListDTO;
 import com.hunt.otziv.admin.dto.presonal.UserData;
+import com.hunt.otziv.admin.dto.presonal.WorkersListDTO;
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateScoreService;
 import com.hunt.otziv.analytics.service.AnalyticsAggregateStatsService;
@@ -14,6 +15,7 @@ import com.hunt.otziv.analytics.service.AnalyticsAggregateUserStatsService;
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.manager_performance.service.ManagerPerformanceService;
+import com.hunt.otziv.manager_daily_summary.service.ManagerActivityMetricsService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerNetworkViolationService;
@@ -93,6 +95,9 @@ class ApiCabinetControllerTest {
     private ManagerPerformanceService managerPerformanceService;
 
     @Mock
+    private ManagerActivityMetricsService managerActivityMetricsService;
+
+    @Mock
     private StaffDailyProgressService staffDailyProgressService;
 
     @Mock
@@ -121,6 +126,7 @@ class ApiCabinetControllerTest {
                 paymentProfileService,
                 manualPaymentTaskService,
                 managerPerformanceService,
+                managerActivityMetricsService,
                 staffDailyProgressService,
                 workerNetworkViolationService,
                 teamPatternAnalysisService
@@ -219,6 +225,78 @@ class ApiCabinetControllerTest {
     }
 
     @Test
+    void managerTeamContainsOnlyAssignedOperationalRolesAndWorkerProgress() {
+        User managerUser = user(10L, "Manager One");
+        Manager manager = Manager.builder().id(100L).user(managerUser).build();
+        WorkersListDTO worker = WorkersListDTO.builder()
+                .id(300L)
+                .userId(30L)
+                .fio("Worker One")
+                .login("worker")
+                .build();
+        DailyWorkProgressResponse progress = new DailyWorkProgressResponse(
+                true,
+                "WORKER",
+                DATE,
+                50,
+                5,
+                10,
+                5,
+                false,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                0
+        );
+        Authentication managerAuthentication = new UsernamePasswordAuthenticationToken(
+                "alex",
+                "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_MANAGER"))
+        );
+        when(userService.findByUserName("alex")).thenReturn(Optional.of(managerUser));
+        when(managerService.getManagerByUserId(10L)).thenReturn(manager);
+        when(personalService.gerWorkersToManager(manager)).thenReturn(List.of(worker));
+        when(personalService.gerOperatorsToManager(manager)).thenReturn(List.of());
+        when(staffDailyProgressService.progressEnabled()).thenReturn(true);
+        when(staffDailyProgressService.workerProgressBySubjects(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.eq(DATE)
+        )).thenReturn(Map.of(300L, progress));
+        when(staffDailyProgressService.averageDailyActiveWorkSecondsByWorkerIds(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.eq(DATE)
+        )).thenReturn(Map.of(300L, 1_800L));
+        when(staffDailyProgressService.monthlyWorkerProgressBySubjects(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.eq(DATE.withDayOfMonth(1))
+        )).thenReturn(Map.of(300L, progress));
+
+        ApiCabinetController.TeamResponse response = controller.team(
+                principal,
+                managerAuthentication,
+                DATE,
+                null,
+                true
+        );
+
+        assertEquals("MANAGER", response.role());
+        assertEquals(List.of(), response.managers());
+        assertEquals(List.of(), response.marketologs());
+        assertSame(progress, response.workers().getFirst().getDailyProgress());
+        assertSame(progress, response.workers().getFirst().getMonthlyProgress());
+        assertEquals(1_800L, response.workers().getFirst().getAverageDailyActiveWorkSeconds());
+        verify(personalService, never()).getMarketologsToManager(manager);
+    }
+
+    @Test
     void profileUsesLegacyWorkerStatsWhenAggregateReadIsDisabled() {
         User user = user(10L, "Worker One");
         ReflectionTestUtils.setField(controller, "aggregateAnalyticsReadEnabled", false);
@@ -294,6 +372,90 @@ class ApiCabinetControllerTest {
         ApiCabinetController.CabinetProfileResponse response = controller.profile(principal, DATE, true);
 
         assertSame(progress, response.dailyProgress());
+    }
+
+    @Test
+    void managerProfileIncludesAggregateProgressForAssignedWorkers() {
+        User managerUser = user(10L, "Manager One");
+        Manager manager = Manager.builder().id(100L).user(managerUser).build();
+        WorkersListDTO worker = WorkersListDTO.builder()
+                .id(300L)
+                .userId(30L)
+                .fio("Worker One")
+                .login("worker")
+                .build();
+        DailyWorkProgressResponse workerProgress = new DailyWorkProgressResponse(
+                true,
+                "WORKER",
+                DATE,
+                28,
+                75,
+                103,
+                27,
+                false,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                0
+        );
+        DailyWorkProgressResponse teamProgress = new DailyWorkProgressResponse(
+                true,
+                "WORKER_TEAM",
+                DATE,
+                28,
+                75,
+                103,
+                27,
+                false,
+                null,
+                null,
+                0,
+                0,
+                0,
+                null,
+                null,
+                0,
+                0,
+                0,
+                0,
+                0
+        );
+        Authentication managerAuthentication = new UsernamePasswordAuthenticationToken(
+                "alex",
+                "n/a",
+                List.of(new SimpleGrantedAuthority("ROLE_MANAGER"))
+        );
+        when(userService.findByUserName("alex")).thenReturn(Optional.of(managerUser));
+        when(personalService.getWorkerReviews(managerUser, DATE)).thenReturn(workerStats(0));
+        when(managerService.getManagerByUserId(10L)).thenReturn(manager);
+        when(personalService.gerWorkersToManager(manager)).thenReturn(List.of(worker));
+        when(staffDailyProgressService.progressEnabled()).thenReturn(true);
+        when(staffDailyProgressService.workerProgressBySubjects(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.eq(DATE)
+        )).thenReturn(Map.of(300L, workerProgress));
+        when(staffDailyProgressService.aggregateTeamProgressResponses(
+                org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.eq(List.of(300L)),
+                org.mockito.ArgumentMatchers.eq(DATE),
+                org.mockito.ArgumentMatchers.eq("WORKER_TEAM")
+        )).thenReturn(teamProgress);
+
+        ApiCabinetController.CabinetProfileResponse response = controller.profile(
+                managerAuthentication,
+                DATE,
+                true
+        );
+
+        assertSame(teamProgress, response.teamDailyProgress());
     }
 
     @Test

@@ -170,7 +170,10 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
               invoice.status IN :staleStatuses
               AND invoice.updatedAt <= :staleBefore
               AND (
-                invoice.status <> :partiallyPaidStatus
+                (
+                  invoice.status <> :partiallyPaidStatus
+                  AND invoice.status <> :collectingStatus
+                )
                 OR NOT EXISTS (
                   SELECT pendingInvoiceOrder.id
                   FROM CommonInvoiceOrder pendingInvoiceOrder
@@ -188,6 +191,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("criticalStatuses") Collection<CommonInvoiceStatus> criticalStatuses,
             @Param("staleStatuses") Collection<CommonInvoiceStatus> staleStatuses,
             @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
+            @Param("collectingStatus") CommonInvoiceStatus collectingStatus,
             @Param("staleBefore") LocalDateTime staleBefore
     );
 
@@ -218,7 +222,10 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
               invoice.status IN :staleStatuses
               AND invoice.updatedAt <= :staleBefore
               AND (
-                invoice.status <> :partiallyPaidStatus
+                (
+                  invoice.status <> :partiallyPaidStatus
+                  AND invoice.status <> :collectingStatus
+                )
                 OR NOT EXISTS (
                   SELECT pendingInvoiceOrder.id
                   FROM CommonInvoiceOrder pendingInvoiceOrder
@@ -237,6 +244,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("criticalStatuses") Collection<CommonInvoiceStatus> criticalStatuses,
             @Param("staleStatuses") Collection<CommonInvoiceStatus> staleStatuses,
             @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
+            @Param("collectingStatus") CommonInvoiceStatus collectingStatus,
             @Param("staleBefore") LocalDateTime staleBefore,
             Pageable pageable
     );

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { IonIcon, IonLabel, IonRouterOutlet, IonTabBar, IonTabButton, IonTabs } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
@@ -12,6 +12,7 @@ import {
 } from 'ionicons/icons';
 import { AuthService } from '../core/auth.service';
 import { MOBILE_ACTIONS, MOBILE_ROLES, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
+import { ManagerReportReviewAccessService } from '../core/manager-report-review-access.service';
 
 type SmartTab = 'home' | 'leads' | 'companies' | 'orders' | 'worker';
 const SMART_TAB_HOLD_MS = 700;
@@ -198,7 +199,7 @@ const SMART_TAB_DOUBLE_TAP_MS = 700;
     }
   `]
 })
-export class TabsPage {
+export class TabsPage implements OnInit, OnDestroy {
   private readonly smartTabRoutes: Record<SmartTab, string> = {
     home: '/tabs/home',
     leads: '/tabs/leads',
@@ -211,8 +212,13 @@ export class TabsPage {
   private lastTapTab: SmartTab | null = null;
   private lastTapTime = 0;
   private suppressNextClick = false;
+  private reportReviewTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(readonly auth: AuthService, private readonly router: Router) {
+  constructor(
+    readonly auth: AuthService,
+    private readonly router: Router,
+    readonly reportReview: ManagerReportReviewAccessService
+  ) {
     addIcons({
       businessOutline,
       callOutline,
@@ -221,6 +227,24 @@ export class TabsPage {
       readerOutline,
       receiptOutline
     });
+  }
+
+  ngOnInit(): void {
+    if (!this.auth.hasRealmRole('MANAGER')) {
+      return;
+    }
+    void this.refreshReportReviewAccess();
+    this.reportReviewTimer = setInterval(() => {
+      void this.refreshReportReviewAccess();
+    }, 60_000);
+  }
+
+  ngOnDestroy(): void {
+    this.clearSmartTabHold();
+    if (this.reportReviewTimer) {
+      clearInterval(this.reportReviewTimer);
+      this.reportReviewTimer = null;
+    }
   }
 
   startSmartTabHold(tab: SmartTab): void {
@@ -277,6 +301,9 @@ export class TabsPage {
   }
 
   private openSmartTab(tab: SmartTab, mode: 'all' | 'menu'): Promise<boolean> {
+    if (this.workLocked() && tab !== 'home') {
+      return this.router.navigateByUrl('/tabs/home/profile?reportReviewRequired=1');
+    }
     const route = tab === 'home' && mode === 'all'
       ? this.defaultHomeRoute()
       : this.smartTabRoutes[tab];
@@ -296,24 +323,53 @@ export class TabsPage {
   }
 
   private defaultHomeRoute(): string {
+    if (this.workLocked()) {
+      return '/tabs/home/profile';
+    }
     return this.auth.hasAnyRealmRole(MOBILE_ROLES.ownerAdmin)
       ? '/tabs/home/analytics'
       : '/tabs/home/profile';
   }
 
   canManager(): boolean {
-    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view);
+    return !this.workLocked()
+      && canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.companies, MOBILE_ACTIONS.view);
   }
 
   canWorker(): boolean {
-    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view);
+    return !this.workLocked()
+      && canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.worker, MOBILE_ACTIONS.view);
   }
 
   canLeads(): boolean {
-    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view);
+    return !this.workLocked()
+      && canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.leads, MOBILE_ACTIONS.view);
   }
 
   canOperator(): boolean {
-    return canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view);
+    return !this.workLocked()
+      && canUseAction(this.auth.user()?.roles, MOBILE_SECTIONS.operator, MOBILE_ACTIONS.view);
   }
+
+  workLocked(): boolean {
+    return this.auth.hasRealmRole('MANAGER') && this.reportReview.state()?.restricted === true;
+  }
+
+  private async refreshReportReviewAccess(): Promise<void> {
+    try {
+      const state = await this.reportReview.refresh();
+      if (state.restricted && !isPersonalMobileRoute(this.router.url)) {
+        await this.router.navigateByUrl('/tabs/home/profile?reportReviewRequired=1');
+      }
+    } catch {
+      // Рабочие API дополнительно защищены сервером.
+    }
+  }
+}
+
+function isPersonalMobileRoute(url: string): boolean {
+  const path = url.split('?')[0];
+  return path === '/tabs/home'
+    || path === '/tabs/home/profile'
+    || path === '/tabs/profile';
 }

@@ -41,6 +41,9 @@ export interface AdminUser {
   workerChatUrl?: string;
   workerTelegramGroupChatId?: number | null;
   workerTelegramBotInviteUrl?: string;
+  managerAuditChatUrl?: string;
+  managerAuditTelegramGroupChatId?: number | null;
+  managerAuditTelegramBotInviteUrl?: string;
   imageId?: number | null;
   active: boolean;
   createTime?: string;
@@ -55,6 +58,7 @@ export interface UpdateKeycloakUserRequest {
   phoneNumber?: string;
   coefficient?: number;
   workerChatUrl?: string;
+  managerAuditChatUrl?: string;
   enabled: boolean;
   roles: string[];
 }

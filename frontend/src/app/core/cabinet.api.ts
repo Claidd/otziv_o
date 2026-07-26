@@ -93,6 +93,7 @@ export interface CabinetProfile {
   workerZp: UserStat;
   managerPerformance?: ManagerPerformanceScore | null;
   dailyProgress?: DailyWorkProgress | null;
+  teamDailyProgress?: DailyWorkProgress | null;
 }
 
 export interface ManagerManualPaymentSettings {
@@ -153,6 +154,7 @@ export interface TeamMember {
   inCorrect?: number;
   intVigul?: number;
   publish?: number;
+  averageDailyActiveWorkSeconds?: number;
   dailyProgress?: DailyWorkProgress | null;
   monthlyProgress?: DailyWorkProgress | null;
   dailyNetworkViolations?: WorkerNetworkViolationStats | null;

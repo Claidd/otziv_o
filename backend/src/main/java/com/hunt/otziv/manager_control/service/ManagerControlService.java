@@ -238,6 +238,7 @@ public class ManagerControlService {
             CommonInvoiceStatus.BAN
     );
     private static final Set<CommonInvoiceStatus> COMMON_INVOICE_STALE_STATUSES = Set.of(
+            CommonInvoiceStatus.COLLECTING,
             CommonInvoiceStatus.READY,
             CommonInvoiceStatus.INVOICED,
             CommonInvoiceStatus.REMINDER,
@@ -268,6 +269,7 @@ public class ManagerControlService {
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final CommonInvoiceRepository commonInvoiceRepository;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+    private final ManagerAutomationFailureService managerAutomationFailureService;
     private final CommonBillingService commonBillingService;
     private final OrderPublicationApprovalService publicationApprovalService;
     private final WorkerRiskIncidentRepository riskIncidentRepository;
@@ -280,6 +282,7 @@ public class ManagerControlService {
     private final ManagerDailyControlConcreteItemRepository dailyControlConcreteItemRepository;
     private final ManagerDailyControlEventRepository dailyControlEventRepository;
     private final ManagerActionBalanceService managerActionBalanceService;
+    private final ManagerOperationalMetricsService managerOperationalMetricsService;
     private final ManagerPerformanceService managerPerformanceService;
     private final GamificationEventService gamificationEventService;
     private final LeadsRepository leadsRepository;
@@ -293,9 +296,10 @@ public class ManagerControlService {
     public ManagerControlSummaryResponse syncToday(Principal principal, Authentication authentication) {
         reconcileClientMessagesForControl();
         invalidateManagerPerformance();
-        ManagerControlSummaryResponse initial = today(principal, authentication, true);
-        for (ManagerControlManagerResponse row : initial.managers()) {
-            managerRepository.findById(row.managerId()).ifPresent(manager -> syncManagerActionConcreteItems(manager, LocalDate.now()));
+        LocalDate today = LocalDate.now();
+        for (Manager manager : visibleManagers(principal, authentication)) {
+            managerControl(manager, today, null, true, false);
+            syncManagerActionConcreteItems(manager, today);
         }
         return today(principal, authentication, false);
     }
@@ -305,7 +309,7 @@ public class ManagerControlService {
         LocalDate snapshotDate = date == null ? LocalDate.now() : date;
         reconcileClientMessagesForControl();
         for (Manager manager : managerRepository.findAllWithUserAndImage()) {
-            managerControl(manager, snapshotDate, null, true);
+            managerControl(manager, snapshotDate, null, true, false);
             syncManagerActionConcreteItems(manager, snapshotDate);
         }
     }
@@ -313,7 +317,7 @@ public class ManagerControlService {
     private ManagerControlSummaryResponse today(Principal principal, Authentication authentication, boolean persist) {
         LocalDate today = LocalDate.now();
         List<ManagerControlManagerResponse> managers = visibleManagers(principal, authentication).stream()
-                .map(manager -> managerControl(manager, today, null, persist))
+                .map(manager -> managerControl(manager, today, null, persist, true))
                 .sorted(Comparator
                         .comparingInt((ManagerControlManagerResponse manager) -> statusRank(manager.status()))
                         .thenComparing(ManagerControlManagerResponse::totalAttentionCount, Comparator.reverseOrder())
@@ -410,6 +414,10 @@ public class ManagerControlService {
                 manager.workerSections(),
                 manager.overdueStatuses(),
                 manager.workerExplanationStats(),
+                manager.activeWorkSeconds(),
+                manager.averageDailyWorkSeconds(),
+                manager.averageReactionSeconds(),
+                manager.reactionCount(),
                 managerPerformance
         );
     }
@@ -436,7 +444,7 @@ public class ManagerControlService {
         }
         managers = managerRepository.findAllManagersWorkers(managers);
         for (Manager manager : managers) {
-            managerControl(manager, today, null, true);
+            managerControl(manager, today, null, true, false);
             dailyControlRepository.findByControlDateAndManager(today, manager)
                     .ifPresent(control -> {
                         sendOverdueStageNotifications(control, now, false);
@@ -650,9 +658,15 @@ public class ManagerControlService {
         ManagerDailyControlActionType actionType = parseActionType(request == null ? null : request.actionType());
         requireConcreteActionAllowed(concreteItem, actionType);
         if ("COMMON_INVOICE".equals(concreteItem.getEntityType())
-                && actionType == ManagerDailyControlActionType.ACTION_TAKEN) {
+                && (actionType == ManagerDailyControlActionType.ACTION_TAKEN
+                || actionType == ManagerDailyControlActionType.RESOLVED)) {
             requireCommonInvoiceProblemResolved(concreteItem);
             actionType = ManagerDailyControlActionType.RESOLVED;
+        }
+        if (actionType == ManagerDailyControlActionType.RESOLVED
+                && (ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE.equals(concreteItem.getEntityType())
+                || ManagerAutomationFailureService.ENTITY_COMMON_INVOICE_AUTOMATION.equals(concreteItem.getEntityType()))) {
+            requireAutomationFailureResolved(concreteItem);
         }
         ManagerDailyControlItemStatus status = itemStatusForAction(actionType);
         String comment = limit(request == null ? null : request.comment(), 1000);
@@ -875,12 +889,12 @@ public class ManagerControlService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.ACTION_TAKEN, false);
-        concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
-        concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.RESOLVED, false);
+        concreteItem.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        concreteItem.setActionType(ManagerDailyControlActionType.RESOLVED);
         concreteItem.setLastManualTouchAt(now);
-        concreteItem.setFollowUpAt(now.plusDays(MANUAL_FOLLOW_UP_DAYS));
-        concreteItem.setResolvedAt(null);
+        concreteItem.setFollowUpAt(null);
+        concreteItem.setResolvedAt(now);
         concreteItem.setAutomaticResolution(false);
         String statusNote = applyOrderStatusAfterClientSend(concreteItem, order);
         concreteItem.setComment(limit("Сообщение клиенту отправлено через " + safe(result.channel()) + statusNote, 1000));
@@ -900,7 +914,7 @@ public class ManagerControlService {
                 savedConcreteItem.getParentItem(),
                 actorUserId(principal),
                 ManagerDailyControlEventType.ITEM_ACTION,
-                ManagerDailyControlActionType.ACTION_TAKEN,
+                ManagerDailyControlActionType.RESOLVED,
                 "Клиенту отправлено сообщение по карточке: " + concreteItem.getTitle()
                         + " через " + safe(result.channel())
                         + " за " + (System.currentTimeMillis() - startedAt) + " мс"
@@ -932,8 +946,13 @@ public class ManagerControlService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
         ManagerDailyControl control = concreteItem.getControl();
         requireControlAccess(control, principal, authentication);
-        if (!ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ответ из карточки доступен только для неотвеченных сообщений");
+        boolean unansweredConcrete = ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()));
+        boolean auditConcrete = ENTITY_CLIENT_CHAT_AUDIT.equals(safe(concreteItem.getEntityType()));
+        if (!unansweredConcrete && !auditConcrete) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Ответ из карточки доступен только для клиентских сообщений"
+            );
         }
         if (concreteItem.getEntityId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Карточка не связана с сообщением клиента");
@@ -941,8 +960,11 @@ public class ManagerControlService {
 
         ClientChatUnansweredItem unansweredItem = clientChatUnansweredItemRepository.findById(concreteItem.getEntityId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Неотвеченное сообщение не найдено"));
-        if (unansweredItem.getStatus() != ClientChatUnansweredStatus.OPEN) {
+        if (unansweredConcrete && unansweredItem.getStatus() != ClientChatUnansweredStatus.OPEN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это сообщение уже закрыто");
+        }
+        if (auditConcrete && !unansweredItem.isAuditRequired()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Эта проверка уже закрыта");
         }
         Company company = unansweredItem.getCompany();
         Manager manager = unansweredItem.getManager() == null ? control.getManager() : unansweredItem.getManager();
@@ -962,9 +984,15 @@ public class ManagerControlService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        recordConcreteEpisode(concreteItem, ManagerDailyControlItemStatus.ACTION_TAKEN, false);
-        concreteItem.setStatus(ManagerDailyControlItemStatus.ACTION_TAKEN);
-        concreteItem.setActionType(ManagerDailyControlActionType.ACTION_TAKEN);
+        ManagerDailyControlItemStatus resultStatus = auditConcrete
+                ? ManagerDailyControlItemStatus.RESOLVED
+                : ManagerDailyControlItemStatus.ACTION_TAKEN;
+        ManagerDailyControlActionType resultAction = auditConcrete
+                ? ManagerDailyControlActionType.RESOLVED
+                : ManagerDailyControlActionType.ACTION_TAKEN;
+        recordConcreteEpisode(concreteItem, resultStatus, false);
+        concreteItem.setStatus(resultStatus);
+        concreteItem.setActionType(resultAction);
         concreteItem.setLastManualTouchAt(now);
         concreteItem.setResolvedAt(now);
         concreteItem.setAutomaticResolution(false);
@@ -972,12 +1000,21 @@ public class ManagerControlService {
         concreteItem.setComment(limit("Ответ отправлен через " + safe(result.channel()) + ": " + message, 1000));
         ManagerDailyControlConcreteItem savedConcreteItem = dailyControlConcreteItemRepository.save(concreteItem);
 
-        clientChatMessageTrackerService.markConfirmedReply(
-                unansweredItem.getId(),
-                "Ответ отправлен из контроля менеджера через " + safe(result.channel()),
-                actorUserId(principal),
-                message
-        );
+        if (auditConcrete) {
+            clientChatMessageTrackerService.markAuditReplySent(
+                    unansweredItem.getId(),
+                    actorUserId(principal),
+                    message,
+                    result.channel()
+            );
+        } else {
+            clientChatMessageTrackerService.markConfirmedReply(
+                    unansweredItem.getId(),
+                    "Ответ отправлен из контроля менеджера через " + safe(result.channel()),
+                    actorUserId(principal),
+                    message
+            );
+        }
         updateParentItemFromConcreteItems(savedConcreteItem.getParentItem());
 
         if (control.getStartedAt() == null) {
@@ -992,7 +1029,7 @@ public class ManagerControlService {
                 savedConcreteItem.getParentItem(),
                 actorUserId(principal),
                 ManagerDailyControlEventType.ITEM_ACTION,
-                ManagerDailyControlActionType.ACTION_TAKEN,
+                resultAction,
                 "Ответ клиенту отправлен из карточки: " + concreteItem.getTitle()
                         + " через " + safe(result.channel())
         );
@@ -1012,11 +1049,12 @@ public class ManagerControlService {
         ManagerDailyControlConcreteItem concreteItem = dailyControlConcreteItemRepository.findById(concreteItemId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Карточка контроля не найдена"));
         requireControlAccess(concreteItem.getControl(), principal, authentication);
-        if (!ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()))
+        if ((!ENTITY_CLIENT_CHAT_UNANSWERED.equals(safe(concreteItem.getEntityType()))
+                && !ENTITY_CLIENT_CHAT_AUDIT.equals(safe(concreteItem.getEntityType())))
                 || concreteItem.getEntityId() == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Подсказка доступна только для неотвеченного сообщения"
+                    "Подсказка доступна только для клиентского сообщения"
             );
         }
         ClientChatUnansweredItem item = clientChatUnansweredItemRepository.findById(concreteItem.getEntityId())
@@ -1096,6 +1134,10 @@ public class ManagerControlService {
         ManagerDailyControl control = concreteItem.getControl();
         requireControlAccess(control, principal, authentication);
         String entityType = safe(concreteItem.getEntityType());
+        if (ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE.equals(entityType)
+                || ManagerAutomationFailureService.ENTITY_COMMON_INVOICE_AUTOMATION.equals(entityType)) {
+            return repairAutomationFailureConcreteItem(concreteItem, control, principal);
+        }
         if ("COMMON_INVOICE".equals(entityType)) {
             return repairCommonInvoiceConcreteItem(concreteItem, control, principal);
         }
@@ -1186,6 +1228,57 @@ public class ManagerControlService {
         );
     }
 
+    private ManagerControlConcreteItemResponse repairAutomationFailureConcreteItem(
+            ManagerDailyControlConcreteItem concreteItem,
+            ManagerDailyControl control,
+            Principal principal
+    ) {
+        Manager manager = control.getManager();
+        Optional<ManagerAutomationFailureService.AutomationFailureIssue> currentIssue =
+                managerAutomationFailureService.findIssue(
+                        manager,
+                        concreteItem.getEntityType(),
+                        concreteItem.getEntityId()
+                );
+        if (currentIssue.isEmpty()) {
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Ошибка автоматизации уже устранена, карточка перепроверена",
+                    principal,
+                    "Перепроверена устраненная ошибка автоматизации"
+            );
+        }
+
+        ScheduledClientMessageService.ManualRetryResult retry =
+                scheduledClientMessageService.retryNow(currentIssue.get().stateId());
+        Optional<ManagerAutomationFailureService.AutomationFailureIssue> remaining =
+                managerAutomationFailureService.findIssue(
+                        manager,
+                        concreteItem.getEntityType(),
+                        concreteItem.getEntityId()
+                );
+        if (remaining.isPresent()) {
+            String retryError = safe(retry.errorMessage());
+            if (retryError.isBlank()) {
+                retryError = safe(retry.errorCode());
+            }
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Повторный запуск выполнен, но источник ошибки еще активен"
+                            + (retryError.isBlank() ? "" : ": " + limit(retryError, 220))
+            );
+        }
+
+        return resolveRepairedConcreteItem(
+                concreteItem,
+                control,
+                "Задача автоматизации перезапущена и прошла повторную проверку",
+                principal,
+                "Повторно запущена и восстановлена клиентская автоматизация"
+        );
+    }
+
     private ManagerControlConcreteItemResponse repairCommonInvoiceConcreteItem(
             ManagerDailyControlConcreteItem concreteItem,
             ManagerDailyControl control,
@@ -1197,6 +1290,74 @@ public class ManagerControlService {
         }
         CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING
+                || invoice.getStatus() == CommonInvoiceStatus.READY) {
+            CommonInvoiceDetailsResponse details = commonBillingService.invoice(invoiceId);
+            if (details != null
+                    && details.summary() != null
+                    && CommonInvoiceStatus.COLLECTING.name().equals(details.summary().status())
+                    && details.orders() != null
+                    && details.orders().stream().anyMatch(order ->
+                    !order.ready() && Set.of("В проверку", "На проверке").contains(safe(order.orderStatus())))) {
+                details = commonBillingService.approveReviewOrders(invoiceId);
+                details = commonBillingService.invoice(invoiceId);
+            }
+            if (details != null
+                    && details.summary() != null
+                    && CommonInvoiceStatus.READY.name().equals(details.summary().status())) {
+                details = commonBillingService.sendInvoice(invoiceId, true);
+            }
+            String status = details == null || details.summary() == null
+                    ? ""
+                    : safe(details.summary().status());
+            String lastError = details == null || details.summary() == null
+                    ? ""
+                    : safe(details.summary().lastError());
+            if (CommonInvoiceStatus.COLLECTING.name().equals(status)) {
+                int ready = details.summary().readyOrders();
+                int total = details.summary().totalOrders();
+                return resolveRepairedConcreteItem(
+                        concreteItem,
+                        control,
+                        "Счет исправен и остается в сборе: " + Math.max(0, total - ready)
+                                + " из " + total + " заказов еще в работе. Карточка убрана из замечаний.",
+                        principal,
+                        "Исключен исправный общий счет с незавершенными заказами"
+                );
+            }
+            if (!lastError.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Счет обработан, но автоматическая отправка не прошла: " + limit(lastError, 220)
+                );
+            }
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Позиции общего счета пересчитаны, готовые заказы одобрены, счет отправлен клиенту",
+                    principal,
+                    "Пересчитан и отправлен зависший общий счет"
+            );
+        }
+        if (invoice.getStatus() == CommonInvoiceStatus.INVOICED
+                || invoice.getStatus() == CommonInvoiceStatus.REMINDER
+                || invoice.getStatus() == CommonInvoiceStatus.PARTIALLY_PAID) {
+            CommonInvoiceDetailsResponse details = commonBillingService.sendManualReminder(invoiceId);
+            String lastError = details == null || details.summary() == null ? "" : safe(details.summary().lastError());
+            if (!lastError.isBlank()) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Напоминание по общему счету не отправлено: " + limit(lastError, 220)
+                );
+            }
+            return resolveRepairedConcreteItem(
+                    concreteItem,
+                    control,
+                    "Клиенту отправлено напоминание по зависшему общему счету",
+                    principal,
+                    "Повторно отправлено напоминание по общему счету"
+            );
+        }
         if (commonInvoiceMessageSendRepairable(invoice)) {
             CommonInvoiceDetailsResponse details = commonBillingService.sendInvoice(invoiceId, true);
             String lastError = details == null || details.summary() == null ? "" : safe(details.summary().lastError());
@@ -1761,7 +1922,7 @@ public class ManagerControlService {
                 .filter(item -> managerId != null && managerId.equals(item.getId()))
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер недоступен"));
-        managerControl(manager, LocalDate.now(), null, true);
+        managerControl(manager, LocalDate.now(), null, true, false);
         invalidateManagerPerformance();
         return managerDetails(manager, true);
     }
@@ -2029,10 +2190,7 @@ public class ManagerControlService {
 
     private boolean hasFastClickRisk(ManagerDailyControl control) {
         List<ManagerDailyControlEvent> actions = dailyControlEventRepository.findByControlOrderByCreatedAtDesc(control).stream()
-                .filter(event -> event.getEventType() == ManagerDailyControlEventType.ITEM_ACTION
-                        || event.getEventType() == ManagerDailyControlEventType.ITEM_RESOLVED)
-                .filter(event -> event.getActorUserId() != null)
-                .filter(event -> event.getCreatedAt() != null)
+                .filter(event -> isManagerClientMessageResolutionEvent(control, event))
                 .sorted(Comparator.comparing(ManagerDailyControlEvent::getCreatedAt))
                 .toList();
         if (actions.size() < 3) {
@@ -2056,6 +2214,31 @@ public class ManagerControlService {
         ));
         return hasActionBurst(actions, warningCount, warningSeconds)
                 || hasActionBurst(actions, criticalCount, criticalSeconds);
+    }
+
+    private boolean isManagerClientMessageResolutionEvent(
+            ManagerDailyControl control,
+            ManagerDailyControlEvent event
+    ) {
+        if (control == null || event == null || event.getCreatedAt() == null
+                || event.getActorUserId() == null || event.getItem() == null
+                || event.getActionType() == null
+                || event.getActionType() == ManagerDailyControlActionType.DEFERRED
+                || (event.getEventType() != ManagerDailyControlEventType.ITEM_ACTION
+                && event.getEventType() != ManagerDailyControlEventType.ITEM_RESOLVED)) {
+            return false;
+        }
+        Long managerUserId = control.getManagerUserId();
+        if (managerUserId == null && control.getManager() != null
+                && control.getManager().getUser() != null) {
+            managerUserId = control.getManager().getUser().getId();
+        }
+        if (!Objects.equals(event.getActorUserId(), managerUserId)) {
+            return false;
+        }
+        String reasonCode = safe(event.getItem().getReasonCode());
+        return "UNANSWERED_CLIENT_MESSAGES".equals(reasonCode)
+                || "SUSPICIOUS_CLIENT_CLOSURES".equals(reasonCode);
     }
 
     private boolean hasActionBurst(
@@ -2095,7 +2278,8 @@ public class ManagerControlService {
             Manager manager,
             LocalDate today,
             ManagerPerformanceScoreResponse managerPerformance,
-            boolean persist
+            boolean persist,
+            boolean includeOperationalMetrics
     ) {
         User user = manager.getUser();
         Map<String, Integer> orderCounts = safeMap(orderService.countOrdersByStatusToManager(manager));
@@ -2108,7 +2292,14 @@ public class ManagerControlService {
         long workerActionCount = workerCounts.actionTotal();
         long workerWorkloadCount = workerCounts.workloadTotal();
         long requiresAttention = orderCounts.getOrDefault("Требует внимания", 0);
-        long commonInvoiceActionCount = commonInvoiceActionCount(manager);
+        List<ManagerAutomationFailureService.AutomationFailureIssue> automationFailures =
+                managerAutomationFailureService.issues(manager, 10_000);
+        Set<Long> automationInvoiceIds = automationFailures.stream()
+                .map(ManagerAutomationFailureService.AutomationFailureIssue::commonInvoiceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        long automationFailureCount = automationFailures.size();
+        long commonInvoiceActionCount = commonInvoiceActionCount(manager, automationInvoiceIds);
         long publicationDateIssueCount = reviewRepository.countPublicationDateIssuesByManager(manager);
         long chatBindingIssueCount = orderRepository.countManagerControlChatBindingIssuesByManager(
                 manager,
@@ -2130,20 +2321,21 @@ public class ManagerControlService {
         addProblem(problems, "OVERDUE_ORDERS", "Просроченные заказы", overdueOrders, "CRITICAL", "ACTION", "schedule", ordersUrl(manager, null));
         addProblem(problems, "OPEN_RISKS", "Риски", openRisks, "CRITICAL", "ACTION", "warning", "/worker/risk");
         addProblem(problems, "REQUIRES_ATTENTION", "Требует внимания", requiresAttention, "CRITICAL", "ACTION", "error", ordersUrl(manager, "Требует внимания"));
+        addProblem(problems, "AUTOMATION_FAILURES", "Ошибки счетов и сообщений", automationFailureCount, "CRITICAL", "ACTION", "sync_problem", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "COMMON_INVOICES", "Общие счета", commonInvoiceActionCount, "CRITICAL", "ACTION", "receipt_long", "/admin/common-billing");
         addProblem(problems, "PAYMENT_INTEGRITY", "Повторная оплата", paymentIntegrityIssueCount, "CRITICAL", "ACTION", "payments", ordersUrl(manager, null));
         addProblem(problems, "PUBLICATION_DATE_ISSUES", "Публикация без даты", publicationDateIssueCount, "CRITICAL", "ACTION", "event_busy", ordersUrl(manager, "Публикация"));
         addProblem(problems, "CHAT_BINDING_ISSUES", "Привязка соцсетей", chatBindingIssueCount, "CRITICAL", "ACTION", "link_off", ordersUrl(manager, null));
         addProblem(problems, "TELEGRAM_CHAT_MIGRATION", "Telegram-группы", telegramChatIssueCount, "CRITICAL", "ACTION", "send", ordersUrl(manager, null));
         addProblem(problems, "UNANSWERED_CLIENT_MESSAGES", "Неотвеченные сообщения", unansweredClientMessages, "CRITICAL", "ACTION", "mark_chat_unread", "/admin/manager-control/" + manager.getId());
-        addProblem(problems, "SUSPICIOUS_CLIENT_CLOSURES", "Возможно закрыто без ответа", suspiciousClientClosures, "CRITICAL", "ACTION", "fact_check", "/admin/manager-control/" + manager.getId());
+        addProblem(problems, "SUSPICIOUS_CLIENT_CLOSURES", "Ответ требует проверки", suspiciousClientClosures, "CRITICAL", "ACTION", "fact_check", "/admin/manager-control/" + manager.getId());
         addProblem(problems, "LEADS", "Лиды требуют действия", leadActionCount, "WARNING", "ACTION", "person_search", "/leads");
         addProblem(problems, "ORDERS_WORKLOAD", "Рабочие заказы", orderAttention, "INFO", "WORKLOAD", "inventory_2", ordersUrl(manager, null));
         addProblem(problems, "LEADS_WORKLOAD", "Лиды в работе", leadsInWork, "INFO", "WORKLOAD", "groups", "/leads");
         addProblem(problems, "WORKER_WORKLOAD", "Нагрузка специалистов", workerWorkloadCount, "INFO", "WORKLOAD", "engineering", firstWorkerSectionUrl(workerCounts.sections(), "WORKLOAD", "new"));
 
         List<ManagerControlSectionResponse> sections = workerCounts.sections();
-        long criticalCount = overdueOrders + openRisks + requiresAttention + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount
+        long criticalCount = overdueOrders + openRisks + requiresAttention + automationFailureCount + commonInvoiceActionCount + paymentIntegrityIssueCount + publicationDateIssueCount + chatBindingIssueCount
                 + telegramChatIssueCount + unansweredClientMessages + suspiciousClientClosures + workerActionCount;
         long warningCount = leadActionCount;
         long workloadCount = orderAttention + workerWorkloadCount + leadsInWork;
@@ -2190,9 +2382,16 @@ public class ManagerControlService {
         var actionBalance = managerActionBalanceService.calculate(controlSync.items(), balanceConcreteItems);
         long actionCompletedCount = actionBalance.handledByManager();
         long actionTotalCount = actionBalance.total();
+        long actionFinishedCount = actionCompletedCount + actionBalance.autoClosed();
         int actionProgressPercent = actionTotalCount <= 0
                 ? 100
-                : (int) Math.max(0, Math.min(100, Math.round(actionCompletedCount * 100D / actionTotalCount)));
+                : (int) Math.max(0, Math.min(100, Math.round(actionFinishedCount * 100D / actionTotalCount)));
+        ManagerOperationalMetricsService.Metrics operational = includeOperationalMetrics
+                ? managerOperationalMetricsService.calculate(manager, today, LocalDateTime.now())
+                : null;
+        if (operational == null) {
+            operational = new ManagerOperationalMetricsService.Metrics(0, 0, 0, 0);
+        }
 
         return new ManagerControlManagerResponse(
                 manager.getId(),
@@ -2242,6 +2441,10 @@ public class ManagerControlService {
                 sections,
                 overdueStatuses,
                 workerExplanationStats,
+                operational.activeWorkSeconds(),
+                operational.averageDailyWorkSeconds(),
+                operational.averageReactionSeconds(),
+                operational.reactionCount(),
                 managerPerformance
         );
     }
@@ -2260,6 +2463,7 @@ public class ManagerControlService {
                 continue;
             }
             syncConcreteExamples(item, detailExamples(manager, item, today));
+            reopenParentItemIfConcreteOpen(item);
         }
     }
 
@@ -2790,6 +2994,9 @@ public class ManagerControlService {
         if ("REQUIRES_ATTENTION".equals(item.getReasonCode())) {
             return orderStatusExamples(manager, "Требует внимания", limit);
         }
+        if ("AUTOMATION_FAILURES".equals(item.getReasonCode())) {
+            return automationFailureExamples(manager, limit);
+        }
         if ("COMMON_INVOICES".equals(item.getReasonCode())) {
             return commonInvoiceExamples(manager, today, limit);
         }
@@ -2903,18 +3110,25 @@ public class ManagerControlService {
         if (parentItem == null) {
             return List.of();
         }
-        Map<String, ManagerDailyControlConcreteItem> existing = dailyControlConcreteItemRepository.findByParentItem(parentItem).stream()
+        Map<String, ManagerControlConcreteItemResponse> uniqueExamples = examples.stream()
+                .collect(Collectors.toMap(
+                        this::concreteEntityKey,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        Map<String, ManagerDailyControlConcreteItem> existing = dailyControlConcreteItemRepository
+                .findByParentItemForUpdate(parentItem).stream()
                 .collect(Collectors.toMap(ManagerDailyControlConcreteItem::getEntityKey, Function.identity(), (left, right) -> left));
-        Set<String> freshKeys = examples.stream()
-                .map(this::concreteEntityKey)
-                .collect(Collectors.toSet());
+        Set<String> freshKeys = uniqueExamples.keySet();
         resolveStaleConcreteItems(parentItem, existing, freshKeys);
-        if (examples.isEmpty()) {
+        if (uniqueExamples.isEmpty()) {
             return List.of();
         }
         List<ManagerControlConcreteItemResponse> synced = new ArrayList<>();
-        for (ManagerControlConcreteItemResponse example : examples) {
-            String key = concreteEntityKey(example);
+        for (Map.Entry<String, ManagerControlConcreteItemResponse> entry : uniqueExamples.entrySet()) {
+            String key = entry.getKey();
+            ManagerControlConcreteItemResponse example = entry.getValue();
             ManagerDailyControlConcreteItem concreteItem = existing.get(key);
             boolean created = false;
             if (concreteItem == null) {
@@ -2935,6 +3149,9 @@ public class ManagerControlService {
             if (reopenResolvedConcreteItemIfExpired(concreteItem)) {
                 changed = true;
             }
+            if (reopenActiveAutomationConcreteItem(concreteItem)) {
+                changed = true;
+            }
             if (isResolvedConcreteItemHiddenForToday(concreteItem)) {
                 if (created || changed) {
                     dailyControlConcreteItemRepository.save(concreteItem);
@@ -2950,6 +3167,7 @@ public class ManagerControlService {
             ManagerDailyControlConcreteItem saved = created || changed
                     ? dailyControlConcreteItemRepository.save(concreteItem)
                     : concreteItem;
+            existing.put(key, saved);
             synced.add(concreteItemResponse(
                     saved,
                     example.contactText(),
@@ -3120,6 +3338,17 @@ public class ManagerControlService {
         }
         LocalDateTime resolvedAt = concreteItem.getResolvedAt();
         if (resolvedAt == null || !resolvedAt.toLocalDate().isBefore(LocalDate.now())) {
+            return false;
+        }
+        reopenConcreteItem(concreteItem);
+        return true;
+    }
+
+    private boolean reopenActiveAutomationConcreteItem(ManagerDailyControlConcreteItem concreteItem) {
+        if (concreteItem == null
+                || concreteItem.getStatus() != ManagerDailyControlItemStatus.RESOLVED
+                || concreteItem.getParentItem() == null
+                || !"AUTOMATION_FAILURES".equals(concreteItem.getParentItem().getReasonCode())) {
             return false;
         }
         reopenConcreteItem(concreteItem);
@@ -3437,33 +3666,68 @@ public class ManagerControlService {
         dailyControlItemRepository.save(parentItem);
     }
 
+    private void reopenParentItemIfConcreteOpen(ManagerDailyControlItem parentItem) {
+        if (parentItem == null
+                || parentItem.getStatus() == ManagerDailyControlItemStatus.OPEN
+                || parentItem.getGroup() != ManagerDailyControlGroup.ACTION) {
+            return;
+        }
+        boolean hasOpenConcrete = dailyControlConcreteItemRepository.findByParentItem(parentItem).stream()
+                .anyMatch(item -> item.getStatus() == ManagerDailyControlItemStatus.OPEN);
+        if (!hasOpenConcrete) {
+            return;
+        }
+        parentItem.setStatus(ManagerDailyControlItemStatus.OPEN);
+        parentItem.setActionType(null);
+        parentItem.setComment(null);
+        parentItem.setResolvedAt(null);
+        parentItem.setAutomaticResolution(false);
+        dailyControlItemRepository.save(parentItem);
+    }
+
     private List<ManagerControlConcreteItemResponse> overdueOrderExamples(Manager manager, String status, LocalDate today, int limit) {
-        LocalDate cutoff = managerControlOrderCutoff(status, today);
         Set<Long> snoozedOrderIds = snoozedOrderIds(manager, today);
-        List<OrderDTOList> orders = orderService.getManagerControlOverdueOrdersByManager(
-                        manager,
-                        "",
-                        safe(status).isBlank() ? "Все" : status,
-                        cutoff,
-                        OVERDUE_IGNORED_STATUSES,
-                        COMMON_INVOICE_CONTROL_STATUSES,
-                        PAYMENT_AUTOMATION_STATUSES,
-                        PAYMENT_AUTOMATION_SCENARIOS,
-                        REVIEW_CHECK_AUTOMATION_STATUSES,
-                        REVIEW_CHECK_SCENARIOS,
-                        DELIVERY_RETRY_AUTOMATION_STATUSES,
-                        DELIVERY_RETRY_SCENARIOS,
-                        CLIENT_TEXT_AUTOMATION_STATUSES,
-                        CLIENT_TEXT_SCENARIOS,
-                        ScheduledMessageStateStatus.ACTIVE,
-                        ScheduledMessageStateStatus.DONE,
-                        0,
-                        limit,
-                        "desc"
-                ).getContent();
+        List<String> statuses = safe(status).isBlank() || "Все".equalsIgnoreCase(status)
+                ? overdueStatuses(manager, today).stream()
+                        .map(ManagerControlOverdueStatusResponse::status)
+                        .toList()
+                : List.of(status);
+        Map<Long, OrderDTOList> uniqueOrders = new LinkedHashMap<>();
+        for (String currentStatus : statuses) {
+            if (uniqueOrders.size() >= limit) {
+                break;
+            }
+            int remaining = Math.max(1, limit - uniqueOrders.size());
+            LocalDate cutoff = managerControlOrderCutoff(currentStatus, today);
+            orderService.getManagerControlOverdueOrdersByManager(
+                            manager,
+                            "",
+                            currentStatus,
+                            cutoff,
+                            OVERDUE_IGNORED_STATUSES,
+                            COMMON_INVOICE_CONTROL_STATUSES,
+                            PAYMENT_AUTOMATION_STATUSES,
+                            PAYMENT_AUTOMATION_SCENARIOS,
+                            REVIEW_CHECK_AUTOMATION_STATUSES,
+                            REVIEW_CHECK_SCENARIOS,
+                            DELIVERY_RETRY_AUTOMATION_STATUSES,
+                            DELIVERY_RETRY_SCENARIOS,
+                            CLIENT_TEXT_AUTOMATION_STATUSES,
+                            CLIENT_TEXT_SCENARIOS,
+                            ScheduledMessageStateStatus.ACTIVE,
+                            ScheduledMessageStateStatus.DONE,
+                            0,
+                            remaining,
+                            "desc"
+                    ).getContent().stream()
+                    .filter(order -> order.getId() != null)
+                    .forEach(order -> uniqueOrders.putIfAbsent(order.getId(), order));
+        }
+        List<OrderDTOList> orders = new ArrayList<>(uniqueOrders.values());
         clientMessageOrderStatusService.enrichOrderList(orders);
         return orders.stream()
                 .filter(order -> order.getId() == null || !snoozedOrderIds.contains(order.getId()))
+                .filter(order -> !hasHealthyActiveClientMessageQueue(order))
                 .map(order -> orderExample(order, today, orderManagerReason(order, today), manager))
                 .limit(limit)
                 .toList();
@@ -3480,6 +3744,7 @@ public class ManagerControlService {
                 ).getContent();
         clientMessageOrderStatusService.enrichOrderList(orders);
         return orders.stream()
+                .filter(order -> !hasHealthyActiveClientMessageQueue(order))
                 .map(order -> orderExample(order, LocalDate.now(), orderManagerReason(order, LocalDate.now()), manager))
                 .toList();
     }
@@ -3569,7 +3834,7 @@ public class ManagerControlService {
     private String orderManagerReason(OrderDTOList order, LocalDate today) {
         String status = safe(order == null ? null : order.getStatus());
         long days = order == null || order.getChanged() == null ? 0 : daysSince(order.getChanged(), today);
-        String age = days > 0 ? days + " дн." : "сегодня";
+        String age = days > 0 ? days + " дн" : "сегодня";
         String controlReason = orderControlReason(order);
         return switch (status) {
             case "На проверке" -> "Клиент не проверил шаблоны " + age
@@ -3609,8 +3874,8 @@ public class ManagerControlService {
                 String nextAttempt = clientMessageStatus.nextAttemptAt() == null
                         ? "в ближайший разрешённый слот"
                         : clientMessageStatus.nextAttemptAt().toString();
-                return "Почему в контроле: очередь автоответчика исправна и ожидает ограничения отправки. "
-                        + "Следующий слот отправки: " + nextAttempt + ".";
+                return "Сообщение уже запланировано. Система отправит его автоматически: "
+                        + nextAttempt + ".";
             }
             if (!error.isBlank()) {
                 return clientMessageControlErrorReason(error);
@@ -3639,6 +3904,20 @@ public class ManagerControlService {
             return "Почему в контроле: клиентский текст ожидается, но нет активного или успешного автозапроса.";
         }
         return "Почему в контроле: заказ просрочен, автоматическое действие не найдено или не применимо.";
+    }
+
+    private boolean hasHealthyActiveClientMessageQueue(OrderDTOList order) {
+        if (order == null || order.getClientMessageStatus() == null) {
+            return false;
+        }
+        var status = order.getClientMessageStatus();
+        if (!"scheduled".equalsIgnoreCase(safe(status.state()))
+                || status.nextAttemptAt() == null
+                || status.consecutiveFailures() > 0) {
+            return false;
+        }
+        String errorCode = safe(status.errorCode()).toLowerCase(Locale.ROOT);
+        return errorCode.isBlank() || "rate_limited".equals(errorCode);
     }
 
     private String clientMessageControlErrorReason(String error) {
@@ -5140,13 +5419,35 @@ public class ManagerControlService {
                 || "RECOVERY_TASK_COMPLETE".equals(incident.getAction());
     }
 
+    private long commonInvoiceActionCount(Manager manager, Set<Long> excludedInvoiceIds) {
+        if (excludedInvoiceIds == null || excludedInvoiceIds.isEmpty()) {
+            return commonInvoiceActionCount(manager);
+        }
+        return managerControlInvoices(manager).stream()
+                .filter(invoice -> !excludedInvoiceIds.contains(invoice.getId()))
+                .count();
+    }
+
     private long commonInvoiceActionCount(Manager manager) {
         return commonInvoiceRepository.countManagerControlInvoices(
                 manager,
                 COMMON_INVOICE_CRITICAL_STATUSES,
-                COMMON_INVOICE_STALE_STATUSES,
+                effectiveCommonInvoiceStaleStatuses(),
                 CommonInvoiceStatus.PARTIALLY_PAID,
+                CommonInvoiceStatus.COLLECTING,
                 LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS)
+        );
+    }
+
+    private List<CommonInvoice> managerControlInvoices(Manager manager) {
+        return commonInvoiceRepository.findManagerControlInvoices(
+                manager,
+                COMMON_INVOICE_CRITICAL_STATUSES,
+                effectiveCommonInvoiceStaleStatuses(),
+                CommonInvoiceStatus.PARTIALLY_PAID,
+                CommonInvoiceStatus.COLLECTING,
+                LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
+                PageRequest.of(0, 10_000)
         );
     }
 
@@ -5165,6 +5466,24 @@ public class ManagerControlService {
                 "Общий счет все еще требует внимания: статус «"
                         + commonInvoiceStatusLabel(invoice.getStatus())
                         + "». Обновите счет в правой панели или используйте «Починить», если кнопка доступна."
+        );
+    }
+
+    private void requireAutomationFailureResolved(ManagerDailyControlConcreteItem concreteItem) {
+        Manager manager = concreteItem == null
+                || concreteItem.getControl() == null
+                ? null
+                : concreteItem.getControl().getManager();
+        if (!managerAutomationFailureService.isStillActionable(
+                manager,
+                concreteItem == null ? null : concreteItem.getEntityType(),
+                concreteItem == null ? null : concreteItem.getEntityId()
+        )) {
+            return;
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Ошибка автоматизации все еще активна. Устраните причину и дождитесь успешной отправки или следующей синхронизации."
         );
     }
 
@@ -5212,12 +5531,13 @@ public class ManagerControlService {
         }
         LocalDateTime updatedAt = invoice.getUpdatedAt();
         LocalDateTime staleBefore = (now == null ? LocalDateTime.now() : now).minusDays(COMMON_INVOICE_STALE_DAYS);
-        if (!COMMON_INVOICE_STALE_STATUSES.contains(status)
+        if (!effectiveCommonInvoiceStaleStatuses().contains(status)
                 || updatedAt == null
                 || updatedAt.isAfter(staleBefore)) {
             return false;
         }
-        if (status != CommonInvoiceStatus.PARTIALLY_PAID) {
+        if (status != CommonInvoiceStatus.PARTIALLY_PAID
+                && status != CommonInvoiceStatus.COLLECTING) {
             return true;
         }
         return commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId()).stream()
@@ -5366,15 +5686,51 @@ public class ManagerControlService {
     }
 
     private List<ManagerControlConcreteItemResponse> commonInvoiceExamples(Manager manager, LocalDate today, int limit) {
-        return commonInvoiceRepository.findManagerControlInvoices(
-                        manager,
-                        COMMON_INVOICE_CRITICAL_STATUSES,
-                        COMMON_INVOICE_STALE_STATUSES,
-                        CommonInvoiceStatus.PARTIALLY_PAID,
-                        LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
-                        PageRequest.of(0, limit)
-                ).stream()
+        Set<Long> excludedInvoiceIds = managerAutomationFailureService.representedCommonInvoiceIds(manager);
+        return managerControlInvoices(manager).stream()
+                .filter(invoice -> !excludedInvoiceIds.contains(invoice.getId()))
+                .limit(limit)
                 .map(invoice -> commonInvoiceExample(invoice, today))
+                .toList();
+    }
+
+    private Set<CommonInvoiceStatus> effectiveCommonInvoiceStaleStatuses() {
+        if (appSettingService.getBoolean(AppSettingService.MANAGER_CONTROL_COLLECTING_STALE_ENABLED, true)) {
+            return COMMON_INVOICE_STALE_STATUSES;
+        }
+        return Set.of(
+                CommonInvoiceStatus.READY,
+                CommonInvoiceStatus.INVOICED,
+                CommonInvoiceStatus.REMINDER,
+                CommonInvoiceStatus.PARTIALLY_PAID
+        );
+    }
+
+    private List<ManagerControlConcreteItemResponse> automationFailureExamples(Manager manager, int limit) {
+        return managerAutomationFailureService.issues(manager, limit).stream()
+                .map(issue -> new ManagerControlConcreteItemResponse(
+                        null,
+                        issue.entityType(),
+                        issue.entityId(),
+                        issue.title(),
+                        issue.subtitle(),
+                        issue.status(),
+                        issue.firstObservedAt() == null
+                                ? null
+                                : Math.max(0, ChronoUnit.DAYS.between(issue.firstObservedAt().toLocalDate(), LocalDate.now())),
+                        issue.reason(),
+                        issue.targetUrl(),
+                        null,
+                        issue.chatUrl(),
+                        null,
+                        null,
+                        ManagerDailyControlItemStatus.OPEN.name(),
+                        null,
+                        null,
+                        issue.lastAttemptAt(),
+                        null,
+                        null
+                ).withSla(issue.firstObservedAt(), null, null, null))
                 .toList();
     }
 
@@ -5436,8 +5792,26 @@ public class ManagerControlService {
             return "Счет в бане. Рекомендация: проверьте причину блокировки в карточке счета.";
         }
         long ageDays = invoice.getUpdatedAt() == null ? 0 : daysSince(invoice.getUpdatedAt().toLocalDate(), today);
+        if (status == CommonInvoiceStatus.COLLECTING) {
+            List<CommonInvoiceOrder> items = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+            long ready = items.stream().filter(CommonInvoiceOrder::isReady).count();
+            String waitingStatuses = items.stream()
+                    .filter(item -> !item.isReady())
+                    .map(CommonInvoiceOrder::getOrder)
+                    .filter(Objects::nonNull)
+                    .map(this::orderStatusTitle)
+                    .filter(value -> !value.isBlank())
+                    .distinct()
+                    .limit(4)
+                    .collect(Collectors.joining(", "));
+            return "Почему в замечаниях: общий счет уже " + ageDays
+                    + " дн. находится в «Сборе» и еще не выставлен клиенту. Готово заказов: "
+                    + ready + "/" + items.size()
+                    + (waitingStatuses.isBlank() ? "" : "; не готовы статусы: " + waitingStatuses)
+                    + ". Нажмите «Починить»: система пересчитает позиции и отправит счет, если все заказы действительно готовы.";
+        }
         return "Счет завис в статусе «" + commonInvoiceStatusLabel(status) + "» " + ageDays
-                + " дн. Рекомендация: откройте «Счет» и проверьте следующий шаг оплаты.";
+                + " дн. Нажмите «Починить»: система проверит текущий шаг и выполнит безопасное продолжение.";
     }
 
     private String commonInvoiceLastErrorReason(CommonInvoice invoice, String rawError) {
@@ -5637,7 +6011,7 @@ public class ManagerControlService {
                 ENTITY_CLIENT_CHAT_AUDIT,
                 example.id(),
                 companyTitle,
-                platformLabel(example.platform()) + " · перепроверьте закрытие",
+                platformLabel(example.platform()) + " · проверьте полноту ответа",
                 "Нужен аудит",
                 Math.max(0, example.waitingMinutes() / (60L * 24L)),
                 sender + ": " + compact(example.lastMessageText(), 300)
@@ -5714,6 +6088,7 @@ public class ManagerControlService {
             case PAID -> "Оплачен";
             case UNPAID -> "Не оплачен";
             case BAN -> "Бан";
+            case ARCHIVED -> "Архив";
             case DISABLED -> "Отключен";
         };
     }

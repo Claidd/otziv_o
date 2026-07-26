@@ -27,11 +27,45 @@ public interface ClientChatMessageRepository extends JpaRepository<ClientChatMes
             LocalDateTime to
     );
 
+    @Query("""
+        SELECT message
+        FROM ClientChatMessage message
+        WHERE message.actorUser.id = (
+            SELECT managerUser.id
+            FROM Manager manager
+            JOIN manager.user managerUser
+            WHERE manager.id = :managerId
+        )
+          AND message.messageAt >= :from
+          AND message.messageAt < :to
+        ORDER BY message.messageAt ASC, message.id ASC
+    """)
+    List<ClientChatMessage> findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+            @Param("managerId") Long managerId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
+    List<ClientChatMessage> findByPlatformAndChatIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+            ClientChatPlatform platform,
+            String chatId,
+            LocalDateTime from,
+            LocalDateTime to
+    );
+
     Optional<ClientChatMessage> findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtAfterOrderByMessageAtAscIdAsc(
             ClientChatPlatform platform,
             String chatId,
             ClientChatSenderRole senderRole,
             LocalDateTime messageAt
+    );
+
+    Optional<ClientChatMessage> findFirstByPlatformAndChatIdAndSenderRoleAndMessageAtBetweenOrderByMessageAtAscIdAsc(
+            ClientChatPlatform platform,
+            String chatId,
+            ClientChatSenderRole senderRole,
+            LocalDateTime from,
+            LocalDateTime to
     );
 
     @Modifying

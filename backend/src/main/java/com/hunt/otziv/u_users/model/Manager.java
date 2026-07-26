@@ -52,6 +52,13 @@ public class Manager {
     @Column(name = "group_id")
     private String groupId;
 
+    // Внутренняя Telegram-группа менеджера и владельца для ежедневного аудита
+    @Column(name = "audit_telegram_group_url", length = 500)
+    private String auditTelegramGroupUrl;
+
+    @Column(name = "audit_telegram_group_chat_id", unique = true)
+    private Long auditTelegramGroupChatId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_profile_id")
     private PaymentProfile paymentProfile;

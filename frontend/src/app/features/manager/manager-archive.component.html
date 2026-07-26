@@ -58,6 +58,69 @@
       />
     }
 
+    <section class="common-invoice-archive" aria-label="Архив общих счетов">
+      <header>
+        <div>
+          <strong>Общие счета</strong>
+          <span>{{ commonInvoiceArchiveTotal() }} закрытых групп</span>
+        </div>
+        @if (commonInvoiceLoading()) {
+          <span>Загрузка...</span>
+        }
+      </header>
+
+      <div class="common-invoice-grid">
+        @for (invoice of commonInvoiceArchives(); track trackCommonInvoice($index, invoice)) {
+          <article class="common-invoice-card" [class.common-invoice-card--ban]="invoice.status === 'BAN'">
+            <div class="common-invoice-card__head">
+              <strong>{{ invoice.accountName || invoice.title }}</strong>
+              <small>#{{ invoice.id }}</small>
+            </div>
+            <div class="meta-row">
+              <span>{{ commonInvoiceStatus(invoice) }}</span>
+              <span>{{ invoice.source === 'archive' ? 'archive_*' : 'live' }}</span>
+            </div>
+            <div class="common-invoice-card__amount">
+              <span>{{ invoice.orderCount }} заказов</span>
+              <strong>{{ commonInvoiceRemaining(invoice) | number:'1.0-0' }} руб.</strong>
+            </div>
+            <small>
+              Закрыт: {{ invoice.closedAt ? (invoice.closedAt | date:'dd.MM.yyyy HH:mm') : '—' }}
+            </small>
+
+            @if (commonInvoiceDetails()?.invoice?.id === invoice.id) {
+              <div class="common-invoice-orders">
+                @for (order of commonInvoiceDetails()?.orders ?? []; track order.orderId) {
+                  <div>
+                    <span>#{{ order.orderId }} · {{ order.companyTitle }}</span>
+                    <small>{{ order.status }}</small>
+                  </div>
+                }
+              </div>
+            }
+
+            <div class="common-invoice-card__actions">
+              <button type="button" (click)="toggleCommonInvoice(invoice)" [disabled]="commonInvoiceMutationId() === invoice.id">
+                {{ commonInvoiceDetails()?.invoice?.id === invoice.id ? 'Скрыть' : 'Состав' }}
+              </button>
+              @if (invoice.restorable) {
+                <button
+                  type="button"
+                  class="restore-button"
+                  (click)="restoreCommonInvoice(invoice)"
+                  [disabled]="!!commonInvoiceMutationId()"
+                >
+                  Восстановить
+                </button>
+              }
+            </div>
+          </article>
+        } @empty {
+          <p class="common-invoice-empty">Закрытых общих счетов нет.</p>
+        }
+      </div>
+    </section>
+
     <section class="archive-summary">
       <strong>{{ ordersPage().totalElements }}</strong>
       <span>закрытых заказов</span>

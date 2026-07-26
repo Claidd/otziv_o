@@ -552,6 +552,92 @@ button .material-icons-sharp {
   opacity: 0.72;
 }
 
+.paid-history,
+.next-cycle {
+  order: 2;
+  min-width: 0;
+  border: 1px solid #e2e7ee;
+  border-radius: 0.65rem;
+  background: #fbfcfd;
+}
+
+.paid-history summary,
+.next-cycle > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.8rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.paid-history summary strong {
+  display: grid;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border-radius: 999px;
+  color: #238655;
+  background: #e7f8ef;
+}
+
+.paid-history-list,
+.next-cycle > div {
+  display: grid;
+  gap: 0.42rem;
+  border-top: 1px solid #e8ecf1;
+  padding: 0.55rem;
+}
+
+.paid-history-list article,
+.next-cycle article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, auto) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 0.48rem;
+  padding: 0.58rem 0.65rem;
+  background: #fff;
+}
+
+.paid-history-list strong,
+.next-cycle strong {
+  color: var(--otziv-text, #1f2430);
+  font-size: 0.76rem;
+}
+
+.paid-history-list small,
+.next-cycle small,
+.payment-evidence small {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--otziv-muted, #77808d);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.payment-evidence a,
+.next-cycle a {
+  color: #2f7fdf;
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.next-cycle {
+  order: 3;
+  border-color: rgba(47, 127, 223, 0.24);
+  background: #f5f9ff;
+}
+
+.next-cycle > header {
+  cursor: default;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .invoice-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -914,8 +1000,14 @@ button .material-icons-sharp {
   }
 
   .linked-company-list article,
-  .invoice-orders article {
+  .invoice-orders article,
+  .paid-history-list article,
+  .next-cycle article {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .payment-evidence {
+    grid-column: 1 / -1;
   }
 
   .invoice-order-cards {

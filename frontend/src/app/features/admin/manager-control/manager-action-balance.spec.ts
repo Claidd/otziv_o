@@ -20,6 +20,7 @@ describe('managerActionBalanceView', () => {
     } as ManagerControlManager);
 
     expect(balance.total).toBe(balance.handled + balance.autoClosed + balance.remaining);
+    expect(balance.completed).toBe(85);
     expect(balance.handled).toBe(balance.resolved + balance.actionTaken + balance.deferred + balance.acknowledged);
     expect(balance.remaining).toBe(balance.overdue + balance.risks + balance.unanswered + balance.other);
     expect(balance.consistent).toBe(true);
@@ -33,5 +34,17 @@ describe('managerActionBalanceView', () => {
     } as ManagerControlManager);
 
     expect(balance.remaining).toBe(26);
+  });
+
+  it('counts automatically closed actions as completed progress', () => {
+    const balance = managerActionBalanceView({
+      actionTotalCount: 123,
+      actionCompletedCount: 118,
+      actionAutoClosedCount: 5,
+      actionRemainingCount: 0
+    } as ManagerControlManager);
+
+    expect(balance.completed).toBe(123);
+    expect(Math.round(balance.completed * 100 / balance.total)).toBe(100);
   });
 });

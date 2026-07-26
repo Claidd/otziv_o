@@ -16,6 +16,10 @@ public record CommonInvoiceOrderResponse(
         boolean paid,
         boolean unpaid,
         boolean detachable,
-        LocalDateTime paidAt
+        LocalDateTime paidAt,
+        String paymentMethod,
+        String paidBy,
+        String paymentComment,
+        String paymentReceiptUrl
 ) {
 }

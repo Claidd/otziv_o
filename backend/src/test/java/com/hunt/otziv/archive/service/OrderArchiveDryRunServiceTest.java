@@ -59,8 +59,8 @@ class OrderArchiveDryRunServiceTest {
         ArchiveCandidateCounts counts = new ArchiveCandidateCounts(10, 12, 18, 2, 1, 20, 9);
         when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(42L);
-        when(repository.countSelected(cutoffDate, 200)).thenReturn(counts);
-        when(repository.countMissingClosedAnalyticsMonths(cutoffDate, 200, LocalDate.of(2026, 5, 1))).thenReturn(1L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1))).thenReturn(1L);
         when(repository.insertDryRunBatch(
                 any(LocalDateTime.class),
                 any(LocalDateTime.class),
@@ -97,8 +97,8 @@ class OrderArchiveDryRunServiceTest {
         LocalDate cutoffDate = LocalDate.of(2026, 3, 26);
         when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(0L);
-        when(repository.countSelected(cutoffDate, 300)).thenReturn(counts);
-        when(repository.countMissingClosedAnalyticsMonths(cutoffDate, 300, LocalDate.of(2026, 5, 1))).thenReturn(0L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1))).thenReturn(0L);
         when(repository.insertDryRunBatch(
                 any(LocalDateTime.class),
                 any(LocalDateTime.class),
@@ -134,9 +134,9 @@ class OrderArchiveDryRunServiceTest {
         ArchiveCandidateCounts counts = new ArchiveCandidateCounts(4, 5, 6, 0, 0, 2, 1);
         LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(12L);
-        when(repository.countSelected(cutoffDate, 100)).thenReturn(counts);
-        when(repository.countMissingClosedAnalyticsMonths(cutoffDate, 100, LocalDate.of(2026, 5, 1))).thenReturn(0L);
-        when(repository.findCandidateOrders(cutoffDate, 100, 8)).thenReturn(List.of());
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1))).thenReturn(0L);
+        when(repository.findPreparedCandidateOrders(8)).thenReturn(List.of());
 
         ArchiveCandidatesPreview preview = service.previewCandidates(null, 100, null);
 
@@ -145,7 +145,7 @@ class OrderArchiveDryRunServiceTest {
         assertEquals(100, preview.batchLimit());
         assertEquals(12L, preview.eligibleOrders());
         assertEquals(counts, preview.selected());
-        verify(repository).findCandidateOrders(cutoffDate, 100, 8);
+        verify(repository).findPreparedCandidateOrders(8);
     }
 
     @Test

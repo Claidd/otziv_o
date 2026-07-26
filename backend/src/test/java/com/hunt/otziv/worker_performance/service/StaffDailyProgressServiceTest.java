@@ -35,6 +35,28 @@ class StaffDailyProgressServiceTest {
     );
 
     @Test
+    void averageDailyActivityIncludesCalendarDaysWithoutActions() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of(
+                Map.of("worker_id", 7L, "active_work_seconds", 7_200L)
+        ));
+        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings);
+
+        Map<Long, Long> averages = localService.averageDailyActiveWorkSecondsByWorkerIds(
+                List.of(7L),
+                LocalDate.of(2026, 7, 4)
+        );
+
+        assertEquals(1_800L, averages.get(7L));
+        ArgumentCaptor<MapSqlParameterSource> params = ArgumentCaptor.forClass(MapSqlParameterSource.class);
+        verify(localJdbc).queryForList(anyString(), params.capture());
+        assertEquals(LocalDate.of(2026, 7, 1), params.getValue().getValue("from"));
+        assertEquals(LocalDate.of(2026, 7, 5), params.getValue().getValue("to"));
+    }
+
+    @Test
     void endOfDayGraceHourUsesActualQueueAppearanceTime() {
         LocalDate date = LocalDate.of(2026, 7, 17);
         LocalDateTime cutoff = date.atTime(23, 0);

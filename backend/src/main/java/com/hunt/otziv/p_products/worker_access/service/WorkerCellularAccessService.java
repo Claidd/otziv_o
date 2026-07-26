@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.worker_access.service;
 import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,23 +30,24 @@ public class WorkerCellularAccessService {
     private static final String REASON_DESKTOP = "DESKTOP_OR_UNKNOWN_DEVICE";
     private static final String REASON_UNKNOWN = "UNKNOWN_NETWORK";
     private static final Set<String> ELEVATED_ROLES = Set.of("ROLE_ADMIN", "ROLE_OWNER", "ROLE_MANAGER");
-    private static final String DENIED_MESSAGE =
-            "Этот подраздел доступен специалистам только с мобильного телефона через мобильный интернет. "
-                    + "Отключите Wi-Fi и VPN, затем повторите попытку.";
 
     private final WorkerCellularAccessProperties properties;
     private final IpCidrMatcher cidrMatcher;
     private final WorkerIpIntelligenceClient ipIntelligenceClient;
     private final WorkerNetworkViolationService networkViolationService;
+    private final WorkerCellularAccessRuntimeSettingsService runtimeSettingsService;
 
+    @Autowired
     public WorkerCellularAccessService(
             WorkerCellularAccessProperties properties,
             WorkerIpIntelligenceClient ipIntelligenceClient,
-            WorkerNetworkViolationService networkViolationService
+            WorkerNetworkViolationService networkViolationService,
+            WorkerCellularAccessRuntimeSettingsService runtimeSettingsService
     ) {
         this.properties = properties;
         this.ipIntelligenceClient = ipIntelligenceClient;
         this.networkViolationService = networkViolationService;
+        this.runtimeSettingsService = runtimeSettingsService;
         this.cidrMatcher = new IpCidrMatcher(properties.getAllowedCidrs());
         if (properties.getMode() != WorkerCellularAccessProperties.Mode.OFF
                 && cidrMatcher.isEmpty()
@@ -63,7 +65,8 @@ public class WorkerCellularAccessService {
     }
 
     public void enforceProtectedAccess(String scope) {
-        WorkerCellularAccessProperties.Mode mode = properties.getMode();
+        WorkerCellularAccessRuntimeSettingsService.AccessPolicy policy = accessPolicy();
+        WorkerCellularAccessProperties.Mode mode = policy.mode();
         if (mode == WorkerCellularAccessProperties.Mode.OFF) {
             return;
         }
@@ -84,7 +87,7 @@ public class WorkerCellularAccessService {
         boolean allowed = REASON_ALLOWED.equals(reason);
         boolean blocked = !allowed
                 && mode == WorkerCellularAccessProperties.Mode.ENFORCE
-                && shouldEnforce(reason, telemetry);
+                && shouldEnforce(reason, telemetry, policy);
 
         log.info(
                 "Worker cellular access: user={}, scope={}, mode={}, result={}, reason={}, mobileDevice={}, cidrMatch={}, "
@@ -118,8 +121,35 @@ public class WorkerCellularAccessService {
         }
 
         if (blocked) {
-            throw new ResponseStatusException(FORBIDDEN, DENIED_MESSAGE);
+            throw new ResponseStatusException(FORBIDDEN, deniedMessage(reason));
         }
+    }
+
+    WorkerCellularAccessService(
+            WorkerCellularAccessProperties properties,
+            WorkerIpIntelligenceClient ipIntelligenceClient,
+            WorkerNetworkViolationService networkViolationService
+    ) {
+        this(properties, ipIntelligenceClient, networkViolationService, null);
+    }
+
+    private String deniedMessage(String reason) {
+        return switch (reason) {
+            case REASON_NON_CELLULAR ->
+                    "Доступ заблокирован: обнаружена домашняя сеть или Wi-Fi. "
+                            + "Отключите Wi-Fi, включите мобильный интернет и повторите действие.";
+            case REASON_VPN ->
+                    "Доступ заблокирован: обнаружен VPN, прокси, Tor или сеть дата-центра. "
+                            + "Отключите VPN или прокси и повторите действие через мобильный интернет.";
+            case REASON_DESKTOP ->
+                    "Доступ заблокирован: обнаружен компьютер или неподдерживаемое устройство. "
+                            + "Откройте сайт на телефоне в обычном мобильном браузере.";
+            case REASON_UNKNOWN ->
+                    "Доступ заблокирован: не удалось подтвердить мобильную сеть. "
+                            + "Отключите Wi-Fi и VPN, включите мобильный интернет и повторите действие.";
+            default ->
+                    "Этот подраздел доступен специалистам только с мобильного телефона через мобильный интернет.";
+        };
     }
 
     private boolean mobileDevice(HttpServletRequest request, ClientTelemetry telemetry) {
@@ -159,13 +189,17 @@ public class WorkerCellularAccessService {
         return REASON_ALLOWED;
     }
 
-    private boolean shouldEnforce(String reason, ClientTelemetry telemetry) {
+    private boolean shouldEnforce(
+            String reason,
+            ClientTelemetry telemetry,
+            WorkerCellularAccessRuntimeSettingsService.AccessPolicy policy
+    ) {
         if (REASON_DESKTOP.equals(reason)
                 && telemetry.virtualDevice()
-                && properties.isEnforceNativeVirtualDevice()) {
+                && policy.enforceNativeVirtualDevice()) {
             return true;
         }
-        Set<String> configured = properties.getEnforcedReasons();
+        Set<String> configured = policy.enforcedReasons();
         if (configured == null || configured.isEmpty()) {
             return false;
         }
@@ -174,6 +208,17 @@ public class WorkerCellularAccessService {
                 .filter(java.util.Objects::nonNull)
                 .map(value -> value.trim().toUpperCase(Locale.ROOT))
                 .anyMatch(normalizedReason::equals);
+    }
+
+    private WorkerCellularAccessRuntimeSettingsService.AccessPolicy accessPolicy() {
+        if (runtimeSettingsService != null) {
+            return runtimeSettingsService.currentPolicy();
+        }
+        return new WorkerCellularAccessRuntimeSettingsService.AccessPolicy(
+                properties.getMode(),
+                properties.getEnforcedReasons(),
+                properties.isEnforceNativeVirtualDevice()
+        );
     }
 
     private boolean isWorkerOnly(Authentication authentication) {

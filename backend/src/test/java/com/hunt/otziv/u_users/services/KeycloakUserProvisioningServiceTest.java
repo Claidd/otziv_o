@@ -5,6 +5,7 @@ import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ImageRepository;
 import com.hunt.otziv.u_users.repository.RoleRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
@@ -115,6 +116,38 @@ class KeycloakUserProvisioningServiceTest {
         assertEquals("Новое имя", user.getFio());
         verify(keycloakAdminClient, never()).updateUser(anyString(), anyString(), any());
         verify(userRepository).flush();
+    }
+
+    @Test
+    void changingManagerAuditGroupUrlResetsChatIdAndReturnsInviteUrl() {
+        Role managerRole = role("ROLE_MANAGER");
+        User user = User.builder()
+                .id(17L)
+                .username("lika")
+                .active(true)
+                .roles(new HashSet<>(Set.of(managerRole)))
+                .build();
+        Manager manager = Manager.builder()
+                .id(9L)
+                .user(user)
+                .auditTelegramGroupUrl("https://t.me/old_group")
+                .auditTelegramGroupChatId(-100111L)
+                .build();
+        UpdateKeycloakUserRequest request = updateRequest("lika", true, "MANAGER");
+        request.setManagerAuditChatUrl("https://t.me/new_group");
+        when(userRepository.findById(17L)).thenReturn(Optional.of(user));
+        when(roleRepository.findByName("ROLE_MANAGER")).thenReturn(Optional.of(managerRole));
+        when(managerService.getManagerByUserId(17L)).thenReturn(manager);
+        when(telegramGroupLinkService.buildManagerAuditInviteUrl(manager))
+                .thenReturn("https://t.me/O_Company_Bot?startgroup=m9_signed");
+
+        var response = service.updateUser(17L, request);
+
+        assertEquals("https://t.me/new_group", manager.getAuditTelegramGroupUrl());
+        assertEquals(null, manager.getAuditTelegramGroupChatId());
+        assertEquals("https://t.me/O_Company_Bot?startgroup=m9_signed",
+                response.managerAuditTelegramBotInviteUrl());
+        verify(managerService).save(manager);
     }
 
     @Test

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -60,6 +61,9 @@ public class ClientChatParticipantClassifier {
         if (platform == ClientChatPlatform.TELEGRAM && isAnonymousTelegramAdmin(senderExternalId, senderName)) {
             return ClientChatSenderRole.STAFF;
         }
+        if (isKnownGlobalControlStaffName(senderName)) {
+            return ClientChatSenderRole.STAFF;
+        }
         return switch (platform) {
             case TELEGRAM -> isKnownTelegramUser(senderExternalId) || isKnownCompanyStaffName(senderName, company)
                     ? ClientChatSenderRole.STAFF
@@ -73,6 +77,37 @@ public class ClientChatParticipantClassifier {
         };
     }
 
+    public Optional<User> resolveStaffUser(
+            ClientChatPlatform platform,
+            String chatId,
+            String senderExternalId,
+            String senderName,
+            Company company
+    ) {
+        if (platform == null) {
+            return Optional.empty();
+        }
+        Optional<User> linkedUser = identityService
+                .knownUser(platform, chatId, senderExternalId, senderName)
+                .filter(User::isActive);
+        if (linkedUser.isPresent()) {
+            return linkedUser;
+        }
+        if (platform == ClientChatPlatform.TELEGRAM) {
+            Optional<User> telegramUser = telegramUser(senderExternalId);
+            if (telegramUser.isPresent()) {
+                return telegramUser;
+            }
+        }
+        if (platform == ClientChatPlatform.WHATSAPP) {
+            Optional<User> phoneUser = phoneUser(senderExternalId);
+            if (phoneUser.isPresent()) {
+                return phoneUser;
+            }
+        }
+        return namedStaffUser(senderName, company);
+    }
+
     private boolean isAnonymousTelegramAdmin(String senderExternalId, String senderName) {
         String external = senderExternalId == null ? "" : senderExternalId.trim();
         String normalized = normalizedName(senderName);
@@ -80,27 +115,53 @@ public class ClientChatParticipantClassifier {
     }
 
     private boolean isKnownTelegramUser(String senderExternalId) {
+        return telegramUser(senderExternalId).isPresent();
+    }
+
+    private Optional<User> telegramUser(String senderExternalId) {
         if (senderExternalId == null || senderExternalId.isBlank()) {
-            return false;
+            return Optional.empty();
         }
         try {
-            return userRepository.findByTelegramChatId(Long.parseLong(senderExternalId.trim())).isPresent();
+            return userRepository.findByTelegramChatId(Long.parseLong(senderExternalId.trim()))
+                    .filter(User::isActive);
         } catch (NumberFormatException ignored) {
-            return false;
+            return Optional.empty();
         }
     }
 
     private boolean isKnownPhone(String senderExternalId) {
+        return phoneUser(senderExternalId).isPresent();
+    }
+
+    private Optional<User> phoneUser(String senderExternalId) {
         String senderPhone = digits(senderExternalId);
         if (senderPhone.length() < 7) {
+            return Optional.empty();
+        }
+        return uniqueUser(userRepository.findAllActiveUsersWithPhoneNumbers().stream()
+                .filter(Objects::nonNull)
+                .filter(user -> {
+                    String phone = digits(user.getPhoneNumber());
+                    return phone.length() >= 7
+                            && (phone.endsWith(senderPhone) || senderPhone.endsWith(phone));
+                })
+                .toList());
+    }
+
+    private boolean isKnownGlobalControlStaffName(String senderName) {
+        String sender = normalizedName(senderName);
+        if (sender.isBlank()) {
             return false;
         }
-        List<User> users = userRepository.findAllActiveUsersWithPhoneNumbers();
-        return users.stream()
-                .map(User::getPhoneNumber)
-                .map(ClientChatParticipantClassifier::digits)
-                .filter(phone -> phone.length() >= 7)
-                .anyMatch(phone -> phone.endsWith(senderPhone) || senderPhone.endsWith(phone));
+        List<User> staff = userRepository.findAllActiveManagerControlStaff();
+        for (User user : staff) {
+            if (matchesFullName(sender, normalizedName(user == null ? null : user.getFio()))
+                    || matchesFullName(sender, normalizedName(user == null ? null : user.getUsername()))) {
+                return true;
+            }
+        }
+        return matchesConfiguredStaffAlias(sender, staff);
     }
 
     private boolean isKnownCompanyStaffName(String senderName, Company company) {
@@ -129,6 +190,83 @@ public class ClientChatParticipantClassifier {
                 .filter(senderFirstName::equals)
                 .count();
         return sameFirstNameStaff == 1;
+    }
+
+    private Optional<User> namedStaffUser(String senderName, Company company) {
+        String sender = normalizedName(senderName);
+        if (sender.isBlank()) {
+            return Optional.empty();
+        }
+        List<User> candidates = new ArrayList<>(userRepository.findAllActiveManagerControlStaff());
+        candidates.addAll(companyStaff(company));
+        candidates = candidates.stream()
+                .filter(Objects::nonNull)
+                .filter(User::isActive)
+                .distinct()
+                .toList();
+
+        Optional<User> direct = uniqueUser(candidates.stream()
+                .filter(user -> matchesFullName(sender, normalizedName(user.getFio()))
+                        || matchesFullName(sender, normalizedName(user.getUsername())))
+                .toList());
+        if (direct.isPresent()) {
+            return direct;
+        }
+
+        Optional<User> alias = configuredAliasUser(sender, candidates);
+        if (alias.isPresent()) {
+            return alias;
+        }
+
+        String senderFirstName = firstToken(sender);
+        if (senderFirstName.length() < 3) {
+            return Optional.empty();
+        }
+        return uniqueUser(companyStaff(company).stream()
+                .filter(Objects::nonNull)
+                .filter(User::isActive)
+                .filter(user -> senderFirstName.equals(firstStaffNameToken(user)))
+                .toList());
+    }
+
+    private Optional<User> configuredAliasUser(String sender, List<User> staff) {
+        String rawAliases = appSettingService.getString(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES,
+                ""
+        );
+        if (rawAliases == null || rawAliases.isBlank()) {
+            return Optional.empty();
+        }
+        List<User> matches = new ArrayList<>();
+        for (String rule : rawAliases.split("[;\\r\\n]+")) {
+            String[] parts = rule.split("=", 2);
+            if (parts.length != 2) {
+                continue;
+            }
+            boolean senderMatchesAlias = false;
+            for (String alias : parts[1].split("[,|]+")) {
+                if (matchesFullName(sender, normalizedName(alias))) {
+                    senderMatchesAlias = true;
+                    break;
+                }
+            }
+            if (!senderMatchesAlias) {
+                continue;
+            }
+            String staffName = normalizedName(parts[0]);
+            staff.stream()
+                    .filter(user -> matchesFullName(staffName, normalizedName(user.getFio()))
+                            || matchesFullName(staffName, normalizedName(user.getUsername())))
+                    .forEach(matches::add);
+        }
+        return uniqueUser(matches);
+    }
+
+    private Optional<User> uniqueUser(List<User> users) {
+        List<User> distinct = users == null
+                ? List.of()
+                : users.stream().filter(Objects::nonNull).distinct().toList();
+        return distinct.size() == 1 ? Optional.of(distinct.getFirst()) : Optional.empty();
     }
 
     private boolean matchesConfiguredStaffAlias(String sender, List<User> staff) {
@@ -169,6 +307,9 @@ public class ClientChatParticipantClassifier {
     }
 
     private List<User> companyStaff(Company company) {
+        if (company == null) {
+            return List.of();
+        }
         List<User> users = new ArrayList<>();
         if (company.getUser() != null) {
             users.add(company.getUser());

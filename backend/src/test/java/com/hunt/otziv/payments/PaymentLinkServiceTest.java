@@ -140,6 +140,39 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void reconcileActiveLinkExpiresUnstartedLinkWhenOrderAmountChanged() {
+        PaymentLinkService service = service(properties());
+        Order order = order(70L, "ООО Новая сумма", BigDecimal.valueOf(1000));
+        PaymentLink link = new PaymentLink();
+        link.setId(701L);
+        link.setOrder(order);
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setAmountKopecks(90000L);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository
+                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                        eq(70L),
+                        anyCollection(),
+                        any(LocalDateTime.class)
+                ))
+                .thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findById(701L)).thenReturn(Optional.of(link));
+
+        PaymentLinkService.PaymentLinkReconcileResult result =
+                service.reconcileActiveLinkForOrder(70L);
+
+        assertTrue(result.changed());
+        assertEquals(PaymentLinkStatus.CREATED, result.statusBefore());
+        assertEquals(PaymentLinkStatus.EXPIRED, result.statusAfter());
+        assertEquals(PaymentLinkStatus.EXPIRED, link.getStatus());
+        assertTrue(link.getLastError().contains("Сумма заказа изменилась"));
+        verify(paymentLinkRepository).save(link);
+        verify(tbankClient, never()).getState(any(), anyString());
+    }
+
+    @Test
     void createForOrderBuildsHiddenTokenizedLinkWithPayableAmount() {
         TbankPaymentProperties properties = properties();
         PaymentLinkService service = service(properties);

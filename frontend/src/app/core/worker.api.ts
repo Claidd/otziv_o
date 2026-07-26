@@ -81,6 +81,7 @@ export interface WorkerReviewItem {
   recoveryTaskStatus?: string;
   recoveryTaskScheduledDate?: string;
   recoveryTaskCompletedDate?: string;
+  taskWorkerId?: number | null;
 }
 
 export interface WorkerMetric {
@@ -253,6 +254,13 @@ export class WorkerApi {
     );
   }
 
+  reassignBadReviewTask(taskId: number, workerId: number): Observable<void> {
+    return this.http.put<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/worker`,
+      { workerId }
+    );
+  }
+
   updateRecoveryTask(
     taskId: number,
     recoveryText: string,
@@ -267,6 +275,13 @@ export class WorkerApi {
 
   completeRecoveryTask(taskId: number): Observable<void> {
     return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/complete`, {});
+  }
+
+  reassignRecoveryTask(taskId: number, workerId: number): Observable<void> {
+    return this.http.put<void>(
+      `${appEnvironment.apiBaseUrl}/api/worker/recovery-tasks/${taskId}/worker`,
+      { workerId }
+    );
   }
 
   changeRecoveryTaskBot(taskId: number): Observable<BotChangeResponse> {

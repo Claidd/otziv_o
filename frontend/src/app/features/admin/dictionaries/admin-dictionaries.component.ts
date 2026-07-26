@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, Observable } from 'rxjs';
+import { forkJoin, Observable, of } from 'rxjs';
 import {
   AdminBot,
   AdminCategory,
@@ -36,6 +36,7 @@ import {
   AdminSubCategory,
   AdminTelegramReportScheduleSettings,
   AdminWhatsAppGroupSyncSettings,
+  AdminWorkerCellularAccessSettings,
   BotImportResponse,
   BotRequest,
   BotsResponse,
@@ -55,7 +56,9 @@ import {
   SubCategoryRequest,
   TelegramReportScheduleSettingsRequest,
   TitleRequest,
-  WhatsAppGroupSyncSettingsRequest
+  WhatsAppGroupSyncSettingsRequest,
+  WorkerCellularAccessMode,
+  WorkerCellularAccessSettingsRequest
 } from '../../../core/admin-dictionaries.api';
 import { AuthService } from '../../../core/auth.service';
 import { ReputationAiApi } from '../../../core/reputation-ai.api';
@@ -78,6 +81,10 @@ import {
   OperatorPhonesResponse,
   PhoneOperatorOption
 } from '../../../core/operator-phones.api';
+import {
+  requiresWorkerCellularEnforceConfirmation,
+  workerCellularAccessReasons
+} from './worker-cellular-access-settings';
 
 type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
 
@@ -104,6 +111,7 @@ type DictionarySettingsResponse = {
   telegramReportSettings: AdminTelegramReportScheduleSettings;
   whatsAppGroupSyncSettings: AdminWhatsAppGroupSyncSettings;
   clientPublicationProgressReportSettings: AdminClientPublicationProgressReportSettings;
+  workerCellularAccessSettings: AdminWorkerCellularAccessSettings | null;
 };
 
 type GamificationDictionaryResponse = {
@@ -278,6 +286,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly telegramReportSettings = signal<AdminTelegramReportScheduleSettings | null>(null);
   readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
   readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
+  readonly workerCellularAccessSettings = signal<AdminWorkerCellularAccessSettings | null>(null);
   readonly gamificationSettings = signal<AdminGamificationSettings | null>(null);
   readonly rewardSettings = signal<GamificationRewardSettings | null>(null);
   readonly gamificationRules = signal<AdminGamificationRule[]>([]);
@@ -424,7 +433,13 @@ export class AdminDictionariesComponent implements OnDestroy {
     telegramReportZone: ['Asia/Irkutsk', Validators.required],
     whatsAppGroupSyncEnabled: [true],
     whatsAppGroupSyncIntervalMinutes: [30, [Validators.required, Validators.min(5), Validators.max(1440)]],
-    clientPublicationProgressReportsEnabled: [true]
+    clientPublicationProgressReportsEnabled: [true],
+    workerCellularAccessMode: ['ENFORCE' as WorkerCellularAccessMode, Validators.required],
+    blockNonCellularNetwork: [true],
+    blockVpnProxyOrDatacenter: [true],
+    blockDesktopOrUnknownDevice: [false],
+    blockUnknownNetwork: [false],
+    enforceNativeVirtualDevice: [true]
   });
 
   readonly gamificationForm = this.fb.nonNullable.group({
@@ -2638,7 +2653,10 @@ export class AdminDictionariesComponent implements OnDestroy {
           nagulSettings: this.dictionariesApi.getNagulSettings(),
           telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
           whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
-          clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings()
+          clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings(),
+          workerCellularAccessSettings: this.canApplyMaintenance()
+            ? this.dictionariesApi.getWorkerCellularAccessSettings()
+            : of(null)
         });
         break;
       case 'messageDictionary':
@@ -2693,6 +2711,9 @@ export class AdminDictionariesComponent implements OnDestroy {
             this.applyTelegramReportSettings(payload.telegramReportSettings);
             this.applyWhatsAppGroupSyncSettings(payload.whatsAppGroupSyncSettings);
             this.applyClientPublicationProgressReportSettings(payload.clientPublicationProgressReportSettings);
+            if (payload.workerCellularAccessSettings) {
+              this.applyWorkerCellularAccessSettings(payload.workerCellularAccessSettings);
+            }
             break;
           }
           case 'messageDictionary':
@@ -3131,6 +3152,24 @@ export class AdminDictionariesComponent implements OnDestroy {
     const clientPublicationProgressReportRequest: ClientPublicationProgressReportSettingsRequest = {
       enabled: raw.clientPublicationProgressReportsEnabled
     };
+    const workerCellularAccessRequest: WorkerCellularAccessSettingsRequest = {
+      mode: raw.workerCellularAccessMode,
+      enforcedReasons: workerCellularAccessReasons(raw),
+      enforceNativeVirtualDevice: raw.enforceNativeVirtualDevice
+    };
+
+    if (
+      this.canApplyMaintenance()
+      && requiresWorkerCellularEnforceConfirmation(
+        this.workerCellularAccessSettings()?.mode,
+        workerCellularAccessRequest.mode
+      )
+      && !window.confirm(
+        'Включить боевой режим? Специалисты через домашнюю сеть/Wi-Fi или VPN получат отказ в защищённых подразделах.'
+      )
+    ) {
+      return;
+    }
 
     this.saving.set(true);
     this.error.set(null);
@@ -3141,17 +3180,31 @@ export class AdminDictionariesComponent implements OnDestroy {
       whatsAppGroupSyncSettings: this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest),
       clientPublicationProgressReportSettings: this.dictionariesApi.updateClientPublicationProgressReportSettings(
         clientPublicationProgressReportRequest
-      )
+      ),
+      workerCellularAccessSettings: this.canApplyMaintenance()
+        ? this.dictionariesApi.updateWorkerCellularAccessSettings(workerCellularAccessRequest)
+        : of(null)
     }).subscribe({
-      next: ({ nagulSettings, telegramReportSettings, whatsAppGroupSyncSettings, clientPublicationProgressReportSettings }) => {
+      next: ({
+        nagulSettings,
+        telegramReportSettings,
+        whatsAppGroupSyncSettings,
+        clientPublicationProgressReportSettings,
+        workerCellularAccessSettings
+      }) => {
         this.saving.set(false);
         this.applyNagulSettings(nagulSettings);
         this.applyTelegramReportSettings(telegramReportSettings);
         this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
         this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
+        if (workerCellularAccessSettings) {
+          this.applyWorkerCellularAccessSettings(workerCellularAccessSettings);
+        }
         this.toastService.success(
           'Настройки сохранены',
-          `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, WhatsApp ${whatsAppGroupSyncSettings.intervalMinutes} мин.`
+          workerCellularAccessSettings
+            ? `Контроль доступа: ${this.workerCellularAccessModeLabel(workerCellularAccessSettings.mode)}`
+            : `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, WhatsApp ${whatsAppGroupSyncSettings.intervalMinutes} мин.`
         );
       },
       error: (err) => {
@@ -3491,6 +3544,45 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.settingsForm.patchValue({
       clientPublicationProgressReportsEnabled: response.enabled
     });
+  }
+
+  private applyWorkerCellularAccessSettings(response: AdminWorkerCellularAccessSettings): void {
+    this.workerCellularAccessSettings.set(response);
+    const reasons = new Set(response.enforcedReasons);
+    this.settingsForm.patchValue({
+      workerCellularAccessMode: response.mode,
+      blockNonCellularNetwork: reasons.has('NON_CELLULAR_NETWORK'),
+      blockVpnProxyOrDatacenter: reasons.has('VPN_PROXY_OR_DATACENTER'),
+      blockDesktopOrUnknownDevice: reasons.has('DESKTOP_OR_UNKNOWN_DEVICE'),
+      blockUnknownNetwork: reasons.has('UNKNOWN_NETWORK'),
+      enforceNativeVirtualDevice: response.enforceNativeVirtualDevice
+    });
+  }
+
+  workerCellularAccessModeLabel(mode: WorkerCellularAccessMode): string {
+    switch (mode) {
+      case 'OFF':
+        return 'выключено';
+      case 'AUDIT':
+        return 'аудит без блокировки';
+      case 'ENFORCE':
+        return 'боевой режим';
+    }
+  }
+
+  workerProtectedSectionLabel(section: string): string {
+    switch (section) {
+      case 'nagul':
+        return 'Выгул';
+      case 'publish':
+        return 'Публикация';
+      case 'recovery':
+        return 'Восстановление';
+      case 'bad':
+        return 'Плохие';
+      default:
+        return section;
+    }
   }
 
   private applyGamificationSettings(response: AdminGamificationSettings): void {

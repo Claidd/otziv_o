@@ -40,12 +40,63 @@
         </div>
       </section>
 
+      @if (reportReviewAccess.state(); as reviewAccess) {
+        @if (reviewAccess.pending) {
+          <section
+            class="report-review-lock"
+            [class.report-review-lock--pending]="!reviewAccess.restricted"
+            aria-label="Требуется проверка персонального отчёта"
+          >
+            <span class="material-icons-sharp">{{ reviewAccess.restricted ? 'lock_clock' : 'school' }}</span>
+            <div>
+              <p class="eyebrow">
+                {{ reviewAccess.restricted ? 'Доступ временно ограничен' : 'Ожидается ознакомление' }}
+              </p>
+              <h2>Проверьте персональный отчёт в Telegram</h2>
+              <p>{{ reviewAccess.message }}</p>
+              @if (reviewAccess.questionCount > 0) {
+                <small>
+                  Вопросы: {{ reviewAccess.answeredQuestionCount }} из {{ reviewAccess.questionCount }}
+                </small>
+              }
+              @if (reviewAccess.summaryDate) {
+                <small>Отчёт за {{ reviewAccess.summaryDate }}</small>
+              }
+            </div>
+          </section>
+        }
+      }
+
       @if (cabinet()?.dailyProgress?.visible) {
         <section class="cabinet-progress-strip" aria-label="Дневной прогресс специалиста">
           <app-daily-progress-strip
             [progress]="cabinet()?.dailyProgress"
             label="Прогресс"
           />
+        </section>
+      }
+
+      @if (showManagerTeamProgress() && cabinet()) {
+        <section class="panel manager-team-progress" aria-label="Прогресс моей команды">
+          <div class="panel-title">
+            <span class="material-icons-sharp">groups</span>
+            <div>
+              <p class="eyebrow">КОМАНДА</p>
+              <h2>Моя команда</h2>
+            </div>
+            <a class="manager-team-progress__link" routerLink="/admin/team">
+              Подробнее
+              <span class="material-icons-sharp">arrow_forward</span>
+            </a>
+          </div>
+          @if (cabinet()?.teamDailyProgress?.visible) {
+            <app-daily-progress-strip
+              [progress]="cabinet()?.teamDailyProgress"
+              label="Команда"
+            />
+          } @else {
+            <p class="manager-team-progress__empty">На выбранную дату заданий команды пока нет.</p>
+          }
         </section>
       }
 

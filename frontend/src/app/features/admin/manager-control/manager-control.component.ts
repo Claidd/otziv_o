@@ -17,13 +17,13 @@ import {
   ManagerControlItemStatus,
   ManagerControlManagerDetail,
   ManagerControlManager,
+  ManagerReportReview,
   ManagerDailySummaryPreview,
   ManagerControlOverdueStatus,
   ManagerControlProblem,
   ManagerControlSection,
   ManagerControlSummary,
   ManagerControlStatus,
-  ManagerQueueState,
   ManagerControlWorkerExplanationStats
 } from '../../../core/manager-control.api';
 import { apiErrorMessage } from '../../../shared/api-error-message';
@@ -108,10 +108,14 @@ export class ManagerControlComponent implements OnInit {
   readonly activePerformanceTip = signal<string | null>(null);
   readonly dailySummaryPreview = signal<ManagerDailySummaryPreview | null>(null);
   readonly dailySummaryPreviewLoading = signal(false);
+  readonly dailySummaryTelegramSending = signal(false);
+  readonly reportReviewTestStarting = signal(false);
+  readonly managerReportReviews = signal<ManagerReportReview[]>([]);
+  readonly managerReportReviewsLoading = signal(false);
+  readonly reportDisputeComments = signal<Record<number, string>>({});
+  readonly resolvingReportReviewIds = signal<Set<number>>(new Set());
   readonly isDetailPage = computed(() => this.detailPageManagerId() !== null);
   readonly clock = signal(Date.now());
-  readonly queueState = signal<ManagerQueueState | null>(null);
-
   readonly managers = computed(() => {
     return this.summary()?.managers ?? [];
   });
@@ -128,10 +132,16 @@ export class ManagerControlComponent implements OnInit {
     return (this.detail()?.items ?? []).filter((item) => this.shouldShowDetailItem(item));
   });
   readonly visibleDetailOpenCount = computed(() => {
-    return this.visibleDetailItems().filter((item) => item.itemStatus === 'OPEN').length;
+    return this.visibleDetailItems().reduce(
+      (total, item) => total + this.detailConcreteStatusCount(item, true),
+      0
+    );
   });
   readonly visibleDetailHandledCount = computed(() => {
-    return this.visibleDetailItems().filter((item) => item.itemStatus !== 'OPEN').length;
+    return this.visibleDetailItems().reduce(
+      (total, item) => total + this.detailConcreteStatusCount(item, false),
+      0
+    );
   });
 
   constructor() {
@@ -152,10 +162,16 @@ export class ManagerControlComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.load({ sync: true });
+    if (this.isDetailPage()) {
+      this.load();
+      return;
+    }
+    this.load({
+      afterSuccess: () => this.load({ silent: true, sync: true })
+    });
   }
 
-  load(options: { silent?: boolean; sync?: boolean } = {}): void {
+  load(options: { silent?: boolean; sync?: boolean; afterSuccess?: () => void } = {}): void {
     if (!options.silent) {
       this.loading.set(true);
       this.error.set(null);
@@ -164,6 +180,9 @@ export class ManagerControlComponent implements OnInit {
     request.subscribe({
       next: (summary) => {
         this.summary.set(summary);
+        if (this.canManageDailySummary()) {
+          this.loadManagerReportReviews();
+        }
         const selectedId = this.detailPageManagerId() ?? this.selectedManagerId();
         if (this.isPersonalControl()) {
           const personalManagerId = summary.managers[0]?.managerId ?? null;
@@ -171,7 +190,6 @@ export class ManagerControlComponent implements OnInit {
           if (!personalManagerId) {
             this.clearDetails();
           }
-          this.loadQueueState();
         } else if (this.detailPageManagerId()) {
           this.selectedManagerId.set(this.detailPageManagerId());
         } else if (!selectedId || !summary.managers.some((manager) => manager.managerId === selectedId)) {
@@ -180,6 +198,7 @@ export class ManagerControlComponent implements OnInit {
         if (!options.silent) {
           this.loading.set(false);
         }
+        options.afterSuccess?.();
       },
       error: (err) => {
         const message = apiErrorMessage(err, 'Контроль менеджеров не загрузился');
@@ -230,6 +249,209 @@ export class ManagerControlComponent implements OnInit {
 
   closeDailySummaryPreview(): void {
     this.dailySummaryPreview.set(null);
+  }
+
+  sendDailySummaryToTelegram(): void {
+    if (this.dailySummaryTelegramSending()) return;
+    this.dailySummaryTelegramSending.set(true);
+    this.api.sendDailySummaryToTelegram(this.summaryDate() || undefined).subscribe({
+      next: (result) => {
+        this.dailySummaryTelegramSending.set(false);
+        this.toast.success(
+          'Аудит отправлен в Telegram',
+          `${result.managerCount} менеджеров · сообщений: ${result.messageCount}`
+        );
+      },
+      error: (err) => {
+        this.dailySummaryTelegramSending.set(false);
+        this.toast.error(
+          'Аудит не отправлен',
+          apiErrorMessage(err, 'Не удалось отправить аудит в Telegram')
+        );
+      }
+    });
+  }
+
+  startReportReviewTest(): void {
+    if (this.reportReviewTestStarting()) return;
+    this.reportReviewTestStarting.set(true);
+    this.api.startManagerReportReviewTest(this.summaryDate() || undefined).subscribe({
+      next: (result) => {
+        this.reportReviewTestStarting.set(false);
+        this.toast.success(
+          'Тестовый аудит отправлен',
+          `${result.sourceManagerName} · вопросов: ${result.issueCount}. Откройте личный Telegram.`
+        );
+        this.loadManagerReportReviews();
+      },
+      error: (err) => {
+        this.reportReviewTestStarting.set(false);
+        this.toast.error(
+          'Тестовый аудит не запущен',
+          apiErrorMessage(err, 'Не удалось создать тестовую попытку')
+        );
+      }
+    });
+  }
+
+  loadManagerReportReviews(): void {
+    if (this.managerReportReviewsLoading()) return;
+    this.managerReportReviewsLoading.set(true);
+    this.api.managerReportReviews().subscribe({
+      next: (reviews) => {
+        this.managerReportReviews.set(reviews);
+        this.managerReportReviewsLoading.set(false);
+      },
+      error: () => {
+        this.managerReportReviews.set([]);
+        this.managerReportReviewsLoading.set(false);
+      }
+    });
+  }
+
+  reportReviewStatus(review: ManagerReportReview): string {
+    if (review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused) {
+      return 'доступ ограничен · ждём завершения разбора';
+    }
+    if (review.openDisputeCount > 0 && review.status !== 'DISPUTED') {
+      return `идёт проверка · спорных пунктов ${review.openDisputeCount}`;
+    }
+    switch (review.status) {
+      case 'DELIVERED':
+        return 'доставлен, не открыт';
+      case 'READING':
+        return 'изучает отчёт';
+      case 'QUESTION_PENDING':
+        return 'отвечает на вопросы';
+      case 'PLAN_PENDING':
+        return 'ждём план';
+      case 'COMPLETED':
+        if (review.autoCompleted) return 'принят автоматически · замечаний нет';
+        return review.quickReview ? 'завершён слишком быстро' : 'отчёт принят';
+      case 'DISPUTE_PENDING':
+        return 'формулирует спор';
+      case 'DISPUTED':
+        return 'оспорен · нужен аудит';
+      default:
+        return review.status;
+    }
+  }
+
+  reportReviewTone(review: ManagerReportReview): string {
+    if ((review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused)
+      || review.status === 'DISPUTED'
+      || review.quickReview
+      || review.auditRequired) return 'red';
+    if (review.status === 'COMPLETED') return 'green';
+    return 'yellow';
+  }
+
+  reportReviewProgress(review: ManagerReportReview): string {
+    const validIssues = review.issues?.filter((issue) => issue.status !== 'WITHDRAWN') ?? [];
+    const answeredIssues = validIssues.filter((issue) => issue.status === 'ANSWERED').length;
+    const withdrawnIssues = review.issues?.filter((issue) => issue.status === 'WITHDRAWN').length ?? 0;
+    const questions = validIssues.length > 0
+      ? `${answeredIssues}/${validIssues.length} действующих вопросов`
+      : review.questionCount > 0
+        ? `${review.acceptedAnswerCount}/${review.questionCount} ответов`
+      : 'вопросы ещё не начаты';
+    const withdrawn = withdrawnIssues > 0 ? ` · снято ${withdrawnIssues}` : '';
+    const time = review.totalReviewSeconds > 0
+      ? ` · проверка ${this.reportReviewDuration(review.totalReviewSeconds)}`
+      : '';
+    return `${questions}${withdrawn}${time}`;
+  }
+
+  reportReviewDuration(seconds: number): string {
+    if (seconds < 60) return `${Math.max(0, seconds)} сек`;
+    const minutes = Math.floor(seconds / 60);
+    const rest = seconds % 60;
+    return rest > 0 ? `${minutes} мин ${rest} сек` : `${minutes} мин`;
+  }
+
+  reportReviewEventLabel(eventType: string): string {
+    switch (eventType) {
+      case 'DELIVERED': return 'Отчёт доставлен';
+      case 'STARTED': return 'Разбор начат';
+      case 'READING_STARTED': return 'Отчёт открыт для изучения';
+      case 'READING_CONFIRMED': return 'Прочтение подтверждено';
+      case 'DEADLINE_STARTED': return 'Начат трёхчасовой срок';
+      case 'ANSWER_ACCEPTED': return 'Ответ принят';
+      case 'ANSWER_REJECTED': return 'Запрошено уточнение';
+      case 'PLAN_ACCEPTED': return 'План принят';
+      case 'PLAN_REJECTED': return 'План отправлен на уточнение';
+      case 'DISPUTE_REQUESTED': return 'Запрошено описание спора';
+      case 'DISPUTED': return 'Отчёт оспорен';
+      case 'RESTRICTION_APPLIED': return 'Рабочие разделы ограничены';
+      case 'RESTRICTION_RELEASED': return 'Доступ восстановлен';
+      case 'DISPUTE_ACCEPTED': return 'Неточность отчёта подтверждена';
+      case 'DISPUTE_REJECTED': return 'Исходный отчёт подтверждён';
+      case 'ISSUE_DISPUTE_ACCEPTED': return 'Оспоренное замечание снято';
+      case 'ISSUE_DISPUTE_REJECTED': return 'Оспоренное замечание подтверждено';
+      case 'ISSUE_DISPUTE_CONTEXT_REQUESTED': return 'По замечанию запрошен контекст';
+      case 'REVIEW_CANCELLED_NO_VALID_ISSUES': return 'Аудит отменён: корректных замечаний не осталось';
+      case 'AUTO_COMPLETED': return 'Принят автоматически без замечаний';
+      case 'REVIEW_COMPLETED': return 'Все вопросы пройдены';
+      default: return eventType;
+    }
+  }
+
+  reportReviewIssueStatus(status: string): string {
+    switch (status) {
+      case 'PENDING': return 'ожидает ответа';
+      case 'ANSWERED': return 'ответ принят';
+      case 'DISPUTE_PENDING': return 'ожидается описание спора';
+      case 'DISPUTED': return 'оспорено';
+      case 'WITHDRAWN': return 'снято владельцем';
+      case 'NEEDS_CONTEXT': return 'нужна дополнительная проверка';
+      default: return status;
+    }
+  }
+
+  setReportDisputeComment(reviewId: number, value: string): void {
+    this.reportDisputeComments.update((comments) => ({ ...comments, [reviewId]: value }));
+  }
+
+  isResolvingReportReview(reviewId: number): boolean {
+    return this.resolvingReportReviewIds().has(reviewId);
+  }
+
+  resolveReportDispute(
+    review: ManagerReportReview,
+    action: 'REPORT_INCORRECT' | 'REPORT_CONFIRMED' | 'REPORT_NEEDS_CONTEXT'
+  ): void {
+    if (this.isResolvingReportReview(review.reviewId)) return;
+    const comment = (this.reportDisputeComments()[review.reviewId] ?? '').trim();
+    this.resolvingReportReviewIds.update((ids) => new Set(ids).add(review.reviewId));
+    this.api.resolveManagerReportDispute(review.reviewId, { action, comment }).subscribe({
+      next: () => {
+        this.resolvingReportReviewIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(review.reviewId);
+          return next;
+        });
+        const title = action === 'REPORT_INCORRECT'
+          ? 'Неточность подтверждена'
+          : action === 'REPORT_CONFIRMED'
+            ? 'Отчёт подтверждён'
+            : 'Запрошен дополнительный контекст';
+        const message = action === 'REPORT_INCORRECT'
+          ? 'Снято только выбранное замечание. Остальные вопросы аудита сохранены.'
+          : action === 'REPORT_CONFIRMED'
+            ? 'Выбранное замечание возвращено в очередь вопросов.'
+            : 'Выбранный пункт приостановлен до проверки дополнительного контекста.';
+        this.toast.success(title, message);
+        this.loadManagerReportReviews();
+      },
+      error: (err) => {
+        this.resolvingReportReviewIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(review.reviewId);
+          return next;
+        });
+        this.toast.error('Решение не сохранено', apiErrorMessage(err, 'Не удалось обработать спор'));
+      }
+    });
   }
 
   statusLabel(status: ManagerControlStatus): string {
@@ -313,11 +535,11 @@ export class ManagerControlComponent implements OnInit {
     if (total === 0) {
       return 100;
     }
-    return Math.max(0, Math.min(100, Math.round(managerActionBalanceView(manager).handled * 100 / total)));
+    return Math.max(0, Math.min(100, Math.round(this.dailyTaskCompleted(manager) * 100 / total)));
   }
 
   dailyTaskCompleted(manager: ManagerControlManager): number {
-    return managerActionBalanceView(manager).handled;
+    return managerActionBalanceView(manager).completed;
   }
 
   dailyTaskProgressExplanation(manager: ManagerControlManager): string {
@@ -344,10 +566,6 @@ export class ManagerControlComponent implements OnInit {
     const hours = Math.floor(Math.max(0, seconds) / 3600);
     const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60);
     return `${hours} ч ${minutes} мин`;
-  }
-
-  private loadQueueState(): void {
-    this.api.myQueueState().subscribe({ next: (state) => this.queueState.set(state), error: () => this.queueState.set(null) });
   }
 
   slaTimer(item: ManagerControlProblem | ManagerControlConcreteItem | ManagerControlSection): string {
@@ -715,6 +933,16 @@ export class ManagerControlComponent implements OnInit {
     return item.group === 'ACTION' ? item.examples.length : item.count;
   }
 
+  private detailConcreteStatusCount(item: ManagerControlItemDetail, open: boolean): number {
+    if (item.group !== 'ACTION') {
+      return open === (item.itemStatus === 'OPEN') ? item.count : 0;
+    }
+    return item.examples.filter((example) => {
+      const status = example.itemStatus ?? item.itemStatus;
+      return open ? status === 'OPEN' : status !== 'OPEN';
+    }).length;
+  }
+
   selectManager(manager: ManagerControlManager): void {
     if (this.selectedManagerId() !== manager.managerId) {
       this.activePerformanceTip.set(null);
@@ -818,7 +1046,11 @@ export class ManagerControlComponent implements OnInit {
   private hasUnsyncedConcreteItems(detail: ManagerControlManagerDetail): boolean {
     return detail.items.some((item) =>
       item.itemStatus === 'OPEN'
-      && item.examples.some((example) => !example.controlEntityId)
+      && item.group === 'ACTION'
+      && (
+        item.examples.length !== item.count
+        || item.examples.some((example) => !example.controlEntityId)
+      )
     );
   }
 
@@ -1135,10 +1367,8 @@ export class ManagerControlComponent implements OnInit {
           return next;
         });
         const merged = this.patchDetailConcreteItem(example, updated);
-        this.toast.success('Сообщение отправлено', 'Карточка уйдет из контроля до повторной проверки');
-        if (this.shouldHideConcreteItemAfterAction(merged)) {
-          this.removeConcreteItemFromDetail(merged);
-        }
+        this.toast.success('Сообщение отправлено', 'Карточка закрыта');
+        this.removeConcreteItemFromDetail(merged);
         this.load({ silent: true });
       },
       error: (err) => {
@@ -1363,7 +1593,12 @@ export class ManagerControlComponent implements OnInit {
           return next;
         });
         const merged = this.patchDetailConcreteItem(example, updated);
-        this.toast.success('Ответ отправлен', 'Карточка закрыта как отвеченная');
+        this.toast.success(
+          'Ответ отправлен',
+          this.isClientChatAudit(example)
+            ? 'Ответ зафиксирован, проверка закрыта'
+            : 'Карточка закрыта как отвеченная'
+        );
         if (this.shouldHideConcreteItemAfterAction(merged)) {
           this.removeConcreteItemFromDetail(merged);
         }
@@ -1440,6 +1675,10 @@ export class ManagerControlComponent implements OnInit {
     return example.type === 'CLIENT_CHAT_UNANSWERED';
   }
 
+  canReplyToClientMessage(example: ManagerControlConcreteItem): boolean {
+    return this.isUnansweredClientMessage(example) || this.isClientChatAudit(example);
+  }
+
   clientChatPlatformLabel(example: ManagerControlConcreteItem): string {
     const source = `${example.subtitle ?? ''} ${example.status ?? ''}`.toLowerCase();
     if (source.includes('whatsapp')) {
@@ -1478,8 +1717,11 @@ export class ManagerControlComponent implements OnInit {
     if (example.type === 'ORDER_PAYMENT_INTEGRITY') {
       return true;
     }
+    if (example.type === 'AUTOMATION_FAILURE' || example.type === 'COMMON_INVOICE_AUTOMATION') {
+      return true;
+    }
     if (example.type === 'COMMON_INVOICE') {
-      return reason.includes('нажмите «починить»') || reason.includes('нажмите "починить"');
+      return true;
     }
     if (example.type === 'TELEGRAM_CHAT') {
       return true;
@@ -1603,6 +1845,30 @@ export class ManagerControlComponent implements OnInit {
       return 'Ответ специалиста получен, скрыть до повторной проверки';
     }
     return fallback;
+  }
+
+  isClientChatAudit(example: ManagerControlConcreteItem): boolean {
+    return example.type === 'CLIENT_CHAT_AUDIT';
+  }
+
+  clientAuditSender(example: ManagerControlConcreteItem): string {
+    const reason = (example.reason ?? '').trim();
+    const separator = reason.indexOf(':');
+    const sender = separator > 0 ? reason.slice(0, separator).trim() : '';
+    return sender || 'Клиент';
+  }
+
+  clientAuditMessage(example: ManagerControlConcreteItem): string {
+    const message = (example.contactText ?? '').trim();
+    if (message) {
+      return message;
+    }
+    const reason = (example.reason ?? '').trim();
+    const separator = reason.indexOf(':');
+    const fallback = separator >= 0 ? reason.slice(separator + 1) : reason;
+    return fallback
+      .replace(/\.\s*Укажите в комментарии найденный ответ или выполненное действие\.?$/i, '')
+      .trim() || 'Текст сообщения не найден. Откройте переписку для проверки.';
   }
 
   private requiresClientAuditComment(
@@ -2149,7 +2415,10 @@ export class ManagerControlComponent implements OnInit {
       case 'RISK':
         return 'warning';
       case 'COMMON_INVOICE':
+      case 'COMMON_INVOICE_AUTOMATION':
         return 'receipt_long';
+      case 'AUTOMATION_FAILURE':
+        return 'sync_problem';
       case 'CLIENT_CHAT_UNANSWERED':
         return 'mark_chat_unread';
       case 'BAD_REVIEW_TASK':
@@ -2238,6 +2507,9 @@ export class ManagerControlComponent implements OnInit {
       return (!!example.itemStatus && example.itemStatus !== 'OPEN')
         || example.actionType === 'ACTION_TAKEN'
         || example.actionType === 'ACKNOWLEDGED';
+    }
+    if (this.isClientChatAudit(example)) {
+      return example.itemStatus === 'RESOLVED';
     }
     return !!example.itemStatus
       && example.itemStatus !== 'OPEN'

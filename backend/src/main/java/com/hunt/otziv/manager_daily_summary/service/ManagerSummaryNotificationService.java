@@ -35,7 +35,7 @@ public class ManagerSummaryNotificationService {
             log.info("Manager daily summary is calculated but delivery is disabled");
             return 0;
         }
-        String message = formatter.format(managers, false);
+        ManagerFormattedReport report = formatter.formatBoth(managers, false);
         int sent = 0;
         for (User recipient : recipients()) {
             if (recipient.getTelegramChatId() == null || alreadySent(date, recipient)) continue;
@@ -48,10 +48,7 @@ public class ManagerSummaryNotificationService {
             delivery.setChannel("TELEGRAM");
             delivery.setAttemptCount(delivery.getAttemptCount() + 1);
             try {
-                boolean success = true;
-                for (String chunk : chunks(message, 3900)) {
-                    success &= telegramService.sendMessage(recipient.getTelegramChatId(), chunk, "HTML");
-                }
+                boolean success = sendReport(recipient.getTelegramChatId(), report.richHtml(), report.html()) > 0;
                 delivery.setStatus(success ? "SENT" : "FAILED");
                 delivery.setSentAt(success ? LocalDateTime.now() : null);
                 delivery.setErrorMessage(success ? null : "Telegram не подтвердил отправку");
@@ -62,6 +59,38 @@ public class ManagerSummaryNotificationService {
                 log.warn("Manager summary delivery failed for userId={}", recipient.getId(), exception);
             }
             deliveryRepository.save(delivery);
+        }
+        return sent;
+    }
+
+    /**
+     * Sends an explicitly requested test report only to the user who requested it.
+     * This path intentionally does not use the scheduled-recipient settings and does
+     * not create a delivery log, so it cannot suppress the regular midnight report.
+     */
+    public int sendTest(User recipient, List<ManagerDailySummaryResponse> managers) {
+        if (recipient == null || recipient.getTelegramChatId() == null) {
+            throw new IllegalArgumentException("У пользователя не привязан Telegram");
+        }
+        ManagerFormattedReport report = formatter.formatBoth(managers, true);
+        int sentMessages = sendReport(recipient.getTelegramChatId(), report.richHtml(), report.html());
+        if (sentMessages == 0) {
+            throw new IllegalStateException("Telegram не подтвердил отправку");
+        }
+        return sentMessages;
+    }
+
+    private int sendReport(long chatId, String richMessage, String fallbackMessage) {
+        if (telegramService.sendRichMessage(chatId, richMessage)) {
+            return 1;
+        }
+        log.warn("Rich Telegram-аудит недоступен для chatId={}, использован обычный HTML", chatId);
+        int sent = 0;
+        for (String chunk : chunks(fallbackMessage, 3900)) {
+            if (!telegramService.sendMessage(chatId, chunk, "HTML")) {
+                return 0;
+            }
+            sent++;
         }
         return sent;
     }

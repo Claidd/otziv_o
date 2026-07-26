@@ -20,6 +20,21 @@ public interface NextOrderRequestRepository extends CrudRepository<NextOrderRequ
 
     List<NextOrderRequest> findByCreatedOrder_Id(Long createdOrderId);
 
+    @Query("""
+        SELECT r
+        FROM NextOrderRequest r
+        JOIN FETCH r.sourceOrder sourceOrder
+        LEFT JOIN FETCH r.createdOrder createdOrder
+        LEFT JOIN FETCH createdOrder.company
+        LEFT JOIN FETCH createdOrder.filial
+        LEFT JOIN FETCH createdOrder.status
+        WHERE sourceOrder.id IN :sourceOrderIds
+        ORDER BY r.createdAt, r.id
+    """)
+    List<NextOrderRequest> findBySourceOrderIdsWithCreatedOrder(
+            @Param("sourceOrderIds") Collection<Long> sourceOrderIds
+    );
+
     boolean existsByCompanyIdAndStatusIn(Long companyId, Collection<NextOrderRequestStatus> statuses);
 
     @Query("""

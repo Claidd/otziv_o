@@ -23,6 +23,24 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
 
     long countByStatus(ScheduledMessageStateStatus status);
 
+    @Query(value = """
+        SELECT state.state_id
+        FROM scheduled_client_message_state state
+        LEFT JOIN orders linked_order ON linked_order.order_id = state.order_id
+        LEFT JOIN companies company ON company.company_id = COALESCE(state.company_id, linked_order.order_company)
+        WHERE state.state_status = 'ACTIVE'
+          AND COALESCE(linked_order.order_manager, company.company_manager) = :managerId
+          AND (
+              state.consecutive_failures > 0
+              OR (
+                  state.last_error_code IS NOT NULL
+                  AND TRIM(state.last_error_code) <> ''
+              )
+          )
+        ORDER BY COALESCE(state.last_attempt_at, state.updated_at, state.created_at) ASC, state.state_id ASC
+        """, nativeQuery = true)
+    List<Long> findManagerControlCandidateIds(@Param("managerId") Long managerId, Pageable pageable);
+
     @Query("""
         SELECT s.scenario AS scenario, COUNT(s) AS total
         FROM ScheduledClientMessageState s
@@ -362,7 +380,13 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     int releaseDryRunStates(@Param("now") LocalDateTime now);
 
     @Modifying
-    @Query("UPDATE ScheduledClientMessageState s SET s.lockedUntil = :lockedUntil WHERE s.id = :id AND (s.lockedUntil IS NULL OR s.lockedUntil < :now)")
+    @Query(value = """
+        UPDATE scheduled_client_message_state state
+        SET state.locked_until = :lockedUntil
+        WHERE state.state_id = :id
+          AND state.state_status = 'ACTIVE'
+          AND (state.locked_until IS NULL OR state.locked_until < :now)
+    """, nativeQuery = true)
     int lockDueState(@Param("id") Long id,
                      @Param("now") LocalDateTime now,
                      @Param("lockedUntil") LocalDateTime lockedUntil);

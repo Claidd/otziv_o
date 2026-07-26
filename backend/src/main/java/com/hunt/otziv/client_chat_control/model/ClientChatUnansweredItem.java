@@ -84,6 +84,9 @@ public class ClientChatUnansweredItem {
     @JoinColumn(name = "resolution_message_id")
     private ClientChatMessage resolutionMessage;
 
+    @Column(name = "resolution_reply_text", columnDefinition = "TEXT")
+    private String resolutionReplyText;
+
     @Column(name = "resolution_reason_code", length = 60)
     private String resolutionReasonCode;
 

@@ -250,6 +250,10 @@ export interface ManagerControlManager {
   workerSections: ManagerControlSection[];
   overdueStatuses: ManagerControlOverdueStatus[];
   workerExplanationStats: ManagerControlWorkerExplanationStats[];
+  activeWorkSeconds: number;
+  averageDailyWorkSeconds: number;
+  averageReactionSeconds: number;
+  reactionCount: number;
   managerPerformance?: ManagerPerformanceScore | null;
 }
 
@@ -282,6 +286,10 @@ export interface ManagerQueueState {
   currentControlledStreakSeconds: number;
   controlTargetHours: number;
   controlPercent: number;
+  activeWorkSeconds: number;
+  averageDailyWorkSeconds: number;
+  averageReactionSeconds: number;
+  reactionCount: number;
   observedAt?: string | null;
 }
 
@@ -340,6 +348,94 @@ export interface ManagerDailySummaryPreview {
   managers: ManagerDailySummaryRow[];
 }
 
+export interface ManagerSummaryTelegramSendResponse {
+  date: string;
+  managerCount: number;
+  messageCount: number;
+  recipient: string;
+}
+
+export interface ManagerReportReviewTestStartResponse {
+  reviewId: number;
+  date: string;
+  sourceManagerId: number;
+  sourceManagerName: string;
+  recipient: string;
+  issueCount: number;
+}
+
+export interface ManagerReportReviewEvent {
+  eventId: number;
+  eventType: string;
+  actorUserId?: number | null;
+  actorRole: string;
+  source: string;
+  payload?: string | null;
+  createdAt: string;
+}
+
+export interface ManagerReportReviewIssue {
+  issueId: number;
+  questionIndex: number;
+  title: string;
+  question: string;
+  status: 'PENDING' | 'ANSWERED' | 'DISPUTE_PENDING' | 'DISPUTED' | 'WITHDRAWN' | 'NEEDS_CONTEXT';
+  disputeId?: number | null;
+  disputeStatus?: 'DRAFT' | 'OPEN' | 'ACCEPTED' | 'REJECTED' | 'NEEDS_CONTEXT' | null;
+  disputeText?: string | null;
+  ownerComment?: string | null;
+  disputedAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface ManagerReportReview {
+  reviewId: number;
+  summaryDate: string;
+  managerId: number;
+  managerUserId: number;
+  managerName: string;
+  testMode: boolean;
+  testOwnerUserId?: number | null;
+  status: 'DELIVERED' | 'READING' | 'QUESTION_PENDING' | 'PLAN_PENDING' | 'COMPLETED' | 'DISPUTE_PENDING' | 'DISPUTED';
+  currentQuestionIndex: number;
+  issueCount: number;
+  questionCount: number;
+  answerAttemptCount: number;
+  acceptedAnswerCount: number;
+  minimumReadSeconds: number;
+  readSeconds: number;
+  totalReviewSeconds: number;
+  quickReview: boolean;
+  questionsSource?: string | null;
+  aiVerificationPaused: boolean;
+  aiUnavailableSeconds: number;
+  suspiciousAnswerCount: number;
+  answerQuality?: string | null;
+  answerQualityReason?: string | null;
+  actionPlan?: string | null;
+  auditRequired: boolean;
+  autoCompleted: boolean;
+  disputeText?: string | null;
+  deliveredAt?: string | null;
+  startedAt?: string | null;
+  readingConfirmedAt?: string | null;
+  deadlineStartedAt?: string | null;
+  completedAt?: string | null;
+  disputedAt?: string | null;
+  reminderOneSentAt?: string | null;
+  reminderThreeSentAt?: string | null;
+  restrictedAt?: string | null;
+  restrictionReleasedAt?: string | null;
+  openDisputeCount: number;
+  issues: ManagerReportReviewIssue[];
+  events: ManagerReportReviewEvent[];
+}
+
+export interface ManagerReportDisputeResolutionPayload {
+  action: 'REPORT_INCORRECT' | 'REPORT_CONFIRMED' | 'REPORT_NEEDS_CONTEXT';
+  comment?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ManagerControlApi {
   constructor(private readonly http: HttpClient) {}
@@ -373,6 +469,45 @@ export class ManagerControlApi {
     return this.http.get<ManagerDailySummaryPreview>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/preview`,
       { params: date ? { date } : {} }
+    );
+  }
+
+  sendDailySummaryToTelegram(date?: string): Observable<ManagerSummaryTelegramSendResponse> {
+    return this.http.post<ManagerSummaryTelegramSendResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/send-test`,
+      {},
+      { params: date ? { date } : {} }
+    );
+  }
+
+  startManagerReportReviewTest(
+    date?: string,
+    managerId?: number
+  ): Observable<ManagerReportReviewTestStartResponse> {
+    const params: Record<string, string> = {};
+    if (date) params['date'] = date;
+    if (managerId) params['managerId'] = String(managerId);
+    return this.http.post<ManagerReportReviewTestStartResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/review-test`,
+      {},
+      { params }
+    );
+  }
+
+  managerReportReviews(date?: string): Observable<ManagerReportReview[]> {
+    return this.http.get<ManagerReportReview[]>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/review-sessions`,
+      { params: date ? { date } : {} }
+    );
+  }
+
+  resolveManagerReportDispute(
+    reviewId: number,
+    payload: ManagerReportDisputeResolutionPayload
+  ): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-daily-summary/review-sessions/${reviewId}/resolve-dispute`,
+      payload
     );
   }
 

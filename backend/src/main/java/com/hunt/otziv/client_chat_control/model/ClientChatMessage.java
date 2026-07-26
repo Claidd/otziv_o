@@ -2,6 +2,7 @@ package com.hunt.otziv.client_chat_control.model;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.u_users.model.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -63,6 +64,10 @@ public class ClientChatMessage {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
     private Manager manager;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "actor_user_id")
+    private User actorUser;
 
     @Column(name = "sender_external_id", length = 160)
     private String senderExternalId;

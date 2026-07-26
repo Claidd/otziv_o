@@ -18,6 +18,22 @@ public class ClientChatReplyQualityService {
         if (reply.isBlank()) {
             return new Result(ClientChatReplyQuality.SUSPICIOUS, "Ответ сотрудника пуст");
         }
+        if (ClientChatContentClassifier.attachmentOnly(clientMessage)) {
+            return acknowledgesReceipt(reply)
+                    ? new Result(ClientChatReplyQuality.GOOD, "Ответ подтверждает получение вложения и следующий шаг")
+                    : new Result(
+                            ClientChatReplyQuality.NOT_APPLICABLE,
+                            "Для вложения достаточно подтверждения получения"
+                    );
+        }
+        if (positivePaymentConfirmation(client)) {
+            return acknowledgesReceipt(reply)
+                    ? new Result(ClientChatReplyQuality.GOOD, "Ответ подтверждает получение информации об оплате")
+                    : new Result(
+                            ClientChatReplyQuality.NOT_APPLICABLE,
+                            "Для подтверждения оплаты достаточно короткого ответа"
+                    );
+        }
         ClientChatResolutionPolicy.Assessment request = new ClientChatResolutionPolicy().assess(clientMessage);
         if (!request.responseRequired()) {
             return new Result(ClientChatReplyQuality.NOT_APPLICABLE, "Сообщение не требует содержательного ответа");
@@ -55,7 +71,59 @@ public class ClientChatReplyQualityService {
                 .trim();
     }
 
+    private boolean positivePaymentConfirmation(String normalized) {
+        if (containsAny(
+                normalized,
+                "не прошла",
+                "не прошел",
+                "не проходит",
+                "не получается",
+                "ошибка",
+                "проблем",
+                "не дош"
+        )) {
+            return false;
+        }
+        return containsAny(
+                normalized,
+                "оплата прошла",
+                "оплату произвел",
+                "оплату произвела",
+                "оплату перевел",
+                "оплату перевела",
+                "оплату отправил",
+                "оплату отправила",
+                "я оплатил",
+                "я оплатила",
+                "я перевел",
+                "я перевела",
+                "деньги перевел",
+                "деньги перевела",
+                "чек об оплате",
+                "квитанция об оплате"
+        );
+    }
+
+    private boolean acknowledgesReceipt(String normalizedReply) {
+        return normalizedReply.length() >= 12
+                && containsAny(
+                        normalizedReply,
+                        "чек принят",
+                        "чек получили",
+                        "чек получен",
+                        "документ принят",
+                        "документ получили",
+                        "документ получен",
+                        "оплату получили",
+                        "информацию об оплате получили",
+                        "проверим поступление",
+                        "проверю поступление",
+                        "приняли в работу",
+                        "зафиксировали оплату",
+                        "отметили оплату"
+                );
+    }
+
     public record Result(ClientChatReplyQuality quality, String reason) {
     }
 }
-

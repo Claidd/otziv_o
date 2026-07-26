@@ -29,6 +29,7 @@ import {
 import { CabinetLineChartComponent } from '../cabinet/cabinet-line-chart.component';
 import { ManagerControlComponent } from '../admin/manager-control/manager-control.component';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
+import { ManagerReportReviewAccessApi } from '../../core/manager-report-review-access.api';
 
 type DashboardAction = {
   label: string;
@@ -90,6 +91,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
   styleUrl: './home.component.scss'
 })
 export class HomeComponent {
+  private reportReviewToastShown = false;
   readonly roleLabel = roleLabel;
   readonly me = signal<CurrentUser | null>(null);
   readonly health = signal<SystemHealth | null>(null);
@@ -252,6 +254,9 @@ export class HomeComponent {
       return [];
     }
 
+    if (this.reportReviewAccess.state()?.restricted) {
+      return [];
+    }
     const roles = new Set(this.realmRoles());
     const canSeeAll = roles.has('ADMIN') || roles.has('OWNER');
     return this.actions.filter((action) => canSeeAll || action.roles.some((role) => roles.has(role)));
@@ -290,8 +295,15 @@ export class HomeComponent {
       || this.manualPaymentButtonLabel().trim() !== this.manualPaymentButtonLabelOrDefault(settings.manualPaymentButtonLabel);
   });
 
-  readonly showManualPaymentTasks = computed(() => this.isManagerUser());
-  readonly showManagerControl = computed(() => this.isManagerUser());
+  readonly showManualPaymentTasks = computed(() =>
+    this.isManagerUser() && !this.reportReviewAccess.state()?.restricted
+  );
+  readonly showManagerControl = computed(() =>
+    this.isManagerUser() && !this.reportReviewAccess.state()?.restricted
+  );
+  readonly showManagerTeamProgress = computed(() =>
+    this.isManagerUser() && !this.reportReviewAccess.state()?.restricted
+  );
 
   readonly canCreateManualTask = computed(() => {
     const hasTarget = this.manualTaskPaymentType() === 'MOBILE_BANK'
@@ -323,6 +335,7 @@ export class HomeComponent {
     private readonly currentUserApi: CurrentUserApi,
     private readonly systemHealthApi: SystemHealthApi,
     private readonly cabinetApi: CabinetApi,
+    readonly reportReviewAccess: ManagerReportReviewAccessApi,
     private readonly toastService: ToastService,
     private readonly router: Router
   ) {
@@ -339,7 +352,7 @@ export class HomeComponent {
           this.loadManualPaymentSettings();
         }
         if (this.isManagerUser()) {
-          this.loadManualPaymentTasks();
+          void this.loadReportReviewAccess();
         }
       }
     }
@@ -371,7 +384,11 @@ export class HomeComponent {
           && !this.manualPaymentLoading()) {
           this.loadManualPaymentSettings();
         }
-        if (this.isManagerUser() && !this.manualPaymentTasks().length && !this.manualTaskLoading()) {
+        if (this.isManagerUser()
+          && this.reportReviewAccess.state()
+          && !this.reportReviewAccess.state()?.restricted
+          && !this.manualPaymentTasks().length
+          && !this.manualTaskLoading()) {
           this.loadManualPaymentTasks();
         }
         this.loading.set(false);
@@ -449,8 +466,50 @@ export class HomeComponent {
       this.loadManualPaymentSettings(true);
     }
     if (this.isManagerUser()) {
-      this.loadManualPaymentTasks(true);
+      if (!this.reportReviewAccess.state()?.restricted) {
+        this.loadManualPaymentTasks(true);
+      }
     }
+  }
+
+  private async loadReportReviewAccess(): Promise<void> {
+    try {
+      const state = await this.reportReviewAccess.checkIn();
+      this.showReportReviewToast(state);
+      if (!state.restricted && !this.manualPaymentTasks().length && !this.manualTaskLoading()) {
+        this.loadManualPaymentTasks();
+      }
+    } catch {
+      this.reportReviewAccess.clear();
+      if (!this.manualPaymentTasks().length && !this.manualTaskLoading()) {
+        this.loadManualPaymentTasks();
+      }
+    }
+  }
+
+  private showReportReviewToast(state: {
+    pending: boolean;
+    restricted: boolean;
+    questionCount: number;
+    answeredQuestionCount: number;
+    message?: string | null;
+  }): void {
+    if (!state.pending || this.reportReviewToastShown) return;
+    this.reportReviewToastShown = true;
+    const progress = state.questionCount > 0
+      ? ` Прогресс: ${state.answeredQuestionCount} из ${state.questionCount}.`
+      : '';
+    if (state.restricted) {
+      this.toastService.warning(
+        'Рабочие разделы временно закрыты',
+        `${state.message || 'Завершите проверку отчёта в Telegram.'}${progress}`
+      );
+      return;
+    }
+    this.toastService.warning(
+      'Необходимо проверить персональный отчёт',
+      `${state.message || 'Откройте Telegram и изучите отчёт.'}${progress}`
+    );
   }
 
   selectCabinetDate(date: string): void {

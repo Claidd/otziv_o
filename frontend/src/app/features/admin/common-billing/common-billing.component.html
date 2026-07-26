@@ -103,9 +103,69 @@
                 </div>
               </article>
             } @empty {
-              <p class="empty-text">В счете пока нет заказов.</p>
+              <p class="empty-text">Неоплаченных заказов в этом счёте нет.</p>
             }
             </section>
+
+            @if (paidInvoiceOrders().length) {
+              <details class="paid-history">
+                <summary>
+                  <span>Оплачено ранее</span>
+                  <strong>{{ paidInvoiceOrders().length }}</strong>
+                </summary>
+                <div class="paid-history-list">
+                  @for (order of paidInvoiceOrders(); track order.orderId) {
+                    <article>
+                      <div>
+                        <strong>№{{ order.orderId }} · {{ order.companyTitle }}</strong>
+                        <small>{{ order.filialTitle || 'Без филиала' }}</small>
+                      </div>
+                      <div class="payment-evidence">
+                        <strong>{{ paymentMethodLabel(order) }}</strong>
+                        @if (order.paidBy) {
+                          <small>{{ order.paidBy }}</small>
+                        }
+                        @if (order.paidAt) {
+                          <small>{{ order.paidAt | date:'dd.MM.yyyy HH:mm' }}</small>
+                        }
+                        @if (order.paymentComment) {
+                          <small>{{ order.paymentComment }}</small>
+                        }
+                        @if (order.paymentReceiptUrl) {
+                          <a [href]="order.paymentReceiptUrl" target="_blank" rel="noopener">Чек</a>
+                        }
+                      </div>
+                      <strong>{{ formatKopecks(order.amountKopecks) }}</strong>
+                    </article>
+                  }
+                </div>
+              </details>
+            }
+
+            @if (nextCycleOrders().length) {
+              <section class="next-cycle" aria-label="Новые циклы заказов">
+                <header>
+                  <strong>Новый цикл, не относится к этому счёту</strong>
+                  <small>Создан автоматически после оплаты предыдущих заказов</small>
+                </header>
+                <div>
+                  @for (order of nextCycleOrders(); track order.orderId) {
+                    <article>
+                      <div>
+                        <strong>№{{ order.orderId }} · {{ order.companyTitle }}</strong>
+                        <small>После заказа №{{ order.sourceOrderId }} · {{ order.filialTitle || 'Без филиала' }}</small>
+                      </div>
+                      <span>{{ order.orderStatus }}</span>
+                      @if (order.invoiceId) {
+                        <a [routerLink]="[]" [queryParams]="{ invoiceId: order.invoiceId }">
+                          Счёт №{{ order.invoiceId }}
+                        </a>
+                      }
+                    </article>
+                  }
+                </div>
+              </section>
+            }
           </div>
         } @else {
           <p class="empty-text">Текущий счет появится автоматически, когда первый заказ попадет в общую связку.</p>
@@ -141,7 +201,7 @@
 
         <section class="invoice-summary">
           <div>
-            <small>Сумма</small>
+            <small>Всего</small>
             <strong>{{ formatKopecks(invoice?.amountKopecks) }}</strong>
           </div>
           <div>
@@ -149,7 +209,7 @@
             <strong>{{ formatKopecks(invoice?.paidKopecks) }}</strong>
           </div>
           <div>
-            <small>Остаток</small>
+            <small>Осталось</small>
             <strong>{{ formatKopecks(invoice?.remainingKopecks) }}</strong>
           </div>
           <div>
@@ -263,6 +323,12 @@
               <button type="button" class="danger" (click)="markInvoiceBan()" [disabled]="!!mutating()">
                 <span class="material-icons-sharp" aria-hidden="true">block</span>
                 В Бан
+              </button>
+            }
+            @if (canArchiveInvoice()) {
+              <button type="button" class="danger" (click)="archiveInvoice()" [disabled]="!!mutating()">
+                <span class="material-icons-sharp" aria-hidden="true">archive</span>
+                В архив
               </button>
             }
             @if (canDeleteInvoiceWithOrders()) {

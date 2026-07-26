@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -41,7 +42,14 @@ class ClientChatParticipantClassifierTest {
                 org.mockito.ArgumentMatchers.nullable(String.class),
                 org.mockito.ArgumentMatchers.nullable(String.class)
         )).thenReturn(Optional.empty());
+        lenient().when(identityService.knownUser(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class),
+                org.mockito.ArgumentMatchers.nullable(String.class)
+        )).thenReturn(Optional.empty());
         lenient().when(userRepository.findAllActiveUsersWithPhoneNumbers()).thenReturn(List.of());
+        lenient().when(userRepository.findAllActiveManagerControlStaff()).thenReturn(List.of());
         lenient().when(appSettingService.getString(
                 AppSettingService.MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES,
                 ""
@@ -62,6 +70,43 @@ class ClientChatParticipantClassifierTest {
         );
 
         assertEquals(ClientChatSenderRole.STAFF, role);
+    }
+
+    @Test
+    void resolvesActualWhatsappUserByPhone() {
+        User managerUser = user("Вика Ц.", "vika", "+7 999 111-22-33");
+        when(userRepository.findAllActiveUsersWithPhoneNumbers()).thenReturn(List.of(managerUser));
+
+        Optional<User> actual = classifier.resolveStaffUser(
+                ClientChatPlatform.WHATSAPP,
+                "12001@g.us",
+                "79991112233@c.us",
+                "Вика",
+                companyWithManager(managerUser)
+        );
+
+        assertSame(managerUser, actual.orElseThrow());
+    }
+
+    @Test
+    void resolvesLinkedIdentityBeforeHeuristics() {
+        User managerUser = user("Мия Ригз", "mia", "");
+        when(identityService.knownUser(
+                ClientChatPlatform.MAX,
+                "-75516171875013",
+                "260174587",
+                "Мия О"
+        )).thenReturn(Optional.of(managerUser));
+
+        Optional<User> actual = classifier.resolveStaffUser(
+                ClientChatPlatform.MAX,
+                "-75516171875013",
+                "260174587",
+                "Мия О",
+                new Company()
+        );
+
+        assertSame(managerUser, actual.orElseThrow());
     }
 
     @Test
@@ -141,6 +186,27 @@ class ClientChatParticipantClassifierTest {
                 "unknown@c.us",
                 "Мария",
                 companyWithManager(managerUser)
+        );
+
+        assertEquals(ClientChatSenderRole.STAFF, role);
+    }
+
+    @Test
+    void maxOwnerAliasIsStaffAcrossAllCompanyChats() {
+        User owner = user("Мия Ригз", "mia", "");
+        when(userRepository.findAllActiveManagerControlStaff()).thenReturn(List.of(owner));
+        when(appSettingService.getString(
+                AppSettingService.MANAGER_CONTROL_UNANSWERED_STAFF_NAME_ALIASES,
+                ""
+        )).thenReturn("Мия Ригз=Мия О|Мия О!");
+
+        ClientChatSenderRole role = classifier.classify(
+                ClientChatPlatform.MAX,
+                ClientChatDirection.INCOMING,
+                "-75516171875013",
+                "260174587",
+                "Мия О",
+                companyWithManager(user("Вика Ц.", "vika", ""))
         );
 
         assertEquals(ClientChatSenderRole.STAFF, role);

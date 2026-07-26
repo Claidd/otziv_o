@@ -24,6 +24,7 @@ public class ManagersListDTO {
     private int review1Month;
     private int payment1Month;
     private int leadsInWorkInMonth;
+    private long averageDailyActiveWorkSeconds;
     private DailyWorkProgressResponse dailyProgress;
     private DailyWorkProgressResponse monthlyProgress;
 

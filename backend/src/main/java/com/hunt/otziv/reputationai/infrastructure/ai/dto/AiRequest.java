@@ -9,14 +9,27 @@ public record AiRequest(
         Double temperature,
         Boolean jsonObject,
         Integer maxTokens,
-        Duration timeout
+        Duration timeout,
+        Boolean thinkingEnabled
 ) {
+    public AiRequest(
+            String task,
+            String systemPrompt,
+            String userPrompt,
+            Double temperature,
+            Boolean jsonObject,
+            Integer maxTokens,
+            Duration timeout
+    ) {
+        this(task, systemPrompt, userPrompt, temperature, jsonObject, maxTokens, timeout, null);
+    }
+
     public AiRequest(String task, String systemPrompt, String userPrompt, Double temperature) {
         this(task, systemPrompt, userPrompt, temperature, false);
     }
 
     public AiRequest(String task, String systemPrompt, String userPrompt, Double temperature, Boolean jsonObject) {
-        this(task, systemPrompt, userPrompt, temperature, jsonObject, null, null);
+        this(task, systemPrompt, userPrompt, temperature, jsonObject, null, null, null);
     }
 
     public AiRequest {
@@ -27,5 +40,6 @@ public record AiRequest(
         jsonObject = jsonObject != null && jsonObject;
         maxTokens = maxTokens == null ? null : Math.max(1, maxTokens);
         timeout = timeout == null ? null : timeout;
+        thinkingEnabled = thinkingEnabled == null ? null : thinkingEnabled;
     }
 }

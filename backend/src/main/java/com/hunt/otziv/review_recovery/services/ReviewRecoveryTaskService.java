@@ -26,6 +26,8 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryTask updateTask(Long taskId, String recoveryText, String recoveryAnswer, LocalDate scheduledDate);
 
+    ReviewRecoveryTask reassignTask(Long taskId, Worker worker);
+
     ReviewRecoveryTask completeTask(Long taskId, User completedBy);
 
     ReviewRecoveryTask cancelTask(Long taskId);

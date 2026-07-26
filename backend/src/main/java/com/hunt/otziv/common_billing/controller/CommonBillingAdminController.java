@@ -2,7 +2,10 @@ package com.hunt.otziv.common_billing.controller;
 
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceArchivePreviewResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
+import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.service.CommonBillingPublicationApprovalFailureMarker;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
 import java.security.Principal;
@@ -100,8 +103,12 @@ public class CommonBillingAdminController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/paid")
-    public CommonInvoiceDetailsResponse markPaid(@PathVariable Long invoiceId) {
-        return commonBillingService.markPaid(invoiceId);
+    public CommonInvoiceDetailsResponse markPaid(
+            @PathVariable Long invoiceId,
+            @RequestBody ManualPaymentConfirmationRequest request,
+            Principal principal
+    ) {
+        return commonBillingService.markPaid(invoiceId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
@@ -154,14 +161,35 @@ public class CommonBillingAdminController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/ban")
-    public CommonInvoiceDetailsResponse markBan(@PathVariable Long invoiceId) {
-        return commonBillingService.markBan(invoiceId);
+    public CommonInvoiceDetailsResponse markBan(@PathVariable Long invoiceId, Principal principal) {
+        return commonBillingService.markBan(invoiceId, principal);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @GetMapping("/api/common-billing/invoices/{invoiceId}/archive-preview")
+    public CommonInvoiceArchivePreviewResponse archivePreview(@PathVariable Long invoiceId) {
+        return commonBillingService.archivePreview(invoiceId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @PostMapping("/api/common-billing/invoices/{invoiceId}/archive")
+    public CommonInvoiceDetailsResponse archiveInvoice(
+            @PathVariable Long invoiceId,
+            @RequestBody CommonInvoiceCloseRequest request,
+            Principal principal
+    ) {
+        return commonBillingService.archiveInvoice(invoiceId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/common-billing/invoices/{invoiceId}/orders/{orderId}/paid")
-    public CommonInvoiceDetailsResponse markOrderPaid(@PathVariable Long invoiceId, @PathVariable Long orderId) {
-        return commonBillingService.markOrderPaid(invoiceId, orderId);
+    public CommonInvoiceDetailsResponse markOrderPaid(
+            @PathVariable Long invoiceId,
+            @PathVariable Long orderId,
+            @RequestBody ManualPaymentConfirmationRequest request,
+            Principal principal
+    ) {
+        return commonBillingService.markOrderPaid(invoiceId, orderId, request, principal);
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")

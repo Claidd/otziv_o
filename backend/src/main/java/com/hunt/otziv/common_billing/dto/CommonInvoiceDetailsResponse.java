@@ -6,6 +6,7 @@ import java.util.List;
 public record CommonInvoiceDetailsResponse(
         CommonInvoiceSummaryResponse summary,
         List<CommonInvoiceOrderResponse> orders,
-        List<OrderDTOList> orderCards
+        List<OrderDTOList> orderCards,
+        List<CommonInvoiceNextCycleResponse> nextCycleOrders
 ) {
 }

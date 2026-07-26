@@ -8,7 +8,8 @@ import {
   CommonBillingApi,
   CommonInvoiceDetailsResponse,
   CommonInvoiceOrderResponse,
-  CommonInvoiceSummaryResponse
+  CommonInvoiceSummaryResponse,
+  ManualPaymentConfirmationRequest
 } from '../../../core/common-billing.api';
 import { AuthService } from '../../../core/auth.service';
 import { CompanyCardItem, ManagerApi, OrderCardItem } from '../../../core/manager.api';
@@ -125,7 +126,12 @@ export class CommonBillingComponent implements OnDestroy {
   });
   readonly currentInvoice = computed(() => this.invoiceDetails()?.summary ?? this.selectedAccount()?.currentInvoice ?? null);
   readonly invoiceOrders = computed(() => this.invoiceDetails()?.orders ?? []);
-  readonly invoiceOrderCards = computed(() => this.invoiceDetails()?.orderCards ?? []);
+  readonly paidInvoiceOrders = computed(() => this.invoiceOrders().filter(order => order.paid));
+  readonly invoiceOrderCards = computed(() => {
+    const unpaidIds = new Set(this.invoiceOrders().filter(order => !order.paid).map(order => order.orderId));
+    return (this.invoiceDetails()?.orderCards ?? []).filter(order => unpaidIds.has(order.id));
+  });
+  readonly nextCycleOrders = computed(() => this.invoiceDetails()?.nextCycleOrders ?? []);
   readonly invoiceCardIndex = signal(0);
   readonly invoiceCardPageIndex = computed(() => Math.min(
     this.invoiceCardIndex(),
@@ -267,6 +273,16 @@ export class CommonBillingComponent implements OnDestroy {
     );
   });
   readonly canMarkBan = computed(() => this.currentInvoice()?.status === 'UNPAID');
+  readonly canArchiveInvoice = computed(() => {
+    const invoice = this.currentInvoice();
+    return Boolean(
+      invoice
+        && invoice.status === 'COLLECTING'
+        && invoice.totalOrders > 0
+        && invoice.paidKopecks <= 0
+        && invoice.paidOrders <= 0
+    );
+  });
   readonly canDeleteInvoiceWithOrders = computed(() => {
     this.auth.tokenParsed();
     const invoice = this.currentInvoice();
@@ -555,11 +571,19 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || this.mutating() || !this.canMarkPaid()) {
       return;
     }
-    const confirmed = window.confirm('Отметить весь общий счет оплаченным? Все заказы внутри перейдут через штатную логику оплаты.');
-    if (!confirmed) {
+    const evidence = this.requestManualPaymentEvidence(
+      'Подтверждение ручной оплаты общего счёта',
+      'Отметить весь общий счет оплаченным? Все заказы внутри перейдут через штатную логику оплаты.'
+    );
+    if (!evidence) {
       return;
     }
-    this.invoiceAction(invoice.id, 'mark-paid', () => this.commonBillingApi.markPaid(invoice.id), 'Общий счет закрыт оплатой');
+    this.invoiceAction(
+      invoice.id,
+      'mark-paid',
+      () => this.commonBillingApi.markPaid(invoice.id, evidence),
+      'Общий счет закрыт оплатой'
+    );
   }
 
   markInvoiceUnpaid(): void {
@@ -584,6 +608,37 @@ export class CommonBillingComponent implements OnDestroy {
       return;
     }
     this.invoiceAction(invoice.id, 'mark-ban', () => this.commonBillingApi.markBan(invoice.id), 'Общий счет переведен в Бан');
+  }
+
+  archiveInvoice(): void {
+    const invoice = this.currentInvoice();
+    if (!invoice || this.mutating() || !this.canArchiveInvoice()) {
+      return;
+    }
+    this.mutating.set(`archive-preview-${invoice.id}`);
+    this.commonBillingApi.archivePreview(invoice.id).subscribe({
+      next: (preview) => {
+        if (!preview.allowed) {
+          this.mutating.set('');
+          this.toastService.error(
+            'Общий счет нельзя архивировать',
+            preview.blockers.join('; ') || 'Проверьте статусы заказов.'
+          );
+          return;
+        }
+        if (!window.confirm(`Архивировать общий счет #${invoice.id} и ${preview.totalOrders} заказов внутри?`)) {
+          this.mutating.set('');
+          return;
+        }
+        this.invoiceAction(
+          invoice.id,
+          'archive-invoice',
+          () => this.commonBillingApi.archiveInvoice(invoice.id),
+          'Общий счет и все заказы архивированы'
+        );
+      },
+      error: (err) => this.failMutation(err, 'Не удалось проверить возможность архивирования')
+    });
   }
 
   deleteInvoiceWithOrders(): void {
@@ -741,12 +796,66 @@ export class CommonBillingComponent implements OnDestroy {
     if (!invoice || invoice.status === 'NEEDS_ATTENTION' || order.paid || this.mutating()) {
       return;
     }
+    const evidence = this.requestManualPaymentEvidence(
+      `Подтверждение оплаты заказа №${order.orderId}`,
+      `Отметить заказ №${order.orderId} оплаченным внутри общего счёта?`
+    );
+    if (!evidence) {
+      return;
+    }
     this.invoiceAction(
       invoice.id,
       `mark-order-${order.orderId}`,
-      () => this.commonBillingApi.markOrderPaid(invoice.id, order.orderId),
+      () => this.commonBillingApi.markOrderPaid(invoice.id, order.orderId, evidence),
       `Заказ ${order.orderId} отмечен внутри счета`
     );
+  }
+
+  paymentMethodLabel(order: CommonInvoiceOrderResponse): string {
+    switch (order.paymentMethod) {
+      case 'TBANK':
+        return 'T-Bank';
+      case 'MANUAL':
+      case 'MIXED':
+        return 'Подтверждено вручную';
+      case 'MANUAL_LEGACY':
+        return 'Подтверждено вручную · старые данные';
+      default:
+        return 'Способ не указан';
+    }
+  }
+
+  private requestManualPaymentEvidence(
+    title: string,
+    confirmation: string
+  ): ManualPaymentConfirmationRequest | null {
+    if (!window.confirm(confirmation)) {
+      return null;
+    }
+    const commentValue = window.prompt(
+      `${title}\n\nВведите комментарий (например: «сверено по выписке»). Если есть только чек — оставьте пустым.`
+    );
+    if (commentValue === null) {
+      return null;
+    }
+    const receiptValue = window.prompt(
+      'Ссылка на чек или платёжный документ (необязательно, если заполнен комментарий):'
+    );
+    if (receiptValue === null) {
+      return null;
+    }
+    const evidence = {
+      comment: commentValue.trim(),
+      receiptUrl: receiptValue.trim()
+    };
+    if (!evidence.comment && !evidence.receiptUrl) {
+      this.toastService.error(
+        'Оплата не подтверждена',
+        'Для ручной оплаты обязательно укажите комментарий или ссылку на чек.'
+      );
+      return null;
+    }
+    return evidence;
   }
 
   approveReviewOrders(): void {

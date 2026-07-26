@@ -26,6 +26,7 @@ export class AuthService {
       return;
     }
 
+    const returnedFromAuthentication = hasKeycloakAuthenticationCallback(window.location.href);
     this.registerKeycloakCallbacks();
     this.registerBrowserResumeHandlers();
 
@@ -33,7 +34,7 @@ export class AuthService {
       const authenticated = await this.keycloak.init({
         onLoad: 'check-sso',
         pkceMethod: 'S256',
-        responseMode: 'query',
+        responseMode: 'fragment',
         checkLoginIframe: false,
         silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
         silentCheckSsoFallback: true
@@ -43,6 +44,12 @@ export class AuthService {
 
       if (authenticated) {
         await this.setAuthenticatedState();
+      } else if (returnedFromAuthentication) {
+        this.error.set(
+          'Сайт получил возврат после ввода пароля, но не смог сохранить сессию. '
+          + 'Откройте o-ogo.ru напрямую в Safari или Chrome и повторите вход.'
+        );
+        this.clearSession('error');
       } else {
         this.clearSession('anonymous');
       }
@@ -249,4 +256,19 @@ export class AuthService {
   private currentBrowserPath(): string {
     return `${window.location.pathname}${window.location.search}${window.location.hash}` || '/';
   }
+}
+
+export function hasKeycloakAuthenticationCallback(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return isAuthenticationCallbackParams(parsed.searchParams)
+      || isAuthenticationCallbackParams(new URLSearchParams(parsed.hash.replace(/^#/, '')));
+  } catch {
+    return false;
+  }
+}
+
+function isAuthenticationCallbackParams(params: URLSearchParams): boolean {
+  const hasState = params.has('state');
+  return hasState && (params.has('code') || params.has('error'));
 }

@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, NavigationStart, ParamMap, Router, RouterLink } from '@angular/router';
-import { IonContent, IonModal } from '@ionic/angular/standalone';
+import { IonContent, IonModal, ToastController } from '@ionic/angular/standalone';
 import { firstValueFrom, Subscription } from 'rxjs';
 import {
   AnalyticsResponse,
@@ -42,6 +42,10 @@ import { MobileDictionariesComponent } from '../shared/mobile-dictionaries.compo
 import { MobileActionSheetComponent } from '../shared/mobile-action-sheet.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import {
+  ManagerReportReviewAccessService,
+  type ManagerReportReviewAccessState
+} from '../core/manager-report-review-access.service';
 
 type HomeSectionKey = 'profile' | 'analytics' | 'team' | 'score' | 'dictionaries';
 type HomeTone = 'blue' | 'green' | 'teal' | 'violet' | 'yellow';
@@ -154,6 +158,32 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
             @switch (activeSection()) {
               @case ('profile') {
                 <section class="profile-view">
+                  @if (reportReview.state(); as audit) {
+                    @if (audit.pending) {
+                      <article
+                        class="report-review-card"
+                        [class.restricted]="audit.restricted"
+                        aria-label="Проверка персонального аудита"
+                      >
+                        <span class="material-icons-sharp">{{ audit.restricted ? 'lock_clock' : 'fact_check' }}</span>
+                        <div>
+                          <p class="eyebrow">{{ audit.restricted ? 'ДОСТУП ОГРАНИЧЕН' : 'НУЖНА ПРОВЕРКА' }}</p>
+                          <h3>Изучите персональный аудит в Telegram</h3>
+                          <p>{{ audit.message || 'Откройте Telegram и нажмите «Изучить отчёт».' }}</p>
+                          @if (audit.questionCount > 0) {
+                            <div class="report-review-progress">
+                              <span [style.width.%]="reportReviewProgress(audit)"></span>
+                            </div>
+                            <small>Ответы: {{ audit.answeredQuestionCount }} из {{ audit.questionCount }}</small>
+                          }
+                          @if (audit.restrictedFrom) {
+                            <small>{{ audit.restricted ? 'Срок истёк' : 'Завершить до' }}: {{ reportReviewDeadline(audit.restrictedFrom) }}</small>
+                          }
+                        </div>
+                      </article>
+                    }
+                  }
+
                   <article class="identity-card">
                     <div>
                       <p class="eyebrow">{{ greeting() }}</p>
@@ -434,16 +464,24 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
                       <span class="material-icons-sharp">person</span>
                       профиль
                     </a>
-                    @if (canPersonalManagerControl()) {
+                    @if (canPersonalManagerControl() && !workLocked()) {
                       <a class="pill-button" routerLink="/tabs/cabinet/manager-control">
                         <span class="material-icons-sharp">fact_check</span>
                         замечания
                       </a>
                     }
-                    <button class="pill-button" type="button" (click)="openSectionSheet()">
-                      <span class="material-icons-sharp">apps</span>
-                      разделы
-                    </button>
+                    @if (auth.hasRealmRole('MANAGER') && !workLocked()) {
+                      <a class="pill-button" routerLink="/tabs/training">
+                        <span class="material-icons-sharp">school</span>
+                        обучение
+                      </a>
+                    }
+                    @if (!workLocked()) {
+                      <button class="pill-button" type="button" (click)="openSectionSheet()">
+                        <span class="material-icons-sharp">apps</span>
+                        разделы
+                      </button>
+                    }
                     <button class="pill-button danger" type="button" (click)="logout()">
                       <span class="material-icons-sharp">logout</span>
                       выход
@@ -1103,6 +1141,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
     }
 
     .profile-view > .identity-card { order: 10; }
+    .profile-view > .report-review-card { order: 5; }
     .profile-view > .manual-payment-card { order: 15; }
     .profile-view > .metric-grid { order: 20; }
     .profile-view > .profile-chart-grid { order: 30; }
@@ -1121,6 +1160,77 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
       gap: 0.75rem;
       border-radius: 1rem;
       padding: 0.82rem;
+    }
+
+    .report-review-card {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 0.68rem;
+      flex: 0 0 auto;
+      border: 1px solid rgba(231, 180, 52, 0.38);
+      border-radius: 1rem;
+      padding: 0.78rem;
+      background: linear-gradient(155deg, #fffaf0 0%, var(--otziv-white) 100%);
+      box-shadow: 0 0.8rem 1.45rem rgba(132, 139, 200, 0.1);
+    }
+
+    .report-review-card.restricted {
+      border-color: rgba(237, 45, 91, 0.36);
+      background: linear-gradient(155deg, #fff3f6 0%, var(--otziv-white) 100%);
+    }
+
+    .report-review-card > .material-icons-sharp {
+      display: grid;
+      width: 2.35rem;
+      height: 2.35rem;
+      place-items: center;
+      border-radius: 0.78rem;
+      color: #9b6d00;
+      background: rgba(231, 180, 52, 0.16);
+    }
+
+    .report-review-card.restricted > .material-icons-sharp {
+      color: var(--otziv-danger);
+      background: rgba(237, 45, 91, 0.12);
+    }
+
+    .report-review-card h3,
+    .report-review-card p {
+      margin: 0;
+    }
+
+    .report-review-card h3 {
+      margin-top: 0.1rem;
+      color: var(--otziv-dark);
+      font-size: 0.94rem;
+      font-weight: 900;
+      line-height: 1.22;
+    }
+
+    .report-review-card p:not(.eyebrow),
+    .report-review-card small {
+      display: block;
+      margin-top: 0.28rem;
+      color: var(--otziv-info);
+      font-size: 0.67rem;
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .report-review-progress {
+      height: 0.34rem;
+      margin-top: 0.48rem;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(103, 116, 131, 0.14);
+    }
+
+    .report-review-progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--otziv-primary), var(--otziv-success));
     }
 
     .manual-payment-card {
@@ -2317,7 +2427,9 @@ export class HomePage implements OnInit, OnDestroy {
     readonly auth: AuthService,
     private readonly api: ApiService,
     private readonly route: ActivatedRoute,
-    private readonly router: Router
+    private readonly router: Router,
+    readonly reportReview: ManagerReportReviewAccessService,
+    private readonly toastController: ToastController
   ) {}
 
   ngOnInit(): void {
@@ -2325,12 +2437,12 @@ export class HomePage implements OnInit, OnDestroy {
     this.applyMobileNavIntent(this.route.snapshot.queryParamMap);
     this.lastMobileNavKey = this.mobileNavKey(this.route.snapshot.queryParamMap);
     this.scheduleMidnightRefresh();
-    void this.reload();
+    void this.reloadWithReportReviewCheckIn();
 
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
       const changed = this.applyRouteSection(params);
       if (changed) {
-        void this.reload();
+        void this.reloadWithReportReviewCheckIn();
       }
     });
 
@@ -2359,6 +2471,9 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   navLinks(): HomeSectionLink[] {
+    if (this.workLocked()) {
+      return HOME_SECTIONS.filter((link) => link.key === 'profile');
+    }
     return HOME_SECTIONS.filter((link) => this.canSee(link));
   }
 
@@ -2501,8 +2616,13 @@ export class HomePage implements OnInit, OnDestroy {
       switch (this.activeSection()) {
         case 'profile':
           this.profile.set(await firstValueFrom(this.api.getCabinetProfile(this.selectedDate(), { forceRefresh })));
-          await this.loadManualPaymentSettings(forceRefresh);
-          await this.loadManualPaymentTasks(forceRefresh);
+          if (!this.workLocked()) {
+            await this.loadManualPaymentSettings(forceRefresh);
+            await this.loadManualPaymentTasks(forceRefresh);
+          } else {
+            this.manualPaymentSettings.set(null);
+            this.manualPaymentTasks.set([]);
+          }
           break;
         case 'team':
           this.team.set(await firstValueFrom(this.api.getCabinetTeam(this.selectedDate(), {
@@ -2524,6 +2644,61 @@ export class HomePage implements OnInit, OnDestroy {
       this.error.set(this.errorMessage(error));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  workLocked(): boolean {
+    return this.auth.hasRealmRole('MANAGER') && this.reportReview.state()?.restricted === true;
+  }
+
+  reportReviewProgress(state: ManagerReportReviewAccessState): number {
+    if (state.questionCount <= 0) {
+      return 0;
+    }
+    return Math.max(
+      0,
+      Math.min(100, Math.round((state.answeredQuestionCount / state.questionCount) * 100))
+    );
+  }
+
+  reportReviewDeadline(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    return date.toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  private async reloadWithReportReviewCheckIn(): Promise<void> {
+    if (this.activeSection() === 'profile' && this.auth.hasRealmRole('MANAGER')) {
+      await this.checkInReportReview();
+    }
+    await this.reload();
+  }
+
+  private async checkInReportReview(): Promise<void> {
+    try {
+      const state = await this.reportReview.checkIn();
+      if (this.reportReview.shouldNotify(state)) {
+        const toast = await this.toastController.create({
+          header: state.restricted
+            ? 'Рабочие разделы временно закрыты'
+            : 'Необходимо проверить персональный аудит',
+          message: state.message || 'Откройте Telegram и изучите персональный отчёт.',
+          color: state.restricted ? 'danger' : 'warning',
+          duration: 7000,
+          position: 'top',
+          buttons: [{ text: 'Понятно', role: 'cancel' }]
+        });
+        await toast.present();
+      }
+    } catch {
+      // Личный кабинет остаётся доступным даже при временной ошибке проверки статуса.
     }
   }
 

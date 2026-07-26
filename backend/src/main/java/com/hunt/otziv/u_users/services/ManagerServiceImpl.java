@@ -70,6 +70,11 @@ public class ManagerServiceImpl implements ManagerService {
     } // Сохранить менеджера
 
     @Override
+    public Manager save(Manager manager) {
+        return managerRepository.save(manager);
+    }
+
+    @Override
     public List<Manager> getAllManagersToOwner(List<Manager> managers) {
         return managerRepository.findAllManagersToOwner(managers);
     }

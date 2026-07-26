@@ -468,6 +468,26 @@ deploy_tag=$deployTagQuoted
 vps_host=$vpsHostQuoted
 uploaded_env=$uploadedEnv
 uploaded_mobile_release=$uploadedMobileRelease
+self_heal_timer="otziv-prod-up.timer"
+self_heal_service="otziv-prod-up.service"
+self_heal_was_active="0"
+
+resume_self_heal() {
+  if [ "`$self_heal_was_active" = "1" ]; then
+    echo "Resuming production self-heal timer..."
+    sudo -n systemctl start "`$self_heal_timer" || true
+  fi
+}
+
+trap resume_self_heal EXIT
+
+if command -v systemctl >/dev/null 2>&1 \
+    && sudo -n systemctl is-active --quiet "`$self_heal_timer"; then
+  echo "Pausing production self-heal timer during deploy..."
+  sudo -n systemctl stop "`$self_heal_timer"
+  sudo -n systemctl stop "`$self_heal_service" || true
+  self_heal_was_active="1"
+fi
 
 compose() {
   if command -v docker-compose >/dev/null 2>&1; then
@@ -791,6 +811,8 @@ fi
 chmod 600 "`$env_file" || true
 
 set_env OTZIV_APP_BASE_URL "https://o-ogo.ru"
+set_env OTZIV_WORKER_CELLULAR_ACCESS_MODE "ENFORCE"
+set_env OTZIV_WORKER_CELLULAR_ALLOWED_CIDRS "178.177.216.0/22,178.177.220.0/22,91.78.236.0/22,91.78.216.0/21,91.78.224.0/21,91.79.216.0/21,91.79.224.0/21,91.79.232.0/22,89.113.30.0/23"
 set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
 set_env MAX_BOT_WEBHOOK_UPDATE_TYPES "bot_started,bot_added,message_created"
 set_env MAX_BOT_LONG_POLLING_ENABLED "false"
@@ -841,13 +863,16 @@ wait_service_healthy tempo 600
 wait_service_healthy prometheus 600
 compose up -d --no-deps grafana
 wait_service_healthy grafana 600
-remove_service_containers nginx
-recreate_service_with_retry nginx
 remove_service_containers whatsapp_lika
 recreate_service_with_retry whatsapp_lika
 remove_service_containers whatsapp_vika
 recreate_service_with_retry whatsapp_vika
 compose up -d --remove-orphans --no-deps phpmyadmin dozzle alloy
+wait_service_healthy app 300
+wait_service_healthy keycloak 300
+wait_service_healthy grafana 300
+remove_service_containers nginx
+recreate_service_with_retry nginx
 wait_service_healthy nginx 300
 wait_service_healthy whatsapp_lika 300
 wait_service_healthy whatsapp_vika 300

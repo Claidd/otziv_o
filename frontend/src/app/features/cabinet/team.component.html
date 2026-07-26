@@ -78,7 +78,7 @@
   }
 
   @if (team()) {
-    @for (section of sections; track section.key) {
+    @for (section of visibleSections(); track section.key) {
       <section class="team-section">
         <div class="section-title">
           <span class="material-icons-sharp">{{ section.icon }}</span>
@@ -141,7 +141,7 @@
               </div>
 
               <div class="progress-summary-slot">
-                @if (progressDetails(member); as details) {
+                @if (progressDetails(section.key, member); as details) {
                   @if (details.length) {
                     <details class="progress-details">
                       <summary title="Детализация дневного прогресса: остаток, нагрузка, активное время, рабочее окно и скорость закрытия.">

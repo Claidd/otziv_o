@@ -34,6 +34,7 @@ export const MOBILE_ROLES = {
 
 export const MOBILE_SECTIONS = {
   home: 'home',
+  training: 'training',
   leads: 'leads',
   companies: 'companies',
   orders: 'orders',
@@ -69,6 +70,9 @@ type MobileActionMatrix = Record<MobileSection, Partial<Record<MobileAction, Mob
 export const MOBILE_ACTION_MATRIX: MobileActionMatrix = {
   home: {
     view: MOBILE_ROLES.authenticated
+  },
+  training: {
+    view: MOBILE_ROLES.manager
   },
   leads: {
     view: MOBILE_ROLES.leads,

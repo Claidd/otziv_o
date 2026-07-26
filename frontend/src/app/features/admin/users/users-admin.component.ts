@@ -175,6 +175,7 @@ export class UsersAdminComponent implements OnDestroy {
     phoneNumber: [''],
     coefficient: ['0.05'],
     workerChatUrl: [''],
+    managerAuditChatUrl: [''],
     enabled: [true],
     roles: this.fb.nonNullable.control<string[]>([], [Validators.required])
   });
@@ -284,6 +285,10 @@ export class UsersAdminComponent implements OnDestroy {
     return this.isRoleSelected('WORKER');
   }
 
+  isManagerProfile(): boolean {
+    return this.isRoleSelected('MANAGER');
+  }
+
   isOwnerProfile(): boolean {
     return this.isRoleSelected('OWNER');
   }
@@ -300,6 +305,18 @@ export class UsersAdminComponent implements OnDestroy {
     return user?.workerTelegramGroupChatId ? 'Telegram привязан' : 'Telegram не привязан';
   }
 
+  managerAuditChatStatus(user: AdminUser | null | undefined): string {
+    const currentUrl = this.form.controls.managerAuditChatUrl.value.trim();
+    const savedUrl = (user?.managerAuditChatUrl ?? '').trim();
+    if (!currentUrl) {
+      return 'Не указана';
+    }
+    if (currentUrl !== savedUrl) {
+      return 'Сохраните ссылку';
+    }
+    return user?.managerAuditTelegramGroupChatId ? 'Telegram привязан' : 'Telegram не привязан';
+  }
+
   async copyWorkerTelegramInviteUrl(user: AdminUser | null | undefined): Promise<void> {
     const inviteUrl = (user?.workerTelegramBotInviteUrl ?? '').trim();
     if (!inviteUrl) {
@@ -311,6 +328,21 @@ export class UsersAdminComponent implements OnDestroy {
       return;
     }
 
+    this.toastService.error('Не удалось скопировать', 'Скопируйте ссылку вручную из кнопки привязки.');
+  }
+
+  async copyManagerAuditTelegramInviteUrl(user: AdminUser | null | undefined): Promise<void> {
+    const inviteUrl = (user?.managerAuditTelegramBotInviteUrl ?? '').trim();
+    if (!inviteUrl) {
+      return;
+    }
+    if (await copyTextToClipboard(inviteUrl)) {
+      this.toastService.success(
+        'Ссылка скопирована',
+        'Добавьте бота во внутреннюю группу менеджера и владельца.'
+      );
+      return;
+    }
     this.toastService.error('Не удалось скопировать', 'Скопируйте ссылку вручную из кнопки привязки.');
   }
 
@@ -354,6 +386,7 @@ export class UsersAdminComponent implements OnDestroy {
       phoneNumber: raw.phoneNumber.trim() || undefined,
       coefficient,
       workerChatUrl: raw.workerChatUrl.trim() || undefined,
+      managerAuditChatUrl: raw.managerAuditChatUrl.trim() || undefined,
       enabled: raw.enabled,
       roles: raw.roles
     };
@@ -723,6 +756,7 @@ export class UsersAdminComponent implements OnDestroy {
       phoneNumber: user.phoneNumber ?? '',
       coefficient: this.formatCoefficient(user.coefficient),
       workerChatUrl: user.workerChatUrl ?? '',
+      managerAuditChatUrl: user.managerAuditChatUrl ?? '',
       enabled: user.active,
       roles: user.roles ?? []
     });
@@ -758,6 +792,7 @@ export class UsersAdminComponent implements OnDestroy {
       phoneNumber: raw.phoneNumber.trim(),
       coefficient: coefficient === null ? `invalid:${raw.coefficient.trim()}` : coefficient ?? '',
       workerChatUrl: raw.workerChatUrl.trim(),
+      managerAuditChatUrl: raw.managerAuditChatUrl.trim(),
       enabled: raw.enabled,
       roles: [...raw.roles].sort()
     });

@@ -23,6 +23,9 @@ public record CommonInvoiceSummaryResponse(
         LocalDateTime sentAt,
         LocalDateTime lastReminderAt,
         LocalDateTime nextReminderAt,
+        LocalDateTime closedAt,
+        String closedBy,
+        String closeReason,
         String lastError,
         String paymentSuccessNotificationError
 ) {

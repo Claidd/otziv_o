@@ -5,7 +5,11 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { CompanyDeepReportLaunchService } from '../../core/company-deep-report-launch.service';
 import { CompanyCreateResult, CompanyCreateSource } from '../../core/company-create.api';
-import { CommonBillingApi, type CommonInvoiceDetailsResponse } from '../../core/common-billing.api';
+import {
+  CommonBillingApi,
+  type CommonInvoiceDetailsResponse,
+  type ManualPaymentConfirmationRequest
+} from '../../core/common-billing.api';
 import { MetricSnapshotApi } from '../../core/metric-snapshot.api';
 import { PaymentsApi } from '../../core/payments.api';
 import {
@@ -837,6 +841,17 @@ export class ManagerBoardComponent implements OnDestroy {
     const invoiceId = order.commonInvoiceId ?? Math.abs(order.id);
     const key = `order-${order.id}-${action.status}`;
     this.mutationKey.set(key);
+    const paymentEvidence = action.status === 'Оплачено'
+      ? this.requestCommonInvoiceManualPaymentEvidence(invoiceId)
+      : null;
+    if (action.status === 'Оплачено' && !paymentEvidence) {
+      this.mutationKey.set(null);
+      return;
+    }
+    if (action.status === 'Архив') {
+      this.archiveCommonInvoice(invoiceId, order, key);
+      return;
+    }
 
     const request = (() => {
       switch (action.status) {
@@ -849,7 +864,7 @@ export class ManagerBoardComponent implements OnDestroy {
         case 'Бан':
           return this.commonBillingApi.markBan(invoiceId);
         case 'Оплачено':
-          return this.commonBillingApi.markPaid(invoiceId);
+          return this.commonBillingApi.markPaid(invoiceId, paymentEvidence!);
         default:
           return null;
       }
@@ -874,6 +889,82 @@ export class ManagerBoardComponent implements OnDestroy {
         this.toastService.error('Общий счет не обновлен', this.errorMessage(err, 'Не удалось изменить общий счет'));
       }
     });
+  }
+
+  private archiveCommonInvoice(invoiceId: number, order: OrderCardItem, mutationKey: string): void {
+    this.commonBillingApi.archivePreview(invoiceId).subscribe({
+      next: (preview) => {
+        if (!preview.allowed) {
+          this.mutationKey.set(null);
+          this.toastService.error(
+            'Общий счет нельзя архивировать',
+            preview.blockers.join('; ') || 'Проверьте статусы заказов внутри счета.'
+          );
+          return;
+        }
+        const confirmed = window.confirm(
+          `Перевести общий счёт №${invoiceId} и все заказы внутри (${preview.totalOrders}) в архив?`
+        );
+        if (!confirmed) {
+          this.mutationKey.set(null);
+          return;
+        }
+        this.mutationKey.set(mutationKey);
+        this.commonBillingApi.archiveInvoice(invoiceId).subscribe({
+          next: () => {
+            this.mutationKey.set(null);
+            this.toastService.success(
+              'Общий счет архивирован',
+              `${order.companyTitle}: архивировано заказов — ${preview.totalOrders}`
+            );
+            this.loadBoard();
+          },
+          error: (err) => {
+            this.mutationKey.set(null);
+            this.toastService.error(
+              'Общий счет не архивирован',
+              this.errorMessage(err, 'Не удалось архивировать общий счет')
+            );
+          }
+        });
+      },
+      error: (err) => {
+        this.mutationKey.set(null);
+        this.toastService.error(
+          'Проверка архивирования не выполнена',
+          this.errorMessage(err, 'Не удалось проверить общий счет')
+        );
+      }
+    });
+  }
+
+  private requestCommonInvoiceManualPaymentEvidence(
+    invoiceId: number
+  ): ManualPaymentConfirmationRequest | null {
+    if (!window.confirm(`Отметить общий счёт №${invoiceId} оплаченным вручную?`)) {
+      return null;
+    }
+    const comment = window.prompt(
+      'Комментарий к ручной оплате (например: «сверено по выписке»). Если есть только чек — оставьте пустым:'
+    );
+    if (comment === null) {
+      return null;
+    }
+    const receiptUrl = window.prompt(
+      'Ссылка на чек или платёжный документ (необязательно, если заполнен комментарий):'
+    );
+    if (receiptUrl === null) {
+      return null;
+    }
+    const evidence = { comment: comment.trim(), receiptUrl: receiptUrl.trim() };
+    if (!evidence.comment && !evidence.receiptUrl) {
+      this.toastService.error(
+        'Оплата не подтверждена',
+        'Укажите комментарий или ссылку на чек.'
+      );
+      return null;
+    }
+    return evidence;
   }
 
   private commonInvoiceStatusLabel(details: CommonInvoiceDetailsResponse, fallback: string): string {

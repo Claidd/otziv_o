@@ -132,6 +132,10 @@ public class AppSettingService {
     public static final String CLIENT_MESSAGES_TRANSIENT_RETRY_MINUTES = "client.messages.transient-retry-minutes";
     public static final String CLIENT_MESSAGES_MANUAL_CONTROL_FAILURE_THRESHOLD = "client.messages.manual-control.failure-threshold";
     public static final String CLIENT_MESSAGES_MANUAL_CONTROL_AFTER_MINUTES = "client.messages.manual-control.after-minutes";
+    public static final String MANAGER_CONTROL_AUTOMATION_FAILURES_ENABLED =
+            "manager-control.automation-failures.enabled";
+    public static final String MANAGER_CONTROL_COLLECTING_STALE_ENABLED =
+            "manager-control.common-invoices.collecting-stale-enabled";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_ENABLED = "manager-control.unanswered-client-messages.auto-ignore-enabled";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_MAX_LENGTH = "manager-control.unanswered-client-messages.auto-ignore-max-length";
     public static final String MANAGER_CONTROL_UNANSWERED_AUTO_IGNORE_PHRASES = "manager-control.unanswered-client-messages.auto-ignore-phrases";
@@ -164,6 +168,12 @@ public class AppSettingService {
             "worker-risk.explanation.ai-timeout-seconds";
     public static final String WORKER_RISK_SPECIALIST_SECTION_RESTRICTION_ENABLED =
             "worker-risk.specialist-section-restriction-enabled";
+    public static final String WORKER_CELLULAR_ACCESS_MODE =
+            "worker.cellular-access.mode";
+    public static final String WORKER_CELLULAR_ACCESS_ENFORCED_REASONS =
+            "worker.cellular-access.enforced-reasons";
+    public static final String WORKER_CELLULAR_ACCESS_ENFORCE_NATIVE_VIRTUAL_DEVICE =
+            "worker.cellular-access.enforce-native-virtual-device";
     public static final String MANAGER_SUMMARY_AI_ANALYSIS_ENABLED =
             "manager.summary.ai-analysis-enabled";
     public static final String MANAGER_SUMMARY_AI_ANALYSIS_TIMEOUT_SECONDS =

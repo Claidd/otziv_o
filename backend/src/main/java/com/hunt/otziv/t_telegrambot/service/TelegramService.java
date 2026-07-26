@@ -1,5 +1,7 @@
 package com.hunt.otziv.t_telegrambot.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.admin.services.PersonalService;
 import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
 import com.hunt.otziv.client_chat_control.model.ClientChatDirection;
@@ -7,6 +9,7 @@ import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.manager_control.service.ManagerControlWorkerTaskTelegramCallbackService;
+import com.hunt.otziv.manager_daily_summary.service.ManagerReportReviewTelegramService;
 import com.hunt.otziv.performers.service.PerformerTelegramCallbackService;
 import com.hunt.otziv.performers.service.PerformerTelegramLinkService;
 import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
@@ -14,14 +17,22 @@ import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
+import java.net.URI;
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import javax.net.ssl.SSLException;
@@ -57,8 +68,10 @@ public class TelegramService extends TelegramLongPollingBot {
 
     private static final Pattern BOT_TOKEN_PATTERN = Pattern.compile("\\d{6,}:[A-Za-z0-9_-]{20,}");
     private static final int MAX_TELEGRAM_MESSAGE_LENGTH = 3900;
+    private static final int MAX_TELEGRAM_RICH_MESSAGE_LENGTH = 32_000;
     private static final int SEND_ATTEMPTS = 3;
     private static final long SEND_RETRY_DELAY_MS = 1_500L;
+    private static final ObjectMapper TELEGRAM_JSON = new ObjectMapper();
 
     private final String botUsername;
     private final boolean sendingEnabled;
@@ -71,8 +84,10 @@ public class TelegramService extends TelegramLongPollingBot {
     private final ObjectProvider<PerformerTelegramCallbackService> performerTelegramCallbackServiceProvider;
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
+    private final ObjectProvider<ManagerReportReviewTelegramService> managerReportReviewTelegramServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
+    private final HttpClient richMessageHttpClient;
 
     public TelegramService(
             DefaultBotOptions botOptions,
@@ -101,6 +116,7 @@ public class TelegramService extends TelegramLongPollingBot {
                 workerRiskTelegramCallbackServiceProvider,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -120,6 +136,7 @@ public class TelegramService extends TelegramLongPollingBot {
             ObjectProvider<PerformerTelegramCallbackService> performerTelegramCallbackServiceProvider,
             ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider,
             ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider,
+            ObjectProvider<ManagerReportReviewTelegramService> managerReportReviewTelegramServiceProvider,
             TelegramChatMigrationService telegramChatMigrationService,
             ClientChatMessageTrackerService clientChatMessageTrackerService
     ) {
@@ -135,8 +152,47 @@ public class TelegramService extends TelegramLongPollingBot {
         this.performerTelegramCallbackServiceProvider = performerTelegramCallbackServiceProvider;
         this.workerRiskTelegramCallbackServiceProvider = workerRiskTelegramCallbackServiceProvider;
         this.managerControlWorkerTaskTelegramCallbackServiceProvider = managerControlWorkerTaskTelegramCallbackServiceProvider;
+        this.managerReportReviewTelegramServiceProvider = managerReportReviewTelegramServiceProvider;
         this.telegramChatMigrationService = telegramChatMigrationService;
         this.clientChatMessageTrackerService = clientChatMessageTrackerService;
+        this.richMessageHttpClient = richMessageHttpClient(botOptions);
+    }
+
+    public TelegramService(
+            DefaultBotOptions botOptions,
+            String botToken,
+            String botUsername,
+            boolean sendingEnabled,
+            String adminChatIds,
+            ObjectProvider<PersonalService> personalServiceProvider,
+            UserService userService,
+            TelegramGroupLinkService telegramGroupLinkService,
+            PublicationProgressPreferenceService publicationProgressPreferenceService,
+            ObjectProvider<PerformerTelegramLinkService> performerTelegramLinkServiceProvider,
+            ObjectProvider<PerformerTelegramCallbackService> performerTelegramCallbackServiceProvider,
+            ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider,
+            ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider,
+            TelegramChatMigrationService telegramChatMigrationService,
+            ClientChatMessageTrackerService clientChatMessageTrackerService
+    ) {
+        this(
+                botOptions,
+                botToken,
+                botUsername,
+                sendingEnabled,
+                adminChatIds,
+                personalServiceProvider,
+                userService,
+                telegramGroupLinkService,
+                publicationProgressPreferenceService,
+                performerTelegramLinkServiceProvider,
+                performerTelegramCallbackServiceProvider,
+                workerRiskTelegramCallbackServiceProvider,
+                managerControlWorkerTaskTelegramCallbackServiceProvider,
+                null,
+                telegramChatMigrationService,
+                clientChatMessageTrackerService
+        );
     }
 
     @Override
@@ -187,10 +243,38 @@ public class TelegramService extends TelegramLongPollingBot {
         }
 
         if (!isPrivateChat(update)) {
+            Long actorTelegramId = update.getMessage().getFrom() == null
+                    ? null
+                    : update.getMessage().getFrom().getId();
+            Message replyToMessage = update.getMessage().getReplyToMessage();
+            Integer replyToMessageId = replyToMessage == null ? null : replyToMessage.getMessageId();
+            ManagerReportReviewTelegramService managerReportReviewTelegramService =
+                    managerReportReviewTelegramServiceProvider == null
+                            ? null
+                            : managerReportReviewTelegramServiceProvider.getIfAvailable();
+            if (managerReportReviewTelegramService != null) {
+                Optional<String> groupCommandResponse =
+                        managerReportReviewTelegramService.handleGroupCommand(
+                                chatId,
+                                actorTelegramId,
+                                messageText
+                        );
+                if (groupCommandResponse.isPresent()) {
+                    sendMessage(chatId, groupCommandResponse.get(), "HTML");
+                    return;
+                }
+                if (managerReportReviewTelegramService.handleGroupTextMessage(
+                        chatId,
+                        actorTelegramId,
+                        messageText,
+                        replyToMessageId
+                )) {
+                    return;
+                }
+            }
+
             WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService =
                     workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
-            Long actorTelegramId = update.getMessage().getFrom() == null ? null : update.getMessage().getFrom().getId();
-            Message replyToMessage = update.getMessage().getReplyToMessage();
             String replyToMessageText = telegramMessageText(replyToMessage);
             boolean replyToBotMessage = replyToMessage != null
                     && replyToMessage.getFrom() != null
@@ -230,6 +314,23 @@ public class TelegramService extends TelegramLongPollingBot {
                 workerRiskTelegramCallbackServiceProvider == null ? null : workerRiskTelegramCallbackServiceProvider.getIfAvailable();
         if (workerRiskTelegramCallbackService != null
                 && workerRiskTelegramCallbackService.handleWorkerTextMessage(chatId, user, messageText)) {
+            return;
+        }
+
+        ManagerReportReviewTelegramService managerReportReviewTelegramService =
+                managerReportReviewTelegramServiceProvider == null
+                        ? null
+                        : managerReportReviewTelegramServiceProvider.getIfAvailable();
+        Message managerReplyTo = update.getMessage().getReplyToMessage();
+        Integer managerReplyToMessageId =
+                managerReplyTo == null ? null : managerReplyTo.getMessageId();
+        if (managerReportReviewTelegramService != null
+                && managerReportReviewTelegramService.handleTextMessage(
+                chatId,
+                user,
+                messageText,
+                managerReplyToMessageId
+        )) {
             return;
         }
 
@@ -309,6 +410,19 @@ public class TelegramService extends TelegramLongPollingBot {
             if (managerControlAnswer.isPresent()) {
                 log.info("Manager control worker task Telegram callback handled answer='{}'", managerControlAnswer.get());
                 answerCallback(callbackQuery.getId(), managerControlAnswer.get());
+                return;
+            }
+        }
+
+        ManagerReportReviewTelegramService managerReportReviewTelegramService =
+                managerReportReviewTelegramServiceProvider == null
+                        ? null
+                        : managerReportReviewTelegramServiceProvider.getIfAvailable();
+        if (managerReportReviewTelegramService != null) {
+            Optional<String> reviewAnswer = managerReportReviewTelegramService.handle(callbackQuery);
+            if (reviewAnswer.isPresent()) {
+                log.info("Manager report review Telegram callback handled answer='{}'", reviewAnswer.get());
+                answerCallback(callbackQuery.getId(), reviewAnswer.get());
                 return;
             }
         }
@@ -530,22 +644,35 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     public boolean sendForceReplyMessage(long chatId, String text) {
+        return sendForceReplyMessageId(chatId, text).isPresent();
+    }
+
+    public Optional<Integer> sendForceReplyMessageId(long chatId, String text) {
+        return sendForceReplyMessageId(chatId, text, false);
+    }
+
+    public Optional<Integer> sendProtectedForceReplyMessageId(long chatId, String text) {
+        return sendForceReplyMessageId(chatId, text, true);
+    }
+
+    private Optional<Integer> sendForceReplyMessageId(long chatId, String text, boolean protectContent) {
         if (!sendingEnabled) {
             log.debug("Telegram-сообщение не отправлено chatId={}: отправка отключена настройкой", chatId);
-            return false;
+            return Optional.empty();
         }
         if (!looksLikeTelegramBotToken(getBotToken())) {
             log.warn("Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
-            return false;
+            return Optional.empty();
         }
         if (!hasText(text)) {
             log.warn("Telegram-сообщение для {} не отправлено: текст пустой", chatId);
-            return false;
+            return Optional.empty();
         }
         ForceReplyKeyboard forceReply = new ForceReplyKeyboard();
         forceReply.setForceReply(true);
         forceReply.setSelective(false);
-        return sendSingleMessage(chatId, text, null, forceReply);
+        return sendSingleMessageResult(chatId, text, null, forceReply, protectContent)
+                .map(Message::getMessageId);
     }
 
     public boolean sendSelectiveForceReplyMessage(long chatId, long targetTelegramUserId, String text) {
@@ -595,6 +722,24 @@ public class TelegramService extends TelegramLongPollingBot {
             markup.setKeyboard(keyboard);
         }
         return sendSingleMessageResult(chatId, text, parseMode, markup)
+                .map(Message::getMessageId);
+    }
+
+    public Optional<Integer> sendProtectedMessageWithInlineKeyboardMessageId(
+            long chatId,
+            String text,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken()) || !hasText(text)) {
+            return Optional.empty();
+        }
+        InlineKeyboardMarkup markup = null;
+        if (keyboard != null && !keyboard.isEmpty()) {
+            markup = new InlineKeyboardMarkup();
+            markup.setKeyboard(keyboard);
+        }
+        return sendSingleMessageResult(chatId, text, parseMode, markup, true)
                 .map(Message::getMessageId);
     }
 
@@ -651,6 +796,203 @@ public class TelegramService extends TelegramLongPollingBot {
         return sent;
     }
 
+    /**
+     * Sends a Bot API 10.2 rich message directly because the currently used Java
+     * Telegram library predates sendRichMessage. Rich messages support native
+     * headings, lists, tables and collapsible details and have a 32K text limit.
+     */
+    public boolean sendRichMessage(long chatId, String html) {
+        return sendRichMessageWithInlineKeyboard(chatId, html, List.of());
+    }
+
+    public boolean sendRichMessageWithInlineKeyboard(
+            long chatId,
+            String html,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        return sendRichMessageWithInlineKeyboardMessageId(chatId, html, keyboard).isPresent();
+    }
+
+    public Optional<Integer> sendRichMessageWithInlineKeyboardMessageId(
+            long chatId,
+            String html,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        return sendRichMessageWithInlineKeyboardMessageId(chatId, html, keyboard, false);
+    }
+
+    public Optional<Integer> sendProtectedRichMessageWithInlineKeyboardMessageId(
+            long chatId,
+            String html,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        return sendRichMessageWithInlineKeyboardMessageId(chatId, html, keyboard, true);
+    }
+
+    private Optional<Integer> sendRichMessageWithInlineKeyboardMessageId(
+            long chatId,
+            String html,
+            List<List<InlineKeyboardButton>> keyboard,
+            boolean protectContent
+    ) {
+        if (!sendingEnabled) {
+            log.debug("Rich Telegram-сообщение не отправлено chatId={}: отправка отключена", chatId);
+            return Optional.empty();
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Rich Telegram-сообщение не отправлено: TELEGRAM_BOT_TOKEN отсутствует");
+            return Optional.empty();
+        }
+        if (!hasText(html) || html.length() > MAX_TELEGRAM_RICH_MESSAGE_LENGTH) {
+            log.warn("Rich Telegram-сообщение для {} не отправлено: длина {} символов",
+                    chatId, html == null ? 0 : html.length());
+            return Optional.empty();
+        }
+
+        try {
+            Map<String, Object> payloadData = new java.util.LinkedHashMap<>();
+            payloadData.put("chat_id", String.valueOf(chatId));
+            payloadData.put("protect_content", protectContent);
+            payloadData.put("rich_message", Map.of(
+                    "html", html,
+                    "skip_entity_detection", true
+            ));
+            if (keyboard != null && !keyboard.isEmpty()) {
+                payloadData.put("reply_markup", Map.of(
+                        "inline_keyboard",
+                        keyboard.stream()
+                                .map(row -> row.stream()
+                                        .map(button -> Map.of(
+                                                "text", button.getText(),
+                                                "callback_data", button.getCallbackData()
+                                        ))
+                                        .toList())
+                                .toList()
+                ));
+            }
+            String payload = TELEGRAM_JSON.writeValueAsString(payloadData);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.telegram.org/bot" + getBotToken() + "/sendRichMessage"))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+            for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
+                try {
+                    HttpResponse<String> response = richMessageHttpClient.send(
+                            request,
+                            HttpResponse.BodyHandlers.ofString()
+                    );
+                    JsonNode body = TELEGRAM_JSON.readTree(response.body());
+                    if (response.statusCode() >= 200
+                            && response.statusCode() < 300
+                            && body.path("ok").asBoolean(false)) {
+                        log.info("Rich Telegram-аудит отправлен chatId={}", chatId);
+                        int messageId = body.path("result").path("message_id").asInt(0);
+                        return messageId > 0 ? Optional.of(messageId) : Optional.empty();
+                    }
+                    String description = body.path("description").asText("HTTP " + response.statusCode());
+                    log.warn("Rich Telegram-аудит не принят chatId={} попытка {}/{}: {}",
+                            chatId, attempt, SEND_ATTEMPTS, description);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    return Optional.empty();
+                } catch (Exception exception) {
+                    log.warn("Rich Telegram-аудит временно не отправлен chatId={} попытка {}/{}: {}",
+                            chatId, attempt, SEND_ATTEMPTS, safeRichSendError(exception));
+                }
+                if (attempt < SEND_ATTEMPTS) {
+                    sleepBeforeRetry(SEND_RETRY_DELAY_MS * attempt);
+                }
+            }
+        } catch (Exception exception) {
+            log.warn("Не удалось подготовить rich Telegram-аудит chatId={}: {}",
+                    chatId, safeRichSendError(exception));
+        }
+        return Optional.empty();
+    }
+
+    public boolean editRichMessage(
+            long chatId,
+            int messageId,
+            String html,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled || !looksLikeTelegramBotToken(getBotToken())
+                || !hasText(html) || html.length() > MAX_TELEGRAM_RICH_MESSAGE_LENGTH) {
+            return false;
+        }
+        try {
+            Map<String, Object> payloadData = new java.util.LinkedHashMap<>();
+            payloadData.put("chat_id", String.valueOf(chatId));
+            payloadData.put("message_id", messageId);
+            payloadData.put("rich_message", Map.of(
+                    "html", html,
+                    "skip_entity_detection", true
+            ));
+            if (keyboard != null && !keyboard.isEmpty()) {
+                payloadData.put("reply_markup", Map.of(
+                        "inline_keyboard",
+                        keyboard.stream()
+                                .map(row -> row.stream()
+                                        .map(button -> Map.of(
+                                                "text", button.getText(),
+                                                "callback_data", button.getCallbackData()
+                                        ))
+                                        .toList())
+                                .toList()
+                ));
+            }
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.telegram.org/bot" + getBotToken() + "/editMessageText"))
+                    .timeout(Duration.ofSeconds(30))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(TELEGRAM_JSON.writeValueAsString(payloadData)))
+                    .build();
+            HttpResponse<String> response = richMessageHttpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+            JsonNode body = TELEGRAM_JSON.readTree(response.body());
+            if (response.statusCode() >= 200 && response.statusCode() < 300
+                    && body.path("ok").asBoolean(false)) {
+                return true;
+            }
+            log.warn("Rich Telegram-сообщение не обновлено chatId={} messageId={}: {}",
+                    chatId, messageId, body.path("description").asText("HTTP " + response.statusCode()));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        } catch (Exception exception) {
+            log.warn("Не удалось обновить rich Telegram-сообщение chatId={} messageId={}: {}",
+                    chatId, messageId, safeRichSendError(exception));
+        }
+        return false;
+    }
+
+    private HttpClient richMessageHttpClient(DefaultBotOptions botOptions) {
+        HttpClient.Builder builder = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10));
+        if (botOptions != null
+                && botOptions.getProxyType() == DefaultBotOptions.ProxyType.HTTP
+                && hasText(botOptions.getProxyHost())
+                && botOptions.getProxyPort() > 0) {
+            builder.proxy(ProxySelector.of(new InetSocketAddress(
+                    botOptions.getProxyHost(),
+                    botOptions.getProxyPort()
+            )));
+        }
+        return builder.build();
+    }
+
+    private String safeRichSendError(Exception exception) {
+        String message = concise(exception);
+        String token = getBotToken();
+        if (hasText(token)) {
+            message = message.replace(token, "[bot-token]");
+        }
+        return message;
+    }
+
     private boolean sendSingleMessage(long chatId, String text, String parseMode) {
         return sendSingleMessage(chatId, text, parseMode, null);
     }
@@ -660,10 +1002,21 @@ public class TelegramService extends TelegramLongPollingBot {
     }
 
     private Optional<Message> sendSingleMessageResult(long chatId, String text, String parseMode, ReplyKeyboard replyMarkup) {
+        return sendSingleMessageResult(chatId, text, parseMode, replyMarkup, false);
+    }
+
+    private Optional<Message> sendSingleMessageResult(
+            long chatId,
+            String text,
+            String parseMode,
+            ReplyKeyboard replyMarkup,
+            boolean protectContent
+    ) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
         message.setDisableWebPagePreview(true);
+        message.setProtectContent(protectContent);
         if (hasText(parseMode)) {
             message.setParseMode(parseMode);
         }
@@ -683,7 +1036,14 @@ public class TelegramService extends TelegramLongPollingBot {
             } catch (TelegramApiRequestException e) {
                 Optional<Long> migratedChatId = migrateToChatId(e);
                 if (migratedChatId.isPresent()) {
-                    return resendAfterChatMigrationResult(chatId, migratedChatId.get(), text, parseMode, replyMarkup);
+                    return resendAfterChatMigrationResult(
+                            chatId,
+                            migratedChatId.get(),
+                            text,
+                            parseMode,
+                            replyMarkup,
+                            protectContent
+                    );
                 }
                 if (e.getApiResponse() != null && e.getApiResponse().contains("bot was blocked by the user")) {
                     log.warn("Telegram-бот заблокирован пользователем. ChatId: {}", chatId);
@@ -758,13 +1118,31 @@ public class TelegramService extends TelegramLongPollingBot {
             String parseMode,
             ReplyKeyboard replyMarkup
     ) {
+        return resendAfterChatMigrationResult(
+                oldChatId,
+                newChatId,
+                text,
+                parseMode,
+                replyMarkup,
+                false
+        );
+    }
+
+    private Optional<Message> resendAfterChatMigrationResult(
+            long oldChatId,
+            long newChatId,
+            String text,
+            String parseMode,
+            ReplyKeyboard replyMarkup,
+            boolean protectContent
+    ) {
         if (telegramChatMigrationService != null) {
             telegramChatMigrationService.migrateChatId(oldChatId, newChatId);
         } else {
             log.warn("Telegram chat migrated oldChatId={} newChatId={}, but migration service is unavailable", oldChatId, newChatId);
         }
         log.info("Повторяем Telegram-сообщение после миграции chatId={} -> {}", oldChatId, newChatId);
-        return sendSingleMessageResult(newChatId, text, parseMode, replyMarkup);
+        return sendSingleMessageResult(newChatId, text, parseMode, replyMarkup, protectContent);
     }
 
     private Optional<Long> migrateToChatId(TelegramApiRequestException e) {

@@ -42,6 +42,7 @@ public class ManagerQueueStateService {
     private final UserService userService;
     private final AppSettingService settings;
     private final GamificationEventService gamification;
+    private final ManagerOperationalMetricsService operationalMetricsService;
 
     @Scheduled(fixedDelayString = "${manager.sla.observer-delay-ms:60000}", initialDelay = 30000)
     @Transactional
@@ -90,10 +91,18 @@ public class ManagerQueueStateService {
         }
         long targetSeconds = targetHours * 3600L;
         int percent = (int) Math.min(100, Math.round(controlled * 100.0 / targetSeconds));
+        ManagerOperationalMetricsService.Metrics operational = operationalMetricsService.calculate(
+                manager,
+                date,
+                end
+        );
         return new ManagerQueueStateResponse(enabled, date, last == null ? "NOT_OBSERVED" : last.getStateCode(),
                 last == null ? 0 : last.getOpenActionCount(), last == null ? 0 : last.getWithinTargetCount(),
                 last == null ? 0 : last.getTargetMissedCount(), last == null ? 0 : last.getOverdueCount(),
-                hardBreaches, controlled, clean, streak, targetHours, percent, last == null ? null : last.getObservedAt());
+                hardBreaches, controlled, clean, streak, targetHours, percent,
+                operational.activeWorkSeconds(), operational.averageDailyWorkSeconds(),
+                operational.averageReactionSeconds(), operational.reactionCount(),
+                last == null ? null : last.getObservedAt());
     }
 
     private void observe(ManagerDailyControl control, LocalDateTime now) {

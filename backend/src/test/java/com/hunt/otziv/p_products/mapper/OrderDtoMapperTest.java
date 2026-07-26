@@ -38,7 +38,11 @@ class OrderDtoMapperTest {
 
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final OrderDtoMapper mapper = new OrderDtoMapper(
-            new TelegramGroupLinkService(companyRepository, mock(UserRepository.class)),
+            new TelegramGroupLinkService(
+                    companyRepository,
+                    mock(UserRepository.class),
+                    mock(com.hunt.otziv.u_users.repository.ManagerRepository.class)
+            ),
             new MaxGroupLinkService(companyRepository, mock(MaxBotClient.class))
     );
 

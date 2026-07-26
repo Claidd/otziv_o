@@ -44,6 +44,7 @@ class ManagerQueueStateServiceTest {
     @Mock private UserService userService;
     @Mock private AppSettingService settings;
     @Mock private GamificationEventService gamification;
+    @Mock private ManagerOperationalMetricsService operationalMetricsService;
 
     private ManagerQueueStateService service;
 
@@ -57,7 +58,8 @@ class ManagerQueueStateServiceTest {
                 managerRepository,
                 userService,
                 settings,
-                gamification
+                gamification,
+                operationalMetricsService
         );
         when(settings.getBoolean("manager.sla.enabled", false)).thenReturn(true);
         when(settings.getInt(anyString(), anyInt())).thenAnswer(invocation -> invocation.getArgument(1));

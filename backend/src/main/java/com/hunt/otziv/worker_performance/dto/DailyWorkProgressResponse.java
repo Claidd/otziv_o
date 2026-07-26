@@ -161,4 +161,51 @@ public record DailyWorkProgressResponse(
                 false
         );
     }
+
+    public DailyWorkProgressResponse withActiveWorkSeconds(long value) {
+        return new DailyWorkProgressResponse(
+                visible,
+                roleType,
+                date,
+                completed,
+                active,
+                total,
+                percent,
+                checked,
+                firstCompletedAt,
+                lastCompletedAt,
+                averageCloseSeconds,
+                medianCloseSeconds,
+                p90CloseSeconds,
+                firstActivityAt,
+                lastActivityAt,
+                Math.max(0, value),
+                workWindowSeconds,
+                activityEvents,
+                loadScore,
+                efficiencyScore,
+                openedCount,
+                orderCompletedCount,
+                nagulCompletedCount,
+                publishCompletedCount,
+                badCompletedCount,
+                recoveryCompletedCount,
+                recoveryCreatedCount,
+                orderOverdueCount,
+                totalOverdueCount,
+                speedScore,
+                disciplineScore,
+                workloadScore,
+                botChangeCount,
+                botBlockCount,
+                reached100,
+                firstReached100At,
+                lastReached100At,
+                periodType,
+                workingDays,
+                checkedDays,
+                reached100Days,
+                closedPeriod
+        );
+    }
 }

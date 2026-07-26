@@ -435,6 +435,13 @@ p {
   transition: width 240ms ease;
 }
 
+.queue-control-stats em {
+  color: var(--otziv-info);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .summary-preview-button {
   display: inline-flex;
   width: 100%;
@@ -454,6 +461,20 @@ p {
 .summary-preview-button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.summary-telegram-button {
+  margin-top: 0.55rem;
+  border-color: rgba(238, 85, 59, 0.46);
+  color: var(--otziv-primary);
+  background: linear-gradient(135deg, rgba(238, 85, 59, 0.13), rgba(255, 255, 255, 0.94));
+}
+
+.summary-audit-test-button {
+  margin-top: 0.55rem;
+  border-color: rgba(121, 83, 190, 0.42);
+  color: #6b43a8;
+  background: linear-gradient(135deg, rgba(121, 83, 190, 0.13), rgba(255, 255, 255, 0.94));
 }
 
 .summary-preview-backdrop {
@@ -1853,15 +1874,53 @@ button.review-action.request-action {
   padding: 5px 9px;
 }
 
+.client-reply-composer {
+  display: grid;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #cfe0f4;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.client-reply-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: #34445e;
+}
+
+.client-reply-heading > span {
+  color: #4774ad;
+  font-size: 1.2rem;
+}
+
+.client-reply-heading div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.client-reply-heading strong {
+  font-size: 0.82rem;
+}
+
+.client-reply-heading small {
+  color: #6e7c91;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .unanswered-reply {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
 }
 
 .unanswered-reply textarea {
+  grid-column: 1 / -1;
   width: 100%;
   min-height: 4.2rem;
   resize: vertical;
@@ -1876,8 +1935,8 @@ button.review-action.request-action {
 }
 
 .unanswered-reply button {
-  align-self: center;
-  min-width: 8.5rem;
+  width: 100%;
+  min-width: 0;
   height: 40px;
   padding: 0 18px;
   box-shadow: 0 8px 18px rgba(40, 119, 103, 0.1);
@@ -1915,6 +1974,9 @@ button.review-action.request-action {
 
 .detail-example-actions {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 

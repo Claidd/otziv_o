@@ -12,7 +12,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ClientChatAutoIgnoreService {
 
-    public static final String DEFAULT_PHRASES = "ок,окей,хорошо,спасибо,спасибо большое,благодарю,да,нет,"
+    public static final String DEFAULT_PHRASES = "ок,окей,хорошо,спасибо,спасибо большое,вам спасибо,"
+            + "и вам спасибо,взаимно,благодарю,да,нет,"
             + "понял,поняла,поняли,принято,договорились,отлично,супер,ясно,ладно,хорошо спасибо,спс";
     private static final Set<String> QUESTION_WORDS = Set.of(
             "когда",
@@ -44,6 +45,11 @@ public class ClientChatAutoIgnoreService {
             "не вижу",
             "не могу"
     );
+    private static final Set<String> SAFE_ACKNOWLEDGEMENT_WORDS = Set.of(
+            "ок", "окей", "хорошо", "спасибо", "большое", "вам", "и",
+            "взаимно", "благодарю", "понял", "поняла", "поняли", "принято",
+            "договорились", "отлично", "супер", "ясно", "ладно", "спс"
+    );
 
     private final AppSettingService appSettingService;
 
@@ -66,9 +72,12 @@ public class ClientChatAutoIgnoreService {
         if (phrases.contains(normalized)) {
             return true;
         }
-        return normalized.length() <= 12 && phrases.stream().anyMatch(phrase ->
-                phrase.length() >= 2 && (normalized.equals(phrase) || normalized.startsWith(phrase + " "))
-        );
+        String[] words = normalized.split(" ");
+        return words.length <= 5
+                && (Arrays.stream(words).allMatch(SAFE_ACKNOWLEDGEMENT_WORDS::contains)
+                || normalized.length() <= 12 && phrases.stream().anyMatch(phrase ->
+                        phrase.length() >= 2 && normalized.startsWith(phrase + " ")
+                ));
     }
 
     private boolean looksLikeQuestionOrProblem(String normalized) {

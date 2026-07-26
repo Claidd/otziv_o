@@ -1,5 +1,6 @@
 package com.hunt.otziv.common_billing.service;
 
+import com.hunt.otziv.bad_reviews.dto.BadReviewTaskSummary;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
@@ -8,6 +9,8 @@ import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
+import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonBillingAccountCompany;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
@@ -27,6 +30,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.next_order.service.NextOrderFailureNotifier;
 import com.hunt.otziv.p_products.next_order.service.NextOrderRequestService;
+import com.hunt.otziv.p_products.next_order.repository.NextOrderRequestRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderStatusService;
@@ -128,6 +132,8 @@ class CommonBillingServiceTest {
     @Mock
     private NextOrderRequestService nextOrderRequestService;
     @Mock
+    private NextOrderRequestRepository nextOrderRequestRepository;
+    @Mock
     private BadReviewTaskService badReviewTaskService;
     @Mock
     private ManagerPermissionService managerPermissionService;
@@ -202,6 +208,8 @@ class CommonBillingServiceTest {
 
         assertTrue(firstItem.isPaid());
         assertFalse(secondItem.isPaid());
+        assertEquals("MANUAL", firstItem.getPaymentMethod());
+        assertEquals("system", firstItem.getManualPaidBy());
         assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
         assertEquals(BigDecimal.valueOf(1000).setScale(2), response.summary().paid());
         assertEquals(BigDecimal.valueOf(1000).setScale(2), response.summary().remaining());
@@ -210,6 +218,28 @@ class CommonBillingServiceTest {
         verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(firstOrder);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(firstOrder, "Оплата общего счета");
         verify(nextOrderRequestService, never()).openForPaidOrder(any());
+    }
+
+    @Test
+    void manualPaymentRequiresCommentOrReceipt() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        CommonInvoiceOrder invoiceItem = item(invoice, order(101L));
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(invoiceItem));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.markPaid(
+                        10L,
+                        new ManualPaymentConfirmationRequest(" ", " "),
+                        () -> "alex"
+                )
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertFalse(invoiceItem.isPaid());
     }
 
     @Test
@@ -414,7 +444,15 @@ class CommonBillingServiceTest {
         CommonInvoiceDetailsResponse response = service.markPaid(10L);
 
         assertEquals(CommonInvoiceStatus.PAID, invoice.getStatus());
+        assertNotNull(invoice.getClosedAt());
+        assertEquals(invoice.getPaidAt(), invoice.getClosedAt());
+        assertEquals("PAID", invoice.getCloseReason());
+        assertEquals("system", invoice.getClosedBy());
         assertEquals(BigDecimal.valueOf(2000).setScale(2), response.summary().paid());
+        assertEquals("MANUAL", invoice.getPaymentMethod());
+        assertEquals("system", invoice.getManualPaidBy());
+        assertEquals("MANUAL", firstItem.getPaymentMethod());
+        assertEquals("Внутреннее подтверждение", firstItem.getManualPaymentComment());
         verify(orderTransactionService).handlePaymentStatus(firstOrder, false);
         verify(orderTransactionService).handlePaymentStatus(secondOrder, false);
         verify(manualPaymentAutoConfirmationService).retireOpenLinksForPaidOrder(firstOrder);
@@ -2037,6 +2075,7 @@ class CommonBillingServiceTest {
 
         assertTrue(firstItem.isPaid());
         assertFalse(secondItem.isPaid());
+        assertEquals("TBANK", firstItem.getPaymentMethod());
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertTrue(invoice.getLastError().startsWith("late_payment_close_failed"));
         assertEquals("CONFIRMED", ref.getStatus());
@@ -2226,6 +2265,50 @@ class CommonBillingServiceTest {
         assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
         assertTrue(invoice.getLastError().startsWith("late_tbank_payment"));
         assertEquals("CONFIRMED", archivedRef.getStatus());
+    }
+
+    @Test
+    void archiveInvoiceClosesWholeGroupAndRemembersOrderStatuses() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        Order firstOrder = order(101L);
+        firstOrder.setStatus(status("В проверку"));
+        Order secondOrder = order(102L);
+        secondOrder.setStatus(status("Коррекция"));
+        CommonInvoiceOrder firstItem = item(invoice, firstOrder);
+        CommonInvoiceOrder secondItem = item(invoice, secondOrder);
+        firstItem.setReady(false);
+        secondItem.setReady(false);
+        List<CommonInvoiceOrder> items = List.of(firstItem, secondItem);
+
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(items);
+        when(badReviewTaskService.getSummaryForOrder(101L)).thenReturn(BadReviewTaskSummary.empty());
+        when(badReviewTaskService.getSummaryForOrder(102L)).thenReturn(BadReviewTaskSummary.empty());
+        when(orderRepository.findOrderListRows(any())).thenReturn(List.of());
+        doAnswer(invocation -> {
+            Long orderId = invocation.getArgument(0);
+            Order target = orderId.equals(101L) ? firstOrder : secondOrder;
+            target.setStatus(status("Архив"));
+            return true;
+        }).when(orderStatusTransitionService).changeStatusForCommonBillingOrder(any(), eq("Архив"));
+
+        CommonInvoiceDetailsResponse result = service.archiveInvoice(
+                10L,
+                new CommonInvoiceCloseRequest(true, ""),
+                () -> "manager"
+        );
+
+        assertEquals(CommonInvoiceStatus.ARCHIVED, invoice.getStatus());
+        assertEquals("MANUAL_ARCHIVE", invoice.getCloseReason());
+        assertEquals("manager", invoice.getClosedBy());
+        assertNotNull(invoice.getClosedAt());
+        assertEquals("В проверку", firstItem.getArchiveSourceOrderStatusTitle());
+        assertEquals("Коррекция", secondItem.getArchiveSourceOrderStatusTitle());
+        assertEquals("ARCHIVED", result.summary().status());
+        verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(101L, "Архив");
+        verify(orderStatusTransitionService).changeStatusForCommonBillingOrder(102L, "Архив");
     }
 
     @Test

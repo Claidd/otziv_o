@@ -18,40 +18,56 @@ public class ManagerDailySummaryScheduler {
     private final ManagerSummaryNotificationService notificationService;
     private final ManagerPersonalDayResultService personalDayResultService;
 
-    @Scheduled(cron = "${manager.summary.snapshot-cron:0 55 22 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
+    @Scheduled(cron = "${manager.summary.snapshot-cron:0 55 21 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
     public void calculateSnapshot() {
         try {
-            summaryService.calculate(LocalDate.now(), false);
+            summaryService.calculate(LocalDate.now(SUMMARY_ZONE), false);
         } catch (RuntimeException exception) {
             log.error("Manager daily summary snapshot failed", exception);
         }
     }
 
-    @Scheduled(cron = "${manager.summary.delivery-cron:0 0 0 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
-    public void finalizeAndSend() {
+    @Scheduled(cron = "${manager.summary.delivery-cron:0 0 22 * * *}", zone = "${manager.summary.zone:Asia/Irkutsk}")
+    public void calculateAndSendCurrentDay() {
         try {
-            LocalDate date = LocalDate.now(SUMMARY_ZONE).minusDays(1);
-            var summaries = summaryService.calculate(date, true);
+            LocalDate date = LocalDate.now(SUMMARY_ZONE);
+            var summaries = summaryService.calculate(date, false);
             int sent = notificationService.send(date, summaries);
-            log.info("Manager daily summary finalized: date={}, managers={}, recipients={}", date, summaries.size(), sent);
+            log.info("Manager daily summary sent at 22:00: date={}, managers={}, recipients={}",
+                    date, summaries.size(), sent);
         } catch (RuntimeException exception) {
             log.error("Manager daily summary delivery failed", exception);
         }
     }
 
     @Scheduled(
-            cron = "${manager.summary.personal-delivery-cron:5 0 0 * * *}",
+            cron = "${manager.summary.personal-delivery-cron:5 0 22 * * *}",
             zone = "${manager.summary.zone:Asia/Irkutsk}"
     )
-    public void finalizePreviousDayAndSendPersonalResults() {
-        LocalDate date = LocalDate.now(SUMMARY_ZONE).minusDays(1);
+    public void calculateCurrentDayAndSendPersonalResults() {
+        LocalDate date = LocalDate.now(SUMMARY_ZONE);
         try {
-            var summaries = summaryService.calculate(date, true);
+            var summaries = summaryService.calculate(date, false);
             int sent = personalDayResultService.send(date, summaries);
             log.info("Manager personal day results sent: date={}, managers={}, recipients={}",
                     date, summaries.size(), sent);
         } catch (RuntimeException exception) {
             log.error("Manager personal day result delivery failed for {}", date, exception);
+        }
+    }
+
+    @Scheduled(
+            cron = "${manager.summary.finalize-cron:0 0 0 * * *}",
+            zone = "${manager.summary.zone:Asia/Irkutsk}"
+    )
+    public void finalizePreviousDay() {
+        LocalDate date = LocalDate.now(SUMMARY_ZONE).minusDays(1);
+        try {
+            var summaries = summaryService.calculate(date, true);
+            log.info("Manager daily summary finalized without repeat delivery: date={}, managers={}",
+                    date, summaries.size());
+        } catch (RuntimeException exception) {
+            log.error("Manager daily summary finalization failed for {}", date, exception);
         }
     }
 }

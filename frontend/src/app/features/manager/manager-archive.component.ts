@@ -1,4 +1,4 @@
-import { DecimalPipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, ParamMap, Router, RouterLink } from '@angular/router';
@@ -23,6 +23,11 @@ import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { orderReviewCopyText, reviewCheckPath } from '../../shared/order-review-copy-text';
 import { ToastService } from '../../shared/toast.service';
+import {
+  CommonBillingApi,
+  CommonInvoiceArchiveDetailsResponse,
+  CommonInvoiceArchiveListItem
+} from '../../core/common-billing.api';
 
 type ArchiveModeTab = {
   key: ArchiveOrderMode;
@@ -71,13 +76,14 @@ type ArchiveRouteState = {
 
 @Component({
   selector: 'app-manager-archive',
-  imports: [AdminLayoutComponent, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
+  imports: [AdminLayoutComponent, DatePipe, DecimalPipe, FormsModule, LoadErrorCardComponent, RouterLink],
   templateUrl: './manager-archive.component.html',
   styleUrl: './manager-archive.component.scss'
 })
 export class ManagerArchiveComponent implements OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly managerApi = inject(ManagerApi);
+  private readonly commonBillingApi = inject(CommonBillingApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly toastService = inject(ToastService);
@@ -111,6 +117,11 @@ export class ManagerArchiveComponent implements OnDestroy {
   readonly liveStatusMutationKey = signal<string | null>(null);
   readonly recoveryTaskMutationKey = signal<string | null>(null);
   readonly copied = signal<string | null>(null);
+  readonly commonInvoiceArchives = signal<CommonInvoiceArchiveListItem[]>([]);
+  readonly commonInvoiceArchiveTotal = signal(0);
+  readonly commonInvoiceDetails = signal<CommonInvoiceArchiveDetailsResponse | null>(null);
+  readonly commonInvoiceLoading = signal(false);
+  readonly commonInvoiceMutationId = signal<number | null>(null);
   readonly liveStatusActions = LIVE_ARCHIVE_STATUS_ACTIONS;
   readonly restoreStatuses = RESTORE_STATUS_OPTIONS;
 
@@ -205,6 +216,72 @@ export class ManagerArchiveComponent implements OnDestroy {
 
   trackOrder(_index: number, order: ArchiveOrderListItem): number {
     return order.id;
+  }
+
+  trackCommonInvoice(_index: number, invoice: CommonInvoiceArchiveListItem): number {
+    return invoice.id;
+  }
+
+  commonInvoiceStatus(invoice: CommonInvoiceArchiveListItem): string {
+    if (invoice.status === 'BAN') {
+      return 'Бан';
+    }
+    return invoice.status === 'PAID' ? 'Оплачено' : 'Архив';
+  }
+
+  commonInvoiceRemaining(invoice: CommonInvoiceArchiveListItem): number {
+    return Math.max(0, (invoice.amountKopecks - invoice.paidKopecks) / 100);
+  }
+
+  toggleCommonInvoice(invoice: CommonInvoiceArchiveListItem): void {
+    if (this.commonInvoiceDetails()?.invoice.id === invoice.id) {
+      this.commonInvoiceDetails.set(null);
+      return;
+    }
+    this.commonInvoiceMutationId.set(invoice.id);
+    this.commonBillingApi.archiveInvoiceDetails(invoice.id).subscribe({
+      next: (details) => {
+        this.commonInvoiceDetails.set(details);
+        this.commonInvoiceMutationId.set(null);
+      },
+      error: (err) => {
+        this.commonInvoiceMutationId.set(null);
+        this.toastService.error(
+          'Общий счет не открыт',
+          apiErrorMessage(err, 'Не удалось загрузить состав общего счета')
+        );
+      }
+    });
+  }
+
+  restoreCommonInvoice(invoice: CommonInvoiceArchiveListItem): void {
+    if (!invoice.restorable || this.commonInvoiceMutationId()) {
+      return;
+    }
+    const mode = invoice.status === 'BAN'
+      ? 'восстановить в live со статусом «Бан»'
+      : invoice.status === 'PAID'
+        ? 'восстановить в live со статусом «Оплачено»'
+        : 'восстановить общий счет и все его заказы в работу';
+    if (!window.confirm(`Общий счет #${invoice.id}: ${mode}?`)) {
+      return;
+    }
+    this.commonInvoiceMutationId.set(invoice.id);
+    this.commonBillingApi.restoreArchiveInvoice(invoice.id).subscribe({
+      next: (result) => {
+        this.commonInvoiceMutationId.set(null);
+        this.commonInvoiceDetails.set(null);
+        this.toastService.success('Общий счет восстановлен', result.message);
+        this.loadOrders();
+      },
+      error: (err) => {
+        this.commonInvoiceMutationId.set(null);
+        this.toastService.error(
+          'Общий счет не восстановлен',
+          apiErrorMessage(err, 'Не удалось восстановить группу')
+        );
+      }
+    });
   }
 
   trackMetric(_index: number, metric: ArchiveSideMetric): string {
@@ -443,6 +520,7 @@ export class ManagerArchiveComponent implements OnDestroy {
   }
 
   private loadOrders(): void {
+    this.loadCommonInvoices();
     this.loading.set(true);
     this.error.set(null);
 
@@ -462,6 +540,29 @@ export class ManagerArchiveComponent implements OnDestroy {
         this.error.set(message);
         this.loading.set(false);
         this.toastService.error('Архив не загрузился', message);
+      }
+    });
+  }
+
+  private loadCommonInvoices(): void {
+    this.commonInvoiceLoading.set(true);
+    this.commonBillingApi.archiveInvoices({
+      keyword: this.keyword(),
+      pageNumber: 0,
+      pageSize: 50,
+      sortDirection: this.sortDirection()
+    }).subscribe({
+      next: (page) => {
+        this.commonInvoiceArchives.set(page.content ?? []);
+        this.commonInvoiceArchiveTotal.set(page.totalElements ?? 0);
+        this.commonInvoiceLoading.set(false);
+      },
+      error: (err) => {
+        this.commonInvoiceLoading.set(false);
+        this.toastService.error(
+          'Общие счета не загрузились',
+          apiErrorMessage(err, 'Не удалось загрузить архив общих счетов')
+        );
       }
     });
   }

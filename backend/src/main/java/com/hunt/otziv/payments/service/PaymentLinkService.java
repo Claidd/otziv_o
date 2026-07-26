@@ -243,6 +243,44 @@ public class PaymentLinkService {
         return expired;
     }
 
+    /**
+     * Refreshes the bank state of the current payment before an explicit
+     * automation retry. A payment that has already finished is applied through
+     * the normal bank-status path; an unstarted stale link may be retired. A
+     * genuinely active payment is deliberately left untouched so the retry
+     * cannot create a duplicate charge.
+     */
+    @Transactional
+    public PaymentLinkReconcileResult reconcileActiveLinkForOrder(Long orderId) {
+        if (orderId == null || orderId <= 0) {
+            return new PaymentLinkReconcileResult(null, null, null, false);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        Optional<PaymentLink> candidate = paymentLinkRepository
+                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                        orderId,
+                        REUSABLE_STATUSES,
+                        now
+                );
+        if (candidate.isEmpty()) {
+            return new PaymentLinkReconcileResult(null, null, null, false);
+        }
+
+        PaymentLink link = candidate.get();
+        PaymentLinkStatus before = link.getStatus();
+        syncTbankStateIfNeeded(link);
+        expireIfPastDue(link);
+        if (REUSABLE_STATUSES.contains(link.getStatus()) && expireIfAmountChanged(link)) {
+            link = paymentLinkRepository.findById(link.getId()).orElse(link);
+        }
+        return new PaymentLinkReconcileResult(
+                link.getId(),
+                before,
+                link.getStatus(),
+                before != link.getStatus()
+        );
+    }
+
     private PaymentLink preparedCandidate(
             Order order,
             Manager manager,
@@ -1994,6 +2032,14 @@ public class PaymentLinkService {
                 Map.entry("afterword", afterword)
         ));
         return isManualPayment(link) ? text : removeReceiptRequest(text);
+    }
+
+    public record PaymentLinkReconcileResult(
+            Long linkId,
+            PaymentLinkStatus statusBefore,
+            PaymentLinkStatus statusAfter,
+            boolean changed
+    ) {
     }
 
     private String paymentInstructionText(PaymentLink link, String url) {

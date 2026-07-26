@@ -103,6 +103,15 @@ public class ClientChatMessageTrackerService {
                 )
                 : senderRoleOverride;
         ClientChatSenderRole senderRole = normalizeSenderRole(command, classifiedRole);
+        User actorUser = senderRole == ClientChatSenderRole.STAFF
+                ? participantClassifier.resolveStaffUser(
+                        command.platform(),
+                        command.chatId(),
+                        command.senderExternalId(),
+                        command.senderName(),
+                        company
+                ).orElse(null)
+                : null;
 
         ClientChatMessage message = new ClientChatMessage();
         message.setPlatform(command.platform());
@@ -113,6 +122,7 @@ public class ClientChatMessageTrackerService {
         message.setExternalMessageId(externalMessageId);
         message.setCompany(company);
         message.setManager(manager);
+        message.setActorUser(actorUser);
         message.setSenderExternalId(limit(command.senderExternalId(), 160));
         message.setSenderName(limit(command.senderName(), 255));
         message.setMessageText(messageText);
@@ -135,6 +145,7 @@ public class ClientChatMessageTrackerService {
                     "Ответ сотрудника",
                     savedMessage
             );
+            resolveAuditsWithStaffReply(savedMessage);
             return;
         }
         if (direction == ClientChatDirection.OUTGOING) {
@@ -286,6 +297,7 @@ public class ClientChatMessageTrackerService {
         }
         assertResolutionRateAllowed(item, resolvedByUserId);
         ClientChatReplyQualityService.Result quality = quality(item.getLastMessageText(), replyText);
+        item.setResolutionReplyText(limit(replyText, 4000));
         close(
                 item,
                 ClientChatUnansweredStatus.ANSWERED,
@@ -353,6 +365,33 @@ public class ClientChatMessageTrackerService {
         unansweredRepository.save(item);
     }
 
+    @Transactional
+    public void markAuditReplySent(
+            Long unansweredItemId,
+            Long resolvedByUserId,
+            String replyText,
+            String channel
+    ) {
+        ClientChatUnansweredItem item = unansweredRepository.findById(unansweredItemId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Закрытое сообщение не найдено"));
+        if (!item.isAuditRequired()) {
+            return;
+        }
+        ClientChatReplyQualityService.Result quality = quality(item.getLastMessageText(), replyText);
+        item.setResolutionReplyText(limit(replyText, 4000));
+        item.setResolutionType(ClientChatResolutionType.ANSWERED);
+        item.setResolutionReasonCode("AUDIT_FOLLOW_UP_SENT");
+        item.setResolutionComment(limit(
+                "После проверки отправлен ответ клиенту через " + safe(channel),
+                1000
+        ));
+        item.setResolvedByUserId(resolvedByUserId);
+        item.setReplyQuality(quality.quality());
+        item.setReplyQualityReason(limit(quality.reason(), 500));
+        item.setAuditRequired(false);
+        unansweredRepository.save(item);
+    }
+
     private void openOrRefresh(ClientChatMessage message, Company company, Manager manager) {
         ClientChatUnansweredItem item = unansweredRepository
                 .findFirstByPlatformAndChatIdAndStatusOrderByLastClientMessageAtDesc(
@@ -380,6 +419,7 @@ public class ClientChatMessageTrackerService {
         item.setCloseReason(null);
         item.setResolutionType(null);
         item.setResolutionMessage(null);
+        item.setResolutionReplyText(null);
         item.setResolutionReasonCode(null);
         item.setResolutionComment(null);
         item.setResolvedByUserId(null);
@@ -420,6 +460,48 @@ public class ClientChatMessageTrackerService {
                 });
     }
 
+    private void resolveAuditsWithStaffReply(ClientChatMessage staffReply) {
+        if (staffReply == null || staffReply.getPlatform() == null || !hasText(staffReply.getChatId())) {
+            return;
+        }
+        unansweredRepository.findByPlatformAndChatIdAndAuditRequiredTrue(
+                        staffReply.getPlatform(),
+                        staffReply.getChatId()
+                ).forEach(item -> {
+                    if (!isReplyAfterClientMessage(item, staffReply)) {
+                        return;
+                    }
+                    ClientChatReplyQualityService.Result quality =
+                            replyQualityService.assess(item.getLastMessageText(), staffReply.getMessageText());
+                    if (quality.quality() == ClientChatReplyQuality.PARTIAL
+                            || quality.quality() == ClientChatReplyQuality.SUSPICIOUS) {
+                        return;
+                    }
+                    item.setResolutionMessage(staffReply);
+                    item.setResolutionReplyText(limit(staffReply.getMessageText(), 4000));
+                    item.setResolutionReasonCode("AUDIT_AUTO_CLEARED_BY_FOLLOW_UP");
+                    item.setResolutionComment(limit(
+                            "Аудит автоматически снят: позже найден подходящий ответ сотрудника",
+                            1000
+                    ));
+                    item.setReplyQuality(quality.quality());
+                    item.setReplyQualityReason(limit(quality.reason(), 500));
+                    item.setAuditRequired(false);
+                    unansweredRepository.save(item);
+                });
+    }
+
+    private boolean isReplyAfterClientMessage(ClientChatUnansweredItem item, ClientChatMessage staffReply) {
+        if (item == null || !item.isAuditRequired()) {
+            return false;
+        }
+        LocalDateTime clientMessageAt = item.getLastClientMessageAt();
+        LocalDateTime replyAt = staffReply.getMessageAt();
+        return clientMessageAt == null
+                || replyAt == null
+                || !replyAt.isBefore(clientMessageAt.minusMinutes(2));
+    }
+
     private void close(ClientChatUnansweredItem item, ClientChatUnansweredStatus status, String reason) {
         close(
                 item,
@@ -457,6 +539,9 @@ public class ClientChatMessageTrackerService {
         item.setCloseReason(limit(reason, 255));
         item.setResolutionType(resolutionType);
         item.setResolutionMessage(resolutionMessage);
+        if (resolutionMessage != null && hasText(resolutionMessage.getMessageText())) {
+            item.setResolutionReplyText(limit(resolutionMessage.getMessageText(), 4000));
+        }
         item.setResolutionReasonCode(limit(reasonCode, 60));
         item.setResolutionComment(limit(comment, 1000));
         item.setResolvedByUserId(resolvedByUserId);

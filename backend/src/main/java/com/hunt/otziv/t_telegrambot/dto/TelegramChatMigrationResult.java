@@ -4,10 +4,11 @@ public record TelegramChatMigrationResult(
         Long oldChatId,
         Long newChatId,
         int companiesUpdated,
-        int workerGroupsUpdated
+        int workerGroupsUpdated,
+        int managerAuditGroupsUpdated
 ) {
     public int totalUpdated() {
-        return companiesUpdated + workerGroupsUpdated;
+        return companiesUpdated + workerGroupsUpdated + managerAuditGroupsUpdated;
     }
 
     public boolean updated() {

@@ -21,9 +21,15 @@ public class ClientChatResolutionPolicy {
             "деньги требу", "не читаете"
     );
     private static final Set<String> SAFE_PHRASES = Set.of(
-            "ок", "окей", "хорошо", "спасибо", "спасибо большое", "благодарю",
+            "ок", "окей", "хорошо", "спасибо", "спасибо большое", "вам спасибо",
+            "и вам спасибо", "взаимно", "благодарю",
             "понял", "поняла", "поняли", "принято", "договорились", "отлично",
             "супер", "ясно", "ладно", "хорошо спасибо", "не надо", "пока не нужно"
+    );
+    private static final Set<String> SAFE_ACKNOWLEDGEMENT_WORDS = Set.of(
+            "ок", "окей", "хорошо", "спасибо", "большое", "вам", "и",
+            "взаимно", "благодарю", "понял", "поняла", "поняли", "принято",
+            "договорились", "отлично", "супер", "ясно", "ладно"
     );
 
     public Assessment assess(String messageText) {
@@ -54,8 +60,12 @@ public class ClientChatResolutionPolicy {
             return true;
         }
         String withoutEmoji = normalized.replaceAll("[^\\p{IsAlphabetic}\\p{IsDigit}]+", "").trim();
-        return withoutEmoji.isBlank() || (normalized.length() <= 20 && SAFE_PHRASES.stream()
-                .anyMatch(phrase -> normalized.startsWith(phrase + " ")));
+        if (withoutEmoji.isBlank()) {
+            return true;
+        }
+        String[] words = normalized.split(" ");
+        return words.length <= 5
+                && java.util.Arrays.stream(words).allMatch(SAFE_ACKNOWLEDGEMENT_WORDS::contains);
     }
 
     private boolean containsWord(String normalized, Set<String> words) {

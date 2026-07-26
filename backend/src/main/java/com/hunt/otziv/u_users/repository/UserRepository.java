@@ -135,6 +135,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     """)
     List<User> findAllActiveUsersWithPhoneNumbers();
 
+    @Query("""
+        SELECT DISTINCT u
+        FROM User u
+        JOIN FETCH u.roles r
+        WHERE u.active = true
+          AND r.name IN ('ROLE_OWNER', 'ROLE_ADMIN', 'ROLE_MANAGER')
+    """)
+    List<User> findAllActiveManagerControlStaff();
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
         UPDATE User u

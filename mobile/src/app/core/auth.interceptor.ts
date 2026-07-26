@@ -1,11 +1,13 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 import { mobileEnvironment } from './mobile-environment';
 
 export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);
+  const router = inject(Router);
   const apiBaseUrl = mobileEnvironment.apiBaseUrl;
   const requestPath = pathFromRequestUrl(request.url, apiBaseUrl);
   const isPublicApi = requestPath.startsWith('/api/payments/public')
@@ -57,6 +59,16 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
             );
           })
         );
+      }
+
+      if (
+        error instanceof HttpErrorResponse
+        && error.status === 423
+        && error.error?.code === 'MANAGER_REPORT_REVIEW_REQUIRED'
+      ) {
+        void router.navigate(['/tabs/home/profile'], {
+          queryParams: { reportReviewRequired: '1' }
+        });
       }
 
       return throwError(() => error);

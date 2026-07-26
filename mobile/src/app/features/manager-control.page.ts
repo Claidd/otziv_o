@@ -22,6 +22,7 @@ import {
   ManagerControlProblem,
   ManagerControlSection,
   ManagerControlSummary,
+  ManagerReportReview,
   ManagerPerformanceScore,
   WorkerRiskResolutionAction
 } from '../core/api.service';
@@ -97,6 +98,156 @@ import {
                 <strong>{{ summary()?.workloadTotal ?? 0 }}</strong>
                 <small>нагрузка</small>
               </article>
+            </section>
+          }
+
+          @if (isSummaryPage()) {
+            <section class="audit-panel" aria-label="Аудит работы менеджеров">
+              <header>
+                <div>
+                  <p class="eyebrow">АУДИТ МЕНЕДЖЕРОВ</p>
+                  <h2>Проверка ежедневных отчётов</h2>
+                  <small>Отправьте аудит в Telegram и следите, кто действительно изучил отчёт.</small>
+                </div>
+                <div class="audit-panel-actions">
+                  <button type="button" class="audit-send-button" (click)="sendManagerAudit()" [disabled]="auditSending()">
+                    <span class="material-icons-sharp">send</span>
+                    {{ auditSending() ? 'Отправляю…' : 'Запросить аудит' }}
+                  </button>
+                  <button type="button" class="audit-test-button" (click)="startReportReviewTest()" [disabled]="auditTestStarting()">
+                    <span class="material-icons-sharp">science</span>
+                    {{ auditTestStarting() ? 'Создаю тест…' : 'Пройти тестовый аудит' }}
+                  </button>
+                  <button type="button" class="audit-refresh-button" (click)="loadManagerReportReviews()" [disabled]="auditReviewsLoading()">
+                    <span class="material-icons-sharp">refresh</span>
+                    Статусы
+                  </button>
+                </div>
+              </header>
+
+              @if (auditReviewsLoading()) {
+                <p class="audit-empty">Загружаю прохождение аудита…</p>
+              } @else {
+                <div class="audit-review-list">
+                  @for (review of managerReportReviews(); track review.reviewId) {
+                    <details
+                      class="audit-review-card"
+                      [class.red]="reportReviewTone(review) === 'red'"
+                      [class.yellow]="reportReviewTone(review) === 'yellow'"
+                      [class.green]="reportReviewTone(review) === 'green'"
+                    >
+                      <summary>
+                        <span class="material-icons-sharp">
+                          {{ review.status === 'COMPLETED' && !review.quickReview ? 'task_alt' : review.status === 'DISPUTED' ? 'gavel' : 'schedule' }}
+                        </span>
+                        <span>
+                          <strong>{{ review.testMode ? '🧪 Тест · ' : '' }}{{ shortName(review.managerName) }}</strong>
+                          <small>{{ reportReviewStatus(review) }}</small>
+                          <em>{{ reportReviewProgress(review) }}</em>
+                        </span>
+                        <span class="material-icons-sharp audit-expand">expand_more</span>
+                      </summary>
+
+                      <div class="audit-review-details">
+                        <p><b>Отчёт:</b> {{ review.summaryDate | date: 'dd.MM.yyyy' }}</p>
+                        <p><b>Чтение отчёта:</b> {{ reportReviewDuration(review.readSeconds) }} из расчётных {{ reportReviewDuration(review.minimumReadSeconds) }}</p>
+                        <p><b>Вся проверка:</b> {{ reportReviewDuration(review.totalReviewSeconds) }}</p>
+                        @if (review.aiVerificationPaused) {
+                          <p class="audit-restriction"><b>Проверка DeepSeek приостановлена.</b> Срок не идёт, доступ не ограничивается.</p>
+                        } @else if (review.aiUnavailableSeconds > 0) {
+                          <p><b>Срок продлён из-за сбоя DeepSeek:</b> {{ reportReviewDuration(review.aiUnavailableSeconds) }}</p>
+                        }
+                        @if (review.suspiciousAnswerCount > 0) {
+                          <p class="audit-dispute"><b>Проверка самостоятельности:</b> {{ review.suspiciousAnswerCount }} быстрых длинных ответов; запрошены короткие уточнения своими словами.</p>
+                        }
+                        @if (review.startedAt) {
+                          <p><b>Открыт:</b> {{ review.startedAt | date: 'dd.MM, HH:mm' }}</p>
+                        }
+                        @if (review.readingConfirmedAt) {
+                          <p><b>Прочтение подтверждено:</b> {{ review.readingConfirmedAt | date: 'dd.MM, HH:mm' }}</p>
+                        }
+                        @if (review.deadlineStartedAt && !review.completedAt) {
+                          <p><b>Трёхчасовой срок начат:</b> {{ review.deadlineStartedAt | date: 'dd.MM, HH:mm' }}</p>
+                        }
+                        @if (review.answerQualityReason) {
+                          <p><b>Оценка ответов:</b> {{ review.answerQualityReason }}</p>
+                        }
+                        @if (review.actionPlan) {
+                          <p><b>План менеджера:</b> {{ review.actionPlan }}</p>
+                        }
+                        @if (review.disputeText) {
+                          <p class="audit-dispute"><b>Спор менеджера:</b> {{ review.disputeText }}</p>
+                        }
+                        @if (review.issues.length) {
+                          <div class="audit-issues">
+                            <b>Замечания аудита</b>
+                            @for (issue of review.issues; track issue.issueId) {
+                              <article [class]="'issue-' + issue.status.toLowerCase()">
+                                <strong>{{ issue.title }}</strong>
+                                <span>{{ issue.question }}</span>
+                                <small>
+                                  Статус: {{ reportReviewIssueStatus(issue.status) }}
+                                  @if (issue.disputeText) {
+                                    · Спор: {{ issue.disputeText }}
+                                  }
+                                  @if (issue.ownerComment) {
+                                    · Решение: {{ issue.ownerComment }}
+                                  }
+                                </small>
+                              </article>
+                            }
+                          </div>
+                        }
+                        @if (review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused) {
+                          <p class="audit-restriction">
+                            <b>Доступ ограничен:</b> с {{ review.restrictedAt | date: 'dd.MM, HH:mm' }}.
+                            Доступен только личный кабинет.
+                          </p>
+                        }
+
+                        @if (review.openDisputeCount > 0) {
+                          <div class="audit-resolution">
+                            <label [for]="'audit-dispute-' + review.reviewId">Комментарий решения</label>
+                            <textarea
+                              [id]="'audit-dispute-' + review.reviewId"
+                              rows="3"
+                              [ngModel]="reportDisputeComments()[review.reviewId]"
+                              (ngModelChange)="setReportDisputeComment(review.reviewId, $event)"
+                              placeholder="Что проверили и почему приняли такое решение"
+                            ></textarea>
+                            <button
+                              type="button"
+                              class="audit-resolution-accept"
+                              [disabled]="isResolvingReportReview(review.reviewId)"
+                              (click)="resolveReportDispute(review, 'REPORT_INCORRECT')"
+                            >
+                              Менеджер прав — снять выбранный пункт
+                            </button>
+                            <button
+                              type="button"
+                              class="audit-resolution-confirm"
+                              [disabled]="isResolvingReportReview(review.reviewId)"
+                              (click)="resolveReportDispute(review, 'REPORT_CONFIRMED')"
+                            >
+                              Замечание верно — вернуть вопрос
+                            </button>
+                            <button
+                              type="button"
+                              class="audit-resolution-context"
+                              [disabled]="isResolvingReportReview(review.reviewId)"
+                              (click)="resolveReportDispute(review, 'REPORT_NEEDS_CONTEXT')"
+                            >
+                              Недостаточно данных по этому пункту
+                            </button>
+                          </div>
+                        }
+                      </div>
+                    </details>
+                  } @empty {
+                    <p class="audit-empty">Персональные отчёты сегодня ещё не отправлялись.</p>
+                  }
+                </div>
+              }
             </section>
           }
 
@@ -527,7 +678,7 @@ import {
     }
     ion-content { --overflow: hidden; }
     .control-page { display:flex; height:100%; max-width:48rem; min-height:0; margin:0 auto; overflow:auto; flex-direction:column; gap:.62rem; padding:var(--otziv-page-padding-y,.58rem) var(--otziv-page-padding-x,.62rem) calc(var(--otziv-page-padding-bottom,.62rem) + env(safe-area-inset-bottom)); -webkit-overflow-scrolling:touch; }
-    .control-top,.detail-head,.control-section,.control-card,.worker-stats,.manager-overview,.summary-card { min-width:0; border:1px solid rgba(103,116,131,.16); border-radius:.92rem; background:linear-gradient(155deg,var(--control-surface) 0%,var(--control-soft-surface) 100%); box-shadow:0 .8rem 1.45rem rgba(132,139,200,.1); }
+    .control-top,.detail-head,.control-section,.control-card,.worker-stats,.manager-overview,.summary-card,.audit-panel { min-width:0; border:1px solid rgba(103,116,131,.16); border-radius:.92rem; background:linear-gradient(155deg,var(--control-surface) 0%,var(--control-soft-surface) 100%); box-shadow:0 .8rem 1.45rem rgba(132,139,200,.1); }
     .control-top,.detail-head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.58rem; padding:.72rem; }
     .control-top>*,
     .detail-head>*,
@@ -588,6 +739,50 @@ import {
     .summary-card.yellow { border-color:rgba(231,180,52,.34); }
     .summary-card.green { border-color:rgba(47,159,149,.28); }
     .summary-card.blue { border-color:rgba(108,155,207,.3); }
+    .audit-panel { display:grid; gap:.58rem; padding:.65rem; }
+    .audit-panel>header { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.52rem; }
+    .audit-panel-actions { display:grid; grid-template-columns:1fr; gap:.35rem; }
+    .audit-panel-actions button { display:inline-flex; min-height:2.15rem; align-items:center; justify-content:center; gap:.28rem; border:1px solid rgba(108,155,207,.24); border-radius:999px; padding:0 .7rem; color:var(--otziv-primary); background:var(--control-surface); font-size:.62rem; font-weight:1000; }
+    .audit-panel-actions .audit-send-button { border-color:rgba(237,45,91,.28); color:var(--control-danger-color); background:var(--control-danger-surface); }
+    .audit-panel-actions .audit-test-button { border-color:rgba(121,83,190,.34); color:#6b43a8; background:rgba(121,83,190,.09); }
+    .audit-panel-actions .material-icons-sharp { font-size:.95rem; }
+    .audit-review-list { display:grid; gap:.42rem; }
+    .audit-review-card { overflow:hidden; border:1px solid rgba(108,155,207,.2); border-radius:.8rem; background:var(--control-surface); }
+    .audit-review-card.red { border-color:rgba(237,45,91,.36); }
+    .audit-review-card.yellow { border-color:rgba(231,180,52,.4); }
+    .audit-review-card.green { border-color:rgba(47,159,149,.34); }
+    .audit-review-card>summary { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:.42rem; padding:.55rem; list-style:none; cursor:pointer; }
+    .audit-review-card>summary::-webkit-details-marker { display:none; }
+    .audit-review-card>summary>.material-icons-sharp:first-child { display:grid; place-items:center; width:2rem; height:2rem; border-radius:.65rem; color:var(--otziv-primary); background:var(--control-chip-surface); font-size:1rem; }
+    .audit-review-card.red>summary>.material-icons-sharp:first-child { color:var(--control-danger-color); background:var(--control-danger-surface); }
+    .audit-review-card.yellow>summary>.material-icons-sharp:first-child { color:var(--control-warning-color); background:var(--control-warning-surface); }
+    .audit-review-card.green>summary>.material-icons-sharp:first-child { color:var(--control-success-color); background:var(--control-success-surface); }
+    .audit-review-card>summary>span:nth-child(2) { display:grid; min-width:0; gap:.06rem; }
+    .audit-review-card>summary strong { overflow:hidden; color:var(--otziv-dark); font-size:.7rem; font-weight:1000; text-overflow:ellipsis; white-space:nowrap; }
+    .audit-review-card>summary small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .audit-review-card>summary em { color:var(--otziv-info); font-size:.57rem; font-style:normal; font-weight:900; }
+    .audit-expand { color:var(--otziv-info); font-size:1.05rem; transition:transform .18s ease; }
+    .audit-review-card[open] .audit-expand { transform:rotate(180deg); }
+    .audit-review-details { display:grid; gap:.32rem; border-top:1px solid rgba(103,116,131,.12); padding:.55rem; }
+    .audit-review-details p { margin:0; border-radius:.6rem; padding:.42rem; color:var(--otziv-dark); background:var(--control-soft-surface); font-size:.62rem; font-weight:800; line-height:1.35; overflow-wrap:anywhere; }
+    .audit-review-details .audit-dispute { border:1px solid rgba(231,180,52,.3); color:var(--control-warning-color); background:var(--control-warning-surface); }
+    .audit-review-details .audit-restriction { border:1px solid rgba(237,45,91,.3); color:var(--control-danger-color); background:var(--control-danger-surface); }
+    .audit-issues { display:grid; gap:.34rem; }
+    .audit-issues>b { color:var(--otziv-dark); font-size:.64rem; font-weight:1000; }
+    .audit-issues article { display:grid; gap:.18rem; border:1px solid rgba(108,155,207,.2); border-radius:.62rem; padding:.45rem; background:var(--control-soft-surface); }
+    .audit-issues article.issue-disputed,.audit-issues article.issue-dispute_pending { border-color:rgba(237,45,91,.28); background:var(--control-danger-surface); }
+    .audit-issues article.issue-withdrawn { border-color:rgba(47,159,149,.3); background:var(--control-success-surface); }
+    .audit-issues article.issue-needs_context { border-color:rgba(231,180,52,.34); background:var(--control-warning-surface); }
+    .audit-issues strong { color:var(--otziv-dark); font-size:.63rem; }
+    .audit-issues span,.audit-issues small { color:var(--otziv-info); font-size:.58rem; line-height:1.35; white-space:pre-line; overflow-wrap:anywhere; }
+    .audit-resolution { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.38rem; border-top:1px dashed rgba(103,116,131,.16); padding-top:.48rem; }
+    .audit-resolution label,.audit-resolution textarea { grid-column:1 / -1; }
+    .audit-resolution label { color:var(--otziv-dark); font-size:.61rem; font-weight:1000; }
+    .audit-resolution button { min-height:2.4rem; border:1px solid rgba(108,155,207,.24); border-radius:.75rem; padding:.35rem .5rem; background:var(--control-surface); font-size:.59rem; font-weight:1000; line-height:1.2; }
+    .audit-resolution-accept { border-color:rgba(47,159,149,.3) !important; color:var(--control-success-color); background:var(--control-success-surface) !important; }
+    .audit-resolution-confirm { border-color:rgba(231,180,52,.34) !important; color:var(--control-warning-color); background:var(--control-warning-surface) !important; }
+    .audit-resolution-context { grid-column:1 / -1; border-color:rgba(108,155,207,.34) !important; color:var(--otziv-primary); background:var(--control-chip-surface) !important; }
+    .audit-empty { margin:0; border:1px dashed rgba(108,155,207,.24); border-radius:.72rem; padding:.62rem; color:var(--otziv-info); background:var(--control-soft-surface); font-size:.65rem; font-weight:900; text-align:center; }
     .manager-overview { display:grid; gap:.52rem; padding:.65rem; }
     .manager-overview>header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.5rem; align-items:start; }
     .score-badge { display:inline-flex; min-height:2rem; align-items:center; border:1px solid rgba(47,159,149,.28); border-radius:999px; padding:0 .7rem; color:var(--control-success-color); background:var(--control-success-surface); font-size:.68rem; font-weight:1000; white-space:nowrap; }
@@ -668,8 +863,12 @@ import {
     .card-comment { min-height:2.5rem; }
     .mobile-empty-state { display:grid; place-items:center; gap:.35rem; border:1px dashed rgba(108,155,207,.28); border-radius:.9rem; padding:1.2rem; color:var(--otziv-info); background:var(--control-soft-surface); font-size:.72rem; font-weight:900; text-align:center; }
     @media (max-width:380px) {
-      .control-top,.detail-head,.manager-overview>header { grid-template-columns:1fr; }
+      .control-top,.detail-head,.manager-overview>header,.audit-panel>header { grid-template-columns:1fr; }
       .manager-card>header,.overview-chips,.detail-actions,.card-grid,.action-grid,.risk-actions,.item-actions,.reply-box { grid-template-columns:1fr; }
+      .audit-panel-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .audit-resolution { grid-template-columns:1fr; }
+      .audit-resolution label,.audit-resolution textarea { grid-column:auto; }
+      .audit-resolution-context { grid-column:auto; }
       .summary-grid,.performance-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
       .manager-numbers { grid-template-columns:repeat(3,minmax(0,1fr)); }
       .details-button { width:100%; }
@@ -695,6 +894,12 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   readonly itemComments = signal<Record<number, string>>({});
   readonly replies = signal<Record<number, string>>({});
   readonly preparedContactItemIds = signal<Set<number>>(new Set());
+  readonly managerReportReviews = signal<ManagerReportReview[]>([]);
+  readonly auditSending = signal(false);
+  readonly auditTestStarting = signal(false);
+  readonly auditReviewsLoading = signal(false);
+  readonly reportDisputeComments = signal<Record<number, string>>({});
+  readonly resolvingReportReviewIds = signal<Set<number>>(new Set());
   readonly clock = signal(Date.now());
 
   readonly managers = computed(() => this.summary()?.managers ?? []);
@@ -752,6 +957,9 @@ export class ManagerControlPage implements OnInit, OnDestroy {
       } else {
         this.applyDetail(null);
       }
+      if (this.isSummaryPage()) {
+        await this.loadManagerReportReviews();
+      }
     } catch (error) {
       this.error.set(this.errorMessage(error));
     } finally {
@@ -763,6 +971,186 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     await this.load(true);
     if (!this.error()) {
       this.notice.set('Контроль обновлен.');
+    }
+  }
+
+  async sendManagerAudit(): Promise<void> {
+    if (this.auditSending()) {
+      return;
+    }
+    this.auditSending.set(true);
+    this.error.set(null);
+    try {
+      const result = await this.api.sendManagerDailyAuditToTelegram(this.summary()?.date || undefined).toPromise();
+      this.notice.set(
+        result
+          ? `Аудит отправлен в Telegram: ${result.managerCount} менеджеров, сообщений — ${result.messageCount}.`
+          : 'Аудит отправлен в Telegram.'
+      );
+      await this.loadManagerReportReviews(true);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось отправить аудит в Telegram.'));
+    } finally {
+      this.auditSending.set(false);
+    }
+  }
+
+  async startReportReviewTest(): Promise<void> {
+    if (this.auditTestStarting()) {
+      return;
+    }
+    this.auditTestStarting.set(true);
+    this.error.set(null);
+    try {
+      const result = await this.api.startManagerReportReviewTest(
+        this.summary()?.date || undefined
+      ).toPromise();
+      this.notice.set(
+        result
+          ? `Тестовый аудит отправлен в личный Telegram: ${result.sourceManagerName}, вопросов — ${result.issueCount}.`
+          : 'Тестовый аудит отправлен в личный Telegram.'
+      );
+      await this.loadManagerReportReviews(true);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось запустить тестовый аудит.'));
+    } finally {
+      this.auditTestStarting.set(false);
+    }
+  }
+
+  async loadManagerReportReviews(force = false): Promise<void> {
+    if (this.auditReviewsLoading() && !force) {
+      return;
+    }
+    this.auditReviewsLoading.set(true);
+    try {
+      const reviews = await this.api.getManagerReportReviews(this.summary()?.date || undefined).toPromise();
+      this.managerReportReviews.set(reviews ?? []);
+    } catch (error) {
+      this.managerReportReviews.set([]);
+      if (force) {
+        this.error.set(this.errorMessage(error, 'Не удалось загрузить прохождение аудита.'));
+      }
+    } finally {
+      this.auditReviewsLoading.set(false);
+    }
+  }
+
+  reportReviewStatus(review: ManagerReportReview): string {
+    if (review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused) {
+      return 'доступ ограничен · ждём завершения разбора';
+    }
+    if (review.openDisputeCount > 0 && review.status !== 'DISPUTED') {
+      return `идёт проверка · спорных пунктов ${review.openDisputeCount}`;
+    }
+    switch (review.status) {
+      case 'DELIVERED':
+        return 'доставлен, не открыт';
+      case 'READING':
+        return 'изучает отчёт';
+      case 'QUESTION_PENDING':
+        return 'отвечает на вопросы';
+      case 'PLAN_PENDING':
+        return 'ждём план действий';
+      case 'COMPLETED':
+        if (review.autoCompleted) {
+          return 'принят автоматически · замечаний нет';
+        }
+        return review.quickReview ? 'завершён слишком быстро' : 'отчёт принят';
+      case 'DISPUTE_PENDING':
+        return 'формулирует спор';
+      case 'DISPUTED':
+        return 'оспорен · нужно решение владельца';
+      default:
+        return review.status;
+    }
+  }
+
+  reportReviewTone(review: ManagerReportReview): 'red' | 'yellow' | 'green' {
+    if (
+      (review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused)
+      || review.status === 'DISPUTED'
+      || review.openDisputeCount > 0
+      || review.quickReview
+      || review.auditRequired
+    ) {
+      return 'red';
+    }
+    return review.status === 'COMPLETED' ? 'green' : 'yellow';
+  }
+
+  reportReviewProgress(review: ManagerReportReview): string {
+    const validIssues = review.issues.filter((issue) => issue.status !== 'WITHDRAWN');
+    const answeredIssues = validIssues.filter((issue) => issue.status === 'ANSWERED').length;
+    const withdrawnIssues = review.issues.filter((issue) => issue.status === 'WITHDRAWN').length;
+    const questions = validIssues.length > 0
+      ? `${answeredIssues}/${validIssues.length} действующих вопросов`
+      : 'вопросы ещё не начаты';
+    const withdrawn = withdrawnIssues > 0 ? ` · снято ${withdrawnIssues}` : '';
+    const time = review.totalReviewSeconds > 0
+      ? ` · проверка ${this.reportReviewDuration(review.totalReviewSeconds)}`
+      : '';
+    return `${questions}${withdrawn}${time}`;
+  }
+
+  reportReviewIssueStatus(status: string): string {
+    switch (status) {
+      case 'PENDING': return 'ожидает ответа';
+      case 'ANSWERED': return 'ответ принят';
+      case 'DISPUTE_PENDING': return 'ожидается описание спора';
+      case 'DISPUTED': return 'оспорено';
+      case 'WITHDRAWN': return 'снято владельцем';
+      case 'NEEDS_CONTEXT': return 'нужны дополнительные данные';
+      default: return status;
+    }
+  }
+
+  reportReviewDuration(seconds: number): string {
+    const safeSeconds = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+    if (safeSeconds < 60) {
+      return `${safeSeconds} сек`;
+    }
+    const minutes = Math.floor(safeSeconds / 60);
+    const rest = safeSeconds % 60;
+    return rest > 0 ? `${minutes} мин ${rest} сек` : `${minutes} мин`;
+  }
+
+  setReportDisputeComment(reviewId: number, value: string): void {
+    this.reportDisputeComments.update((comments) => ({ ...comments, [reviewId]: value }));
+  }
+
+  isResolvingReportReview(reviewId: number): boolean {
+    return this.resolvingReportReviewIds().has(reviewId);
+  }
+
+  async resolveReportDispute(
+    review: ManagerReportReview,
+    action: 'REPORT_INCORRECT' | 'REPORT_CONFIRMED' | 'REPORT_NEEDS_CONTEXT'
+  ): Promise<void> {
+    if (this.isResolvingReportReview(review.reviewId)) {
+      return;
+    }
+    const comment = (this.reportDisputeComments()[review.reviewId] ?? '').trim();
+    this.resolvingReportReviewIds.update((ids) => new Set(ids).add(review.reviewId));
+    this.error.set(null);
+    try {
+      await this.api.resolveManagerReportDispute(review.reviewId, { action, comment }).toPromise();
+      this.notice.set(
+        action === 'REPORT_INCORRECT'
+          ? 'Выбранное замечание снято. Остальные пункты аудита сохранены.'
+          : action === 'REPORT_CONFIRMED'
+            ? 'Выбранное замечание подтверждено и возвращено в проверку.'
+            : 'По выбранному замечанию запрошен контекст; остальные пункты не изменены.'
+      );
+      await this.loadManagerReportReviews(true);
+    } catch (error) {
+      this.error.set(this.errorMessage(error, 'Не удалось сохранить решение по спору.'));
+    } finally {
+      this.resolvingReportReviewIds.update((ids) => {
+        const next = new Set(ids);
+        next.delete(review.reviewId);
+        return next;
+      });
     }
   }
 
@@ -1576,10 +1964,10 @@ export class ManagerControlPage implements OnInit, OnDestroy {
     this.preparedContactItemIds.set(new Set());
   }
 
-  private errorMessage(error: unknown): string {
+  private errorMessage(error: unknown, fallback = 'Не удалось выполнить действие.'): string {
     if (error instanceof HttpErrorResponse) {
-      return error.error?.message || error.error?.error || error.message || 'Не удалось выполнить действие.';
+      return error.error?.message || error.error?.error || error.message || fallback;
     }
-    return error instanceof Error ? error.message : 'Не удалось выполнить действие.';
+    return error instanceof Error ? error.message : fallback;
   }
 }

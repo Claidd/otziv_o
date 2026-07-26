@@ -85,6 +85,29 @@ export interface AdminNagulSettings {
   accountWalkDelayDays: number;
 }
 
+export type WorkerCellularAccessMode = 'OFF' | 'AUDIT' | 'ENFORCE';
+export type WorkerCellularAccessReason =
+  | 'NON_CELLULAR_NETWORK'
+  | 'VPN_PROXY_OR_DATACENTER'
+  | 'DESKTOP_OR_UNKNOWN_DEVICE'
+  | 'UNKNOWN_NETWORK';
+
+export interface AdminWorkerCellularAccessSettings {
+  mode: WorkerCellularAccessMode;
+  enforcedReasons: WorkerCellularAccessReason[];
+  enforceNativeVirtualDevice: boolean;
+  requireMobileDevice: boolean;
+  ipIntelligenceEnabled: boolean;
+  allowedCidrs: string[];
+  protectedSections: string[];
+}
+
+export interface WorkerCellularAccessSettingsRequest {
+  mode: WorkerCellularAccessMode;
+  enforcedReasons: WorkerCellularAccessReason[];
+  enforceNativeVirtualDevice: boolean;
+}
+
 export interface AdminTelegramReportScheduleSettings {
   morningEnabled: boolean;
   morningTime: string;
@@ -917,6 +940,21 @@ export class AdminDictionariesApi {
 
   updateNagulSettings(request: NagulSettingsRequest): Observable<AdminNagulSettings> {
     return this.http.put<AdminNagulSettings>(`${this.baseUrl}/settings/nagul`, request);
+  }
+
+  getWorkerCellularAccessSettings(): Observable<AdminWorkerCellularAccessSettings> {
+    return this.http.get<AdminWorkerCellularAccessSettings>(
+      `${this.baseUrl}/settings/worker-cellular-access`
+    );
+  }
+
+  updateWorkerCellularAccessSettings(
+    request: WorkerCellularAccessSettingsRequest
+  ): Observable<AdminWorkerCellularAccessSettings> {
+    return this.http.put<AdminWorkerCellularAccessSettings>(
+      `${this.baseUrl}/settings/worker-cellular-access`,
+      request
+    );
   }
 
   getTelegramReportSettings(): Observable<AdminTelegramReportScheduleSettings> {

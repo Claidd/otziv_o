@@ -292,7 +292,14 @@
 :host .company-edit-modal .lead-edit-actions button:not(.secondary),
 :host .company-edit-modal .company-billing-actions button:not(.secondary),
 :host .company-edit-modal .company-filial-edit-actions button:not(.secondary) {
+  color: var(--otziv-white, #fff);
   background: var(--otziv-primary, #6c9bcf);
+}
+
+:host .company-edit-modal .lead-edit-actions button:not(.secondary):disabled,
+:host .company-edit-modal .company-billing-actions button:not(.secondary):disabled,
+:host .company-edit-modal .company-filial-edit-actions button:not(.secondary):disabled {
+  color: rgba(255, 255, 255, 0.92);
 }
 
 :host .company-edit-modal button.secondary {

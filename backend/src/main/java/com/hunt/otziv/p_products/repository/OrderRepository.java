@@ -1307,6 +1307,13 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
               WHERE item.order = o
                 AND invoice.status IN :commonInvoiceStatuses
           )
+          AND NOT EXISTS (
+              SELECT recovery.id
+              FROM ReviewRecoveryTask recovery
+              WHERE recovery.order = o
+                AND recovery.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+                AND recovery.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
+          )
           AND (
               COALESCE(s.title, '') NOT IN :paymentAutomationStatuses
               OR (
@@ -1501,6 +1508,13 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                       WHERE item.order = o
                         AND invoice.status IN :commonInvoiceStatuses
                   )
+                  AND NOT EXISTS (
+                      SELECT recovery.id
+                      FROM ReviewRecoveryTask recovery
+                      WHERE recovery.order = o
+                        AND recovery.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+                        AND recovery.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
+                  )
                   AND (
                       :keyword = ''
                       OR LOWER(o.company.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
@@ -1681,6 +1695,13 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
                       JOIN item.invoice invoice
                       WHERE item.order = o
                         AND invoice.status IN :commonInvoiceStatuses
+                  )
+                  AND NOT EXISTS (
+                      SELECT recovery.id
+                      FROM ReviewRecoveryTask recovery
+                      WHERE recovery.order = o
+                        AND recovery.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus.PLANNED
+                        AND recovery.batch.status = com.hunt.otziv.review_recovery.model.ReviewRecoveryBatchStatus.OPEN
                   )
                   AND (
                       :keyword = ''

@@ -281,6 +281,54 @@
             </section>
           }
 
+          @if (isManagerProfile()) {
+            <section class="worker-chat-block">
+              <label>
+                <span>Группа аудита менеджера</span>
+                <input
+                  type="url"
+                  formControlName="managerAuditChatUrl"
+                  placeholder="https://t.me/..."
+                >
+              </label>
+              <div class="worker-chat-actions">
+                <span
+                  class="status-pill"
+                  [class.warn]="selectedUser()?.managerAuditChatUrl && !selectedUser()?.managerAuditTelegramGroupChatId"
+                >
+                  {{ managerAuditChatStatus(selectedUser()) }}
+                </span>
+                @if (selectedUser()?.managerAuditChatUrl) {
+                  <a [href]="selectedUser()?.managerAuditChatUrl" target="_blank" rel="noopener">
+                    <span class="material-icons-sharp">forum</span>
+                    Открыть
+                  </a>
+                }
+                @if (selectedUser()?.managerAuditTelegramBotInviteUrl) {
+                  <a
+                    [href]="selectedUser()?.managerAuditTelegramBotInviteUrl"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    <span class="material-icons-sharp">hub</span>
+                    Привязать Telegram
+                  </a>
+                  <button
+                    type="button"
+                    (click)="copyManagerAuditTelegramInviteUrl(selectedUser())"
+                    title="Скопировать ссылку привязки аудита"
+                  >
+                    <span class="material-icons-sharp">content_copy</span>
+                    Скопировать ссылку
+                  </button>
+                }
+              </div>
+              <p class="form-hint">
+                Это внутренняя группа менеджера и владельца. Клиентскую группу здесь указывать нельзя.
+              </p>
+            </section>
+          }
+
           <label class="checkbox wide">
             <input
               type="checkbox"

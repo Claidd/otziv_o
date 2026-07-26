@@ -25,6 +25,8 @@ public interface ManagerService {
     // сохранить нового менеджера
     void saveNewManager(User user);
 
+    Manager save(Manager manager);
+
 
     List<Manager> getAllManagersToOwner(List<Manager> managers);
 

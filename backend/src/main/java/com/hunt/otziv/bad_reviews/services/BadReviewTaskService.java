@@ -31,6 +31,8 @@ public interface BadReviewTaskService {
 
     BadReviewTask updateTask(Long taskId, String taskText, LocalDate scheduledDate);
 
+    BadReviewTask reassignTask(Long taskId, Worker worker);
+
     BadReviewTask cancelTask(Long taskId);
 
     void deleteOrderReadyReminder(Order order);

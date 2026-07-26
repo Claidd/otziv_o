@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -402,6 +403,44 @@ public class StaffDailyProgressService {
             Long workerId = longValue(row.get("worker_id"));
             result.put(workerId, monthlyResponse(safeMonthStart, row));
         });
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, Long> averageDailyActiveWorkSecondsByWorkerIds(
+            Collection<Long> workerIds,
+            LocalDate throughDate
+    ) {
+        if (!progressEnabled() || workerIds == null || workerIds.isEmpty()) {
+            return Map.of();
+        }
+        LocalDate safeThroughDate = safeDate(throughDate);
+        LocalDate monthStart = safeThroughDate.withDayOfMonth(1);
+        long elapsedDays = ChronoUnit.DAYS.between(monthStart, safeThroughDate) + 1;
+        List<Long> visibleWorkerIds = workerIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (visibleWorkerIds.isEmpty()) {
+            return Map.of();
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("workerIds", visibleWorkerIds)
+                .addValue("from", monthStart)
+                .addValue("to", safeThroughDate.plusDays(1));
+
+        Map<Long, Long> result = new LinkedHashMap<>();
+        jdbc.queryForList("""
+                SELECT worker_id, COALESCE(SUM(active_work_seconds), 0) AS active_work_seconds
+                FROM worker_daily_performance
+                WHERE worker_id IN (:workerIds)
+                  AND progress_date >= :from
+                  AND progress_date < :to
+                GROUP BY worker_id
+                """, params).forEach(row -> result.put(
+                longValue(row.get("worker_id")),
+                Math.round(longValue(row.get("active_work_seconds")) / (double) elapsedDays)
+        ));
         return result;
     }
 

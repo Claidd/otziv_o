@@ -54,6 +54,63 @@ public class OrderArchiveDryRunRepository {
                     WHERE nor.source_order_id = o.order_id
                       AND nor.request_status IN ('PENDING', 'FAILED')
               )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders cio
+                    WHERE cio.order_id = o.order_id
+              )
+            """;
+
+    private static final String ELIGIBLE_COMMON_INVOICE_WHERE = """
+            FROM common_invoices ci
+            WHERE ci.status IN ('ARCHIVED', 'BAN', 'PAID')
+              AND ci.closed_at IS NOT NULL
+              AND DATE(ci.closed_at) <= :cutoffDate
+              AND EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders cio
+                    WHERE cio.invoice_id = ci.invoice_id
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders cio
+                    JOIN orders o ON o.order_id = cio.order_id
+                    JOIN order_statuses s ON s.order_status_id = o.order_status
+                    WHERE cio.invoice_id = ci.invoice_id
+                      AND (
+                            (ci.status = 'ARCHIVED' AND s.order_status_title <> 'Архив')
+                         OR (ci.status = 'BAN' AND s.order_status_title NOT IN ('Бан', 'Оплачено'))
+                         OR (ci.status = 'PAID' AND s.order_status_title <> 'Оплачено')
+                      )
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders cio
+                    JOIN bad_review_tasks brt ON brt.bad_review_task_order = cio.order_id
+                    WHERE cio.invoice_id = ci.invoice_id
+                      AND brt.bad_review_task_status = 'NEW'
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders cio
+                    JOIN next_order_requests nor ON nor.source_order_id = cio.order_id
+                    WHERE cio.invoice_id = ci.invoice_id
+                      AND nor.request_status IN ('PENDING', 'FAILED')
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_payment_refs ref
+                    WHERE ref.invoice_id = ci.invoice_id
+                      AND ref.status IN (
+                            'CONFIRMED',
+                            'PREPAID',
+                            'APPLYING',
+                            'CANCEL_PENDING',
+                            'CANCELING',
+                            'CANCEL_FAILED',
+                            'INIT_CONFLICT'
+                      )
+              )
             """;
 
     private static final String CANDIDATE_ORDER_CTE = """
@@ -76,24 +133,54 @@ public class OrderArchiveDryRunRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
     public long countEligibleOrders(LocalDate cutoffDate) {
-        Long count = jdbc.queryForObject(
+        Long standalone = jdbc.queryForObject(
                 "SELECT COUNT(*) " + ELIGIBLE_ORDER_WHERE,
                 Map.of("cutoffDate", cutoffDate),
                 Long.class
         );
-        return count == null ? 0L : count;
+        Long grouped = jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM common_invoice_orders cio
+                JOIN (
+                    SELECT ci.invoice_id
+                    """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
+                ) eligible_invoice ON eligible_invoice.invoice_id = cio.invoice_id
+                """, Map.of("cutoffDate", cutoffDate), Long.class);
+        return (standalone == null ? 0L : standalone) + (grouped == null ? 0L : grouped);
     }
 
     public void prepareCandidateOrders(LocalDate cutoffDate, int batchLimit) {
+        jdbc.update("""
+                CREATE TEMPORARY TABLE IF NOT EXISTS archive_candidate_common_invoices (
+                    invoice_id BIGINT NOT NULL,
+                    PRIMARY KEY (invoice_id)
+                ) ENGINE = MEMORY
+                """, Map.of());
         jdbc.update("""
                 CREATE TEMPORARY TABLE IF NOT EXISTS archive_candidate_orders (
                     order_id BIGINT NOT NULL,
                     PRIMARY KEY (order_id)
                 ) ENGINE = MEMORY
                 """, Map.of());
+        jdbc.update("DELETE FROM archive_candidate_common_invoices", Map.of());
         jdbc.update("DELETE FROM archive_candidate_orders", Map.of());
         jdbc.update("""
-                INSERT INTO archive_candidate_orders (order_id)
+                INSERT INTO archive_candidate_common_invoices (invoice_id)
+                SELECT ci.invoice_id
+                """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
+                ORDER BY ci.closed_at, ci.invoice_id
+                LIMIT :batchLimit
+                """, candidateParams(cutoffDate, batchLimit));
+        jdbc.update("""
+                INSERT IGNORE INTO archive_candidate_orders (order_id)
+                SELECT cio.order_id
+                FROM common_invoice_orders cio
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = cio.invoice_id
+                ORDER BY candidate.invoice_id, cio.invoice_order_id
+                """, Map.of());
+        jdbc.update("""
+                INSERT IGNORE INTO archive_candidate_orders (order_id)
                 SELECT o.order_id
                 """ + ELIGIBLE_ORDER_WHERE + """
                 ORDER BY
@@ -156,10 +243,8 @@ public class OrderArchiveDryRunRepository {
         ));
     }
 
-    public List<ArchiveOrderCandidateItem> findCandidateOrders(LocalDate cutoffDate, int batchLimit, int previewLimit) {
-        MapSqlParameterSource params = candidateParams(cutoffDate, batchLimit)
-                .addValue("previewLimit", previewLimit);
-        return jdbc.query(CANDIDATE_ORDER_CTE + """
+    public List<ArchiveOrderCandidateItem> findPreparedCandidateOrders(int previewLimit) {
+        return jdbc.query("""
                 SELECT
                     o.order_id,
                     o.order_company,
@@ -194,7 +279,7 @@ public class OrderArchiveDryRunRepository {
                         JOIN order_details od ON od.order_detail_id = r.review_order_details
                         WHERE od.order_detail_order = o.order_id
                     ) AS reviews_count
-                FROM candidate_orders co
+                FROM archive_candidate_orders co
                 JOIN orders o ON o.order_id = co.order_id
                 LEFT JOIN companies c ON c.company_id = o.order_company
                 LEFT JOIN filial f ON f.filial_id = o.order_filial
@@ -206,7 +291,7 @@ public class OrderArchiveDryRunRepository {
                 LEFT JOIN users wu ON wu.id = w.user_id
                 ORDER BY candidate_date, o.order_id
                 LIMIT :previewLimit
-                """, params, (rs, rowNum) -> candidateItem(rs));
+                """, Map.of("previewLimit", previewLimit), (rs, rowNum) -> candidateItem(rs));
     }
 
     public ArchiveCandidateCounts countPreparedCandidates() {
@@ -467,6 +552,7 @@ public class OrderArchiveDryRunRepository {
 
     public void copyPreparedCandidatesToArchive(Long batchId, LocalDateTime archivedAt, String archiveReason) {
         MapSqlParameterSource params = archiveParams(batchId, archivedAt, archiveReason);
+        clearRestoredArchiveSnapshotsForPreparedCandidates();
         copyOrders(params);
         copyTable(
                 "order_details",
@@ -475,9 +561,43 @@ public class OrderArchiveDryRunRepository {
                 """
                         FROM order_details od
                         JOIN archive_candidate_orders co ON co.order_id = od.order_detail_order
+                """,
+                params
+        );
+        copyTable(
+                "common_invoices",
+                "archive_common_invoices",
+                "ci",
+                """
+                        FROM common_invoices ci
+                        JOIN archive_candidate_common_invoices candidate
+                          ON candidate.invoice_id = ci.invoice_id
                         """,
                 params
         );
+        copyTable(
+                "common_invoice_orders",
+                "archive_common_invoice_orders",
+                "cio",
+                """
+                        FROM common_invoice_orders cio
+                        JOIN archive_candidate_common_invoices candidate
+                          ON candidate.invoice_id = cio.invoice_id
+                        """,
+                params
+        );
+        copyTable(
+                "common_invoice_payment_refs",
+                "archive_common_invoice_payment_refs",
+                "cipr",
+                """
+                        FROM common_invoice_payment_refs cipr
+                        JOIN archive_candidate_common_invoices candidate
+                          ON candidate.invoice_id = cipr.invoice_id
+                        """,
+                params
+        );
+        verifyPreparedCommonInvoiceCopy();
         copyTable(
                 "reviews",
                 "archive_reviews",
@@ -531,6 +651,98 @@ public class OrderArchiveDryRunRepository {
         );
     }
 
+    private void clearRestoredArchiveSnapshotsForPreparedCandidates() {
+        jdbc.update("""
+                DELETE archived_ref
+                FROM archive_common_invoice_payment_refs archived_ref
+                JOIN archive_common_invoices archived_invoice
+                  ON archived_invoice.invoice_id = archived_ref.invoice_id
+                 AND archived_invoice.restored_at IS NOT NULL
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = archived_invoice.invoice_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_item
+                FROM archive_common_invoice_orders archived_item
+                JOIN archive_common_invoices archived_invoice
+                  ON archived_invoice.invoice_id = archived_item.invoice_id
+                 AND archived_invoice.restored_at IS NOT NULL
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = archived_invoice.invoice_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_invoice
+                FROM archive_common_invoices archived_invoice
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = archived_invoice.invoice_id
+                WHERE archived_invoice.restored_at IS NOT NULL
+                """, Map.of());
+
+        jdbc.update("""
+                DELETE archived_review
+                FROM archive_reviews archived_review
+                JOIN archive_order_details archived_detail
+                  ON archived_detail.order_detail_id = archived_review.review_order_details
+                JOIN archive_orders archived_order
+                  ON archived_order.order_id = archived_detail.order_detail_order
+                 AND archived_order.restored_at IS NOT NULL
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_row
+                FROM archive_bad_review_tasks archived_row
+                JOIN archive_orders archived_order
+                  ON archived_order.order_id = archived_row.bad_review_task_order
+                 AND archived_order.restored_at IS NOT NULL
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_row
+                FROM archive_next_order_requests archived_row
+                JOIN archive_orders archived_order
+                  ON archived_order.order_id = archived_row.source_order_id
+                 AND archived_order.restored_at IS NOT NULL
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_row
+                FROM archive_zp archived_row
+                JOIN archive_orders archived_order
+                  ON archived_order.order_id = archived_row.zp_order
+                 AND archived_order.restored_at IS NOT NULL
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_row
+                FROM archive_payment_check archived_row
+                JOIN archive_orders archived_order
+                  ON archived_order.order_id = archived_row.check_order
+                 AND archived_order.restored_at IS NOT NULL
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_detail
+                FROM archive_order_details archived_detail
+                JOIN archive_orders archived_order
+                  ON archived_order.order_id = archived_detail.order_detail_order
+                 AND archived_order.restored_at IS NOT NULL
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE archived_order
+                FROM archive_orders archived_order
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = archived_order.order_id
+                WHERE archived_order.restored_at IS NOT NULL
+                """, Map.of());
+    }
+
     public ArchiveCandidateCounts countArchivedPreparedCandidates() {
         return new ArchiveCandidateCounts(
                 count("""
@@ -574,6 +786,31 @@ public class OrderArchiveDryRunRepository {
     }
 
     public ArchiveCandidateCounts deletePreparedCandidatesFromLive() {
+        long expectedCommonInvoices = count("SELECT COUNT(*) FROM archive_candidate_common_invoices");
+        jdbc.update("""
+                DELETE ref
+                FROM common_invoice_payment_refs ref
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = ref.invoice_id
+                """, Map.of());
+        jdbc.update("""
+                DELETE item
+                FROM common_invoice_orders item
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = item.invoice_id
+                """, Map.of());
+        long deletedCommonInvoices = jdbc.update("""
+                DELETE invoice
+                FROM common_invoices invoice
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = invoice.invoice_id
+                """, Map.of());
+        if (deletedCommonInvoices != expectedCommonInvoices) {
+            throw new IllegalStateException(
+                    "Common invoice archive delete verification failed: selected="
+                            + expectedCommonInvoices + ", deleted=" + deletedCommonInvoices
+            );
+        }
         long paymentCheck = jdbc.update("""
                 DELETE pc
                 FROM payment_check pc
@@ -620,6 +857,50 @@ public class OrderArchiveDryRunRepository {
                 zp,
                 paymentCheck
         );
+    }
+
+    private void verifyPreparedCommonInvoiceCopy() {
+        long selectedInvoices = count("SELECT COUNT(*) FROM archive_candidate_common_invoices");
+        long archivedInvoices = count("""
+                SELECT COUNT(*)
+                FROM archive_common_invoices archived
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = archived.invoice_id
+                """);
+        long selectedItems = count("""
+                SELECT COUNT(*)
+                FROM common_invoice_orders item
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = item.invoice_id
+                """);
+        long archivedItems = count("""
+                SELECT COUNT(*)
+                FROM archive_common_invoice_orders archived
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = archived.invoice_id
+                """);
+        long selectedRefs = count("""
+                SELECT COUNT(*)
+                FROM common_invoice_payment_refs ref
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = ref.invoice_id
+                """);
+        long archivedRefs = count("""
+                SELECT COUNT(*)
+                FROM archive_common_invoice_payment_refs archived
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = archived.invoice_id
+                """);
+        if (selectedInvoices != archivedInvoices
+                || selectedItems != archivedItems
+                || selectedRefs != archivedRefs) {
+            throw new IllegalStateException(
+                    "Common invoice archive copy verification failed: invoices="
+                            + selectedInvoices + "/" + archivedInvoices
+                            + ", items=" + selectedItems + "/" + archivedItems
+                            + ", paymentRefs=" + selectedRefs + "/" + archivedRefs
+            );
+        }
     }
 
     public void completeArchiveBatch(

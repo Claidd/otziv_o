@@ -658,6 +658,27 @@ public class ApiWorkerBoardController {
         }
     }
 
+    @PutMapping("/bad-review-tasks/{taskId}/worker")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public void reassignBadReviewTask(
+            @PathVariable Long taskId,
+            @RequestBody WorkerAssignmentRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        try {
+            BadReviewTask task = badReviewTaskService.getTask(taskId);
+            enforceTaskAssignmentAccess(task == null ? null : task.getOrder(), null, principal, authentication);
+            Worker worker = assignmentWorker(request, principal, authentication);
+            badReviewTaskService.reassignTask(taskId, worker);
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист плохой задачи не изменен", exception);
+        }
+    }
+
     @PutMapping("/recovery-tasks/{taskId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
@@ -691,6 +712,32 @@ public class ApiWorkerBoardController {
             throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Задача восстановления не сохранена", exception);
+        }
+    }
+
+    @PutMapping("/recovery-tasks/{taskId}/worker")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public void reassignRecoveryTask(
+            @PathVariable Long taskId,
+            @RequestBody WorkerAssignmentRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        try {
+            ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
+            enforceTaskAssignmentAccess(
+                    task == null ? null : task.getOrder(),
+                    task == null ? null : task.getManager(),
+                    principal,
+                    authentication
+            );
+            Worker worker = assignmentWorker(request, principal, authentication);
+            reviewRecoveryTaskService.reassignTask(taskId, worker);
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист восстановления не изменен", exception);
         }
     }
 
@@ -1708,7 +1755,8 @@ public class ApiWorkerBoardController {
                 null,
                 "",
                 "",
-                ""
+                "",
+                null
         );
     }
 
@@ -1774,7 +1822,8 @@ public class ApiWorkerBoardController {
                 null,
                 "",
                 "",
-                ""
+                "",
+                workerId(task.getWorker())
         );
     }
 
@@ -1842,7 +1891,8 @@ public class ApiWorkerBoardController {
                 task.getId(),
                 task.getStatus() == null ? "" : task.getStatus().name(),
                 dateValue(task.getScheduledDate()),
-                dateValue(task.getCompletedDate())
+                dateValue(task.getCompletedDate()),
+                workerId(task.getWorker())
         );
     }
 
@@ -2030,6 +2080,56 @@ public class ApiWorkerBoardController {
 
     private boolean canSelectWorkerFilter(Authentication authentication) {
         return hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER") || hasRole(authentication, "MANAGER");
+    }
+
+    private Worker assignmentWorker(
+            WorkerAssignmentRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (request == null || request.workerId() == null || request.workerId() <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не указан");
+        }
+
+        return workerFilterWorkers(principal, authentication).stream()
+                .filter(worker -> Objects.equals(worker.getId(), request.workerId()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Этот специалист недоступен"));
+    }
+
+    private void enforceTaskAssignmentAccess(
+            Order order,
+            Manager recoveryManager,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (hasRole(authentication, "ADMIN")) {
+            return;
+        }
+
+        Manager orderManager = order == null ? null : order.getManager();
+        if (hasRole(authentication, "MANAGER")) {
+            Manager currentManager = resolveManager(principal);
+            if (sameManager(currentManager, orderManager) || sameManager(currentManager, recoveryManager)) {
+                return;
+            }
+        } else if (hasRole(authentication, "OWNER")) {
+            boolean allowed = resolveOwnerManagers(principal).stream().anyMatch(manager ->
+                    sameManager(manager, orderManager) || sameManager(manager, recoveryManager)
+            );
+            if (allowed) {
+                return;
+            }
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Эта задача недоступна");
+    }
+
+    private boolean sameManager(Manager left, Manager right) {
+        return left != null
+                && right != null
+                && left.getId() != null
+                && Objects.equals(left.getId(), right.getId());
     }
 
     private DailyWorkProgressResponse workerDailyProgress(
@@ -2862,7 +2962,8 @@ public class ApiWorkerBoardController {
             Long recoveryTaskId,
             String recoveryTaskStatus,
             String recoveryTaskScheduledDate,
-            String recoveryTaskCompletedDate
+            String recoveryTaskCompletedDate,
+            Long taskWorkerId
     ) {
     }
 
@@ -2870,6 +2971,9 @@ public class ApiWorkerBoardController {
     }
 
     public record ClientWaitingRequest(Boolean waitingForClient) {
+    }
+
+    public record WorkerAssignmentRequest(Long workerId) {
     }
 
     public record WorkerActivitySourceRequest(String sourcePage, String sourceEntry, String sourceSection) {

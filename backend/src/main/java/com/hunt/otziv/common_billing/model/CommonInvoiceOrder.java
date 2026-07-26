@@ -45,6 +45,9 @@ public class CommonInvoiceOrder {
     @Column(name = "original_order_status_title", length = 64)
     private String originalOrderStatusTitle;
 
+    @Column(name = "archive_source_order_status_title", length = 64)
+    private String archiveSourceOrderStatusTitle;
+
     @Column(nullable = false)
     private boolean ready;
 
@@ -56,6 +59,18 @@ public class CommonInvoiceOrder {
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    @Column(name = "payment_method", length = 32)
+    private String paymentMethod;
+
+    @Column(name = "manual_paid_by", length = 160)
+    private String manualPaidBy;
+
+    @Column(name = "manual_payment_comment", length = 1000)
+    private String manualPaymentComment;
+
+    @Column(name = "manual_payment_receipt_url", length = 1024)
+    private String manualPaymentReceiptUrl;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

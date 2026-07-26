@@ -1,10 +1,11 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   CABINET_NAVIGATION_LINKS,
   CabinetNavigationLink,
   visibleCabinetNavigationLinks
 } from './cabinet-navigation';
+import { ManagerReportReviewAccessApi } from '../core/manager-report-review-access.api';
 
 @Component({
   selector: 'app-cabinet-navigation',
@@ -179,11 +180,15 @@ import {
   `]
 })
 export class CabinetNavigationComponent {
+  private readonly reportReviewAccess = inject(ManagerReportReviewAccessApi);
   @Input() roles: string[] = [];
   @Input() active = '';
   @Input() links: CabinetNavigationLink[] = CABINET_NAVIGATION_LINKS;
 
   visibleNavigationLinks(): CabinetNavigationLink[] {
+    if (this.reportReviewAccess.state()?.restricted) {
+      return [];
+    }
     return visibleCabinetNavigationLinks(this.roles, this.links);
   }
 }

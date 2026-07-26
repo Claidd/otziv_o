@@ -9,11 +9,15 @@ import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
+import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
+import com.hunt.otziv.client_messages.dto.ClientMessageOrderStatusResponse;
 import com.hunt.otziv.client_messages.service.ScheduledClientMessageService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.l_lead.repository.LeadsRepository;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_chat_control.service.ClientChatReplySuggestionService;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
@@ -27,6 +31,7 @@ import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
+import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlItemActionRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlOverdueStatusResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlStageRequest;
@@ -34,6 +39,7 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlActionType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlEvent;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlEventType;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlGroup;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
@@ -99,6 +105,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -127,6 +134,8 @@ class ManagerControlServiceTest {
     private ScheduledClientMessageStateRepository scheduledClientMessageStateRepository;
     @Mock
     private AppSettingService appSettingService;
+    @Mock
+    private ManagerAutomationFailureService managerAutomationFailureService;
     @Mock
     private ClientChatMessageSender clientChatMessageSender;
     @Mock
@@ -180,12 +189,58 @@ class ManagerControlServiceTest {
     @Spy
     private ManagerActionBalanceService managerActionBalanceService = new ManagerActionBalanceService();
     @Mock
+    private ManagerOperationalMetricsService managerOperationalMetricsService;
+    @Mock
     private LeadsRepository leadsRepository;
     @Mock
     private GamificationEventService gamificationEventService;
 
     @InjectMocks
     private ManagerControlService service;
+
+    @Test
+    void fastClickRiskUsesOnlyManagerClientMessageResolutions() throws Exception {
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setManagerUserId(17L);
+
+        ManagerDailyControlItem clientMessages = new ManagerDailyControlItem();
+        clientMessages.setReasonCode("UNANSWERED_CLIENT_MESSAGES");
+        ManagerDailyControlItem workerOverdue = new ManagerDailyControlItem();
+        workerOverdue.setReasonCode("WORKER_OVERDUE_PUBLICATIONS");
+
+        ManagerDailyControlEvent managerClientClosure = event(
+                clientMessages,
+                17L,
+                ManagerDailyControlActionType.RESOLVED
+        );
+        ManagerDailyControlEvent workerReminder = event(
+                workerOverdue,
+                17L,
+                ManagerDailyControlActionType.ACTION_TAKEN
+        );
+        ManagerDailyControlEvent anotherEmployeeClosure = event(
+                clientMessages,
+                44L,
+                ManagerDailyControlActionType.RESOLVED
+        );
+        ManagerDailyControlEvent deferredClientMessage = event(
+                clientMessages,
+                17L,
+                ManagerDailyControlActionType.DEFERRED
+        );
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "isManagerClientMessageResolutionEvent",
+                ManagerDailyControl.class,
+                ManagerDailyControlEvent.class
+        );
+        method.setAccessible(true);
+
+        assertTrue((boolean) method.invoke(service, control, managerClientClosure));
+        assertFalse((boolean) method.invoke(service, control, workerReminder));
+        assertFalse((boolean) method.invoke(service, control, anotherEmployeeClosure));
+        assertFalse((boolean) method.invoke(service, control, deferredClientMessage));
+    }
 
     @Test
     void concreteMessageSlaUsesActualFirstObservedTime() throws Exception {
@@ -266,9 +321,9 @@ class ManagerControlServiceTest {
     }
 
     @Test
-    void commonInvoiceControlPassesPartiallyPaidStatusForPendingOrderFilter() throws Exception {
+    void commonInvoiceControlPassesStatusesThatRequireAllOrdersReady() throws Exception {
         Manager manager = new Manager();
-        when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any()))
+        when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any(), any()))
                 .thenReturn(0L);
 
         Method method = ManagerControlService.class.getDeclaredMethod("commonInvoiceActionCount", Manager.class);
@@ -280,6 +335,7 @@ class ManagerControlServiceTest {
                 any(),
                 any(),
                 eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.PARTIALLY_PAID),
+                eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.COLLECTING),
                 any()
         );
     }
@@ -447,6 +503,37 @@ class ManagerControlServiceTest {
     }
 
     @Test
+    void successfulClientMessageClosesConcreteCardImmediately() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "ORDER");
+        concrete.setEntityId(77L);
+        concrete.setStatusLabel("Опубликовано");
+        Company company = new Company();
+        company.setTitle("Галерея");
+        Order order = new Order();
+        order.setId(77L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Опубликовано").build());
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(orderRepository.findById(77L)).thenReturn(Optional.of(order));
+        when(clientChatMessageSender.send(any(), any(), any(), any()))
+                .thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+
+        ManagerControlConcreteItemResponse response = service.sendClientMessage(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED, concrete.getActionType());
+        assertNotNull(concrete.getResolvedAt());
+        assertNull(concrete.getFollowUpAt());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
+    }
+
+    @Test
     void commonInvoiceConcreteActionClosesCardWhenInvoiceIsNoLongerAProblem() throws Exception {
         ManagerDailyControl control = control();
         ManagerDailyControlItem parent = actionParent(control);
@@ -526,6 +613,105 @@ class ManagerControlServiceTest {
                 1L,
                 false
         );
+    }
+
+    @Test
+    void repairAutomationFailureRetriesSourceTaskAndResolvesAfterFreshCheck() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        ManagerDailyControl control = control();
+        control.setManager(manager);
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(
+                control,
+                parent,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE
+        );
+        concrete.setEntityId(501L);
+        ManagerAutomationFailureService.AutomationFailureIssue issue =
+                new ManagerAutomationFailureService.AutomationFailureIssue(
+                        "AUTOMATION_FAILURE:501",
+                        ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                        501L,
+                        501L,
+                        null,
+                        "Компания",
+                        "Повторная отправка счета · заказ #77",
+                        "Ошибка автоматизации · 3",
+                        "payment_instruction_failed",
+                        "/orders",
+                        null,
+                        ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+                        3,
+                        LocalDateTime.now().minusDays(1),
+                        LocalDateTime.now().minusHours(1),
+                        LocalDateTime.now().plusHours(1)
+                );
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(managerAutomationFailureService.findIssue(
+                manager,
+                ManagerAutomationFailureService.ENTITY_AUTOMATION_FAILURE,
+                501L
+        )).thenReturn(Optional.of(issue), Optional.empty());
+        when(scheduledClientMessageService.retryNow(501L)).thenReturn(
+                new ScheduledClientMessageService.ManualRetryResult(
+                        501L,
+                        true,
+                        ScheduledMessageStateStatus.DONE,
+                        null,
+                        null,
+                        0,
+                        null
+                )
+        );
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("перезапущена"));
+        verify(scheduledClientMessageService).retryNow(501L);
+    }
+
+    @Test
+    void repairCollectingInvoiceRemovesHealthyInProgressInvoiceFromRemarks() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "COMMON_INVOICE");
+        concrete.setEntityId(88L);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(88L);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        var details = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse.class
+        );
+        var summary = org.mockito.Mockito.mock(
+                com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse.class
+        );
+
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(commonInvoiceRepository.findById(88L)).thenReturn(Optional.of(invoice));
+        when(commonBillingService.invoice(88L)).thenReturn(details);
+        when(details.summary()).thenReturn(summary);
+        when(details.orders()).thenReturn(List.of());
+        when(summary.status()).thenReturn(CommonInvoiceStatus.COLLECTING.name());
+        when(summary.readyOrders()).thenReturn(2);
+        when(summary.totalOrders()).thenReturn(5);
+
+        ManagerControlConcreteItemResponse response = service.repairConcreteItem(
+                concrete.getId(),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals("RESOLVED", response.itemStatus());
+        assertTrue(concrete.getComment().contains("3 из 5 заказов еще в работе"));
+        assertTrue(concrete.getComment().contains("убрана из замечаний"));
+        verify(commonBillingService, never()).sendInvoice(anyLong(), eq(true));
     }
 
     @Test
@@ -933,6 +1119,168 @@ class ManagerControlServiceTest {
         assertEquals(2, statuses.get(0).maxDays());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void aggregateOverdueExamplesUseEachStatusSpecificCutoff() throws Exception {
+        LocalDate today = LocalDate.of(2026, 7, 25);
+        Manager manager = managerWithWorker(11L, 21L);
+        OrderDTOList order = OrderDTOList.builder()
+                .id(25101L)
+                .status("На проверке")
+                .companyTitle("Компания с заказом")
+                .changed(today.minusDays(2))
+                .build();
+
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_INTERVAL_DAYS,
+                ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+        )).thenReturn(2);
+        when(dailyControlRepository.findByControlDateAndManager(today, manager)).thenReturn(Optional.empty());
+        when(orderRepository.summarizeManagerControlOverdueOrdersByManager(
+                any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any()
+        )).thenReturn(List.of());
+        when(orderService.getManagerControlOverdueOrdersByManager(
+                eq(manager), eq(""), eq("На проверке"), eq(today.minusDays(2)),
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), eq(0), eq(1), eq("desc")
+        )).thenReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 1), 1));
+        when(orderService.getManagerControlOverdueOrdersByManager(
+                eq(manager), eq(""), eq("На проверке"), eq(today.minusDays(2)),
+                any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), eq(0), eq(5), eq("desc")
+        )).thenReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 5), 1));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "overdueOrderExamples",
+                Manager.class,
+                String.class,
+                LocalDate.class,
+                int.class
+        );
+        method.setAccessible(true);
+        List<ManagerControlConcreteItemResponse> examples =
+                (List<ManagerControlConcreteItemResponse>) method.invoke(service, manager, "Все", today, 5);
+
+        assertEquals(1, examples.size());
+        assertEquals(25101L, examples.getFirst().entityId());
+        assertEquals("Компания с заказом", examples.getFirst().title());
+    }
+
+    @Test
+    void healthyScheduledClientMessageQueueIsNotAControlRemark() throws Exception {
+        OrderDTOList order = OrderDTOList.builder()
+                .id(25362L)
+                .status("На проверке")
+                .companyTitle("Галерея")
+                .changed(LocalDate.of(2026, 7, 23))
+                .clientMessageStatus(new ClientMessageOrderStatusResponse(
+                        "scheduled",
+                        "Ожидает отправки",
+                        "wait",
+                        "REVIEW_CHECK_REMINDER",
+                        "rate_limited",
+                        "Следующий слот отправки",
+                        null,
+                        null,
+                        LocalDateTime.of(2026, 7, 25, 15, 57),
+                        0,
+                        0
+                ))
+                .build();
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "hasHealthyActiveClientMessageQueue",
+                OrderDTOList.class
+        );
+        method.setAccessible(true);
+
+        assertTrue((boolean) method.invoke(service, order));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void concreteSynchronizationDeduplicatesSameEntityKey() throws Exception {
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(71L);
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setId(578L);
+        ManagerControlConcreteItemResponse duplicate = new ManagerControlConcreteItemResponse(
+                null,
+                "CLIENT_CHAT_UNANSWERED",
+                1315L,
+                "Компания",
+                null,
+                null,
+                0L,
+                "Сообщение клиента",
+                "/admin/manager-control/11",
+                null,
+                null,
+                null,
+                null,
+                "OPEN",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        when(dailyControlConcreteItemRepository.findByParentItemForUpdate(parent)).thenReturn(List.of());
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "syncConcreteExamples",
+                ManagerDailyControlItem.class,
+                List.class
+        );
+        method.setAccessible(true);
+        List<ManagerControlConcreteItemResponse> synced =
+                (List<ManagerControlConcreteItemResponse>) method.invoke(
+                        service,
+                        parent,
+                        List.of(duplicate, duplicate)
+                );
+
+        assertEquals(1, synced.size());
+        verify(dailyControlConcreteItemRepository, times(1)).save(any());
+    }
+
+    @Test
+    void auditCardCanSendCorrectiveReplyAndClose() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "CLIENT_CHAT_AUDIT");
+        ClientChatUnansweredItem audited = new ClientChatUnansweredItem();
+        audited.setId(concrete.getEntityId());
+        audited.setStatus(ClientChatUnansweredStatus.ANSWERED);
+        audited.setAuditRequired(true);
+        audited.setPlatform(com.hunt.otziv.client_chat_control.model.ClientChatPlatform.WHATSAPP);
+        audited.setChatId("12001@g.us");
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(clientChatUnansweredItemRepository.findById(concrete.getEntityId()))
+                .thenReturn(Optional.of(audited));
+        when(clientChatMessageSender.sendToPlatform(
+                any(), any(), any(), any(), any(), any()
+        )).thenReturn(ClientMessageSendResult.sent("WhatsApp"));
+
+        ManagerControlConcreteItemResponse response = service.replyToClientMessage(
+                concrete.getId(),
+                new ManagerControlClientReplyRequest("Исправление проверено, сообщаем результат"),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED.name(), response.actionType());
+        verify(clientChatMessageTrackerService).markAuditReplySent(
+                audited.getId(),
+                1L,
+                "Исправление проверено, сообщаем результат",
+                "WhatsApp"
+        );
+    }
+
     private void stubSuccessfulConcreteAction(
             ManagerDailyControlConcreteItem concrete,
             ManagerDailyControlItem parent
@@ -965,6 +1313,20 @@ class ManagerControlServiceTest {
         control.setDayCheckedAt(now.minusHours(3));
         control.setFinalCheckedAt(now.minusMinutes(10));
         return control;
+    }
+
+    private ManagerDailyControlEvent event(
+            ManagerDailyControlItem item,
+            Long actorUserId,
+            ManagerDailyControlActionType actionType
+    ) {
+        ManagerDailyControlEvent event = new ManagerDailyControlEvent();
+        event.setItem(item);
+        event.setActorUserId(actorUserId);
+        event.setEventType(ManagerDailyControlEventType.ITEM_ACTION);
+        event.setActionType(actionType);
+        event.setCreatedAt(LocalDateTime.now());
+        return event;
     }
 
     private ManagerDailyControlItem actionParent(ManagerDailyControl control) {

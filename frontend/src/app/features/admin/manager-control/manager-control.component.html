@@ -191,6 +191,155 @@
         }
       }
 
+      @if (canManageDailySummary()) {
+        <section class="side-load-card report-review-card" aria-label="Ознакомление менеджеров с аудитом">
+          <div class="side-title">
+            <span class="material-icons-sharp">school</span>
+            <h2>Ознакомление с аудитом</h2>
+          </div>
+          @if (managerReportReviewsLoading()) {
+            <p class="side-empty">Загружаю статусы…</p>
+          } @else if (managerReportReviews().length === 0) {
+            <p class="side-empty">Персональные отчёты ещё не отправлялись</p>
+          } @else {
+            <div class="report-review-list">
+              @for (review of managerReportReviews(); track review.reviewId) {
+                <details
+                  class="report-review-item"
+                  [class.red]="reportReviewTone(review) === 'red'"
+                  [class.yellow]="reportReviewTone(review) === 'yellow'"
+                  [class.green]="reportReviewTone(review) === 'green'"
+                >
+                  <summary>
+                    <span class="material-icons-sharp">
+                      {{ review.status === 'COMPLETED' && !review.quickReview ? 'task_alt' : review.status === 'DISPUTED' ? 'gavel' : 'schedule' }}
+                    </span>
+                    <span>
+                      <strong>
+                        @if (review.testMode) { <span>🧪 Тест · </span> }
+                        {{ review.managerName }}
+                      </strong>
+                      <small>{{ reportReviewStatus(review) }}</small>
+                      <em>{{ reportReviewProgress(review) }}</em>
+                    </span>
+                  </summary>
+                  <div class="report-review-details">
+                    <p><b>Отчёт:</b> {{ review.summaryDate | date: 'dd.MM.yyyy' }}</p>
+                    <p><b>Чтение отчёта:</b> {{ reportReviewDuration(review.readSeconds) }} из расчётных {{ reportReviewDuration(review.minimumReadSeconds) }}</p>
+                    <p><b>Вся проверка:</b> {{ reportReviewDuration(review.totalReviewSeconds) }}</p>
+                    @if (review.aiVerificationPaused) {
+                      <p class="report-review-restriction"><b>Проверка DeepSeek приостановлена.</b> Трёхчасовой срок не идёт, доступ не ограничивается.</p>
+                    } @else if (review.aiUnavailableSeconds > 0) {
+                      <p><b>Срок продлён из-за сбоя DeepSeek:</b> {{ reportReviewDuration(review.aiUnavailableSeconds) }}</p>
+                    }
+                    @if (review.suspiciousAnswerCount > 0) {
+                      <p class="report-review-dispute"><b>Проверка самостоятельности:</b> {{ review.suspiciousAnswerCount }} быстрых длинных ответов; менеджеру заданы короткие уточнения своими словами.</p>
+                    }
+                    @if (review.startedAt) {
+                      <p><b>Открыт:</b> {{ review.startedAt | date: 'dd.MM, HH:mm' }}</p>
+                    }
+                    @if (review.readingConfirmedAt) {
+                      <p><b>Прочтение подтверждено:</b> {{ review.readingConfirmedAt | date: 'dd.MM, HH:mm' }}</p>
+                    }
+                    @if (review.deadlineStartedAt && !review.completedAt) {
+                      <p><b>Срок начат:</b> {{ review.deadlineStartedAt | date: 'dd.MM, HH:mm' }}</p>
+                    }
+                    @if (review.answerQualityReason) {
+                      <p><b>Оценка ответов:</b> {{ review.answerQualityReason }}</p>
+                    }
+                    @if (review.actionPlan) {
+                      <p><b>План менеджера:</b> {{ review.actionPlan }}</p>
+                    }
+                    @if (review.disputeText) {
+                      <p class="report-review-dispute"><b>Спор:</b> {{ review.disputeText }}</p>
+                    }
+                    @if (review.issues.length) {
+                      <div class="report-review-issues">
+                        <b>Замечания аудита</b>
+                        @for (issue of review.issues; track issue.issueId) {
+                          <article [class]="'issue-' + issue.status.toLowerCase()">
+                            <strong>{{ issue.title }}</strong>
+                            <span>{{ issue.question }}</span>
+                            <small>
+                              Статус: {{ reportReviewIssueStatus(issue.status) }}
+                              @if (issue.disputeText) {
+                                · Спор: {{ issue.disputeText }}
+                              }
+                              @if (issue.ownerComment) {
+                                · Решение: {{ issue.ownerComment }}
+                              }
+                            </small>
+                          </article>
+                        }
+                      </div>
+                    }
+                    @if (review.restrictedAt && !review.restrictionReleasedAt && !review.aiVerificationPaused) {
+                      <p class="report-review-restriction">
+                        <b>Ограничение:</b> рабочие разделы закрыты с
+                        {{ review.restrictedAt | date: 'dd.MM, HH:mm' }}. Личный кабинет доступен.
+                      </p>
+                    }
+                    @if (review.openDisputeCount > 0) {
+                      <div class="report-review-resolution">
+                        <label [for]="'report-dispute-' + review.reviewId">Комментарий решения</label>
+                        <textarea
+                          [id]="'report-dispute-' + review.reviewId"
+                          rows="3"
+                          [ngModel]="reportDisputeComments()[review.reviewId]"
+                          (ngModelChange)="setReportDisputeComment(review.reviewId, $event)"
+                          placeholder="Что проверили и почему приняли такое решение"
+                        ></textarea>
+                        <div>
+                          <button
+                            type="button"
+                            class="report-review-resolution__accept"
+                            [disabled]="isResolvingReportReview(review.reviewId)"
+                            (click)="resolveReportDispute(review, 'REPORT_INCORRECT')"
+                          >
+                            Менеджер прав — снять выбранный пункт
+                          </button>
+                          <button
+                            type="button"
+                            class="report-review-resolution__confirm"
+                            [disabled]="isResolvingReportReview(review.reviewId)"
+                            (click)="resolveReportDispute(review, 'REPORT_CONFIRMED')"
+                          >
+                            Замечание верно — вернуть вопрос
+                          </button>
+                          <button
+                            type="button"
+                            class="report-review-resolution__context"
+                            [disabled]="isResolvingReportReview(review.reviewId)"
+                            (click)="resolveReportDispute(review, 'REPORT_NEEDS_CONTEXT')"
+                          >
+                            Недостаточно данных по этому пункту
+                          </button>
+                        </div>
+                      </div>
+                    }
+                    @if (review.events.length > 0) {
+                      <div class="report-review-events">
+                        @for (event of review.events; track event.eventId) {
+                          <article>
+                            <time>{{ event.createdAt | date: 'HH:mm' }}</time>
+                            <div>
+                              <b>{{ reportReviewEventLabel(event.eventType) }}</b>
+                              @if (event.payload) {
+                                <span>{{ event.payload }}</span>
+                              }
+                            </div>
+                          </article>
+                        }
+                      </div>
+                    }
+                  </div>
+                </details>
+              }
+            </div>
+          }
+        </section>
+      }
+
       <h2>Тестовый режим</h2>
       <div class="side-metric">
         <span>Видимость</span>
@@ -204,6 +353,24 @@
         <button type="button" class="summary-preview-button" (click)="buildDailySummaryPreview()" [disabled]="dailySummaryPreviewLoading()">
           <span class="material-icons-sharp">preview</span>
           {{ dailySummaryPreviewLoading() ? 'Формирую…' : 'Предпросмотр ночной сводки' }}
+        </button>
+        <button
+          type="button"
+          class="summary-preview-button summary-telegram-button"
+          (click)="sendDailySummaryToTelegram()"
+          [disabled]="dailySummaryTelegramSending()"
+        >
+          <span class="material-icons-sharp">send</span>
+          {{ dailySummaryTelegramSending() ? 'Отправляю аудит…' : 'Запросить аудит в Telegram' }}
+        </button>
+        <button
+          type="button"
+          class="summary-preview-button summary-audit-test-button"
+          (click)="startReportReviewTest()"
+          [disabled]="reportReviewTestStarting()"
+        >
+          <span class="material-icons-sharp">science</span>
+          {{ reportReviewTestStarting() ? 'Создаю тест…' : 'Пройти тестовый аудит' }}
         </button>
       }
       @for (manager of topManagers(); track trackManager($index, manager)) {
@@ -312,15 +479,23 @@
                 </div>
               </div>
 
-              @if (queueState(); as queue) {
-                @if (queue.enabled) {
-                  <div class="queue-control-stats">
-                    <span><small>Под контролем</small><b>{{ queueDuration(queue.controlledSeconds) }} из {{ queue.controlTargetHours }} ч · {{ queue.controlPercent }}%</b></span>
-                    <span><small>Серия без критической просрочки</small><b>{{ queueDuration(queue.currentControlledStreakSeconds) }}</b></span>
-                    <span><small>Чистая очередь</small><b>{{ queueDuration(queue.cleanQueueSeconds) }}</b></span>
-                  </div>
-                }
-              }
+              <div class="queue-control-stats">
+                <span title="Подтверждённая активность на сайте и в соцсетях за день. Пересекающиеся интервалы не дублируются, периоды бездействия не учитываются.">
+                  <small>Рабочее время</small>
+                  <b>{{ queueDuration(manager.activeWorkSeconds) }}</b>
+                </span>
+                <span title="Средняя подтверждённая активность на сайте и в соцсетях за календарный день с первого числа месяца по выбранную дату.">
+                  <small>В среднем за день</small>
+                  <b>{{ queueDuration(manager.averageDailyWorkSeconds) }}</b>
+                </span>
+                <span title="Среднее время от появления замечания до первого действия менеджера.">
+                  <small>Средняя реакция</small>
+                  <b>{{ manager.reactionCount > 0 ? queueDuration(manager.averageReactionSeconds) : 'Пока нет данных' }}</b>
+                  @if (manager.reactionCount > 0) {
+                    <em>Учтено реакций: {{ manager.reactionCount }}</em>
+                  }
+                </span>
+              </div>
 
               <div class="personal-remark-metrics">
                 <article class="personal-metric overdue {{ countToneClass(currentOverdueCount(manager)) }}">
@@ -448,6 +623,24 @@
               <div class="daily-task-progress-track">
                 <span [style.width.%]="dailyTaskProgress(manager)"></span>
               </div>
+            </div>
+
+            <div class="queue-control-stats">
+              <span title="Подтверждённая активность на сайте и в соцсетях за день. Пересекающиеся интервалы не дублируются, периоды бездействия не учитываются.">
+                <small>Рабочее время</small>
+                <b>{{ queueDuration(manager.activeWorkSeconds) }}</b>
+              </span>
+              <span title="Средняя подтверждённая активность на сайте и в соцсетях за календарный день с первого числа месяца по выбранную дату.">
+                <small>В среднем за день</small>
+                <b>{{ queueDuration(manager.averageDailyWorkSeconds) }}</b>
+              </span>
+              <span title="Среднее время от появления замечания до первого действия менеджера.">
+                <small>Средняя реакция</small>
+                <b>{{ manager.reactionCount > 0 ? queueDuration(manager.averageReactionSeconds) : 'Пока нет данных' }}</b>
+                @if (manager.reactionCount > 0) {
+                  <em>Учтено реакций: {{ manager.reactionCount }}</em>
+                }
+              </span>
             </div>
 
             <div class="manager-numbers">
@@ -846,7 +1039,18 @@
                             </span>
 
                             <span class="detail-example-text">
-                              @if (example.reason) {
+                              @if (isClientChatAudit(example)) {
+                                <span class="client-audit-message">
+                                  <span class="client-audit-message-head">
+                                    <span class="material-icons-sharp">chat_bubble_outline</span>
+                                    <span>
+                                      <small>Сообщение клиента</small>
+                                      <strong>{{ clientAuditSender(example) }}</strong>
+                                    </span>
+                                  </span>
+                                  <span class="client-audit-message-body">{{ clientAuditMessage(example) }}</span>
+                                </span>
+                              } @else if (example.reason) {
                                 <em>{{ example.reason }}</em>
                               }
                               @if (managerActionNote(example)) {
@@ -875,6 +1079,31 @@
                               }
                             </span>
                           </a>
+
+                          @if (isClientChatAudit(example)) {
+                            <div class="client-audit-task" role="note">
+                              <span class="material-icons-sharp">fact_check</span>
+                              <div>
+                                <strong>Что нужно сделать</strong>
+                                <ol>
+                                  <li>Откройте переписку и найдите это сообщение.</li>
+                                  <li>Проверьте, ответил ли менеджер клиенту по существу.</li>
+                                  <li>Ниже запишите найденный ответ или выполненное сейчас действие.</li>
+                                </ol>
+                              </div>
+                              @if (chatUrl(example)) {
+                                <a
+                                  class="review-action client-action client-audit-chat"
+                                  [href]="chatUrl(example)"
+                                  target="_blank"
+                                  rel="noopener"
+                                >
+                                  <span class="material-icons-sharp">forum</span>
+                                  Открыть переписку
+                                </a>
+                              }
+                            </div>
+                          }
 
                           @if (example.type === 'ORDER') {
                             <div class="review-followup order-open-action">
@@ -1047,7 +1276,7 @@
                             </div>
                           }
 
-                          @if (example.type === 'COMMON_INVOICE') {
+                          @if (example.type === 'COMMON_INVOICE' || example.type === 'COMMON_INVOICE_AUTOMATION') {
                             <div class="review-followup invoice-open-action">
                               <a class="review-action order-action" [href]="commonInvoiceOrdersUrl(example)">
                                 <span class="material-icons-sharp">view_kanban</span>
@@ -1070,6 +1299,21 @@
                                 </button>
                               }
                               <small>сначала карточка в заказах, затем правая панель счета</small>
+                            </div>
+                          }
+
+                          @if (example.type === 'AUTOMATION_FAILURE') {
+                            <div class="review-followup order-open-action">
+                              <button
+                                type="button"
+                                class="review-action repair-action"
+                                (click)="repairConcreteItem(example)"
+                                [disabled]="isConcreteUpdating(example.controlEntityId)"
+                                title="Повторно запустить задачу и проверить, исчезла ли ошибка"
+                              >
+                                <span class="material-icons-sharp">build</span>
+                                Починить
+                              </button>
                             </div>
                           }
 
@@ -1158,12 +1402,27 @@
                                 Это сотрудник
                               </button>
                               <small>{{ example.contactText || 'Последнее сообщение клиента сохранено в карточке' }}</small>
+                            </div>
+                          }
+
+                          @if (canReplyToClientMessage(example)) {
+                            <section class="client-reply-composer">
+                              <div class="client-reply-heading">
+                                <span class="material-icons-sharp">reply</span>
+                                <div>
+                                  <strong>Ответить клиенту сейчас</strong>
+                                  <small>
+                                    Сообщение уйдёт в этот чат, а карточка
+                                    {{ isClientChatAudit(example) ? 'проверки' : 'без ответа' }} закроется.
+                                  </small>
+                                </div>
+                              </div>
                               <div class="unanswered-reply">
                                 <textarea
-                                  rows="2"
+                                  rows="3"
                                   [ngModel]="unansweredReplyDraft(example.controlEntityId)"
                                   (ngModelChange)="updateUnansweredReplyDraft(example.controlEntityId, $event)"
-                                  placeholder="Ответ клиенту"
+                                  placeholder="Напишите конкретный ответ на сообщение клиента"
                                 ></textarea>
                                 <button
                                   type="button"
@@ -1186,16 +1445,29 @@
                                   Отправить
                                 </button>
                               </div>
-                            </div>
+                            </section>
                           }
 
-                          <div class="detail-example-control">
-                            <textarea
-                              rows="1"
-                              [ngModel]="detailConcreteComment(example.controlEntityId)"
-                              (ngModelChange)="updateConcreteComment(example.controlEntityId, $event)"
-                              placeholder="Комментарий по карточке"
-                            ></textarea>
+                          <div class="detail-example-control" [class.client-audit-control]="isClientChatAudit(example)">
+                            @if (isClientChatAudit(example)) {
+                              <label class="client-audit-comment-field">
+                                <span>Результат проверки <b>обязательно</b></span>
+                                <textarea
+                                  rows="3"
+                                  [ngModel]="detailConcreteComment(example.controlEntityId)"
+                                  (ngModelChange)="updateConcreteComment(example.controlEntityId, $event)"
+                                  placeholder="Например: менеджер ответил 25.07 в 11:32 и подтвердил оплату. Или: ответа не было — написал клиенту сейчас."
+                                ></textarea>
+                                <small>После заполнения станет доступна кнопка с галочкой.</small>
+                              </label>
+                            } @else {
+                              <textarea
+                                rows="1"
+                                [ngModel]="detailConcreteComment(example.controlEntityId)"
+                                (ngModelChange)="updateConcreteComment(example.controlEntityId, $event)"
+                                placeholder="Комментарий по карточке"
+                              ></textarea>
+                            }
                             <div class="detail-example-actions">
                               <button
                                 type="button"

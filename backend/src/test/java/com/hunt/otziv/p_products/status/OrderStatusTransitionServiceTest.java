@@ -417,7 +417,7 @@ class OrderStatusTransitionServiceTest {
     @Test
     void archiveStatusUpdatesCompanyDetachesBotsAndSaves() throws Exception {
         OrderStatusTransitionService service = service();
-        Order order = order(4L, "Публикация");
+        Order order = order(4L, "На проверке");
         OrderStatus archive = status("Архив");
 
         when(orderRepository.findByIdForMutation(4L)).thenReturn(Optional.of(order));
@@ -438,7 +438,7 @@ class OrderStatusTransitionServiceTest {
     @Test
     void archiveStatusSavesValidReviewsToArchiveBeforeDetachingBots() throws Exception {
         OrderStatusTransitionService service = service();
-        Order order = orderWithReview(42L, "Публикация", 420L, "Готовый текст отзыва");
+        Order order = orderWithReview(42L, "Коррекция", 420L, "Готовый текст отзыва");
         OrderStatus archive = status("Архив");
 
         when(orderRepository.findByIdForMutation(42L)).thenReturn(Optional.of(order));
@@ -455,7 +455,7 @@ class OrderStatusTransitionServiceTest {
     @Test
     void archiveStatusClearsPublicationDatesOnlyForUnpublishedReviews() throws Exception {
         OrderStatusTransitionService service = service();
-        Order order = orderWithPublicationReviews(43L, "Публикация");
+        Order order = orderWithPublicationReviews(43L, "На проверке");
         List<Review> reviews = order.getDetails().getFirst().getReviews();
         OrderStatus archive = status("Архив");
 
@@ -473,7 +473,7 @@ class OrderStatusTransitionServiceTest {
     @Test
     void archiveStatusRejectsBlankReviewTextWithoutSideEffects() {
         OrderStatusTransitionService service = service();
-        Order order = orderWithReview(40L, "Публикация", 400L, " ");
+        Order order = orderWithReview(40L, "Коррекция", 400L, " ");
         OrderStatus originalStatus = order.getStatus();
 
         when(orderRepository.findByIdForMutation(40L)).thenReturn(Optional.of(order));
@@ -494,7 +494,7 @@ class OrderStatusTransitionServiceTest {
     @Test
     void archiveStatusRejectsPlaceholderReviewTextIgnoringCase() {
         OrderStatusTransitionService service = service();
-        Order order = orderWithReview(41L, "Публикация", 410L, "  текст отзыва  ");
+        Order order = orderWithReview(41L, "На проверке", 410L, "  текст отзыва  ");
 
         when(orderRepository.findByIdForMutation(41L)).thenReturn(Optional.of(order));
 

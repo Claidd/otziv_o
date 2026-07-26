@@ -1,6 +1,7 @@
 package com.hunt.otziv.b_bots.services;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -19,6 +20,7 @@ import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -116,11 +118,82 @@ class ReviewAccountPoolAlertServiceTest {
         assertEquals(threshold, state.getLastRemainingCount());
     }
 
+    @Test
+    void notifiesOwnersAndAdminsWhenUnblockedCityAccountsAreBelowOneHundred() {
+        ReviewAccountPoolAlertState state = state(60, 0, 0);
+        User owner = user(10L, 100L);
+        User admin = user(11L, null);
+        stub(state, 60, List.of(owner), List.of(admin));
+        when(botsRepository.countActiveByCityId(325L)).thenReturn(99L);
+
+        service().reconcileAndNotify();
+
+        assertEquals(LocalDate.now(ZoneId.of("Asia/Irkutsk")), state.getLastLowUnblockedNotifiedOn());
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(owner), anyString(), anyString(),
+                eq(ReviewAccountPoolAlertService.LOW_UNBLOCKED_SOURCE_TYPE), anyLong(), eq(null)
+        );
+        verify(personalReminderService).createSystemReminderDueNow(
+                eq(admin), anyString(), anyString(),
+                eq(ReviewAccountPoolAlertService.LOW_UNBLOCKED_SOURCE_TYPE), anyLong(), eq(null)
+        );
+        verify(telegramService).sendMessage(eq(100L), anyString());
+    }
+
+    @Test
+    void doesNotRepeatLowUnblockedAlertOnSameDay() {
+        ReviewAccountPoolAlertState state = state(60, 0, 0);
+        state.setLastLowUnblockedNotifiedOn(LocalDate.now(ZoneId.of("Asia/Irkutsk")));
+        stub(state, 60, List.of(user(10L, 100L)), List.of());
+        when(botsRepository.countActiveByCityId(325L)).thenReturn(99L);
+
+        service().reconcileAndNotify();
+
+        verify(personalReminderService, never()).createSystemReminderDueNow(
+                any(), anyString(), anyString(),
+                eq(ReviewAccountPoolAlertService.LOW_UNBLOCKED_SOURCE_TYPE), anyLong(), any()
+        );
+        verify(telegramService, never()).sendMessage(anyLong(), anyString());
+    }
+
+    @Test
+    void sendsLowUnblockedAlertAgainOnNextDay() {
+        ReviewAccountPoolAlertState state = state(60, 0, 0);
+        state.setLastLowUnblockedNotifiedOn(LocalDate.now(ZoneId.of("Asia/Irkutsk")).minusDays(1));
+        stub(state, 60, List.of(user(10L, null)), List.of());
+        when(botsRepository.countActiveByCityId(325L)).thenReturn(40L);
+
+        service().reconcileAndNotify();
+
+        assertEquals(LocalDate.now(ZoneId.of("Asia/Irkutsk")), state.getLastLowUnblockedNotifiedOn());
+        verify(personalReminderService).createSystemReminderDueNow(
+                any(), anyString(), anyString(),
+                eq(ReviewAccountPoolAlertService.LOW_UNBLOCKED_SOURCE_TYPE), anyLong(), eq(null)
+        );
+    }
+
+    @Test
+    void doesNotNotifyWhenUnblockedCityAccountsEqualOneHundred() {
+        ReviewAccountPoolAlertState state = state(60, 0, 0);
+        stub(state, 60, List.of(user(10L, 100L)), List.of());
+        when(botsRepository.countActiveByCityId(325L)).thenReturn(100L);
+
+        service().reconcileAndNotify();
+
+        assertNull(state.getLastLowUnblockedNotifiedOn());
+        verify(personalReminderService, never()).createSystemReminderDueNow(
+                any(), anyString(), anyString(),
+                eq(ReviewAccountPoolAlertService.LOW_UNBLOCKED_SOURCE_TYPE), anyLong(), any()
+        );
+        verify(telegramService, never()).sendMessage(anyLong(), anyString());
+    }
+
     private void stub(ReviewAccountPoolAlertState state, long count, List<User> owners, List<User> admins) {
         when(stateRepository.findByIdForUpdate(ReviewAccountPoolAlertService.STATE_ID)).thenReturn(Optional.of(state));
         when(botsRepository.countAvailableAccountPool(
                 anyLong(), anyString(), anyString(), anyInt(), anyInt(), any(LocalDate.class)
         )).thenReturn(count);
+        lenient().when(botsRepository.countActiveByCityId(325L)).thenReturn(100L);
         lenient().when(botsRepository.countUnpublishedStubReviews()).thenReturn(0L);
         lenient().when(userService.getAllOwners("ROLE_OWNER")).thenReturn(owners);
         lenient().when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(admins);

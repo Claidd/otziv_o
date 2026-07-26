@@ -576,6 +576,106 @@ async function inviteInfo(groupChat) {
   }
 }
 
+async function inviteInfoByGroupId(groupId) {
+  if (!groupId) {
+    return { inviteCode: null, inviteLink: null };
+  }
+
+  try {
+    const inviteCode = await withTimeout(
+      () => client.pupPage.evaluate(async (chatId) => {
+        try {
+          const result = await window
+            .require("WAWebMexFetchGroupInviteCodeJob")
+            .fetchMexGroupInviteCode(chatId);
+          return result && result.code ? result.code : result;
+        } catch (error) {
+          if (error && error.name === "ServerStatusCodeError") {
+            return null;
+          }
+          throw error;
+        }
+      }, groupId),
+      WHATSAPP_GROUP_INVITE_TIMEOUT_MS,
+      "Invite code lookup"
+    );
+    return {
+      inviteCode,
+      inviteLink: inviteCode ? `https://chat.whatsapp.com/${inviteCode}` : null,
+    };
+  } catch (error) {
+    const level = error.message.includes("timed out") ? "warn" : "debug";
+    log(level, "Invite code unavailable through minimal group fallback", {
+      groupId,
+      error: error.message,
+    });
+    return { inviteCode: null, inviteLink: null };
+  }
+}
+
+async function loadMinimalGroupsSnapshot() {
+  const snapshot = await withTimeout(
+    () => client.pupPage.evaluate(() => {
+      const chatCollection = window.require("WAWebCollections").Chat;
+      const chats = typeof chatCollection.getModelsArray === "function"
+        ? chatCollection.getModelsArray()
+        : Array.isArray(chatCollection.models)
+          ? chatCollection.models
+          : Object.values(chatCollection.models || {});
+
+      const groups = chats
+        .map((chat) => {
+          const id = chat && chat.id;
+          const groupId = id && (
+            id._serialized
+            || (typeof id.toString === "function" ? id.toString() : "")
+          );
+          const name = chat && (
+            chat.name
+            || chat.formattedTitle
+            || (chat.groupMetadata && chat.groupMetadata.subject)
+          );
+          return {
+            groupId: typeof groupId === "string" ? groupId : "",
+            name: typeof name === "string" ? name : "",
+          };
+        })
+        .filter((chat) => chat.groupId.endsWith("@g.us"));
+
+      return {
+        groups,
+        totalChats: chats.length,
+      };
+    }),
+    WHATSAPP_GROUPS_TIMEOUT_MS,
+    "Minimal group list lookup"
+  );
+
+  const groups = await mapWithConcurrency(
+    snapshot.groups,
+    WHATSAPP_GROUP_INVITE_CONCURRENCY,
+    async (chat) => {
+      const invite = await inviteInfoByGroupId(chat.groupId);
+      return {
+        groupId: chat.groupId,
+        id: chat.groupId,
+        chatId: chat.groupId,
+        name: chat.name,
+        title: chat.name,
+        subject: chat.name,
+        inviteCode: invite.inviteCode,
+        inviteLink: invite.inviteLink,
+        link: invite.inviteLink,
+      };
+    }
+  );
+
+  return {
+    groups,
+    totalChats: snapshot.totalChats,
+  };
+}
+
 function groupsPayload(snapshot, extra = {}) {
   const groups = snapshot && Array.isArray(snapshot.groups) ? snapshot.groups : [];
   return {
@@ -591,11 +691,19 @@ function groupsPayload(snapshot, extra = {}) {
 }
 
 async function loadGroupsSnapshot() {
-  const chats = await withTimeout(
-    () => client.getChats(),
-    WHATSAPP_GROUPS_TIMEOUT_MS,
-    "Group list lookup"
-  );
+  let chats;
+  try {
+    chats = await withTimeout(
+      () => client.getChats(),
+      WHATSAPP_GROUPS_TIMEOUT_MS,
+      "Group list lookup"
+    );
+  } catch (error) {
+    log("warn", "Full WhatsApp chat serialization failed; using minimal group fallback", {
+      error: errorMessage(error),
+    });
+    return loadMinimalGroupsSnapshot();
+  }
   const groupChats = chats.filter((item) => item.isGroup);
   const groups = await mapWithConcurrency(groupChats, WHATSAPP_GROUP_INVITE_CONCURRENCY, async (chat) => {
     const groupId = chat.id && chat.id._serialized ? chat.id._serialized : null;

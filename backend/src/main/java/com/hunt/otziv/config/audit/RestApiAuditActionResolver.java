@@ -354,6 +354,12 @@ public class RestApiAuditActionResolver {
         put(actions, "GET", "/api/manager/archive/orders", "загрузка архива заказов");
         put(actions, "GET", "/api/manager/archive/orders/{orderId}", "загрузка архивного заказа {orderId}");
         put(actions, "POST", "/api/manager/archive/orders/{orderId}/restore", "восстановление архивного заказа {orderId}");
+        put(actions, "GET", "/api/common-billing/invoices/{invoiceId}/archive-preview", "проверка архивирования общего счета {invoiceId}");
+        put(actions, "POST", "/api/common-billing/invoices/{invoiceId}/archive", "архивирование общего счета {invoiceId} со всеми заказами");
+        put(actions, "POST", "/api/common-billing/invoices/{invoiceId}/ban", "перевод общего счета {invoiceId} в Бан");
+        put(actions, "GET", "/api/common-billing/archive/invoices", "загрузка архива общих счетов");
+        put(actions, "GET", "/api/common-billing/archive/invoices/{invoiceId}", "загрузка архивного общего счета {invoiceId}");
+        put(actions, "POST", "/api/common-billing/archive/invoices/{invoiceId}/restore", "восстановление общего счета {invoiceId} со всеми заказами");
 
         put(actions, "POST", "/api/worker/orders/{orderId}/status", "смена статуса заказа на \"{status}\"");
         put(actions, "POST", "/api/worker/orders/{orderId}/client-waiting", "изменение ожидания клиента у заказа {orderId}");
@@ -365,8 +371,10 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/worker/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва {taskId}");
         put(actions, "PUT", "/api/worker/bad-review-tasks/{taskId}", "редактирование плохого отзыва {taskId}");
+        put(actions, "PUT", "/api/worker/bad-review-tasks/{taskId}/worker", "смена специалиста плохого отзыва {taskId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/change-bot", "смена аккаунта плохого отзыва {taskId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} плохого отзыва {taskId}");
+        put(actions, "PUT", "/api/worker/recovery-tasks/{taskId}/worker", "смена специалиста восстановления {taskId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/nagul", "выгул отзыва {reviewId}");
         put(actions, "PUT", "/api/worker/reviews/{reviewId}/text", "редактирование текста отзыва {reviewId}");
         put(actions, "PUT", "/api/worker/reviews/{reviewId}/answer", "редактирование ответа отзыва {reviewId}");

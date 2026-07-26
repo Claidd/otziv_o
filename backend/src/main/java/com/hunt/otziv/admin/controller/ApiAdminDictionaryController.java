@@ -32,6 +32,8 @@ import com.hunt.otziv.l_lead.repository.PromoTextRepository;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.repository.ProductRepository;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties;
+import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessRuntimeSettingsService;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsRequest;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
@@ -96,6 +98,7 @@ public class ApiAdminDictionaryController {
     private final PromoTextRepository promoTextRepository;
     private final PromoTextAssignmentRepository promoTextAssignmentRepository;
     private final AppSettingService appSettingService;
+    private final WorkerCellularAccessRuntimeSettingsService workerCellularAccessSettingsService;
     private final TelegramReportScheduleSettingsService telegramReportScheduleSettingsService;
     private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
     private final SharedChatLinkSyncService sharedChatLinkSyncService;
@@ -937,6 +940,55 @@ public class ApiAdminDictionaryController {
         );
 
         return clientMessageSettings();
+    }
+
+    @GetMapping("/settings/worker-cellular-access")
+    @PreAuthorize("hasRole('ADMIN')")
+    public WorkerCellularAccessSettingsResponse getWorkerCellularAccessSettings() {
+        return workerCellularAccessSettingsResponse(workerCellularAccessSettingsService.currentPolicy());
+    }
+
+    @PutMapping("/settings/worker-cellular-access")
+    @PreAuthorize("hasRole('ADMIN')")
+    public WorkerCellularAccessSettingsResponse updateWorkerCellularAccessSettings(
+            @RequestBody WorkerCellularAccessSettingsRequest request
+    ) {
+        if (request == null) {
+            throw badRequest("Настройки контроля мобильного доступа не переданы");
+        }
+        WorkerCellularAccessProperties.Mode mode;
+        try {
+            mode = WorkerCellularAccessProperties.Mode.valueOf(
+                    safe(request.mode()).trim().toUpperCase(Locale.ROOT)
+            );
+        } catch (IllegalArgumentException exception) {
+            throw badRequest("Неизвестный режим контроля мобильного доступа");
+        }
+
+        try {
+            return workerCellularAccessSettingsResponse(workerCellularAccessSettingsService.update(
+                    mode,
+                    request.enforcedReasons() == null ? List.of() : request.enforcedReasons(),
+                    request.enforceNativeVirtualDevice() == null
+                            || request.enforceNativeVirtualDevice()
+            ));
+        } catch (IllegalArgumentException exception) {
+            throw badRequest(exception.getMessage());
+        }
+    }
+
+    private WorkerCellularAccessSettingsResponse workerCellularAccessSettingsResponse(
+            WorkerCellularAccessRuntimeSettingsService.AccessPolicy policy
+    ) {
+        return new WorkerCellularAccessSettingsResponse(
+                policy.mode().name(),
+                List.copyOf(policy.enforcedReasons()),
+                policy.enforceNativeVirtualDevice(),
+                workerCellularAccessSettingsService.requireMobileDevice(),
+                workerCellularAccessSettingsService.ipIntelligenceEnabled(),
+                workerCellularAccessSettingsService.allowedCidrs(),
+                List.of("nagul", "publish", "recovery", "bad")
+        );
     }
 
     @PostMapping("/settings/shared-chat-links/sync")
@@ -1985,6 +2037,24 @@ public class ApiAdminDictionaryController {
             int lookaheadDays,
             int accountWalkedCounterThreshold,
             int accountWalkDelayDays
+    ) {
+    }
+
+    public record WorkerCellularAccessSettingsRequest(
+            String mode,
+            List<String> enforcedReasons,
+            Boolean enforceNativeVirtualDevice
+    ) {
+    }
+
+    public record WorkerCellularAccessSettingsResponse(
+            String mode,
+            List<String> enforcedReasons,
+            boolean enforceNativeVirtualDevice,
+            boolean requireMobileDevice,
+            boolean ipIntelligenceEnabled,
+            List<String> allowedCidrs,
+            List<String> protectedSections
     ) {
     }
 
