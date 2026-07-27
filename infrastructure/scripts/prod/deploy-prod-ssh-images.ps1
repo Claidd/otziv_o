@@ -367,6 +367,7 @@ set_env KEYCLOAK_ADMIN_SERVER_URL "http://keycloak:8080/keycloak"
 set_env KC_PROXY_TRUSTED_ADDRESSES "172.16.0.0/12,10.0.0.0/8,192.168.0.0/16,127.0.0.0/8"
 
 ensure_nginx_certs
+find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 docker load -i "`$images_tar"
 rm -f "`$images_tar"

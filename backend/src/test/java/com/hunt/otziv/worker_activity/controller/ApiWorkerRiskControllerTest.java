@@ -180,6 +180,52 @@ class ApiWorkerRiskControllerTest {
     }
 
     @Test
+    void adminVerificationClosesRiskWithoutExplanationOrAudit() {
+        WorkerRiskIncident incident = incident();
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
+
+        WorkerRiskIncidentResponse response = controller.resolution(
+                77L,
+                new WorkerRiskResolutionRequest("VERIFIED", null, null),
+                adminAuth()
+        );
+
+        assertEquals(WorkerRiskIncidentStatus.RESOLVED, response.status());
+        assertEquals(WorkerRiskResolutionAction.VERIFIED, response.resolutionAction());
+        assertEquals(false, response.auditRequired());
+        assertEquals("ADMIN_VERIFIED", incident.getDecisionQuality());
+        assertNotNull(response.resolvedAt());
+    }
+
+    @Test
+    void ownerVerificationClosesRiskWithoutExplanationOrAudit() {
+        WorkerRiskIncident incident = incident();
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.findByUserName("owner")).thenReturn(Optional.of(user(3L, "owner", null)));
+        when(userService.findManagersByUserName("owner")).thenReturn(java.util.Set.of());
+        when(managerControlConcreteItemRepository.existsByEntityTypeAndEntityIdAndControl_Manager_User_Username(
+                "RISK",
+                77L,
+                "owner"
+        )).thenReturn(true);
+
+        WorkerRiskIncidentResponse response = controller.resolution(
+                77L,
+                new WorkerRiskResolutionRequest("VERIFIED", null, null),
+                ownerAuth()
+        );
+
+        assertEquals(WorkerRiskIncidentStatus.RESOLVED, response.status());
+        assertEquals(WorkerRiskResolutionAction.VERIFIED, response.resolutionAction());
+        assertEquals(false, response.auditRequired());
+        assertEquals("OWNER_VERIFIED", incident.getDecisionQuality());
+        assertNotNull(response.resolvedAt());
+    }
+
+    @Test
     void ownerReturnFromAuditReopensForManagerWithoutKeepingWorkerRestricted() {
         WorkerRiskIncident incident = incident();
         incident.setStatus(WorkerRiskIncidentStatus.RESOLVED);
@@ -246,6 +292,14 @@ class ApiWorkerRiskControllerTest {
                 "admin",
                 "n/a",
                 java.util.List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+        );
+    }
+
+    private Authentication ownerAuth() {
+        return new UsernamePasswordAuthenticationToken(
+                "owner",
+                "n/a",
+                java.util.List.of(new SimpleGrantedAuthority("ROLE_OWNER"))
         );
     }
 }

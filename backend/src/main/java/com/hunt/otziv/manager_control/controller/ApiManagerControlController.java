@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.controller;
 
 import com.hunt.otziv.config.metrics.PerformanceMetrics;
+import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
@@ -205,6 +206,19 @@ public class ApiManagerControlController {
         return performanceMetrics.recordEndpoint(
                 "admin.manager-control.manager-details",
                 () -> managerControlService.managerDetails(managerId, principal, authentication)
+        );
+    }
+
+    @PostMapping("/managers/{managerId}/today/reconcile-client-messages")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public ClientChatReconciliationResult reconcileClientMessages(
+            @PathVariable Long managerId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        return performanceMetrics.recordEndpoint(
+                "admin.manager-control.client-message-reconcile",
+                () -> managerControlService.reconcileClientMessages(managerId, principal, authentication)
         );
     }
 

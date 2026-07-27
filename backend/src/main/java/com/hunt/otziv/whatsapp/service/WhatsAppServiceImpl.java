@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppClientStatusDto;
+import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
+import com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessage;
+import com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessagesResponse;
 import com.hunt.otziv.whatsapp.dto.WhatsAppSendResult;
 import com.hunt.otziv.whatsapp.dto.WhatsAppUserStatusDto;
 import com.hunt.otziv.whatsapp.exception.WhatsAppConfigurationException;
@@ -223,6 +226,41 @@ public class WhatsAppServiceImpl implements WhatsAppService {
             log.warn("Не удалось получить WhatsApp-группы клиента {}: {}", clientId, e.getMessage());
             return List.of();
         }
+    }
+
+    @Override
+    public List<WhatsAppReconciledMessage> reconcileGroupMessages(
+            String clientId,
+            List<WhatsAppChatMessageCursor> chats
+    ) {
+        if (chats == null || chats.isEmpty()) {
+            return List.of();
+        }
+        try {
+            String url = baseUrl(clientId) + "/groups/reconcile-messages";
+            HttpEntity<String> request = jsonEntity(Map.of("chats", chats));
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            WhatsAppReconciledMessagesResponse payload = MAPPER.readValue(
+                    response.getBody() == null ? "{}" : response.getBody(),
+                    WhatsAppReconciledMessagesResponse.class
+            );
+            return payload.messages() == null ? List.of() : payload.messages();
+        } catch (WhatsAppConfigurationException e) {
+            log.warn("WhatsApp-сообщения не сверены: {}", e.getMessage());
+        } catch (RestClientResponseException e) {
+            log.warn(
+                    "WhatsApp API вернул HTTP {} при сверке сообщений клиента {}",
+                    e.getStatusCode().value(),
+                    clientId
+            );
+        } catch (ResourceAccessException e) {
+            log.warn("WhatsApp-клиент {} недоступен при сверке сообщений: {}", clientId, e.getMessage());
+        } catch (JsonProcessingException e) {
+            log.warn("Не удалось разобрать ответ сверки WhatsApp-клиента {}", clientId, e);
+        } catch (Exception e) {
+            log.warn("Не удалось сверить WhatsApp-сообщения клиента {}", clientId, e);
+        }
+        return List.of();
     }
 
     @Override

@@ -31,6 +31,12 @@ public interface ClientChatUnansweredItemRepository extends JpaRepository<Client
             ClientChatUnansweredStatus status
     );
 
+    List<ClientChatUnansweredItem> findByManagerAndPlatformAndStatus(
+            Manager manager,
+            ClientChatPlatform platform,
+            ClientChatUnansweredStatus status
+    );
+
     List<ClientChatUnansweredItem> findByPlatformAndChatIdAndAuditRequiredTrue(
             ClientChatPlatform platform,
             String chatId

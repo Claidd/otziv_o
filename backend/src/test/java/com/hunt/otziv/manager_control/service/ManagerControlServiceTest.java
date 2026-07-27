@@ -19,6 +19,7 @@ import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRep
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliationService;
 import com.hunt.otziv.client_chat_control.service.ClientChatReplySuggestionService;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
@@ -140,6 +141,8 @@ class ManagerControlServiceTest {
     private ClientChatMessageSender clientChatMessageSender;
     @Mock
     private ClientChatMessageTrackerService clientChatMessageTrackerService;
+    @Mock
+    private ClientChatMessageReconciliationService clientChatMessageReconciliationService;
     @Mock
     private ClientChatReplySuggestionService clientChatReplySuggestionService;
     @Mock
@@ -531,6 +534,35 @@ class ManagerControlServiceTest {
         assertNotNull(concrete.getResolvedAt());
         assertNull(concrete.getFollowUpAt());
         assertEquals(ManagerDailyControlItemStatus.RESOLVED.name(), response.itemStatus());
+    }
+
+    @Test
+    void resolvedRiskActionClosesConcreteCardAndParentImmediately() {
+        ManagerDailyControl control = control();
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setReasonCode("OPEN_RISKS");
+        ManagerDailyControlConcreteItem concrete = concrete(control, parent, "RISK");
+        stubSuccessfulConcreteAction(concrete, parent);
+        when(managerPermissionService.hasAnyRole(any(), eq("ADMIN"), eq("OWNER"))).thenReturn(true);
+
+        ManagerControlConcreteItemResponse response = service.actionConcreteItem(
+                concrete.getId(),
+                new ManagerControlItemActionRequest(
+                        "RESOLVED",
+                        "Проверено администратором/владельцем",
+                        null
+                ),
+                principal(),
+                adminAuth()
+        );
+
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, concrete.getStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED, concrete.getActionType());
+        assertNotNull(concrete.getResolvedAt());
+        assertEquals(ManagerDailyControlItemStatus.RESOLVED, parent.getStatus());
+        assertEquals(ManagerDailyControlActionType.RESOLVED, parent.getActionType());
+        assertEquals("RESOLVED", response.itemStatus());
+        verify(dailyControlItemRepository).save(parent);
     }
 
     @Test
@@ -1129,6 +1161,19 @@ class ManagerControlServiceTest {
                 .status("На проверке")
                 .companyTitle("Компания с заказом")
                 .changed(today.minusDays(2))
+                .clientMessageStatus(new ClientMessageOrderStatusResponse(
+                        "scheduled",
+                        "Ожидает отправки",
+                        "wait",
+                        "OTHER_SCENARIO",
+                        "rate_limited",
+                        "Следующий слот отправки",
+                        null,
+                        null,
+                        LocalDateTime.of(2026, 7, 25, 15, 57),
+                        0,
+                        0
+                ))
                 .build();
 
         when(appSettingService.getInt(
@@ -1244,6 +1289,62 @@ class ManagerControlServiceTest {
 
         assertEquals(1, synced.size());
         verify(dailyControlConcreteItemRepository, times(1)).save(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void concreteSynchronizationReopensResolvedCardWhenProblemIsStillActive() throws Exception {
+        ManagerDailyControl control = new ManagerDailyControl();
+        control.setId(75L);
+        ManagerDailyControlItem parent = actionParent(control);
+        parent.setId(607L);
+
+        ManagerDailyControlConcreteItem resolved = concrete(control, parent, "PUBLICATION_DATE_REVIEW");
+        resolved.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        resolved.setActionType(ManagerDailyControlActionType.RESOLVED);
+        resolved.setResolvedAt(LocalDateTime.now());
+        resolved.setAutomaticResolution(true);
+
+        ManagerControlConcreteItemResponse active = new ManagerControlConcreteItemResponse(
+                null,
+                resolved.getEntityType(),
+                resolved.getEntityId(),
+                resolved.getTitle(),
+                resolved.getSubtitle(),
+                "Нет даты публикации",
+                0L,
+                "Проблема всё ещё актуальна",
+                "/admin/orders/25588",
+                null,
+                null,
+                null,
+                null,
+                "OPEN",
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        when(dailyControlConcreteItemRepository.findByParentItemForUpdate(parent))
+                .thenReturn(List.of(resolved));
+        when(dailyControlConcreteItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Method method = ManagerControlService.class.getDeclaredMethod(
+                "syncConcreteExamples",
+                ManagerDailyControlItem.class,
+                List.class
+        );
+        method.setAccessible(true);
+        List<ManagerControlConcreteItemResponse> synced =
+                (List<ManagerControlConcreteItemResponse>) method.invoke(service, parent, List.of(active));
+
+        assertEquals(1, synced.size());
+        assertEquals(ManagerDailyControlItemStatus.OPEN, resolved.getStatus());
+        assertEquals("OPEN", synced.getFirst().itemStatus());
+        assertNull(resolved.getActionType());
+        assertNull(resolved.getResolvedAt());
+        verify(dailyControlConcreteItemRepository).save(resolved);
     }
 
     @Test

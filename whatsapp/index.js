@@ -9,6 +9,7 @@ const {
   DeliveredMessageCache,
   RecentOutboundRegistry,
   createMessageHandler,
+  reconciliationPayloads,
 } = require("./message-webhook");
 const {
   groupFromInviteInfo,
@@ -889,6 +890,59 @@ app.get("/groups", asyncRoute(async (req, res) => {
     });
     res.status(groupsCache ? 200 : 503).json(payload);
   }
+}));
+
+app.post("/groups/reconcile-messages", asyncRoute(async (req, res) => {
+  if (!requireReady(res)) {
+    return;
+  }
+
+  const cursors = Array.isArray(req.body && req.body.chats)
+    ? req.body.chats.slice(0, 50)
+    : [];
+  if (cursors.length === 0) {
+    res.json({ status: "ok", clientId: CLIENT_ID, messages: [] });
+    return;
+  }
+
+  const messages = [];
+  for (const cursor of cursors) {
+    const groupId = normalizeGroupId(cursor && (cursor.groupId || cursor.chatId));
+    if (!groupId) {
+      continue;
+    }
+    const afterTimestamp = Math.max(0, Number(cursor.afterTimestamp) || 0);
+    try {
+      const chat = await client.getChatById(groupId);
+      const recent = await withTimeout(
+        () => chat.fetchMessages({ limit: 100, fromMe: false }),
+        WHATSAPP_GROUPS_TIMEOUT_MS,
+        `Recent messages for ${groupId}`
+      );
+      messages.push(...reconciliationPayloads({
+        clientId: CLIENT_ID,
+        groupId,
+        groupName: chat.name || "",
+        afterTimestamp,
+        messages: recent,
+      }));
+    } catch (error) {
+      log("warn", "WhatsApp message reconciliation skipped for group", {
+        groupId,
+        error: errorMessage(error),
+      });
+    }
+  }
+
+  messages.sort((left, right) =>
+    Number(left.timestamp || 0) - Number(right.timestamp || 0)
+      || String(left.messageId || "").localeCompare(String(right.messageId || ""))
+  );
+  res.json({
+    status: "ok",
+    clientId: CLIENT_ID,
+    messages,
+  });
 }));
 
 app.post("/groups/resolve-invite", asyncRoute(async (req, res) => {

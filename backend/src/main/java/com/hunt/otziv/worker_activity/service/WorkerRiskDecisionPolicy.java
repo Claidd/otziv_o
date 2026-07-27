@@ -57,6 +57,26 @@ public class WorkerRiskDecisionPolicy {
         incident.setAuditRequired(true);
     }
 
+    public void applyPrivilegedVerification(
+            WorkerRiskIncident incident,
+            String comment,
+            String actorRole
+    ) {
+        if (incident == null) {
+            return;
+        }
+        String evidence = clean(comment);
+        String role = clean(actorRole).toUpperCase();
+        incident.setManagerResolutionComment(evidence.isBlank() ? null : evidence);
+        incident.setDecisionQuality("ADMIN".equals(role) ? "ADMIN_VERIFIED" : "OWNER_VERIFIED");
+        incident.setDecisionQualityReason(
+                evidence.isBlank()
+                        ? "Риск закрыт администратором или владельцем"
+                        : evidence
+        );
+        incident.setAuditRequired(false);
+    }
+
     public boolean isFinalAction(WorkerRiskResolutionAction action) {
         return action != null
                 && action != WorkerRiskResolutionAction.EXPLANATION_REQUESTED

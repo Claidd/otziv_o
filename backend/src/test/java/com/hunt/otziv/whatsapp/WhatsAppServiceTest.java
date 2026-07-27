@@ -1,6 +1,7 @@
 package com.hunt.otziv.whatsapp;
 
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
+import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
 import com.hunt.otziv.whatsapp.service.WhatsAppServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -157,5 +158,45 @@ class WhatsAppServiceTest {
         assertTrue(group.isPresent());
         assertEquals("1203633063@g.us", group.get().groupId());
         assertEquals("Drivevision", group.get().name());
+    }
+
+    @Test
+    void reconcileGroupMessagesReturnsGatewayHistory() {
+        WhatsAppProperties.ClientConfig config = new WhatsAppProperties.ClientConfig();
+        config.setId("whatsapp_vika");
+        config.setUrl("http://whatsapp_vika:3000");
+
+        when(properties.getClients()).thenReturn(List.of(config));
+        when(restTemplate.postForEntity(
+                eq("http://whatsapp_vika:3000/groups/reconcile-messages"),
+                any(),
+                eq(String.class)
+        )).thenReturn(ResponseEntity.ok("""
+                {
+                  "status":"ok",
+                  "clientId":"whatsapp_vika",
+                  "messages":[{
+                    "clientId":"whatsapp_vika",
+                    "groupId":"1203633063@g.us",
+                    "groupName":"Клиент",
+                    "from":"70000000000@lid",
+                    "fromName":"Мария",
+                    "messageId":"message-42",
+                    "timestamp":1785136200,
+                    "fromMe":false,
+                    "systemGenerated":false,
+                    "message":"Ответ сотрудника"
+                  }]
+                }
+                """));
+
+        var messages = service.reconcileGroupMessages(
+                "whatsapp_vika",
+                List.of(new WhatsAppChatMessageCursor("1203633063@g.us", 1785132000L))
+        );
+
+        assertEquals(1, messages.size());
+        assertEquals("message-42", messages.getFirst().messageId());
+        assertEquals("Ответ сотрудника", messages.getFirst().message());
     }
 }

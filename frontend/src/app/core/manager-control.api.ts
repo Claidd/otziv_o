@@ -25,6 +25,14 @@ export interface ManagerControlClientReplySuggestion {
   reasonCode: string;
 }
 
+export interface ManagerControlClientMessageReconciliation {
+  requestedChats: number;
+  receivedMessages: number;
+  openBefore: number;
+  openAfter: number;
+  closedItems: number;
+}
+
 export interface ManagerControlStagePayload {
   stage: 'MORNING_DONE' | 'FINAL_CHECK';
   comment?: string | null;
@@ -568,6 +576,13 @@ export class ManagerControlApi {
   syncManagerDetails(managerId: number): Observable<ManagerControlManagerDetail> {
     return this.http.post<ManagerControlManagerDetail>(
       `${appEnvironment.apiBaseUrl}/api/admin/manager-control/managers/${managerId}/today/sync`,
+      {}
+    );
+  }
+
+  reconcileClientMessages(managerId: number): Observable<ManagerControlClientMessageReconciliation> {
+    return this.http.post<ManagerControlClientMessageReconciliation>(
+      `${appEnvironment.apiBaseUrl}/api/admin/manager-control/managers/${managerId}/today/reconcile-client-messages`,
       {}
     );
   }

@@ -911,8 +911,8 @@ public class ManagerReportReviewTelegramService {
         sessionRepository.save(review);
         event(review, "DISPUTE_REQUESTED", actor.getId(), actorRole(review), "telegram",
                 "Выбрано замечание: " + dispute.getIssue().getTitle());
-        Optional<Integer> promptId = telegramService.sendForceReplyMessageId(
-                review.getRecipientChatId(),
+        Optional<Integer> promptId = sendReplyPrompt(
+                review,
                 "⚖️ Вы оспариваете:\n"
                         + dispute.getIssue().getQuestionText()
                         + "\n\nОпишите конкретно, что в этом замечании неверно.\n\n"
@@ -931,10 +931,12 @@ public class ManagerReportReviewTelegramService {
     ) {
         String dispute = clean(messageText);
         if (dispute.length() < 20) {
-            telegramService.sendForceReplyMessage(
-                    review.getRecipientChatId(),
+            Optional<Integer> promptId = sendReplyPrompt(
+                    review,
                     "Нужно чуть подробнее: какой именно вывод неверен, что произошло фактически и где это проверить?"
             );
+            promptId.ifPresent(review::setReplyPromptMessageId);
+            sessionRepository.save(review);
             return true;
         }
         ManagerReportReviewDispute issueDispute;
@@ -1178,8 +1180,7 @@ public class ManagerReportReviewTelegramService {
                 + answerDirectionsPlain()
                 + "\n\nКороткий формат, до " + maximumAnswerCharacters()
                 + " символов: что произошло → ваш вывод → как вы поступите в похожей ситуации.";
-        Optional<Integer> promptId =
-                telegramService.sendForceReplyMessageId(review.getRecipientChatId(), text);
+        Optional<Integer> promptId = sendReplyPrompt(review, text);
         review.setReplyPromptMessageId(promptId.orElse(null));
         review.setQuestionSentAt(LocalDateTime.now());
         sessionRepository.save(review);
@@ -1225,8 +1226,8 @@ public class ManagerReportReviewTelegramService {
     }
 
     private void sendPlanPrompt(ManagerReportReviewSession review, String prefix) {
-        Optional<Integer> promptId = telegramService.sendForceReplyMessageId(
-                review.getRecipientChatId(),
+        Optional<Integer> promptId = sendReplyPrompt(
+                review,
                 (clean(prefix).isBlank() ? "" : clean(prefix) + "\n\n")
                         + "🎯 Последний шаг\n\n"
                         + "Что конкретно вы измените в следующую смену и как проверите, что проблема не повторилась?"
@@ -1234,6 +1235,23 @@ public class ManagerReportReviewTelegramService {
         review.setReplyPromptMessageId(promptId.orElse(null));
         review.setQuestionSentAt(LocalDateTime.now());
         sessionRepository.save(review);
+    }
+
+    private Optional<Integer> sendReplyPrompt(ManagerReportReviewSession review, String text) {
+        Long chatId = review == null ? null : review.getRecipientChatId();
+        if (chatId == null) {
+            return Optional.empty();
+        }
+        if (isGroupChat(chatId)) {
+            return telegramService.sendMessageWithInlineKeyboardMessageId(
+                    chatId,
+                    clean(text)
+                            + "\n\nЧтобы ответ засчитался, нажмите «Ответить» на это сообщение.",
+                    null,
+                    List.of()
+            );
+        }
+        return telegramService.sendForceReplyMessageId(chatId, text);
     }
 
     private void completeReview(

@@ -8,7 +8,9 @@ import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
 import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
 import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
+import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
 import com.hunt.otziv.client_chat_control.dto.ClientChatUnansweredExample;
+import com.hunt.otziv.client_chat_control.service.ClientChatMessageReconciliationService;
 import com.hunt.otziv.client_chat_control.service.ClientChatMessageTrackerService;
 import com.hunt.otziv.client_chat_control.service.ClientChatReplySuggestionService;
 import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
@@ -257,6 +259,7 @@ public class ManagerControlService {
     private final AppSettingService appSettingService;
     private final ClientChatMessageSender clientChatMessageSender;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
+    private final ClientChatMessageReconciliationService clientChatMessageReconciliationService;
     private final ClientChatReplySuggestionService clientChatReplySuggestionService;
     private final ClientChatUnansweredItemRepository clientChatUnansweredItemRepository;
     private final BadReviewTaskService badReviewTaskService;
@@ -1859,6 +1862,21 @@ public class ManagerControlService {
         return managerDetails(manager, false);
     }
 
+    public ClientChatReconciliationResult reconcileClientMessages(
+            Long managerId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        if (managerId == null || managerId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный менеджер");
+        }
+        Manager manager = visibleManagers(principal, authentication).stream()
+                .filter(item -> managerId.equals(item.getId()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Менеджер недоступен"));
+        return clientChatMessageReconciliationService.reconcileOpenWhatsAppMessages(manager);
+    }
+
     private ManagerControlManagerDetailResponse managerDetails(Manager manager, boolean syncConcrete) {
         LocalDate today = LocalDate.now();
         ManagerDailyControl control = dailyControlRepository.findByControlDateAndManager(today, manager)
@@ -2630,7 +2648,7 @@ public class ManagerControlService {
         Set<String> activeKeys = new HashSet<>();
         List<ManagerDailyControlItem> currentItems = new ArrayList<>();
 
-        for (ControlItemInput input : controlItemInputs(problems, sections, overdueStatuses)) {
+        for (ControlItemInput input : controlItemInputs(problems, sections)) {
             activeKeys.add(input.itemKey());
             ManagerDailyControlItem item = existing.get(input.itemKey());
             boolean created = false;
@@ -2772,8 +2790,7 @@ public class ManagerControlService {
 
     private List<ControlItemInput> controlItemInputs(
             List<ManagerControlProblemResponse> problems,
-            List<ManagerControlSectionResponse> sections,
-            List<ManagerControlOverdueStatusResponse> overdueStatuses
+            List<ManagerControlSectionResponse> sections
     ) {
         List<ControlItemInput> inputs = new ArrayList<>();
         for (ManagerControlProblemResponse problem : problems) {
@@ -2816,24 +2833,6 @@ public class ManagerControlService {
                     section.count(),
                     parseSeverity(section.severity()),
                     parseGroup(section.group())
-            ));
-        }
-        for (ManagerControlOverdueStatusResponse status : overdueStatuses) {
-            if (status.count() <= 0) {
-                continue;
-            }
-            inputs.add(new ControlItemInput(
-                    overdueKey(status.status()),
-                    ManagerDailyControlItemType.ORDER_STATUS,
-                    null,
-                    null,
-                    status.status(),
-                    status.status(),
-                    status.status(),
-                    status.targetUrl(),
-                    status.count(),
-                    ManagerDailyControlSeverity.CRITICAL,
-                    ManagerDailyControlGroup.ACTION
             ));
         }
         return inputs;
@@ -3152,6 +3151,9 @@ public class ManagerControlService {
             if (reopenActiveAutomationConcreteItem(concreteItem)) {
                 changed = true;
             }
+            if (reopenResolvedConcreteItemStillActive(parentItem, concreteItem)) {
+                changed = true;
+            }
             if (isResolvedConcreteItemHiddenForToday(concreteItem)) {
                 if (created || changed) {
                     dailyControlConcreteItemRepository.save(concreteItem);
@@ -3349,6 +3351,21 @@ public class ManagerControlService {
                 || concreteItem.getStatus() != ManagerDailyControlItemStatus.RESOLVED
                 || concreteItem.getParentItem() == null
                 || !"AUTOMATION_FAILURES".equals(concreteItem.getParentItem().getReasonCode())) {
+            return false;
+        }
+        reopenConcreteItem(concreteItem);
+        return true;
+    }
+
+    private boolean reopenResolvedConcreteItemStillActive(
+            ManagerDailyControlItem parentItem,
+            ManagerDailyControlConcreteItem concreteItem
+    ) {
+        if (parentItem == null
+                || concreteItem == null
+                || parentItem.getStatus() != ManagerDailyControlItemStatus.OPEN
+                || parentItem.getGroup() != ManagerDailyControlGroup.ACTION
+                || concreteItem.getStatus() != ManagerDailyControlItemStatus.RESOLVED) {
             return false;
         }
         reopenConcreteItem(concreteItem);
@@ -3727,7 +3744,6 @@ public class ManagerControlService {
         clientMessageOrderStatusService.enrichOrderList(orders);
         return orders.stream()
                 .filter(order -> order.getId() == null || !snoozedOrderIds.contains(order.getId()))
-                .filter(order -> !hasHealthyActiveClientMessageQueue(order))
                 .map(order -> orderExample(order, today, orderManagerReason(order, today), manager))
                 .limit(limit)
                 .toList();

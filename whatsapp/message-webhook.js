@@ -225,6 +225,31 @@ function createMessageHandler({ clientId, postWebhook, outboundRegistry, log }) 
   };
 }
 
+function reconciliationPayloads({
+  clientId,
+  groupId,
+  groupName,
+  afterTimestamp,
+  messages,
+}) {
+  const cutoff = Number(afterTimestamp) || 0;
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => message && !message.fromMe && Number(message.timestamp) > cutoff)
+    .map((message) => ({
+      clientId,
+      groupId,
+      groupName: String(groupName || "").trim(),
+      from: serializedId(message.author) || serializedId(message.from),
+      fromName: String(message._data && message._data.notifyName || "").trim(),
+      messageId: messageId(message) || null,
+      timestamp: message.timestamp || null,
+      fromMe: false,
+      systemGenerated: false,
+      message: trackedBody(message),
+    }))
+    .filter((payload) => payload.message && payload.messageId);
+}
+
 module.exports = {
   DeliveredMessageCache,
   RecentOutboundRegistry,
@@ -233,6 +258,7 @@ module.exports = {
   groupMetadata,
   messageId,
   outboundFingerprint,
+  reconciliationPayloads,
   serializedId,
   trackedBody,
 };

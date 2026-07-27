@@ -7,6 +7,7 @@ const {
   RecentOutboundRegistry,
   createMessageHandler,
   deriveGroupId,
+  reconciliationPayloads,
   trackedBody,
 } = require("./message-webhook");
 
@@ -92,4 +93,40 @@ test("delivers media-only group messages with a stable placeholder", async () =>
   assert.equal(trackedBody({ type: "ptt", hasMedia: true }), "[Вложение: ptt]");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].payload.message, "[Вложение: ptt]");
+});
+
+test("reconciliation returns only incoming messages newer than the open-card cursor", () => {
+  const payloads = reconciliationPayloads({
+    clientId: "whatsapp_vika",
+    groupId: "120363000000000000@g.us",
+    groupName: "Клиент",
+    afterTimestamp: 100,
+    messages: [
+      {
+        id: { _serialized: "old" },
+        timestamp: 100,
+        author: "70000000001@c.us",
+        body: "Старое сообщение",
+      },
+      {
+        id: { _serialized: "bot" },
+        timestamp: 110,
+        author: "70000000002@c.us",
+        body: "Автоматическое сообщение",
+        fromMe: true,
+      },
+      {
+        id: { _serialized: "reply" },
+        timestamp: 120,
+        author: "70000000003@c.us",
+        body: "Ответ сотрудника",
+        fromMe: false,
+      },
+    ],
+  });
+
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0].messageId, "reply");
+  assert.equal(payloads[0].message, "Ответ сотрудника");
+  assert.equal(payloads[0].fromMe, false);
 });

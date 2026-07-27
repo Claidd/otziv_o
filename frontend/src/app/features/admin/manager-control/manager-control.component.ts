@@ -39,6 +39,7 @@ import {
   managerControlDetailVisibleCount,
   shouldShowManagerControlDetailItem
 } from './manager-control-detail-visibility';
+import { shouldImmediatelyCloseRiskControlCard } from './manager-control-risk-close';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -90,6 +91,7 @@ export class ManagerControlComponent implements OnInit {
   private readonly routePersonalControl = this.route.snapshot.data['personalControl'] === true;
   private detailRequestSeq = 0;
   private autoSyncingDetailManagerIds = new Set<number>();
+  private reconcilingDetailMessageManagerIds = new Set<number>();
 
   @Input() embedded = false;
   @Input() personalControl = false;
@@ -964,7 +966,7 @@ export class ManagerControlComponent implements OnInit {
         }
         this.applyDetail(detail);
         this.detailLoading.set(false);
-        this.autoSyncUnsyncedDetails(detail);
+        this.reconcileClientMessagesAfterOpen(detail);
       },
       error: (err) => {
         if (requestId !== this.detailRequestSeq) {
@@ -974,6 +976,49 @@ export class ManagerControlComponent implements OnInit {
         this.detailError.set(message);
         this.detailLoading.set(false);
         this.toast.error('Детализация не загружена', message);
+      }
+    });
+  }
+
+  private reconcileClientMessagesAfterOpen(detail: ManagerControlManagerDetail): void {
+    if (this.reconcilingDetailMessageManagerIds.has(detail.managerId)) {
+      return;
+    }
+    this.reconcilingDetailMessageManagerIds.add(detail.managerId);
+    this.api.reconcileClientMessages(detail.managerId).subscribe({
+      next: () => {
+        this.reconcilingDetailMessageManagerIds.delete(detail.managerId);
+        if (this.detail()?.managerId !== detail.managerId) {
+          return;
+        }
+        this.refreshDetailsAfterReconciliation(detail.managerId);
+      },
+      error: () => {
+        this.reconcilingDetailMessageManagerIds.delete(detail.managerId);
+        if (this.detail()?.managerId === detail.managerId) {
+          this.refreshDetailsAfterReconciliation(detail.managerId);
+        }
+      }
+    });
+  }
+
+  private refreshDetailsAfterReconciliation(managerId: number): void {
+    if (this.autoSyncingDetailManagerIds.has(managerId)) {
+      return;
+    }
+    this.autoSyncingDetailManagerIds.add(managerId);
+    this.api.syncManagerDetails(managerId).subscribe({
+      next: (syncedDetail) => {
+        this.autoSyncingDetailManagerIds.delete(managerId);
+        if (this.detail()?.managerId !== managerId || syncedDetail.managerId !== managerId) {
+          return;
+        }
+        this.applyDetail(syncedDetail);
+        this.load({ silent: true });
+      },
+      error: () => {
+        this.autoSyncingDetailManagerIds.delete(managerId);
+        // Детали уже показаны; ошибка фоновой сверки не должна блокировать работу.
       }
     });
   }
@@ -2587,6 +2632,14 @@ export class ManagerControlComponent implements OnInit {
     this.updatingConcreteItemIds.update((ids) => new Set(ids).add(itemId));
     this.managerApi.setWorkerRiskIncidentResolution(incidentId, action, penaltyPoints, comment || null).subscribe({
       next: (incident) => {
+        if (shouldImmediatelyCloseRiskControlCard(
+          this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']),
+          action,
+          incident.status
+        )) {
+          this.closeResolvedRiskControlCard(example, incident, action, comment);
+          return;
+        }
         this.updatingConcreteItemIds.update((ids) => {
           const next = new Set(ids);
           next.delete(itemId);
@@ -2606,6 +2659,54 @@ export class ManagerControlComponent implements OnInit {
           return next;
         });
         this.toast.error('Статус риска не изменен', apiErrorMessage(err, 'Не удалось обновить риск'));
+      }
+    });
+  }
+
+  private closeResolvedRiskControlCard(
+    example: ManagerControlConcreteItem,
+    incident: WorkerRiskIncident,
+    action: WorkerRiskResolutionAction,
+    comment: string
+  ): void {
+    const itemId = example.controlEntityId;
+    if (!itemId) {
+      return;
+    }
+    const closeComment = comment || 'Проверено администратором/владельцем';
+    this.api.actionConcreteItem(itemId, {
+      actionType: 'RESOLVED',
+      comment: closeComment,
+      manualWorkerNotification: null
+    }).subscribe({
+      next: (closed) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        const riskPatch = this.riskConcretePatch(example, incident);
+        const merged = this.patchDetailConcreteItem(example, { ...riskPatch, ...closed });
+        this.toast.success(this.riskActionToast(action), 'Карточка контроля закрыта');
+        this.removeConcreteItemFromDetail(merged);
+        this.load({ silent: true, sync: true });
+      },
+      error: (err) => {
+        this.updatingConcreteItemIds.update((ids) => {
+          const next = new Set(ids);
+          next.delete(itemId);
+          return next;
+        });
+        const merged = this.patchDetailConcreteItem(example, this.riskConcretePatch(example, incident));
+        this.removeConcreteItemFromDetail(merged);
+        this.toast.error(
+          'Риск закрыт, карточка синхронизируется',
+          apiErrorMessage(err, 'Не удалось сразу закрыть карточку контроля')
+        );
+        const managerId = this.detail()?.managerId;
+        if (managerId) {
+          this.syncDetails(managerId);
+        }
       }
     });
   }

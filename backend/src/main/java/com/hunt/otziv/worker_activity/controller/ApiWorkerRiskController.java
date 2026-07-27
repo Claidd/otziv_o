@@ -292,7 +292,11 @@ public class ApiWorkerRiskController {
             Authentication authentication
     ) {
         WorkerRiskIncident incident = findIncidentForCurrentUser(incidentId, authentication);
-        decisionPolicy.requireAllowed(incident, action, comment);
+        boolean privilegedVerification = action == WorkerRiskResolutionAction.VERIFIED
+                && (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER"));
+        if (!privilegedVerification) {
+            decisionPolicy.requireAllowed(incident, action, comment);
+        }
 
         User resolver = currentUser(authentication);
         incident.setStatus(statusFor(action));
@@ -302,7 +306,15 @@ public class ApiWorkerRiskController {
         incident.setResolvedByUsername(resolver.getUsername());
         incident.setPenaltyPoints(action == WorkerRiskResolutionAction.VIOLATION_CONFIRMED ? penaltyPoints : 0);
         appendManagerResolutionComment(incident, action, comment, resolver);
-        decisionPolicy.applyDecisionEvidence(incident, action, comment);
+        if (privilegedVerification) {
+            decisionPolicy.applyPrivilegedVerification(
+                    incident,
+                    comment,
+                    hasRole(authentication, "ADMIN") ? "ADMIN" : "OWNER"
+            );
+        } else {
+            decisionPolicy.applyDecisionEvidence(incident, action, comment);
+        }
         boolean restrictionReleased = decisionPolicy.isFinalAction(action)
                 && incident.getSectionRestrictedAt() != null
                 && incident.getSectionRestrictionReleasedAt() == null;

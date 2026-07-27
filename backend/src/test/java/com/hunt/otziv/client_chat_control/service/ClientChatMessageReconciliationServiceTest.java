@@ -1,0 +1,83 @@
+package com.hunt.otziv.client_chat_control.service;
+
+import com.hunt.otziv.client_chat_control.dto.ClientChatMessageCommand;
+import com.hunt.otziv.client_chat_control.dto.ClientChatReconciliationResult;
+import com.hunt.otziv.client_chat_control.model.ClientChatPlatform;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredItem;
+import com.hunt.otziv.client_chat_control.model.ClientChatUnansweredStatus;
+import com.hunt.otziv.client_chat_control.repository.ClientChatUnansweredItemRepository;
+import com.hunt.otziv.u_users.model.Manager;
+import com.hunt.otziv.whatsapp.dto.WhatsAppChatMessageCursor;
+import com.hunt.otziv.whatsapp.dto.WhatsAppReconciledMessage;
+import com.hunt.otziv.whatsapp.service.service.WhatsAppService;
+import java.time.LocalDateTime;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class ClientChatMessageReconciliationServiceTest {
+
+    @Mock
+    private ClientChatUnansweredItemRepository unansweredRepository;
+    @Mock
+    private ClientChatMessageTrackerService trackerService;
+    @Mock
+    private WhatsAppService whatsAppService;
+
+    @InjectMocks
+    private ClientChatMessageReconciliationService service;
+
+    @Test
+    void tracksMessagesFoundAfterTheOpenCardAndReportsClosedItems() {
+        Manager manager = new Manager();
+        manager.setId(3L);
+        manager.setClientId("whatsapp_vika");
+
+        ClientChatUnansweredItem open = new ClientChatUnansweredItem();
+        open.setChatId("120363000000000000@g.us");
+        open.setLastClientMessageAt(LocalDateTime.of(2026, 7, 27, 14, 0));
+        when(unansweredRepository.findByManagerAndPlatformAndStatus(
+                manager,
+                ClientChatPlatform.WHATSAPP,
+                ClientChatUnansweredStatus.OPEN
+        )).thenReturn(List.of(open), List.of());
+        when(whatsAppService.reconcileGroupMessages(eq("whatsapp_vika"), anyList()))
+                .thenReturn(List.of(new WhatsAppReconciledMessage(
+                        "whatsapp_vika",
+                        "120363000000000000@g.us",
+                        "Клиент",
+                        "70000000000@lid",
+                        "Мария",
+                        "message-42",
+                        1_785_136_200L,
+                        false,
+                        false,
+                        "Ответ сотрудника"
+                )));
+
+        ClientChatReconciliationResult result = service.reconcileOpenWhatsAppMessages(manager);
+
+        ArgumentCaptor<ClientChatMessageCommand> command = ArgumentCaptor.forClass(ClientChatMessageCommand.class);
+        verify(trackerService).track(command.capture());
+        assertEquals("message-42", command.getValue().externalMessageId());
+        assertEquals("Ответ сотрудника", command.getValue().messageText());
+        assertEquals(1, result.requestedChats());
+        assertEquals(1, result.receivedMessages());
+        assertEquals(1, result.closedItems());
+
+        ArgumentCaptor<List<WhatsAppChatMessageCursor>> cursors = ArgumentCaptor.forClass(List.class);
+        verify(whatsAppService).reconcileGroupMessages(eq("whatsapp_vika"), cursors.capture());
+        assertEquals("120363000000000000@g.us", cursors.getValue().getFirst().groupId());
+    }
+}

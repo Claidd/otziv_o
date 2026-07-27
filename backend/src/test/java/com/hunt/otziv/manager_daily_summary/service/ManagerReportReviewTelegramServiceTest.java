@@ -599,6 +599,45 @@ class ManagerReportReviewTelegramServiceTest {
     }
 
     @Test
+    void groupAnswerPromptDoesNotForceReplyForAllParticipants() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(-100900L);
+        review.setStatus(ManagerReportReviewStatus.QUESTION_PENDING);
+        review.setIssueCount(1);
+        review.setCurrentQuestionIndex(0);
+        review.setQuestionsJson("[{}]");
+        var question = new ManagerReportReviewQualityService.ReviewQuestion(
+                "Почему клиенту не ответили вовремя?",
+                List.of("причина", "действие")
+        );
+        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+        when(qualityService.readQuestions("[{}]")).thenReturn(List.of(question));
+        when(issueService.issues(review)).thenReturn(List.of(issue(review, 0, question.question())));
+        when(telegramService.sendMessageWithInlineKeyboardMessageId(
+                eq(-100900L), any(String.class), eq(null), eq(List.of())
+        )).thenReturn(Optional.of(515));
+
+        CallbackQuery callback = callback("answer", 41L);
+        callback.setMessage(messageInChat(-100900L));
+
+        assertThat(service.handle(callback)).hasValueSatisfying(value ->
+                assertThat(value).contains("Напишите ответ")
+        );
+        assertThat(review.getReplyPromptMessageId()).isEqualTo(515);
+        verify(telegramService).sendMessageWithInlineKeyboardMessageId(
+                eq(-100900L),
+                org.mockito.ArgumentMatchers.contains("нажмите «Ответить»"),
+                eq(null),
+                eq(List.of())
+        );
+        verify(telegramService, never()).sendForceReplyMessageId(eq(-100900L), any(String.class));
+        verify(telegramService, never()).sendForceReplyMessage(eq(-100900L), any(String.class));
+    }
+
+    @Test
     void ownerCanSeeGroupReportButCannotPassReviewInsteadOfManager() {
         User owner = User.builder()
                 .id(99L)

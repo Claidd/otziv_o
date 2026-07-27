@@ -28,46 +28,76 @@ function detailItem(overrides: Partial<ManagerControlItemDetail>): ManagerContro
 }
 
 describe('shouldShowManagerControlDetailItem', () => {
-  it('shows WORKER_ACTIONS included in the current-action counter', () => {
-    const item = detailItem({});
+  it('shows an action only when it has a concrete card', () => {
+    const item = detailItem({
+      examples: [{
+        type: 'ORDER',
+        entityId: 22840,
+        title: 'Компания',
+        subtitle: 'Заказ',
+        reason: 'Нужно действие',
+        targetUrl: '/admin/orders/22840',
+        itemStatus: 'OPEN'
+      }]
+    });
 
     expect(shouldShowManagerControlDetailItem(item)).toBe(true);
-    expect(managerControlDetailVisibleCount(item)).toBe(8);
-    expect(managerControlDetailItemStatusCount(item, true)).toBe(8);
+    expect(managerControlDetailVisibleCount(item)).toBe(1);
+    expect(managerControlDetailItemStatusCount(item, true)).toBe(1);
   });
 
-  it('shows any counted open action while concrete cards are still synchronizing', () => {
+  it('hides a counted action when it has no concrete cards', () => {
     expect(shouldShowManagerControlDetailItem(detailItem({
       reasonCode: 'OVERDUE_ORDERS',
       itemKey: 'problem:OVERDUE_ORDERS',
       count: 4,
       hiddenExampleCount: 4
-    }))).toBe(true);
-  });
-
-  it('keeps the detail open count equal to the 12 actions shown in the summary', () => {
-    const items = [
-      detailItem({ count: 8, hiddenExampleCount: 8 }),
-      detailItem({
-        itemId: 2,
-        reasonCode: 'OVERDUE_ORDERS',
-        itemKey: 'problem:OVERDUE_ORDERS',
-        count: 4,
-        hiddenExampleCount: 4
-      })
-    ];
-
-    const visibleOpenCount = items
-      .filter(shouldShowManagerControlDetailItem)
-      .reduce((total, item) => total + managerControlDetailItemStatusCount(item, true), 0);
-
-    expect(visibleOpenCount).toBe(12);
-  });
-
-  it('does not show an empty open action', () => {
-    expect(shouldShowManagerControlDetailItem(detailItem({
-      count: 0,
-      hiddenExampleCount: 0
     }))).toBe(false);
+  });
+
+  it('hides the technical ORDER_STATUS breakdown even if it contains a card', () => {
+    expect(shouldShowManagerControlDetailItem(detailItem({
+      itemType: 'ORDER_STATUS',
+      reasonCode: 'На проверке',
+      examples: [{
+        type: 'ORDER',
+        entityId: 22841,
+        title: 'Компания',
+        subtitle: 'Заказ',
+        reason: 'Просрочен',
+        targetUrl: '/admin/orders/22841',
+        itemStatus: 'OPEN'
+      }]
+    }))).toBe(false);
+  });
+
+  it('counts open and handled concrete cards instead of the stale parent count', () => {
+    const item = detailItem({
+      count: 8,
+      examples: [
+        {
+          type: 'ORDER',
+          entityId: 22840,
+          title: 'Первая',
+          subtitle: 'Заказ',
+          reason: 'Нужно действие',
+          targetUrl: '/admin/orders/22840',
+          itemStatus: 'OPEN'
+        },
+        {
+          type: 'ORDER',
+          entityId: 22839,
+          title: 'Вторая',
+          subtitle: 'Заказ',
+          reason: 'Обработан',
+          targetUrl: '/admin/orders/22839',
+          itemStatus: 'ACTION_TAKEN'
+        }
+      ]
+    });
+
+    expect(managerControlDetailVisibleCount(item)).toBe(2);
+    expect(managerControlDetailItemStatusCount(item, true)).toBe(1);
+    expect(managerControlDetailItemStatusCount(item, false)).toBe(1);
   });
 });
