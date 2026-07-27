@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_daily_summary.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +35,8 @@ class ManagerReportReviewQualityServiceTest {
         when(settings.getInt("manager.report-review.max-plan-characters", 600)).thenReturn(600);
         when(settings.getInt("manager.report-review.copy-gram-size", 4)).thenReturn(4);
         when(settings.getInt("manager.report-review.copy-similarity-percent", 65)).thenReturn(65);
+        when(settings.getInt("manager.report-review.question-generation-max-tokens", 8000)).thenReturn(8000);
+        when(settings.getInt("manager.report-review.question-generation-retry-max-tokens", 12000)).thenReturn(12000);
         service = new ManagerReportReviewQualityService(providerRouter, new ObjectMapper(), settings);
     }
 
@@ -91,6 +94,43 @@ class ManagerReportReviewQualityServiceTest {
         );
 
         assertThat(questions).isEmpty();
+    }
+
+    @Test
+    void retriesTruncatedQuestionJsonWithLargerTokenBudget() {
+        AiProvider provider = mock(AiProvider.class);
+        when(providerRouter.activeProviderName()).thenReturn("deepseek");
+        when(providerRouter.activeProviderAvailable()).thenReturn(true);
+        when(providerRouter.activeProvider()).thenReturn(provider);
+        when(settings.getInt("manager.report-review.ai-timeout-seconds", 25)).thenReturn(25);
+        when(provider.generate(any(AiRequest.class)))
+                .thenReturn(new AiResponse(
+                        "{\"questions\":[{\"question\":\"Оборванный вопрос",
+                        "deepseek",
+                        100,
+                        1000
+                ))
+                .thenReturn(new AiResponse(
+                        """
+                                {"questions":[{"question":"Что произошло в карточке Ромашка?",
+                                "expectedPoints":["назвать действие","объяснить исправление"],
+                                "sourceTaskIds":[3545]}]}
+                                """,
+                        "deepseek",
+                        100,
+                        80
+                ));
+
+        var generation = service.generateQuestions("Персональный отчёт", 8);
+
+        ArgumentCaptor<AiRequest> requests = ArgumentCaptor.forClass(AiRequest.class);
+        verify(provider, times(2)).generate(requests.capture());
+        assertThat(generation.aiVerified()).isTrue();
+        assertThat(generation.questions()).hasSize(1);
+        assertThat(generation.questions().getFirst().sourceTaskIds()).containsExactly(3545L);
+        assertThat(requests.getAllValues())
+                .extracting(AiRequest::maxTokens)
+                .containsExactly(8000, 12000);
     }
 
     @Test

@@ -190,7 +190,8 @@ public class PaymentLinkService {
         LocalDateTime now = LocalDateTime.now();
         expireStaleManualLinks(now);
 
-        Order order = orderRepository.findByIdForMutation(orderId)
+        Order order = orderRepository.findByIdForCounterUpdate(orderId)
+                .or(() -> orderRepository.findByIdForMutation(orderId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
 
@@ -496,7 +497,9 @@ public class PaymentLinkService {
                 MANUAL_METHODS,
                 MANUAL_PENDING_STATUSES,
                 REFUNDABLE_STATUSES,
-                REJECTED_STATUSES
+                REJECTED_STATUSES,
+                PaymentReceiptStatus.PENDING,
+                LocalDateTime.now().minusHours(24)
         );
 
         return new AdminPaymentLinksPageResponse(
@@ -541,7 +544,7 @@ public class PaymentLinkService {
 
     private AdminPaymentLinkSummaryResponse toSummaryResponse(PaymentLinkAdminSummary summary) {
         PaymentLinkAdminSummary safe = summary == null
-                ? new PaymentLinkAdminSummary(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)
+                ? new PaymentLinkAdminSummary(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)
                 : summary;
         return new AdminPaymentLinkSummaryResponse(
                 safe.safeTotalElements(),
@@ -554,7 +557,9 @@ public class PaymentLinkService {
                 safe.safeNotificationErrors(),
                 safe.safeRefundable(),
                 safe.safeRefunded(),
-                safe.safeRejected()
+                safe.safeRejected(),
+                safe.safeReceiptPending(),
+                safe.safeReceiptOverdue()
         );
     }
 
@@ -581,7 +586,7 @@ public class PaymentLinkService {
 
     @Transactional
     public AdminPaymentLinkResponse confirmManual(Long linkId, String confirmedBy) {
-        PaymentLink link = paymentLinkRepository.findByIdWithOrder(linkId)
+        PaymentLink link = findLinkByIdForUpdate(linkId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         ensureManualPayment(link);
         validateManualConfirmable(link);
@@ -590,6 +595,8 @@ public class PaymentLinkService {
         try {
             if (!canApplyOrderPaymentNow(link.getOrder())) {
                 markOrderPrepaid(link);
+                prepareSuccessNotificationRetry(link);
+                notifyPaymentSuccessIfNeeded(link);
                 paymentLinkRepository.save(link);
                 manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
                 return toAdminResponse(link);
@@ -603,6 +610,8 @@ public class PaymentLinkService {
             link.setConfirmedAmountKopecks(link.getAmountKopecks());
             link.setReceiptStatus(PaymentReceiptStatus.PENDING);
             link.setLastError(null);
+            prepareSuccessNotificationRetry(link);
+            notifyPaymentSuccessIfNeeded(link);
             paymentLinkRepository.save(link);
             manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
             if (updated) {
@@ -620,7 +629,7 @@ public class PaymentLinkService {
 
     @Transactional
     public AdminPaymentLinkResponse markManualReceipt(Long linkId, String confirmedBy) {
-        PaymentLink link = paymentLinkRepository.findByIdWithOrder(linkId)
+        PaymentLink link = findLinkByIdForUpdate(linkId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
         ensureManualPayment(link);
         if (link.getStatus() != PaymentLinkStatus.CONFIRMED) {
@@ -630,6 +639,29 @@ public class PaymentLinkService {
             link.setManualConfirmedBy(limit(confirmedBy, 160));
         }
         link.setReceiptStatus(PaymentReceiptStatus.MARKED);
+        link.setLastError(null);
+        paymentLinkRepository.save(link);
+        return toAdminResponse(link);
+    }
+
+    @Transactional
+    public AdminPaymentLinkResponse markManualReceiptLegacyNotRequired(Long linkId, String confirmedBy) {
+        PaymentLink link = findLinkByIdForUpdate(linkId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+        ensureManualPayment(link);
+        if (link.getStatus() != PaymentLinkStatus.CONFIRMED) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Статус без чека доступен только для подтвержденной ручной оплаты");
+        }
+        if (link.getPaidAt() == null || link.getPaidAt().isAfter(LocalDateTime.now().minusDays(30))) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Без чека можно закрыть только старую ручную оплату старше 30 дней"
+            );
+        }
+        link.setReceiptStatus(PaymentReceiptStatus.LEGACY_NOT_REQUIRED);
+        if (normalize(link.getManualConfirmedBy()).isBlank()) {
+            link.setManualConfirmedBy(limit(confirmedBy, 160));
+        }
         link.setLastError(null);
         paymentLinkRepository.save(link);
         return toAdminResponse(link);
@@ -663,7 +695,9 @@ public class PaymentLinkService {
             String clientIp,
             String userAgent
     ) {
-        PaymentLink link = resolveReplacementPublicLink(findPublicLink(token), LocalDateTime.now(), true);
+        PaymentLink link = lockResolvedPublicLink(
+                resolveReplacementPublicLink(findPublicLinkForUpdate(token), LocalDateTime.now(), true)
+        );
         validatePayable(link);
         validateTbankPayment(link);
         validateConsents(offerConsent, privacyConsent, receiptConsent);
@@ -738,7 +772,9 @@ public class PaymentLinkService {
             String clientIp,
             String userAgent
     ) {
-        PaymentLink link = resolveReplacementPublicLink(findPublicLink(token), LocalDateTime.now(), true);
+        PaymentLink link = lockResolvedPublicLink(
+                resolveReplacementPublicLink(findPublicLinkForUpdate(token), LocalDateTime.now(), true)
+        );
         validatePayable(link);
         validateTbankPayment(link);
         validateConsents(offerConsent, privacyConsent, receiptConsent);
@@ -1019,6 +1055,10 @@ public class PaymentLinkService {
             rememberCompanyPayerEmail(link);
             return;
         }
+        if (hasAnotherConfirmedPayment(link)) {
+            markDuplicateConfirmedPayment(link);
+            return;
+        }
         if (link.getStatus() == PaymentLinkStatus.CANCELED || link.getStatus() == PaymentLinkStatus.EXPIRED) {
             markClosedLinkConfirmed(link);
             return;
@@ -1042,6 +1082,7 @@ public class PaymentLinkService {
         }
         if (!canApplyOrderPaymentNow(link.getOrder())) {
             markOrderPrepaid(link);
+            prepareSuccessNotificationRetry(link);
             notifyPaymentSuccessIfNeeded(link);
             return;
         }
@@ -1052,6 +1093,7 @@ public class PaymentLinkService {
             link.setConfirmedAmountKopecks(link.getAmountKopecks());
             link.setLastError(null);
             rememberCompanyPayerEmail(link);
+            prepareSuccessNotificationRetry(link);
             notifyPaymentSuccessIfNeeded(link);
             if (updated) {
                 paymentInvoiceRetryScheduler.cancelBadReviewAutoBan(link.getOrder(), "T-Bank/SBP оплата подтверждена");
@@ -1062,6 +1104,20 @@ public class PaymentLinkService {
             link.setLastError("Order payment transition failed");
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Не удалось перевести заказ в оплату", e);
         }
+    }
+
+    @Transactional
+    public boolean reconcileBankLink(Long linkId) {
+        if (linkId == null || linkId <= 0) {
+            return false;
+        }
+        PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElse(null);
+        if (link == null || !SYNCABLE_BANK_STATUSES.contains(link.getStatus())) {
+            return false;
+        }
+        PaymentLinkStatus before = link.getStatus();
+        syncTbankStateIfNeeded(link);
+        return before != link.getStatus();
     }
 
     @Transactional
@@ -1209,6 +1265,7 @@ public class PaymentLinkService {
             if (result != null && result.sent()) {
                 link.setPaymentSuccessNotifiedAt(LocalDateTime.now());
                 link.setPaymentSuccessNotificationError(null);
+                link.setPaymentSuccessNotificationRetryEligible(false);
                 log.info(
                         "Payment success notification sent: linkId={}, orderId={}, channel={}",
                         link.getId(),
@@ -1220,6 +1277,7 @@ public class PaymentLinkService {
 
             String error = paymentNotificationError(result);
             link.setPaymentSuccessNotificationError(limit(error, 512));
+            link.setPaymentSuccessNotificationRetryEligible(true);
             log.warn(
                     "Payment success notification was not sent: linkId={}, orderId={}, error={}",
                     link.getId(),
@@ -1231,6 +1289,7 @@ public class PaymentLinkService {
                     ? e.getClass().getSimpleName()
                     : e.getMessage();
             link.setPaymentSuccessNotificationError(limit(error, 512));
+            link.setPaymentSuccessNotificationRetryEligible(true);
             log.warn(
                     "Payment success notification failed: linkId={}, orderId={}",
                     link.getId(),
@@ -1238,6 +1297,44 @@ public class PaymentLinkService {
                     e
             );
         }
+    }
+
+    private void prepareSuccessNotificationRetry(PaymentLink link) {
+        if (link != null && link.getPaymentSuccessNotifiedAt() == null) {
+            link.setPaymentSuccessNotificationRetryEligible(true);
+        }
+    }
+
+    private boolean hasAnotherConfirmedPayment(PaymentLink link) {
+        Order order = link == null ? null : link.getOrder();
+        Long orderId = order == null ? null : order.getId();
+        if (orderId == null) {
+            return false;
+        }
+        LocalDateTime currentLinkCreatedAt = link.getCreatedAt();
+        return paymentLinkRepository.findByOrder_IdAndStatusIn(orderId, Set.of(PaymentLinkStatus.CONFIRMED))
+                .stream()
+                .anyMatch(existing -> !sameLinkId(existing, link)
+                        && (currentLinkCreatedAt == null
+                        || existing.getPaidAt() == null
+                        || !existing.getPaidAt().isBefore(currentLinkCreatedAt)));
+    }
+
+    private void markDuplicateConfirmedPayment(PaymentLink link) {
+        link.setStatus(PaymentLinkStatus.AMOUNT_MISMATCH);
+        link.setPaidAt(LocalDateTime.now());
+        link.setConfirmedAmountKopecks(link.getAmountKopecks());
+        link.setLastError(
+                "duplicate_confirmed_payment: по заказу уже есть другой подтвержденный платеж; "
+                        + "сумма не зачислена повторно, требуется сверка и при необходимости возврат"
+        );
+        rememberCompanyPayerEmail(link);
+        log.error(
+                "Duplicate confirmed payment detected: linkId={}, orderId={}, amount={}",
+                link.getId(),
+                link.getOrder() == null ? null : link.getOrder().getId(),
+                link.getAmountKopecks()
+        );
     }
 
     private String paymentNotificationError(ClientMessageSendResult result) {
@@ -1296,6 +1393,28 @@ public class PaymentLinkService {
         }
         return paymentLinkRepository.findByTokenWithOrder(cleanToken)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+    }
+
+    private PaymentLink findPublicLinkForUpdate(String token) {
+        String cleanToken = normalize(token);
+        if (cleanToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена");
+        }
+        return paymentLinkRepository.findByTokenForUpdate(cleanToken)
+                .or(() -> paymentLinkRepository.findByTokenWithOrder(cleanToken))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Платежная ссылка не найдена"));
+    }
+
+    private PaymentLink lockResolvedPublicLink(PaymentLink link) {
+        if (link == null || link.getId() == null) {
+            return link;
+        }
+        return paymentLinkRepository.findByIdForUpdate(link.getId()).orElse(link);
+    }
+
+    private Optional<PaymentLink> findLinkByIdForUpdate(Long linkId) {
+        return paymentLinkRepository.findByIdForUpdate(linkId)
+                .or(() -> paymentLinkRepository.findByIdWithOrder(linkId));
     }
 
     private PaymentLink resolveReplacementPublicLink(PaymentLink link, LocalDateTime now, boolean createIfMissing) {

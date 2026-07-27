@@ -8,7 +8,9 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
 import com.hunt.otziv.payments.model.PaymentMethod;
 import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.u_users.model.Manager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -16,6 +18,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,6 +28,14 @@ import org.springframework.stereotype.Repository;
 public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> {
 
     Optional<PaymentLink> findByToken(String token);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT link FROM PaymentLink link WHERE link.token = :token")
+    Optional<PaymentLink> findByTokenForUpdate(@Param("token") String token);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT link FROM PaymentLink link WHERE link.id = :id")
+    Optional<PaymentLink> findByIdForUpdate(@Param("id") Long id);
 
     List<PaymentLink> findTop100ByOrderByCreatedAtDesc();
 
@@ -141,7 +152,19 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             COALESCE(SUM(CASE WHEN link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED AND link.paymentSuccessNotifiedAt IS NULL AND link.paymentSuccessNotificationError IS NOT NULL THEN 1 ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN link.status IN :refundableStatuses AND link.tbankPaymentId IS NOT NULL AND link.tbankPaymentId <> '' THEN 1 ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN link.status IN :refundedStatuses THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(CASE WHEN link.status IN :rejectedStatuses THEN 1 ELSE 0 END), 0)
+            COALESCE(SUM(CASE WHEN link.status IN :rejectedStatuses THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE
+                WHEN link.paymentMethod IN :manualMethods
+                  AND link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+                  AND link.receiptStatus = :receiptPendingStatus
+                THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE
+                WHEN link.paymentMethod IN :manualMethods
+                  AND link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
+                  AND link.receiptStatus = :receiptPendingStatus
+                  AND link.paidAt IS NOT NULL
+                  AND link.paidAt <= :receiptOverdueBefore
+                THEN 1 ELSE 0 END), 0)
         )
         FROM PaymentLink link
         LEFT JOIN link.order o
@@ -191,7 +214,9 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             @Param("manualMethods") Collection<PaymentMethod> manualMethods,
             @Param("manualPendingStatuses") Collection<PaymentLinkStatus> manualPendingStatuses,
             @Param("refundableStatuses") Collection<PaymentLinkStatus> refundableStatuses,
-            @Param("rejectedStatuses") Collection<PaymentLinkStatus> rejectedStatuses
+            @Param("rejectedStatuses") Collection<PaymentLinkStatus> rejectedStatuses,
+            @Param("receiptPendingStatus") PaymentReceiptStatus receiptPendingStatus,
+            @Param("receiptOverdueBefore") LocalDateTime receiptOverdueBefore
     );
 
     Optional<PaymentLink> findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
@@ -218,6 +243,53 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
             Long orderId,
             PaymentLinkStatus status
     );
+
+    @Query("""
+        SELECT link.id
+        FROM PaymentLink link
+        WHERE link.status IN :statuses
+          AND link.tbankPaymentId IS NOT NULL
+          AND TRIM(link.tbankPaymentId) <> ''
+          AND link.updatedAt <= :updatedBefore
+        ORDER BY link.updatedAt ASC, link.id ASC
+    """)
+    List<Long> findBankReconciliationCandidateIds(
+            @Param("statuses") Collection<PaymentLinkStatus> statuses,
+            @Param("updatedBefore") LocalDateTime updatedBefore,
+            Pageable pageable
+    );
+
+    @Query(value = """
+        SELECT
+            paid.order_id AS orderId,
+            paid.confirmed_kopecks AS confirmedKopecks,
+            COALESCE(checks.check_kopecks, 0) AS checkKopecks
+        FROM (
+            SELECT
+                link.order_id,
+                SUM(COALESCE(link.confirmed_amount_kopecks, link.amount_kopecks)) AS confirmed_kopecks
+            FROM payment_links link
+            JOIN (
+                SELECT check_order, MAX(check_date) AS current_check_date
+                FROM payment_check
+                WHERE check_active = 1
+                GROUP BY check_order
+            ) current_check ON current_check.check_order = link.order_id
+            WHERE link.status IN ('CONFIRMED', 'AMOUNT_MISMATCH')
+              AND link.paid_at >= :paidSince
+              AND link.paid_at >= TIMESTAMP(current_check.current_check_date)
+            GROUP BY link.order_id
+        ) paid
+        JOIN (
+            SELECT check_order, ROUND(SUM(check_sum) * 100) AS check_kopecks
+            FROM payment_check
+            WHERE check_active = 1
+            GROUP BY check_order
+        ) checks ON checks.check_order = paid.order_id
+        WHERE paid.confirmed_kopecks <> checks.check_kopecks
+        ORDER BY paid.order_id
+    """, nativeQuery = true)
+    List<PaymentAccountingMismatchView> findAccountingMismatches(@Param("paidSince") LocalDateTime paidSince);
 
     @Query("""
         SELECT DISTINCT link
@@ -467,7 +539,7 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
         LEFT JOIN FETCH m.paymentProfile
         WHERE link.status = com.hunt.otziv.payments.model.PaymentLinkStatus.CONFIRMED
           AND link.paymentSuccessNotifiedAt IS NULL
-          AND link.paymentSuccessNotificationError IS NOT NULL
+          AND link.paymentSuccessNotificationRetryEligible = true
           AND (
             (LOWER(COALESCE(c.urlChat, '')) LIKE '%chat.whatsapp.com%'
               AND c.groupId IS NOT NULL

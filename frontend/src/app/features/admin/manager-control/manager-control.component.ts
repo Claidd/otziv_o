@@ -34,6 +34,11 @@ import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { AuthService } from '../../../core/auth.service';
 import { ManagerPerformanceScore } from '../../../core/cabinet.api';
 import { managerActionBalanceView } from './manager-action-balance';
+import {
+  managerControlDetailItemStatusCount,
+  managerControlDetailVisibleCount,
+  shouldShowManagerControlDetailItem
+} from './manager-control-detail-visibility';
 
 const ORDER_LIST_STATUSES = new Set([
   'Все',
@@ -918,29 +923,15 @@ export class ManagerControlComponent implements OnInit {
   }
 
   shouldShowDetailItem(item: ManagerControlItemDetail): boolean {
-    if (item.reasonCode === 'WORKER_ACTIONS') {
-      return false;
-    }
-    if (item.group === 'ACTION') {
-      return item.examples.length > 0;
-    }
-    return item.itemStatus !== 'OPEN' || !!item.comment || item.examples.some((example) =>
-      !!example.comment || !!example.actionType || (!!example.itemStatus && example.itemStatus !== 'OPEN')
-    );
+    return shouldShowManagerControlDetailItem(item);
   }
 
   detailItemVisibleCount(item: ManagerControlItemDetail): number {
-    return item.group === 'ACTION' ? item.examples.length : item.count;
+    return managerControlDetailVisibleCount(item);
   }
 
   private detailConcreteStatusCount(item: ManagerControlItemDetail, open: boolean): number {
-    if (item.group !== 'ACTION') {
-      return open === (item.itemStatus === 'OPEN') ? item.count : 0;
-    }
-    return item.examples.filter((example) => {
-      const status = example.itemStatus ?? item.itemStatus;
-      return open ? status === 'OPEN' : status !== 'OPEN';
-    }).length;
+    return managerControlDetailItemStatusCount(item, open);
   }
 
   selectManager(manager: ManagerControlManager): void {

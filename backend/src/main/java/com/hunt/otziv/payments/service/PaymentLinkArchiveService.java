@@ -163,7 +163,7 @@ public class PaymentLinkArchiveService {
 
     private AdminPaymentLinkSummaryResponse toSummaryResponse(PaymentLinkAdminSummary summary) {
         PaymentLinkAdminSummary safe = summary == null
-                ? new PaymentLinkAdminSummary(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)
+                ? new PaymentLinkAdminSummary(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L)
                 : summary;
         return new AdminPaymentLinkSummaryResponse(
                 safe.safeTotalElements(),
@@ -176,7 +176,9 @@ public class PaymentLinkArchiveService {
                 safe.safeNotificationErrors(),
                 safe.safeRefundable(),
                 safe.safeRefunded(),
-                safe.safeRejected()
+                safe.safeRejected(),
+                safe.safeReceiptPending(),
+                safe.safeReceiptOverdue()
         );
     }
 

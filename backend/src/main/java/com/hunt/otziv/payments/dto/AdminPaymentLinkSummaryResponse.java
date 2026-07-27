@@ -13,6 +13,8 @@ public record AdminPaymentLinkSummaryResponse(
         long notificationErrors,
         long refundable,
         long refunded,
-        long rejected
+        long rejected,
+        long receiptPending,
+        long receiptOverdue
 ) {
 }

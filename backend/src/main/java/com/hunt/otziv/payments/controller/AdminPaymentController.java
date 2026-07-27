@@ -90,6 +90,15 @@ public class AdminPaymentController {
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/admin/payments/manual-links/{linkId}/receipt/legacy-not-required")
+    public AdminPaymentLinkResponse markLegacyManualPaymentReceiptNotRequired(
+            @PathVariable Long linkId,
+            Authentication authentication
+    ) {
+        return paymentLinkService.markManualReceiptLegacyNotRequired(linkId, actor(authentication));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @GetMapping("/api/admin/payments/tbank-profiles")
     public TbankPaymentProfilesResponse tbankProfiles() {
         return paymentProfileService.managementState();

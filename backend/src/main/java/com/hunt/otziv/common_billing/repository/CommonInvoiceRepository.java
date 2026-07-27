@@ -140,6 +140,26 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         LEFT JOIN FETCH account.manager manager
         LEFT JOIN FETCH manager.user
         LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        WHERE invoice.status IN :statuses
+          AND account.enabled = true
+          AND invoice.sentAt IS NULL
+          AND invoice.updatedAt <= :readyBefore
+          AND COALESCE(invoice.lastError, '') = ''
+        ORDER BY invoice.updatedAt ASC, invoice.id ASC
+    """)
+    List<CommonInvoice> findUnsentActionCandidates(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            @Param("readyBefore") LocalDateTime readyBefore,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
         LEFT JOIN FETCH invoiceCompany.manager invoiceManager
         LEFT JOIN FETCH invoiceManager.user
         WHERE invoice.status IN :statuses
@@ -166,6 +186,10 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
           AND LOWER(COALESCE(invoice.lastError, '')) NOT LIKE 'review_recovery_active:%'
           AND (
             invoice.status IN :criticalStatuses
+            OR (
+              invoice.status = :partiallyPaidStatus
+              AND (invoice.sentAt IS NULL OR invoice.nextReminderAt IS NULL)
+            )
             OR (
               invoice.status IN :staleStatuses
               AND invoice.updatedAt <= :staleBefore
@@ -218,6 +242,10 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
           AND LOWER(COALESCE(invoice.lastError, '')) NOT LIKE 'review_recovery_active:%'
           AND (
             invoice.status IN :criticalStatuses
+            OR (
+              invoice.status = :partiallyPaidStatus
+              AND (invoice.sentAt IS NULL OR invoice.nextReminderAt IS NULL)
+            )
             OR (
               invoice.status IN :staleStatuses
               AND invoice.updatedAt <= :staleBefore

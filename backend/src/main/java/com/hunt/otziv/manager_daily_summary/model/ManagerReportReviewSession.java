@@ -87,6 +87,9 @@ public class ManagerReportReviewSession {
     @Column(name = "questions_json", columnDefinition = "LONGTEXT")
     private String questionsJson;
 
+    @Column(name = "questions_context", columnDefinition = "LONGTEXT")
+    private String questionsContext;
+
     @Column(name = "questions_source", length = 24)
     private String questionsSource;
 

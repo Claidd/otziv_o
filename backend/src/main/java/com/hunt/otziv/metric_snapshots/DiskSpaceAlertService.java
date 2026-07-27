@@ -24,6 +24,7 @@ public class DiskSpaceAlertService {
     private static final String NORMAL = "NORMAL";
     private static final String WARNING = "WARNING";
     private static final String CRITICAL = "CRITICAL";
+    private static final String EMERGENCY = "EMERGENCY";
 
     private final DiskSpaceUsageProvider usageProvider;
     private final AppSettingService appSettingService;
@@ -37,6 +38,9 @@ public class DiskSpaceAlertService {
 
     @Value("${otziv.monitoring.disk.critical-percent:90}")
     private int criticalPercent = 90;
+
+    @Value("${otziv.monitoring.disk.emergency-percent:95}")
+    private int emergencyPercent = 95;
 
     @Value("${otziv.monitoring.disk.repeat-hours:6}")
     private int repeatHours = 6;
@@ -95,6 +99,9 @@ public class DiskSpaceAlertService {
     }
 
     private String level(int usedPercent) {
+        if (usedPercent >= Math.max(emergencyPercent, Math.max(criticalPercent, warningPercent))) {
+            return EMERGENCY;
+        }
         if (usedPercent >= Math.max(criticalPercent, warningPercent)) {
             return CRITICAL;
         }
@@ -105,7 +112,7 @@ public class DiskSpaceAlertService {
     }
 
     private int rank(String level) {
-        return CRITICAL.equals(level) ? 2 : WARNING.equals(level) ? 1 : 0;
+        return EMERGENCY.equals(level) ? 3 : CRITICAL.equals(level) ? 2 : WARNING.equals(level) ? 1 : 0;
     }
 
     private void notifyRecipients(
@@ -116,11 +123,16 @@ public class DiskSpaceAlertService {
     ) {
         String title = recovered
                 ? "Место на сервере восстановлено"
-                : CRITICAL.equals(level) ? "Критически мало места на сервере" : "Заканчивается место на сервере";
+                : EMERGENCY.equals(level) ? "Аварийно мало места на сервере"
+                : CRITICAL.equals(level) ? "Критически мало места на сервере"
+                : "Заканчивается место на сервере";
         String text = "Использовано: " + usage.usedPercent() + "% ("
                 + gibibytes(usage.usedBytes()) + " из " + gibibytes(usage.totalBytes()) + " ГиБ)."
                 + "\nСвободно: " + gibibytes(usage.usableBytes()) + " ГиБ."
-                + (recovered ? "\nЗаполнение снова ниже порога " + warningPercent + "%." : "\nПорог предупреждения: " + warningPercent + "%, критический: " + criticalPercent + "%.");
+                + (recovered
+                ? "\nЗаполнение снова ниже порога " + warningPercent + "%."
+                : "\nПороги: предупреждение " + warningPercent + "%, критический "
+                        + criticalPercent + "%, аварийный " + emergencyPercent + "%.");
         long sourceId = now.getEpochSecond() / 3600L * 10L + rank(level);
         recipients().values().forEach(user -> notifyUser(user, title, text, sourceId));
         log.warn("Disk space state: level={}, usedPercent={}, freeBytes={}", level, usage.usedPercent(), usage.usableBytes());

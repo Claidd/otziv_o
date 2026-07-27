@@ -1614,6 +1614,42 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void unsentPartiallyPaidInvoiceIsSentForRemainingAmountAndGetsReminderDate() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+        invoice.setSentAt(null);
+        invoice.setNextReminderAt(null);
+        Order paidOrder = order(101L);
+        Order unpaidOrder = order(102L);
+        CommonInvoiceOrder paidItem = item(invoice, paidOrder);
+        paidItem.setPaid(true);
+        CommonInvoiceOrder unpaidItem = item(invoice, unpaidOrder);
+
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_IMMEDIATE_ENABLED, true))
+                .thenReturn(true);
+        when(invoiceRepository.findUnsentActionCandidates(any(), any(), any(Pageable.class)))
+                .thenReturn(List.of(invoice));
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L))
+                .thenReturn(List.of(paidItem, unpaidItem));
+        when(badReviewTaskService.getPayableSum(unpaidOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+
+        assertEquals(1, service.sendUnsentActionInvoices(20));
+
+        assertEquals(CommonInvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+        assertNotNull(invoice.getSentAt());
+        assertNotNull(invoice.getNextReminderAt());
+        verify(messageSender).send(any(), any(), any(), messageCaptor.capture());
+        String compactMessage = messageCaptor.getValue().replace(" ", "").replace("\u00A0", "");
+        assertTrue(compactMessage.contains("Коплате:1000"));
+    }
+
+    @Test
     void manualSendInvoiceFailureStillMarksInvoiceAsInvoiced() throws Exception {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);

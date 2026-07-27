@@ -76,6 +76,11 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     @Override
     @Transactional
     public boolean handlePaymentStatus(Order order, boolean createNextOrder) throws Exception {
+        if (order == null || order.getId() == null) {
+            throw new IllegalArgumentException("Для зачисления оплаты нужен заказ с ID");
+        }
+        order = orderRepository.findByIdForCounterUpdate(order.getId())
+                .orElseThrow(() -> new IllegalStateException("Заказ исчез во время зачисления оплаты"));
         boolean wasAlreadyPaid = order != null
                 && order.getStatus() != null
                 && STATUS_PAYMENT.equals(order.getStatus().getTitle());

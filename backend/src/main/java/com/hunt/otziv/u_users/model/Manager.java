@@ -59,6 +59,10 @@ public class Manager {
     @Column(name = "audit_telegram_group_chat_id", unique = true)
     private Long auditTelegramGroupChatId;
 
+    @Builder.Default
+    @Column(name = "report_review_enabled", nullable = false)
+    private boolean reportReviewEnabled = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "payment_profile_id")
     private PaymentProfile paymentProfile;

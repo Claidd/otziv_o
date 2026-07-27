@@ -1,5 +1,6 @@
 package com.hunt.otziv.payments.service;
 
+import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.model.PaymentLinkStatus;
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ManualPaymentAutoConfirmationService {
 
     private static final Set<PaymentMethod> MANUAL_PAYMENT_METHODS = Set.of(
@@ -45,6 +48,7 @@ public class ManualPaymentAutoConfirmationService {
 
     private final PaymentLinkRepository paymentLinkRepository;
     private final ManualPaymentTaskService manualPaymentTaskService;
+    private final PaymentSuccessClientNotifier paymentSuccessClientNotifier;
 
     @Transactional(readOnly = true)
     public void ensureCanCloseOrderManually(Order order) {
@@ -125,7 +129,50 @@ public class ManualPaymentAutoConfirmationService {
         link.setConfirmedAmountKopecks(link.getAmountKopecks());
         link.setReceiptStatus(PaymentReceiptStatus.PENDING);
         link.setLastError(null);
+        link.setPaymentSuccessNotificationRetryEligible(true);
+        notifyPaymentSuccess(link);
         paymentLinkRepository.save(link);
         manualPaymentTaskService.completeIfConfirmedTargetReached(link.getManualPaymentTask());
+    }
+
+    private void notifyPaymentSuccess(PaymentLink link) {
+        try {
+            ClientMessageSendResult result = paymentSuccessClientNotifier.notifySuccess(link);
+            if (result != null && result.sent()) {
+                link.setPaymentSuccessNotifiedAt(LocalDateTime.now());
+                link.setPaymentSuccessNotificationError(null);
+                link.setPaymentSuccessNotificationRetryEligible(false);
+                return;
+            }
+            link.setPaymentSuccessNotificationError(limit(notificationError(result), 512));
+        } catch (RuntimeException exception) {
+            String message = exception.getMessage();
+            link.setPaymentSuccessNotificationError(limit(
+                    message == null || message.isBlank() ? exception.getClass().getSimpleName() : message,
+                    512
+            ));
+            log.warn("Manual payment success notification failed: linkId={}", link.getId(), exception);
+        }
+    }
+
+    private String notificationError(ClientMessageSendResult result) {
+        if (result == null) {
+            return "notification_result_empty";
+        }
+        String code = normalize(result.errorCode());
+        String message = normalize(result.errorMessage());
+        if (code.isBlank()) {
+            return message.isBlank() ? "notification_not_sent" : message;
+        }
+        return message.isBlank() ? code : code + ": " + message;
+    }
+
+    private String limit(String value, int maxLength) {
+        String clean = normalize(value);
+        return clean.length() <= maxLength ? clean : clean.substring(0, maxLength);
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 }

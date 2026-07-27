@@ -6,6 +6,7 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewEvent;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewStatus;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssue;
+import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssueStatus;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
@@ -65,9 +66,14 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewAdminService adminService;
     private final ManagerReportReviewAiAvailabilityService aiAvailabilityService;
     private final ManagerReportReviewIssueService issueService;
+    private final ManagerReportReviewTaskContextService taskContextService;
 
     public boolean enabled() {
         return appSettingService.getBoolean("manager.report-review.enabled", true);
+    }
+
+    public boolean enabledFor(Manager manager) {
+        return enabled() && manager != null && manager.isReportReviewEnabled();
     }
 
     public static List<List<InlineKeyboardButton>> initialKeyboard(Long reviewId) {
@@ -124,7 +130,7 @@ public class ManagerReportReviewTelegramService {
                 || summary == null || summary.date() == null) {
             return false;
         }
-        if (!enabled()) {
+        if (!enabledFor(manager)) {
             return false;
         }
         ManagerReportReviewSession review = sessionRepository
@@ -149,7 +155,7 @@ public class ManagerReportReviewTelegramService {
             Manager sourceManager,
             ManagerDailySummaryResponse summary
     ) {
-        if (!enabled() || tester == null || tester.getId() == null
+        if (!enabledFor(sourceManager) || tester == null || tester.getId() == null
                 || tester.getTelegramChatId() == null || sourceManager == null
                 || sourceManager.getId() == null || summary == null || summary.date() == null) {
             return Optional.empty();
@@ -189,6 +195,7 @@ public class ManagerReportReviewTelegramService {
         review.setStatus(ManagerReportReviewStatus.DELIVERED);
         review.setReportSnapshot(report.html());
         review.setReportRichSnapshot(report.richHtml());
+        review.setQuestionsContext(report.questionContext());
         review.setCurrentQuestionIndex(0);
         review.setMinimumReadSeconds(minimumReadSeconds(report.html(), testMode));
         int issueCount = issueCount(summary);
@@ -196,7 +203,10 @@ public class ManagerReportReviewTelegramService {
         List<ManagerReportReviewQualityService.ReviewQuestion> preparedQuestions = List.of();
         if (issueCount > 0) {
             ManagerReportReviewQualityService.QuestionGeneration generation =
-                    qualityService.generateQuestions(report.html(), issueCount);
+                    qualityService.generateQuestions(
+                            taskContextService.refresh(report.questionContext()),
+                            issueCount
+                    );
             review.setQuestionsJson(qualityService.questionsJson(generation.questions()));
             review.setQuestionsSource(generation.aiVerified() ? QUESTIONS_AI : QUESTIONS_PENDING_AI);
             if (generation.aiVerified()) {
@@ -368,8 +378,7 @@ public class ManagerReportReviewTelegramService {
             return Optional.of("Напишите ответ на вопрос");
         }
         if (START.equals(command.action())) {
-            continueFlow(review, actor);
-            return Optional.of("Проверка продолжена");
+            return Optional.of(continueFlow(review, actor));
         }
         return Optional.of("Команда не распознана");
     }
@@ -586,31 +595,36 @@ public class ManagerReportReviewTelegramService {
                 : "Отчёт принят";
     }
 
-    private void continueFlow(ManagerReportReviewSession review, User actor) {
+    private String continueFlow(ManagerReportReviewSession review, User actor) {
         if (review.getStatus() == ManagerReportReviewStatus.DELIVERED
                 || review.getStatus() == ManagerReportReviewStatus.READING) {
             startReading(review, actor);
-            return;
+            return "Отчёт открыт для изучения";
         }
         if (review.getStatus() == ManagerReportReviewStatus.PLAN_PENDING) {
             sessionRepository.save(review);
             sendPlanPrompt(review, "");
-            return;
+            return "Форма плана действий отправлена";
         }
         if (review.getStatus() == ManagerReportReviewStatus.QUESTION_PENDING) {
             List<ManagerReportReviewQualityService.ReviewQuestion> questions = questions(review);
             if (questions.isEmpty() && questionsPendingAi(review)) {
                 sendAiUnavailable(review);
-                return;
+                return "Вопросы пока не сформированы. Повторите немного позже";
             }
-            if (!sendQuestion(review, questions, "")) {
-                if (hasPendingQuestion(review, questions)) {
-                    notifyQuestionDeliveryFailure(review);
-                } else {
-                    waitForDisputeOrComplete(review, actor, "Действующих вопросов больше нет");
-                }
+            if (sendQuestion(review, questions, "")) {
+                return "Вопрос отправлен";
             }
+            if (hasPendingQuestion(review, questions)) {
+                notifyQuestionDeliveryFailure(review);
+                return "Не удалось отправить вопрос. Повторите немного позже";
+            }
+            waitForDisputeOrComplete(review, actor, "Действующих вопросов больше нет");
+            return review.getStatus() == ManagerReportReviewStatus.COMPLETED
+                    ? "Отчёт принят"
+                    : "Осталось дождаться решения по спору";
         }
+        return "Проверка уже находится на другом этапе";
     }
 
     private boolean handleQuestionAnswer(
@@ -626,6 +640,14 @@ public class ManagerReportReviewTelegramService {
                 return true;
             }
             return false;
+        }
+        int requestedIndex = review.getCurrentQuestionIndex();
+        withdrawCompletedTaskQuestions(review, questions);
+        if (!issueService.isPending(review, requestedIndex)) {
+            if (!sendQuestion(review, questions, "")) {
+                waitForDisputeOrComplete(review, actor, "Связанные задачи уже выполнены");
+            }
+            return true;
         }
         int index = nextQuestionIndex(review, questions, review.getCurrentQuestionIndex());
         if (index < 0) {
@@ -835,6 +857,8 @@ public class ManagerReportReviewTelegramService {
         }
         List<ManagerReportReviewQualityService.ReviewQuestion> questions = questions(review);
         List<ManagerReportReviewIssue> issues = issueService.ensureIssues(review, questions);
+        withdrawCompletedTaskQuestions(review, questions);
+        issues = issueService.issues(review);
         List<ManagerReportReviewIssue> selectable = issueService.selectableIssues(review);
         if (selectable.isEmpty()) {
             telegramService.sendMessage(
@@ -1064,14 +1088,16 @@ public class ManagerReportReviewTelegramService {
     ) {
         if (questions == null || questions.isEmpty()) return false;
         issueService.ensureIssues(review, questions);
+        withdrawCompletedTaskQuestions(review, questions);
         int index = nextQuestionIndex(review, questions, review.getCurrentQuestionIndex());
         if (index < 0) return false;
         review.setCurrentQuestionIndex(index);
         ManagerReportReviewQualityService.ReviewQuestion question = questions.get(index);
+        QuestionProgress progress = questionProgress(review, questions, index);
         String text = (clean(prefix).isBlank()
                 ? ""
-                : escape(clean(prefix)).replace("\n", "<br>") + "\n\n")
-                + "❓ <b>Вопрос " + (index + 1) + " из " + questions.size() + "</b>\n\n"
+                : escape(clean(prefix)) + "\n\n")
+                + "❓ <b>Вопрос " + progress.position() + " из " + progress.total() + "</b>\n\n"
                 + escape(question.question())
                 + answerDirectionsHtml()
                 + "\n\nКороткий формат, <b>до " + maximumAnswerCharacters() + " символов</b>: "
@@ -1134,6 +1160,7 @@ public class ManagerReportReviewTelegramService {
             }
             return;
         }
+        withdrawCompletedTaskQuestions(review, questions);
         int index = nextQuestionIndex(review, questions, review.getCurrentQuestionIndex());
         if (index < 0) {
             telegramService.sendMessage(
@@ -1145,7 +1172,8 @@ public class ManagerReportReviewTelegramService {
         }
         review.setCurrentQuestionIndex(index);
         ManagerReportReviewQualityService.ReviewQuestion question = questions.get(index);
-        String text = "✍️ Ответьте на вопрос " + (index + 1) + " из " + questions.size() + ":\n\n"
+        QuestionProgress progress = questionProgress(review, questions, index);
+        String text = "✍️ Ответьте на вопрос " + progress.position() + " из " + progress.total() + ":\n\n"
                 + question.question()
                 + answerDirectionsPlain()
                 + "\n\nКороткий формат, до " + maximumAnswerCharacters()
@@ -1155,6 +1183,45 @@ public class ManagerReportReviewTelegramService {
         review.setReplyPromptMessageId(promptId.orElse(null));
         review.setQuestionSentAt(LocalDateTime.now());
         sessionRepository.save(review);
+    }
+
+    private QuestionProgress questionProgress(
+            ManagerReportReviewSession review,
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions,
+            int questionIndex
+    ) {
+        List<Integer> activeIndexes = issueService.issues(review).stream()
+                .filter(issue -> issue.getStatus() != ManagerReportReviewIssueStatus.WITHDRAWN)
+                .map(ManagerReportReviewIssue::getQuestionIndex)
+                .filter(index -> index >= 0 && index < questions.size())
+                .distinct()
+                .sorted()
+                .toList();
+        if (activeIndexes.isEmpty()) {
+            return new QuestionProgress(questionIndex + 1, questions.size());
+        }
+        int position = activeIndexes.indexOf(questionIndex);
+        return new QuestionProgress(position < 0 ? 1 : position + 1, activeIndexes.size());
+    }
+
+    private void withdrawCompletedTaskQuestions(
+            ManagerReportReviewSession review,
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions
+    ) {
+        int withdrawn = issueService.withdrawResolvedSourceIssues(review, questions);
+        if (withdrawn <= 0) return;
+        telegramService.sendMessage(
+                review.getRecipientChatId(),
+                "✅ <b>Аудит обновлён</b>\n\n"
+                        + (withdrawn == 1
+                        ? "Одна связанная задача уже выполнена после формирования отчёта. "
+                        : "Связанные задачи уже выполнены после формирования отчёта: " + withdrawn + ". ")
+                        + "Вопрос по ней снят автоматически.",
+                "HTML"
+        );
+    }
+
+    private record QuestionProgress(int position, int total) {
     }
 
     private void sendPlanPrompt(ManagerReportReviewSession review, String prefix) {
@@ -1229,7 +1296,9 @@ public class ManagerReportReviewTelegramService {
         }
         ManagerReportReviewQualityService.QuestionGeneration generation =
                 qualityService.generateQuestions(
-                review.getReportSnapshot(),
+                taskContextService.refresh(clean(review.getQuestionsContext()).isBlank()
+                        ? review.getReportSnapshot()
+                        : review.getQuestionsContext()),
                 Math.max(0, review.getIssueCount())
         );
         if (!generation.aiVerified()) {

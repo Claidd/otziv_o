@@ -152,11 +152,30 @@ public class PaymentCheckServiceImpl implements PaymentCheckService {
     @Transactional
     public boolean save(Order order, BigDecimal sum){ // Сохранить Чек в БД
         try {
+            if (order == null || order.getId() == null) {
+                throw new IllegalArgumentException("Для чека нужен заказ с ID");
+            }
+            BigDecimal expected = sum == null ? BigDecimal.ZERO : sum;
+            List<PaymentCheck> existing = paymentCheckRepository.findByOrderIdAndActiveTrue(order.getId());
+            if (!existing.isEmpty()) {
+                BigDecimal recorded = existing.stream()
+                        .map(PaymentCheck::getSum)
+                        .filter(java.util.Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (recorded.compareTo(expected) == 0 && existing.size() == 1) {
+                    log.info("Активный чек заказа {} уже существует с той же суммой; повтор не создается", order.getId());
+                    return true;
+                }
+                throw new IllegalStateException(
+                        "Активный чек заказа " + order.getId() + " не совпадает с оплатой: "
+                                + recorded + " вместо " + expected
+                );
+            }
             saveCheckCompany(order, sum);
             return true;
         }
         catch (Exception e){
-            return false;
+            throw new IllegalStateException("Не удалось сохранить чек оплаты заказа", e);
         }
     } // Сохранить Чек в БД
 

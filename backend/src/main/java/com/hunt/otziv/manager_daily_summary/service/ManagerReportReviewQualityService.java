@@ -64,7 +64,16 @@ public class ManagerReportReviewQualityService {
             «Совет без штрафа», по нормальным действиям или при недостаточном контексте.
             Если подтверждённых проблем меньше questionCount, верни меньше вопросов.
             Если подтверждённых проблем нет, верни пустой массив questions.
-            Верни только JSON: {"questions":[{"question":"...","expectedPoints":["..."]}]}.
+            Если вопрос создан по записи из блока «СЛУЖЕБНЫЕ ССЫЛКИ НА ОТКРЫТЫЕ ЗАДАЧИ»,
+            верни её точный идентификатор в sourceTaskIds. Не придумывай идентификаторы и не показывай
+            их в тексте вопроса. Для замечаний без служебной ссылки верни пустой sourceTaskIds.
+            Блок «ТЕКУЩЕЕ СОСТОЯНИЕ И РЕЗУЛЬТАТ СВЯЗАННЫХ ЗАДАЧ» новее снимка отчёта.
+            Если задача уже закрыта, auditRequired=false, а replyQuality равно GOOD или NOT_APPLICABLE,
+            не создавай по ней вопрос. Если replyQuality равно PARTIAL или SUSPICIOUS либо
+            auditRequired=true, вопрос остаётся обязательным: укажи в нём точное сообщение клиента
+            и фактический ответ менеджера, но не подсказывай правильный ответ.
+            Верни только JSON:
+            {"questions":[{"question":"...","expectedPoints":["..."],"sourceTaskIds":[123]}]}.
             """;
     private static final String ASSESSMENT_PROMPT = """
             Ты проверяешь, понял ли менеджер конкретное замечание из своего рабочего аудита.
@@ -134,39 +143,84 @@ public class ManagerReportReviewQualityService {
         if (!aiAvailable()) {
             return new QuestionGeneration(List.of(), false, "DeepSeek недоступен");
         }
+        String input;
         try {
-            AiResponse response = generate(
-                    "manager-report-review-questions",
-                    QUESTION_PROMPT,
-                    objectMapper.writeValueAsString(Map.of(
-                            "questionCount", count,
-                            "report", clean(report)
-                    )),
-                    900
-            );
-            JsonNode questions = objectMapper.readTree(stripCodeFence(response.text())).path("questions");
-            List<ReviewQuestion> result = new ArrayList<>();
-            if (questions.isArray()) {
-                for (JsonNode item : questions) {
-                    String question = limit(item.path("question").asText(""), 700);
-                    if (question.isBlank()) continue;
-                    List<String> expected = new ArrayList<>();
-                    JsonNode points = item.path("expectedPoints");
-                    if (points.isArray()) {
-                        points.forEach(point -> {
-                            String value = limit(point.asText(""), 300);
-                            if (!value.isBlank()) expected.add(value);
-                        });
-                    }
-                    result.add(new ReviewQuestion(question, expected));
-                    if (result.size() >= count) break;
-                }
-            }
-            return new QuestionGeneration(result, true, "");
+            input = objectMapper.writeValueAsString(Map.of(
+                    "questionCount", count,
+                    "report", clean(report)
+            ));
         } catch (Exception exception) {
             log.warn("Не удалось сформировать вопросы по отчёту менеджера: {}", exception.getMessage());
             return new QuestionGeneration(List.of(), false, clean(exception.getMessage()));
         }
+        int maxTokens = Math.max(2000, Math.min(16000, appSettingService.getInt(
+                "manager.report-review.question-generation-max-tokens",
+                8000
+        )));
+        try {
+            AiResponse response = generate(
+                    "manager-report-review-questions",
+                    QUESTION_PROMPT,
+                    input,
+                    maxTokens
+            );
+            try {
+                return new QuestionGeneration(parseQuestions(response.text(), count), true, "");
+            } catch (Exception firstParseFailure) {
+                int retryMaxTokens = Math.max(maxTokens, Math.min(24000, appSettingService.getInt(
+                        "manager.report-review.question-generation-retry-max-tokens",
+                        12000
+                )));
+                log.warn(
+                        "DeepSeek вернул некорректный JSON вопросов, повторяем запрос: {}",
+                        firstParseFailure.getMessage()
+                );
+                AiResponse retry = generate(
+                        "manager-report-review-questions-retry",
+                        QUESTION_PROMPT
+                                + "\nПредыдущий ответ был повреждён. Верни компактный полный JSON "
+                                + "без Markdown и без текста после закрывающей фигурной скобки.",
+                        input,
+                        retryMaxTokens
+                );
+                return new QuestionGeneration(parseQuestions(retry.text(), count), true, "");
+            }
+        } catch (Exception exception) {
+            log.warn("Не удалось сформировать вопросы по отчёту менеджера: {}", exception.getMessage());
+            return new QuestionGeneration(List.of(), false, clean(exception.getMessage()));
+        }
+    }
+
+    private List<ReviewQuestion> parseQuestions(String responseText, int count) throws Exception {
+        JsonNode root = objectMapper.readTree(stripCodeFence(responseText));
+        JsonNode questions = root == null ? null : root.get("questions");
+        if (questions == null || !questions.isArray()) {
+            throw new IllegalArgumentException("ответ не содержит массив questions");
+        }
+        List<ReviewQuestion> result = new ArrayList<>();
+        for (JsonNode item : questions) {
+            String question = limit(item.path("question").asText(""), 700);
+            if (question.isBlank()) continue;
+            List<String> expected = new ArrayList<>();
+            JsonNode points = item.path("expectedPoints");
+            if (points.isArray()) {
+                points.forEach(point -> {
+                    String value = limit(point.asText(""), 300);
+                    if (!value.isBlank()) expected.add(value);
+                });
+            }
+            List<Long> sourceTaskIds = new ArrayList<>();
+            JsonNode sourceIds = item.path("sourceTaskIds");
+            if (sourceIds.isArray()) {
+                sourceIds.forEach(sourceId -> {
+                    long value = sourceId.asLong(0);
+                    if (value > 0 && !sourceTaskIds.contains(value)) sourceTaskIds.add(value);
+                });
+            }
+            result.add(new ReviewQuestion(question, expected, sourceTaskIds));
+            if (result.size() >= count) break;
+        }
+        return result;
     }
 
     public Assessment assessAnswer(
@@ -554,10 +608,22 @@ public class ManagerReportReviewQualityService {
         }
     }
 
-    public record ReviewQuestion(String question, List<String> expectedPoints) {
+    public record ReviewQuestion(String question, List<String> expectedPoints, List<Long> sourceTaskIds) {
+
+        public ReviewQuestion(String question, List<String> expectedPoints) {
+            this(question, expectedPoints, List.of());
+        }
+
         public ReviewQuestion {
             question = question == null ? "" : question.trim();
             expectedPoints = expectedPoints == null ? List.of() : List.copyOf(expectedPoints);
+            sourceTaskIds = sourceTaskIds == null
+                    ? List.of()
+                    : sourceTaskIds.stream()
+                    .filter(java.util.Objects::nonNull)
+                    .filter(id -> id > 0)
+                    .distinct()
+                    .toList();
         }
     }
 

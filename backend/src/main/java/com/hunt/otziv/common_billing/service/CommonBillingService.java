@@ -192,6 +192,10 @@ public class CommonBillingService {
             CommonInvoiceStatus.REMINDER,
             CommonInvoiceStatus.PARTIALLY_PAID
     );
+    private static final Set<CommonInvoiceStatus> UNSENT_ACTION_STATUSES = Set.of(
+            CommonInvoiceStatus.READY,
+            CommonInvoiceStatus.PARTIALLY_PAID
+    );
     private static final Set<CommonInvoiceStatus> PUBLIC_PAYABLE_STATUSES = Set.of(
             CommonInvoiceStatus.COLLECTING,
             CommonInvoiceStatus.READY,
@@ -674,6 +678,32 @@ public class CommonBillingService {
                 if (delivered) {
                     sent++;
                 }
+            }
+        }
+        return sent;
+    }
+
+    public int sendUnsentActionInvoices(int limit) {
+        if (!immediateClientMessagesEnabled()) {
+            return 0;
+        }
+        List<CommonInvoice> invoices = invoiceRepository.findUnsentActionCandidates(
+                UNSENT_ACTION_STATUSES,
+                LocalDateTime.now().minusMinutes(5),
+                PageRequest.of(0, Math.max(1, limit))
+        );
+        int sent = 0;
+        for (CommonInvoice candidate : invoices) {
+            PreparedCommonInvoiceMessage prepared = writeTransaction(() ->
+                    preparePaymentMessage(candidate.getId(), false, false, false, null, false)
+            );
+            if (prepared == null) {
+                continue;
+            }
+            ClientMessageSendResult result = sendPreparedPaymentMessage(prepared);
+            boolean delivered = writeTransaction(() -> finishPaymentMessageSend(prepared, result));
+            if (delivered) {
+                sent++;
             }
         }
         return sent;
@@ -2435,11 +2465,15 @@ public class CommonBillingService {
         }
         if (result.sent()) {
             if (prepared.reminder()) {
-                invoice.setStatus(CommonInvoiceStatus.REMINDER);
+                invoice.setStatus(invoice.getPaidKopecks() > 0
+                        ? CommonInvoiceStatus.PARTIALLY_PAID
+                        : CommonInvoiceStatus.REMINDER);
                 invoice.setLastReminderAt(LocalDateTime.now());
                 markInvoiceOrdersReminder(invoice.getId());
             } else {
-                invoice.setStatus(CommonInvoiceStatus.INVOICED);
+                invoice.setStatus(invoice.getPaidKopecks() > 0
+                        ? CommonInvoiceStatus.PARTIALLY_PAID
+                        : CommonInvoiceStatus.INVOICED);
                 invoice.setSentAt(LocalDateTime.now());
                 markInvoiceOrdersToPay(invoice.getId());
             }
@@ -2451,7 +2485,9 @@ public class CommonBillingService {
 
         if (prepared.reminder()) {
             if (prepared.manual()) {
-                invoice.setStatus(CommonInvoiceStatus.REMINDER);
+                invoice.setStatus(invoice.getPaidKopecks() > 0
+                        ? CommonInvoiceStatus.PARTIALLY_PAID
+                        : CommonInvoiceStatus.REMINDER);
                 invoice.setLastReminderAt(LocalDateTime.now());
                 markInvoiceOrdersReminder(invoice.getId());
             }
@@ -2486,6 +2522,7 @@ public class CommonBillingService {
             closePaidInvoice(invoice, items);
         } else {
             invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+            ensurePartialPaymentNextAction(invoice);
             invoiceRepository.save(invoice);
         }
     }
@@ -3138,9 +3175,19 @@ public class CommonBillingService {
                 && invoice.getStatus() != CommonInvoiceStatus.NEEDS_ATTENTION) {
             if (paid > 0 && paid < amount) {
                 invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+                ensurePartialPaymentNextAction(invoice);
             }
         }
         invoiceRepository.save(invoice);
+    }
+
+    private void ensurePartialPaymentNextAction(CommonInvoice invoice) {
+        if (invoice == null || invoice.getStatus() != CommonInvoiceStatus.PARTIALLY_PAID) {
+            return;
+        }
+        if (invoice.getSentAt() != null && invoice.getNextReminderAt() == null) {
+            invoice.setNextReminderAt(LocalDateTime.now().plusDays(REMINDER_INTERVAL_DAYS));
+        }
     }
 
     private void refreshInvoiceAmounts(CommonInvoice invoice, List<CommonInvoiceOrder> items) {

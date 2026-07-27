@@ -1,0 +1,264 @@
+<section class="audit-settings">
+  <header class="audit-hero">
+    <div>
+      <p class="eyebrow">Контроль менеджеров</p>
+      <h2>Настройки аудита</h2>
+      <p>
+        Здесь определяется, кому система формирует ежедневный аудит, как проверяет понимание
+        замечаний и когда напоминает о незавершённом разборе.
+      </p>
+    </div>
+    <button type="button" class="secondary-button" (click)="load()" [disabled]="loading() || saving()">
+      <span class="material-icons-sharp">refresh</span>
+      Обновить
+    </button>
+  </header>
+
+  @if (error()) {
+    <div class="audit-error" role="alert">
+      <span class="material-icons-sharp">error_outline</span>
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="audit-loading">
+      <span class="material-icons-sharp">hourglass_top</span>
+      Загружаем настройки аудита…
+    </div>
+  } @else if (settings()) {
+    <div class="audit-summary">
+      <article [class.disabled]="!form.controls.enabled.value">
+        <span class="material-icons-sharp">fact_check</span>
+        <div>
+          <strong>{{ form.controls.enabled.value ? 'Аудит работает' : 'Аудит выключен' }}</strong>
+          <small>Общий режим</small>
+        </div>
+      </article>
+      <article>
+        <span class="material-icons-sharp">groups</span>
+        <div>
+          <strong>{{ enabledManagers() }} из {{ settings()!.managers.length }}</strong>
+          <small>Менеджеров участвуют</small>
+        </div>
+      </article>
+      <article>
+        <span class="material-icons-sharp">forum</span>
+        <div>
+          <strong>{{ connectedGroups() }}</strong>
+          <small>Telegram-групп подключено</small>
+        </div>
+      </article>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="save()" class="audit-form">
+      <article class="audit-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">Главное</p>
+            <h3>Формирование и контроль</h3>
+          </div>
+          <span class="material-icons-sharp">tune</span>
+        </div>
+
+        <label class="switch-row">
+          <span>
+            <strong>Формировать ежедневные аудиты</strong>
+            <small>При выключении отчёты не анализируются и не отправляются менеджерам.</small>
+          </span>
+          <input type="checkbox" formControlName="enabled">
+          <i aria-hidden="true"></i>
+        </label>
+
+        <label class="switch-row">
+          <span>
+            <strong>Отправлять в персональные группы</strong>
+            <small>Если группа менеджера подключена, аудит приходит туда; иначе — в личный Telegram.</small>
+          </span>
+          <input type="checkbox" formControlName="managerGroupsEnabled">
+          <i aria-hidden="true"></i>
+        </label>
+
+        <label class="switch-row">
+          <span>
+            <strong>Ограничивать доступ при непрохождении</strong>
+            <small>После истечения срока рабочие разделы блокируются до завершения аудита.</small>
+          </span>
+          <input type="checkbox" formControlName="restrictionEnabled">
+          <i aria-hidden="true"></i>
+        </label>
+      </article>
+
+      <article class="audit-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">Сроки</p>
+            <h3>Чтение и напоминания</h3>
+          </div>
+          <span class="material-icons-sharp">schedule</span>
+        </div>
+        <div class="field-grid">
+          <label>
+            <span>Минимальное чтение, сек.</span>
+            <input type="number" formControlName="minimumReadSeconds">
+            <small>От 30 до 300 секунд</small>
+          </label>
+          <label>
+            <span>Чтение в тестовом режиме, сек.</span>
+            <input type="number" formControlName="testMinimumReadSeconds">
+            <small>От 3 до 30 секунд</small>
+          </label>
+          <label>
+            <span>Первое напоминание, мин.</span>
+            <input type="number" formControlName="reminderOneMinutes">
+            <small>После начала аудита</small>
+          </label>
+          <label>
+            <span>Срок прохождения, мин.</span>
+            <input type="number" formControlName="reminderThreeMinutes">
+            <small>Должен быть больше первого напоминания</small>
+          </label>
+        </div>
+      </article>
+
+      <article class="audit-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">Проверка понимания</p>
+            <h3>Вопросы и качество ответов</h3>
+          </div>
+          <span class="material-icons-sharp">psychology_alt</span>
+        </div>
+        <div class="field-grid">
+          <label>
+            <span>Максимум вопросов</span>
+            <input type="number" formControlName="maxQuestionCount">
+            <small>От 1 до 12, только по действующим замечаниям</small>
+          </label>
+          <label>
+            <span>Проходной балл ответа, %</span>
+            <input type="number" formControlName="minimumAnswerScore">
+            <small>От 60 до 100%</small>
+          </label>
+          <label>
+            <span>Максимальная длина ответа</span>
+            <input type="number" formControlName="maxAnswerCharacters">
+            <small>Количество символов</small>
+          </label>
+          <label>
+            <span>Максимальная длина плана</span>
+            <input type="number" formControlName="maxPlanCharacters">
+            <small>Количество символов</small>
+          </label>
+        </div>
+      </article>
+
+      <details class="audit-card advanced-card">
+        <summary>
+          <span>
+            <span class="material-icons-sharp">settings_suggest</span>
+            <strong>Дополнительные настройки проверки</strong>
+          </span>
+          <small>Антикопирование и параметры AI</small>
+        </summary>
+        <div class="field-grid advanced-grid">
+          <label>
+            <span>Быстрый ответ, сек.</span>
+            <input type="number" formControlName="fastPasteSeconds">
+          </label>
+          <label>
+            <span>Минимум символов для проверки вставки</span>
+            <input type="number" formControlName="fastPasteMinCharacters">
+          </label>
+          <label>
+            <span>Размер сравниваемого фрагмента</span>
+            <input type="number" formControlName="copyGramSize">
+          </label>
+          <label>
+            <span>Порог сходства ответов, %</span>
+            <input type="number" formControlName="copySimilarityPercent">
+          </label>
+          <label>
+            <span>Таймаут ответа AI, сек.</span>
+            <input type="number" formControlName="aiTimeoutSeconds">
+          </label>
+          <label>
+            <span>Лимит генерации вопросов</span>
+            <input type="number" formControlName="questionGenerationMaxTokens">
+          </label>
+          <label>
+            <span>Лимит повторной генерации</span>
+            <input type="number" formControlName="questionGenerationRetryMaxTokens">
+          </label>
+        </div>
+      </details>
+
+      <div class="save-bar">
+        <div>
+          <strong>Изменения применяются сразу</strong>
+          <small>При полном выключении текущие незавершённые аудиты будут закрыты.</small>
+        </div>
+        <button type="submit" class="primary-button" [disabled]="saving() || form.invalid">
+          <span class="material-icons-sharp">save</span>
+          {{ saving() ? 'Сохраняем…' : 'Сохранить настройки' }}
+        </button>
+      </div>
+    </form>
+
+    <article class="audit-card managers-card">
+      <div class="managers-heading">
+        <div>
+          <p class="eyebrow">Персональное включение</p>
+          <h3>Аудит по менеджерам</h3>
+          <p>Выключенный менеджер полностью исключается из формирования и отправки аудита.</p>
+        </div>
+        <label class="manager-search">
+          <span class="material-icons-sharp">search</span>
+          <input
+            type="search"
+            placeholder="Найти менеджера"
+            [value]="managerSearch()"
+            (input)="managerSearch.set($any($event.target).value)"
+          >
+        </label>
+      </div>
+
+      <div class="manager-list">
+        @for (manager of filteredManagers(); track trackManager($index, manager)) {
+          <div class="manager-row" [class.manager-disabled]="!manager.auditEnabled">
+            <div class="manager-avatar">{{ manager.managerName.slice(0, 1).toLocaleUpperCase('ru') }}</div>
+            <div class="manager-main">
+              <strong>{{ manager.managerName }}</strong>
+              <span>
+                <i [class.connected]="manager.auditGroupConnected"></i>
+                {{ manager.auditGroupConnected ? 'Telegram-группа подключена' : 'Аудит придёт в личный Telegram' }}
+                @if (!manager.userActive) {
+                  · аккаунт неактивен
+                }
+              </span>
+            </div>
+            <div class="manager-state">
+              <span [class.on]="manager.auditEnabled">
+                {{ manager.auditEnabled ? 'Аудит включён' : 'Аудит выключен' }}
+              </span>
+              <button
+                type="button"
+                class="manager-switch"
+                role="switch"
+                [attr.aria-checked]="manager.auditEnabled"
+                [attr.aria-label]="'Аудит для ' + manager.managerName"
+                [disabled]="managerSavingId() != null"
+                [class.on]="manager.auditEnabled"
+                (click)="toggleManager(manager)"
+              >
+                <i></i>
+              </button>
+            </div>
+          </div>
+        } @empty {
+          <div class="empty-managers">Менеджеры по запросу не найдены.</div>
+        }
+      </div>
+    </article>
+  }
+</section>

@@ -16,7 +16,7 @@
       </nav>
 
       <div class="dictionary-actions">
-        @if (activeTab() !== 'settings' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'audit' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <label class="dictionary-search" [appTooltip]="searchTooltip()">
             <span class="material-icons-sharp">search</span>
             <input
@@ -37,16 +37,18 @@
           </button>
         }
 
-        @if (activeTab() !== 'settings' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
+        @if (activeTab() !== 'settings' && activeTab() !== 'audit' && activeTab() !== 'aiProvider' && activeTab() !== 'gamification' && activeTab() !== 'specialistTransfer' && activeTab() !== 'messageDictionary' && activeTab() !== 'autoresponder' && activeTab() !== 'autoresponderMonitor') {
           <button type="button" class="dictionary-action create" (click)="openActiveCreate()">
             <span class="material-icons-sharp">{{ activeTab() === 'managerTexts' ? 'close' : 'add' }}</span>
             {{ activeTab() === 'managerTexts' ? 'Снять выбор' : 'Новая запись' }}
           </button>
         }
-        <button type="button" class="dictionary-action" (click)="loadAll()" [disabled]="loading()">
-          <span class="material-icons-sharp">refresh</span>
-          {{ loading() ? 'Загрузка' : 'Обновить' }}
-        </button>
+        @if (activeTab() !== 'audit') {
+          <button type="button" class="dictionary-action" (click)="loadAll()" [disabled]="loading()">
+            <span class="material-icons-sharp">refresh</span>
+            {{ loading() ? 'Загрузка' : 'Обновить' }}
+          </button>
+        }
       </div>
     </header>
 
@@ -760,6 +762,8 @@
         }
       </article>
     </section>
+    } @else if (activeTab() === 'audit') {
+      <app-manager-audit-settings (managerCount)="auditManagerCount.set($event)" />
     } @else if (activeTab() === 'aiProvider') {
     <section class="dictionary-ai-provider-page">
       <article class="dictionary-card ai-provider-card">

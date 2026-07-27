@@ -8,6 +8,7 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewDisputeRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewIssueRepository;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +30,7 @@ public class ManagerReportReviewIssueService {
     private final ManagerReportReviewIssueRepository issueRepository;
     private final ManagerReportReviewDisputeRepository disputeRepository;
     private final ManagerReportReviewQualityService qualityService;
+    private final ManagerReportReviewTaskContextService taskContextService;
 
     @Transactional
     public List<ManagerReportReviewIssue> ensureIssues(
@@ -86,6 +88,48 @@ public class ManagerReportReviewIssueService {
                 .filter(issue -> issue.getQuestionIndex() >= Math.max(0, fromIndex))
                 .findFirst()
                 .or(() -> pending.stream().findFirst());
+    }
+
+    @Transactional
+    public int withdrawResolvedSourceIssues(
+            ManagerReportReviewSession review,
+            List<ManagerReportReviewQualityService.ReviewQuestion> questions
+    ) {
+        if (review == null || review.getId() == null || questions == null || questions.isEmpty()) {
+            return 0;
+        }
+        List<ManagerReportReviewIssue> issues = ensureIssues(review, questions);
+        Set<Long> requestedIds = questions.stream()
+                .flatMap(question -> question.sourceTaskIds().stream())
+                .collect(java.util.stream.Collectors.toSet());
+        if (requestedIds.isEmpty()) return 0;
+
+        List<ManagerReportReviewIssue> withdrawn = new ArrayList<>();
+        for (ManagerReportReviewIssue issue : issues) {
+            if (issue.getStatus() != ManagerReportReviewIssueStatus.PENDING
+                    || issue.getQuestionIndex() < 0
+                    || issue.getQuestionIndex() >= questions.size()) {
+                continue;
+            }
+            List<Long> sourceIds = questions.get(issue.getQuestionIndex()).sourceTaskIds();
+            if (!sourceIds.isEmpty()
+                    && sourceIds.stream().allMatch(taskContextService::resolvedSatisfactorily)) {
+                issue.setStatus(ManagerReportReviewIssueStatus.WITHDRAWN);
+                withdrawn.add(issue);
+            }
+        }
+        if (!withdrawn.isEmpty()) {
+            issueRepository.saveAll(withdrawn);
+        }
+        return withdrawn.size();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isPending(ManagerReportReviewSession review, int questionIndex) {
+        if (review == null || review.getId() == null || questionIndex < 0) return false;
+        return issueRepository.findByReview_IdAndQuestionIndex(review.getId(), questionIndex)
+                .map(issue -> issue.getStatus() == ManagerReportReviewIssueStatus.PENDING)
+                .orElse(false);
     }
 
     @Transactional

@@ -204,6 +204,21 @@
     </section>
   }
 
+  @if (receiptPendingCount()) {
+    <section class="analytics-section manual-alert-panel" aria-label="Ручные чеки на контроле">
+      <div class="section-title compact-title">
+        <span class="material-icons-sharp">receipt_long</span>
+        <div>
+          <h2>Ручные чеки на контроле</h2>
+          <p>
+            {{ receiptPendingCount() }} ожидает отметки,
+            {{ receiptOverdueCount() }} просрочено более чем на 24 часа.
+          </p>
+        </div>
+      </div>
+    </section>
+  }
+
   @if (error()) {
     <app-load-error-card title="T-Bank платежи не загрузились" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="load()" />
   }
@@ -385,6 +400,18 @@
                       >
                         <span class="material-icons-sharp" aria-hidden="true">receipt</span>
                         Чек
+                      </button>
+                    }
+                    @if (canMarkLegacyReceiptNotRequired(link)) {
+                      <button
+                        type="button"
+                        class="receipt-action"
+                        (click)="markLegacyReceiptNotRequired(link)"
+                        [disabled]="isMutating(link)"
+                        title="Закрыть старую оплату без требования чека"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">history</span>
+                        Без чека
                       </button>
                     }
                     @if (!isManualPayment(link)) {

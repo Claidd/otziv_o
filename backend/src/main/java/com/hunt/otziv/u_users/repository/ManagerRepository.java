@@ -122,6 +122,15 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     SELECT DISTINCT m
     FROM Manager m
     JOIN FETCH m.user u
+    LEFT JOIN FETCH u.image
+    ORDER BY m.id
+""")
+    List<Manager> findAllForReportReviewSettings();
+
+    @Query("""
+    SELECT DISTINCT m
+    FROM Manager m
+    JOIN FETCH m.user u
     LEFT JOIN FETCH m.paymentProfile
     ORDER BY m.id
 """)

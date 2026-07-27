@@ -154,6 +154,9 @@ export class TbankPaymentsComponent implements OnDestroy {
     return this.paymentSummary()?.manualPending ?? this.manualPendingLinks().length;
   });
 
+  readonly receiptPendingCount = computed(() => this.paymentSummary()?.receiptPending ?? 0);
+  readonly receiptOverdueCount = computed(() => this.paymentSummary()?.receiptOverdue ?? 0);
+
   readonly recipientSummaryItems = computed(() => this.recipientMonthlySummary()?.items ?? []);
 
   readonly paymentPageLabel = computed(() => {
@@ -839,6 +842,30 @@ export class TbankPaymentsComponent implements OnDestroy {
     });
   }
 
+  markLegacyReceiptNotRequired(link: AdminPaymentLinkResponse): void {
+    if (!this.canMarkLegacyReceiptNotRequired(link) || this.mutatingId()) {
+      return;
+    }
+    if (!window.confirm('Закрыть старую оплату без отметки чека? Денежные суммы при этом не изменятся.')) {
+      return;
+    }
+
+    this.mutatingId.set(link.id);
+    this.paymentsApi.markAdminManualPaymentReceiptLegacyNotRequired(link.id).subscribe({
+      next: (updated) => {
+        this.replaceLink(updated);
+        this.mutatingId.set(null);
+        this.toastService.success('Старая оплата закрыта без требования чека');
+        this.loadPaymentLinks();
+      },
+      error: (err) => {
+        const message = apiErrorDetail(err, 'Не удалось закрыть старую оплату без чека');
+        this.mutatingId.set(null);
+        this.toastService.error('Статус чека не обновлен', message);
+      }
+    });
+  }
+
   updateManualTaskStatus(task: ManualPaymentTaskResponse, status: ManualPaymentTaskStatus): void {
     if (!task?.id || this.mutatingTaskId()) {
       return;
@@ -1111,7 +1138,13 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (!this.isManualPayment(link)) {
       return '';
     }
-    return link.receiptStatus === 'MARKED' ? 'Чек отмечен' : 'Чек ожидает';
+    if (link.receiptStatus === 'MARKED') {
+      return 'Чек отмечен';
+    }
+    if (link.receiptStatus === 'LEGACY_NOT_REQUIRED') {
+      return 'Старая оплата · чек не требуется';
+    }
+    return 'Чек ожидает';
   }
 
   manualSourceLabel(link: AdminPaymentLinkResponse): string {
@@ -1199,7 +1232,18 @@ export class TbankPaymentsComponent implements OnDestroy {
   }
 
   canMarkManualReceipt(link: AdminPaymentLinkResponse): boolean {
-    return !link.archived && this.isManualPayment(link) && link.status === 'CONFIRMED' && link.receiptStatus !== 'MARKED';
+    return !link.archived
+      && this.isManualPayment(link)
+      && link.status === 'CONFIRMED'
+      && link.receiptStatus !== 'MARKED'
+      && link.receiptStatus !== 'LEGACY_NOT_REQUIRED';
+  }
+
+  canMarkLegacyReceiptNotRequired(link: AdminPaymentLinkResponse): boolean {
+    if (!this.canMarkManualReceipt(link) || link.receiptStatus !== 'PENDING' || !link.paidAt) {
+      return false;
+    }
+    return Date.now() - new Date(link.paidAt).getTime() >= 30 * 24 * 60 * 60 * 1000;
   }
 
   profilePolicy(profileId: number): ProfilePolicyDraft {

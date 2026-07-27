@@ -85,8 +85,9 @@ import {
   requiresWorkerCellularEnforceConfirmation,
   workerCellularAccessReasons
 } from './worker-cellular-access-settings';
+import { ManagerAuditSettingsComponent } from './manager-audit-settings.component';
 
-type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
+type DictionaryTabKey = 'categories' | 'subcategories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'messageDictionary' | 'specialistTransfer' | 'gamification' | 'settings' | 'audit' | 'aiProvider' | 'autoresponder' | 'autoresponderMonitor';
 
 type DictionaryTab = {
   key: DictionaryTabKey;
@@ -192,6 +193,10 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
     title: 'Рабочие настройки',
     text: 'Паузы, расписания отчетов и синхронизации, которые влияют на автоматические процессы.'
   },
+  audit: {
+    title: 'Аудит менеджеров',
+    text: 'Формирование ежедневного аудита, проверка понимания и персональное включение по менеджерам.'
+  },
   aiProvider: {
     title: 'AI-провайдер',
     text: 'Основная модель для запросов «О компании», «Помощь» и инструментов AI-репутации.'
@@ -208,7 +213,7 @@ const DICTIONARY_GUIDES: Record<DictionaryTabKey, DictionaryGuide> = {
 
 @Component({
   selector: 'app-admin-dictionaries',
-  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective, SpecialistTransferComponent],
+  imports: [AdminLayoutComponent, DatePipe, LoadErrorCardComponent, ReactiveFormsModule, UiTooltipDirective, SpecialistTransferComponent, ManagerAuditSettingsComponent],
   templateUrl: './admin-dictionaries.component.html',
   styleUrls: ['./admin-dictionaries.component.scss', './admin-dictionaries-monitor.component.scss']
 })
@@ -236,6 +241,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     { key: 'specialistTransfer', label: 'Передача', icon: 'sync_alt' },
     { key: 'gamification', label: 'Геймификация', icon: 'emoji_events' },
     { key: 'settings', label: 'Настройки', icon: 'tune' },
+    { key: 'audit', label: 'Аудит', icon: 'fact_check' },
     { key: 'aiProvider', label: 'AI-провайдер', icon: 'psychology' },
     { key: 'autoresponder', label: 'Автоответчик', icon: 'mark_chat_unread' },
     { key: 'autoresponderMonitor', label: 'Мониторинг', icon: 'monitor_heart' }
@@ -287,6 +293,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly whatsAppGroupSyncSettings = signal<AdminWhatsAppGroupSyncSettings | null>(null);
   readonly clientPublicationProgressReportSettings = signal<AdminClientPublicationProgressReportSettings | null>(null);
   readonly workerCellularAccessSettings = signal<AdminWorkerCellularAccessSettings | null>(null);
+  readonly auditManagerCount = signal(0);
   readonly gamificationSettings = signal<AdminGamificationSettings | null>(null);
   readonly rewardSettings = signal<GamificationRewardSettings | null>(null);
   readonly gamificationRules = signal<AdminGamificationRule[]>([]);
@@ -624,6 +631,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         return this.gamificationTotal();
       case 'settings':
         return this.settingsTotal();
+      case 'audit':
+        return this.auditManagerCount();
       case 'aiProvider':
         return this.aiProviderStatus()?.aiAvailable ? 1 : 0;
       case 'autoresponder':
@@ -1381,6 +1390,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         return;
       case 'specialistTransfer':
         return;
+      case 'audit':
+        return;
       case 'gamification':
         this.saveGamificationSettings();
         return;
@@ -1927,6 +1938,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       || activeTab === 'specialistTransfer'
       || activeTab === 'gamification'
       || activeTab === 'settings'
+      || activeTab === 'audit'
       || activeTab === 'aiProvider'
       || activeTab === 'messageDictionary'
       || activeTab === 'autoresponder'
@@ -2019,6 +2031,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       specialistTransfer: 0,
       gamification: this.gamificationTotal(),
       settings: this.settingsTotal(),
+      audit: this.auditManagerCount(),
       aiProvider: this.aiProviderStatus()?.aiAvailable ? 1 : 0,
       autoresponder: this.autoresponderTotal(),
       autoresponderMonitor: this.monitorTotal()
@@ -2597,7 +2610,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   private loadActive(): void {
-    if (this.activeTab() === 'specialistTransfer') {
+    if (this.activeTab() === 'specialistTransfer' || this.activeTab() === 'audit') {
       return;
     }
 
@@ -2636,6 +2649,8 @@ export class AdminDictionariesComponent implements OnDestroy {
         request = this.dictionariesApi.getManagerTexts(keyword);
         break;
       case 'specialistTransfer':
+        return;
+      case 'audit':
         return;
       case 'gamification':
         request = forkJoin({
@@ -3939,6 +3954,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       'specialistTransfer',
       'gamification',
       'settings',
+      'audit',
       'aiProvider',
       'autoresponder',
       'autoresponderMonitor'

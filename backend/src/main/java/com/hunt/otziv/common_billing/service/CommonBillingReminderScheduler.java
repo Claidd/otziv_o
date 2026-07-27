@@ -20,6 +20,14 @@ public class CommonBillingReminderScheduler {
         }
     }
 
+    @Scheduled(fixedDelayString = "${common-billing.unsent-invoices.fixed-delay:PT5M}")
+    public void sendUnsentInvoices() {
+        int sent = commonBillingService.sendUnsentActionInvoices(20);
+        if (sent > 0) {
+            log.info("Common billing unsent invoices sent: {}", sent);
+        }
+    }
+
     @Scheduled(fixedDelayString = "${common-billing.payment-cancel.fixed-delay:PT1M}")
     public void cancelArchivedPaymentRefs() {
         int canceled = commonBillingService.cancelPendingArchivedPayments(20);

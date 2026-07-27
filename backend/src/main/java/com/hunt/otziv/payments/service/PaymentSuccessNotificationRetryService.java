@@ -53,6 +53,7 @@ public class PaymentSuccessNotificationRetryService {
             if (result != null && result.sent()) {
                 link.setPaymentSuccessNotifiedAt(LocalDateTime.now());
                 link.setPaymentSuccessNotificationError(null);
+                link.setPaymentSuccessNotificationRetryEligible(false);
                 paymentLinkRepository.save(link);
                 log.info(
                         "Payment success notification retry sent: linkId={}, orderId={}, channel={}",
@@ -65,6 +66,7 @@ public class PaymentSuccessNotificationRetryService {
 
             String error = paymentNotificationError(result);
             link.setPaymentSuccessNotificationError(limit(error, 512));
+            link.setPaymentSuccessNotificationRetryEligible(true);
             paymentLinkRepository.save(link);
             log.warn(
                     "Payment success notification retry was not sent: linkId={}, orderId={}, error={}",
@@ -77,6 +79,7 @@ public class PaymentSuccessNotificationRetryService {
                     ? e.getClass().getSimpleName()
                     : e.getMessage();
             link.setPaymentSuccessNotificationError(limit(error, 512));
+            link.setPaymentSuccessNotificationRetryEligible(true);
             paymentLinkRepository.save(link);
             log.warn(
                     "Payment success notification retry failed: linkId={}, orderId={}",

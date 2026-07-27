@@ -26,6 +26,10 @@ public interface ManagerReportReviewSessionRepository extends JpaRepository<Mana
 
     List<ManagerReportReviewSession> findBySummaryDateOrderByManagerNameAsc(LocalDate date);
 
+    List<ManagerReportReviewSession> findByCompletedAtIsNull();
+
+    List<ManagerReportReviewSession> findByManager_IdAndCompletedAtIsNull(Long managerId);
+
     Optional<ManagerReportReviewSession> findTopByOrderBySummaryDateDesc();
 
     Optional<ManagerReportReviewSession>

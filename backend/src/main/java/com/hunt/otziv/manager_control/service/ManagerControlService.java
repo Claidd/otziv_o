@@ -5529,6 +5529,10 @@ public class ManagerControlService {
         if (COMMON_INVOICE_CRITICAL_STATUSES.contains(status)) {
             return true;
         }
+        if (status == CommonInvoiceStatus.PARTIALLY_PAID
+                && (invoice.getSentAt() == null || invoice.getNextReminderAt() == null)) {
+            return true;
+        }
         LocalDateTime updatedAt = invoice.getUpdatedAt();
         LocalDateTime staleBefore = (now == null ? LocalDateTime.now() : now).minusDays(COMMON_INVOICE_STALE_DAYS);
         if (!effectiveCommonInvoiceStaleStatuses().contains(status)

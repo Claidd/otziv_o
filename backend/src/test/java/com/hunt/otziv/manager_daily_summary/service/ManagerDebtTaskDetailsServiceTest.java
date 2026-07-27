@@ -77,6 +77,7 @@ class ManagerDebtTaskDetailsServiceTest {
                 "Компания Бета",
                 "26 мин. без ответа"
         );
+        alpha.setReason("Клиент написал 48 мин. без ответа. Последнее сообщение: Когда будет готово?");
         when(controlRepository.findByControlDate(date)).thenReturn(List.of(control));
         when(itemRepository.findByControlIn(List.of(control))).thenReturn(List.of(unanswered, resolved));
         when(concreteItemRepository.findByParentItemIn(List.of(unanswered)))
@@ -90,6 +91,8 @@ class ManagerDebtTaskDetailsServiceTest {
             assertThat(category.count()).isEqualTo(2);
             assertThat(category.items()).extracting(ManagerDebtTaskDetailsService.DebtItem::title)
                     .containsExactly("Компания Альфа", "Компания Бета");
+            assertThat(category.items().getFirst().detail())
+                    .contains("48 мин. без ответа", "Когда будет готово?");
         });
         assertThat(service.location("Вика Ц.", result.get(2L).categories().getFirst()))
                 .contains("Контроль менеджеров", "Вика Ц.", "Неотвеченные сообщения");

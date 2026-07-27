@@ -150,6 +150,9 @@ public class PaymentLink {
     @Column(name = "payment_success_notification_error", length = 512)
     private String paymentSuccessNotificationError;
 
+    @Column(name = "payment_success_notification_retry_eligible", nullable = false)
+    private boolean paymentSuccessNotificationRetryEligible;
+
     @Column(name = "last_error", length = 512)
     private String lastError;
 

@@ -10,7 +10,9 @@ public record PaymentLinkAdminSummary(
         Long notificationErrors,
         Long refundable,
         Long refunded,
-        Long rejected
+        Long rejected,
+        Long receiptPending,
+        Long receiptOverdue
 ) {
     public long safeTotalElements() {
         return totalElements == null ? 0 : totalElements;
@@ -50,5 +52,13 @@ public record PaymentLinkAdminSummary(
 
     public long safeRejected() {
         return rejected == null ? 0 : rejected;
+    }
+
+    public long safeReceiptPending() {
+        return receiptPending == null ? 0 : receiptPending;
+    }
+
+    public long safeReceiptOverdue() {
+        return receiptOverdue == null ? 0 : receiptOverdue;
     }
 }

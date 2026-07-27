@@ -1395,8 +1395,12 @@ class PaymentLinkServiceTest {
                 anyCollection(),
                 anyCollection(),
                 anyCollection(),
-                anyCollection()
-        )).thenReturn(new PaymentLinkAdminSummary(1L, 90000L, 1L, 0L, 1L, 0L, 0L, 1L, 0L, 0L));
+                anyCollection(),
+                any(),
+                any()
+        )).thenReturn(new PaymentLinkAdminSummary(
+                1L, 90000L, 1L, 0L, 1L, 0L, 0L, 1L, 0L, 0L, 0L, 0L
+        ));
         when(paymentProfileService.toRuntimeForTerminal(profile, "secondary-terminal")).thenReturn(new TbankPaymentProfile(
                 2L,
                 TbankPaymentProfile.SECONDARY_CODE,

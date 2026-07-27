@@ -110,7 +110,11 @@ public class ManagerSummaryFormatter {
                 .append(richLines(managerMetrics(view))).append("</p></details>")
                 .append("<p>Нажмите <b>«Изучить отчёт»</b>, прочитайте примеры и подтвердите прочтение. ")
                 .append("После этого бот последовательно задаст вопросы по конкретным замечаниям.</p>");
-        return new ManagerFormattedReport(html.toString(), rich.toString());
+        return new ManagerFormattedReport(
+                html.toString(),
+                rich.toString(),
+                questionContext(html.toString(), debtTasks)
+        );
     }
 
     private String render(List<ManagerDailySummaryResponse> managers, boolean testMode, boolean rich) {
@@ -354,9 +358,59 @@ public class ManagerSummaryFormatter {
 
     private String debtItemText(ManagerDebtTaskDetailsService.DebtItem item) {
         String title = escape(item.title().isBlank() ? "Карточка без названия" : item.title());
+        String chatUrl = absoluteUrl(item.chatUrl());
+        if (!chatUrl.isBlank()) {
+            title = "<a href=\"" + escapeAttribute(chatUrl) + "\">" + title + "</a>";
+        }
         return item.detail().isBlank()
                 ? title
                 : title + " — " + escape(item.detail());
+    }
+
+    private String questionContext(
+            String report,
+            ManagerDebtTaskDetailsService.ManagerDebtTasks debtTasks
+    ) {
+        if (debtTasks == null || debtTasks.categories().isEmpty()) {
+            return report;
+        }
+        StringBuilder context = new StringBuilder(report)
+                .append("\n\nСЛУЖЕБНЫЕ ССЫЛКИ НА ОТКРЫТЫЕ ЗАДАЧИ. ")
+                .append("Не показывай идентификаторы менеджеру. Для вопроса по задаче обязательно ")
+                .append("верни её sourceTaskId:\n");
+        for (ManagerDebtTaskDetailsService.DebtCategory category : debtTasks.categories()) {
+            for (ManagerDebtTaskDetailsService.DebtItem item : category.items()) {
+                if (item.id() == null) continue;
+                context.append("- sourceTaskId=").append(item.id())
+                        .append("; раздел=").append(cleanContext(category.label()))
+                        .append("; карточка=").append(cleanContext(item.title()))
+                        .append("; детали=").append(cleanContext(item.detail()))
+                        .append('\n');
+            }
+        }
+        return context.toString().trim();
+    }
+
+    private String cleanContext(String value) {
+        return value == null ? "" : value.replaceAll("\\s+", " ").trim();
+    }
+
+    private String absoluteUrl(String value) {
+        String url = value == null ? "" : value.trim();
+        String lower = url.toLowerCase(java.util.Locale.ROOT);
+        return lower.startsWith("https://")
+                || lower.startsWith("http://")
+                || lower.startsWith("tg://")
+                ? url
+                : "";
+    }
+
+    private String escapeAttribute(String value) {
+        return value == null ? "" : value
+                .replace("&", "&amp;")
+                .replace("\"", "&quot;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private void appendDebtTaskLine(

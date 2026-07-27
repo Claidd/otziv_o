@@ -146,9 +146,17 @@ public class ManagerDebtTaskDetailsService {
     }
 
     private String firstDetail(ManagerDailyControlConcreteItem item) {
-        if (!clean(item.getStatusLabel()).isBlank()) return clean(item.getStatusLabel());
-        if (!clean(item.getSubtitle()).isBlank()) return clean(item.getSubtitle());
-        return limit(clean(item.getReason()), 180);
+        String status = clean(item.getStatusLabel());
+        String subtitle = clean(item.getSubtitle());
+        String reason = clean(item.getReason());
+        List<String> parts = new ArrayList<>();
+        if (!status.isBlank()) parts.add(status);
+        if (!subtitle.isBlank() && !subtitle.equalsIgnoreCase(status)) parts.add(subtitle);
+        if (!reason.isBlank()
+                && parts.stream().noneMatch(part -> reason.equalsIgnoreCase(part))) {
+            parts.add(reason);
+        }
+        return limit(String.join(". ", parts), 420);
     }
 
     private String categoryLabel(ManagerDailyControlItem item) {

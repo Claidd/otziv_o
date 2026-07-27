@@ -9,6 +9,7 @@ import com.hunt.otziv.payments.model.PaymentReceiptStatus;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.ManualPaymentAutoConfirmationService;
 import com.hunt.otziv.payments.service.ManualPaymentTaskService;
+import com.hunt.otziv.payments.service.PaymentSuccessClientNotifier;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +39,8 @@ class ManualPaymentAutoConfirmationServiceTest {
 
     @Mock
     private ManualPaymentTaskService manualPaymentTaskService;
+    @Mock
+    private PaymentSuccessClientNotifier paymentSuccessClientNotifier;
 
     @Test
     void confirmsLatestManualPaymentLinkForPaidOrder() {
@@ -160,6 +163,10 @@ class ManualPaymentAutoConfirmationServiceTest {
     }
 
     private ManualPaymentAutoConfirmationService service() {
-        return new ManualPaymentAutoConfirmationService(paymentLinkRepository, manualPaymentTaskService);
+        return new ManualPaymentAutoConfirmationService(
+                paymentLinkRepository,
+                manualPaymentTaskService,
+                paymentSuccessClientNotifier
+        );
     }
 }

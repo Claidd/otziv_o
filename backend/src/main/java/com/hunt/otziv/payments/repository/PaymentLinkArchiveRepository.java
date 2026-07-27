@@ -58,6 +58,7 @@ public class PaymentLinkArchiveRepository {
             "receipt_status",
             "payment_success_notified_at",
             "payment_success_notification_error",
+            "payment_success_notification_retry_eligible",
             "last_error",
             "created_at",
             "updated_at",
@@ -117,7 +118,9 @@ public class PaymentLinkArchiveRepository {
                   COALESCE(SUM(CASE WHEN apl.status = 'CONFIRMED' AND apl.payment_success_notified_at IS NULL AND apl.payment_success_notification_error IS NOT NULL THEN 1 ELSE 0 END), 0) AS notification_errors,
                   0 AS refundable,
                   COALESCE(SUM(CASE WHEN apl.status IN ('REVERSED', 'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED', 'CANCELED') THEN 1 ELSE 0 END), 0) AS refunded,
-                  COALESCE(SUM(CASE WHEN apl.status IN ('REJECTED', 'FAILED') THEN 1 ELSE 0 END), 0) AS rejected
+                  COALESCE(SUM(CASE WHEN apl.status IN ('REJECTED', 'FAILED') THEN 1 ELSE 0 END), 0) AS rejected,
+                  COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS receipt_pending,
+                  COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' AND apl.paid_at <= CURRENT_TIMESTAMP(6) - INTERVAL 24 HOUR THEN 1 ELSE 0 END), 0) AS receipt_overdue
                 FROM archive_payment_links apl
                 """ + filterWhereClause(), params, (rs, rowNum) -> new PaymentLinkAdminSummary(
                 rs.getLong("total_elements"),
@@ -129,7 +132,9 @@ public class PaymentLinkArchiveRepository {
                 rs.getLong("notification_errors"),
                 rs.getLong("refundable"),
                 rs.getLong("refunded"),
-                rs.getLong("rejected")
+                rs.getLong("rejected"),
+                rs.getLong("receipt_pending"),
+                rs.getLong("receipt_overdue")
         ));
     }
 

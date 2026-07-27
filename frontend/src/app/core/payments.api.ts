@@ -159,6 +159,8 @@ export interface AdminPaymentLinkSummaryResponse {
   refundable: number;
   refunded: number;
   rejected: number;
+  receiptPending: number;
+  receiptOverdue: number;
 }
 
 export interface AdminPaymentLinksPageResponse {
@@ -228,7 +230,7 @@ export type PaymentInstructionSource = 'MANAGER_TEXT' | 'TBANK_LINK';
 export type TbankPaymentPageMode = 'SBP_PRIMARY' | 'BANK_PRIMARY' | 'SBP_PAY_ONLY' | 'SBP_ONLY' | 'BANK_ONLY';
 export type PaymentPolicy = 'T_BANK_ONLY' | 'MANUAL_UNTIL_LIMIT_THEN_TBANK';
 export type PaymentMethod = 'BANK_FORM' | 'SBP_QR' | 'MANUAL_MOBILE_BANK' | 'MANUAL_EXTERNAL_LINK' | string;
-export type PaymentReceiptStatus = 'PENDING' | 'MARKED';
+export type PaymentReceiptStatus = 'PENDING' | 'MARKED' | 'LEGACY_NOT_REQUIRED';
 export type ManualPaymentSource = 'PROFILE_MONTHLY_LIMIT' | 'MANUAL_TASK';
 export type ManualPaymentType = 'MOBILE_BANK' | 'EXTERNAL_LINK';
 export type ManualPaymentTaskStatus = 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'CANCELED';
@@ -516,6 +518,13 @@ export class PaymentsApi {
   markAdminManualPaymentReceipt(linkId: number): Observable<AdminPaymentLinkResponse> {
     return this.http.post<AdminPaymentLinkResponse>(
       `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/receipt`,
+      {}
+    );
+  }
+
+  markAdminManualPaymentReceiptLegacyNotRequired(linkId: number): Observable<AdminPaymentLinkResponse> {
+    return this.http.post<AdminPaymentLinkResponse>(
+      `${appEnvironment.apiBaseUrl}/api/admin/payments/manual-links/${linkId}/receipt/legacy-not-required`,
       {}
     );
   }
