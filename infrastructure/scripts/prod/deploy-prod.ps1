@@ -903,7 +903,11 @@ fi
 # The WhatsApp gateway may need its 10-minute startup watchdog followed by a
 # fresh initialization. Finalize Keycloak first and leave recovery headroom
 # instead of reporting a partial deployment at the watchdog deadline.
-wait_service_healthy whatsapp_vika 720
+if ! wait_service_healthy whatsapp_vika 720; then
+  echo "whatsapp_vika stayed authenticated without becoming ready; restarting its container once..."
+  compose restart whatsapp_vika
+  wait_service_healthy whatsapp_vika 300
+fi
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"
