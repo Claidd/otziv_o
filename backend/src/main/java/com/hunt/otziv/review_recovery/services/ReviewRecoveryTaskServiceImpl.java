@@ -268,6 +268,30 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
 
     @Override
     @Transactional
+    public int reassignPendingTasksForOrder(Long orderId, Worker worker) {
+        if (orderId == null || worker == null || worker.getId() == null) {
+            return 0;
+        }
+        int updated = taskRepository.reassignWorkerByOrderIdAndStatus(
+                orderId,
+                ReviewRecoveryTaskStatus.PLANNED,
+                ReviewRecoveryBatchStatus.OPEN,
+                worker.getId(),
+                worker
+        );
+        if (updated > 0) {
+            log.info(
+                    "Незавершённые восстановления заказа {} переназначены специалисту {}: {}",
+                    orderId,
+                    worker.getId(),
+                    updated
+            );
+        }
+        return updated;
+    }
+
+    @Override
+    @Transactional
     public ReviewRecoveryTask completeTask(Long taskId, User completedBy) {
         ReviewRecoveryTask task = requireTaskForMutation(taskId);
         if (task.getStatus() == ReviewRecoveryTaskStatus.DONE) {
@@ -920,10 +944,10 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     }
 
     private Worker resolveWorker(Order order, Review review) {
-        if (review != null && review.getWorker() != null) {
-            return review.getWorker();
+        if (order != null && order.getWorker() != null) {
+            return order.getWorker();
         }
-        return order != null ? order.getWorker() : null;
+        return review != null ? review.getWorker() : null;
     }
 
     private String safeText(String text) {

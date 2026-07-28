@@ -4,11 +4,12 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Read-only snapshot of every active responsibility that would travel with a company.
+ * Read-only snapshot of the source worker's active order bundle inside a company.
  *
  * <p>The snapshot deliberately contains mismatched and detached nodes. Hiding those nodes
  * would make the observation mode look healthy while an active task remains assigned to a
- * different specialist.</p>
+ * different specialist. Orders belonging to other specialists are not part of the bundle;
+ * their aggregate counts are retained only as informational context.</p>
  */
 public record WorkloadTransferCompanyGraph(
         long companyId,
@@ -202,6 +203,7 @@ public record WorkloadTransferCompanyGraph(
         RECOVERY_BOT_MISSING,
         RECOVERY_BOT_INACTIVE,
         ARCHIVED_RECOVERY_SOURCE,
+        COMPLETED_RECOVERY_SOURCE,
         BAD_WORKER_MISMATCH,
         BAD_ORDER_NOT_OWNED_BY_SOURCE,
         BAD_BOT_MISSING,

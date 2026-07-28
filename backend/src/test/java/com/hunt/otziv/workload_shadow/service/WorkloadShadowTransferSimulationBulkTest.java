@@ -174,11 +174,11 @@ class WorkloadShadowTransferSimulationBulkTest {
     }
 
     @Test
-    void otherWorkerActiveOrderBlocksRecommendation() throws Exception {
+    void otherWorkerActiveOrderDoesNotBlockSourceOrderBundle() throws Exception {
         Warning activeOwnershipConflict = new Warning(
                 WarningCode.OTHER_WORKER_ACTIVE_ORDERS,
-                WarningSeverity.WARNING,
-                "В компании есть активный заказ другого специалиста"
+                WarningSeverity.INFO,
+                "Чужой активный заказ не входит в пакет исходного специалиста"
         );
 
         SimulationPayload result = simulateTransferGraphs(List.of(
@@ -186,10 +186,9 @@ class WorkloadShadowTransferSimulationBulkTest {
         ));
 
         assertEquals(1, result.cases().size());
-        assertEquals("BLOCKED_GRAPH", result.cases().get(0).get("caseStatus").asText());
-        assertEquals(0, result.cases().get(0).get("candidateCount").asInt());
-        assertTrue(hasEvent(result.events(), "TRANSFER_GRAPH_WARNING"));
-        assertFalse(hasEvent(result.events(), "TRANSFER_RECOMMENDATION"));
+        assertEquals("SHADOW_PENDING", result.cases().get(0).get("caseStatus").asText());
+        assertFalse(hasEvent(result.events(), "TRANSFER_GRAPH_WARNING"));
+        assertTrue(hasEvent(result.events(), "STAFFING_REQUIRED"));
     }
 
     @Test

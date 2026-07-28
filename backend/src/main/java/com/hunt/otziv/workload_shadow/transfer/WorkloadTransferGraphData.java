@@ -96,8 +96,39 @@ record WorkloadTransferGraphData(
             Long botId,
             Boolean botActive,
             LocalDate scheduledDate,
-            boolean archivedSource
+            boolean archivedSource,
+            Long orderWorkerId,
+            boolean orderComplete
     ) {
+        RecoveryRow(
+                long taskId,
+                Long orderId,
+                long companyId,
+                Long archiveCompanyId,
+                Long workerId,
+                Long taskManagerId,
+                Long batchManagerId,
+                Long botId,
+                Boolean botActive,
+                LocalDate scheduledDate,
+                boolean archivedSource
+        ) {
+            this(
+                    taskId,
+                    orderId,
+                    companyId,
+                    archiveCompanyId,
+                    workerId,
+                    taskManagerId,
+                    batchManagerId,
+                    botId,
+                    botActive,
+                    scheduledDate,
+                    archivedSource,
+                    null,
+                    false
+            );
+        }
     }
 
     record BadRow(

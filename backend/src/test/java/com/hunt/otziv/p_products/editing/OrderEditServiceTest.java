@@ -12,6 +12,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -26,6 +27,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -55,6 +57,9 @@ class OrderEditServiceTest {
     @Mock
     private BadReviewTaskService badReviewTaskService;
 
+    @Mock
+    private ReviewRecoveryTaskService reviewRecoveryTaskService;
+
     @Test
     void updateOrderChangesFilialOnOrderAndReviews() {
         OrderEditService service = service();
@@ -68,6 +73,7 @@ class OrderEditServiceTest {
 
         when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
         when(filialService.getFilial(2L)).thenReturn(newFilial);
+        when(reviewRepository.getAllByOrderId(10L)).thenReturn(List.of(review));
 
         service.updateOrder(dto, 100L, 10L);
 
@@ -95,11 +101,34 @@ class OrderEditServiceTest {
         service.updateOrder(dto, 100L, 10L);
 
         assertSame(newWorker, order.getWorker());
-        assertSame(newWorker, review.getWorker());
         verify(reviewRepository).reassignWorkerByOrderId(10L, newWorker);
         verify(badReviewTaskService).reassignPendingTasksForOrder(10L, newWorker);
+        verify(reviewRecoveryTaskService).reassignPendingTasksForOrder(10L, newWorker);
+        assertEquals(true, order.getCompany().getWorkers().contains(newWorker));
         verify(orderRepository).save(order);
         verifyNoInteractions(reviewService);
+    }
+
+    @Test
+    void updateOrderDoesNotHideFailureWhileMovingAnOrderBundle() {
+        OrderEditService service = service();
+        Worker oldWorker = worker(1L);
+        Worker newWorker = worker(2L);
+        Order order = orderWithDetails(null, oldWorker, List.of());
+        OrderDTO dto = OrderDTO.builder()
+                .worker(WorkerDTO.builder().workerId(2L).build())
+                .build();
+
+        when(orderRepository.findById(10L)).thenReturn(Optional.of(order));
+        when(workerService.getWorkerById(2L)).thenReturn(newWorker);
+        when(reviewRecoveryTaskService.reassignPendingTasksForOrder(10L, newWorker))
+                .thenThrow(new IllegalStateException("recovery update failed"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.updateOrder(dto, 100L, 10L)
+        );
+        verify(orderRepository, never()).save(order);
     }
 
     @Test
@@ -154,7 +183,8 @@ class OrderEditServiceTest {
                 filialService,
                 reviewService,
                 reviewRepository,
-                badReviewTaskService
+                badReviewTaskService,
+                reviewRecoveryTaskService
         );
     }
 
@@ -163,6 +193,9 @@ class OrderEditServiceTest {
         order.setId(10L);
         order.setFilial(filial);
         order.setWorker(worker);
+        Company company = new Company();
+        company.setId(100L);
+        order.setCompany(company);
 
         OrderDetails detail = new OrderDetails();
         detail.setOrder(order);

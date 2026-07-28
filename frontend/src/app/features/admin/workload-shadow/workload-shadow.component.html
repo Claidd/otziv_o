@@ -385,8 +385,8 @@
           <div>
             <span class="material-icons-sharp">move_up</span>
             <div>
-              <h2>Компании, готовящиеся к передаче</h2>
-              <p>Это прогноз. В режиме наблюдения система ничего не переназначает.</p>
+              <h2>Пакеты заказов, готовящиеся к передаче</h2>
+              <p>Передаются только заказы выбранного специалиста со всеми активными этапами. Чужие заказы общей компании не затрагиваются.</p>
             </div>
           </div>
           <label>
@@ -432,7 +432,7 @@
                 @if (proposal.companies?.length) {
                   <div class="company-chips">
                     @for (company of proposal.companies!; track company.companyId) {
-                      <span title="Передаётся целиком со всеми направлениями">
+                      <span title="Передаются заказы исходного специалиста со всеми активными этапами">
                         {{ company.companyName }}
                         <small>{{ company.activeUnitCount ?? 0 }} ед.</small>
                       </span>
@@ -440,7 +440,7 @@
                   </div>
                 } @else if (proposal.companyTitle) {
                   <div class="company-chips">
-                    <span title="Передаётся целиком со всеми направлениями">
+                    <span title="Передаются заказы исходного специалиста со всеми активными этапами">
                       {{ proposal.companyTitle }}
                       <small>{{ proposal.problemUnits ?? 0 }} ед.</small>
                     </span>
@@ -448,7 +448,7 @@
                 }
 
                 @if (proposal.graph) {
-                  <div class="company-chips graph-chips" aria-label="Состав компании">
+                  <div class="company-chips graph-chips" aria-label="Состав пакета заказов">
                     <span>Заказы <small>{{ proposal.graph.activeOrders ?? 0 }}</small></span>
                     <span>Новые <small>{{ proposal.graph.newUnits ?? 0 }}</small></span>
                     <span>Коррекция <small>{{ proposal.graph.correction ?? 0 }}</small></span>
@@ -689,7 +689,7 @@
         <section class="settings-section">
           <div class="settings-heading">
             <span class="material-icons-sharp">move_up</span>
-            <div><h2>Ступени предлагаемой разгрузки</h2><p>Компания всегда предлагается целиком со всеми её заказами и направлениями.</p></div>
+            <div><h2>Ступени предлагаемой разгрузки</h2><p>Пакет включает только заказы исходного специалиста и все связанные с ними активные этапы.</p></div>
           </div>
           <div class="failure-grid">
             <article>

@@ -176,7 +176,7 @@ public class WorkloadShadowTransferSimulationService {
                             settings,
                             selectedProblem.graph().companyId(),
                             caseKey,
-                            "Обнаружены несогласованности графа передачи компании",
+                            "Обнаружены несогласованности пакета заказов специалиста",
                             graphWarningMessage(selectedProblem),
                             observedAt
                     ));
@@ -216,7 +216,7 @@ public class WorkloadShadowTransferSimulationService {
                                 "НАБЛЮДЕНИЕ. Если никто не примет предложение, карточку #"
                                         + (fallbackReviewId == null ? "не определена" : fallbackReviewId)
                                         + " система рекомендовала бы назначить специалисту #"
-                                        + fallbackWorkerId + ". Компания целиком при этом не передаётся.",
+                                        + fallbackWorkerId + ". Остальные заказы компании при этом не передаются.",
                                 observedAt
                         ));
                     }
@@ -385,10 +385,7 @@ public class WorkloadShadowTransferSimulationService {
     }
 
     private boolean graphBlocksRecommendation(CompanyProblem problem) {
-        WorkloadTransferCompanyGraph graph = problem.graph();
-        return problem.diagnostics().errorCount() > 0
-                || graph.otherWorkerActiveOrderCount() > 0
-                || graph.unassignedActiveOrderCount() > 0;
+        return problem.diagnostics().errorCount() > 0;
     }
 
     private Long emergencyReviewId(WorkloadTransferCompanyGraph graph) {
@@ -408,7 +405,8 @@ public class WorkloadShadowTransferSimulationService {
                 .orElse("кандидатов нет");
         return "НАБЛЮДЕНИЕ. У специалиста #" + source.workerId() + " зафиксировано "
                 + source.failureDays() + " дней ниже 100%. Для компании «"
-                + safeTitle(problem.graph()) + "» система подготовила бы передачу полного активного графа. "
+                + safeTitle(problem.graph()) + "» система подготовила бы передачу пакета заказов этого специалиста "
+                + "со всеми их активными этапами. Заказы других специалистов этой компании не затрагиваются. "
                 + "Текущая выполнимая нагрузка: " + problem.problemUnits()
                 + " ед., около " + problem.estimatedMinutes()
                 + " мин. Уровень: " + tier.percent() + "%, максимум "
@@ -447,7 +445,7 @@ public class WorkloadShadowTransferSimulationService {
         String errorCodes = diagnostics.compactErrorCodes().isBlank()
                 ? "нет"
                 : diagnostics.compactErrorCodes();
-        return "НАБЛЮДЕНИЕ. В полном графе компании «" + safeTitle(problem.graph())
+        return "НАБЛЮДЕНИЕ. В пакете заказов специалиста по компании «" + safeTitle(problem.graph())
                 + "» обнаружено ошибок: " + diagnostics.errorCount()
                 + ", предупреждений: " + diagnostics.warningCount()
                 + ". Коды ошибок: " + errorCodes

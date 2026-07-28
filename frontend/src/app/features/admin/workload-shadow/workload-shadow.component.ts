@@ -314,7 +314,7 @@ export class WorkloadShadowComponent implements OnDestroy {
         lagSeconds: health.snapshotAgeSeconds
       },
       {
-        name: 'Целостность компаний',
+        name: 'Целостность пакетов заказов',
         status: Number(health.graphErrorCases ?? 0) > 0
           ? 'DEGRADED'
           : Number(health.graphWarningCases ?? 0) > 0 ? 'WARNING' : 'UP',
@@ -380,8 +380,8 @@ export class WorkloadShadowComponent implements OnDestroy {
       issues.push({
         code: 'TRANSFER_GRAPH_INTEGRITY',
         severity: Number(health.graphErrorCases ?? 0) > 0 ? 'CRITICAL' : 'WARNING',
-        component: 'Целостность компаний',
-        message: `Компаний с ошибками: ${health.graphErrorCases ?? 0}; с предупреждениями: ${health.graphWarningCases ?? 0}.`,
+        component: 'Целостность пакетов заказов',
+        message: `Пакетов с ошибками: ${health.graphErrorCases ?? 0}; с предупреждениями: ${health.graphWarningCases ?? 0}.`,
         detectedAt: health.checkedAt
       });
     }
@@ -752,6 +752,8 @@ export class WorkloadShadowComponent implements OnDestroy {
       case 'WARNING':
       case 'STALE': return 'Требует внимания';
       case 'PAUSED': return 'На паузе';
+      case 'SHADOW_PENDING': return 'Теневое предложение';
+      case 'BLOCKED_GRAPH': return 'Пакет заблокирован';
       case 'DOWN':
       case 'CRITICAL':
       case 'FAILED': return 'Ошибка';

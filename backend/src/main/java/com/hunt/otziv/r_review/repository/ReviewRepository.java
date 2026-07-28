@@ -447,6 +447,24 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     int reassignWorkerByOrderId(@Param("orderId") Long orderId,
                                 @Param("worker") Worker worker);
 
+    @Query("""
+        SELECT CASE WHEN COUNT(r.id) > 0 THEN true ELSE false END
+        FROM Review r
+        WHERE r.orderDetails.order.id = :orderId
+          AND r.publish = false
+          AND (
+              (:workerId IS NULL AND r.worker IS NOT NULL)
+              OR (
+                  :workerId IS NOT NULL
+                  AND (r.worker IS NULL OR r.worker.id <> :workerId)
+              )
+          )
+    """)
+    boolean existsUnpublishedReviewAssignedToAnotherWorker(
+            @Param("orderId") Long orderId,
+            @Param("workerId") Long workerId
+    );
+
     @Query("SELECT r.id FROM Review r WHERE r.worker.id = :workerId")
     List<Long> findAllIdByWorkerId(@Param("workerId") Long workerId);
 

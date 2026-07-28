@@ -149,6 +149,9 @@ class ReviewRecoveryTaskServiceImplTest {
         User actor = user(1L);
         Bot sourceBot = bot(20L);
         Review review = review(100L, "старый текст", order(10L), sourceBot);
+        Worker historicalReviewWorker = new Worker();
+        historicalReviewWorker.setId(61L);
+        review.setWorker(historicalReviewWorker);
         Bot recoveryBot = prepareRecoveryCandidate(review, 21L);
 
         when(reviewRepository.findById(100L)).thenReturn(Optional.of(review));
@@ -178,6 +181,7 @@ class ReviewRecoveryTaskServiceImplTest {
         assertEquals("Бот Ф.", task.getBotFioSnapshot());
         assertSame(actor, task.getCreatedBy());
         assertSame(recoveryBot, task.getBot());
+        assertSame(review.getOrderDetails().getOrder().getWorker(), task.getWorker());
         assertFalse(sourceBot == task.getBot());
 
         ArgumentCaptor<ReviewRecoveryBatch> batchCaptor = ArgumentCaptor.forClass(ReviewRecoveryBatch.class);
@@ -627,6 +631,30 @@ class ReviewRecoveryTaskServiceImplTest {
                 ReviewRecoveryBatchStatus.ARCHIVED,
                 cutoff,
                 archivedAt
+        );
+    }
+
+    @Test
+    void reassignPendingTasksForOrderUsesOneBulkQuery() {
+        Worker worker = new Worker();
+        worker.setId(77L);
+        when(taskRepository.reassignWorkerByOrderIdAndStatus(
+                10L,
+                ReviewRecoveryTaskStatus.PLANNED,
+                ReviewRecoveryBatchStatus.OPEN,
+                77L,
+                worker
+        )).thenReturn(2);
+
+        int updated = service.reassignPendingTasksForOrder(10L, worker);
+
+        assertEquals(2, updated);
+        verify(taskRepository).reassignWorkerByOrderIdAndStatus(
+                10L,
+                ReviewRecoveryTaskStatus.PLANNED,
+                ReviewRecoveryBatchStatus.OPEN,
+                77L,
+                worker
         );
     }
 

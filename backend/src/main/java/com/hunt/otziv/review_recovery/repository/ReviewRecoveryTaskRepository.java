@@ -614,6 +614,23 @@ public interface ReviewRecoveryTaskRepository extends JpaRepository<ReviewRecove
             @Param("newDate") LocalDate newDate
     );
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE ReviewRecoveryTask t
+        SET t.worker = :worker
+        WHERE t.order.id = :orderId
+          AND t.status = :taskStatus
+          AND t.batch.status = :batchStatus
+          AND (t.worker IS NULL OR t.worker.id <> :workerId)
+    """)
+    int reassignWorkerByOrderIdAndStatus(
+            @Param("orderId") Long orderId,
+            @Param("taskStatus") ReviewRecoveryTaskStatus taskStatus,
+            @Param("batchStatus") ReviewRecoveryBatchStatus batchStatus,
+            @Param("workerId") Long workerId,
+            @Param("worker") Worker worker
+    );
+
     @Query("""
         SELECT DISTINCT t
         FROM ReviewRecoveryTask t

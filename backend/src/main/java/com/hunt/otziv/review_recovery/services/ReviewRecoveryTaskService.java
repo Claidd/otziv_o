@@ -28,6 +28,8 @@ public interface ReviewRecoveryTaskService {
 
     ReviewRecoveryTask reassignTask(Long taskId, Worker worker);
 
+    int reassignPendingTasksForOrder(Long orderId, Worker worker);
+
     ReviewRecoveryTask completeTask(Long taskId, User completedBy);
 
     ReviewRecoveryTask cancelTask(Long taskId);

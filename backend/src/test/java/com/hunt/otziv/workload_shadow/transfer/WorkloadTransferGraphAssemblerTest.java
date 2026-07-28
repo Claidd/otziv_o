@@ -3,7 +3,9 @@ package com.hunt.otziv.workload_shadow.transfer;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.ARCHIVED_RECOVERY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.BAD_ORDER_NOT_OWNED_BY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.COMPANY_MANAGER_MISMATCH;
+import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.COMPLETED_RECOVERY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.OTHER_WORKER_ACTIVE_ORDERS;
+import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.RECOVERY_ORDER_NOT_OWNED_BY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.RECOVERY_WORKER_MISMATCH;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.REVIEW_BOT_DUPLICATED;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.REVIEW_BOT_OWNER_MISMATCH;
@@ -171,6 +173,79 @@ class WorkloadTransferGraphAssemblerTest {
         assertEquals(0, diagnostics.errorCount());
         assertEquals(0, diagnostics.warningCount());
         assertFalse(diagnostics.hasReportableIssues());
+    }
+
+    @Test
+    void sharedCompanyWithOtherWorkersOrdersIsInformationalForSourceOrderBundle() {
+        WorkloadTransferGraphData data = data(
+                List.of(company()),
+                List.of(
+                        new CompanyWorkerLinkRow(1L, SOURCE_WORKER_ID),
+                        new CompanyWorkerLinkRow(1L, 99L)
+                ),
+                List.of(
+                        new CompanyOrderOwnershipRow(1L, SOURCE_WORKER_ID, 1),
+                        new CompanyOrderOwnershipRow(1L, 99L, 2)
+                ),
+                List.of(order(10L, "Новый", 1)),
+                List.of(new DetailRow(10L, 1, 1, 1)),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+
+        WorkloadTransferCompanyGraph graph =
+                WorkloadTransferGraphAssembler.assemble(data).getFirst();
+        WorkloadTransferGraphDiagnostics diagnostics =
+                WorkloadTransferGraphDiagnostics.from(graph);
+
+        assertEquals(INFO, findWarning(graph.warnings(), SHARED_COMPANY_OWNERSHIP).severity());
+        assertEquals(INFO, findWarning(graph.warnings(), OTHER_WORKER_ACTIVE_ORDERS).severity());
+        assertEquals(2, graph.otherWorkerActiveOrderCount());
+        assertFalse(diagnostics.hasReportableIssues());
+    }
+
+    @Test
+    void completedOrderRecoveryOwnedBySameWorkerIsNotReportedAsOwnershipError() {
+        RecoveryRow recovery = new RecoveryRow(
+                201L,
+                10L,
+                1L,
+                null,
+                SOURCE_WORKER_ID,
+                MANAGER_ID,
+                MANAGER_ID,
+                4L,
+                true,
+                DATE,
+                false,
+                SOURCE_WORKER_ID,
+                true
+        );
+        WorkloadTransferGraphData data = data(
+                List.of(company()),
+                List.of(new CompanyWorkerLinkRow(1L, SOURCE_WORKER_ID)),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(recovery),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+
+        WorkloadTransferCompanyGraph graph =
+                WorkloadTransferGraphAssembler.assemble(data).getFirst();
+
+        assertTrue(hasWarning(graph.detachedRecoveryTasks().getFirst().warnings(), COMPLETED_RECOVERY_SOURCE));
+        assertFalse(hasWarning(
+                graph.detachedRecoveryTasks().getFirst().warnings(),
+                RECOVERY_ORDER_NOT_OWNED_BY_SOURCE
+        ));
+        assertEquals(0, WorkloadTransferGraphDiagnostics.from(graph).errorCount());
     }
 
     @Test
@@ -436,8 +511,8 @@ class WorkloadTransferGraphAssemblerTest {
 
         WorkloadTransferGraphDiagnostics diagnostics = WorkloadTransferGraphDiagnostics.from(graph);
         assertEquals(4, diagnostics.warningCount());
-        assertEquals(4, diagnostics.errorCount());
-        assertTrue(diagnostics.warningCodes().contains(OTHER_WORKER_ACTIVE_ORDERS));
+        assertEquals(3, diagnostics.errorCount());
+        assertFalse(diagnostics.warningCodes().contains(OTHER_WORKER_ACTIVE_ORDERS));
         assertTrue(diagnostics.errorCodes().contains(SOURCE_COMPANY_LINK_MISSING));
         assertTrue(diagnostics.errorCodes().contains(REVIEW_ORDER_NOT_OWNED_BY_SOURCE));
         assertEquals(

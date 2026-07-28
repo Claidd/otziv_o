@@ -325,7 +325,9 @@ public interface WorkloadTransferGraphRepository extends Repository<Worker, Long
                    recovery_task.review_recovery_task_bot AS botId,
                    bot.bot_active AS botActive,
                    recovery_task.review_recovery_task_scheduled_date AS scheduledDate,
-                   CASE WHEN orders.order_id IS NULL THEN 1 ELSE 0 END AS archivedSource
+                   CASE WHEN orders.order_id IS NULL THEN 1 ELSE 0 END AS archivedSource,
+                   orders.order_worker AS orderWorkerId,
+                   COALESCE(orders.order_complete, 0) AS orderComplete
             FROM relevant_tasks relevant
             JOIN review_recovery_tasks recovery_task
               ON recovery_task.review_recovery_task_id = relevant.task_id
@@ -557,6 +559,10 @@ public interface WorkloadTransferGraphRepository extends Repository<Worker, Long
         LocalDate getScheduledDate();
 
         Object getArchivedSource();
+
+        Long getOrderWorkerId();
+
+        Object getOrderComplete();
     }
 
     interface BadProjection {

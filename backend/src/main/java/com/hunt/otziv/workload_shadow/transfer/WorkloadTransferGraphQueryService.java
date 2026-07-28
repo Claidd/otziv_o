@@ -367,7 +367,9 @@ public class WorkloadTransferGraphQueryService {
                 value.getBotId(),
                 nullableBoolean(value.getBotActive()),
                 value.getScheduledDate(),
-                booleanValue(value.getArchivedSource())
+                booleanValue(value.getArchivedSource()),
+                value.getOrderWorkerId(),
+                booleanValue(value.getOrderComplete())
         );
     }
 

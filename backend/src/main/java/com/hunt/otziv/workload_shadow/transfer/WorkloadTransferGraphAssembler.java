@@ -9,6 +9,7 @@ import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGra
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.BAD_WORKER_MISMATCH;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.COMPANY_INACTIVE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.COMPANY_MANAGER_MISMATCH;
+import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.COMPLETED_RECOVERY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.DECLARED_DETAIL_AMOUNT_MISMATCH;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.DECLARED_REVIEW_COUNT_MISMATCH;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.EXTERNAL_CHECK_REQUIRES_ATTENTION;
@@ -228,9 +229,9 @@ final class WorkloadTransferGraphAssembler {
         if (sharedOwnership) {
             warnings.add(warning(
                     SHARED_COMPANY_OWNERSHIP,
-                    company.otherWorkerActiveOrderCount > 0 ? WARNING : INFO,
+                    INFO,
                     company.otherWorkerActiveOrderCount > 0
-                            ? "Компания связана с несколькими специалистами и содержит активные заказы других исполнителей: "
+                            ? "Компания общая для нескольких специалистов; в пакет входят только заказы исходного исполнителя: "
                                     + linkedWorkerIds
                             : "Компания имеет дополнительные связи workers_companies без активных заказов других исполнителей: "
                                     + linkedWorkerIds
@@ -239,15 +240,17 @@ final class WorkloadTransferGraphAssembler {
         if (company.otherWorkerActiveOrderCount > 0) {
             warnings.add(warning(
                     OTHER_WORKER_ACTIVE_ORDERS,
-                    WARNING,
-                    "В компании есть активные заказы других специалистов: " + company.otherWorkerActiveOrderCount
+                    INFO,
+                    "Активные заказы других специалистов не входят в передаваемый пакет: "
+                            + company.otherWorkerActiveOrderCount
             ));
         }
         if (company.unassignedActiveOrderCount > 0) {
             warnings.add(warning(
                     UNASSIGNED_ACTIVE_ORDERS,
-                    ERROR,
-                    "В компании есть активные заказы без специалиста: " + company.unassignedActiveOrderCount
+                    WARNING,
+                    "В компании есть активные заказы без специалиста; они не входят в пакет: "
+                            + company.unassignedActiveOrderCount
             ));
         }
 
@@ -520,11 +523,14 @@ final class WorkloadTransferGraphAssembler {
                     "Исполнитель восстановления не совпадает с исполнителем активного заказа"
             ));
         }
-        if (detached && !row.archivedSource()) {
+        if (detached
+                && !row.archivedSource()
+                && row.orderWorkerId() != null
+                && !Objects.equals(row.orderWorkerId(), data.sourceWorkerId())) {
             warnings.add(warning(
                     RECOVERY_ORDER_NOT_OWNED_BY_SOURCE,
                     ERROR,
-                    "Восстановление назначено специалисту, но активный заказ принадлежит другому специалисту"
+                    "Восстановление назначено специалисту, но заказ принадлежит другому специалисту"
             ));
         }
         if (!Objects.equals(row.batchManagerId(), data.managerId())
@@ -540,6 +546,14 @@ final class WorkloadTransferGraphAssembler {
                     ARCHIVED_RECOVERY_SOURCE,
                     INFO,
                     "Активное восстановление относится к уже архивированному заказу"
+            ));
+        } else if (detached
+                && row.orderComplete()
+                && Objects.equals(row.orderWorkerId(), data.sourceWorkerId())) {
+            warnings.add(warning(
+                    COMPLETED_RECOVERY_SOURCE,
+                    INFO,
+                    "Активное восстановление относится к завершённому заказу того же специалиста"
             ));
         }
         if (row.botId() == null) {

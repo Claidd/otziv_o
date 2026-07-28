@@ -6,11 +6,11 @@ import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
+import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -21,12 +21,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.Objects;
-import java.util.Optional;
-
-import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getAllReviews;
-import static com.hunt.otziv.p_products.utils.OrderReviewGraph.getFirstReview;
 
 @Service
 @Slf4j
@@ -40,6 +36,7 @@ public class OrderEditService {
     private final ReviewService reviewService;
     private final ReviewRepository reviewRepository;
     private final BadReviewTaskService badReviewTaskService;
+    private final ReviewRecoveryTaskService reviewRecoveryTaskService;
 
     @Transactional
     public void updateOrder(OrderDTO orderDTO, Long companyId, Long orderId) {
@@ -54,7 +51,6 @@ public class OrderEditService {
         Filial currentFilial = saveOrder.getFilial();
         Worker currentWorker = saveOrder.getWorker();
         Manager currentManager = saveOrder.getManager();
-        Review firstReview = getFirstReview(saveOrder);
         Company company = saveOrder.getCompany();
 
         if (orderDTO.getFilial() != null && currentFilial != null &&
@@ -64,7 +60,7 @@ public class OrderEditService {
             Filial newFilial = convertFilialDTOToFilial(orderDTO);
             saveOrder.setFilial(newFilial);
 
-            for (Review review : getAllReviews(saveOrder)) {
+            for (Review review : reviewRepository.getAllByOrderId(saveOrder.getId())) {
                 review.setFilial(newFilial);
                 reviewService.save(review);
                 log.info("Сменили филиал у отзыва в заказе");
@@ -73,35 +69,31 @@ public class OrderEditService {
             isChanged = true;
         }
 
-        try {
-            Long dtoWorkerId = orderDTO.getWorker() != null ? orderDTO.getWorker().getWorkerId() : null;
-            Long currentWorkerId = currentWorker != null ? currentWorker.getId() : null;
-            Long firstReviewWorkerId = firstReview != null && firstReview.getWorker() != null
-                    ? firstReview.getWorker().getId()
-                    : null;
+        Long dtoWorkerId = orderDTO.getWorker() != null ? orderDTO.getWorker().getWorkerId() : null;
+        Long currentWorkerId = currentWorker != null ? currentWorker.getId() : null;
+        boolean unpublishedReviewMismatch =
+                reviewRepository.existsUnpublishedReviewAssignedToAnotherWorker(
+                        saveOrder.getId(),
+                        dtoWorkerId
+                );
 
-            if (!Objects.equals(dtoWorkerId, currentWorkerId) ||
-                    (firstReview != null && !Objects.equals(dtoWorkerId, firstReviewWorkerId))) {
+        if (!Objects.equals(dtoWorkerId, currentWorkerId) || unpublishedReviewMismatch) {
 
-                log.info("Обновляем работника заказа");
-                Worker newWorker = convertWorkerDTOToWorker(orderDTO);
-                saveOrder.setWorker(newWorker);
+            log.info("Обновляем работника заказа");
+            Worker newWorker = convertWorkerDTOToWorker(orderDTO);
+            saveOrder.setWorker(newWorker);
 
-                for (OrderDetails detail : Optional.ofNullable(saveOrder.getDetails()).orElse(Collections.emptyList())) {
-                    for (Review review : Optional.ofNullable(detail.getReviews()).orElse(Collections.emptyList())) {
-                        if (!review.isPublish()) {
-                            review.setWorker(newWorker);
-                        }
-                    }
+            reviewRepository.reassignWorkerByOrderId(saveOrder.getId(), newWorker);
+            badReviewTaskService.reassignPendingTasksForOrder(saveOrder.getId(), newWorker);
+            reviewRecoveryTaskService.reassignPendingTasksForOrder(saveOrder.getId(), newWorker);
+            if (company != null && newWorker != null) {
+                if (company.getWorkers() == null) {
+                    company.setWorkers(new HashSet<>());
                 }
-
-                reviewRepository.reassignWorkerByOrderId(saveOrder.getId(), newWorker);
-                badReviewTaskService.reassignPendingTasksForOrder(saveOrder.getId(), newWorker);
-
-                isChanged = true;
+                company.getWorkers().add(newWorker);
             }
-        } catch (Exception e) {
-            log.error("Ошибка при обновлении работника заказа: ", e);
+
+            isChanged = true;
         }
 
         if (orderDTO.getManager() != null && currentManager != null &&
