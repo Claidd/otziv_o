@@ -56,7 +56,12 @@
 
       <section class="metric-grid" aria-label="Сводные показатели">
         @for (metric of metrics(); track metric.label) {
-          <article class="metric-card" [attr.data-tone]="metric.tone">
+          <article
+            class="metric-card"
+            [attr.data-tone]="metric.tone"
+            [attr.title]="metric.hint || null"
+            [attr.aria-label]="metric.hint ? metric.label + ': ' + metric.value + '. ' + metric.hint : null"
+          >
             <span class="metric-icon material-icons-sharp">{{ metric.icon }}</span>
             <div>
               <strong>{{ metric.value }}</strong>

@@ -29,6 +29,7 @@ type MonitorMetric = {
   value: number | string;
   icon: string;
   tone: MonitorTone;
+  hint?: string;
 };
 
 const MONITOR_POLLING_MS = 60_000;
@@ -271,6 +272,12 @@ export class WorkloadShadowComponent implements OnDestroy {
         );
     const blockedUnits = this.workers()
       .reduce((total, worker) => total + Number(worker.blockedUnits ?? 0), 0);
+    const externalBlockedUnits = this.workers()
+      .reduce((total, worker) => total + Number(worker.externalBlockedUnits ?? 0), 0);
+    const clientDeferredUnits = this.workers()
+      .reduce((total, worker) => total + Number(worker.clientDeferredUnits ?? 0), 0);
+    const managerDeferredUnits = this.workers()
+      .reduce((total, worker) => total + Number(worker.managerDeferredUnits ?? 0), 0);
     const staffingSignals = scoped
       ? this.proposals().filter((proposal) => proposal.staffingRequired).length
       : summary?.staffingSignals ?? summary?.staffingSignalCount
@@ -282,7 +289,13 @@ export class WorkloadShadowComponent implements OnDestroy {
       { label: 'В распределении', value: recipients, icon: 'playlist_add_check', tone: 'blue' },
       { label: 'Готовится передач', value: proposals, icon: 'move_up', tone: proposals ? 'yellow' : 'gray' },
       { label: 'Поздних единиц', value: lateUnits, icon: 'schedule', tone: 'yellow' },
-      { label: 'Блокировок', value: blockedUnits, icon: 'block', tone: blockedUnits ? 'red' : 'gray' },
+      {
+        label: 'Вне процента',
+        value: blockedUnits,
+        icon: 'rule',
+        tone: 'gray',
+        hint: `Внешние причины: ${externalBlockedUnits}; отложено клиентом: ${clientDeferredUnits}; менеджером: ${managerDeferredUnits}`
+      },
       { label: 'Сигналов о найме', value: staffingSignals, icon: 'person_add', tone: staffingSignals ? 'red' : 'gray' },
       {
         label: 'Самодиагностика',
