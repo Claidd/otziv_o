@@ -132,6 +132,7 @@ class WorkloadShadowTransferSimulationBulkTest {
                 "TRANSFER_GRAPH_WARNING",
                 events.get(0).get("eventType").asText()
         );
+        assertTrue(events.get(0).get("message").asText().contains("Специалист: Елена Ч."));
         assertTrue(events.get(0).get("message").asText().contains("Передача не выполнялась"));
     }
 
@@ -241,21 +242,54 @@ class WorkloadShadowTransferSimulationBulkTest {
         assertEquals(2L, eligibleRecipient.transferCase().get("fallbackWorkerId").asLong());
         assertEquals(500L, eligibleRecipient.transferCase().get("fallbackReviewId").asLong());
         assertTrue(hasEvent(eligibleRecipient.events(), "EMERGENCY_FALLBACK"));
+        assertTrue(eventMessage(
+                eligibleRecipient.events(),
+                "EMERGENCY_FALLBACK"
+        ).contains("Резервный специалист: Альфия Л."));
+        assertFalse(eventMessage(
+                eligibleRecipient.events(),
+                "EMERGENCY_FALLBACK"
+        ).contains("специалист #2"));
+    }
+
+    @Test
+    void recommendationUsesWorkerNamesAndParagraphsInsteadOfTechnicalIds()
+            throws Exception {
+        RecipientProjection candidate = recipient(true, 11L);
+
+        SimulationPayload result = simulateTransferGraphs(
+                List.of(transferGraph(601L, false, 0, List.of())),
+                List.of(candidate)
+        );
+
+        String message = eventMessage(result.events(), "TRANSFER_RECOMMENDATION");
+        assertTrue(message.contains("Специалист: Елена Ч."));
+        assertTrue(message.contains("• Альфия Л. — рейтинг 90"));
+        assertTrue(message.contains("Результат: 4 дня ниже 100%"));
+        assertTrue(message.contains("\n\nОчередь кандидатов:\n"));
+        assertFalse(message.contains("специалиста #"));
+        assertFalse(message.contains("#2 ("));
     }
 
     private SourceWorkerProjection source(long workerId, long managerId) {
         SourceWorkerProjection value = mock(SourceWorkerProjection.class);
         when(value.getWorkerId()).thenReturn(workerId);
         when(value.getManagerId()).thenReturn(managerId);
+        when(value.getWorkerName()).thenReturn("Елена Ч.");
         when(value.getFailureDays()).thenReturn(4);
         when(value.getRating()).thenReturn(BigDecimal.valueOf(90));
         return value;
     }
 
     private RecipientProjection recipient(boolean eligible) {
+        return recipient(eligible, 12L);
+    }
+
+    private RecipientProjection recipient(boolean eligible, long managerId) {
         RecipientProjection value = mock(RecipientProjection.class);
         when(value.getWorkerId()).thenReturn(2L);
-        when(value.getManagerId()).thenReturn(12L);
+        when(value.getManagerId()).thenReturn(managerId);
+        when(value.getWorkerName()).thenReturn("Альфия Л.");
         when(value.getRating()).thenReturn(BigDecimal.valueOf(90));
         when(value.getHundredPercentDays()).thenReturn(14);
         when(value.getFailureDays()).thenReturn(0);
@@ -318,6 +352,15 @@ class WorkloadShadowTransferSimulationBulkTest {
         return false;
     }
 
+    private String eventMessage(JsonNode events, String eventType) {
+        for (JsonNode event : events) {
+            if (eventType.equals(event.get("eventType").asText())) {
+                return event.get("message").asText();
+            }
+        }
+        throw new AssertionError("Событие " + eventType + " не найдено");
+    }
+
     private int countEvents(JsonNode events, String eventType) {
         int count = 0;
         for (JsonNode event : events) {
@@ -340,6 +383,13 @@ class WorkloadShadowTransferSimulationBulkTest {
     private SimulationPayload simulateTransferGraphs(
             List<WorkloadTransferCompanyGraph> graphs
     ) throws Exception {
+        return simulateTransferGraphs(graphs, List.of());
+    }
+
+    private SimulationPayload simulateTransferGraphs(
+            List<WorkloadTransferCompanyGraph> graphs,
+            List<RecipientProjection> recipients
+    ) throws Exception {
         WorkloadShadowTransferRepository repository =
                 mock(WorkloadShadowTransferRepository.class);
         WorkloadShadowSettingsService settingsService =
@@ -354,7 +404,7 @@ class WorkloadShadowTransferSimulationBulkTest {
         when(settings.newMinutesPerCard()).thenReturn(5);
         SourceWorkerProjection source = source(1L, 11L);
         when(repository.findSourceWorkers(3)).thenReturn(List.of(source));
-        when(repository.findRecipients()).thenReturn(List.of());
+        when(repository.findRecipients()).thenReturn(recipients);
         when(graphQueryService.findActiveGraphs(anyList(), any(LocalDate.class)))
                 .thenReturn(Map.of(1L, graphs));
 

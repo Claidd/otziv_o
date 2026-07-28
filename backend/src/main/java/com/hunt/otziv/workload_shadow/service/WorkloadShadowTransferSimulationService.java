@@ -130,7 +130,7 @@ public class WorkloadShadowTransferSimulationService {
                 Long fallbackReviewId = staffingRequired
                         ? emergencyReviewId(selectedProblem.graph())
                         : null;
-                Long fallbackWorkerId = staffingRequired && fallbackReviewId != null
+                Recipient fallbackRecipient = staffingRequired && fallbackReviewId != null
                         ? chooseFallback(
                                 emergencyPool,
                                 source,
@@ -138,6 +138,9 @@ public class WorkloadShadowTransferSimulationService {
                                 date
                         )
                         : null;
+                Long fallbackWorkerId = fallbackRecipient == null
+                        ? null
+                        : fallbackRecipient.workerId();
                 String caseKey = caseKey(source, selectedProblem);
                 caseWrites.add(transferCase(
                         caseKey,
@@ -177,7 +180,7 @@ public class WorkloadShadowTransferSimulationService {
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Обнаружены несогласованности пакета заказов специалиста",
-                            graphWarningMessage(selectedProblem),
+                            graphWarningMessage(source, selectedProblem),
                             observedAt
                     ));
                 }
@@ -198,7 +201,7 @@ public class WorkloadShadowTransferSimulationService {
                             staffingMessage(
                                     source,
                                     selectedProblem,
-                                    fallbackWorkerId,
+                                    fallbackRecipient,
                                     fallbackReviewId
                             ),
                             observedAt
@@ -213,10 +216,11 @@ public class WorkloadShadowTransferSimulationService {
                                 selectedProblem.graph().companyId(),
                                 caseKey,
                                 "Резервный исполнитель для одиночной карточки",
-                                "НАБЛЮДЕНИЕ. Если никто не примет предложение, карточку #"
-                                        + (fallbackReviewId == null ? "не определена" : fallbackReviewId)
-                                        + " система рекомендовала бы назначить специалисту #"
-                                        + fallbackWorkerId + ". Остальные заказы компании при этом не передаются.",
+                                emergencyFallbackMessage(
+                                        selectedProblem,
+                                        fallbackRecipient,
+                                        fallbackReviewId
+                                ),
                                 observedAt
                         ));
                     }
@@ -368,7 +372,7 @@ public class WorkloadShadowTransferSimulationService {
         );
     }
 
-    private Long chooseFallback(
+    private Recipient chooseFallback(
             List<Recipient> emergencyPool,
             SourceWorker source,
             long companyId,
@@ -381,7 +385,7 @@ public class WorkloadShadowTransferSimulationService {
                 .sorted(Comparator.comparingLong(Recipient::workerId))
                 .toList();
         Random stableRandom = new Random(Objects.hash(date, source.managerId(), source.workerId(), companyId));
-        return ordered.get(stableRandom.nextInt(ordered.size())).workerId();
+        return ordered.get(stableRandom.nextInt(ordered.size()));
     }
 
     private boolean graphBlocksRecommendation(CompanyProblem problem) {
@@ -400,44 +404,58 @@ public class WorkloadShadowTransferSimulationService {
     ) {
         String sequence = candidates.stream()
                 .limit(10)
-                .map(candidate -> "#" + candidate.workerId() + " (" + candidate.rating() + ")")
-                .reduce((left, right) -> left + " → " + right)
+                .map(candidate -> "• " + candidate.workerName()
+                        + " — рейтинг " + ratingLabel(candidate.rating()))
+                .reduce((left, right) -> left + "\n" + right)
                 .orElse("кандидатов нет");
-        return "НАБЛЮДЕНИЕ. У специалиста #" + source.workerId() + " зафиксировано "
-                + source.failureDays() + " дней ниже 100%. Для компании «"
-                + safeTitle(problem.graph()) + "» система подготовила бы передачу пакета заказов этого специалиста "
-                + "со всеми их активными этапами. Заказы других специалистов этой компании не затрагиваются. "
-                + "Текущая выполнимая нагрузка: " + problem.problemUnits()
-                + " ед., около " + problem.estimatedMinutes()
-                + " мин. Уровень: " + tier.percent() + "%, максимум "
-                + tier.maxCompanies() + " комп. Очередь кандидатов: " + sequence
-                + ". Никакие назначения не изменены.";
+        return "НАБЛЮДЕНИЕ\n\n"
+                + "Специалист: " + source.workerName() + "\n"
+                + "Результат: " + daysLabel(source.failureDays())
+                + " ниже 100% с начала месяца.\n\n"
+                + "Компания: «" + safeTitle(problem.graph()) + "»\n"
+                + "Предложение: передать пакет заказов этого специалиста "
+                + "со всеми активными этапами.\n"
+                + "Заказы других специалистов этой компании не затрагиваются.\n\n"
+                + "Выполнимая нагрузка: " + problem.problemUnits()
+                + " ед., около " + problem.estimatedMinutes() + " мин.\n"
+                + "Объём передачи: " + tier.percent() + "%, максимум "
+                + companiesLabel(tier.maxCompanies()) + ".\n\n"
+                + "Очередь кандидатов:\n" + sequence + "\n\n"
+                + "Назначения не изменены.";
     }
 
     private String staffingMessage(
             SourceWorker source,
             CompanyProblem problem,
-            Long fallbackWorkerId,
+            Recipient fallbackRecipient,
             Long fallbackReviewId
     ) {
         String fallback;
         if (fallbackReviewId == null) {
             fallback = "нет конкретной выполнимой карточки для аварийного назначения; "
                     + "текущий владелец сохраняется";
-        } else if (fallbackWorkerId == null || fallbackWorkerId == source.workerId()) {
+        } else if (fallbackRecipient == null
+                || fallbackRecipient.workerId() == source.workerId()) {
             fallback = "для карточки #" + fallbackReviewId
                     + " подходящего резервного специалиста нет; текущий владелец сохраняется";
         } else {
             fallback = "для карточки #" + fallbackReviewId
-                    + " резервом выбран специалист #" + fallbackWorkerId;
+                    + " резервом выбран специалист " + fallbackRecipient.workerName();
         }
-        return "НАБЛЮДЕНИЕ. Для компании «" + safeTitle(problem.graph())
-                + "» не найден получатель, отвечающий всем правилам рейтинга, 100% и доступности. "
-                + "Это сигнал о дефиците сотрудника у менеджера. " + fallback
-                + ". Компания и все карточки остаются назначены текущему специалисту.";
+        return "НАБЛЮДЕНИЕ\n\n"
+                + "Специалист: " + source.workerName() + "\n"
+                + "Компания: «" + safeTitle(problem.graph()) + "»\n\n"
+                + "Причина: не найден получатель, отвечающий всем правилам "
+                + "рейтинга, 100% и доступности.\n"
+                + "Кадровый сигнал: менеджеру может потребоваться новый специалист.\n\n"
+                + "Резервный сценарий: " + fallback + ".\n\n"
+                + "Компания и все карточки остаются назначены текущему специалисту.";
     }
 
-    private String graphWarningMessage(CompanyProblem problem) {
+    private String graphWarningMessage(
+            SourceWorker source,
+            CompanyProblem problem
+    ) {
         WorkloadTransferGraphDiagnostics diagnostics = problem.diagnostics();
         String warningCodes = diagnostics.compactWarningCodes().isBlank()
                 ? "нет"
@@ -445,12 +463,33 @@ public class WorkloadShadowTransferSimulationService {
         String errorCodes = diagnostics.compactErrorCodes().isBlank()
                 ? "нет"
                 : diagnostics.compactErrorCodes();
-        return "НАБЛЮДЕНИЕ. В пакете заказов специалиста по компании «" + safeTitle(problem.graph())
-                + "» обнаружено ошибок: " + diagnostics.errorCount()
-                + ", предупреждений: " + diagnostics.warningCount()
-                + ". Коды ошибок: " + errorCodes
-                + ". Коды предупреждений: " + warningCodes
-                + ". Передача не выполнялась; требуется проверка связей до боевого режима.";
+        return "НАБЛЮДЕНИЕ\n\n"
+                + "Специалист: " + source.workerName() + "\n"
+                + "Компания: «" + safeTitle(problem.graph()) + "»\n\n"
+                + "Ошибки: " + diagnostics.errorCount() + "\n"
+                + "Предупреждения: " + diagnostics.warningCount() + "\n"
+                + "Коды ошибок: " + errorCodes + "\n"
+                + "Коды предупреждений: " + warningCodes + "\n\n"
+                + "Передача не выполнялась. До включения боевого режима "
+                + "необходимо проверить связи пакета заказов.";
+    }
+
+    private String emergencyFallbackMessage(
+            CompanyProblem problem,
+            Recipient fallbackRecipient,
+            Long fallbackReviewId
+    ) {
+        return "НАБЛЮДЕНИЕ\n\n"
+                + "Компания: «" + safeTitle(problem.graph()) + "»\n"
+                + "Карточка: #" + (fallbackReviewId == null
+                        ? "не определена"
+                        : fallbackReviewId) + "\n"
+                + "Резервный специалист: "
+                + (fallbackRecipient == null
+                        ? "не найден"
+                        : fallbackRecipient.workerName()) + "\n\n"
+                + "Сценарий применяется только если никто не примет предложение. "
+                + "Остальные заказы компании не передаются.";
     }
 
     private TransferEventWrite event(
@@ -504,6 +543,7 @@ public class WorkloadShadowTransferSimulationService {
         return new SourceWorker(
                 value.getWorkerId(),
                 value.getManagerId(),
+                workerName(value.getWorkerName()),
                 intValue(value.getFailureDays()),
                 value(value.getRating())
         );
@@ -513,6 +553,7 @@ public class WorkloadShadowTransferSimulationService {
         return new Recipient(
                 value.getWorkerId(),
                 value.getManagerId(),
+                workerName(value.getWorkerName()),
                 value(value.getRating()),
                 intValue(value.getHundredPercentDays()),
                 intValue(value.getFailureDays()),
@@ -551,6 +592,45 @@ public class WorkloadShadowTransferSimulationService {
 
     private static long longValue(Number value) {
         return value == null ? 0 : value.longValue();
+    }
+
+    private String workerName(String value) {
+        return value == null || value.isBlank()
+                ? "Имя не указано"
+                : value.trim();
+    }
+
+    private String ratingLabel(BigDecimal rating) {
+        BigDecimal normalized = value(rating).stripTrailingZeros();
+        return normalized.scale() < 0
+                ? normalized.setScale(0).toPlainString()
+                : normalized.toPlainString();
+    }
+
+    private String daysLabel(int value) {
+        return value + " " + russianPlural(value, "день", "дня", "дней");
+    }
+
+    private String companiesLabel(int value) {
+        return value + " " + russianPlural(value, "компания", "компании", "компаний");
+    }
+
+    private String russianPlural(
+            int value,
+            String singular,
+            String few,
+            String many
+    ) {
+        int absolute = Math.abs(value);
+        int lastTwoDigits = absolute % 100;
+        if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
+            return many;
+        }
+        return switch (absolute % 10) {
+            case 1 -> singular;
+            case 2, 3, 4 -> few;
+            default -> many;
+        };
     }
 
     public record SimulationResult(int transferCaseCount, int eventCount) {
@@ -631,6 +711,7 @@ public class WorkloadShadowTransferSimulationService {
     private record SourceWorker(
             long workerId,
             long managerId,
+            String workerName,
             int failureDays,
             BigDecimal rating
     ) {
@@ -639,6 +720,7 @@ public class WorkloadShadowTransferSimulationService {
     private record Recipient(
             long workerId,
             long managerId,
+            String workerName,
             BigDecimal rating,
             int hundredPercentDays,
             int failureDays,

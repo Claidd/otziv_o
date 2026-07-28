@@ -18,9 +18,16 @@ public interface WorkloadShadowTransferRepository
     @Query(value = """
             SELECT current.worker_id AS workerId,
                    current.manager_id AS managerId,
+                   COALESCE(
+                       NULLIF(TRIM(worker_user.fio), ''),
+                       NULLIF(TRIM(worker_user.username), ''),
+                       'Имя не указано'
+                   ) AS workerName,
                    current.failure_days AS failureDays,
                    current.rating AS rating
             FROM workload_shadow_worker_current current
+            LEFT JOIN users worker_user
+              ON worker_user.id = current.worker_user_id
             WHERE current.failure_days > :allowedFailureDays
               AND current.diagnostic_status = 'OK'
             ORDER BY current.worker_id
@@ -32,6 +39,11 @@ public interface WorkloadShadowTransferRepository
     @Query(value = """
             SELECT current.worker_id AS workerId,
                    current.manager_id AS managerId,
+                   COALESCE(
+                       NULLIF(TRIM(worker_user.fio), ''),
+                       NULLIF(TRIM(worker_user.username), ''),
+                       'Имя не указано'
+                   ) AS workerName,
                    current.rating AS rating,
                    current.hundred_percent_days AS hundredPercentDays,
                    current.failure_days AS failureDays,
@@ -40,6 +52,8 @@ public interface WorkloadShadowTransferRepository
                    current.recipient_eligible AS recipientEligible,
                    current.worker_group_connected AS workerGroupConnected
             FROM workload_shadow_worker_current current
+            LEFT JOIN users worker_user
+              ON worker_user.id = current.worker_user_id
             """, nativeQuery = true)
     List<RecipientProjection> findRecipients();
 
@@ -510,6 +524,8 @@ public interface WorkloadShadowTransferRepository
 
         Long getManagerId();
 
+        String getWorkerName();
+
         Integer getFailureDays();
 
         BigDecimal getRating();
@@ -519,6 +535,8 @@ public interface WorkloadShadowTransferRepository
         Long getWorkerId();
 
         Long getManagerId();
+
+        String getWorkerName();
 
         BigDecimal getRating();
 

@@ -334,6 +334,48 @@ class WorkloadShadowNotificationDispatcherTest {
         assertThat(summary.dead()).isEqualTo(2);
     }
 
+    @Test
+    void keepsUnicodeQuotesArrowsEllipsisAndMessageParagraphsReadable() {
+        WorkloadShadowNotificationEvent first = notificationEvent(
+                1,
+                "WARNING",
+                "TRANSFER_RECOMMENDATION",
+                "Передача компании",
+                "Специалист: Елена Ч.\n\nКомпания: «Drivevision»\n"
+                        + "Очередь: Альфия Л. → Юлия Ф.…",
+                0
+        );
+        WorkloadShadowNotificationEvent second = notificationEvent(
+                2,
+                "INFO",
+                "LATE_INCOMING_LOAD",
+                "Поздняя нагрузка",
+                "Специалист: Альфия Л.\n\nИсключено из процента: 3 ед.",
+                0
+        );
+        prepareClaim(List.of(first, second));
+        when(telegramService.sendMessage(
+                org.mockito.ArgumentMatchers.eq(-100L),
+                anyString(),
+                org.mockito.ArgumentMatchers.eq("HTML")
+        )).thenReturn(true);
+
+        dispatcher.dispatchDue();
+
+        ArgumentCaptor<String> digest = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(
+                org.mockito.ArgumentMatchers.eq(-100L),
+                digest.capture(),
+                org.mockito.ArgumentMatchers.eq("HTML")
+        );
+        assertThat(digest.getValue())
+                .contains("Специалист: Елена Ч.\n\nКомпания: «Drivevision»")
+                .contains("Альфия Л. → Юлия Ф.…")
+                .doesNotContain("&laquo;")
+                .doesNotContain("&rarr;")
+                .doesNotContain("&hellip;");
+    }
+
     private void prepareClaim(WorkloadShadowNotificationEvent event) {
         prepareClaim(List.of(event));
     }
@@ -410,14 +452,18 @@ class WorkloadShadowNotificationDispatcherTest {
                 + "<b>Уровни:</b> WARNING — 2, CRITICAL — 2\n"
                 + "<b>Типы:</b> FIRST — 1, SECOND — 1, THIRD — 1, FOURTH — 1\n\n"
                 + "<b>Примеры:</b>\n"
-                + "1. <code>THIRD</code> <b>Третье</b>\n"
-                + "Сообщение\n"
-                + "2. <code>FOURTH</code> <b>Четвёртое</b>\n"
-                + "Сообщение\n"
-                + "3. <code>FIRST</code> <b>Первое</b>\n"
-                + "Сообщение\n"
-                + "4. <code>SECOND</code> <b>Второе</b>\n"
+                + "<b>1. Третье</b>\n"
+                + "Тип: <code>THIRD</code>\n\n"
                 + "Сообщение\n\n"
+                + "<b>2. Четвёртое</b>\n"
+                + "Тип: <code>FOURTH</code>\n\n"
+                + "Сообщение\n\n"
+                + "<b>3. Первое</b>\n"
+                + "Тип: <code>FIRST</code>\n\n"
+                + "Сообщение\n\n"
+                + "<b>4. Второе</b>\n"
+                + "Тип: <code>SECOND</code>\n\n"
+                + "Сообщение\n\n\n"
                 + "Полный список доступен на странице мониторинга SHADOW.";
     }
 }

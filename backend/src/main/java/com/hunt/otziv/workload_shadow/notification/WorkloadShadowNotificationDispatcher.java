@@ -17,7 +17,6 @@ import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.util.HtmlUtils;
 
 @Service
 @Slf4j
@@ -309,15 +308,16 @@ public class WorkloadShadowNotificationDispatcher {
         int exampleCount = Math.min(5, orderedExamples.size());
         for (int index = 0; index < exampleCount; index++) {
             WorkloadShadowNotificationEvent event = orderedExamples.get(index);
-            message.append(index + 1)
-                    .append(". <code>")
-                    .append(escaped(normalizedLabel(event.eventType(), "OTHER")))
-                    .append("</code> ")
-                    .append("<b>")
+            message.append("<b>")
+                    .append(index + 1)
+                    .append(". ")
                     .append(escaped(compact(event.title(), 120)))
                     .append("</b>\n")
-                    .append(escaped(compact(event.message(), 260)))
-                    .append('\n');
+                    .append("Тип: <code>")
+                    .append(escaped(normalizedLabel(event.eventType(), "OTHER")))
+                    .append("</code>\n\n")
+                    .append(escaped(compactPreservingParagraphs(event.message(), 520)))
+                    .append("\n\n");
         }
         if (events.size() > exampleCount) {
             message.append("… ещё ").append(events.size() - exampleCount).append(" событий.\n");
@@ -363,6 +363,24 @@ public class WorkloadShadowNotificationDispatcher {
         return normalized.substring(0, Math.max(1, maximumLength - 1)).trim() + "…";
     }
 
+    private String compactPreservingParagraphs(String value, int maximumLength) {
+        String normalized = value == null
+                ? ""
+                : value.replace("\r\n", "\n")
+                        .replace('\r', '\n')
+                        .replace('\t', ' ')
+                        .lines()
+                        .map(line -> line.replaceAll("\\s{2,}", " ").trim())
+                        .reduce((left, right) -> left + "\n" + right)
+                        .orElse("")
+                        .replaceAll("\\n{3,}", "\n\n")
+                        .trim();
+        if (normalized.length() <= maximumLength) {
+            return normalized;
+        }
+        return normalized.substring(0, Math.max(1, maximumLength - 1)).trim() + "…";
+    }
+
     private Duration retryBackoff(int attempt, int baseMinutes) {
         int[] multipliers = {1, 5, 15, 60, 180, 360, 720, 1440};
         int index = Math.max(0, Math.min(attempt - 1, multipliers.length - 1));
@@ -378,7 +396,13 @@ public class WorkloadShadowNotificationDispatcher {
     }
 
     private String escaped(String value) {
-        return HtmlUtils.htmlEscape(value == null ? "" : value);
+        if (value == null) {
+            return "";
+        }
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
     private String safeMessage(RuntimeException exception) {
