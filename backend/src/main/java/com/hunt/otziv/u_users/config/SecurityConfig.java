@@ -167,6 +167,7 @@ public class SecurityConfig {
         auth.requestMatchers("/api/manager-activity/**").authenticated();
         auth.requestMatchers("/api/mobile/**").authenticated();
         auth.requestMatchers("/api/gamification/me").authenticated();
+        auth.requestMatchers("/api/workload-shadow/preferences/me").hasRole("WORKER");
         auth.requestMatchers("/api/personal-reminders", "/api/personal-reminders/**").authenticated();
         auth.requestMatchers("/api/metric-snapshots", "/api/metric-snapshots/**").authenticated();
         auth.requestMatchers("/api/cabinet/profile").authenticated();

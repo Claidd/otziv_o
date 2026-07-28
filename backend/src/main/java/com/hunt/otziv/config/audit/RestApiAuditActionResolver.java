@@ -275,6 +275,12 @@ public class RestApiAuditActionResolver {
         put(actions, "DELETE", "/api/admin/phones/{id}", "удаление телефона оператора {id}");
         put(actions, "GET", "/api/admin/settings/nagul", "загрузка настройки времени между выгулами");
         put(actions, "PUT", "/api/admin/settings/nagul", "редактирование настройки времени между выгулами");
+        put(actions, "GET", "/api/admin/workload-shadow/settings", "загрузка настроек наблюдения за нагрузкой");
+        put(actions, "PUT", "/api/admin/workload-shadow/settings", "редактирование настроек наблюдения за нагрузкой");
+        put(actions, "POST", "/api/admin/workload-shadow/monitor/recalculate", "ручной теневой пересчёт нагрузки");
+        put(actions, "POST", "/api/admin/workload-shadow/monitor/repair", "ручная самоналадка теневого контура нагрузки");
+        put(actions, "GET", "/api/workload-shadow/preferences/me", "загрузка настройки получения компаний специалистом");
+        put(actions, "PUT", "/api/workload-shadow/preferences/me", "изменение настройки получения компаний специалистом: {acceptsCompanyTransfers}");
         put(actions, "GET", "/api/admin/settings/telegram-reports", "загрузка настроек Telegram-рассылок");
         put(actions, "PUT", "/api/admin/settings/telegram-reports", "редактирование настроек Telegram-рассылок");
         put(actions, "GET", "/api/admin/settings/whatsapp-group-sync", "загрузка настроек синхронизации WhatsApp-групп");

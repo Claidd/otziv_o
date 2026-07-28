@@ -1,0 +1,121 @@
+package com.hunt.otziv.workload_shadow.repository;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.lang.reflect.Method;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.Test;
+import org.springframework.data.jpa.repository.Query;
+
+class WorkloadShadowJsonTableCollationContractTest {
+
+    private static final String REQUIRED_CHARACTER_DEFINITION =
+            "character set utf8mb4 collate utf8mb4_unicode_ci";
+    private static final Pattern JSON_CHARACTER_COLUMN = Pattern.compile(
+            "\\b[a-z0-9_]+\\s+"
+                    + "(?:varchar\\s*\\(\\s*\\d+\\s*\\)|char\\s*\\(\\s*\\d+\\s*\\)|text)\\s+"
+                    + "(.*?)\\bpath\\b",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+    private static final List<Class<?>> RUNTIME_REPOSITORIES = List.of(
+            WorkloadShadowEventRepository.class,
+            WorkloadShadowMonitorRepository.class,
+            WorkloadShadowProjectionRepository.class,
+            WorkloadShadowRecalculationLockRepository.class,
+            WorkloadShadowRunRepository.class,
+            WorkloadShadowSettingsRepository.class,
+            WorkloadShadowTransferRepository.class,
+            WorkloadShadowWorkerDailyRepository.class,
+            WorkloadTransferGraphRepository.class,
+            WorkloadTransferPreferenceRepository.class
+    );
+
+    @Test
+    void everyJsonTableCharacterColumnUsesTheDatabaseCollation() {
+        int checkedColumns = 0;
+        for (Class<?> repositoryType : RUNTIME_REPOSITORIES) {
+            for (Method method : repositoryType.getDeclaredMethods()) {
+                Query query = method.getAnnotation(Query.class);
+                if (query == null || !normalized(query.value()).contains("json_table(")) {
+                    continue;
+                }
+                Matcher column = JSON_CHARACTER_COLUMN.matcher(query.value());
+                while (column.find()) {
+                    checkedColumns++;
+                    assertThat(normalized(column.group(1)))
+                            .as(repositoryType.getSimpleName() + "." + method.getName()
+                                    + ": строковая JSON_TABLE-колонка должна использовать "
+                                    + "ту же collation, что runtime-таблицы")
+                            .contains(REQUIRED_CHARACTER_DEFINITION);
+                }
+            }
+        }
+        assertThat(checkedColumns).isGreaterThan(0);
+    }
+
+    @Test
+    void everyCurrentJsonStringJoinToATargetTableIsCovered() throws Exception {
+        assertCollatedComparison(
+                WorkloadShadowSettingsRepository.class.getDeclaredMethod(
+                        "updateAllWithRevision",
+                        String.class,
+                        String.class,
+                        String.class,
+                        long.class
+                ),
+                "setting_key varchar(100) " + REQUIRED_CHARACTER_DEFINITION,
+                "requested_setting.setting_key = target_setting.setting_key"
+        );
+        assertCollatedComparison(
+                WorkloadShadowTransferRepository.class.getDeclaredMethod(
+                        "deleteStaleCandidates",
+                        String.class,
+                        String.class
+                ),
+                "case_key varchar(160) " + REQUIRED_CHARACTER_DEFINITION,
+                "case_row.case_key = transfer_case.case_key",
+                "candidate_row.case_key = transfer_case.case_key"
+        );
+        assertCollatedComparison(
+                WorkloadShadowTransferRepository.class.getDeclaredMethod(
+                        "upsertCandidates",
+                        String.class
+                ),
+                "case_key varchar(160) " + REQUIRED_CHARACTER_DEFINITION,
+                "transfer_case.case_key = candidate_row.case_key"
+        );
+        assertCollatedComparison(
+                WorkloadShadowTransferRepository.class.getDeclaredMethod(
+                        "upsertEvents",
+                        String.class,
+                        LocalDateTime.class,
+                        LocalDateTime.class
+                ),
+                "case_key varchar(160) " + REQUIRED_CHARACTER_DEFINITION,
+                "transfer_case.case_key = event_row.case_key"
+        );
+    }
+
+    private void assertCollatedComparison(
+            Method method,
+            String collatedColumn,
+            String... comparisons
+    ) {
+        Query query = method.getAnnotation(Query.class);
+        assertThat(query)
+                .as(method.getDeclaringClass().getSimpleName() + "." + method.getName()
+                        + " должен иметь @Query")
+                .isNotNull();
+        String sql = normalized(query.value());
+        assertThat(sql).contains(collatedColumn);
+        assertThat(sql).contains(comparisons);
+    }
+
+    private String normalized(String value) {
+        return value.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
+    }
+}

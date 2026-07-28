@@ -150,19 +150,19 @@ class ManagerReportReviewTelegramServiceTest {
     }
 
     @Test
-    void createsQuestionsAndSendsCollapsedReportWhenProblemsExist() {
+    void initialAuditMessageDoesNotContainReportBeforeStudyButton() {
         ManagerDailySummaryResponse summary = summary(2);
         var questions = List.of(
                 new ManagerReportReviewQualityService.ReviewQuestion("Вопрос 1", List.of("Факт 1")),
                 new ManagerReportReviewQualityService.ReviewQuestion("Вопрос 2", List.of("Факт 2"))
         );
         when(formatter.formatPersonal(summary)).thenReturn(new ManagerFormattedReport(
-                "Полный отчёт",
-                "<h2>Полный отчёт</h2>"
+                "СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА",
+                "<h2>СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА</h2>"
         ));
         when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
                 .thenReturn(Optional.empty());
-        when(qualityService.generateQuestions("Полный отчёт", 2))
+        when(qualityService.generateQuestions("СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА", 2))
                 .thenReturn(new ManagerReportReviewQualityService.QuestionGeneration(questions, true, ""));
         when(qualityService.questionsJson(questions)).thenReturn("[{},{}]");
         when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
@@ -176,12 +176,59 @@ class ManagerReportReviewTelegramServiceTest {
                         && review.getIssueCount() == 2
                         && review.getTelegramMessageId() == 502
         ));
+        ArgumentCaptor<String> initialMessage = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L),
+                initialMessage.capture(),
+                eq(ManagerReportReviewTelegramService.initialKeyboard(41L))
+        );
+        assertThat(initialMessage.getValue())
+                .contains("Текст отчёта станет доступен после нажатия кнопки")
+                .doesNotContain("СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА")
+                .doesNotContain("<details")
+                .doesNotContain("<summary");
         verify(telegramService, never()).sendProtectedRichMessageWithInlineKeyboardMessageId(
                 anyLong(), any(String.class), any()
         );
         verify(telegramService, never()).sendProtectedMessageWithInlineKeyboardMessageId(
                 anyLong(), any(String.class), any(String.class), any()
         );
+    }
+
+    @Test
+    void initialFallbackMessageAlsoDoesNotContainReport() {
+        ManagerDailySummaryResponse summary = summary(1);
+        var questions = List.of(
+                new ManagerReportReviewQualityService.ReviewQuestion("Вопрос", List.of("Факт"))
+        );
+        when(formatter.formatPersonal(summary)).thenReturn(new ManagerFormattedReport(
+                "СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА",
+                "<h2>СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА</h2>"
+        ));
+        when(sessionRepository.findBySummaryDateAndManager_IdAndTestModeFalse(summary.date(), manager.getId()))
+                .thenReturn(Optional.empty());
+        when(qualityService.generateQuestions("СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА", 1))
+                .thenReturn(new ManagerReportReviewQualityService.QuestionGeneration(questions, true, ""));
+        when(qualityService.questionsJson(questions)).thenReturn("[{}]");
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any()
+        )).thenReturn(Optional.empty());
+        when(telegramService.sendMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), eq("HTML"), any()
+        )).thenReturn(Optional.of(503));
+
+        assertThat(service.deliver(manager, summary)).isTrue();
+
+        ArgumentCaptor<String> fallbackMessage = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessageWithInlineKeyboardMessageId(
+                eq(700L),
+                fallbackMessage.capture(),
+                eq("HTML"),
+                eq(ManagerReportReviewTelegramService.initialKeyboard(41L))
+        );
+        assertThat(fallbackMessage.getValue())
+                .contains("только после нажатия кнопки")
+                .doesNotContain("СЕКРЕТНЫЙ ТЕКСТ ОТЧЁТА");
     }
 
     @Test
@@ -285,7 +332,7 @@ class ManagerReportReviewTelegramServiceTest {
         review.setStatus(ManagerReportReviewStatus.READING);
         review.setStartedAt(LocalDateTime.now());
         review.setMinimumReadSeconds(60);
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
 
         CallbackQuery callback = new CallbackQuery();
@@ -319,7 +366,7 @@ class ManagerReportReviewTelegramServiceTest {
                 "Компания «Ромашка»: клиент спросил о сроке публикации. Разберите этот случай.",
                 List.of("название компании", "фактический ответ менеджера", "правильный ответ или необходимое действие")
         ));
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[{}]")).thenReturn(questions);
         when(telegramService.sendMessageWithInlineKeyboardMessageId(
@@ -361,7 +408,7 @@ class ManagerReportReviewTelegramServiceTest {
         review.setReportSnapshot("Отчёт");
         review.setQuestionsJson("[]");
         review.setQuestionsSource("PENDING_AI");
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[]")).thenReturn(List.of());
         when(qualityService.generateQuestions(any(String.class), eq(1)))
@@ -401,7 +448,7 @@ class ManagerReportReviewTelegramServiceTest {
         review.setReportSnapshot("Большой отчёт");
         review.setQuestionsJson("[]");
         review.setQuestionsSource("PENDING_AI");
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[]")).thenReturn(List.of());
         when(qualityService.generateQuestions("Большой отчёт", 8))
@@ -443,7 +490,7 @@ class ManagerReportReviewTelegramServiceTest {
                 "Разберите замечание",
                 List.of("факт")
         ));
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[{}]")).thenReturn(questions);
         when(telegramService.sendMessageWithInlineKeyboardMessageId(
@@ -544,7 +591,7 @@ class ManagerReportReviewTelegramServiceTest {
         ManagerReportReviewIssue withdrawn = issue(review, 0, firstQuestion.question());
         withdrawn.setStatus(ManagerReportReviewIssueStatus.WITHDRAWN);
         ManagerReportReviewIssue pending = issue(review, 1, secondQuestion.question());
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[{},{}]")).thenReturn(List.of(firstQuestion, secondQuestion));
         when(issueService.nextPending(eq(review), anyInt())).thenReturn(Optional.of(pending));
@@ -575,7 +622,7 @@ class ManagerReportReviewTelegramServiceTest {
         review.setStatus(ManagerReportReviewStatus.DELIVERED);
         review.setReportSnapshot("Отчёт");
         review.setReportRichSnapshot("<h2>Отчёт</h2>");
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
                 eq(-100900L), any(String.class), any()
@@ -591,10 +638,72 @@ class ManagerReportReviewTelegramServiceTest {
 
         assertThat(service.handle(callback)).contains("Отчёт открыт для изучения");
         assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.READING);
+        assertThat(review.getStartedAt()).isNotNull();
+        assertThat(review.getDeadlineStartedAt()).isNotNull();
+        ArgumentCaptor<String> openedReport = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendRichMessageWithInlineKeyboardMessageId(
+                eq(-100900L),
+                openedReport.capture(),
+                eq(ManagerReportReviewTelegramService.readingKeyboard(41L))
+        );
+        assertThat(openedReport.getValue()).contains("<h2>Отчёт</h2>");
         verify(telegramService).sendMessage(
                 eq(-100900L),
                 org.mockito.ArgumentMatchers.contains("начал(а) изучение"),
                 eq("HTML")
+        );
+    }
+
+    @Test
+    void failedReportOpeningDoesNotStartReadingTimer() {
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setManagerName("Менеджер");
+        review.setRecipientChatId(700L);
+        review.setTelegramMessageId(501);
+        review.setStatus(ManagerReportReviewStatus.DELIVERED);
+        review.setReportSnapshot("Полный отчёт");
+        review.setReportRichSnapshot("<h2>Полный отчёт</h2>");
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+        when(telegramService.editRichMessage(eq(700L), eq(501), any(String.class), any()))
+                .thenReturn(false);
+        when(telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), any()
+        )).thenReturn(Optional.empty());
+        when(telegramService.sendMessageWithInlineKeyboardMessageId(
+                eq(700L), any(String.class), eq("HTML"), any()
+        )).thenReturn(Optional.empty());
+
+        assertThat(service.handle(callback("study", 41L)))
+                .hasValueSatisfying(value -> assertThat(value).contains("Не удалось открыть отчёт"));
+        assertThat(review.getStatus()).isEqualTo(ManagerReportReviewStatus.DELIVERED);
+        assertThat(review.getStartedAt()).isNull();
+        assertThat(review.getDeadlineStartedAt()).isNull();
+        verify(accessPolicy, never()).invalidate(17L);
+    }
+
+    @Test
+    void repeatedStudyClickDoesNotResendReportOrRestartTimer() {
+        LocalDateTime startedAt = LocalDateTime.now().minusMinutes(1);
+        ManagerReportReviewSession review = new ManagerReportReviewSession();
+        review.setId(41L);
+        review.setManagerUserId(17L);
+        review.setRecipientChatId(700L);
+        review.setStatus(ManagerReportReviewStatus.READING);
+        review.setStartedAt(startedAt);
+        review.setDeadlineStartedAt(startedAt);
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
+        when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
+
+        assertThat(service.handle(callback("study", 41L)))
+                .hasValueSatisfying(value -> assertThat(value).contains("уже открыт"));
+        assertThat(review.getStartedAt()).isEqualTo(startedAt);
+        assertThat(review.getDeadlineStartedAt()).isEqualTo(startedAt);
+        verify(telegramService, never()).editRichMessage(anyLong(), anyInt(), any(), any());
+        verify(telegramService, never()).sendRichMessageWithInlineKeyboardMessageId(
+                anyLong(), any(String.class), any()
         );
     }
 
@@ -612,7 +721,7 @@ class ManagerReportReviewTelegramServiceTest {
                 "Почему клиенту не ответили вовремя?",
                 List.of("причина", "действие")
         );
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[{}]")).thenReturn(List.of(question));
         when(issueService.issues(review)).thenReturn(List.of(issue(review, 0, question.question())));
@@ -650,7 +759,7 @@ class ManagerReportReviewTelegramServiceTest {
         review.setManagerUserId(17L);
         review.setRecipientChatId(-100900L);
         review.setStatus(ManagerReportReviewStatus.DELIVERED);
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(800L)).thenReturn(Optional.of(owner));
 
         CallbackQuery callback = new CallbackQuery();
@@ -679,7 +788,7 @@ class ManagerReportReviewTelegramServiceTest {
         review.setQuestionsJson("[{},{}]");
         ManagerReportReviewIssue first = issue(review, 0, "Неверный процент выполнения");
         ManagerReportReviewIssue second = issue(review, 1, "Формальный ответ клиенту");
-        when(sessionRepository.findById(41L)).thenReturn(Optional.of(review));
+        when(sessionRepository.findForUpdateById(41L)).thenReturn(Optional.of(review));
         when(userService.findByChatId(700L)).thenReturn(Optional.of(user));
         when(qualityService.readQuestions("[{},{}]")).thenReturn(List.of(
                 new ManagerReportReviewQualityService.ReviewQuestion(first.getQuestionText(), List.of()),

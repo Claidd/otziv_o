@@ -188,6 +188,7 @@ public class AnalyticsAggregateTeamService {
                             .sum1Month(toInt(metric.salary))
                             .order1Month(toInt(metric.salaryEntries))
                             .review1Month(toInt(metric.salaryReviews))
+                            .acceptsCompanyTransfers(worker.isAcceptsCompanyTransfers())
                             .build();
                 })
                 .toList();

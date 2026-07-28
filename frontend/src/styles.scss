@@ -1,6 +1,59 @@
 @use './app/shared/admin-layout.component';
 @use './app/features/admin/manager-control/manager-control-audit.global';
 
+.worker-response-legend {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.65rem 0 0.85rem;
+}
+
+.worker-response-legend span,
+.risk-response-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.38rem 0.65rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.worker-response-legend i,
+.risk-response-indicator i {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 72%);
+}
+
+.worker-response-legend .yellow,
+.risk-response-indicator.pending,
+.risk-response-indicator.sent {
+  background: #fff9e8;
+  color: #8a6500;
+}
+
+.worker-response-legend .red,
+.risk-response-indicator.overdue,
+.risk-response-indicator.failed {
+  background: #fff0f3;
+  color: #b91f48;
+}
+
+.worker-response-legend .green,
+.risk-response-indicator.accepted {
+  background: #f2fbf6;
+  color: #287767;
+}
+
+.risk-response-indicator {
+  width: 100%;
+  justify-content: center;
+}
+
 @font-face {
   font-family: 'laptev_brush';
   src: url('/assets/fonts/borders.ttf') format('truetype');

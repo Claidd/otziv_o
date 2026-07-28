@@ -241,6 +241,132 @@ small {
   font-weight: 800;
 }
 
+.transfer-preference-panel {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-top: 1.05rem;
+  border: 1px solid rgba(115, 128, 236, 0.18);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(115, 128, 236, 0.11), transparent 35%),
+    var(--otziv-white);
+}
+
+.transfer-preference-panel__content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.transfer-preference-panel__icon {
+  display: grid;
+  width: 2.8rem;
+  height: 2.8rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.8rem;
+  color: var(--otziv-primary);
+  background: rgba(115, 128, 236, 0.11);
+}
+
+.transfer-preference-panel__content h2 {
+  margin: 0;
+}
+
+.transfer-preference-panel__content p:not(.eyebrow) {
+  max-width: 46rem;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.transfer-preference-panel__control {
+  display: grid;
+  flex: 0 0 auto;
+  justify-items: center;
+  gap: 0.32rem;
+}
+
+.transfer-preference-panel__control strong {
+  color: var(--otziv-dark);
+  font-size: 0.76rem;
+}
+
+.transfer-preference-panel__control small {
+  color: var(--otziv-info);
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.preference-switch {
+  position: relative;
+  width: 3.15rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.18rem;
+  background: rgba(103, 116, 131, 0.28);
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.preference-switch span {
+  display: block;
+  width: 1.39rem;
+  height: 1.39rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0.15rem 0.45rem rgba(54, 57, 73, 0.22);
+  transition: transform 0.18s ease;
+}
+
+.preference-switch.on {
+  background: var(--otziv-success);
+}
+
+.preference-switch.on span {
+  transform: translateX(1.4rem);
+}
+
+.preference-switch:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.transfer-preference-panel__error {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--otziv-danger);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.transfer-preference-panel__error button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .transfer-preference-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transfer-preference-panel__control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+}
+
 .dashboard-warnings {
   display: grid;
   gap: 0.7rem;

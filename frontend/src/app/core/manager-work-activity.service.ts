@@ -7,9 +7,9 @@ import { appEnvironment } from './app-environment';
 
 @Injectable({ providedIn: 'root' })
 export class ManagerWorkActivityService {
-  private readonly heartbeatMs = 60_000;
-  private readonly activeWindowMs = 75_000;
-  private lastInteractionAt = Date.now();
+  private readonly heartbeatMs = 30_000;
+  private readonly activeWindowMs = 45_000;
+  private lastInteractionAt = 0;
   private lastSentAt = 0;
   private started = false;
   private timerId?: ReturnType<typeof setInterval>;
@@ -27,7 +27,9 @@ export class ManagerWorkActivityService {
     this.started = true;
 
     const markInteraction = (): void => {
+      if (!this.canTrackActivity()) return;
       this.lastInteractionAt = Date.now();
+      this.send('INTERACTION', this.router.url, false);
     };
     window.addEventListener('pointerdown', markInteraction, { passive: true });
     window.addEventListener('keydown', markInteraction, { passive: true });
@@ -36,6 +38,7 @@ export class ManagerWorkActivityService {
     this.router.events
       .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
       .subscribe((event) => {
+        if (!this.canTrackActivity()) return;
         this.lastInteractionAt = Date.now();
         this.send('NAVIGATION', event.urlAfterRedirects, true);
       });
@@ -46,12 +49,13 @@ export class ManagerWorkActivityService {
   }
 
   private heartbeat(): void {
-    if (document.visibilityState !== 'visible') return;
+    if (!this.canTrackActivity()) return;
     if (Date.now() - this.lastInteractionAt > this.activeWindowMs) return;
-    this.send('HEARTBEAT', this.router.url, false);
+    this.send('ACTIVE_HEARTBEAT', this.router.url, false);
   }
 
   private send(activityType: string, route: string, force: boolean): void {
+    if (!this.canTrackActivity()) return;
     if (!this.auth.isAuthenticated()) return;
     if (!force && Date.now() - this.lastSentAt < this.heartbeatMs - 2_000) return;
     this.lastSentAt = Date.now();
@@ -62,6 +66,10 @@ export class ManagerWorkActivityService {
         sessionId: this.sessionId
       }).subscribe({ error: () => undefined });
     });
+  }
+
+  private canTrackActivity(): boolean {
+    return document.visibilityState === 'visible' && document.hasFocus();
   }
 
   private resolveSessionId(): string {

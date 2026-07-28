@@ -129,6 +129,33 @@
                 </div>
               </div>
 
+              @if (section.key === 'worker') {
+                <div
+                  class="company-transfer-indicator"
+                  [class.accepting]="member.acceptsCompanyTransfers === true"
+                  [class.excluded]="member.acceptsCompanyTransfers === false"
+                  [class.unknown]="member.acceptsCompanyTransfers == null"
+                  [attr.title]="member.acceptsCompanyTransfers === true
+                    ? 'Сотрудник участвует в списке возможных получателей компаний'
+                    : member.acceptsCompanyTransfers === false
+                      ? 'Сотрудник сам исключил себя из получения компаний'
+                      : 'Статус получения компаний ещё не рассчитан'"
+                >
+                  <span class="material-icons-sharp">
+                    {{ member.acceptsCompanyTransfers === true
+                      ? 'check_circle'
+                      : member.acceptsCompanyTransfers === false
+                        ? 'do_not_disturb_on'
+                        : 'help' }}
+                  </span>
+                  {{ member.acceptsCompanyTransfers === true
+                    ? 'Принимает компании'
+                    : member.acceptsCompanyTransfers === false
+                      ? 'Не принимает компании'
+                      : 'Статус не задан' }}
+                </div>
+              }
+
               <div class="progress-strip-slot">
                 @if (memberProgress(member); as progress) {
                   @if (progress.visible) {

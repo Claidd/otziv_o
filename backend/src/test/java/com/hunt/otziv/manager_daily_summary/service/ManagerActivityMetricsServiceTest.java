@@ -31,7 +31,11 @@ class ManagerActivityMetricsServiceTest {
     @BeforeEach
     void setUp() {
         service = new ManagerActivityMetricsService(activityRepository, messageRepository, settings);
-        when(settings.getInt("manager.summary.activity-idle-minutes", 15)).thenReturn(15);
+        when(settings.getInt("manager.summary.heartbeat-credit-seconds", 60)).thenReturn(60);
+        when(settings.getInt("manager.summary.active-heartbeat-credit-seconds", 30)).thenReturn(30);
+        when(settings.getInt("manager.summary.interaction-credit-seconds", 30)).thenReturn(30);
+        when(settings.getInt("manager.summary.action-credit-seconds", 15)).thenReturn(15);
+        when(settings.getInt("manager.summary.message-credit-seconds", 60)).thenReturn(60);
     }
 
     @Test
@@ -45,17 +49,17 @@ class ManagerActivityMetricsServiceTest {
                 monthStart,
                 until
         )).thenReturn(List.of(
-                activity(date.withDayOfMonth(1).atTime(9, 0)),
-                activity(date.withDayOfMonth(1).atTime(9, 10)),
-                activity(date.atTime(11, 0)),
-                activity(date.atTime(11, 4))
+                activity(date.withDayOfMonth(1).atTime(9, 0), "HEARTBEAT"),
+                activity(date.withDayOfMonth(1).atTime(9, 1), "HEARTBEAT"),
+                activity(date.atTime(11, 0), "HEARTBEAT"),
+                activity(date.atTime(11, 1), "HEARTBEAT")
         ));
         when(messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(
                 managerId,
                 monthStart,
                 until
         )).thenReturn(List.of(
-                message(date.withDayOfMonth(1).atTime(9, 5)),
+                message(date.withDayOfMonth(1).atTime(9, 0, 30)),
                 message(date.minusDays(1).atTime(10, 0)),
                 message(date.minusDays(1).atTime(10, 5)),
                 message(date.atTime(11, 10))
@@ -64,10 +68,10 @@ class ManagerActivityMetricsServiceTest {
         ManagerActivityMetricsService.DailyAndAverage result =
                 service.calculateDailyAndMonthAverage(managerId, date, until);
 
-        assertEquals(300, result.daily().siteSeconds());
+        assertEquals(120, result.daily().siteSeconds());
         assertEquals(60, result.daily().messengerOutsideSiteSeconds());
-        assertEquals(360, result.daily().confirmedSeconds());
-        assertEquals(460, result.averageDailyConfirmedSeconds());
+        assertEquals(180, result.daily().confirmedSeconds());
+        assertEquals(140, result.averageDailyConfirmedSeconds());
     }
 
     @Test
@@ -84,19 +88,43 @@ class ManagerActivityMetricsServiceTest {
                 from,
                 to,
                 List.of(
-                        message(200L, from),
+                        message(200L, from.plusMinutes(1)),
                         message(200L, from.plusMinutes(5)),
                         message(300L, from.plusMinutes(10))
                 )
         );
 
-        assertEquals(360, result.confirmedSeconds());
-        assertEquals(360, result.messengerOutsideSiteSeconds());
+        assertEquals(120, result.confirmedSeconds());
+        assertEquals(120, result.messengerOutsideSiteSeconds());
     }
 
-    private ManagerSiteActivityEvent activity(LocalDateTime occurredAt) {
+    @Test
+    void doesNotBridgeIdleTimeBetweenSparseActions() {
+        LocalDate date = LocalDate.of(2026, 7, 3);
+        LocalDateTime from = date.atTime(9, 0);
+        LocalDateTime to = date.atTime(10, 0);
+        when(activityRepository.findByManager_IdAndOccurredAtBetweenOrderByOccurredAt(20L, from, to))
+                .thenReturn(List.of(
+                        activity(from.plusMinutes(1), "NAVIGATION"),
+                        activity(from.plusMinutes(15), "NAVIGATION")
+                ));
+        when(messageRepository.findByActorManagerIdAndMessageAtBetweenOrderByMessageAtAscIdAsc(20L, from, to))
+                .thenReturn(List.of(
+                        message(from.plusMinutes(30)),
+                        message(from.plusMinutes(44))
+                ));
+
+        ManagerActivityMetricsService.Metrics result = service.calculate(20L, from, to);
+
+        assertEquals(30, result.siteSeconds());
+        assertEquals(120, result.messengerOutsideSiteSeconds());
+        assertEquals(150, result.confirmedSeconds());
+    }
+
+    private ManagerSiteActivityEvent activity(LocalDateTime occurredAt, String activityType) {
         ManagerSiteActivityEvent event = new ManagerSiteActivityEvent();
         event.setOccurredAt(occurredAt);
+        event.setActivityType(activityType);
         return event;
     }
 

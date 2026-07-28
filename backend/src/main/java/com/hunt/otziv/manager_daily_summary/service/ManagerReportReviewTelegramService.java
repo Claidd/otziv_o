@@ -272,7 +272,7 @@ public class ManagerReportReviewTelegramService {
         if (!sent) {
             Optional<Integer> fallbackId = telegramService.sendMessageWithInlineKeyboardMessageId(
                     recipientChatId,
-                    fallbackMessage(review, report.html()),
+                    initialFallbackMessage(review),
                     "HTML",
                     initialKeyboard(review.getId())
             );
@@ -311,7 +311,7 @@ public class ManagerReportReviewTelegramService {
         User actor = telegramUserId == null
                 ? null
                 : userService.findByChatId(telegramUserId).filter(User::isActive).orElse(null);
-        ManagerReportReviewSession review = sessionRepository.findById(command.reviewId()).orElse(null);
+        ManagerReportReviewSession review = sessionRepository.findForUpdateById(command.reviewId()).orElse(null);
         if (ownerDecision(command.action())) {
             if (!canOwnerResolve(review, actor, telegramUserId, callbackChatId)) {
                 return Optional.of("Решение может принять только владелец или администратор");
@@ -367,8 +367,7 @@ public class ManagerReportReviewTelegramService {
             return Optional.of("Спор уже передан владельцу");
         }
         if (STUDY.equals(command.action())) {
-            startReading(review, actor);
-            return Optional.of("Отчёт открыт для изучения");
+            return Optional.of(startReading(review, actor));
         }
         if (CONFIRM.equals(command.action())) {
             return Optional.of(confirmReading(review, actor));
@@ -476,16 +475,46 @@ public class ManagerReportReviewTelegramService {
         return handleTextMessage(chatId, actor, messageText, replyToMessageId);
     }
 
-    private void startReading(ManagerReportReviewSession review, User actor) {
-        LocalDateTime now = LocalDateTime.now();
-        boolean firstOpen = review.getStartedAt() == null;
-        if (review.getStartedAt() == null) {
-            review.setStartedAt(now);
-            event(review, "READING_STARTED", actor.getId(), actorRole(review), "telegram",
-                    review.isTestMode()
-                            ? "Администратор открыл тестовый отчёт для изучения"
-                            : "Менеджер открыл отчёт для изучения");
+    private String startReading(ManagerReportReviewSession review, User actor) {
+        if (review.getStartedAt() != null) {
+            return "Отчёт уже открыт, продолжайте изучение";
         }
+        boolean opened = review.getTelegramMessageId() != null
+                && telegramService.editRichMessage(
+                review.getRecipientChatId(),
+                review.getTelegramMessageId(),
+                expandedReport(review),
+                readingKeyboard(review.getId())
+        );
+        if (!opened) {
+            Optional<Integer> messageId = telegramService.sendRichMessageWithInlineKeyboardMessageId(
+                    review.getRecipientChatId(),
+                    expandedReport(review),
+                    readingKeyboard(review.getId())
+            );
+            if (messageId.isEmpty()) {
+                messageId = telegramService.sendMessageWithInlineKeyboardMessageId(
+                        review.getRecipientChatId(),
+                        expandedFallbackMessage(review),
+                        "HTML",
+                        readingKeyboard(review.getId())
+                );
+            }
+            if (messageId.isPresent()) {
+                review.setTelegramMessageId(messageId.get());
+                opened = true;
+            }
+        }
+        if (!opened) {
+            return "Не удалось открыть отчёт. Нажмите «Изучить отчёт» ещё раз";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        review.setStartedAt(now);
+        event(review, "READING_STARTED", actor.getId(), actorRole(review), "telegram",
+                review.isTestMode()
+                        ? "Администратор открыл тестовый отчёт для изучения"
+                        : "Менеджер открыл отчёт для изучения");
         if (review.getDeadlineStartedAt() == null) {
             review.setDeadlineStartedAt(now);
             event(review, "DEADLINE_STARTED", actor.getId(), actorRole(review), "telegram",
@@ -498,23 +527,7 @@ public class ManagerReportReviewTelegramService {
         if (!review.isTestMode()) {
             accessPolicy.invalidate(review.getManagerUserId());
         }
-        boolean edited = review.getTelegramMessageId() != null
-                && telegramService.editRichMessage(
-                review.getRecipientChatId(),
-                review.getTelegramMessageId(),
-                expandedReport(review),
-                readingKeyboard(review.getId())
-        );
-        if (!edited) {
-            Optional<Integer> messageId = telegramService.sendRichMessageWithInlineKeyboardMessageId(
-                    review.getRecipientChatId(),
-                    expandedReport(review),
-                    readingKeyboard(review.getId())
-            );
-            messageId.ifPresent(review::setTelegramMessageId);
-            sessionRepository.save(review);
-        }
-        if (firstOpen && isGroupChat(review.getRecipientChatId())) {
+        if (isGroupChat(review.getRecipientChatId())) {
             telegramService.sendMessage(
                     review.getRecipientChatId(),
                     "👀 <b>" + escape(review.getManagerName()) + " начал(а) изучение отчёта.</b>\n"
@@ -522,12 +535,15 @@ public class ManagerReportReviewTelegramService {
                     "HTML"
             );
         }
+        return "Отчёт открыт для изучения";
     }
 
     private String confirmReading(ManagerReportReviewSession review, User actor) {
         if (review.getStartedAt() == null || review.getStatus() == ManagerReportReviewStatus.DELIVERED) {
-            startReading(review, actor);
-            return "Сначала изучите раскрытый отчёт";
+            String result = startReading(review, actor);
+            return result.startsWith("Не удалось")
+                    ? result
+                    : "Сначала изучите открытый отчёт";
         }
         if (review.getReadingConfirmedAt() != null) {
             if (questionsPendingAi(review)) {
@@ -1416,11 +1432,9 @@ public class ManagerReportReviewTelegramService {
                 : "<h2>📘 Персональный отчёт · " + review.getSummaryDate().format(DATE) + "</h2>")
                 + "<p>👤 <b>" + escape(review.getManagerName()) + "</b></p>"
                 + "<p>Обнаружено вопросов для проверки: <b>" + review.getIssueCount() + "</b>.</p>"
-                + "<details><summary>📄 Отчёт свёрнут</summary><p>"
-                + richPlain(review.getReportSnapshot())
-                + "</p></details>"
-                + "<p>Нажмите <b>«Изучить отчёт»</b>. После открытия появится отдельное "
-                + "подтверждение прочтения.</p>";
+                + "<blockquote>Текст отчёта станет доступен после нажатия кнопки.</blockquote>"
+                + "<p>Нажмите <b>«Изучить отчёт»</b>, чтобы открыть полный отчёт "
+                + "и начать отсчёт времени чтения.</p>";
     }
 
     private String expandedReport(ManagerReportReviewSession review) {
@@ -1617,19 +1631,33 @@ public class ManagerReportReviewTelegramService {
                 : Math.max(0, Duration.between(review.getStartedAt(), now).toSeconds());
     }
 
-    private String fallbackMessage(ManagerReportReviewSession review, String html) {
+    private String initialFallbackMessage(ManagerReportReviewSession review) {
+        return (review != null && review.isTestMode()
+                ? "🧪 <b>ТЕСТОВЫЙ АУДИТ</b>\n"
+                + "Без блокировки доступа и влияния на показатели менеджера.\n\n"
+                : "📘 <b>Персональный отчёт</b>\n\n")
+                + "👤 <b>" + escape(review == null ? "Менеджер" : review.getManagerName()) + "</b>\n"
+                + "Обнаружено вопросов для проверки: <b>"
+                + (review == null ? 0 : review.getIssueCount()) + "</b>.\n\n"
+                + "Текст отчёта станет доступен только после нажатия кнопки "
+                + "<b>«Изучить отчёт»</b>.";
+    }
+
+    private String expandedFallbackMessage(ManagerReportReviewSession review) {
         String prefix = review != null && review.isTestMode()
                 ? "🧪 <b>ТЕСТОВЫЙ АУДИТ</b>\n"
                 + "Без блокировки доступа и влияния на показатели менеджера.\n\n"
                 : "";
-        if (html != null && html.length() + prefix.length() <= 3800) return prefix + html;
-        String plain = clean(html)
+        String plain = clean(review == null ? null : review.getReportSnapshot())
                 .replaceAll("<[^>]+>", "")
                 .replace("&amp;", "&")
                 .replace("&lt;", "<")
                 .replace("&gt;", ">");
-        plain = limit(plain, 3650);
-        return prefix + "📘 <b>Персональный разбор дня</b>\n\n" + escape(plain);
+        plain = limit(plain, 3300);
+        return prefix + "📘 <b>Персональный разбор дня</b>\n\n"
+                + escape(plain)
+                + "\n\n<b>Следующий шаг:</b> внимательно изучите отчёт, затем нажмите "
+                + "«Подтвердить прочтение».";
     }
 
     private long testRunId() {

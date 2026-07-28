@@ -2206,8 +2206,11 @@ export class ManagerControlComponent implements OnInit {
     if (!this.canRequestWorkerTask(example)) {
       return '';
     }
-    if (example.workerExplanationAt) {
-      return `ответ специалиста получен ${this.shortDateTime(example.workerExplanationAt)}`;
+    if (this.isWorkerExplanationAccepted(example)) {
+      return `ответ специалиста получен ${this.shortDateTime(example.workerExplanationAt!)}`;
+    }
+    if (example.type === 'RISK' && example.workerExplanationAt) {
+      return `ответ получен ${this.shortDateTime(example.workerExplanationAt)}, но ещё не принят`;
     }
     if (!this.workerRequiresExplanation(example) && example.workerNotificationSentAt) {
       return `напоминание отправлено ${this.shortDateTime(example.workerNotificationSentAt)}, повтор завтра`;
@@ -2229,11 +2232,14 @@ export class ManagerControlComponent implements OnInit {
     if (!this.canRequestWorkerTask(example)) {
       return '';
     }
-    if (example.workerExplanationAt) {
-      return 'Ответ получен';
+    if (this.isWorkerExplanationAccepted(example)) {
+      return 'Ответ принят';
     }
     if (this.isWorkerExplanationOverdue(example)) {
       return 'Ответ просрочен';
+    }
+    if (example.type === 'RISK' && example.workerExplanationAt) {
+      return 'Нужно уточнить ответ';
     }
     if (!this.workerRequiresExplanation(example) && example.workerNotificationSentAt) {
       return 'Напомнили';
@@ -2249,7 +2255,7 @@ export class ManagerControlComponent implements OnInit {
   }
 
   workerNotificationBadgeClass(example: ManagerControlConcreteItem): string {
-    if (example.workerExplanationAt) {
+    if (this.isWorkerExplanationAccepted(example)) {
       return 'accepted';
     }
     if (this.isWorkerExplanationOverdue(example)) {
@@ -2288,7 +2294,16 @@ export class ManagerControlComponent implements OnInit {
     return this.canRequestWorkerTask(example)
       && !!example.workerNotificationSentAt
       && this.workerRequiresExplanation(example)
-      && !example.workerExplanationAt;
+      && (example.type === 'RISK'
+        ? !example.workerNotificationAcceptedAt
+        : !example.workerExplanationAt);
+  }
+
+  isWorkerExplanationAccepted(example: ManagerControlConcreteItem): boolean {
+    if (example.type === 'RISK') {
+      return !!example.workerExplanationAt && !!example.workerNotificationAcceptedAt;
+    }
+    return !!example.workerExplanationAt;
   }
 
   isWorkerExplanationOverdue(example: ManagerControlConcreteItem): boolean {
@@ -2308,15 +2323,21 @@ export class ManagerControlComponent implements OnInit {
   }
 
   riskExplanationButtonLabel(example: ManagerControlConcreteItem): string {
+    if (this.isWorkerExplanationAccepted(example)) {
+      return 'Ответ принят';
+    }
     if (example.workerExplanation) {
-      return 'Ответ получен';
+      return 'Нужно уточнить ответ';
     }
     return example.workerNotificationAcceptedAt ? 'Принято, нужен комментарий' : 'Ждем пояснение';
   }
 
   riskExplanationButtonIcon(example: ManagerControlConcreteItem): string {
-    if (example.workerExplanation) {
+    if (this.isWorkerExplanationAccepted(example)) {
       return 'mark_chat_read';
+    }
+    if (example.workerExplanation) {
+      return 'rate_review';
     }
     return example.workerNotificationAcceptedAt ? 'edit_note' : 'hourglass_top';
   }

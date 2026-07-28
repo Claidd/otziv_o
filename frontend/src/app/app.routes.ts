@@ -484,6 +484,15 @@ export const routes: Routes = [
     }
   },
   {
+    path: 'admin/workload-monitor',
+    loadComponent: () => import('./features/admin/workload-shadow/workload-shadow.component')
+      .then((m) => m.WorkloadShadowComponent),
+    canActivate: [roleGuard],
+    data: {
+      roles: ['ADMIN', 'OWNER']
+    }
+  },
+  {
     path: 'admin/users',
     loadComponent: () => import('./features/admin/users/users-admin.component')
       .then((m) => m.UsersAdminComponent),

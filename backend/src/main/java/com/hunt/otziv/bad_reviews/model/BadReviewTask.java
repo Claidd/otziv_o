@@ -24,6 +24,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Data
@@ -91,6 +92,9 @@ public class BadReviewTask {
     @CreationTimestamp
     @Column(name = "bad_review_task_created")
     private LocalDate created;
+    @CreationTimestamp
+    @Column(name = "bad_review_task_created_at")
+    private LocalDateTime createdAt;
 
     @UpdateTimestamp
     @Column(name = "bad_review_task_changed")

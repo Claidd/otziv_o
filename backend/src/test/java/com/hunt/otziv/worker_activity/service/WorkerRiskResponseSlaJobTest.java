@@ -20,10 +20,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,7 +65,7 @@ class WorkerRiskResponseSlaJobTest {
     }
 
     @Test
-    void overdueRiskSendsReplyableReminderAndRestrictsOnlySpecialistSection() {
+    void overdueRiskSendsRedReplyButtonAndRestrictsOnlySpecialistSection() {
         WorkerRiskIncident incident = new WorkerRiskIncident();
         incident.setId(77L);
         incident.setStatus(WorkerRiskIncidentStatus.OPEN);
@@ -85,7 +87,12 @@ class WorkerRiskResponseSlaJobTest {
                 any(Pageable.class)
         )).thenReturn(List.of(incident));
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
-        when(telegramService.sendMessage(eq(-100123L), contains("Код запроса: risk-77")))
+        when(telegramService.sendMessageWithInlineKeyboard(
+                eq(-100123L),
+                contains("Код запроса: risk-77"),
+                eq(null),
+                any()
+        ))
                 .thenReturn(true);
         when(incidentRepository.save(any(WorkerRiskIncident.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -99,7 +106,7 @@ class WorkerRiskResponseSlaJobTest {
                 eq(WorkerRiskEventType.EXPLANATION_REMINDER_SENT),
                 eq(2L),
                 eq("WORKER"),
-                eq("telegram"),
+                eq("telegram-overdue"),
                 any()
         );
         verify(eventService).record(
@@ -111,7 +118,67 @@ class WorkerRiskResponseSlaJobTest {
                 any()
         );
         ArgumentCaptor<String> reminder = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessage(eq(-100123L), reminder.capture());
-        assertTrue(reminder.getValue().contains("Ответьте на это сообщение"));
+        verify(telegramService).sendMessageWithInlineKeyboard(
+                eq(-100123L),
+                reminder.capture(),
+                eq(null),
+                any()
+        );
+        assertTrue(reminder.getValue().contains("🔴 ОТВЕТ ПРОСРОЧЕН"));
+        assertTrue(reminder.getValue().contains("Пояснить причину"));
+    }
+
+    @Test
+    void upcomingDeadlineSendsYellowReplyButtonWithoutRestriction() {
+        WorkerRiskIncident incident = new WorkerRiskIncident();
+        incident.setId(78L);
+        incident.setStatus(WorkerRiskIncidentStatus.OPEN);
+        incident.setWorkerUserId(2L);
+        incident.setWorkerUsername("worker");
+        incident.setTitle("Нужно пояснить действие");
+        incident.setOrderId(100L);
+        incident.setReviewId(501L);
+        incident.setResponseDueAt(LocalDateTime.now().plusMinutes(59));
+
+        User worker = new User();
+        worker.setId(2L);
+        worker.setUsername("worker");
+        worker.setActive(true);
+        worker.setWorkerTelegramGroupChatId(-100123L);
+
+        when(incidentRepository.findPendingResponseSla(
+                eq(WorkerRiskIncidentStatus.OPEN),
+                any(Pageable.class)
+        )).thenReturn(List.of(incident));
+        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(telegramService.sendMessageWithInlineKeyboard(
+                eq(-100123L),
+                contains("Код запроса: risk-78"),
+                eq(null),
+                any()
+        )).thenReturn(true);
+        when(incidentRepository.save(any(WorkerRiskIncident.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        job.process();
+
+        assertNotNull(incident.getExplanationReminderAt());
+        assertNull(incident.getSectionRestrictedAt());
+        ArgumentCaptor<String> reminder = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessageWithInlineKeyboard(
+                eq(-100123L),
+                reminder.capture(),
+                eq(null),
+                any()
+        );
+        assertTrue(reminder.getValue().contains("🟡 НУЖНО ОТВЕТИТЬ"));
+        verify(eventService, never()).record(
+                eq(incident),
+                eq(WorkerRiskEventType.SPECIALIST_SECTION_RESTRICTED),
+                any(),
+                any(),
+                any(),
+                any()
+        );
     }
 }

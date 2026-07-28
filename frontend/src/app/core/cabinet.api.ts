@@ -159,6 +159,7 @@ export interface TeamMember {
   monthlyProgress?: DailyWorkProgress | null;
   dailyNetworkViolations?: WorkerNetworkViolationStats | null;
   monthlyNetworkViolations?: WorkerNetworkViolationStats | null;
+  acceptsCompanyTransfers?: boolean | null;
 }
 
 export interface WorkerNetworkViolationStats {

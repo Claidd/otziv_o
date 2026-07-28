@@ -473,6 +473,42 @@ input[type='month'] {
   min-height: 1.55rem;
 }
 
+.company-transfer-indicator {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.32rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.55rem;
+  color: var(--otziv-info);
+  background: var(--otziv-muted-surface);
+  font-size: 0.65rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.company-transfer-indicator .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+}
+
+.company-transfer-indicator.accepting {
+  border: 1px solid var(--otziv-surface-border-green);
+  color: var(--otziv-success);
+  background: var(--otziv-surface-gradient-green);
+}
+
+.company-transfer-indicator.excluded {
+  border: 1px solid var(--otziv-surface-border-neutral);
+  color: var(--otziv-info);
+  background: var(--otziv-surface-gradient-neutral);
+}
+
+.company-transfer-indicator.unknown {
+  border: 1px dashed var(--otziv-surface-border-neutral);
+}
+
 .progress-summary-slot {
   min-height: 2.65rem;
 }
@@ -1229,6 +1265,7 @@ dd {
   .network-details-slot,
   .status-list-slot,
   .status-list,
+  .company-transfer-indicator,
   .edit-link {
     grid-column: 1 / -1;
   }

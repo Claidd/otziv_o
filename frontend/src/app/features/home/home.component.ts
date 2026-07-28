@@ -30,6 +30,7 @@ import { CabinetLineChartComponent } from '../cabinet/cabinet-line-chart.compone
 import { ManagerControlComponent } from '../admin/manager-control/manager-control.component';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
 import { ManagerReportReviewAccessApi } from '../../core/manager-report-review-access.api';
+import { WorkloadShadowApi } from '../../core/workload-shadow.api';
 
 type DashboardAction = {
   label: string;
@@ -132,6 +133,10 @@ export class HomeComponent {
   readonly cabinetError = signal<DashboardWarning | null>(null);
   readonly manualPaymentError = signal<DashboardWarning | null>(null);
   readonly manualTaskError = signal<DashboardWarning | null>(null);
+  readonly transferPreference = signal<boolean | null>(null);
+  readonly transferPreferenceLoading = signal(false);
+  readonly transferPreferenceSaving = signal(false);
+  readonly transferPreferenceError = signal<string | null>(null);
 
   readonly actions: DashboardAction[] = [
     {
@@ -248,6 +253,9 @@ export class HomeComponent {
   readonly isClientUser = computed(() => {
     return this.currentRoles().some((role) => normalizeRole(role) === 'CLIENT');
   });
+  readonly showTransferPreference = computed(() => {
+    return this.currentRoles().some((role) => normalizeRole(role) === 'WORKER');
+  });
 
   readonly visibleActions = computed(() => {
     if (!this.auth.authenticated()) {
@@ -336,6 +344,7 @@ export class HomeComponent {
     private readonly systemHealthApi: SystemHealthApi,
     private readonly cabinetApi: CabinetApi,
     readonly reportReviewAccess: ManagerReportReviewAccessApi,
+    private readonly workloadShadowApi: WorkloadShadowApi,
     private readonly toastService: ToastService,
     private readonly router: Router
   ) {
@@ -348,6 +357,9 @@ export class HomeComponent {
       this.loadCurrentUser();
       if (!this.isClientUser()) {
         this.loadCabinet();
+        if (this.showTransferPreference()) {
+          this.loadTransferPreference();
+        }
         if (this.isManagerUser() && this.showManualPaymentSettings()) {
           this.loadManualPaymentSettings();
         }
@@ -377,6 +389,11 @@ export class HomeComponent {
         this.me.set(user);
         if (this.isClientUser()) {
           this.clearCabinetForClient();
+        }
+        if (this.showTransferPreference()
+          && this.transferPreference() == null
+          && !this.transferPreferenceLoading()) {
+          this.loadTransferPreference();
         }
         if (this.isManagerUser()
           && this.showManualPaymentSettings()
@@ -446,6 +463,11 @@ export class HomeComponent {
     this.cabinetApi.getProfile(this.cabinetDate(), { forceRefresh }).subscribe({
       next: (profile) => {
         this.cabinet.set(profile);
+        if (this.showTransferPreference()
+          && this.transferPreference() == null
+          && !this.transferPreferenceLoading()) {
+          this.loadTransferPreference();
+        }
         this.cabinetLoading.set(false);
       },
       error: (err) => {
@@ -462,6 +484,9 @@ export class HomeComponent {
 
   refreshCabinet(): void {
     this.loadCabinet(true);
+    if (this.showTransferPreference()) {
+      this.loadTransferPreference();
+    }
     if (this.isManagerUser() && this.showManualPaymentSettings()) {
       this.loadManualPaymentSettings(true);
     }
@@ -470,6 +495,52 @@ export class HomeComponent {
         this.loadManualPaymentTasks(true);
       }
     }
+  }
+
+  loadTransferPreference(): void {
+    if (!this.showTransferPreference() || this.transferPreferenceLoading()) {
+      return;
+    }
+    this.transferPreferenceLoading.set(true);
+    this.transferPreferenceError.set(null);
+    this.workloadShadowApi.getMyTransferPreference().subscribe({
+      next: (preference) => {
+        this.transferPreference.set(preference.acceptsCompanyTransfers);
+        this.transferPreferenceLoading.set(false);
+      },
+      error: (error) => {
+        this.transferPreferenceError.set(
+          apiErrorDetail(error, 'Не удалось получить настройку получения компаний.')
+        );
+        this.transferPreferenceLoading.set(false);
+      }
+    });
+  }
+
+  toggleTransferPreference(): void {
+    if (this.transferPreferenceSaving() || this.transferPreferenceLoading()) {
+      return;
+    }
+    const previous = this.transferPreference() ?? true;
+    const next = !previous;
+    this.transferPreferenceSaving.set(true);
+    this.transferPreferenceError.set(null);
+    this.workloadShadowApi.updateMyTransferPreference(next).subscribe({
+      next: (preference) => {
+        this.transferPreference.set(preference.acceptsCompanyTransfers);
+        this.transferPreferenceSaving.set(false);
+        const message = preference.acceptsCompanyTransfers
+          ? 'Вы снова участвуете в списке возможных получателей компаний.'
+          : 'Вы исключены из списка возможных получателей компаний.';
+        this.toastService.success('Настройка сохранена', message);
+      },
+      error: (error) => {
+        const detail = apiErrorDetail(error, 'Не удалось изменить настройку получения компаний.');
+        this.transferPreferenceError.set(detail);
+        this.transferPreferenceSaving.set(false);
+        this.toastService.error('Настройка не сохранена', detail);
+      }
+    });
   }
 
   private async loadReportReviewAccess(): Promise<void> {

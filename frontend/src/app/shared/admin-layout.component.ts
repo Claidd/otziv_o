@@ -103,7 +103,7 @@ export class AdminLayoutComponent {
     ...shellLinksById([
       'personal-cabinet', 'leads', 'companies', 'orders', 'worker', 'performer', 'operator',
       'manager-control', 'team', 'score', 'manager-control-self', 'achievements', 'gamification-rewards', 'analytics', 'training',
-      'company-archive', 'cities', 'archive-admin', 'performers-admin',
+      'company-archive', 'cities', 'archive-admin', 'workload-monitor', 'performers-admin',
       'tbank', 'common-billing', 'reputation-ai', 'dictionaries', 'users', 'new-user',
       'migration', 'mobile-update', 'metrics'
     ]),

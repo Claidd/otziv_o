@@ -233,8 +233,7 @@ public class WorkerRiskTelegramCallbackService {
                 AppSettingService.WORKER_RISK_EXPLANATION_MAX_CLARIFICATIONS,
                 1
         )));
-        boolean answerNotAccepted = assessment.quality() != WorkerRiskExplanationQuality.LOGICAL
-                && assessment.quality() != WorkerRiskExplanationQuality.NEEDS_REVIEW;
+        boolean answerNotAccepted = assessment.quality() != WorkerRiskExplanationQuality.LOGICAL;
         if (answerNotAccepted) {
             incident.setExplanationPromptedAt(LocalDateTime.now());
             incidentRepository.save(incident);

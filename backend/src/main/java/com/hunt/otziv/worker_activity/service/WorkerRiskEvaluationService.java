@@ -760,20 +760,22 @@ public class WorkerRiskEvaluationService {
             return;
         }
 
-        String telegramText = "Система заметила риск по действию специалиста."
-                + "\nСтатус: ждем пояснение"
+        String telegramText = "🟡 НУЖНО ОТВЕТИТЬ"
+                + "\nСистема заметила риск по действию специалиста."
+                + "\nСтатус: ждём пояснение"
                 + "\nСпециалист: " + html(clean(workerName(workerUser)))
                 + "\nПричина: " + html(clean(incident.getTitle()))
                 + "\nРиск: " + incident.getScore()
                 + incidentContextHtml(incident)
-                + "\n\nОтветьте на это сообщение: что произошло и почему это объясняет замечание."
+                + "\n\nНажмите «Пояснить причину» и укажите, что произошло и почему это объясняет замечание."
+                + "\nОтвет должен быть отправлен в течение 3 часов и будет проверен DeepSeek."
                 + "\nКод запроса: risk-" + incident.getId();
 
         Optional<Integer> sentMessageId = telegramService.sendMessageWithInlineKeyboardMessageId(
                 chatId,
                 telegramText,
                 "HTML",
-                null
+                WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
         );
         if (sentMessageId.isEmpty()) {
             riskEventService.record(

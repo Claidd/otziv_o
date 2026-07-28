@@ -368,6 +368,55 @@ class WorkerRiskTelegramCallbackServiceTest {
     }
 
     @Test
+    void deepSeekNeedsReviewDoesNotAcceptAnswerOrTurnStatusGreen() {
+        WorkerRiskIncident incident = incident();
+        incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        incident.setExplanationPromptedAt(java.time.LocalDateTime.now());
+        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        when(incidentRepository
+                .findFirstByWorkerUserIdAndStatusAndResolutionActionAndExplanationAcceptedAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
+                        2L,
+                        WorkerRiskIncidentStatus.OPEN,
+                        WorkerRiskResolutionAction.EXPLANATION_REQUESTED
+                )).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(appSettingService.getInt(
+                AppSettingService.WORKER_RISK_EXPLANATION_MAX_CLARIFICATIONS,
+                1
+        )).thenReturn(1);
+        when(explanationQualityService.assess(any(), any())).thenReturn(
+                new WorkerRiskExplanationQualityService.Result(
+                        WorkerRiskExplanationQuality.NEEDS_REVIEW,
+                        BigDecimal.ZERO,
+                        "DeepSeek не смог подтвердить правильность ответа",
+                        "",
+                        "deepseek",
+                        "test",
+                        0,
+                        0
+                )
+        );
+
+        assertEquals(true, service.handleWorkerTextMessage(
+                888L,
+                worker,
+                "Причина связана с блокировкой аккаунта, детали уточняю"
+        ));
+
+        assertNull(incident.getExplanationAcceptedAt());
+        assertEquals(WorkerRiskExplanationQuality.NEEDS_REVIEW, incident.getExplanationQuality());
+        verify(telegramService).sendForceReplyMessage(
+                eq(888L),
+                contains("🟡 ОТВЕТ НУЖНО УТОЧНИТЬ")
+        );
+        verify(personalReminderService, never()).deleteSystemReminderBySource(
+                any(),
+                eq("WORKER_RISK_MANAGER_WARNING"),
+                eq(77L)
+        );
+    }
+
+    @Test
     void verifiedCallbackDeletesOpenRiskReminder() {
         WorkerRiskIncident incident = incident();
         incident.setExplanationQuality(WorkerRiskExplanationQuality.LOGICAL);

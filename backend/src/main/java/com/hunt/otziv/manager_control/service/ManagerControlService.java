@@ -2503,7 +2503,11 @@ public class ManagerControlService {
                             worker.getId(),
                             userId -> new WorkerExplanationAccumulator(worker.getId(), userDisplayName(worker))
                     );
-                    accumulator.add(item, now, workerExplanationStartedAt(item));
+                    accumulator.add(
+                            now,
+                            workerExplanationStartedAt(item),
+                            workerAcceptedExplanationAtForStats(item)
+                    );
                 });
         return stats.values().stream()
                 .map(WorkerExplanationAccumulator::response)
@@ -2574,6 +2578,21 @@ public class ManagerControlService {
         return item.getWorkerNotificationAttemptedAt();
     }
 
+    private LocalDateTime workerAcceptedExplanationAtForStats(ManagerDailyControlConcreteItem item) {
+        if (item == null) {
+            return null;
+        }
+        if (!isWorkerRiskConcrete(item) && item.getWorkerExplanationAt() != null) {
+            return item.getWorkerExplanationAt();
+        }
+        if (!isWorkerRiskConcrete(item) || item.getEntityId() == null) {
+            return null;
+        }
+        return riskIncidentRepository.findById(item.getEntityId())
+                .map(WorkerRiskIncident::getExplanationAcceptedAt)
+                .orElse(null);
+    }
+
     private static class WorkerExplanationAccumulator {
         private final Long workerUserId;
         private final String workerName;
@@ -2588,9 +2607,13 @@ public class ManagerControlService {
             this.workerName = workerName;
         }
 
-        private void add(ManagerDailyControlConcreteItem item, LocalDateTime now, LocalDateTime startedAt) {
+        private void add(
+                LocalDateTime now,
+                LocalDateTime startedAt,
+                LocalDateTime explanationAt
+        ) {
             requestCount++;
-            if (item.getWorkerExplanationAt() == null) {
+            if (explanationAt == null) {
                 unansweredCount++;
                 if (startedAt != null && Duration.between(startedAt, now).toHours() >= WORKER_TASK_FOLLOW_UP_HOURS) {
                     overdueCount++;
@@ -2599,7 +2622,7 @@ public class ManagerControlService {
             }
             if (startedAt != null) {
                 answeredCount++;
-                responseMinutesTotal += Math.max(0, Duration.between(startedAt, item.getWorkerExplanationAt()).toMinutes());
+                responseMinutesTotal += Math.max(0, Duration.between(startedAt, explanationAt).toMinutes());
             }
         }
 
@@ -3513,7 +3536,7 @@ public class ManagerControlService {
         );
         LocalDateTime workerNotificationAcceptedAt = firstNonNullTime(
                 item.getWorkerNotificationAcceptedAt(),
-                incident == null ? null : incident.getExplanationPromptedAt()
+                incident == null ? null : incident.getExplanationAcceptedAt()
         );
         Long workerNotificationAcceptedByUserId = firstNonNullLong(
                 item.getWorkerNotificationAcceptedByUserId(),
@@ -5406,8 +5429,8 @@ public class ManagerControlService {
                 null,
                 notificationStartedAt,
                 notificationStartedAt,
-                incident.getExplanationPromptedAt(),
-                incident.getExplanationPromptedAt() == null ? null : incident.getWorkerUserId(),
+                incident.getExplanationAcceptedAt(),
+                incident.getExplanationAcceptedAt() == null ? null : incident.getWorkerUserId(),
                 null,
                 null,
                 incident.getResolutionAction() == null ? null : incident.getResolutionAction().name(),

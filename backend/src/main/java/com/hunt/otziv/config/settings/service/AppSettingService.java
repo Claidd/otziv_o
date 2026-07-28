@@ -251,6 +251,13 @@ public class AppSettingService {
         return value;
     }
 
+    public void invalidateByPrefix(String prefix) {
+        if (prefix == null || prefix.isEmpty()) {
+            return;
+        }
+        cache.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
     private String getCachedValue(String key) {
         CachedSetting cached = cache.get(key);
         if (cached != null && !cached.isExpired()) {

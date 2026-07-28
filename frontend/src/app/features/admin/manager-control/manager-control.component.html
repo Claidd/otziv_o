@@ -116,6 +116,11 @@
               <span class="material-icons-sharp">contact_support</span>
               <h2>Ответы специалистов</h2>
             </div>
+            <div class="worker-response-legend" aria-label="Обозначения статусов ответа">
+              <span class="yellow"><i></i>Нужно ответить</span>
+              <span class="red"><i></i>Просрочено 3 ч.</span>
+              <span class="green"><i></i>Ответ принят</span>
+            </div>
             <div class="side-chip-list">
               @for (row of workerExplanationRows(manager); track row.workerUserId || row.workerName) {
                 <article
@@ -480,11 +485,11 @@
               </div>
 
               <div class="queue-control-stats">
-                <span title="Подтверждённая активность на сайте и в соцсетях за день. Пересекающиеся интервалы не дублируются, периоды бездействия не учитываются.">
-                  <small>Рабочее время</small>
+                <span title="Активное время по коротким подтверждённым интервалам на сайте и в чатах. Паузы между отдельными действиями не засчитываются.">
+                  <small>Активное время</small>
                   <b>{{ queueDuration(manager.activeWorkSeconds) }}</b>
                 </span>
-                <span title="Средняя подтверждённая активность на сайте и в соцсетях за календарный день с первого числа месяца по выбранную дату.">
+                <span title="Среднее активное время за календарный день с первого числа месяца по выбранную дату.">
                   <small>В среднем за день</small>
                   <b>{{ queueDuration(manager.averageDailyWorkSeconds) }}</b>
                 </span>
@@ -626,11 +631,11 @@
             </div>
 
             <div class="queue-control-stats">
-              <span title="Подтверждённая активность на сайте и в соцсетях за день. Пересекающиеся интервалы не дублируются, периоды бездействия не учитываются.">
-                <small>Рабочее время</small>
+              <span title="Активное время по коротким подтверждённым интервалам на сайте и в чатах. Паузы между отдельными действиями не засчитываются.">
+                <small>Активное время</small>
                 <b>{{ queueDuration(manager.activeWorkSeconds) }}</b>
               </span>
-              <span title="Средняя подтверждённая активность на сайте и в соцсетях за календарный день с первого числа месяца по выбранную дату.">
+              <span title="Среднее активное время за календарный день с первого числа месяца по выбранную дату.">
                 <small>В среднем за день</small>
                 <b>{{ queueDuration(manager.averageDailyWorkSeconds) }}</b>
               </span>
@@ -1167,6 +1172,16 @@
 
                           @if (example.type === 'RISK') {
                             <div class="review-followup risk-followup">
+                              @if (riskExplanationRequested(example)) {
+                                <span
+                                  class="risk-response-indicator"
+                                  [class]="workerNotificationBadgeClass(example)"
+                                  [title]="workerNotificationTitle(example)"
+                                >
+                                  <i></i>
+                                  {{ workerNotificationBadgeLabel(example) }}
+                                </span>
+                              }
                               <button
                                 type="button"
                                 class="review-action secondary-action"

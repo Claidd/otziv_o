@@ -74,7 +74,8 @@ public class RestApiAuditInterceptor implements HandlerInterceptor {
         }
 
         String path = request.getRequestURI();
-        return path.startsWith("/api/ai/reputation/companies/")
+        return path.startsWith("/api/admin/workload-shadow/monitor/")
+                || path.startsWith("/api/ai/reputation/companies/")
                 && (path.endsWith("/deep-research/jobs/latest")
                 || path.endsWith("/content-pack/jobs/latest"));
     }

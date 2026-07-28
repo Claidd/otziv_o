@@ -295,6 +295,16 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['ADMIN', 'OWNER']
   },
   {
+    id: 'workload-monitor',
+    label: 'Нагрузка',
+    description: 'Теневой анализ и распределение',
+    icon: 'monitor_heart',
+    active: 'workload-monitor',
+    group: 'home',
+    routerLink: '/admin/workload-monitor',
+    roles: ['ADMIN', 'OWNER']
+  },
+  {
     id: 'performers-admin',
     label: 'Исполнители',
     description: 'Управление исполнителями',

@@ -36,6 +36,13 @@ public class Worker {
     @Column(name = "last_nagul_time")
     private LocalDateTime lastNagulTime;
 
+    @Builder.Default
+    @Column(name = "accepts_company_transfers", nullable = false)
+    private boolean acceptsCompanyTransfers = true;
+
+    @Column(name = "company_transfer_preference_changed_at")
+    private LocalDateTime companyTransferPreferenceChangedAt;
+
     @Override
     public int hashCode() {
         return Objects.hash(id);

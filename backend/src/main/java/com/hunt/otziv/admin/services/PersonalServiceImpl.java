@@ -862,6 +862,12 @@ public class PersonalServiceImpl implements PersonalService {
         report.append("\n");
     }
 
+    private void appendWorkerGroupReportBlock(StringBuilder report, String fio, UserData user) {
+        report.append("👷 <b>").append(escapeHtml(fio)).append("</b>\n");
+        appendOrderFlowLines(report, user);
+        report.append("\n");
+    }
+
     private void appendMarketologBlock(StringBuilder report, String fio, UserData user) {
         report.append("📣 <b>").append(escapeHtml(fio)).append("</b>\n");
         report.append("ЗП: <b>").append(money(safeLong(user.getSalary()))).append("</b>\n");
@@ -1338,7 +1344,7 @@ public class PersonalServiceImpl implements PersonalService {
         StringBuilder report = new StringBuilder("📊 <b>Личный отчёт</b>\n\n");
         sortedReportEntries(result).stream()
                 .filter(entry -> ROLE_WORKER.equals(entry.getValue().getRole()))
-                .forEach(entry -> appendWorkerBlock(report, entry.getKey(), entry.getValue()));
+                .forEach(entry -> appendWorkerGroupReportBlock(report, entry.getKey(), entry.getValue()));
         return report.toString().trim();
     }
 
@@ -1395,6 +1401,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .fio(worker.getUser().getFio())
                 .login(worker.getUser().getUsername())
                 .imageId(imageId)
+                .acceptsCompanyTransfers(worker.isAcceptsCompanyTransfers())
                 .build();
     }
 
@@ -1483,6 +1490,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .inCorrect(inCorrectInt)
                 .intVigul(inVigulInt)
                 .publish(inPublishInt)
+                .acceptsCompanyTransfers(worker.isAcceptsCompanyTransfers())
                 .build();
     }
 
@@ -1615,6 +1623,7 @@ public class PersonalServiceImpl implements PersonalService {
                 .sum1Month(sum30.intValue())
                 .order1Month(zps.size())
                 .review1Month(zps.stream().mapToInt(Zp::getAmount).sum())
+                .acceptsCompanyTransfers(worker.isAcceptsCompanyTransfers())
                 .build();
     }
 

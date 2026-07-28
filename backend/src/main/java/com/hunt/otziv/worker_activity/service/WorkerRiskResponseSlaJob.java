@@ -57,14 +57,16 @@ public class WorkerRiskResponseSlaJob {
             if (incident.getResponseDueAt() == null || incident.getExplanationAcceptedAt() != null) {
                 continue;
             }
+            boolean overdue = !incident.getResponseDueAt().isAfter(now);
             LocalDateTime reminderDueAt = incident.getResponseDueAt()
                     .minusMinutes(Math.max(0, deadlineMinutes - reminderMinutes));
-            if (incident.getExplanationReminderAt() == null && !reminderDueAt.isAfter(now)) {
+            if (!overdue && incident.getExplanationReminderAt() == null && !reminderDueAt.isAfter(now)) {
                 sendReminder(incident, now);
             }
             if (restrictionEnabled
                     && incident.getSectionRestrictedAt() == null
-                    && !incident.getResponseDueAt().isAfter(now)) {
+                    && overdue) {
+                sendOverdue(incident, now);
                 incident.setSectionRestrictedAt(now);
                 incidentRepository.save(incident);
                 eventService.record(
@@ -90,14 +92,21 @@ public class WorkerRiskResponseSlaJob {
         if (chatId == null) {
             return;
         }
-        String text = "⏳ Напоминание: нужно пояснить замечание."
+        String text = "🟡 НУЖНО ОТВЕТИТЬ"
+                + "\nНапоминание: нужно пояснить замечание."
                 + "\nПричина: " + clean(incident.getTitle())
                 + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
                 + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
-                + "\n\nОтветьте на это сообщение конкретным пояснением."
+                + "\n\nНажмите «Пояснить причину» и отправьте конкретный ответ."
+                + "\nОтвет будет проверен DeepSeek."
                 + "\nКод запроса: risk-" + incident.getId()
                 + "\nБез пояснения раздел «Специалист» будет временно ограничен.";
-        if (telegramService.sendMessage(chatId, text)) {
+        if (telegramService.sendMessageWithInlineKeyboard(
+                chatId,
+                text,
+                null,
+                WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
+        )) {
             incident.setExplanationReminderAt(now);
             incidentRepository.save(incident);
             eventService.record(
@@ -107,6 +116,44 @@ public class WorkerRiskResponseSlaJob {
                     "WORKER",
                     "telegram",
                     Map.of("chatId", chatId)
+            );
+        }
+    }
+
+    private void sendOverdue(WorkerRiskIncident incident, LocalDateTime now) {
+        User worker = userService.findByUserName(incident.getWorkerUsername()).orElse(null);
+        if (worker == null || !worker.isActive()) {
+            return;
+        }
+        Long chatId = worker.getWorkerTelegramGroupChatId() != null
+                ? worker.getWorkerTelegramGroupChatId()
+                : worker.getTelegramChatId();
+        if (chatId == null) {
+            return;
+        }
+        String text = "🔴 ОТВЕТ ПРОСРОЧЕН"
+                + "\nПояснение не получено в течение 3 часов."
+                + "\nПричина: " + clean(incident.getTitle())
+                + "\nЗаказ: #" + valueOrDash(incident.getOrderId())
+                + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
+                + "\n\nНажмите «Пояснить причину» и отправьте конкретный ответ."
+                + "\nОтвет будет проверен DeepSeek."
+                + "\nКод запроса: risk-" + incident.getId();
+        if (telegramService.sendMessageWithInlineKeyboard(
+                chatId,
+                text,
+                null,
+                WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
+        )) {
+            incident.setExplanationReminderAt(now);
+            incidentRepository.save(incident);
+            eventService.record(
+                    incident,
+                    WorkerRiskEventType.EXPLANATION_REMINDER_SENT,
+                    incident.getWorkerUserId(),
+                    "WORKER",
+                    "telegram-overdue",
+                    Map.of("chatId", chatId, "overdue", true)
             );
         }
     }

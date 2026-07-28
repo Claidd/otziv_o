@@ -1,0 +1,755 @@
+<app-admin-layout title="Нагрузка" active="workload-monitor">
+  <section class="workload-shadow">
+    <header class="page-toolbar">
+      <div>
+        <div class="eyebrow">
+          <span class="material-icons-sharp">visibility</span>
+          Теневой контур
+        </div>
+        <h1>Мониторинг нагрузки</h1>
+        <p>
+          Система только рассчитывает и предлагает решения. Компании, заказы и карточки
+          автоматически не передаются.
+        </p>
+      </div>
+
+      <div class="toolbar-actions">
+        <span class="mode-pill" [class.off]="settings()?.mode === 'OFF'">
+          <span class="material-icons-sharp">shield</span>
+          {{ statusLabel(settings()?.mode || summary()?.mode || 'SHADOW') }}
+        </span>
+        @if (lastUpdatedAt()) {
+          <small>Обновлено {{ lastUpdatedAt() | date:'dd.MM.yyyy HH:mm:ss' }}</small>
+        }
+      </div>
+    </header>
+
+    <nav class="page-tabs" aria-label="Разделы мониторинга">
+      <button
+        type="button"
+        [class.active]="activeTab() === 'monitor'"
+        (click)="setTab('monitor')"
+      >
+        <span class="material-icons-sharp">monitor_heart</span>
+        Мониторинг
+      </button>
+      <button
+        type="button"
+        [class.active]="activeTab() === 'settings'"
+        (click)="setTab('settings')"
+      >
+        <span class="material-icons-sharp">tune</span>
+        Настройки
+      </button>
+    </nav>
+
+    @if (activeTab() === 'monitor') {
+      @if (monitorError()) {
+        <app-load-error-card
+          title="Часть данных мониторинга недоступна"
+          [message]="monitorError()!"
+          actionLabel="Повторить"
+          [loading]="monitorLoading()"
+          (retry)="loadMonitor()"
+        />
+      }
+
+      <section class="metric-grid" aria-label="Сводные показатели">
+        @for (metric of metrics(); track metric.label) {
+          <article class="metric-card" [attr.data-tone]="metric.tone">
+            <span class="metric-icon material-icons-sharp">{{ metric.icon }}</span>
+            <div>
+              <strong>{{ metric.value }}</strong>
+              <small>{{ metric.label }}</small>
+            </div>
+          </article>
+        }
+      </section>
+
+      @if (visibleManagerSummaries().length) {
+        <section class="monitor-section">
+          <div class="section-heading">
+            <div>
+              <span class="material-icons-sharp">supervisor_account</span>
+              <div>
+                <h2>Итоги менеджеров</h2>
+                <p>Процент менеджера — среднее актуальных процентов его специалистов.</p>
+              </div>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Менеджер</th>
+                  <th>Итог дня</th>
+                  <th>Специалисты 100%</th>
+                  <th>Готовится передач</th>
+                  <th>Кадровый сигнал</th>
+                  <th>Audit-группа</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (manager of visibleManagerSummaries(); track manager.managerId) {
+                  <tr>
+                    <td><strong>{{ manager.managerName }}</strong></td>
+                    <td><strong>{{ (manager.progressPercent ?? 100) | number:'1.0-1' }}%</strong></td>
+                    <td>{{ manager.workersAt100 ?? manager.hundredPercentWorkers ?? 0 }}/{{ manager.workerCount }}</td>
+                    <td>{{ manager.transferCaseCount ?? manager.pendingProposals ?? 0 }}</td>
+                    <td>{{ manager.staffingRequired ? 'Нужен сотрудник' : 'Нет' }}</td>
+                    <td>{{ manager.groupConnected ? 'Подключена' : 'Не подключена' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+
+      <section class="control-panel">
+        <label>
+          <span>Менеджер</span>
+          <select
+            [ngModel]="selectedManagerId()"
+            (ngModelChange)="selectManager($event)"
+            aria-label="Фильтр по менеджеру"
+          >
+            <option [ngValue]="null">Все менеджеры</option>
+            @for (manager of managers(); track manager.id) {
+              <option [ngValue]="manager.id">{{ manager.name }}</option>
+            }
+          </select>
+        </label>
+
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="monitorLoading()"
+          (click)="loadMonitor()"
+        >
+          <span class="material-icons-sharp" [class.spin]="monitorLoading()">refresh</span>
+          {{ monitorLoading() ? 'Обновляю' : 'Обновить' }}
+        </button>
+
+        @if (canRepair()) {
+          <button
+            type="button"
+            class="primary-button"
+            [disabled]="recalculating()"
+            (click)="recalculate()"
+          >
+            <span class="material-icons-sharp">calculate</span>
+            {{ recalculating() ? 'Пересчитываю' : 'Теневой пересчёт' }}
+          </button>
+          <button
+            type="button"
+            class="repair-button"
+            [disabled]="repairing()"
+            (click)="repair()"
+          >
+            <span class="material-icons-sharp">healing</span>
+            {{ repairing() ? 'Проверяю' : 'Самоналадка' }}
+          </button>
+        }
+      </section>
+
+      <section class="monitor-section health-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">monitor_heart</span>
+            <div>
+              <h2>Самодиагностика</h2>
+              <p>Состояние расчётов, очередей, хранения данных и интеграций.</p>
+            </div>
+          </div>
+          <span class="status-badge" [attr.data-status]="health()?.status || 'UNKNOWN'">
+            {{ statusLabel(health()?.status) }}
+          </span>
+        </div>
+
+        <div class="health-summary">
+          <div>
+            <small>Последний расчёт</small>
+            <strong>
+              {{ healthLastRunAt() ? (healthLastRunAt() | date:'dd.MM HH:mm:ss') : '—' }}
+            </strong>
+          </div>
+          <div>
+            <small>Следующий расчёт</small>
+            <strong>{{ health()?.nextRunAt ? (health()?.nextRunAt | date:'dd.MM HH:mm:ss') : '—' }}</strong>
+          </div>
+          <div>
+            <small>Очередь</small>
+            <strong>{{ healthQueueDepth() }}</strong>
+          </div>
+          <div>
+            <small>Ошибок запусков</small>
+            <strong>{{ healthFailedCount() }}</strong>
+          </div>
+          <div>
+            <small>Исправлено</small>
+            <strong>{{ health()?.repairedItems ?? 0 }}</strong>
+          </div>
+          <div>
+            <small>Выгул одной карточки</small>
+            <strong>{{ summary()?.walkEstimate?.effectiveMinutes ?? settings()?.walkMinutesPerCard ?? 4 }} мин</strong>
+          </div>
+          <div>
+            <small>Источник оценки</small>
+            <strong>
+              {{ summary()?.walkEstimate?.source === 'ADAPTIVE'
+                ? 'Статистика (' + (summary()?.walkEstimate?.sampleCount ?? 0) + ')'
+                : 'По умолчанию' }}
+            </strong>
+          </div>
+        </div>
+
+        @if (healthNodes().length) {
+          <div class="node-grid">
+            @for (node of healthNodes(); track node.name) {
+              <article>
+                <span class="node-dot" [attr.data-status]="node.status"></span>
+                <div>
+                  <strong>{{ node.name }}</strong>
+                  <small>{{ node.message || statusLabel(node.status) }}</small>
+                </div>
+                @if (node.lagSeconds != null) {
+                  <em>{{ node.lagSeconds }} с</em>
+                }
+              </article>
+            }
+          </div>
+        }
+
+        @if (healthIssues().length) {
+          <div class="issue-list">
+            @for (issue of healthIssues(); track issue.code) {
+              <article [attr.data-severity]="issue.severity || 'WARNING'">
+                <span class="material-icons-sharp">report_problem</span>
+                <div>
+                  <strong>{{ issue.component || issue.code }}</strong>
+                  <p>{{ issue.message }}</p>
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <p class="empty-state compact">
+            <span class="material-icons-sharp">verified</span>
+            Активных диагностических предупреждений нет.
+          </p>
+        }
+      </section>
+
+      <section class="monitor-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">groups</span>
+            <div>
+              <h2>Специалисты и списки распределения</h2>
+              <p>{{ recipientEligibilityBasis }}</p>
+            </div>
+          </div>
+          <label class="search-field">
+            <span class="material-icons-sharp">search</span>
+            <input
+              type="search"
+              placeholder="Сотрудник, менеджер, причина"
+              [ngModel]="workerSearch()"
+              (ngModelChange)="setWorkerSearch($event)"
+            >
+          </label>
+        </div>
+
+        @if (filteredWorkers().length) {
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Специалист</th>
+                  <th>Менеджер</th>
+                  <th>Сегодня · мониторинг</th>
+                  <th>Завершённые дни месяца</th>
+                  <th>Рейтинг</th>
+                  <th>Получение компаний</th>
+                  <th>Очередь</th>
+                  <th>Причины</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (worker of filteredWorkers(); track trackWorker($index, worker)) {
+                  <tr>
+                    <td>
+                      <div class="person-cell">
+                        <span class="avatar-placeholder">{{ worker.workerName.slice(0, 1) }}</span>
+                        <div>
+                          <strong>{{ worker.workerName }}</strong>
+                          <small>{{ worker.username || ('ID ' + (worker.workerUserId || worker.workerId)) }}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{{ worker.managerName || '—' }}</td>
+                    <td>
+                      <div class="percent-cell">
+                        <strong>{{ workerPercent(worker) | number:'1.0-1' }}%</strong>
+                        <span><i [style.width.%]="workerPercent(worker)"></i></span>
+                        <small>
+                          {{ worker.completedUnits ?? 0 }}/{{ workerEligibleUnits(worker) }}
+                          ед.
+                        </small>
+                        @if ((worker.lateExcludedUnits ?? worker.lateUnits ?? 0) > 0) {
+                          <small class="stacked">
+                            +{{ worker.lateExcludedUnits ?? worker.lateUnits }} поздних вне процента
+                          </small>
+                        }
+                        <small class="stacked">
+                          План {{ worker.plannedUnits ?? 0 }} · входящие {{ worker.incomingUnits ?? 0 }}
+                        </small>
+                        <small class="stacked">До завершения дня процент не влияет на допуск</small>
+                        @if ((worker.urgentUnits ?? 0) > 0) {
+                          <small class="stacked">Срочные: {{ worker.urgentUnits }}</small>
+                        }
+                        @if ((worker.blockedUnits ?? 0) > 0) {
+                          <small class="stacked">
+                            Вне процента: {{ worker.blockedUnits }}
+                            (внешние {{ worker.externalBlockedUnits ?? 0 }},
+                            клиент {{ worker.clientDeferredUnits ?? 0 }},
+                            менеджер {{ worker.managerDeferredUnits ?? 0 }})
+                          </small>
+                        }
+                      </div>
+                    </td>
+                    <td>
+                      <strong class="success-text">
+                        {{ worker.hundredPercentDays ?? 0 }} из {{ workerEvaluatedDays(worker) }} дней — 100%
+                      </strong>
+                      <small class="stacked">
+                        {{ workerRate(worker) | number:'1.0-1' }}% с начала месяца
+                      </small>
+                      <small class="stacked">{{ worker.failureDays ?? 0 }} завершённых дней без 100%</small>
+                      <small class="stacked">
+                        Последний завершённый день:
+                        {{ workerLastCompletedDayLabel(worker) }}
+                      </small>
+                    </td>
+                    <td>
+                      <strong>{{ worker.rating == null ? '—' : (worker.rating | number:'1.0-1') }}</strong>
+                    </td>
+                    <td>
+                      <span
+                        class="acceptance-badge"
+                        [class.accepting]="worker.acceptsCompanyTransfers"
+                        [class.excluded]="worker.acceptsCompanyTransfers === false"
+                      >
+                        <span class="material-icons-sharp">
+                          {{ worker.acceptsCompanyTransfers ? 'check_circle' : 'do_not_disturb_on' }}
+                        </span>
+                        {{ worker.acceptsCompanyTransfers ? 'Принимает' : 'Не принимает' }}
+                      </span>
+                    </td>
+                    <td>
+                      @if (workerEligible(worker)) {
+                        <span class="rank-badge">
+                          {{ workerDistributionLabel(worker) }}
+                        </span>
+                      } @else {
+                        <span class="muted-badge">{{ workerDistributionLabel(worker) }}</span>
+                      }
+                    </td>
+                    <td>
+                      @if (workerReasons(worker).length) {
+                        <ul class="reason-list">
+                          @for (reason of workerReasons(worker); track reason) {
+                            <li>{{ reason }}</li>
+                          }
+                        </ul>
+                      } @else {
+                        <span class="muted">—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="empty-state">
+            <span class="material-icons-sharp">person_search</span>
+            По выбранным условиям специалистов нет.
+          </p>
+        }
+      </section>
+
+      <section class="monitor-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">move_up</span>
+            <div>
+              <h2>Компании, готовящиеся к передаче</h2>
+              <p>Это прогноз. В режиме наблюдения система ничего не переназначает.</p>
+            </div>
+          </div>
+          <label>
+            <span class="visually-hidden">Статус предложения</span>
+            <select
+              [ngModel]="proposalStatus()"
+              (ngModelChange)="setProposalStatus($event)"
+              aria-label="Фильтр предложений по статусу"
+            >
+              <option value="ALL">Все статусы</option>
+              @for (status of proposalStatuses(); track status) {
+                <option [value]="status">{{ statusLabel(status) }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        @if (filteredProposals().length) {
+          <div class="proposal-grid">
+            @for (proposal of filteredProposals(); track trackProposal($index, proposal)) {
+              <article class="proposal-card">
+                <header>
+                  <div>
+                    <small>{{ proposal.managerName || 'Менеджер не указан' }}</small>
+                    <h3>{{ proposal.sourceWorkerName || 'Источник не указан' }}</h3>
+                  </div>
+                  <span class="status-badge" [attr.data-status]="proposal.status">
+                    {{ statusLabel(proposal.status) }}
+                  </span>
+                </header>
+
+                <div class="proposal-facts">
+                  <span><b>{{ proposalCompanyCount(proposal) }}</b> компаний</span>
+                  <span><b>{{ proposalTargetPercent(proposal) }}</b>% разгрузки</span>
+                  <span><b>{{ proposal.estimatedMinutes ?? '—' }}</b> мин</span>
+                  @if (proposal.staffingRequired && proposal.fallbackReviewId) {
+                    <span><b>#{{ proposal.fallbackReviewId }}</b> резервная карточка</span>
+                  }
+                </div>
+
+                <p>{{ proposal.reason || 'Основание будет сформировано после расчёта.' }}</p>
+
+                @if (proposal.companies?.length) {
+                  <div class="company-chips">
+                    @for (company of proposal.companies!; track company.companyId) {
+                      <span title="Передаётся целиком со всеми направлениями">
+                        {{ company.companyName }}
+                        <small>{{ company.activeUnitCount ?? 0 }} ед.</small>
+                      </span>
+                    }
+                  </div>
+                } @else if (proposal.companyTitle) {
+                  <div class="company-chips">
+                    <span title="Передаётся целиком со всеми направлениями">
+                      {{ proposal.companyTitle }}
+                      <small>{{ proposal.problemUnits ?? 0 }} ед.</small>
+                    </span>
+                  </div>
+                }
+
+                @if (proposal.graph) {
+                  <div class="company-chips graph-chips" aria-label="Состав компании">
+                    <span>Заказы <small>{{ proposal.graph.activeOrders ?? 0 }}</small></span>
+                    <span>Новые <small>{{ proposal.graph.newUnits ?? 0 }}</small></span>
+                    <span>Коррекция <small>{{ proposal.graph.correction ?? 0 }}</small></span>
+                    <span>Выгул <small>{{ proposal.graph.nagul ?? 0 }}</small></span>
+                    <span>Публикация <small>{{ proposal.graph.publish ?? 0 }}</small></span>
+                    <span>Восстановление <small>{{ proposal.graph.recovery ?? 0 }}</small></span>
+                    <span>Плохие <small>{{ proposal.graph.bad ?? 0 }}</small></span>
+                  </div>
+                }
+
+                @if ((proposal.graphErrorCount ?? 0) > 0 || (proposal.graphWarningCount ?? 0) > 0) {
+                  <div class="graph-diagnostics">
+                    @if ((proposal.graphErrorCount ?? 0) > 0) {
+                      <strong>
+                        Ошибки графа: {{ proposal.graphErrorCount }}
+                        <small>{{ proposal.graphErrorCodes || 'без кода' }}</small>
+                      </strong>
+                    }
+                    @if ((proposal.graphWarningCount ?? 0) > 0) {
+                      <span>
+                        Предупреждения: {{ proposal.graphWarningCount }}
+                        <small>{{ proposal.graphWarningCodes || 'без кода' }}</small>
+                      </span>
+                    }
+                  </div>
+                }
+
+                @if (proposal.candidates?.length) {
+                  <div class="company-chips candidate-sequence" aria-label="Очередь получателей">
+                    @for (candidate of proposal.candidates!; track candidate.workerId) {
+                      <span>
+                        #{{ candidate.sequenceNumber ?? candidate.rank ?? ($index + 1) }}
+                        {{ candidate.workerName }}
+                        <small>рейтинг {{ candidate.rating ?? '—' }}</small>
+                      </span>
+                    }
+                  </div>
+                }
+
+                <footer>
+                  <span class="material-icons-sharp">recommend</span>
+                  <div>
+                    <small>Первый кандидат</small>
+                    <strong>{{ proposalRecommendedWorker(proposal) }}</strong>
+                  </div>
+                </footer>
+              </article>
+            }
+          </div>
+        } @else {
+          <p class="empty-state">
+            <span class="material-icons-sharp">inventory_2</span>
+            Предложений о передаче пока нет.
+          </p>
+        }
+      </section>
+
+      <section class="monitor-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">event_note</span>
+            <div>
+              <h2>Журнал событий</h2>
+              <p>Последние 50 расчётов, предупреждений, уведомлений и диагностик.</p>
+            </div>
+          </div>
+          <label>
+            <span class="visually-hidden">Важность события</span>
+            <select
+              [ngModel]="eventSeverity()"
+              (ngModelChange)="setEventSeverity($event)"
+              aria-label="Фильтр событий по важности"
+            >
+              <option value="ALL">Все уровни</option>
+              @for (severity of eventSeverities(); track severity) {
+                <option [value]="severity">{{ severity }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        @if (filteredEvents().length) {
+          <div class="event-list">
+            @for (event of filteredEvents(); track trackEvent($index, event)) {
+              <article [attr.data-tone]="eventTone(event)">
+                <span class="event-marker"></span>
+                <div class="event-body">
+                  <header>
+                    <strong>{{ event.eventType }}</strong>
+                    <time>{{ eventTimestamp(event) | date:'dd.MM.yyyy HH:mm:ss' }}</time>
+                  </header>
+                  <p>{{ event.message }}</p>
+                  <small>
+                    {{ event.managerName || 'Без менеджера' }}
+                    @if (event.workerName) { · {{ event.workerName }} }
+                    @if (eventCompany(event)) { · {{ eventCompany(event) }} }
+                    @if (event.targetGroupType) {
+                      · {{ event.targetGroupType }}
+                      {{ event.targetGroupConnected === false ? '(группа не привязана)' : '' }}
+                    }
+                    @if (event.deliveryStatus) {
+                      · доставка: {{ event.deliveryStatus }}
+                      @if (event.deliveryAttempts) { (попыток: {{ event.deliveryAttempts }}) }
+                    }
+                  </small>
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <p class="empty-state">
+            <span class="material-icons-sharp">history</span>
+            Событий выбранного уровня нет.
+          </p>
+        }
+      </section>
+    } @else {
+      @if (settingsError()) {
+        <app-load-error-card
+          title="Настройки наблюдения"
+          [message]="settingsError()!"
+          actionLabel="Загрузить заново"
+          [loading]="settingsLoading()"
+          (retry)="loadSettings()"
+        />
+      }
+
+      <form class="settings-form" [formGroup]="form" (ngSubmit)="saveSettings()">
+        <section class="safety-banner">
+          <span class="material-icons-sharp">visibility</span>
+          <div>
+            <strong>Перед сохранением действует жёсткая защита</strong>
+            <p>
+              UI не позволяет включить LIVE или применение решений. Все передачи остаются
+              рекомендациями для администратора и владельцев.
+            </p>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">shield</span>
+            <div><h2>Режим и уведомления</h2><p>Безопасность контура и отправка сообщений только в группы.</p></div>
+          </div>
+          <div class="field-grid">
+            <label>
+              <span>Режим</span>
+              <select formControlName="mode">
+                <option value="SHADOW">Наблюдение</option>
+              </select>
+            </label>
+            <label class="switch-field">
+              <input type="checkbox" formControlName="observationEnabled">
+              <span><b>Сбор наблюдений</b><small>Считать показатели без изменений рабочих данных</small></span>
+            </label>
+            <label class="switch-field">
+              <input type="checkbox" formControlName="groupNotificationsEnabled">
+              <span><b>Уведомления в группы</b><small>Предложения и предупреждения не отправляются в личку</small></span>
+            </label>
+            <label class="switch-field locked">
+              <input type="checkbox" formControlName="applyEnabled">
+              <span><b>Применение решений</b><small>Заблокировано для режима наблюдения</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">schedule</span>
+            <div><h2>Расписание расчётов</h2><p>Обычный интервал и более частая проверка к завершению смены.</p></div>
+          </div>
+          <div class="field-grid">
+            <label><span>Интервал планировщика, мин</span><input type="number" formControlName="schedulerIntervalMinutes"></label>
+            <label><span>Интервал у конца смены, мин</span><input type="number" formControlName="nearEndIntervalMinutes"></label>
+            <label><span>Окно до конца смены, мин</span><input type="number" formControlName="nearEndWindowMinutes"></label>
+            <label><span>Часовой пояс</span><input type="text" formControlName="businessZone"></label>
+            <label><span>Начало смены</span><input type="time" formControlName="shiftStart"></label>
+            <label><span>Конец смены</span><input type="time" formControlName="shiftEnd"></label>
+            <label><span>Просроченный запуск через, мин</span><input type="number" formControlName="staleRunMinutes"></label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">timer</span>
+            <div><h2>Оценка трудоёмкости</h2><p>Новый заказ и выгул считаются по карточкам, коррекция — одна задача на заказ.</p></div>
+          </div>
+          <div class="field-grid">
+            <label><span>Выгул одной карточки, мин</span><input type="number" formControlName="walkMinutesPerCard"></label>
+            <label><span>Минимум выгула, мин</span><input type="number" formControlName="walkMinimumMinutesPerCard" min="3"></label>
+            <label><span>Новая карточка, мин</span><input type="number" formControlName="newMinutesPerCard"></label>
+            <label><span>Коррекция заказа, мин</span><input type="number" formControlName="correctionMinutesPerOrder"></label>
+            <label><span>Публикация карточки, мин</span><input type="number" formControlName="publishMinutesPerCard"></label>
+            <label><span>Восстановление, мин</span><input type="number" formControlName="recoveryMinutesPerTask"></label>
+            <label><span>Плохой отзыв, мин</span><input type="number" formControlName="badMinutesPerTask"></label>
+            <label class="switch-field">
+              <input type="checkbox" formControlName="adaptiveEstimatesEnabled">
+              <span><b>Адаптивные оценки</b><small>Уточнять время по накопленной статистике</small></span>
+            </label>
+            <label><span>Минимум примеров</span><input type="number" formControlName="adaptiveMinimumSamples"></label>
+            <label><span>Окно рейтинга и оценок, дней</span><input type="number" formControlName="lookbackDays"></label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">leaderboard</span>
+            <div>
+              <h2>Допуск к получению компаний</h2>
+              <p>{{ recipientEligibilityBasis }} Кандидаты остаются внутри команды своего менеджера.</p>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label><span>Дней без 100% до реакции</span><input type="number" formControlName="allowedFailureDays"></label>
+            <label><span>Минимальный рейтинг</span><input type="number" formControlName="recipientMinimumRating"></label>
+            <label><span>Минимальная доля 100%-дней с начала месяца, %</span><input type="number" formControlName="recipientMinimumHundredPercentRate"></label>
+            <label><span>Максимум дней без 100% с начала месяца</span><input type="number" formControlName="recipientMaximumFailureDays"></label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">move_up</span>
+            <div><h2>Ступени предлагаемой разгрузки</h2><p>Компания всегда предлагается целиком со всеми её заказами и направлениями.</p></div>
+          </div>
+          <div class="failure-grid">
+            <article>
+              <strong>Первое превышение порога</strong>
+              <label><span>Доля, %</span><input type="number" formControlName="fourthFailurePercent"></label>
+              <label><span>Не более компаний</span><input type="number" formControlName="fourthFailureMaxCompanies"></label>
+            </article>
+            <article>
+              <strong>Второе превышение порога</strong>
+              <label><span>Доля, %</span><input type="number" formControlName="fifthFailurePercent"></label>
+              <label><span>Не более компаний</span><input type="number" formControlName="fifthFailureMaxCompanies"></label>
+            </article>
+            <article>
+              <strong>Третье и последующие превышения</strong>
+              <label><span>Доля, %</span><input type="number" formControlName="sixthFailurePercent"></label>
+              <label><span>Не более компаний</span><input type="number" formControlName="sixthFailureMaxCompanies"></label>
+            </article>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">ac_unit</span>
+            <div><h2>Заморозки и оповещения</h2><p>Поощрение стабильности и защита от повторяющихся уведомлений.</p></div>
+          </div>
+          <div class="field-grid">
+            <label><span>Дней для одной заморозки</span><input type="number" formControlName="freezeEarnDays"></label>
+            <label><span>Максимум заморозок</span><input type="number" formControlName="freezeMaxCredits"></label>
+            <label><span>Пауза между сигналами, мин</span><input type="number" formControlName="alertCooldownMinutes"></label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">send</span>
+            <div>
+              <h2>Доставка в группы и обслуживание</h2>
+              <p>Размер очереди, повторные попытки и ограниченная очистка данных за один проход.</p>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label><span>Событий в одной пачке</span><input type="number" formControlName="notificationBatchSize"></label>
+            <label><span>Максимум попыток доставки</span><input type="number" formControlName="notificationMaxAttempts"></label>
+            <label><span>Аренда события, мин</span><input type="number" formControlName="notificationLeaseMinutes"></label>
+            <label><span>Базовая пауза повтора, мин</span><input type="number" formControlName="notificationRetryBaseMinutes"></label>
+            <label><span>Записей обслуживания за проход</span><input type="number" formControlName="maintenanceBatchSize"></label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">storage</span>
+            <div><h2>Хранение и агрегация</h2><p>Сырые данные очищаются, долгосрочная статистика хранится агрегированно.</p></div>
+          </div>
+          <div class="field-grid">
+            <label><span>Запуски, дней</span><input type="number" formControlName="runRetentionDays"></label>
+            <label><span>Дневные агрегаты, дней</span><input type="number" formControlName="dailyRetentionDays"></label>
+            <label><span>События, дней</span><input type="number" formControlName="eventRetentionDays"></label>
+            <label><span>Решения нагрузки, дней</span><input type="number" formControlName="decisionRetentionDays"></label>
+            <label><span>Ревизия</span><input type="number" formControlName="revision" readonly></label>
+          </div>
+        </section>
+
+        <footer class="settings-actions">
+          <div>
+            <strong>Изменения влияют только на будущие теневые расчёты</strong>
+            <small>Текущие назначения сотрудников не изменятся.</small>
+          </div>
+          <button type="button" class="secondary-button" [disabled]="settingsLoading()" (click)="loadSettings()">
+            Отменить изменения
+          </button>
+          <button type="submit" class="primary-button" [disabled]="saving() || settingsLoading() || !settings()">
+            <span class="material-icons-sharp">save</span>
+            {{ saving() ? 'Сохраняю' : 'Сохранить настройки' }}
+          </button>
+        </footer>
+      </form>
+    }
+  </section>
+</app-admin-layout>

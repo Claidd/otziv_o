@@ -827,7 +827,9 @@ class ManagerControlServiceTest {
         concrete.setEntityId(25442L);
         concrete.setReason("Автоответчик не обработал заказ: нет записи в очереди CLIENT_TEXT_REMINDER");
 
-        LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 7, 18, 14, 50, 19);
+        LocalDateTime waitingChangedAt = LocalDate.now()
+                .minusDays(1)
+                .atTime(14, 50, 19);
         Company company = new Company();
         company.setId(2155L);
         company.setTitle("Хэлп Девелопмент");
@@ -846,10 +848,10 @@ class ManagerControlServiceTest {
         ScheduledClientMessageState healthyState = ScheduledClientMessageState.builder()
                 .id(4200L)
                 .scenario(ClientMessageScenario.CLIENT_TEXT_REMINDER)
-                .targetKey("client-text:25442:2026-07-18T14:50:19")
+                .targetKey("client-text:25442:" + waitingChangedAt)
                 .orderId(25442L)
                 .status(ScheduledMessageStateStatus.ACTIVE)
-                .nextAttemptAt(LocalDateTime.of(2026, 7, 24, 20, 54, 6))
+                .nextAttemptAt(LocalDateTime.now().plusDays(1))
                 .build();
 
         stubSuccessfulConcreteAction(concrete, parent);

@@ -6,6 +6,7 @@ import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.r_review.utils.ReviewTextPolicy;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -33,11 +34,18 @@ public class Review {
     private Long id;
     @Column(name = "review_text")
     private String text;
+    @Column(name = "review_text_ready_at")
+    private LocalDateTime textReadyAt;
+    @Column(name = "review_text_ready_worker_id")
+    private Long textReadyWorkerId;
     @Column(name = "review_answer")
     private String answer;
     @CreationTimestamp
     @Column(name = "review_created")
     private LocalDate created;
+    @CreationTimestamp
+    @Column(name = "review_created_at", updatable = false)
+    private LocalDateTime createdAt;
     @UpdateTimestamp
     @Column(name = "review_changed")
     private LocalDate changed;
@@ -45,6 +53,8 @@ public class Review {
     private LocalDate publishedDate;
     @Column(name = "review_vigul")
     private boolean vigul;
+    @Column(name = "review_vigul_changed_at")
+    private LocalDateTime vigulChangedAt;
     @Column(name = "review_account_walk_delay_days", nullable = false)
     private int accountWalkDelayDays;
     @Column(name = "review_account_walk_delay_bot_id")
@@ -92,6 +102,72 @@ public class Review {
 
     @Column(name = "review_url")
     private String url;
+
+    @Transient
+    private boolean textReadyWhenLoaded;
+    @Transient
+    private boolean vigulWhenLoaded;
+
+    @PostLoad
+    void rememberTrackedState() {
+        rememberTextReadiness();
+        rememberVigulState();
+    }
+
+    void rememberTextReadiness() {
+        textReadyWhenLoaded = !ReviewTextPolicy.isBlankOrPlaceholder(text);
+    }
+
+    void rememberVigulState() {
+        vigulWhenLoaded = vigul;
+    }
+
+    @PrePersist
+    void markInitialTrackedState() {
+        markInitialTextReadyAt();
+        markInitialVigulState();
+    }
+
+    void markInitialTextReadyAt() {
+        if (textReadyAt == null && !ReviewTextPolicy.isBlankOrPlaceholder(text)) {
+            textReadyAt = LocalDateTime.now();
+            textReadyWorkerId = worker == null ? null : worker.getId();
+        }
+    }
+
+    void markInitialVigulState() {
+        if (vigulChangedAt == null) {
+            vigulChangedAt = LocalDateTime.now();
+        }
+        vigulWhenLoaded = vigul;
+    }
+
+    @PreUpdate
+    void markTrackedTransitions() {
+        markTextReadyTransition();
+        markVigulTransition();
+    }
+
+    void markTextReadyTransition() {
+        if (textReadyAt == null
+                && !textReadyWhenLoaded
+                && !ReviewTextPolicy.isBlankOrPlaceholder(text)) {
+            textReadyAt = LocalDateTime.now();
+            textReadyWorkerId = worker == null ? null : worker.getId();
+        }
+    }
+
+    void markVigulTransition() {
+        if (vigul != vigulWhenLoaded) {
+            vigulChangedAt = LocalDateTime.now();
+        }
+    }
+
+    @PostUpdate
+    void rememberUpdatedTrackedState() {
+        textReadyWhenLoaded = !ReviewTextPolicy.isBlankOrPlaceholder(text);
+        vigulWhenLoaded = vigul;
+    }
 
     @Override
     public boolean equals(Object o) {

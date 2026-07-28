@@ -76,6 +76,57 @@
         </section>
       }
 
+      @if (showTransferPreference()) {
+        <section class="panel transfer-preference-panel" aria-label="Получение компаний">
+          <div class="transfer-preference-panel__content">
+            <span class="transfer-preference-panel__icon material-icons-sharp">move_to_inbox</span>
+            <div>
+              <p class="eyebrow">РАСПРЕДЕЛЕНИЕ НАГРУЗКИ</p>
+              <h2>Получение компаний</h2>
+              <p>
+                Вы можете временно исключить себя из списка сотрудников, которым система
+                предлагает принять компанию. Уже назначенные компании не изменятся.
+              </p>
+              @if (transferPreferenceError()) {
+                <small class="transfer-preference-panel__error">
+                  {{ transferPreferenceError() }}
+                  <button type="button" (click)="loadTransferPreference()">Повторить</button>
+                </small>
+              }
+            </div>
+          </div>
+
+          <div class="transfer-preference-panel__control">
+            <strong>
+              @if (transferPreferenceLoading()) {
+                Загружаю…
+              } @else if (transferPreference() == null) {
+                Статус неизвестен
+              } @else if (transferPreference() === false) {
+                Не принимаю
+              } @else {
+                Принимаю
+              }
+            </strong>
+            <button
+              type="button"
+              class="preference-switch"
+              role="switch"
+              [class.on]="transferPreference() === true"
+              [attr.aria-checked]="transferPreference() === true"
+              [attr.aria-label]="transferPreference() === false ? 'Включить получение компаний' : 'Выключить получение компаний'"
+              [disabled]="transferPreferenceLoading() || transferPreferenceSaving() || transferPreference() == null"
+              (click)="toggleTransferPreference()"
+            >
+              <span></span>
+            </button>
+            @if (transferPreferenceSaving()) {
+              <small>Сохраняю…</small>
+            }
+          </div>
+        </section>
+      }
+
       @if (showManagerTeamProgress() && cabinet()) {
         <section class="panel manager-team-progress" aria-label="Прогресс моей команды">
           <div class="panel-title">

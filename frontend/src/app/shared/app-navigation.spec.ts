@@ -47,6 +47,7 @@ describe('app navigation registry', () => {
       'analytics',
       'team',
       'score',
+      'workload-monitor',
       'dictionaries',
       'tbank',
       'manager-control',
