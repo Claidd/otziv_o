@@ -550,7 +550,7 @@
                       {{ event.targetGroupConnected === false ? '(группа не привязана)' : '' }}
                     }
                     @if (event.deliveryStatus) {
-                      · доставка: {{ event.deliveryStatus }}
+                      · доставка: {{ statusLabel(event.deliveryStatus) }}
                       @if (event.deliveryAttempts) { (попыток: {{ event.deliveryAttempts }}) }
                     }
                   </small>
@@ -606,7 +606,13 @@
             </label>
             <label class="switch-field">
               <input type="checkbox" formControlName="groupNotificationsEnabled">
-              <span><b>Уведомления в общую группу</b><small>Только администраторы и владельцы; группы менеджеров и личные чаты исключены</small></span>
+              <span>
+                <b>Уведомления в общую группу</b>
+                <small>
+                  Только администраторы и владельцы. Накопленные события останутся в мониторинге;
+                  новые и повторно возникшие будут объединяться в сводки.
+                </small>
+              </span>
             </label>
             <label>
               <span>Telegram chat ID группы администраторов и владельцев</span>
@@ -721,11 +727,11 @@
             <span class="material-icons-sharp">send</span>
             <div>
               <h2>Доставка в группы и обслуживание</h2>
-              <p>Размер очереди, повторные попытки и ограниченная очистка данных за один проход.</p>
+              <p>Одна сводка вместо потока сообщений, повторные попытки и ограниченная очистка данных.</p>
             </div>
           </div>
           <div class="field-grid">
-            <label><span>Событий в одной пачке</span><input type="number" formControlName="notificationBatchSize"></label>
+            <label><span>Событий в одной сводке</span><input type="number" min="1" max="250" formControlName="notificationBatchSize"></label>
             <label><span>Максимум попыток доставки</span><input type="number" formControlName="notificationMaxAttempts"></label>
             <label><span>Аренда события, мин</span><input type="number" formControlName="notificationLeaseMinutes"></label>
             <label><span>Базовая пауза повтора, мин</span><input type="number" formControlName="notificationRetryBaseMinutes"></label>

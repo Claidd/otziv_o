@@ -17,6 +17,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsRequest;
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse;
+import com.hunt.otziv.workload_shadow.repository.WorkloadShadowEventRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowSettingsRepository;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 class WorkloadShadowSettingsServiceTest {
 
     @Mock private WorkloadShadowSettingsRepository repository;
+    @Mock private WorkloadShadowEventRepository eventRepository;
     @Mock private BusinessAuditService businessAuditService;
     @Mock private AppSettingService appSettingService;
 
@@ -45,6 +47,7 @@ class WorkloadShadowSettingsServiceTest {
         objectMapper = new ObjectMapper();
         service = new WorkloadShadowSettingsService(
                 repository,
+                eventRepository,
                 businessAuditService,
                 objectMapper,
                 appSettingService
@@ -65,9 +68,10 @@ class WorkloadShadowSettingsServiceTest {
         assertThat(result.walkMinutesPerCard()).isEqualTo(4);
         assertThat(result.walkMinimumMinutesPerCard()).isEqualTo(3);
         assertThat(result.decisionRetentionDays()).isEqualTo(60);
+        assertThat(result.notificationBatchSize()).isEqualTo(250);
         assertThat(result.revision()).isEqualTo(1);
         verify(repository).findAllByPrefix(WorkloadShadowSettingsService.PREFIX);
-        verifyNoInteractions(businessAuditService, appSettingService);
+        verifyNoInteractions(eventRepository, businessAuditService, appSettingService);
     }
 
     @Test
@@ -127,6 +131,7 @@ class WorkloadShadowSettingsServiceTest {
         assertThat(value(payload, "workload.shadow.notification-group-chat-id"))
                 .isEmpty();
 
+        verify(eventRepository, never()).baselineActiveAdminOwnerEvents();
         verify(appSettingService).invalidateByPrefix(WorkloadShadowSettingsService.PREFIX);
         verify(businessAuditService).recordSafely(
                 eq("UPDATE_WORKLOAD_SHADOW_SETTINGS"),
@@ -138,6 +143,98 @@ class WorkloadShadowSettingsServiceTest {
                 eq(result),
                 anyString()
         );
+    }
+
+    @Test
+    void enablingNotificationsBaselinesExistingEventsBeforeStartingTheRoute() {
+        when(repository.findAllByPrefix(WorkloadShadowSettingsService.PREFIX))
+                .thenReturn(rows(Map.of(
+                        "group-notifications-enabled", "false",
+                        "notification-group-chat-id", "-100001",
+                        "settings-revision", "1"
+                )))
+                .thenReturn(rows(Map.of(
+                        "group-notifications-enabled", "true",
+                        "notification-group-chat-id", "-100001",
+                        "settings-revision", "2"
+                )));
+        when(repository.updateAllWithRevision(
+                anyString(),
+                eq(WorkloadShadowSettingsService.PREFIX),
+                eq(WorkloadShadowSettingsService.REVISION_KEY),
+                eq(1L)
+        )).thenReturn(44);
+
+        WorkloadShadowSettingsResponse result = service.update(withNotificationRoute(
+                request(true, false, "Asia/Irkutsk", 1L),
+                true,
+                -100001L
+        ));
+
+        assertThat(result.groupNotificationsEnabled()).isTrue();
+        assertThat(result.notificationGroupChatId()).isEqualTo(-100001L);
+        verify(eventRepository).baselineActiveAdminOwnerEvents();
+    }
+
+    @Test
+    void changingNotificationChatBaselinesExistingEventsEvenWhileDeliveryIsPaused() {
+        when(repository.findAllByPrefix(WorkloadShadowSettingsService.PREFIX))
+                .thenReturn(rows(Map.of(
+                        "group-notifications-enabled", "false",
+                        "notification-group-chat-id", "-100001",
+                        "settings-revision", "1"
+                )))
+                .thenReturn(rows(Map.of(
+                        "group-notifications-enabled", "false",
+                        "notification-group-chat-id", "-100002",
+                        "settings-revision", "2"
+                )));
+        when(repository.updateAllWithRevision(
+                anyString(),
+                eq(WorkloadShadowSettingsService.PREFIX),
+                eq(WorkloadShadowSettingsService.REVISION_KEY),
+                eq(1L)
+        )).thenReturn(44);
+
+        WorkloadShadowSettingsResponse result = service.update(withNotificationRoute(
+                request(true, false, "Asia/Irkutsk", 1L),
+                false,
+                -100002L
+        ));
+
+        assertThat(result.groupNotificationsEnabled()).isFalse();
+        assertThat(result.notificationGroupChatId()).isEqualTo(-100002L);
+        verify(eventRepository).baselineActiveAdminOwnerEvents();
+    }
+
+    @Test
+    void disablingNotificationsImmediatelyBaselinesAnyActiveDeliveryLease() {
+        when(repository.findAllByPrefix(WorkloadShadowSettingsService.PREFIX))
+                .thenReturn(rows(Map.of(
+                        "group-notifications-enabled", "true",
+                        "notification-group-chat-id", "-100001",
+                        "settings-revision", "1"
+                )))
+                .thenReturn(rows(Map.of(
+                        "group-notifications-enabled", "false",
+                        "notification-group-chat-id", "-100001",
+                        "settings-revision", "2"
+                )));
+        when(repository.updateAllWithRevision(
+                anyString(),
+                eq(WorkloadShadowSettingsService.PREFIX),
+                eq(WorkloadShadowSettingsService.REVISION_KEY),
+                eq(1L)
+        )).thenReturn(44);
+
+        WorkloadShadowSettingsResponse result = service.update(withNotificationRoute(
+                request(true, false, "Asia/Irkutsk", 1L),
+                false,
+                -100001L
+        ));
+
+        assertThat(result.groupNotificationsEnabled()).isFalse();
+        verify(eventRepository).baselineActiveAdminOwnerEvents();
     }
 
     @Test
@@ -156,7 +253,7 @@ class WorkloadShadowSettingsServiceTest {
                 anyString(),
                 org.mockito.ArgumentMatchers.anyLong()
         );
-        verifyNoInteractions(businessAuditService, appSettingService);
+        verifyNoInteractions(eventRepository, businessAuditService, appSettingService);
     }
 
     @Test
@@ -173,7 +270,7 @@ class WorkloadShadowSettingsServiceTest {
                         assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
                 );
 
-        verifyNoInteractions(businessAuditService, appSettingService);
+        verifyNoInteractions(eventRepository, businessAuditService, appSettingService);
     }
 
     @Test
@@ -190,7 +287,7 @@ class WorkloadShadowSettingsServiceTest {
                 .hasMessageContaining("ожидалось 44")
                 .hasMessageContaining("обновлено 43");
 
-        verifyNoInteractions(businessAuditService, appSettingService);
+        verifyNoInteractions(eventRepository, businessAuditService, appSettingService);
     }
 
     @Test
@@ -201,67 +298,32 @@ class WorkloadShadowSettingsServiceTest {
                                 .isEqualTo(HttpStatus.PRECONDITION_FAILED)
                 );
 
-        verifyNoInteractions(repository, businessAuditService, appSettingService);
+        verifyNoInteractions(
+                repository,
+                eventRepository,
+                businessAuditService,
+                appSettingService
+        );
     }
 
     @Test
     void notificationsCannotUseAPersonalTelegramChat() {
         WorkloadShadowSettingsRequest source =
                 request(true, false, "Asia/Irkutsk", 1L);
-        WorkloadShadowSettingsRequest invalid = new WorkloadShadowSettingsRequest(
-                source.mode(),
-                source.applyEnabled(),
-                source.observationEnabled(),
-                true,
-                794146111L,
-                source.schedulerIntervalMinutes(),
-                source.nearEndIntervalMinutes(),
-                source.nearEndWindowMinutes(),
-                source.businessZone(),
-                source.shiftStart(),
-                source.shiftEnd(),
-                source.walkMinutesPerCard(),
-                source.walkMinimumMinutesPerCard(),
-                source.newMinutesPerCard(),
-                source.correctionMinutesPerOrder(),
-                source.publishMinutesPerCard(),
-                source.recoveryMinutesPerTask(),
-                source.badMinutesPerTask(),
-                source.adaptiveEstimatesEnabled(),
-                source.adaptiveMinimumSamples(),
-                source.lookbackDays(),
-                source.allowedFailureDays(),
-                source.recipientMinimumRating(),
-                source.recipientMinimumHundredPercentRate(),
-                source.recipientMaximumFailureDays(),
-                source.fourthFailurePercent(),
-                source.fourthFailureMaxCompanies(),
-                source.fifthFailurePercent(),
-                source.fifthFailureMaxCompanies(),
-                source.sixthFailurePercent(),
-                source.sixthFailureMaxCompanies(),
-                source.freezeEarnDays(),
-                source.freezeMaxCredits(),
-                source.alertCooldownMinutes(),
-                source.runRetentionDays(),
-                source.dailyRetentionDays(),
-                source.eventRetentionDays(),
-                source.decisionRetentionDays(),
-                source.staleRunMinutes(),
-                source.notificationBatchSize(),
-                source.notificationMaxAttempts(),
-                source.notificationLeaseMinutes(),
-                source.notificationRetryBaseMinutes(),
-                source.maintenanceBatchSize(),
-                source.revision()
-        );
+        WorkloadShadowSettingsRequest invalid =
+                withNotificationRoute(source, true, 794146111L);
 
         assertThatThrownBy(() -> service.update(invalid))
                 .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
                         assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST)
                 )
                 .hasMessageContaining("отрицательный chat ID");
-        verifyNoInteractions(repository, businessAuditService, appSettingService);
+        verifyNoInteractions(
+                repository,
+                eventRepository,
+                businessAuditService,
+                appSettingService
+        );
     }
 
     private WorkloadShadowSettingsRequest request(
@@ -310,12 +372,66 @@ class WorkloadShadowSettingsServiceTest {
                 90,
                 60,
                 30,
-                10,
+                250,
                 8,
                 5,
                 1,
                 1000,
                 revision
+        );
+    }
+
+    private WorkloadShadowSettingsRequest withNotificationRoute(
+            WorkloadShadowSettingsRequest source,
+            boolean enabled,
+            Long chatId
+    ) {
+        return new WorkloadShadowSettingsRequest(
+                source.mode(),
+                source.applyEnabled(),
+                source.observationEnabled(),
+                enabled,
+                chatId,
+                source.schedulerIntervalMinutes(),
+                source.nearEndIntervalMinutes(),
+                source.nearEndWindowMinutes(),
+                source.businessZone(),
+                source.shiftStart(),
+                source.shiftEnd(),
+                source.walkMinutesPerCard(),
+                source.walkMinimumMinutesPerCard(),
+                source.newMinutesPerCard(),
+                source.correctionMinutesPerOrder(),
+                source.publishMinutesPerCard(),
+                source.recoveryMinutesPerTask(),
+                source.badMinutesPerTask(),
+                source.adaptiveEstimatesEnabled(),
+                source.adaptiveMinimumSamples(),
+                source.lookbackDays(),
+                source.allowedFailureDays(),
+                source.recipientMinimumRating(),
+                source.recipientMinimumHundredPercentRate(),
+                source.recipientMaximumFailureDays(),
+                source.fourthFailurePercent(),
+                source.fourthFailureMaxCompanies(),
+                source.fifthFailurePercent(),
+                source.fifthFailureMaxCompanies(),
+                source.sixthFailurePercent(),
+                source.sixthFailureMaxCompanies(),
+                source.freezeEarnDays(),
+                source.freezeMaxCredits(),
+                source.alertCooldownMinutes(),
+                source.runRetentionDays(),
+                source.dailyRetentionDays(),
+                source.eventRetentionDays(),
+                source.decisionRetentionDays(),
+                source.staleRunMinutes(),
+                source.notificationBatchSize(),
+                source.notificationMaxAttempts(),
+                source.notificationLeaseMinutes(),
+                source.notificationRetryBaseMinutes(),
+                source.maintenanceBatchSize(),
+                source.revision()
         );
     }
 

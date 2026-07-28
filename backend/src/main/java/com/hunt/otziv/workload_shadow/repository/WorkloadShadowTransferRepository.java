@@ -19,12 +19,11 @@ public interface WorkloadShadowTransferRepository
             SELECT current.worker_id AS workerId,
                    current.manager_id AS managerId,
                    current.failure_days AS failureDays,
-                   current.rating AS rating,
-                   manager.audit_telegram_group_chat_id AS managerGroupChatId
+                   current.rating AS rating
             FROM workload_shadow_worker_current current
-            JOIN managers manager ON manager.manager_id = current.manager_id
             WHERE current.failure_days > :allowedFailureDays
               AND current.diagnostic_status = 'OK'
+            ORDER BY current.worker_id
             """, nativeQuery = true)
     List<SourceWorkerProjection> findSourceWorkers(
             @Param("allowedFailureDays") int allowedFailureDays
@@ -330,6 +329,8 @@ public interface WorkloadShadowTransferRepository
                 target_group_type = 'ADMIN_OWNER_MONITORING',
                 target_group_chat_id = VALUES(target_group_chat_id),
                 delivery_attempts = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 0
                     WHEN VALUES(target_group_chat_id) IS NULL
                       OR VALUES(target_group_chat_id) >= 0
                         THEN 0
@@ -346,11 +347,15 @@ public interface WorkloadShadowTransferRepository
                     ELSE 0
                 END,
                 next_attempt_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN NULL
                     WHEN VALUES(target_group_chat_id) IS NULL
                       OR VALUES(target_group_chat_id) >= 0
                         THEN NULL
                     WHEN workload_shadow_events.active = FALSE
                         THEN VALUES(next_attempt_at)
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
                     WHEN workload_shadow_events.delivery_status = 'PROCESSING'
                         THEN workload_shadow_events.next_attempt_at
                     WHEN workload_shadow_events.delivery_status = 'RETRY'
@@ -373,12 +378,62 @@ public interface WorkloadShadowTransferRepository
                         END
                     ELSE VALUES(next_attempt_at)
                 END,
+                last_error_code = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'NOTIFICATIONS_DISABLED'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN CASE
+                            WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                                THEN 'MISSING_GROUP_BINDING'
+                            ELSE NULL
+                        END
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN 'MISSING_GROUP_BINDING'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN workload_shadow_events.last_error_code
+                    WHEN VALUES(delivery_status) = 'PENDING'
+                     AND COALESCE(workload_shadow_events.last_error_code, '') IN (
+                         'MISSING_GROUP_BINDING',
+                         'ROUTING_POLICY_CHANGED',
+                         'NOTIFICATIONS_DISABLED',
+                         'NOTIFICATION_BASELINE'
+                     )
+                        THEN NULL
+                    ELSE workload_shadow_events.last_error_code
+                END,
+                last_error = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'Telegram-уведомления SHADOW выключены; событие доступно только в мониторинге'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN CASE
+                            WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                                THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                            ELSE NULL
+                        END
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN workload_shadow_events.last_error
+                    WHEN VALUES(delivery_status) = 'PENDING'
+                     AND COALESCE(workload_shadow_events.last_error_code, '') IN (
+                         'MISSING_GROUP_BINDING',
+                         'ROUTING_POLICY_CHANGED',
+                         'NOTIFICATIONS_DISABLED',
+                         'NOTIFICATION_BASELINE'
+                     )
+                        THEN NULL
+                    ELSE workload_shadow_events.last_error
+                END,
                 delivery_status = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'SKIPPED'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN VALUES(delivery_status)
                     WHEN VALUES(target_group_chat_id) IS NULL
                       OR VALUES(target_group_chat_id) >= 0
                         THEN 'MISSING_GROUP_BINDING'
-                    WHEN workload_shadow_events.active = FALSE
-                        THEN VALUES(delivery_status)
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN 'SKIPPED'
                     WHEN workload_shadow_events.delivery_status = 'PROCESSING'
                         THEN 'PROCESSING'
                     WHEN workload_shadow_events.delivery_status = 'RETRY'
@@ -392,6 +447,22 @@ public interface WorkloadShadowTransferRepository
                     WHEN workload_shadow_events.delivery_status = 'PENDING'
                         THEN 'PENDING'
                     ELSE VALUES(delivery_status)
+                END,
+                processing_started_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
+                    ELSE workload_shadow_events.processing_started_at
+                END,
+                processing_lease_until = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
+                    ELSE workload_shadow_events.processing_lease_until
+                END,
+                delivered_at = CASE
+                    WHEN workload_shadow_events.active = FALSE THEN NULL
+                    ELSE workload_shadow_events.delivered_at
                 END,
                 occurrence_count = workload_shadow_events.occurrence_count + 1,
                 last_seen_at = VALUES(last_seen_at),
@@ -442,8 +513,6 @@ public interface WorkloadShadowTransferRepository
         Integer getFailureDays();
 
         BigDecimal getRating();
-
-        Long getManagerGroupChatId();
     }
 
     interface RecipientProjection {

@@ -75,6 +75,66 @@ class WorkloadShadowEventUpsertContractTest {
         }
     }
 
+    @Test
+    void everyEventUpsertKeepsSkippedEventsOutOfTheDeliveryQueue() throws Exception {
+        for (QueryContract contract : eventUpserts()) {
+            String sql = normalized(contract.sql());
+
+            assertThat(sql)
+                    .as(contract.name())
+                    .contains(
+                            "when values(delivery_status) = 'skipped' then 0",
+                            "when values(delivery_status) = 'skipped' then null",
+                            "when workload_shadow_events.delivery_status = 'skipped' then null",
+                            "when values(delivery_status) = 'skipped' then 'skipped'",
+                            "when workload_shadow_events.delivery_status = 'skipped' "
+                                    + "then 'skipped'",
+                            "processing_started_at = case",
+                            "processing_lease_until = case",
+                            "or workload_shadow_events.delivery_status = 'skipped' then null"
+                    );
+        }
+    }
+
+    @Test
+    void missedFinalSnapshotUsesNotificationToggleBeforeCreatingADueEvent() throws Exception {
+        String sql = normalized(query(
+                WorkloadShadowProjectionRepository.class,
+                "emitMissedFinalSnapshotEvents",
+                LocalDate.class,
+                LocalDateTime.class,
+                LocalDateTime.class,
+                boolean.class,
+                Long.class
+        ).sql());
+
+        assertThat(sql).contains(
+                "when :groupnotificationsenabled = false then 'skipped'",
+                "when :groupnotificationsenabled = true "
+                        + "and :notificationgroupchatid < 0 then :now"
+        );
+    }
+
+    @Test
+    void notificationBaselineSkipsEveryActiveAdminOwnerEventAndClearsItsLease()
+            throws Exception {
+        String sql = normalized(query(
+                WorkloadShadowEventRepository.class,
+                "baselineActiveAdminOwnerEvents"
+        ).sql());
+
+        assertThat(sql).contains(
+                "update workload_shadow_events set delivery_status = 'skipped'",
+                "delivery_attempts = 0",
+                "next_attempt_at = null",
+                "processing_started_at = null",
+                "processing_lease_until = null",
+                "last_error_code = 'notification_baseline'",
+                "where active = 1",
+                "target_group_type = 'admin_owner_monitoring'"
+        );
+    }
+
     private List<QueryContract> eventUpserts() throws Exception {
         return List.of(
                 query(
@@ -82,7 +142,9 @@ class WorkloadShadowEventUpsertContractTest {
                         "emitMissedFinalSnapshotEvents",
                         LocalDate.class,
                         LocalDateTime.class,
-                        LocalDateTime.class
+                        LocalDateTime.class,
+                        boolean.class,
+                        Long.class
                 ),
                 query(
                         WorkloadShadowProjectionRepository.class,

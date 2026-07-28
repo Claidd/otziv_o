@@ -11,6 +11,7 @@ import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGra
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.SHARED_COMPANY_OWNERSHIP;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.SOURCE_COMPANY_LINK_MISSING;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.UNASSIGNED_ACTIVE_ORDERS;
+import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningSeverity.INFO;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,6 +94,83 @@ class WorkloadTransferGraphAssemblerTest {
         assertEquals(2, graph.totals().newUnits());
         assertEquals(1, graph.totals().correctionUnits());
         assertEquals(20, graph.totals().estimatedMinutes());
+    }
+
+    @Test
+    void botOwnerMismatchFromSharedCityPoolIsInformationalAndNotAGraphError() {
+        ReviewRow sharedPoolReview = new ReviewRow(
+                101L,
+                10L,
+                1L,
+                SOURCE_WORKER_ID,
+                501L,
+                true,
+                99L,
+                DATE.plusDays(1),
+                false,
+                true,
+                false,
+                1,
+                null
+        );
+        WorkloadTransferGraphData data = data(
+                List.of(company()),
+                List.of(new CompanyWorkerLinkRow(1L, SOURCE_WORKER_ID)),
+                List.of(new CompanyOrderOwnershipRow(1L, SOURCE_WORKER_ID, 1)),
+                List.of(order(10L, "Новый", 1)),
+                List.of(new DetailRow(10L, 1, 1, 0)),
+                List.of(sharedPoolReview),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+
+        WorkloadTransferCompanyGraph graph =
+                WorkloadTransferGraphAssembler.assemble(data).getFirst();
+        Warning warning = findWarning(
+                graph.orders().getFirst().reviews().getFirst().warnings(),
+                REVIEW_BOT_OWNER_MISMATCH
+        );
+        WorkloadTransferGraphDiagnostics diagnostics =
+                WorkloadTransferGraphDiagnostics.from(graph);
+
+        assertEquals(INFO, warning.severity());
+        assertEquals(0, diagnostics.errorCount());
+        assertEquals(0, diagnostics.warningCount());
+        assertFalse(diagnostics.hasReportableIssues());
+    }
+
+    @Test
+    void historicalSharedCompanyLinkWithoutOtherActiveOrdersIsInformational() {
+        WorkloadTransferGraphData data = data(
+                List.of(company()),
+                List.of(
+                        new CompanyWorkerLinkRow(1L, SOURCE_WORKER_ID),
+                        new CompanyWorkerLinkRow(1L, 99L)
+                ),
+                List.of(new CompanyOrderOwnershipRow(1L, SOURCE_WORKER_ID, 1)),
+                List.of(order(10L, "Новый", 1)),
+                List.of(new DetailRow(10L, 1, 0, 1)),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+
+        WorkloadTransferCompanyGraph graph =
+                WorkloadTransferGraphAssembler.assemble(data).getFirst();
+        Warning warning = findWarning(graph.warnings(), SHARED_COMPANY_OWNERSHIP);
+        WorkloadTransferGraphDiagnostics diagnostics =
+                WorkloadTransferGraphDiagnostics.from(graph);
+
+        assertTrue(graph.sharedOwnership());
+        assertEquals(0, graph.otherWorkerActiveOrderCount());
+        assertEquals(INFO, warning.severity());
+        assertEquals(0, diagnostics.errorCount());
+        assertEquals(0, diagnostics.warningCount());
+        assertFalse(diagnostics.hasReportableIssues());
     }
 
     @Test
@@ -483,5 +561,15 @@ class WorkloadTransferGraphAssemblerTest {
             WorkloadTransferCompanyGraph.WarningCode code
     ) {
         return warnings.stream().anyMatch(value -> value.code() == code);
+    }
+
+    private static Warning findWarning(
+            List<Warning> warnings,
+            WorkloadTransferCompanyGraph.WarningCode code
+    ) {
+        return warnings.stream()
+                .filter(value -> value.code() == code)
+                .findFirst()
+                .orElseThrow();
     }
 }

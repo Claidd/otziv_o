@@ -116,6 +116,21 @@ public interface WorkloadShadowEventRepository
     @Modifying
     @Query(value = """
             UPDATE workload_shadow_events
+            SET delivery_status = 'SKIPPED',
+                delivery_attempts = 0,
+                next_attempt_at = NULL,
+                processing_started_at = NULL,
+                processing_lease_until = NULL,
+                last_error_code = 'NOTIFICATION_BASELINE',
+                last_error = 'Событие уже существовало до включения Telegram-уведомлений'
+            WHERE active = 1
+              AND target_group_type = 'ADMIN_OWNER_MONITORING'
+            """, nativeQuery = true)
+    int baselineActiveAdminOwnerEvents();
+
+    @Modifying
+    @Query(value = """
+            UPDATE workload_shadow_events
             SET delivery_status = 'CANCELLED',
                 next_attempt_at = NULL,
                 processing_started_at = NULL,

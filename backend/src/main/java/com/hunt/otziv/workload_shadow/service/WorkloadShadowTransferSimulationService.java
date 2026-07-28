@@ -18,11 +18,13 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +59,7 @@ public class WorkloadShadowTransferSimulationService {
         List<TransferCaseWrite> caseWrites = new ArrayList<>();
         List<TransferCandidateWrite> candidateWrites = new ArrayList<>();
         List<TransferEventWrite> eventWrites = new ArrayList<>();
+        Set<Long> reportedBlockedCompanyIds = new HashSet<>();
         for (SourceWorker source : sources) {
             List<WorkloadTransferCompanyGraph> graphs =
                     graphsBySource.getOrDefault(source.workerId(), List.of());
@@ -78,12 +81,16 @@ public class WorkloadShadowTransferSimulationService {
             List<CompanyProblem> transferableProblems = problems.stream()
                     .filter(problem -> !graphBlocksRecommendation(problem))
                     .toList();
+            List<CompanyProblem> blockedProblems = problems.stream()
+                    .filter(this::graphBlocksRecommendation)
+                    .toList();
+            // Keep recommendations useful even if the heaviest company is blocked,
+            // but bound diagnostics by the same tier. Previously every blocked graph
+            // was appended and "max 1 company" could produce dozens of alerts.
             List<CompanyProblem> selected = new ArrayList<>(
                     selectProblems(transferableProblems, tier)
             );
-            problems.stream()
-                    .filter(this::graphBlocksRecommendation)
-                    .forEach(selected::add);
+            selected.addAll(selectProblems(blockedProblems, tier));
             List<Recipient> rankedRecipients = recipientsByManager
                     .getOrDefault(source.managerId(), List.of())
                     .stream()
@@ -106,10 +113,19 @@ public class WorkloadShadowTransferSimulationService {
                     ) >= 0)
                     .toList();
 
-            int rank = 0;
+            int recommendationRank = 0;
+            int diagnosticRank = 0;
             for (CompanyProblem selectedProblem : selected) {
-                rank++;
                 boolean graphBlocked = graphBlocksRecommendation(selectedProblem);
+                if (graphBlocked
+                        && !reportedBlockedCompanyIds.add(
+                                selectedProblem.graph().companyId()
+                        )) {
+                    continue;
+                }
+                int selectionRank = graphBlocked
+                        ? ++diagnosticRank
+                        : ++recommendationRank;
                 boolean staffingRequired = !graphBlocked && rankedRecipients.isEmpty();
                 Long fallbackReviewId = staffingRequired
                         ? emergencyReviewId(selectedProblem.graph())
@@ -128,7 +144,7 @@ public class WorkloadShadowTransferSimulationService {
                         source,
                         selectedProblem,
                         tier,
-                        rank,
+                        selectionRank,
                         graphBlocked ? 0 : rankedRecipients.size(),
                         graphBlocked,
                         staffingRequired,
@@ -157,7 +173,7 @@ public class WorkloadShadowTransferSimulationService {
                             selectedProblem.diagnostics().errorCount() > 0 ? "CRITICAL" : "WARNING",
                             "TRANSFER_GRAPH_WARNING",
                             source,
-                            settings.notificationGroupChatId(),
+                            settings,
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Обнаружены несогласованности графа передачи компании",
@@ -175,7 +191,7 @@ public class WorkloadShadowTransferSimulationService {
                             "CRITICAL",
                             "STAFFING_REQUIRED",
                             source,
-                            settings.notificationGroupChatId(),
+                            settings,
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Наблюдение: менеджеру может потребоваться новый специалист",
@@ -193,7 +209,7 @@ public class WorkloadShadowTransferSimulationService {
                                 "WARNING",
                                 "EMERGENCY_FALLBACK",
                                 source,
-                                settings.notificationGroupChatId(),
+                                settings,
                                 selectedProblem.graph().companyId(),
                                 caseKey,
                                 "Резервный исполнитель для одиночной карточки",
@@ -210,7 +226,7 @@ public class WorkloadShadowTransferSimulationService {
                             "WARNING",
                             "TRANSFER_RECOMMENDATION",
                             source,
-                            settings.notificationGroupChatId(),
+                            settings,
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Подготовлена теневая рекомендация передачи компании",
@@ -371,7 +387,6 @@ public class WorkloadShadowTransferSimulationService {
     private boolean graphBlocksRecommendation(CompanyProblem problem) {
         WorkloadTransferCompanyGraph graph = problem.graph();
         return problem.diagnostics().errorCount() > 0
-                || graph.sharedOwnership()
                 || graph.otherWorkerActiveOrderCount() > 0
                 || graph.unassignedActiveOrderCount() > 0;
     }
@@ -445,14 +460,15 @@ public class WorkloadShadowTransferSimulationService {
             String severity,
             String eventType,
             SourceWorker source,
-            Long notificationGroupChatId,
+            WorkloadShadowSettingsResponse settings,
             long companyId,
             String caseKey,
             String title,
             String message,
             LocalDateTime now
     ) {
-        Long targetChatId = notificationGroupChatId;
+        Long targetChatId = settings.notificationGroupChatId();
+        boolean notificationsEnabled = settings.groupNotificationsEnabled();
         boolean routeValid = targetChatId != null && targetChatId < 0;
         return new TransferEventWrite(
                 deduplicationKey,
@@ -465,8 +481,10 @@ public class WorkloadShadowTransferSimulationService {
                 title,
                 message,
                 targetChatId,
-                routeValid ? "PENDING" : "MISSING_GROUP_BINDING",
-                routeValid ? sqlDateTime(now) : null
+                !notificationsEnabled
+                        ? "SKIPPED"
+                        : routeValid ? "PENDING" : "MISSING_GROUP_BINDING",
+                notificationsEnabled && routeValid ? sqlDateTime(now) : null
         );
     }
 
@@ -489,8 +507,7 @@ public class WorkloadShadowTransferSimulationService {
                 value.getWorkerId(),
                 value.getManagerId(),
                 intValue(value.getFailureDays()),
-                value(value.getRating()),
-                value.getManagerGroupChatId()
+                value(value.getRating())
         );
     }
 
@@ -617,8 +634,7 @@ public class WorkloadShadowTransferSimulationService {
             long workerId,
             long managerId,
             int failureDays,
-            BigDecimal rating,
-            Long managerGroupChatId
+            BigDecimal rating
     ) {
     }
 

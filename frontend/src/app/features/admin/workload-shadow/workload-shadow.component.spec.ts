@@ -26,7 +26,7 @@ const validSettings: WorkloadShadowSafetyValues = {
   fourthFailureMaxCompanies: 1,
   fifthFailureMaxCompanies: 2,
   sixthFailureMaxCompanies: 3,
-  notificationBatchSize: 10,
+  notificationBatchSize: 250,
   notificationMaxAttempts: 8,
   notificationLeaseMinutes: 5,
   notificationRetryBaseMinutes: 1,
@@ -91,8 +91,8 @@ describe('workload shadow settings safety', () => {
   it('bounds notification delivery and maintenance batches', () => {
     expect(workloadShadowSettingsError({
       ...validSettings,
-      notificationBatchSize: 26
-    })).toContain('от 1 до 25');
+      notificationBatchSize: 251
+    })).toContain('от 1 до 250');
     expect(workloadShadowSettingsError({
       ...validSettings,
       notificationMaxAttempts: 21

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -165,6 +167,24 @@ class WorkloadShadowNotificationDispatcherTest {
     }
 
     @Test
+    void eventBoundToPreviousAdminGroupIsBlockedAfterChatChange() {
+        WorkloadShadowNotificationEvent previousGroupEvent = event(-200L, 0);
+        prepareClaim(previousGroupEvent);
+
+        dispatcher.dispatchDue();
+
+        verifyNoInteractions(telegramService);
+        verify(store).applyDeliveryOutcomes(List.of(
+                WorkloadShadowDeliveryOutcome.dead(
+                        previousGroupEvent,
+                        0,
+                        WorkloadShadowNotificationDispatcher.ERROR_MISSING_GROUP_BINDING,
+                        "MISSING_GROUP_BINDING: событие относится к другой Telegram-группе и не отправлено"
+                )
+        ), NOW, NOW.plusMinutes(5));
+    }
+
+    @Test
     void failedTelegramSendIsRetriedWithBackoff() {
         prepareClaim(event(-100L, 0));
         when(telegramService.sendMessage(-100L, shadowText(), "HTML")).thenReturn(false);
@@ -202,34 +222,21 @@ class WorkloadShadowNotificationDispatcherTest {
     }
 
     @Test
-    void claimsAndLoadsWholeBatchWithoutPerEventStoreQueries() {
-        WorkloadShadowNotificationEvent first = event(-100L, 0);
-        WorkloadShadowNotificationEvent second = new WorkloadShadowNotificationEvent(
-                2L,
-                "INFO",
-                "SECOND_EVENT",
-                7L,
-                "Второе",
-                "Сообщение",
-                WorkloadShadowNotificationDispatcher.TARGET_ADMIN_OWNER_MONITORING,
-                -100L,
-                0
-        );
-        when(settings.getBoolean(
-                WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,
-                false
-        )).thenReturn(true);
-        when(settings.getStringAllowEmpty(
-                WorkloadShadowNotificationDispatcher.NOTIFICATION_GROUP_CHAT_ID,
-                ""
-        )).thenReturn("-100");
-        List<Long> ids = List.of(1L, 2L);
-        when(store.findDueEventIds(NOW, 10)).thenReturn(ids);
-        when(store.claim(ids, NOW, NOW.plusMinutes(5))).thenReturn(2);
-        when(store.findClaimed(ids, NOW, NOW.plusMinutes(5))).thenReturn(List.of(
-                new WorkloadShadowClaimedNotification(first),
-                new WorkloadShadowClaimedNotification(second)
-        ));
+    void aggregatesOneHundredEventsIntoOneBoundedDigestAndOneBulkOutcome() {
+        List<WorkloadShadowNotificationEvent> events = IntStream.rangeClosed(1, 100)
+                .mapToObj(index -> notificationEvent(
+                        index,
+                        index == 100 ? "CRITICAL" : "INFO",
+                        index == 100 ? "CRITICAL_EVENT" : "INFO_EVENT",
+                        (index == 100 ? "Критическое" : "Информационное")
+                                + " событие " + index,
+                        "Подробное описание события " + index + " " + "x".repeat(500),
+                        0
+                ))
+                .toList();
+        when(settings.getInt("workload.shadow.notification-batch-size", 250))
+                .thenReturn(1_000);
+        prepareClaim(events);
         when(telegramService.sendMessage(
                 org.mockito.ArgumentMatchers.eq(-100L),
                 anyString(),
@@ -238,20 +245,100 @@ class WorkloadShadowNotificationDispatcherTest {
 
         WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
 
-        verify(store).findDueEventIds(NOW, 10);
+        ArgumentCaptor<String> digest = ArgumentCaptor.forClass(String.class);
+        verify(telegramService, times(1)).sendMessage(
+                org.mockito.ArgumentMatchers.eq(-100L),
+                digest.capture(),
+                org.mockito.ArgumentMatchers.eq("HTML")
+        );
+        assertThat(digest.getValue())
+                .contains("SHADOW · СВОДКА НАБЛЮДЕНИЯ")
+                .contains("<b>Новых событий:</b> 100")
+                .contains("… ещё 95 событий.")
+                .hasSizeLessThan(3_900);
+        assertThat(digest.getValue().indexOf("Критическое событие 100"))
+                .isLessThan(digest.getValue().indexOf("Информационное событие 1"));
+
+        List<Long> ids = events.stream()
+                .map(WorkloadShadowNotificationEvent::id)
+                .toList();
+        verify(store).findDueEventIds(NOW, 250);
         verify(store).claim(ids, NOW, NOW.plusMinutes(5));
         verify(store).findClaimed(ids, NOW, NOW.plusMinutes(5));
-        verify(store).applyDeliveryOutcomes(List.of(
-                WorkloadShadowDeliveryOutcome.sent(first, NOW),
-                WorkloadShadowDeliveryOutcome.sent(second, NOW)
-        ), NOW, NOW.plusMinutes(5));
+        verify(store).applyDeliveryOutcomes(
+                events.stream()
+                        .map(value -> WorkloadShadowDeliveryOutcome.sent(value, NOW))
+                        .toList(),
+                NOW,
+                NOW.plusMinutes(5)
+        );
         verifyNoMoreInteractions(store);
-        assertThat(summary.scanned()).isEqualTo(2);
-        assertThat(summary.claimed()).isEqualTo(2);
-        assertThat(summary.sent()).isEqualTo(2);
+        verify(metrics, times(100)).recordSent();
+        assertThat(summary.scanned()).isEqualTo(100);
+        assertThat(summary.claimed()).isEqualTo(100);
+        assertThat(summary.sent()).isEqualTo(100);
+        assertThat(summary.retried()).isZero();
+        assertThat(summary.dead()).isZero();
+    }
+
+    @Test
+    void failedDigestRetriesOrKillsEveryEventInTheClaimedBatch() {
+        WorkloadShadowNotificationEvent first =
+                notificationEvent(1, "WARNING", "FIRST", "Первое", "Сообщение", 0);
+        WorkloadShadowNotificationEvent second =
+                notificationEvent(2, "WARNING", "SECOND", "Второе", "Сообщение", 0);
+        WorkloadShadowNotificationEvent third =
+                notificationEvent(3, "CRITICAL", "THIRD", "Третье", "Сообщение", 1);
+        WorkloadShadowNotificationEvent fourth =
+                notificationEvent(4, "CRITICAL", "FOURTH", "Четвёртое", "Сообщение", 1);
+        List<WorkloadShadowNotificationEvent> events =
+                List.of(first, second, third, fourth);
+        when(settings.getInt("workload.shadow.notification-max-attempts", 8))
+                .thenReturn(2);
+        prepareClaim(events);
+        when(telegramService.sendMessage(-100L, digestText(), "HTML")).thenReturn(false);
+
+        WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
+
+        verify(telegramService, times(1)).sendMessage(-100L, digestText(), "HTML");
+        verify(store).applyDeliveryOutcomes(List.of(
+                WorkloadShadowDeliveryOutcome.retry(
+                        first,
+                        NOW.plusMinutes(1),
+                        WorkloadShadowNotificationDispatcher.ERROR_TELEGRAM_SEND_FAILED,
+                        "TELEGRAM_SEND_FAILED: TelegramService вернул false"
+                ),
+                WorkloadShadowDeliveryOutcome.retry(
+                        second,
+                        NOW.plusMinutes(1),
+                        WorkloadShadowNotificationDispatcher.ERROR_TELEGRAM_SEND_FAILED,
+                        "TELEGRAM_SEND_FAILED: TelegramService вернул false"
+                ),
+                WorkloadShadowDeliveryOutcome.dead(
+                        third,
+                        2,
+                        WorkloadShadowNotificationDispatcher.ERROR_TELEGRAM_SEND_FAILED,
+                        "TELEGRAM_SEND_FAILED: TelegramService вернул false"
+                ),
+                WorkloadShadowDeliveryOutcome.dead(
+                        fourth,
+                        2,
+                        WorkloadShadowNotificationDispatcher.ERROR_TELEGRAM_SEND_FAILED,
+                        "TELEGRAM_SEND_FAILED: TelegramService вернул false"
+                )
+        ), NOW, NOW.plusMinutes(5));
+        verify(metrics, times(2)).recordRetry();
+        verify(metrics, times(2)).recordDead();
+        assertThat(summary.sent()).isZero();
+        assertThat(summary.retried()).isEqualTo(2);
+        assertThat(summary.dead()).isEqualTo(2);
     }
 
     private void prepareClaim(WorkloadShadowNotificationEvent event) {
+        prepareClaim(List.of(event));
+    }
+
+    private void prepareClaim(List<WorkloadShadowNotificationEvent> events) {
         when(settings.getBoolean(
                 WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,
                 false
@@ -260,12 +347,16 @@ class WorkloadShadowNotificationDispatcherTest {
                 WorkloadShadowNotificationDispatcher.NOTIFICATION_GROUP_CHAT_ID,
                 ""
         )).thenReturn("-100");
-        List<Long> eventIds = List.of(event.id());
-        when(store.findDueEventIds(NOW, 10)).thenReturn(eventIds);
-        when(store.claim(eventIds, NOW, NOW.plusMinutes(5))).thenReturn(1);
-        when(store.findClaimed(eventIds, NOW, NOW.plusMinutes(5))).thenReturn(List.of(
-                new WorkloadShadowClaimedNotification(event)
-        ));
+        List<Long> eventIds = events.stream()
+                .map(WorkloadShadowNotificationEvent::id)
+                .toList();
+        when(store.findDueEventIds(NOW, 250)).thenReturn(eventIds);
+        when(store.claim(eventIds, NOW, NOW.plusMinutes(5))).thenReturn(events.size());
+        when(store.findClaimed(eventIds, NOW, NOW.plusMinutes(5))).thenReturn(
+                events.stream()
+                        .map(WorkloadShadowClaimedNotification::new)
+                        .toList()
+        );
     }
 
     private WorkloadShadowNotificationEvent event(Long chatId, int attempts) {
@@ -282,6 +373,27 @@ class WorkloadShadowNotificationDispatcherTest {
         );
     }
 
+    private WorkloadShadowNotificationEvent notificationEvent(
+            long id,
+            String severity,
+            String eventType,
+            String title,
+            String message,
+            int attempts
+    ) {
+        return new WorkloadShadowNotificationEvent(
+                id,
+                severity,
+                eventType,
+                7L,
+                title,
+                message,
+                WorkloadShadowNotificationDispatcher.TARGET_ADMIN_OWNER_MONITORING,
+                -100L,
+                attempts
+        );
+    }
+
     private String shadowText() {
         return "🟣 <b>SHADOW · РЕЖИМ НАБЛЮДЕНИЯ</b>\n"
                 + "<i>Система ничего не передаёт и не меняет назначения.</i>\n\n"
@@ -289,5 +401,23 @@ class WorkloadShadowNotificationDispatcherTest {
                 + "<b>&lt;Компания&gt;</b>\n"
                 + "Нужен сотрудник\n\n"
                 + "<code>STAFFING_REQUIRED</code>";
+    }
+
+    private String digestText() {
+        return "🟣 <b>SHADOW · СВОДКА НАБЛЮДЕНИЯ</b>\n"
+                + "<i>Система ничего не передаёт и не меняет назначения.</i>\n\n"
+                + "<b>Новых событий:</b> 4\n"
+                + "<b>Уровни:</b> WARNING — 2, CRITICAL — 2\n"
+                + "<b>Типы:</b> FIRST — 1, SECOND — 1, THIRD — 1, FOURTH — 1\n\n"
+                + "<b>Примеры:</b>\n"
+                + "1. <code>THIRD</code> <b>Третье</b>\n"
+                + "Сообщение\n"
+                + "2. <code>FOURTH</code> <b>Четвёртое</b>\n"
+                + "Сообщение\n"
+                + "3. <code>FIRST</code> <b>Первое</b>\n"
+                + "Сообщение\n"
+                + "4. <code>SECOND</code> <b>Второе</b>\n"
+                + "Сообщение\n\n"
+                + "Полный список доступен на странице мониторинга SHADOW.";
     }
 }

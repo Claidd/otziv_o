@@ -98,6 +98,8 @@ class WorkloadShadowTransferSimulationBulkTest {
         WorkloadShadowSettingsResponse settings = mock(WorkloadShadowSettingsResponse.class);
         when(settingsService.current()).thenReturn(settings);
         when(settings.allowedFailureDays()).thenReturn(3);
+        when(settings.fourthFailurePercent()).thenReturn(15);
+        when(settings.fourthFailureMaxCompanies()).thenReturn(1);
         SourceWorkerProjection source = source(1L, 11L);
         when(repository.findSourceWorkers(3)).thenReturn(List.of(source));
         when(repository.findRecipients()).thenReturn(List.of());
@@ -134,6 +136,96 @@ class WorkloadShadowTransferSimulationBulkTest {
     }
 
     @Test
+    void informationalBotOwnerMismatchDoesNotBlockRecommendation() throws Exception {
+        Warning informationalMismatch = new Warning(
+                WarningCode.REVIEW_BOT_OWNER_MISMATCH,
+                WarningSeverity.INFO,
+                "Аккаунт закреплён за другим специалистом общего городского пула"
+        );
+
+        SimulationPayload result = simulateTransferGraphs(List.of(
+                transferGraph(201L, false, 0, List.of(informationalMismatch))
+        ));
+
+        assertEquals(1, result.cases().size());
+        assertEquals("SHADOW_PENDING", result.cases().get(0).get("caseStatus").asText());
+        assertEquals(0, result.cases().get(0).get("graphErrorCount").asInt());
+        assertFalse(hasEvent(result.events(), "TRANSFER_GRAPH_WARNING"));
+    }
+
+    @Test
+    void historicalSharedOwnershipWithoutOtherActiveOrdersDoesNotBlockRecommendation()
+            throws Exception {
+        Warning historicalLink = new Warning(
+                WarningCode.SHARED_COMPANY_OWNERSHIP,
+                WarningSeverity.INFO,
+                "Дополнительная историческая связь без чужих активных заказов"
+        );
+
+        SimulationPayload result = simulateTransferGraphs(List.of(
+                transferGraph(202L, true, 0, List.of(historicalLink))
+        ));
+
+        assertEquals(1, result.cases().size());
+        assertEquals("SHADOW_PENDING", result.cases().get(0).get("caseStatus").asText());
+        assertEquals(0, result.cases().get(0).get("graphWarningCount").asInt());
+        assertEquals(0, result.cases().get(0).get("graphErrorCount").asInt());
+        assertFalse(hasEvent(result.events(), "TRANSFER_GRAPH_WARNING"));
+    }
+
+    @Test
+    void otherWorkerActiveOrderBlocksRecommendation() throws Exception {
+        Warning activeOwnershipConflict = new Warning(
+                WarningCode.OTHER_WORKER_ACTIVE_ORDERS,
+                WarningSeverity.WARNING,
+                "В компании есть активный заказ другого специалиста"
+        );
+
+        SimulationPayload result = simulateTransferGraphs(List.of(
+                transferGraph(203L, true, 1, List.of(activeOwnershipConflict))
+        ));
+
+        assertEquals(1, result.cases().size());
+        assertEquals("BLOCKED_GRAPH", result.cases().get(0).get("caseStatus").asText());
+        assertEquals(0, result.cases().get(0).get("candidateCount").asInt());
+        assertTrue(hasEvent(result.events(), "TRANSFER_GRAPH_WARNING"));
+        assertFalse(hasEvent(result.events(), "TRANSFER_RECOMMENDATION"));
+    }
+
+    @Test
+    void blockedGraphDiagnosticsRespectTierCompanyLimit() throws Exception {
+        SimulationPayload result = simulateTransferGraphs(List.of(
+                brokenGraph(301L),
+                brokenGraph(302L),
+                brokenGraph(303L),
+                brokenGraph(304L),
+                brokenGraph(305L)
+        ));
+
+        assertEquals(1, result.cases().size());
+        assertEquals("BLOCKED_GRAPH", result.cases().get(0).get("caseStatus").asText());
+        assertEquals(1, result.cases().get(0).get("selectionRank").asInt());
+        assertEquals(
+                1,
+                countEvents(result.events(), "TRANSFER_GRAPH_WARNING")
+        );
+    }
+
+    @Test
+    void recommendationsAndBlockedDiagnosticsUseIndependentRanks() throws Exception {
+        SimulationPayload result = simulateTransferGraphs(List.of(
+                transferGraph(401L, false, 0, List.of()),
+                brokenGraph(402L)
+        ));
+
+        assertEquals(2, result.cases().size());
+        JsonNode recommendation = caseWithStatus(result.cases(), "SHADOW_PENDING");
+        JsonNode diagnostic = caseWithStatus(result.cases(), "BLOCKED_GRAPH");
+        assertEquals(1, recommendation.get("selectionRank").asInt());
+        assertEquals(1, diagnostic.get("selectionRank").asInt());
+    }
+
+    @Test
     void createsEmergencyFallbackOnlyForConcreteCardAndEligibleRecipient()
             throws Exception {
         ScenarioResult withoutCard = simulateEmergency(false, true);
@@ -158,7 +250,6 @@ class WorkloadShadowTransferSimulationBulkTest {
         when(value.getManagerId()).thenReturn(managerId);
         when(value.getFailureDays()).thenReturn(4);
         when(value.getRating()).thenReturn(BigDecimal.valueOf(90));
-        when(value.getManagerGroupChatId()).thenReturn(-100L - managerId);
         return value;
     }
 
@@ -226,6 +317,118 @@ class WorkloadShadowTransferSimulationBulkTest {
             }
         }
         return false;
+    }
+
+    private int countEvents(JsonNode events, String eventType) {
+        int count = 0;
+        for (JsonNode event : events) {
+            if (eventType.equals(event.get("eventType").asText())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private JsonNode caseWithStatus(JsonNode cases, String status) {
+        for (JsonNode transferCase : cases) {
+            if (status.equals(transferCase.get("caseStatus").asText())) {
+                return transferCase;
+            }
+        }
+        throw new AssertionError("Кейс со статусом " + status + " не найден");
+    }
+
+    private SimulationPayload simulateTransferGraphs(
+            List<WorkloadTransferCompanyGraph> graphs
+    ) throws Exception {
+        WorkloadShadowTransferRepository repository =
+                mock(WorkloadShadowTransferRepository.class);
+        WorkloadShadowSettingsService settingsService =
+                mock(WorkloadShadowSettingsService.class);
+        WorkloadTransferGraphQueryService graphQueryService =
+                mock(WorkloadTransferGraphQueryService.class);
+        WorkloadShadowSettingsResponse settings = mock(WorkloadShadowSettingsResponse.class);
+        when(settingsService.current()).thenReturn(settings);
+        when(settings.allowedFailureDays()).thenReturn(3);
+        when(settings.fourthFailurePercent()).thenReturn(15);
+        when(settings.fourthFailureMaxCompanies()).thenReturn(1);
+        when(settings.newMinutesPerCard()).thenReturn(5);
+        SourceWorkerProjection source = source(1L, 11L);
+        when(repository.findSourceWorkers(3)).thenReturn(List.of(source));
+        when(repository.findRecipients()).thenReturn(List.of());
+        when(graphQueryService.findActiveGraphs(anyList(), any(LocalDate.class)))
+                .thenReturn(Map.of(1L, graphs));
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        WorkloadShadowTransferSimulationService service =
+                new WorkloadShadowTransferSimulationService(
+                        repository,
+                        settingsService,
+                        graphQueryService,
+                        objectMapper
+                );
+        service.rebuild(77L, LocalDateTime.of(2026, 7, 27, 22, 30));
+
+        ArgumentCaptor<String> casesJson = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> eventsJson = ArgumentCaptor.forClass(String.class);
+        verify(repository).upsertTransferCases(casesJson.capture(), anyLong(), any());
+        verify(repository).upsertEvents(eventsJson.capture(), any(), any());
+        return new SimulationPayload(
+                objectMapper.readTree(casesJson.getValue()),
+                objectMapper.readTree(eventsJson.getValue())
+        );
+    }
+
+    private WorkloadTransferCompanyGraph transferGraph(
+            long companyId,
+            boolean sharedOwnership,
+            long otherWorkerActiveOrderCount,
+            List<Warning> warnings
+    ) {
+        WorkloadTotals totals = new WorkloadTotals(
+                1, 0, 1, 0, 0,
+                0, 0, 0, 0, 0,
+                0, 0, 0, 0, 5
+        );
+        OrderNode order = new OrderNode(
+                companyId * 10,
+                "Новый",
+                1L,
+                11L,
+                false,
+                false,
+                LocalDate.of(2026, 7, 27),
+                LocalDate.of(2026, 7, 27),
+                1,
+                1,
+                1,
+                1,
+                1,
+                0,
+                List.of(),
+                List.of(),
+                List.of(),
+                totals,
+                List.of()
+        );
+        return new WorkloadTransferCompanyGraph(
+                companyId,
+                "Компания #" + companyId,
+                true,
+                "В работе",
+                11L,
+                true,
+                sharedOwnership ? List.of(1L, 2L) : List.of(1L),
+                sharedOwnership,
+                otherWorkerActiveOrderCount,
+                0,
+                List.of(order),
+                List.of(),
+                List.of(),
+                List.of(),
+                totals,
+                warnings
+        );
     }
 
     private WorkloadTransferCompanyGraph healthyGraph(boolean includePendingCard) {
@@ -300,57 +503,21 @@ class WorkloadShadowTransferSimulationBulkTest {
     }
 
     private WorkloadTransferCompanyGraph brokenGraph() {
-        WorkloadTotals totals = new WorkloadTotals(
-                1, 0, 1, 0, 0,
-                0, 0, 0, 0, 0,
-                0, 0, 0, 0, 5
-        );
-        OrderNode order = new OrderNode(
-                1000L,
-                "Новый",
-                1L,
-                11L,
-                false,
-                false,
-                LocalDate.of(2026, 7, 27),
-                LocalDate.of(2026, 7, 27),
-                1,
-                1,
-                1,
-                1,
-                1,
-                0,
-                List.of(),
-                List.of(),
-                List.of(),
-                totals,
-                List.of()
-        );
+        return brokenGraph(100L);
+    }
+
+    private WorkloadTransferCompanyGraph brokenGraph(long companyId) {
         Warning warning = new Warning(
                 WarningCode.COMPANY_MANAGER_MISMATCH,
                 WarningSeverity.ERROR,
                 "Менеджер компании не совпадает"
         );
-        return new WorkloadTransferCompanyGraph(
-                100L,
-                "Компания",
-                true,
-                "В работе",
-                99L,
-                true,
-                List.of(1L),
-                false,
-                0,
-                0,
-                List.of(order),
-                List.of(),
-                List.of(),
-                List.of(),
-                totals,
-                List.of(warning)
-        );
+        return transferGraph(companyId, false, 0, List.of(warning));
     }
 
     private record ScenarioResult(JsonNode transferCase, JsonNode events) {
+    }
+
+    private record SimulationPayload(JsonNode cases, JsonNode events) {
     }
 }

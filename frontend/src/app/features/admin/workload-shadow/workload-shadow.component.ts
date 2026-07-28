@@ -115,8 +115,8 @@ export function workloadShadowSettingsError(value: WorkloadShadowSafetyValues): 
   ) {
     return 'Лимит компаний должен возрастать от первого к третьему превышению порога.';
   }
-  if (value.notificationBatchSize < 1 || value.notificationBatchSize > 25) {
-    return 'Размер пачки уведомлений должен быть от 1 до 25.';
+  if (value.notificationBatchSize < 1 || value.notificationBatchSize > 250) {
+    return 'Размер сводки уведомлений должен быть от 1 до 250.';
   }
   if (value.notificationMaxAttempts < 1 || value.notificationMaxAttempts > 20) {
     return 'Количество попыток доставки должно быть от 1 до 20.';
@@ -426,7 +426,7 @@ export class WorkloadShadowComponent implements OnDestroy {
     freezeEarnDays: [14, [Validators.required, Validators.min(1), Validators.max(60)]],
     freezeMaxCredits: [2, [Validators.required, Validators.min(0), Validators.max(10)]],
     alertCooldownMinutes: [60, [Validators.required, Validators.min(5), Validators.max(10080)]],
-    notificationBatchSize: [10, [Validators.required, Validators.min(1), Validators.max(25)]],
+    notificationBatchSize: [250, [Validators.required, Validators.min(1), Validators.max(250)]],
     notificationMaxAttempts: [8, [Validators.required, Validators.min(1), Validators.max(20)]],
     notificationLeaseMinutes: [5, [Validators.required, Validators.min(1), Validators.max(30)]],
     notificationRetryBaseMinutes: [1, [Validators.required, Validators.min(1), Validators.max(60)]],
@@ -756,6 +756,13 @@ export class WorkloadShadowComponent implements OnDestroy {
       case 'CRITICAL':
       case 'FAILED': return 'Ошибка';
       case 'PENDING': return 'Ожидает';
+      case 'PROCESSING': return 'Отправляется';
+      case 'RETRY': return 'Повторная попытка';
+      case 'SENT': return 'Отправлено в общую группу';
+      case 'SKIPPED': return 'Только мониторинг — не отправлялось';
+      case 'MISSING_GROUP_BINDING': return 'Группа не настроена';
+      case 'DEAD': return 'Доставка остановлена';
+      case 'CANCELLED': return 'Событие закрыто до отправки';
       case 'READY': return 'Готово';
       default: return value || '—';
     }

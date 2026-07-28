@@ -6,6 +6,7 @@ import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsRequest;
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse;
+import com.hunt.otziv.workload_shadow.repository.WorkloadShadowEventRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowSettingsRepository;
 import java.time.DateTimeException;
 import java.time.LocalTime;
@@ -13,6 +14,7 @@ import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class WorkloadShadowSettingsService {
     static final String REVISION_KEY = PREFIX + "settings-revision";
 
     private final WorkloadShadowSettingsRepository repository;
+    private final WorkloadShadowEventRepository eventRepository;
     private final BusinessAuditService businessAuditService;
     private final ObjectMapper objectMapper;
     private final AppSettingService appSettingService;
@@ -88,7 +91,7 @@ public class WorkloadShadowSettingsService {
                 settings.getInt("event-retention-days", 90),
                 settings.getInt("decision-retention-days", 60),
                 settings.getInt("stale-run-minutes", 30),
-                settings.getInt("notification-batch-size", 10),
+                settings.getInt("notification-batch-size", 250),
                 settings.getInt("notification-max-attempts", 8),
                 settings.getInt("notification-lease-minutes", 5),
                 settings.getInt("notification-retry-base-minutes", 1),
@@ -131,6 +134,15 @@ public class WorkloadShadowSettingsService {
                     "Неполный набор workload shadow настроек: ожидалось "
                             + updatedValues.size() + ", обновлено " + updatedRows
             );
+        }
+        boolean notificationRouteChanged =
+                before.groupNotificationsEnabled() != request.groupNotificationsEnabled()
+                        || !Objects.equals(
+                                before.notificationGroupChatId(),
+                                request.notificationGroupChatId()
+                        );
+        if (notificationRouteChanged) {
+            eventRepository.baselineActiveAdminOwnerEvents();
         }
 
         WorkloadShadowSettingsResponse after = current();
@@ -353,7 +365,7 @@ public class WorkloadShadowSettingsService {
         range(request.eventRetentionDays(), 7, 3650, "Хранение событий");
         range(request.decisionRetentionDays(), 7, 365, "Хранение дневных решений");
         range(request.staleRunMinutes(), 5, 240, "Порог зависшего запуска");
-        range(request.notificationBatchSize(), 1, 25, "Размер пачки Telegram-уведомлений");
+        range(request.notificationBatchSize(), 1, 250, "Размер сводки Telegram-уведомлений");
         range(request.notificationMaxAttempts(), 1, 20, "Максимум попыток Telegram-уведомления");
         range(request.notificationLeaseMinutes(), 1, 30, "Аренда Telegram-уведомления");
         range(request.notificationRetryBaseMinutes(), 1, 60, "Базовая пауза Telegram-повтора");

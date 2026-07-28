@@ -434,9 +434,7 @@ public interface WorkloadShadowProjectionRepository
     );
 
     @Query(value = """
-            SELECT COUNT(*) AS sample_count,
-                   COALESCE(ROUND(AVG(sample.gap_seconds)), 0) AS average_seconds
-            FROM (
+            WITH valid_samples AS (
                 SELECT TIMESTAMPDIFF(
                            SECOND,
                            LAG(activity.created_at) OVER (
@@ -449,8 +447,23 @@ public interface WorkloadShadowProjectionRepository
                 WHERE activity.action = 'REVIEW_NAGUL'
                   AND activity.created_at >= :from
                   AND activity.created_at < :to
-            ) sample
-            WHERE sample.gap_seconds BETWEEN 60 AND 1800
+            ),
+            ranked_samples AS (
+                SELECT sample.gap_seconds,
+                       ROW_NUMBER() OVER (ORDER BY sample.gap_seconds) AS sample_rank,
+                       COUNT(*) OVER () AS sample_count
+                FROM valid_samples sample
+                WHERE sample.gap_seconds BETWEEN 60 AND 1800
+            )
+            SELECT COALESCE(MAX(sample.sample_count), 0) AS sample_count,
+                   COALESCE(ROUND(AVG(CASE
+                       WHEN sample.sample_rank IN (
+                           FLOOR((sample.sample_count + 1) / 2),
+                           FLOOR((sample.sample_count + 2) / 2)
+                       )
+                       THEN sample.gap_seconds
+                   END)), 0) AS average_seconds
+            FROM ranked_samples sample
             """, nativeQuery = true)
     Map<String, Object> findWalkEstimate(
             @Param("from") LocalDateTime from,
@@ -1440,13 +1453,15 @@ public interface WorkloadShadowProjectionRepository
                    'ADMIN_OWNER_MONITORING',
                    :notificationGroupChatId,
                    CASE
+                       WHEN :groupNotificationsEnabled = FALSE THEN 'SKIPPED'
                        WHEN :notificationGroupChatId < 0 THEN 'PENDING'
                        ELSE 'MISSING_GROUP_BINDING'
                    END,
                    :now,
                    :now,
                    CASE
-                       WHEN :notificationGroupChatId < 0 THEN :now
+                       WHEN :groupNotificationsEnabled = TRUE
+                        AND :notificationGroupChatId < 0 THEN :now
                        ELSE NULL
                    END,
                    TRUE
@@ -1461,6 +1476,8 @@ public interface WorkloadShadowProjectionRepository
                 message = VALUES(message),
                 target_group_chat_id = VALUES(target_group_chat_id),
                 delivery_attempts = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 0
                     WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
                         THEN 0
                     WHEN workload_shadow_events.active = FALSE
@@ -1476,10 +1493,14 @@ public interface WorkloadShadowProjectionRepository
                     ELSE 0
                 END,
                 next_attempt_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN NULL
                     WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
                         THEN NULL
                     WHEN workload_shadow_events.active = FALSE
                         THEN VALUES(next_attempt_at)
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
                     WHEN workload_shadow_events.delivery_status = 'PROCESSING'
                         THEN workload_shadow_events.next_attempt_at
                     WHEN workload_shadow_events.delivery_status = 'RETRY'
@@ -1502,11 +1523,61 @@ public interface WorkloadShadowProjectionRepository
                         END
                     ELSE VALUES(next_attempt_at)
                 END,
-                delivery_status = CASE
-                    WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
+                last_error_code = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'NOTIFICATIONS_DISABLED'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN CASE
+                            WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                                THEN 'MISSING_GROUP_BINDING'
+                            ELSE NULL
+                        END
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
                         THEN 'MISSING_GROUP_BINDING'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN workload_shadow_events.last_error_code
+                    WHEN VALUES(delivery_status) = 'PENDING'
+                     AND COALESCE(workload_shadow_events.last_error_code, '') IN (
+                         'MISSING_GROUP_BINDING',
+                         'ROUTING_POLICY_CHANGED',
+                         'NOTIFICATIONS_DISABLED',
+                         'NOTIFICATION_BASELINE'
+                     )
+                        THEN NULL
+                    ELSE workload_shadow_events.last_error_code
+                END,
+                last_error = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'Telegram-уведомления SHADOW выключены; событие доступно только в мониторинге'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN CASE
+                            WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                                THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                            ELSE NULL
+                        END
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN workload_shadow_events.last_error
+                    WHEN VALUES(delivery_status) = 'PENDING'
+                     AND COALESCE(workload_shadow_events.last_error_code, '') IN (
+                         'MISSING_GROUP_BINDING',
+                         'ROUTING_POLICY_CHANGED',
+                         'NOTIFICATIONS_DISABLED',
+                         'NOTIFICATION_BASELINE'
+                     )
+                        THEN NULL
+                    ELSE workload_shadow_events.last_error
+                END,
+                delivery_status = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'SKIPPED'
                     WHEN workload_shadow_events.active = FALSE
                         THEN VALUES(delivery_status)
+                    WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
+                        THEN 'MISSING_GROUP_BINDING'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN 'SKIPPED'
                     WHEN workload_shadow_events.delivery_status = 'PROCESSING'
                         THEN 'PROCESSING'
                     WHEN workload_shadow_events.delivery_status = 'RETRY'
@@ -1521,6 +1592,22 @@ public interface WorkloadShadowProjectionRepository
                         THEN 'PENDING'
                     ELSE VALUES(delivery_status)
                 END,
+                processing_started_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
+                    ELSE workload_shadow_events.processing_started_at
+                END,
+                processing_lease_until = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
+                    ELSE workload_shadow_events.processing_lease_until
+                END,
+                delivered_at = CASE
+                    WHEN workload_shadow_events.active = FALSE THEN NULL
+                    ELSE workload_shadow_events.delivered_at
+                END,
                 occurrence_count = workload_shadow_events.occurrence_count + 1,
                 last_seen_at = VALUES(last_seen_at),
                 active = TRUE,
@@ -1530,6 +1617,7 @@ public interface WorkloadShadowProjectionRepository
             @Param("progressDate") LocalDate progressDate,
             @Param("now") LocalDateTime now,
             @Param("cooldownStart") LocalDateTime cooldownStart,
+            @Param("groupNotificationsEnabled") boolean groupNotificationsEnabled,
             @Param("notificationGroupChatId") Long notificationGroupChatId
     );
 
@@ -1612,6 +1700,8 @@ public interface WorkloadShadowProjectionRepository
                 target_group_type = 'ADMIN_OWNER_MONITORING',
                 target_group_chat_id = VALUES(target_group_chat_id),
                 delivery_attempts = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 0
                     WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
                         THEN 0
                     WHEN workload_shadow_events.active = FALSE
@@ -1627,10 +1717,14 @@ public interface WorkloadShadowProjectionRepository
                     ELSE 0
                 END,
                 next_attempt_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN NULL
                     WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
                         THEN NULL
                     WHEN workload_shadow_events.active = FALSE
                         THEN VALUES(next_attempt_at)
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
                     WHEN workload_shadow_events.delivery_status = 'PROCESSING'
                         THEN workload_shadow_events.next_attempt_at
                     WHEN workload_shadow_events.delivery_status = 'RETRY'
@@ -1653,11 +1747,61 @@ public interface WorkloadShadowProjectionRepository
                         END
                     ELSE VALUES(next_attempt_at)
                 END,
-                delivery_status = CASE
-                    WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
+                last_error_code = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'NOTIFICATIONS_DISABLED'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN CASE
+                            WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                                THEN 'MISSING_GROUP_BINDING'
+                            ELSE NULL
+                        END
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
                         THEN 'MISSING_GROUP_BINDING'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN workload_shadow_events.last_error_code
+                    WHEN VALUES(delivery_status) = 'PENDING'
+                     AND COALESCE(workload_shadow_events.last_error_code, '') IN (
+                         'MISSING_GROUP_BINDING',
+                         'ROUTING_POLICY_CHANGED',
+                         'NOTIFICATIONS_DISABLED',
+                         'NOTIFICATION_BASELINE'
+                     )
+                        THEN NULL
+                    ELSE workload_shadow_events.last_error_code
+                END,
+                last_error = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'Telegram-уведомления SHADOW выключены; событие доступно только в мониторинге'
+                    WHEN workload_shadow_events.active = FALSE
+                        THEN CASE
+                            WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                                THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                            ELSE NULL
+                        END
+                    WHEN VALUES(delivery_status) = 'MISSING_GROUP_BINDING'
+                        THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN workload_shadow_events.last_error
+                    WHEN VALUES(delivery_status) = 'PENDING'
+                     AND COALESCE(workload_shadow_events.last_error_code, '') IN (
+                         'MISSING_GROUP_BINDING',
+                         'ROUTING_POLICY_CHANGED',
+                         'NOTIFICATIONS_DISABLED',
+                         'NOTIFICATION_BASELINE'
+                     )
+                        THEN NULL
+                    ELSE workload_shadow_events.last_error
+                END,
+                delivery_status = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                        THEN 'SKIPPED'
                     WHEN workload_shadow_events.active = FALSE
                         THEN VALUES(delivery_status)
+                    WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0
+                        THEN 'MISSING_GROUP_BINDING'
+                    WHEN workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN 'SKIPPED'
                     WHEN workload_shadow_events.delivery_status = 'PROCESSING'
                         THEN 'PROCESSING'
                     WHEN workload_shadow_events.delivery_status = 'RETRY'
@@ -1671,6 +1815,22 @@ public interface WorkloadShadowProjectionRepository
                     WHEN workload_shadow_events.delivery_status = 'PENDING'
                         THEN 'PENDING'
                     ELSE VALUES(delivery_status)
+                END,
+                processing_started_at = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
+                    ELSE workload_shadow_events.processing_started_at
+                END,
+                processing_lease_until = CASE
+                    WHEN VALUES(delivery_status) = 'SKIPPED'
+                      OR workload_shadow_events.delivery_status = 'SKIPPED'
+                        THEN NULL
+                    ELSE workload_shadow_events.processing_lease_until
+                END,
+                delivered_at = CASE
+                    WHEN workload_shadow_events.active = FALSE THEN NULL
+                    ELSE workload_shadow_events.delivered_at
                 END,
                 occurrence_count = workload_shadow_events.occurrence_count + 1,
                 last_seen_at = VALUES(last_seen_at),

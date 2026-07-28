@@ -228,8 +228,12 @@ final class WorkloadTransferGraphAssembler {
         if (sharedOwnership) {
             warnings.add(warning(
                     SHARED_COMPANY_OWNERSHIP,
-                    WARNING,
-                    "Компания одновременно связана с несколькими специалистами: " + linkedWorkerIds
+                    company.otherWorkerActiveOrderCount > 0 ? WARNING : INFO,
+                    company.otherWorkerActiveOrderCount > 0
+                            ? "Компания связана с несколькими специалистами и содержит активные заказы других исполнителей: "
+                                    + linkedWorkerIds
+                            : "Компания имеет дополнительные связи workers_companies без активных заказов других исполнителей: "
+                                    + linkedWorkerIds
             ));
         }
         if (company.otherWorkerActiveOrderCount > 0) {
@@ -452,8 +456,8 @@ final class WorkloadTransferGraphAssembler {
                 && !Objects.equals(row.botOwnerWorkerId(), data.sourceWorkerId())) {
             warnings.add(warning(
                     REVIEW_BOT_OWNER_MISMATCH,
-                    ERROR,
-                    "Аккаунт карточки принадлежит другому специалисту"
+                    INFO,
+                    "Аккаунт карточки закреплён за другим специалистом в общем городском пуле"
             ));
         }
         if (value.duplicatedBot) {

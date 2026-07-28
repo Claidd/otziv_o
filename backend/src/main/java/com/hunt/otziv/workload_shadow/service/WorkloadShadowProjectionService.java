@@ -134,7 +134,7 @@ public class WorkloadShadowProjectionService {
             if (snapshot.lateExcludedUnits() > 0) {
                 upsertEvent(
                         pendingEvents,
-                        settings.notificationGroupChatId(),
+                        settings,
                         "LATE:" + progressDate + ":" + worker.workerId(),
                         "INFO",
                         "LATE_INCOMING_LOAD",
@@ -153,7 +153,7 @@ public class WorkloadShadowProjectionService {
             if (!worker.workerGroupConnected()) {
                 upsertEvent(
                         pendingEvents,
-                        settings.notificationGroupChatId(),
+                        settings,
                         "MISSING_WORKER_GROUP:" + worker.workerId(),
                         "WARNING",
                         "MISSING_WORKER_GROUP",
@@ -170,7 +170,7 @@ public class WorkloadShadowProjectionService {
             if (worker.managerLinkCount() != 1) {
                 upsertEvent(
                         pendingEvents,
-                        settings.notificationGroupChatId(),
+                        settings,
                         "AMBIGUOUS_MANAGER_LINK:" + worker.workerId(),
                         "CRITICAL",
                         "AMBIGUOUS_MANAGER_LINK",
@@ -198,7 +198,7 @@ public class WorkloadShadowProjectionService {
             }
             upsertEvent(
                     pendingEvents,
-                    settings.notificationGroupChatId(),
+                    settings,
                     "MISSING_MANAGER_GROUP:" + managerWorker.managerId(),
                     "CRITICAL",
                     "MISSING_MANAGER_GROUP",
@@ -1245,6 +1245,7 @@ public class WorkloadShadowProjectionService {
                 progressDate,
                 now,
                 now.minusMinutes(Math.max(5, settings.alertCooldownMinutes())),
+                settings.groupNotificationsEnabled(),
                 settings.notificationGroupChatId()
         );
         repository.finalizePreviousSnapshots(progressDate, now);
@@ -1252,7 +1253,7 @@ public class WorkloadShadowProjectionService {
 
     private void upsertEvent(
             List<PendingEvent> target,
-            Long notificationGroupChatId,
+            WorkloadShadowSettingsResponse settings,
             String deduplicationKey,
             String severity,
             String eventType,
@@ -1263,7 +1264,8 @@ public class WorkloadShadowProjectionService {
             String message,
             LocalDateTime now
     ) {
-        Long targetChatId = notificationGroupChatId;
+        Long targetChatId = settings.notificationGroupChatId();
+        boolean notificationsEnabled = settings.groupNotificationsEnabled();
         boolean routeValid = targetChatId != null && targetChatId < 0;
         target.add(new PendingEvent(
                 limit(deduplicationKey, 190),
@@ -1276,9 +1278,11 @@ public class WorkloadShadowProjectionService {
                 limit(title, 220),
                 limit(message, 2000),
                 targetChatId,
-                routeValid ? "PENDING" : "MISSING_GROUP_BINDING",
+                !notificationsEnabled
+                        ? "SKIPPED"
+                        : routeValid ? "PENDING" : "MISSING_GROUP_BINDING",
                 now,
-                routeValid ? now : null
+                notificationsEnabled && routeValid ? now : null
         ));
     }
 
