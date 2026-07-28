@@ -1437,23 +1437,22 @@ public interface WorkloadShadowProjectionRepository
                        ' отсутствовал снимок на конец смены. Ранний снимок сохранён только для диагностики ',
                        'и исключён из месячного рейтинга и заморозок.'
                    ),
-                   'MANAGER_AUDIT',
-                   manager.audit_telegram_group_chat_id,
+                   'ADMIN_OWNER_MONITORING',
+                   :notificationGroupChatId,
                    CASE
-                       WHEN manager.audit_telegram_group_chat_id < 0 THEN 'PENDING'
+                       WHEN :notificationGroupChatId < 0 THEN 'PENDING'
                        ELSE 'MISSING_GROUP_BINDING'
                    END,
                    :now,
                    :now,
                    CASE
-                       WHEN manager.audit_telegram_group_chat_id < 0 THEN :now
+                       WHEN :notificationGroupChatId < 0 THEN :now
                        ELSE NULL
                    END,
                    TRUE
             FROM workload_shadow_worker_daily daily
             JOIN workers worker ON worker.worker_id = daily.worker_id
             LEFT JOIN users worker_user ON worker_user.id = worker.user_id
-            LEFT JOIN managers manager ON manager.manager_id = daily.manager_id
             WHERE daily.progress_date < :progressDate
               AND daily.finalized = FALSE
             ON DUPLICATE KEY UPDATE
@@ -1530,7 +1529,8 @@ public interface WorkloadShadowProjectionRepository
     int emitMissedFinalSnapshotEvents(
             @Param("progressDate") LocalDate progressDate,
             @Param("now") LocalDateTime now,
-            @Param("cooldownStart") LocalDateTime cooldownStart
+            @Param("cooldownStart") LocalDateTime cooldownStart,
+            @Param("notificationGroupChatId") Long notificationGroupChatId
     );
 
     @Modifying
@@ -1564,7 +1564,7 @@ public interface WorkloadShadowProjectionRepository
                    event_row.transfer_case_id,
                    event_row.title,
                    event_row.message,
-                   'MANAGER_AUDIT',
+                   'ADMIN_OWNER_MONITORING',
                    event_row.target_group_chat_id,
                    event_row.delivery_status,
                    event_row.observed_at,
@@ -1609,7 +1609,7 @@ public interface WorkloadShadowProjectionRepository
                 transfer_case_id = VALUES(transfer_case_id),
                 title = VALUES(title),
                 message = VALUES(message),
-                target_group_type = 'MANAGER_AUDIT',
+                target_group_type = 'ADMIN_OWNER_MONITORING',
                 target_group_chat_id = VALUES(target_group_chat_id),
                 delivery_attempts = CASE
                     WHEN VALUES(target_group_chat_id) IS NULL OR VALUES(target_group_chat_id) >= 0

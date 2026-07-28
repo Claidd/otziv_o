@@ -10,6 +10,8 @@ import {
 const validSettings: WorkloadShadowSafetyValues = {
   mode: 'SHADOW',
   applyEnabled: false,
+  groupNotificationsEnabled: false,
+  notificationGroupChatId: null,
   shiftStart: '10:00',
   shiftEnd: '23:00',
   schedulerIntervalMinutes: 10,
@@ -49,6 +51,22 @@ describe('workload shadow settings safety', () => {
       walkMinimumMinutesPerCard: 2,
       walkMinutesPerCard: 2
     })).toContain('не может быть меньше 3 минут');
+  });
+
+  it('requires a negative shared group id before notifications can be enabled', () => {
+    expect(workloadShadowSettingsError({
+      ...validSettings,
+      groupNotificationsEnabled: true
+    })).toContain('общей группы администраторов и владельцев');
+    expect(workloadShadowSettingsError({
+      ...validSettings,
+      notificationGroupChatId: 794146111
+    })).toContain('отрицательный Telegram chat ID группы');
+    expect(workloadShadowSettingsError({
+      ...validSettings,
+      groupNotificationsEnabled: true,
+      notificationGroupChatId: -1001234567890
+    })).toBeNull();
   });
 
   it('requires monotonic transfer percentages and company caps', () => {

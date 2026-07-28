@@ -11,6 +11,7 @@ export interface WorkloadShadowSettings {
   applyEnabled: boolean;
   observationEnabled: boolean;
   groupNotificationsEnabled: boolean;
+  notificationGroupChatId: number | null;
   schedulerIntervalMinutes: number;
   nearEndIntervalMinutes: number;
   nearEndWindowMinutes: number;

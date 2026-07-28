@@ -49,7 +49,7 @@ class WorkloadShadowNotificationStoreTest {
     }
 
     @Test
-    void loadsClaimedEventsAndManagerBindingsWithOneRepositoryQuery() {
+    void loadsClaimedEventsWithOneRepositoryQuery() {
         List<Long> eventIds = List.of(1L, 2L);
         when(projection.getId()).thenReturn(1L);
         when(projection.getSeverity()).thenReturn("WARNING");
@@ -57,10 +57,9 @@ class WorkloadShadowNotificationStoreTest {
         when(projection.getManagerId()).thenReturn(7L);
         when(projection.getTitle()).thenReturn("Нужен сотрудник");
         when(projection.getMessage()).thenReturn("Нет получателя");
-        when(projection.getTargetGroupType()).thenReturn("MANAGER_AUDIT");
+        when(projection.getTargetGroupType()).thenReturn("ADMIN_OWNER_MONITORING");
         when(projection.getTargetGroupChatId()).thenReturn(-100L);
         when(projection.getDeliveryAttempts()).thenReturn(2);
-        when(projection.getManagerAuditGroupChatId()).thenReturn(-100L);
         when(eventRepository.findClaimedEvents(
                 eventIds,
                 NOW,
@@ -78,11 +77,10 @@ class WorkloadShadowNotificationStoreTest {
                         7L,
                         "Нужен сотрудник",
                         "Нет получателя",
-                        "MANAGER_AUDIT",
+                        "ADMIN_OWNER_MONITORING",
                         -100L,
                         2
-                ),
-                -100L
+                )
         ));
         verify(eventRepository).findClaimedEvents(eventIds, NOW, LEASE_UNTIL);
     }
@@ -96,7 +94,7 @@ class WorkloadShadowNotificationStoreTest {
                 7L,
                 "Нужен сотрудник",
                 "Нет получателя",
-                "MANAGER_AUDIT",
+                "ADMIN_OWNER_MONITORING",
                 -100L,
                 0
         );
@@ -111,7 +109,7 @@ class WorkloadShadowNotificationStoreTest {
                                 7L,
                                 "Нужен сотрудник",
                                 "Нет получателя",
-                                "MANAGER_AUDIT",
+                                "ADMIN_OWNER_MONITORING",
                                 -100L,
                                 3
                         ),

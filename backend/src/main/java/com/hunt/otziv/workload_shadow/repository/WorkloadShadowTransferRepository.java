@@ -278,7 +278,7 @@ public interface WorkloadShadowTransferRepository
                    transfer_case.workload_shadow_transfer_case_id,
                    event_row.title,
                    event_row.message,
-                   'MANAGER_AUDIT',
+                   'ADMIN_OWNER_MONITORING',
                    event_row.target_group_chat_id,
                    event_row.delivery_status,
                    :observedAt,
@@ -327,7 +327,7 @@ public interface WorkloadShadowTransferRepository
                 transfer_case_id = VALUES(transfer_case_id),
                 title = VALUES(title),
                 message = VALUES(message),
-                target_group_type = 'MANAGER_AUDIT',
+                target_group_type = 'ADMIN_OWNER_MONITORING',
                 target_group_chat_id = VALUES(target_group_chat_id),
                 delivery_attempts = CASE
                     WHEN VALUES(target_group_chat_id) IS NULL

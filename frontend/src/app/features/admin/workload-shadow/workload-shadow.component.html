@@ -606,7 +606,18 @@
             </label>
             <label class="switch-field">
               <input type="checkbox" formControlName="groupNotificationsEnabled">
-              <span><b>Уведомления в группы</b><small>Предложения и предупреждения не отправляются в личку</small></span>
+              <span><b>Уведомления в общую группу</b><small>Только администраторы и владельцы; группы менеджеров и личные чаты исключены</small></span>
+            </label>
+            <label>
+              <span>Telegram chat ID группы администраторов и владельцев</span>
+              <input
+                type="number"
+                formControlName="notificationGroupChatId"
+                max="-1"
+                step="1"
+                placeholder="-1001234567890"
+              >
+              <small>Только отрицательный ID общей Telegram-группы. Узнать ID можно командой /chatid в этой группе.</small>
             </label>
             <label class="switch-field locked">
               <input type="checkbox" formControlName="applyEnabled">

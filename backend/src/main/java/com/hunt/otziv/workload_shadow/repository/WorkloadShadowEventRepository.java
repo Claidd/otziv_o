@@ -18,6 +18,7 @@ public interface WorkloadShadowEventRepository
             SELECT workload_shadow_event_id
             FROM workload_shadow_events
             WHERE active = 1
+              AND target_group_type = 'ADMIN_OWNER_MONITORING'
               AND delivery_status IN ('PENDING', 'RETRY')
               AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
             ORDER BY next_attempt_at, first_seen_at, workload_shadow_event_id
@@ -55,11 +56,8 @@ public interface WorkloadShadowEventRepository
                    wse.message AS message,
                    wse.target_group_type AS targetGroupType,
                    wse.target_group_chat_id AS targetGroupChatId,
-                   wse.delivery_attempts AS deliveryAttempts,
-                   manager.audit_telegram_group_chat_id AS managerAuditGroupChatId
+                   wse.delivery_attempts AS deliveryAttempts
             FROM workload_shadow_events wse
-            LEFT JOIN managers manager
-              ON manager.manager_id = wse.manager_id
             WHERE wse.workload_shadow_event_id IN (:eventIds)
               AND wse.delivery_status = 'PROCESSING'
               AND wse.processing_started_at = :processingStartedAt

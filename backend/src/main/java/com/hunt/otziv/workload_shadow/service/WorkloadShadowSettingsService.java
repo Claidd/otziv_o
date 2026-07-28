@@ -52,7 +52,8 @@ public class WorkloadShadowSettingsService {
                 MODE_SHADOW,
                 false,
                 settings.getBoolean("observation-enabled", true),
-                settings.getBoolean("group-notifications-enabled", true),
+                settings.getBoolean("group-notifications-enabled", false),
+                settings.getNullableLong("notification-group-chat-id"),
                 settings.getInt("scheduler-interval-minutes", 10),
                 settings.getInt("near-end-interval-minutes", 5),
                 settings.getInt("near-end-window-minutes", 120),
@@ -178,6 +179,13 @@ public class WorkloadShadowSettingsService {
         put(values, "observation-enabled", request.observationEnabled());
         put(values, "apply-enabled", false);
         put(values, "group-notifications-enabled", request.groupNotificationsEnabled());
+        put(
+                values,
+                "notification-group-chat-id",
+                request.notificationGroupChatId() == null
+                        ? ""
+                        : request.notificationGroupChatId()
+        );
         put(values, "scheduler-interval-minutes", request.schedulerIntervalMinutes());
         put(values, "near-end-interval-minutes", request.nearEndIntervalMinutes());
         put(values, "near-end-window-minutes", request.nearEndWindowMinutes());
@@ -284,6 +292,18 @@ public class WorkloadShadowSettingsService {
             throw new ResponseStatusException(
                     HttpStatus.PRECONDITION_FAILED,
                     "Боевой режим недоступен: система запущена только в режиме наблюдения"
+            );
+        }
+        if (request.notificationGroupChatId() != null
+                && request.notificationGroupChatId() >= 0) {
+            throw badRequest(
+                    "Для shadow-уведомлений разрешён только отрицательный chat ID Telegram-группы"
+            );
+        }
+        if (request.groupNotificationsEnabled()
+                && request.notificationGroupChatId() == null) {
+            throw badRequest(
+                    "Перед включением уведомлений укажите Telegram chat ID общей группы администраторов и владельцев"
             );
         }
         requireText(request.businessZone(), "Часовой пояс");
@@ -399,6 +419,18 @@ public class WorkloadShadowSettingsService {
                 return Long.parseLong(value.trim());
             } catch (NumberFormatException ignored) {
                 return fallback;
+            }
+        }
+
+        private Long getNullableLong(String suffix) {
+            String value = value(suffix);
+            if (value == null || value.isBlank()) {
+                return null;
+            }
+            try {
+                return Long.parseLong(value.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
             }
         }
 

@@ -157,6 +157,7 @@ public class WorkloadShadowTransferSimulationService {
                             selectedProblem.diagnostics().errorCount() > 0 ? "CRITICAL" : "WARNING",
                             "TRANSFER_GRAPH_WARNING",
                             source,
+                            settings.notificationGroupChatId(),
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Обнаружены несогласованности графа передачи компании",
@@ -174,6 +175,7 @@ public class WorkloadShadowTransferSimulationService {
                             "CRITICAL",
                             "STAFFING_REQUIRED",
                             source,
+                            settings.notificationGroupChatId(),
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Наблюдение: менеджеру может потребоваться новый специалист",
@@ -191,6 +193,7 @@ public class WorkloadShadowTransferSimulationService {
                                 "WARNING",
                                 "EMERGENCY_FALLBACK",
                                 source,
+                                settings.notificationGroupChatId(),
                                 selectedProblem.graph().companyId(),
                                 caseKey,
                                 "Резервный исполнитель для одиночной карточки",
@@ -207,6 +210,7 @@ public class WorkloadShadowTransferSimulationService {
                             "WARNING",
                             "TRANSFER_RECOMMENDATION",
                             source,
+                            settings.notificationGroupChatId(),
                             selectedProblem.graph().companyId(),
                             caseKey,
                             "Подготовлена теневая рекомендация передачи компании",
@@ -441,13 +445,14 @@ public class WorkloadShadowTransferSimulationService {
             String severity,
             String eventType,
             SourceWorker source,
+            Long notificationGroupChatId,
             long companyId,
             String caseKey,
             String title,
             String message,
             LocalDateTime now
     ) {
-        Long targetChatId = source.managerGroupChatId();
+        Long targetChatId = notificationGroupChatId;
         boolean routeValid = targetChatId != null && targetChatId < 0;
         return new TransferEventWrite(
                 deduplicationKey,

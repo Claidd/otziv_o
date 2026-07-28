@@ -55,7 +55,7 @@ class WorkloadShadowNotificationDispatcherTest {
     void runtimeFlagStopsDeliveryBeforeQueueAccess() {
         when(settings.getBoolean(
                 WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,
-                true
+                false
         )).thenReturn(false);
 
         WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
@@ -65,8 +65,8 @@ class WorkloadShadowNotificationDispatcherTest {
     }
 
     @Test
-    void sendsOnlyToVerifiedNegativeManagerAuditGroupWithShadowLabel() {
-        prepareClaim(event(-100L, 0), -100L);
+    void sendsOnlyToConfiguredAdminOwnerMonitoringGroupWithShadowLabel() {
+        prepareClaim(event(-100L, 0));
         when(telegramService.sendMessage(-100L, shadowText(), "HTML")).thenReturn(true);
 
         WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
@@ -91,38 +91,46 @@ class WorkloadShadowNotificationDispatcherTest {
     }
 
     @Test
-    void positiveChatIdIsDeadMissingGroupAndNeverSent() {
-        prepareClaim(event(123L, 0), null);
+    void positiveConfiguredChatIdStopsDeliveryBeforeQueueAccess() {
+        when(settings.getBoolean(
+                WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,
+                false
+        )).thenReturn(true);
+        when(settings.getStringAllowEmpty(
+                WorkloadShadowNotificationDispatcher.NOTIFICATION_GROUP_CHAT_ID,
+                ""
+        )).thenReturn("123");
 
         WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
 
-        verify(store).applyDeliveryOutcomes(List.of(
-                WorkloadShadowDeliveryOutcome.dead(
-                        event(123L, 0),
-                        0,
-                        WorkloadShadowNotificationDispatcher.ERROR_MISSING_GROUP_BINDING,
-                        "MISSING_GROUP_BINDING: target должен быть действующей audit-группой менеджера"
-                )
-        ), NOW, NOW.plusMinutes(5));
-        verifyNoInteractions(telegramService);
-        verify(metrics).recordMissingGroup();
-        verify(metrics).recordDead();
-        assertThat(summary.dead()).isEqualTo(1);
+        assertThat(summary.disabled()).isTrue();
+        verifyNoInteractions(store, telegramService, metrics);
     }
 
     @Test
-    void arbitraryNegativeGroupThatDoesNotMatchManagerBindingIsBlocked() {
-        prepareClaim(event(-100L, 0), -200L);
+    void legacyManagerAuditTargetIsBlocked() {
+        WorkloadShadowNotificationEvent legacyEvent = new WorkloadShadowNotificationEvent(
+                1L,
+                "WARNING",
+                "STAFFING_REQUIRED",
+                7L,
+                "<Компания>",
+                "Нужен сотрудник",
+                "MANAGER_AUDIT",
+                -200L,
+                0
+        );
+        prepareClaim(legacyEvent);
 
         dispatcher.dispatchDue();
 
         verifyNoInteractions(telegramService);
         verify(store).applyDeliveryOutcomes(List.of(
                 WorkloadShadowDeliveryOutcome.dead(
-                        event(-100L, 0),
+                        legacyEvent,
                         0,
                         WorkloadShadowNotificationDispatcher.ERROR_MISSING_GROUP_BINDING,
-                        "MISSING_GROUP_BINDING: target должен быть действующей audit-группой менеджера"
+                        "MISSING_GROUP_BINDING: shadow-событие не направлено в общую группу администраторов и владельцев"
                 )
         ), NOW, NOW.plusMinutes(5));
     }
@@ -141,7 +149,7 @@ class WorkloadShadowNotificationDispatcherTest {
                 -300L,
                 0
         );
-        prepareClaim(workerGroupEvent, -300L);
+        prepareClaim(workerGroupEvent);
 
         dispatcher.dispatchDue();
 
@@ -151,14 +159,14 @@ class WorkloadShadowNotificationDispatcherTest {
                         workerGroupEvent,
                         0,
                         WorkloadShadowNotificationDispatcher.ERROR_MISSING_GROUP_BINDING,
-                        "MISSING_GROUP_BINDING: target должен быть действующей audit-группой менеджера"
+                        "MISSING_GROUP_BINDING: shadow-событие не направлено в общую группу администраторов и владельцев"
                 )
         ), NOW, NOW.plusMinutes(5));
     }
 
     @Test
     void failedTelegramSendIsRetriedWithBackoff() {
-        prepareClaim(event(-100L, 0), -100L);
+        prepareClaim(event(-100L, 0));
         when(telegramService.sendMessage(-100L, shadowText(), "HTML")).thenReturn(false);
 
         WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
@@ -177,7 +185,7 @@ class WorkloadShadowNotificationDispatcherTest {
 
     @Test
     void finalFailedAttemptBecomesDeadAndIsKeptForDiagnostics() {
-        prepareClaim(event(-100L, 7), -100L);
+        prepareClaim(event(-100L, 7));
         when(telegramService.sendMessage(-100L, shadowText(), "HTML")).thenReturn(false);
 
         WorkloadShadowNotificationDispatcher.DispatchSummary summary = dispatcher.dispatchDue();
@@ -203,20 +211,24 @@ class WorkloadShadowNotificationDispatcherTest {
                 7L,
                 "Второе",
                 "Сообщение",
-                WorkloadShadowNotificationDispatcher.TARGET_MANAGER_AUDIT,
+                WorkloadShadowNotificationDispatcher.TARGET_ADMIN_OWNER_MONITORING,
                 -100L,
                 0
         );
         when(settings.getBoolean(
                 WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,
-                true
+                false
         )).thenReturn(true);
+        when(settings.getStringAllowEmpty(
+                WorkloadShadowNotificationDispatcher.NOTIFICATION_GROUP_CHAT_ID,
+                ""
+        )).thenReturn("-100");
         List<Long> ids = List.of(1L, 2L);
         when(store.findDueEventIds(NOW, 10)).thenReturn(ids);
         when(store.claim(ids, NOW, NOW.plusMinutes(5))).thenReturn(2);
         when(store.findClaimed(ids, NOW, NOW.plusMinutes(5))).thenReturn(List.of(
-                new WorkloadShadowClaimedNotification(first, -100L),
-                new WorkloadShadowClaimedNotification(second, -100L)
+                new WorkloadShadowClaimedNotification(first),
+                new WorkloadShadowClaimedNotification(second)
         ));
         when(telegramService.sendMessage(
                 org.mockito.ArgumentMatchers.eq(-100L),
@@ -239,22 +251,20 @@ class WorkloadShadowNotificationDispatcherTest {
         assertThat(summary.sent()).isEqualTo(2);
     }
 
-    private void prepareClaim(
-            WorkloadShadowNotificationEvent event,
-            Long managerAuditGroupChatId
-    ) {
+    private void prepareClaim(WorkloadShadowNotificationEvent event) {
         when(settings.getBoolean(
                 WorkloadShadowNotificationDispatcher.GROUP_NOTIFICATIONS_ENABLED,
-                true
+                false
         )).thenReturn(true);
+        when(settings.getStringAllowEmpty(
+                WorkloadShadowNotificationDispatcher.NOTIFICATION_GROUP_CHAT_ID,
+                ""
+        )).thenReturn("-100");
         List<Long> eventIds = List.of(event.id());
         when(store.findDueEventIds(NOW, 10)).thenReturn(eventIds);
         when(store.claim(eventIds, NOW, NOW.plusMinutes(5))).thenReturn(1);
         when(store.findClaimed(eventIds, NOW, NOW.plusMinutes(5))).thenReturn(List.of(
-                new WorkloadShadowClaimedNotification(
-                        event,
-                        managerAuditGroupChatId
-                )
+                new WorkloadShadowClaimedNotification(event)
         ));
     }
 
@@ -266,7 +276,7 @@ class WorkloadShadowNotificationDispatcherTest {
                 7L,
                 "<Компания>",
                 "Нужен сотрудник",
-                WorkloadShadowNotificationDispatcher.TARGET_MANAGER_AUDIT,
+                WorkloadShadowNotificationDispatcher.TARGET_ADMIN_OWNER_MONITORING,
                 chatId,
                 attempts
         );

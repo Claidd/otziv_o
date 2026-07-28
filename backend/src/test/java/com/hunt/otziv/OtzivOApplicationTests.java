@@ -131,7 +131,7 @@ class OtzivOApplicationTests {
 			    last_seen_at,
 			    active
 			)
-			VALUES (?, 'WARNING', 'INTEGRATION_TEST', 'Тест', 'Тест', 'MANAGER_AUDIT',
+			VALUES (?, 'WARNING', 'INTEGRATION_TEST', 'Тест', 'Тест', 'ADMIN_OWNER_MONITORING',
 			        'PENDING', ?, ?, 1)
 			""", deduplicationKey, now, now);
 		Long eventId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
@@ -177,7 +177,7 @@ class OtzivOApplicationTests {
 			    last_seen_at,
 			    active
 			)
-			VALUES (?, 'WARNING', 'MISSING_GROUP_TEST', 'Тест', 'Тест', 'MANAGER_AUDIT',
+			VALUES (?, 'WARNING', 'MISSING_GROUP_TEST', 'Тест', 'Тест', 'ADMIN_OWNER_MONITORING',
 			        'MISSING_GROUP_BINDING', ?, ?, 1)
 			""", "missing-" + UUID.randomUUID(), now, now);
 		Long missingGroupEventId =

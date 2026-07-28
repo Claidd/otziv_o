@@ -165,10 +165,7 @@ public class WorkloadShadowNotificationStore {
                         ? 0
                         : projection.getDeliveryAttempts()
         );
-        return new WorkloadShadowClaimedNotification(
-                event,
-                projection.getManagerAuditGroupChatId()
-        );
+        return new WorkloadShadowClaimedNotification(event);
     }
 
     private String outcomesJson(List<WorkloadShadowDeliveryOutcome> outcomes) {

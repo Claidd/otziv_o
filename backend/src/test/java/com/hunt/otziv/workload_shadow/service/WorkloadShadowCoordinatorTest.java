@@ -188,6 +188,7 @@ class WorkloadShadowCoordinatorTest {
                 false,
                 true,
                 true,
+                -100L,
                 10,
                 5,
                 120,

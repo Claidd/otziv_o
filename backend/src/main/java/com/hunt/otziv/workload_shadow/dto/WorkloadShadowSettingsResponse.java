@@ -5,6 +5,7 @@ public record WorkloadShadowSettingsResponse(
         boolean applyEnabled,
         boolean observationEnabled,
         boolean groupNotificationsEnabled,
+        Long notificationGroupChatId,
         int schedulerIntervalMinutes,
         int nearEndIntervalMinutes,
         int nearEndWindowMinutes,

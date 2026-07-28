@@ -21,7 +21,10 @@ public class WorkloadShadowNotificationDispatcher {
 
     public static final String GROUP_NOTIFICATIONS_ENABLED =
             "workload.shadow.group-notifications-enabled";
-    public static final String TARGET_MANAGER_AUDIT = "MANAGER_AUDIT";
+    public static final String NOTIFICATION_GROUP_CHAT_ID =
+            "workload.shadow.notification-group-chat-id";
+    public static final String TARGET_ADMIN_OWNER_MONITORING =
+            "ADMIN_OWNER_MONITORING";
     public static final String ERROR_MISSING_GROUP_BINDING = "MISSING_GROUP_BINDING";
     public static final String ERROR_TELEGRAM_SEND_FAILED = "TELEGRAM_SEND_FAILED";
 
@@ -67,7 +70,11 @@ public class WorkloadShadowNotificationDispatcher {
     }
 
     public DispatchSummary dispatchDue() {
-        if (!settings.getBoolean(GROUP_NOTIFICATIONS_ENABLED, true)) {
+        if (!settings.getBoolean(GROUP_NOTIFICATIONS_ENABLED, false)) {
+            return DispatchSummary.disabledSummary();
+        }
+        Long notificationGroupChatId = notificationGroupChatId();
+        if (notificationGroupChatId == null) {
             return DispatchSummary.disabledSummary();
         }
 
@@ -101,6 +108,7 @@ public class WorkloadShadowNotificationDispatcher {
         for (WorkloadShadowClaimedNotification notification : claimed) {
             dispatchClaimed(
                     notification,
+                    notificationGroupChatId,
                     now,
                     maxAttempts,
                     retryBaseMinutes,
@@ -115,6 +123,7 @@ public class WorkloadShadowNotificationDispatcher {
 
     private void dispatchClaimed(
             WorkloadShadowClaimedNotification claimed,
+            long notificationGroupChatId,
             LocalDateTime now,
             int maxAttempts,
             int retryBaseMinutes,
@@ -122,20 +131,20 @@ public class WorkloadShadowNotificationDispatcher {
             List<WorkloadShadowDeliveryOutcome> outcomes
     ) {
         WorkloadShadowNotificationEvent event = claimed.event();
-        Long verifiedGroup = verifiedManagerAuditGroup(claimed);
-        if (verifiedGroup == null) {
+        if (!TARGET_ADMIN_OWNER_MONITORING.equals(event.targetGroupType())) {
             outcomes.add(WorkloadShadowDeliveryOutcome.dead(
                     event,
                     event.deliveryAttempts(),
                     ERROR_MISSING_GROUP_BINDING,
-                    "MISSING_GROUP_BINDING: target должен быть действующей audit-группой менеджера"
+                    "MISSING_GROUP_BINDING: shadow-событие не направлено в общую группу администраторов и владельцев"
             ));
             summary.missingGroups++;
             summary.dead++;
             log.warn(
-                    "Workload shadow notification blocked: missing/invalid manager audit group eventId={} managerId={}",
+                    "Workload shadow notification blocked: invalid target type eventId={} managerId={} targetType={}",
                     event.id(),
-                    event.managerId()
+                    event.managerId(),
+                    event.targetGroupType()
             );
             return;
         }
@@ -155,7 +164,7 @@ public class WorkloadShadowNotificationDispatcher {
         String error = "TelegramService вернул false";
         try {
             sent = telegramService.sendMessage(
-                    verifiedGroup,
+                    notificationGroupChatId,
                     shadowMessage(event),
                     "HTML"
             );
@@ -165,7 +174,7 @@ public class WorkloadShadowNotificationDispatcher {
             log.warn(
                     "Workload shadow Telegram send threw eventId={} groupChatId={}: {}",
                     event.id(),
-                    verifiedGroup,
+                    notificationGroupChatId,
                     error
             );
         }
@@ -197,21 +206,20 @@ public class WorkloadShadowNotificationDispatcher {
         summary.retried++;
     }
 
-    private Long verifiedManagerAuditGroup(WorkloadShadowClaimedNotification claimed) {
-        WorkloadShadowNotificationEvent event = claimed.event();
-        if (!TARGET_MANAGER_AUDIT.equals(event.targetGroupType())
-                || event.managerId() == null
-                || event.targetGroupChatId() == null
-                || event.targetGroupChatId() >= 0) {
+    private Long notificationGroupChatId() {
+        String configured = settings.getStringAllowEmpty(
+                NOTIFICATION_GROUP_CHAT_ID,
+                ""
+        );
+        if (configured == null || configured.isBlank()) {
             return null;
         }
-        Long configuredGroup = claimed.managerAuditGroupChatId();
-        if (configuredGroup == null
-                || configuredGroup >= 0
-                || !configuredGroup.equals(event.targetGroupChatId())) {
+        try {
+            long chatId = Long.parseLong(configured.trim());
+            return chatId < 0 ? chatId : null;
+        } catch (NumberFormatException ignored) {
             return null;
         }
-        return configuredGroup;
     }
 
     private void recordMetrics(MutableSummary summary) {

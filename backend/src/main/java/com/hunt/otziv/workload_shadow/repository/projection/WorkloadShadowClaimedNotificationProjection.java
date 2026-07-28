@@ -19,6 +19,4 @@ public interface WorkloadShadowClaimedNotificationProjection {
     Long getTargetGroupChatId();
 
     Integer getDeliveryAttempts();
-
-    Long getManagerAuditGroupChatId();
 }

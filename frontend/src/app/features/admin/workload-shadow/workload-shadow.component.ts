@@ -55,6 +55,8 @@ export type WorkloadShadowSafetyValues = Pick<
   WorkloadShadowSettings,
   | 'mode'
   | 'applyEnabled'
+  | 'groupNotificationsEnabled'
+  | 'notificationGroupChatId'
   | 'shiftStart'
   | 'shiftEnd'
   | 'schedulerIntervalMinutes'
@@ -79,6 +81,12 @@ export type WorkloadShadowSafetyValues = Pick<
 export function workloadShadowSettingsError(value: WorkloadShadowSafetyValues): string | null {
   if (String(value.mode).toUpperCase() === 'LIVE' || value.applyEnabled) {
     return 'Боевой режим недоступен: страница работает только в режиме наблюдения.';
+  }
+  if (value.notificationGroupChatId != null && value.notificationGroupChatId >= 0) {
+    return 'Для уведомлений разрешён только отрицательный Telegram chat ID группы.';
+  }
+  if (value.groupNotificationsEnabled && value.notificationGroupChatId == null) {
+    return 'Перед включением уведомлений укажите Telegram chat ID общей группы администраторов и владельцев.';
   }
   if (value.shiftStart === value.shiftEnd) {
     return 'Начало и окончание смены не могут совпадать.';
@@ -384,7 +392,11 @@ export class WorkloadShadowComponent implements OnDestroy {
     mode: ['SHADOW', Validators.required],
     applyEnabled: [{ value: false, disabled: true }],
     observationEnabled: [true],
-    groupNotificationsEnabled: [true],
+    groupNotificationsEnabled: [false],
+    notificationGroupChatId: this.fb.control<number | null>(
+      null,
+      [Validators.max(-1)]
+    ),
     schedulerIntervalMinutes: [10, [Validators.required, Validators.min(5), Validators.max(60)]],
     nearEndIntervalMinutes: [5, [Validators.required, Validators.min(5), Validators.max(60)]],
     nearEndWindowMinutes: [120, [Validators.required, Validators.min(15), Validators.max(360)]],
@@ -768,6 +780,7 @@ export class WorkloadShadowComponent implements OnDestroy {
       applyEnabled: settings.applyEnabled,
       observationEnabled: settings.observationEnabled,
       groupNotificationsEnabled: settings.groupNotificationsEnabled,
+      notificationGroupChatId: settings.notificationGroupChatId,
       schedulerIntervalMinutes: settings.schedulerIntervalMinutes,
       nearEndIntervalMinutes: settings.nearEndIntervalMinutes,
       nearEndWindowMinutes: settings.nearEndWindowMinutes,

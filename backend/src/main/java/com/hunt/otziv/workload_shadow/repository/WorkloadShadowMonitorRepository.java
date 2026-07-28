@@ -288,9 +288,8 @@ public interface WorkloadShadowMonitorRepository
                    wse.message AS message,
                    wse.target_group_type AS targetGroupType,
                    CASE
-                     WHEN wse.target_group_type = 'MANAGER_AUDIT'
+                     WHEN wse.target_group_type = 'ADMIN_OWNER_MONITORING'
                       AND wse.target_group_chat_id < 0
-                      AND wse.target_group_chat_id = manager.audit_telegram_group_chat_id
                      THEN TRUE
                      ELSE FALSE
                    END AS targetGroupConnected,
