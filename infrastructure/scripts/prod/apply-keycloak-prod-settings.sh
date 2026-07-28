@@ -34,7 +34,7 @@ env_value() {
 }
 
 kc() {
-  compose exec -T -e HOME=/tmp keycloak /opt/keycloak/bin/kcadm.sh "$@"
+  compose exec -T -e HOME=/tmp keycloak /opt/keycloak/bin/kcadm.sh "$@" </dev/null
 }
 
 kc_login() {

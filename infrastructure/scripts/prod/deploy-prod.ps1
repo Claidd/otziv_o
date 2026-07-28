@@ -369,7 +369,15 @@ try {
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docker-compose.yaml"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "whatsapp"
+    foreach ($whatsAppDeployFile in @(
+        "whatsapp\package.json",
+        "whatsapp\package-lock.json",
+        "whatsapp\index.js",
+        "whatsapp\message-webhook.js",
+        "whatsapp\group-invite.js"
+    )) {
+        Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $whatsAppDeployFile
+    }
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\nginx"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
     Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
@@ -879,7 +887,7 @@ keycloak_settings_applied=0
 for attempt in 1 2 3; do
   wait_service_healthy keycloak 300
 
-  if sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file"; then
+  if sh infrastructure/scripts/prod/apply-keycloak-prod-settings.sh "`$env_file" </dev/null; then
     keycloak_settings_applied=1
     break
   fi
