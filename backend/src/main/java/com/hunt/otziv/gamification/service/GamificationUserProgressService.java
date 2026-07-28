@@ -33,7 +33,7 @@ public class GamificationUserProgressService {
     private final UserService userService;
     private final GamificationRewardService rewardService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public GamificationMyProgressResponse myProgress(Principal principal, int days) {
         if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found");

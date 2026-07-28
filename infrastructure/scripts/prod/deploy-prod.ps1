@@ -875,7 +875,6 @@ remove_service_containers nginx
 recreate_service_with_retry nginx
 wait_service_healthy nginx 300
 wait_service_healthy whatsapp_lika 300
-wait_service_healthy whatsapp_vika 300
 keycloak_settings_applied=0
 for attempt in 1 2 3; do
   wait_service_healthy keycloak 300
@@ -893,6 +892,10 @@ if [ "`$keycloak_settings_applied" != "1" ]; then
   echo "Failed to apply Keycloak production settings after retries." >&2
   exit 1
 fi
+# The WhatsApp gateway may need its 10-minute startup watchdog followed by a
+# fresh initialization. Finalize Keycloak first and leave recovery headroom
+# instead of reporting a partial deployment at the watchdog deadline.
+wait_service_healthy whatsapp_vika 720
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"
