@@ -197,11 +197,12 @@ function Test-LocalFlywayChecksums {
     }
 
     if ($mismatches.Count -gt 0) {
-        $message = @(
-            "Flyway checksum validation failed after local DB restore.",
-            "Do not edit already-applied V__ migrations. Revert the old migration and create a new V__ migration for follow-up changes.",
-            ($mismatches | ForEach-Object { "  - $_" })
-        ) -join [Environment]::NewLine
+        $messageLines = @(
+            "Flyway checksum validation failed after local DB restore."
+            "Do not edit already-applied V__ migrations. Revert the old migration and create a new V__ migration for follow-up changes."
+        )
+        $messageLines += $mismatches | ForEach-Object { "  - $_" }
+        $message = $messageLines -join [Environment]::NewLine
         throw $message
     }
 

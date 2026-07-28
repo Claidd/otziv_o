@@ -30,249 +30,6 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'bad_review_tasks'
-      AND COLUMN_NAME = 'bad_review_task_created_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE bad_review_tasks ADD COLUMN bad_review_task_created_at DATETIME(6) NULL',
-    'SELECT ''bad_review_tasks.bad_review_task_created_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'archive_bad_review_tasks'
-      AND COLUMN_NAME = 'bad_review_task_created_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE archive_bad_review_tasks ADD COLUMN bad_review_task_created_at DATETIME(6) NULL',
-    'SELECT ''archive_bad_review_tasks.bad_review_task_created_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'reviews'
-      AND COLUMN_NAME = 'review_created_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE reviews ADD COLUMN review_created_at DATETIME(6) NULL',
-    'SELECT ''reviews.review_created_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'reviews'
-      AND COLUMN_NAME = 'review_vigul_changed_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE reviews ADD COLUMN review_vigul_changed_at DATETIME(6) NULL',
-    'SELECT ''reviews.review_vigul_changed_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- Existing rows are not rewritten. The shadow queries use legacy review/order
--- timestamps as a read-time fallback, while new transitions are captured exactly.
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'archive_reviews'
-      AND COLUMN_NAME = 'review_created_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE archive_reviews ADD COLUMN review_created_at DATETIME(6) NULL',
-    'SELECT ''archive_reviews.review_created_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'archive_reviews'
-      AND COLUMN_NAME = 'review_vigul_changed_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE archive_reviews ADD COLUMN review_vigul_changed_at DATETIME(6) NULL',
-    'SELECT ''archive_reviews.review_vigul_changed_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'reviews'
-      AND COLUMN_NAME = 'review_text_ready_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE reviews ADD COLUMN review_text_ready_at DATETIME(6) NULL',
-    'SELECT ''reviews.review_text_ready_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'reviews'
-      AND COLUMN_NAME = 'review_text_ready_worker_id'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE reviews ADD COLUMN review_text_ready_worker_id BIGINT NULL',
-    'SELECT ''reviews.review_text_ready_worker_id exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'archive_reviews'
-      AND COLUMN_NAME = 'review_text_ready_at'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE archive_reviews ADD COLUMN review_text_ready_at DATETIME(6) NULL',
-    'SELECT ''archive_reviews.review_text_ready_at exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @column_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'archive_reviews'
-      AND COLUMN_NAME = 'review_text_ready_worker_id'
-);
-SET @sql = IF(
-    @column_exists = 0,
-    'ALTER TABLE archive_reviews ADD COLUMN review_text_ready_worker_id BIGINT NULL',
-    'SELECT ''archive_reviews.review_text_ready_worker_id exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @index_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'reviews'
-      AND INDEX_NAME = 'idx_reviews_worker_publish_marked'
-);
-SET @sql = IF(
-    @index_exists = 0,
-    'ALTER TABLE reviews ADD INDEX idx_reviews_worker_publish_marked (review_worker, review_publish, review_published_marked_at, review_id)',
-    'SELECT ''idx_reviews_worker_publish_marked exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @index_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'reviews'
-      AND INDEX_NAME = 'idx_reviews_worker_text_ready'
-);
-SET @sql = IF(
-    @index_exists = 0,
-    'ALTER TABLE reviews ADD INDEX idx_reviews_worker_text_ready (review_text_ready_worker_id, review_text_ready_at)',
-    'SELECT ''idx_reviews_worker_text_ready exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @index_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'business_audit_events'
-      AND INDEX_NAME = 'idx_business_audit_action_order_created'
-);
-SET @sql = IF(
-    @index_exists = 0,
-    'ALTER TABLE business_audit_events ADD INDEX idx_business_audit_action_order_created (action, order_id, created_at)',
-    'SELECT ''idx_business_audit_action_order_created exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @index_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'business_audit_events'
-      AND INDEX_NAME = 'idx_business_audit_action_review_created'
-);
-SET @sql = IF(
-    @index_exists = 0,
-    'ALTER TABLE business_audit_events ADD INDEX idx_business_audit_action_review_created (action, review_id, created_at)',
-    'SELECT ''idx_business_audit_action_review_created exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SET @index_exists = (
-    SELECT COUNT(1)
-    FROM INFORMATION_SCHEMA.STATISTICS
-    WHERE TABLE_SCHEMA = DATABASE()
-      AND TABLE_NAME = 'worker_activity_events'
-      AND INDEX_NAME = 'idx_worker_activity_review_action_created'
-);
-SET @sql = IF(
-    @index_exists = 0,
-    'ALTER TABLE worker_activity_events ADD INDEX idx_worker_activity_review_action_created (review_id, action, created_at)',
-    'SELECT ''idx_worker_activity_review_action_created exists'''
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
 CREATE TABLE IF NOT EXISTS workload_shadow_runs (
     workload_shadow_run_id BIGINT NOT NULL AUTO_INCREMENT,
     trigger_type VARCHAR(32) NOT NULL,
@@ -293,33 +50,6 @@ CREATE TABLE IF NOT EXISTS workload_shadow_runs (
     INDEX idx_workload_shadow_runs_status_started (status, started_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS workload_shadow_recalculation_locks (
-    lock_name VARCHAR(80) NOT NULL,
-    owner_instance_id VARCHAR(120) NULL,
-    owner_token CHAR(36) NULL,
-    run_id BIGINT NULL,
-    acquired_at DATETIME(6) NULL,
-    renewed_at DATETIME(6) NULL,
-    lease_until DATETIME(6) NOT NULL DEFAULT '1970-01-01 00:00:00.000000',
-    takeover_count BIGINT NOT NULL DEFAULT 0,
-    last_recovered_at DATETIME(6) NULL,
-    last_released_at DATETIME(6) NULL,
-    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    PRIMARY KEY (lock_name),
-    UNIQUE KEY uk_workload_shadow_recalculation_owner_token (owner_token),
-    INDEX idx_workload_shadow_recalculation_lease (lease_until),
-    CONSTRAINT fk_workload_shadow_recalculation_run
-        FOREIGN KEY (run_id) REFERENCES workload_shadow_runs (workload_shadow_run_id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT IGNORE INTO workload_shadow_recalculation_locks (
-    lock_name,
-    lease_until
-) VALUES (
-    'GLOBAL_RECALCULATION',
-    '1970-01-01 00:00:00.000000'
-);
-
 CREATE TABLE IF NOT EXISTS workload_shadow_worker_current (
     worker_id BIGINT NOT NULL,
     worker_user_id BIGINT NULL,
@@ -333,12 +63,6 @@ CREATE TABLE IF NOT EXISTS workload_shadow_worker_current (
     progress_percent DECIMAL(5,2) NOT NULL DEFAULT 100,
     feasible_units BIGINT NOT NULL DEFAULT 0,
     estimated_remaining_minutes BIGINT NOT NULL DEFAULT 0,
-    planned_units BIGINT NOT NULL DEFAULT 0,
-    incoming_units BIGINT NOT NULL DEFAULT 0,
-    urgent_units BIGINT NOT NULL DEFAULT 0,
-    external_blocked_units BIGINT NOT NULL DEFAULT 0,
-    client_deferred_units BIGINT NOT NULL DEFAULT 0,
-    manager_deferred_units BIGINT NOT NULL DEFAULT 0,
     new_units BIGINT NOT NULL DEFAULT 0,
     correction_units BIGINT NOT NULL DEFAULT 0,
     nagul_units BIGINT NOT NULL DEFAULT 0,
@@ -350,7 +74,6 @@ CREATE TABLE IF NOT EXISTS workload_shadow_worker_current (
     failure_days INT NOT NULL DEFAULT 0,
     freeze_credits INT NOT NULL DEFAULT 0,
     transfer_stage INT NOT NULL DEFAULT 0,
-    last_day_reached_100 BIT NOT NULL DEFAULT 0,
     accepts_company_transfers BIT NOT NULL DEFAULT 1,
     recipient_eligible BIT NOT NULL DEFAULT 0,
     worker_group_connected BIT NOT NULL DEFAULT 0,
@@ -383,16 +106,9 @@ CREATE TABLE IF NOT EXISTS workload_shadow_worker_daily (
     eligible_units BIGINT NOT NULL DEFAULT 0,
     progress_percent DECIMAL(5,2) NOT NULL DEFAULT 100,
     rating DECIMAL(5,2) NOT NULL DEFAULT 0,
-    planned_units BIGINT NOT NULL DEFAULT 0,
-    incoming_units BIGINT NOT NULL DEFAULT 0,
-    urgent_units BIGINT NOT NULL DEFAULT 0,
-    external_blocked_units BIGINT NOT NULL DEFAULT 0,
-    client_deferred_units BIGINT NOT NULL DEFAULT 0,
-    manager_deferred_units BIGINT NOT NULL DEFAULT 0,
     reached_100 BIT NOT NULL DEFAULT 0,
     freeze_applied BIT NOT NULL DEFAULT 0,
     finalized BIT NOT NULL DEFAULT 0,
-    finalization_status VARCHAR(32) NOT NULL DEFAULT 'LIVE',
     first_snapshot_at DATETIME(6) NOT NULL,
     last_snapshot_at DATETIME(6) NOT NULL,
     finalized_at DATETIME(6) NULL,
@@ -408,25 +124,6 @@ CREATE TABLE IF NOT EXISTS workload_shadow_worker_daily (
         FOREIGN KEY (worker_user_id) REFERENCES users (id) ON DELETE SET NULL,
     CONSTRAINT fk_workload_shadow_daily_manager
         FOREIGN KEY (manager_id) REFERENCES managers (manager_id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS workload_shadow_late_batches (
-    progress_date DATE NOT NULL,
-    worker_id BIGINT NOT NULL,
-    batch_key VARCHAR(190) NOT NULL,
-    section_code VARCHAR(32) NOT NULL,
-    initial_units BIGINT NOT NULL DEFAULT 0,
-    remaining_units BIGINT NOT NULL DEFAULT 0,
-    initial_estimated_minutes BIGINT NOT NULL DEFAULT 0,
-    remaining_estimated_minutes BIGINT NOT NULL DEFAULT 0,
-    first_detected_at DATETIME(6) NOT NULL,
-    last_seen_at DATETIME(6) NOT NULL,
-    active BIT NOT NULL DEFAULT 1,
-    PRIMARY KEY (progress_date, worker_id, batch_key),
-    INDEX idx_workload_shadow_late_worker_date (worker_id, progress_date, active),
-    INDEX idx_workload_shadow_late_seen (last_seen_at),
-    CONSTRAINT fk_workload_shadow_late_worker
-        FOREIGN KEY (worker_id) REFERENCES workers (worker_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS workload_shadow_freeze_accounts (
@@ -472,10 +169,6 @@ CREATE TABLE IF NOT EXISTS workload_shadow_transfer_cases (
     publish_count BIGINT NOT NULL DEFAULT 0,
     recovery_count BIGINT NOT NULL DEFAULT 0,
     bad_count BIGINT NOT NULL DEFAULT 0,
-    graph_warning_count INT NOT NULL DEFAULT 0,
-    graph_error_count INT NOT NULL DEFAULT 0,
-    graph_warning_codes VARCHAR(1000) NOT NULL DEFAULT '',
-    graph_error_codes VARCHAR(1000) NOT NULL DEFAULT '',
     candidate_count INT NOT NULL DEFAULT 0,
     staffing_required BIT NOT NULL DEFAULT 0,
     fallback_worker_id BIGINT NULL,
@@ -492,12 +185,6 @@ CREATE TABLE IF NOT EXISTS workload_shadow_transfer_cases (
     INDEX idx_workload_shadow_transfer_source (source_worker_id, active),
     INDEX idx_workload_shadow_transfer_company (company_id, active),
     INDEX idx_workload_shadow_transfer_fallback_review (fallback_review_id),
-    INDEX idx_workload_shadow_transfer_graph_health (active, graph_error_count, graph_warning_count),
-    INDEX idx_workload_shadow_transfer_retention (
-        active,
-        resolved_at,
-        workload_shadow_transfer_case_id
-    ),
     CONSTRAINT fk_workload_shadow_transfer_manager
         FOREIGN KEY (manager_id) REFERENCES managers (manager_id) ON DELETE CASCADE,
     CONSTRAINT fk_workload_shadow_transfer_source_worker
@@ -557,24 +244,7 @@ CREATE TABLE IF NOT EXISTS workload_shadow_events (
     resolved_at DATETIME(6) NULL,
     PRIMARY KEY (workload_shadow_event_id),
     UNIQUE KEY uk_workload_shadow_event_dedup (deduplication_key),
-    INDEX idx_workload_shadow_event_due (
-        active,
-        delivery_status,
-        next_attempt_at,
-        first_seen_at,
-        workload_shadow_event_id
-    ),
-    INDEX idx_workload_shadow_event_retention (
-        active,
-        delivery_status,
-        last_seen_at,
-        workload_shadow_event_id
-    ),
-    INDEX idx_workload_shadow_event_monitor (
-        active,
-        last_seen_at,
-        workload_shadow_event_id
-    ),
+    INDEX idx_workload_shadow_event_delivery (delivery_status, next_attempt_at),
     INDEX idx_workload_shadow_event_last_seen (last_seen_at),
     INDEX idx_workload_shadow_event_manager (manager_id, active, severity),
     CONSTRAINT fk_workload_shadow_event_manager
