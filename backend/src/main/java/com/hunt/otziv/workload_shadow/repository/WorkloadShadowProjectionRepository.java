@@ -226,13 +226,28 @@ public interface WorkloadShadowProjectionRepository
     );
 
     @Query(value = """
-            WITH target_orders AS (
+            WITH order_status_audit AS (
+                SELECT event.order_id,
+                       MAX(event.created_at) AS actual_status_changed_at
+                FROM business_audit_events event
+                JOIN orders audited_order
+                  ON audited_order.order_id = event.order_id
+                 AND audited_order.order_worker IN (:workerIds)
+                WHERE event.action = 'order_status_changed'
+                  AND event.created_at <= :observedAt
+                GROUP BY event.order_id
+            ),
+            target_orders AS (
                 SELECT orders.order_id,
                        orders.order_worker AS worker_id,
                        orders.order_company AS company_id,
                        status.order_status_title AS status_title,
                         COALESCE(
-                            orders.order_status_changed_at,
+                            CASE
+                                WHEN orders.order_status_changed_at <= :observedAt
+                                THEN orders.order_status_changed_at
+                            END,
+                            status_audit.actual_status_changed_at,
                             TIMESTAMP(
                                 DATE(orders.order_created),
                                 CAST(:shiftStart AS TIME)
@@ -240,6 +255,8 @@ public interface WorkloadShadowProjectionRepository
                         ) AS available_at
                 FROM orders
                 JOIN order_statuses status ON status.order_status_id = orders.order_status
+                LEFT JOIN order_status_audit status_audit
+                  ON status_audit.order_id = orders.order_id
                 WHERE orders.order_worker IN (:workerIds)
                   AND COALESCE(orders.order_complete, FALSE) = FALSE
                   AND COALESCE(orders.order_waiting_for_client, FALSE) = FALSE
@@ -296,11 +313,23 @@ public interface WorkloadShadowProjectionRepository
             """, nativeQuery = true)
     List<Map<String, Object>> findOrderBatches(
             @Param("workerIds") Collection<Long> workerIds,
+            @Param("observedAt") LocalDateTime observedAt,
             @Param("shiftStart") String shiftStart
     );
 
     @Query(value = """
-            WITH relevant_reviews AS (
+            WITH order_status_audit AS (
+                SELECT event.order_id,
+                       MAX(event.created_at) AS actual_status_changed_at
+                FROM business_audit_events event
+                JOIN orders audited_order
+                  ON audited_order.order_id = event.order_id
+                 AND audited_order.order_worker IN (:workerIds)
+                WHERE event.action = 'order_status_changed'
+                  AND event.created_at <= :observedAt
+                GROUP BY event.order_id
+            ),
+            relevant_reviews AS (
                 SELECT review.review_id,
                        review.review_worker AS worker_id,
                        review.review_order_details AS order_detail_id,
@@ -317,7 +346,15 @@ public interface WorkloadShadowProjectionRepository
                                TIMESTAMP('1970-01-01 00:00:00')
                            ),
                            COALESCE(
-                               orders.order_status_changed_at,
+                               CASE
+                                   WHEN orders.order_status_changed_at <= :observedAt
+                                   THEN orders.order_status_changed_at
+                               END,
+                               status_audit.actual_status_changed_at,
+                               TIMESTAMP(
+                                   DATE(orders.order_created),
+                                   CAST(:shiftStart AS TIME)
+                               ),
                                TIMESTAMP('1970-01-01 00:00:00')
                            ),
                            COALESCE(
@@ -339,6 +376,8 @@ public interface WorkloadShadowProjectionRepository
                 JOIN order_details detail
                   ON detail.order_detail_id = review.review_order_details
                 JOIN orders orders ON orders.order_id = detail.order_detail_order
+                LEFT JOIN order_status_audit status_audit
+                  ON status_audit.order_id = orders.order_id
                 JOIN bots bot ON bot.bot_id = review.review_bot
                 WHERE review.review_worker IN (:workerIds)
                   AND review.review_publish = FALSE
@@ -430,6 +469,7 @@ public interface WorkloadShadowProjectionRepository
     List<Map<String, Object>> findNagulBatches(
             @Param("workerIds") Collection<Long> workerIds,
             @Param("nagulDate") LocalDate nagulDate,
+            @Param("observedAt") LocalDateTime observedAt,
             @Param("shiftStart") String shiftStart
     );
 
@@ -471,7 +511,18 @@ public interface WorkloadShadowProjectionRepository
     );
 
     @Query(value = """
-            WITH relevant_reviews AS (
+            WITH order_status_audit AS (
+                SELECT event.order_id,
+                       MAX(event.created_at) AS actual_status_changed_at
+                FROM business_audit_events event
+                JOIN orders audited_order
+                  ON audited_order.order_id = event.order_id
+                 AND audited_order.order_worker IN (:workerIds)
+                WHERE event.action = 'order_status_changed'
+                  AND event.created_at <= :observedAt
+                GROUP BY event.order_id
+            ),
+            relevant_reviews AS (
                 SELECT review.review_id,
                        review.review_worker AS worker_id,
                        review.review_order_details AS order_detail_id,
@@ -493,7 +544,15 @@ public interface WorkloadShadowProjectionRepository
                                TIMESTAMP('1970-01-01 00:00:00')
                            ),
                            COALESCE(
-                               orders.order_status_changed_at,
+                               CASE
+                                   WHEN orders.order_status_changed_at <= :observedAt
+                                   THEN orders.order_status_changed_at
+                               END,
+                               status_audit.actual_status_changed_at,
+                               TIMESTAMP(
+                                   DATE(orders.order_created),
+                                   CAST(:shiftStart AS TIME)
+                               ),
                                TIMESTAMP('1970-01-01 00:00:00')
                            ),
                            COALESCE(
@@ -515,6 +574,8 @@ public interface WorkloadShadowProjectionRepository
                 JOIN order_details detail
                   ON detail.order_detail_id = review.review_order_details
                 JOIN orders orders ON orders.order_id = detail.order_detail_order
+                LEFT JOIN order_status_audit status_audit
+                  ON status_audit.order_id = orders.order_id
                 JOIN bots bot ON bot.bot_id = review.review_bot
                 WHERE review.review_worker IN (:workerIds)
                   AND review.review_publish = FALSE
@@ -596,6 +657,7 @@ public interface WorkloadShadowProjectionRepository
     List<Map<String, Object>> findPublishBatches(
             @Param("workerIds") Collection<Long> workerIds,
             @Param("today") LocalDate today,
+            @Param("observedAt") LocalDateTime observedAt,
             @Param("shiftStart") String shiftStart
     );
 
@@ -976,6 +1038,17 @@ public interface WorkloadShadowProjectionRepository
               AND active = TRUE
             """, nativeQuery = true)
     int closePreviousDayDecisions(@Param("progressDate") LocalDate progressDate);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM workload_shadow_late_batches
+            WHERE progress_date = :progressDate
+              AND source_available_at > :observedAt
+            """, nativeQuery = true)
+    int deleteFutureDailyBatchDecisions(
+            @Param("progressDate") LocalDate progressDate,
+            @Param("observedAt") LocalDateTime observedAt
+    );
 
     @Modifying
     @Query(value = """

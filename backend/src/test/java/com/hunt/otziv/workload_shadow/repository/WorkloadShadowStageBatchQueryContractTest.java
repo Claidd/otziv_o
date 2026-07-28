@@ -14,7 +14,12 @@ class WorkloadShadowStageBatchQueryContractTest {
 
     @Test
     void newRemainsOneBatchPerCardAndCorrectionOneBatchPerOrder() throws Exception {
-        String sql = sql("findOrderBatches", Collection.class, String.class);
+        String sql = sql(
+                "findOrderBatches",
+                Collection.class,
+                LocalDateTime.class,
+                String.class
+        );
 
         assertThat(sql).contains(
                 "'correction:'",
@@ -23,6 +28,10 @@ class WorkloadShadowStageBatchQueryContractTest {
                 "1 as units",
                 "where target_order.status_title = 'коррекция'",
                 "where target_order.status_title = 'новый'",
+                "event.action = 'order_status_changed'",
+                "event.created_at <= :observedat",
+                "orders.order_status_changed_at <= :observedat",
+                "status_audit.actual_status_changed_at",
                 "cast(:shiftstart as time)"
         );
         assertThat(sql).doesNotContain("interval 10 hour");
@@ -54,6 +63,7 @@ class WorkloadShadowStageBatchQueryContractTest {
                 "findNagulBatches",
                 Collection.class,
                 LocalDate.class,
+                LocalDateTime.class,
                 String.class
         );
 
@@ -66,6 +76,10 @@ class WorkloadShadowStageBatchQueryContractTest {
                 "'review_account_walk_schedule_checked'",
                 "'review_publish_date_changed'",
                 "bin_to_uuid(relevant.order_detail_id)",
+                "event.action = 'order_status_changed'",
+                "event.created_at <= :observedat",
+                "orders.order_status_changed_at <= :observedat",
+                "status_audit.actual_status_changed_at",
                 "cast(:shiftstart as time)"
         );
         assertThat(sql).doesNotContain(
@@ -81,6 +95,7 @@ class WorkloadShadowStageBatchQueryContractTest {
                 "findPublishBatches",
                 Collection.class,
                 LocalDate.class,
+                LocalDateTime.class,
                 String.class
         );
 
@@ -90,7 +105,11 @@ class WorkloadShadowStageBatchQueryContractTest {
                 "review.review_vigul_changed_at",
                 "timestamp( review.review_publish_date, cast(:shiftstart as time) )",
                 "'publication_allowed'",
-                "'review_publish_date_changed'"
+                "'review_publish_date_changed'",
+                "event.action = 'order_status_changed'",
+                "event.created_at <= :observedat",
+                "orders.order_status_changed_at <= :observedat",
+                "status_audit.actual_status_changed_at"
         );
         assertThat(sql).doesNotContain(
                 "count(distinct review.review_id) as units",

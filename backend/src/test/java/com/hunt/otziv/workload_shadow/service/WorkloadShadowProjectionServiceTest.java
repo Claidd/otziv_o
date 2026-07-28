@@ -415,6 +415,22 @@ class WorkloadShadowProjectionServiceTest {
         assertEquals(1, repeated.hundredDays());
     }
 
+    @Test
+    void futureSourceAvailabilityInvalidatesPersistedDecisionForRecalculation() {
+        assertFalse(WorkloadShadowProjectionService.isPersistedDecisionUsable(
+                DATE.plusDays(20).atTime(12, 19),
+                DATE.atTime(14, 30)
+        ));
+        assertTrue(WorkloadShadowProjectionService.isPersistedDecisionUsable(
+                DATE.atTime(10, 0),
+                DATE.atTime(14, 30)
+        ));
+        assertTrue(WorkloadShadowProjectionService.isPersistedDecisionUsable(
+                null,
+                DATE.atTime(14, 30)
+        ));
+    }
+
     private WorkloadShadowProjectionService.WorkBatch batch(
             String batchKey,
             long orderId,

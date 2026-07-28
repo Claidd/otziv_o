@@ -72,11 +72,23 @@ public class WorkloadShadowProjectionService {
         }
 
         List<Long> workerIds = workers.stream().map(WorkerSubject::workerId).distinct().toList();
+        int removedFutureDecisions = repository.deleteFutureDailyBatchDecisions(
+                progressDate,
+                observedAt
+        );
+        if (removedFutureDecisions > 0) {
+            log.info(
+                    "Removed {} workload shadow decisions with future source availability; "
+                            + "they will be rebuilt from current source data",
+                    removedFutureDecisions
+            );
+        }
         WalkEstimate walkEstimate = calculateWalkEstimate(progressDate, settings);
         persistWalkEstimate(walkEstimate, observedAt);
         List<WorkBatch> batches = activeBatches(
                 workerIds,
                 progressDate,
+                observedAt,
                 settings,
                 walkEstimate.effectiveMinutes()
         );
@@ -86,7 +98,12 @@ public class WorkloadShadowProjectionService {
                 progressDate
         );
         Map<Long, Map<String, BatchDecision>> dailyBatchDecisions =
-                dailyBatchDecisions(workerIds, progressDate, settingsService.zone(settings));
+                dailyBatchDecisions(
+                        workerIds,
+                        progressDate,
+                        observedAt,
+                        settingsService.zone(settings)
+                );
         Map<Long, LocalDateTime> observationWatermarks =
                 dailyObservationWatermarks(workerIds, progressDate, settingsService.zone(settings));
         repository.deactivateDailyBatchDecisions(progressDate);
@@ -261,6 +278,7 @@ public class WorkloadShadowProjectionService {
     private List<WorkBatch> activeBatches(
             List<Long> workerIds,
             LocalDate date,
+            LocalDateTime observedAt,
             WorkloadShadowSettingsResponse settings,
             int effectiveWalkMinutes
     ) {
@@ -270,16 +288,17 @@ public class WorkloadShadowProjectionService {
         ));
         ZoneId businessZone = settingsService.zone(settings);
         List<WorkBatch> result = new ArrayList<>();
-        loadOrderBatches(workerIds, settings, businessZone, result);
+        loadOrderBatches(workerIds, observedAt, settings, businessZone, result);
         loadNagulBatches(
                 workerIds,
                 nagulDate,
+                observedAt,
                 effectiveWalkMinutes,
                 settings,
                 businessZone,
                 result
         );
-        loadPublishBatches(workerIds, date, settings, businessZone, result);
+        loadPublishBatches(workerIds, date, observedAt, settings, businessZone, result);
         loadBadBatches(workerIds, date, settings, businessZone, result);
         loadRecoveryBatches(workerIds, date, settings, businessZone, result);
         return result;
@@ -312,16 +331,27 @@ public class WorkloadShadowProjectionService {
     private Map<Long, Map<String, BatchDecision>> dailyBatchDecisions(
             List<Long> workerIds,
             LocalDate progressDate,
+            LocalDateTime observedAt,
             ZoneId businessZone
     ) {
         Map<Long, Map<String, BatchDecision>> result = new HashMap<>();
-        repository.findDailyBatchDecisions(workerIds, progressDate).forEach(row -> {
+        int ignoredFutureDecisions = 0;
+        for (Map<String, Object> row : repository.findDailyBatchDecisions(
+                workerIds,
+                progressDate
+        )) {
             long workerId = longValue(row.get("worker_id"));
             String batchKey = string(row.get("batch_key"));
             if (workerId <= 0 || batchKey.isBlank()) {
-                return;
+                continue;
             }
             DecisionCode decisionCode = DecisionCode.fromDatabase(row.get("decision_code"));
+            LocalDateTime sourceAvailableAt =
+                    toLocalDateTime(row.get("source_available_at"), businessZone);
+            if (!isPersistedDecisionUsable(sourceAvailableAt, observedAt)) {
+                ignoredFutureDecisions++;
+                continue;
+            }
             BatchDecision decision = new BatchDecision(
                     batchKey,
                     decisionCode,
@@ -330,14 +360,30 @@ public class WorkloadShadowProjectionService {
                     Math.max(0, longValue(row.get("initial_units"))),
                     Math.max(0, longValue(row.get("initial_estimated_minutes"))),
                     toLocalDateTime(row.get("first_detected_at"), businessZone),
-                    toLocalDateTime(row.get("source_available_at"), businessZone),
+                    sourceAvailableAt,
                     Math.max(0, longValue(row.get("available_minutes_at_decision"))),
                     Math.max(0, longValue(row.get("cohort_estimated_minutes_at_decision")))
             );
             result.computeIfAbsent(workerId, ignored -> new LinkedHashMap<>())
                     .put(batchKey, decision);
-        });
+        }
+        if (ignoredFutureDecisions > 0) {
+            log.info(
+                    "Ignoring {} workload shadow decisions with future source availability; "
+                            + "they will be recalculated from current source data",
+                    ignoredFutureDecisions
+            );
+        }
         return result;
+    }
+
+    static boolean isPersistedDecisionUsable(
+            LocalDateTime sourceAvailableAt,
+            LocalDateTime observedAt
+    ) {
+        return sourceAvailableAt == null
+                || observedAt == null
+                || !sourceAvailableAt.isAfter(observedAt);
     }
 
     private Map<Long, LocalDateTime> dailyObservationWatermarks(
@@ -405,11 +451,16 @@ public class WorkloadShadowProjectionService {
 
     private void loadOrderBatches(
             List<Long> workerIds,
+            LocalDateTime observedAt,
             WorkloadShadowSettingsResponse settings,
             ZoneId businessZone,
             List<WorkBatch> target
     ) {
-        repository.findOrderBatches(workerIds, settings.shiftStart()).forEach(row -> {
+        repository.findOrderBatches(
+                workerIds,
+                observedAt,
+                settings.shiftStart()
+        ).forEach(row -> {
             String section = "Коррекция".equals(string(row.get("status_title")))
                     ? SECTION_CORRECTION
                     : SECTION_NEW;
@@ -428,6 +479,7 @@ public class WorkloadShadowProjectionService {
     private void loadNagulBatches(
             List<Long> workerIds,
             LocalDate nagulDate,
+            LocalDateTime observedAt,
             int effectiveWalkMinutes,
             WorkloadShadowSettingsResponse settings,
             ZoneId businessZone,
@@ -436,6 +488,7 @@ public class WorkloadShadowProjectionService {
         repository.findNagulBatches(
                 workerIds,
                 nagulDate,
+                observedAt,
                 settings.shiftStart()
         ).forEach(row -> target.add(batch(
                 row,
@@ -500,6 +553,7 @@ public class WorkloadShadowProjectionService {
     private void loadPublishBatches(
             List<Long> workerIds,
             LocalDate date,
+            LocalDateTime observedAt,
             WorkloadShadowSettingsResponse settings,
             ZoneId businessZone,
             List<WorkBatch> target
@@ -507,6 +561,7 @@ public class WorkloadShadowProjectionService {
         repository.findPublishBatches(
                 workerIds,
                 date,
+                observedAt,
                 settings.shiftStart()
         ).forEach(row -> target.add(batch(
                 row,
