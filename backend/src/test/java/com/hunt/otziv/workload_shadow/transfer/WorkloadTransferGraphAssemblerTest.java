@@ -8,6 +8,7 @@ import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGra
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.RECOVERY_ORDER_NOT_OWNED_BY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.RECOVERY_WORKER_MISMATCH;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.REVIEW_BOT_DUPLICATED;
+import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.REVIEW_BOT_MISSING;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.REVIEW_BOT_OWNER_MISMATCH;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.REVIEW_ORDER_NOT_OWNED_BY_SOURCE;
 import static com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.WarningCode.SHARED_COMPANY_OWNERSHIP;
@@ -342,6 +343,51 @@ class WorkloadTransferGraphAssemblerTest {
     }
 
     @Test
+    void reviewWithoutAssignedBotIsInformationalAndDoesNotDegradeTransferGraph() {
+        ReviewRow reviewWithoutBot = new ReviewRow(
+                101L,
+                10L,
+                1L,
+                SOURCE_WORKER_ID,
+                null,
+                null,
+                null,
+                DATE,
+                false,
+                true,
+                false,
+                0,
+                null
+        );
+        WorkloadTransferGraphData data = data(
+                List.of(company()),
+                List.of(new CompanyWorkerLinkRow(1L, SOURCE_WORKER_ID)),
+                List.of(),
+                List.of(order(10L, "Новый", 1)),
+                List.of(new DetailRow(10L, 1, 1, 0)),
+                List.of(reviewWithoutBot),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
+
+        WorkloadTransferCompanyGraph graph =
+                WorkloadTransferGraphAssembler.assemble(data).getFirst();
+        WorkloadTransferCompanyGraph.Warning warning = graph.orders().getFirst()
+                .reviews().getFirst().warnings().stream()
+                .filter(value -> value.code() == REVIEW_BOT_MISSING)
+                .findFirst()
+                .orElseThrow();
+        WorkloadTransferGraphDiagnostics diagnostics =
+                WorkloadTransferGraphDiagnostics.from(graph);
+
+        assertEquals(WorkloadTransferCompanyGraph.WarningSeverity.INFO, warning.severity());
+        assertEquals(0, diagnostics.warningCount());
+        assertEquals(0, diagnostics.errorCount());
+    }
+
+    @Test
     void actionableWorkloadExcludesWaitingFutureUnreadyAndSuppressedNodes() {
         OrderRow waitingCorrection = new OrderRow(
                 11L,
@@ -502,6 +548,7 @@ class WorkloadTransferGraphAssemblerTest {
         assertTrue(hasWarning(graph.warnings(), OTHER_WORKER_ACTIVE_ORDERS));
         assertTrue(hasWarning(graph.warnings(), UNASSIGNED_ACTIVE_ORDERS));
         assertTrue(hasWarning(graph.detachedReviews().getFirst().warnings(), REVIEW_ORDER_NOT_OWNED_BY_SOURCE));
+        assertTrue(hasWarning(graph.detachedReviews().getFirst().warnings(), REVIEW_BOT_MISSING));
         assertTrue(hasWarning(graph.detachedRecoveryTasks().getFirst().warnings(), ARCHIVED_RECOVERY_SOURCE));
         assertTrue(hasWarning(graph.detachedBadTasks().getFirst().warnings(), BAD_ORDER_NOT_OWNED_BY_SOURCE));
         assertEquals(1, graph.totals().nagulOutsideLookaheadUnits());
@@ -510,7 +557,7 @@ class WorkloadTransferGraphAssemblerTest {
         assertEquals(20, graph.totals().estimatedMinutes());
 
         WorkloadTransferGraphDiagnostics diagnostics = WorkloadTransferGraphDiagnostics.from(graph);
-        assertEquals(4, diagnostics.warningCount());
+        assertEquals(3, diagnostics.warningCount());
         assertEquals(3, diagnostics.errorCount());
         assertFalse(diagnostics.warningCodes().contains(OTHER_WORKER_ACTIVE_ORDERS));
         assertTrue(diagnostics.errorCodes().contains(SOURCE_COMPANY_LINK_MISSING));

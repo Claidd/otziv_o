@@ -447,7 +447,11 @@ final class WorkloadTransferGraphAssembler {
             ));
         }
         if (row.botId() == null) {
-            warnings.add(warning(REVIEW_BOT_MISSING, WARNING, "Карточке не назначен аккаунт"));
+            warnings.add(warning(
+                    REVIEW_BOT_MISSING,
+                    INFO,
+                    "Аккаунт ещё не назначен; переносить привязку аккаунта не требуется"
+            ));
         } else if (row.botId() == STUB_BOT_ID) {
             warnings.add(warning(REVIEW_BOT_STUB, INFO, "Карточке назначен служебный аккаунт-заглушка"));
         } else if (Boolean.FALSE.equals(row.botActive())) {

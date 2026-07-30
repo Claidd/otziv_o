@@ -143,7 +143,10 @@ public class ManagerReportReviewIssueService {
                 });
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {
+            IllegalArgumentException.class,
+            IllegalStateException.class
+    })
     public ManagerReportReviewDispute beginDispute(
             ManagerReportReviewSession review,
             Long issueId
@@ -191,7 +194,10 @@ public class ManagerReportReviewIssueService {
         return dispute(review, UNRESOLVED_DISPUTES);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = {
+            IllegalArgumentException.class,
+            IllegalStateException.class
+    })
     public ManagerReportReviewDispute submitDispute(
             ManagerReportReviewSession review,
             String managerText

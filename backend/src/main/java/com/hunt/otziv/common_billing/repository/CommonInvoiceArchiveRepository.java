@@ -222,7 +222,7 @@ public class CommonInvoiceArchiveRepository {
                 """ : "DISTINCT ci.invoice_id";
         return """
                 SELECT
-                """ + columns + """
+                """ + columns + "\n" + """
                 FROM common_invoices ci
                 JOIN common_billing_accounts account ON account.account_id = ci.account_id
                 LEFT JOIN companies invoice_company ON invoice_company.company_id = account.invoice_company_id
@@ -259,7 +259,7 @@ public class CommonInvoiceArchiveRepository {
                 """ : "DISTINCT aci.invoice_id";
         return """
                 SELECT
-                """ + columns + """
+                """ + columns + "\n" + """
                 FROM archive_common_invoices aci
                 LEFT JOIN common_billing_accounts account ON account.account_id = aci.account_id
                 LEFT JOIN companies invoice_company ON invoice_company.company_id = account.invoice_company_id
