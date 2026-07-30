@@ -51,7 +51,7 @@ build/
 .vscode/
 
 ### Runtime/build noise ###
-logs/
+/logs/
 *.log
 data/
 frontend/angular-dev-server.*.log
