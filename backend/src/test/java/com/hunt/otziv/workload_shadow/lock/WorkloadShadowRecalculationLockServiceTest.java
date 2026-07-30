@@ -28,7 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class WorkloadShadowRecalculationLockServiceTest {
 
     private static final String INSTANCE_ID = "node-a";
-    private static final String OWNER_TOKEN = "123e4567-e89b-12d3-a456-426614174000";
+    private static final String OWNER_TOKEN = "test-owner-token";
 
     @Mock private WorkloadShadowRecalculationLockRepository repository;
     @Mock private ScheduledExecutorService heartbeatExecutor;
