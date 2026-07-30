@@ -425,7 +425,7 @@ public class ApiReviewCheckController {
     private ReviewCheckResponse buildArchivedResponse(UUID orderDetailId, Authentication authentication) {
         ArchivedReviewCheck archived = reviewCheckArchiveService.findByOrderDetailId(orderDetailId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Проверка отзывов не найдена"));
-        ReviewCheckPermissions permissions = archivedPermissions(authentication);
+        ReviewCheckPermissions permissions = archivedPermissions(authentication, archived);
         boolean approved = isApprovedForPublicationArchived(archived.reviews());
 
         return new ReviewCheckResponse(
@@ -608,15 +608,19 @@ public class ApiReviewCheckController {
         );
     }
 
-    private ReviewCheckPermissions archivedPermissions(Authentication authentication) {
+    private ReviewCheckPermissions archivedPermissions(
+            Authentication authentication,
+            ArchivedReviewCheck archived
+    ) {
         ReviewCheckPermissions base = permissions(authentication);
+        boolean mutationAllowed = archived != null && !archived.terminalPaidOrder();
         return new ReviewCheckPermissions(
                 base.authenticated(),
                 base.canSeeInternalInfo(),
                 base.canSeeBot(),
-                base.canApprovePublication(),
-                base.canSave(),
-                base.canSendCorrection(),
+                mutationAllowed && base.canApprovePublication(),
+                mutationAllowed && base.canSave(),
+                mutationAllowed && base.canSendCorrection(),
                 false,
                 false,
                 false,

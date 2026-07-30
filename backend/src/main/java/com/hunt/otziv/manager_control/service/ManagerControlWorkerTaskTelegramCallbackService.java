@@ -467,7 +467,8 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
         if (item == null || item.getId() == null
                 || item.getWorkerExplanationRequestedAt() == null
                 || item.getWorkerNotificationSentAt() == null
-                || item.getWorkerExplanationAt() != null) {
+                || item.getWorkerExplanationAt() != null
+                || item.getStatus() != ManagerDailyControlItemStatus.OPEN) {
             return false;
         }
         User worker = workerUserForTask(item);

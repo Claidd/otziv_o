@@ -891,6 +891,36 @@ class OrderStatusTransitionServiceTest {
     }
 
     @Test
+    void completedPaidOrderCannotReturnToCorrection() {
+        OrderStatusTransitionService service = service();
+        Order order = orderWithWorker(73L, "Оплачено", 730L);
+        order.setComplete(true);
+        order.setPayDay(LocalDate.of(2025, 6, 12));
+
+        when(orderRepository.findByIdForMutation(73L)).thenReturn(Optional.of(order));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.changeStatusForOrder(73L, "Коррекция")
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Завершенный оплаченный заказ нельзя вернуть в рабочий статус. "
+                        + "Сначала отмените оплату штатным действием.",
+                exception.getReason()
+        );
+        verify(orderRepository, never()).save(order);
+        verify(orderCorrectionTelegramNotifier, never()).notifyWorkerCorrection(
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
     void correctionStatusClearsPublicationDatesOnlyForUnpublishedReviews() throws Exception {
         OrderStatusTransitionService service = service();
         Order order = orderWithPublicationReviews(71L, "Публикация");

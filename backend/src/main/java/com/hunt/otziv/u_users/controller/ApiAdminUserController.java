@@ -64,6 +64,12 @@ public class ApiAdminUserController {
         return userProvisioningService.updateUser(id, request);
     }
 
+    @DeleteMapping("/{id}/personal-telegram-link")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public AdminUserResponse resetPersonalTelegramLink(@PathVariable Long id) {
+        return userProvisioningService.resetPersonalTelegramLink(id);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

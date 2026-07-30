@@ -407,6 +407,17 @@ tr.unlinked td {
   font-family: inherit;
 }
 
+.worker-chat-actions button.telegram-reset-action {
+  border-color: rgba(239, 49, 100, 0.3);
+  color: var(--otziv-danger);
+  background: rgba(239, 49, 100, 0.07);
+}
+
+.worker-chat-actions button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .worker-chat-actions .material-icons-sharp {
   font-size: 1rem;
 }

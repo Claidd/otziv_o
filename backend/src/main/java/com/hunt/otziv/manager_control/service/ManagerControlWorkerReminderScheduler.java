@@ -1,6 +1,7 @@
 package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,7 @@ public class ManagerControlWorkerReminderScheduler {
         List<ManagerDailyControlConcreteItem> pending = concreteItemRepository
                 .findPendingWorkerExplanationReminders(
                         now.minusHours(REMINDER_INTERVAL_HOURS),
+                        ManagerDailyControlItemStatus.OPEN,
                         PageRequest.of(0, BATCH_SIZE)
                 );
         for (ManagerDailyControlConcreteItem item : pending) {

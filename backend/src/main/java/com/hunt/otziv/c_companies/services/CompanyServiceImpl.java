@@ -1193,6 +1193,8 @@ public class CompanyServiceImpl implements CompanyService{
                 .title(filial.getTitle())
                 .url(filial.getUrl())
                 .city(filial.getCity())
+                .archived(filial.isArchived())
+                .archivedAt(filial.getArchivedAt())
                 .build();
     } // перевод филиала в ДТО
 
@@ -1322,6 +1324,8 @@ public class CompanyServiceImpl implements CompanyService{
         filialDTO.setTitle(filial.getTitle());
         filialDTO.setUrl(filial.getUrl());
         filialDTO.setCity(filial.getCity());
+        filialDTO.setArchived(filial.isArchived());
+        filialDTO.setArchivedAt(filial.getArchivedAt());
         // Other fields if needed
         return filialDTO;
     }
@@ -1541,12 +1545,8 @@ public class CompanyServiceImpl implements CompanyService{
     @Transactional
     public boolean deleteFilial(Long companyId, Long filialId){ // Удаление филиала
         try {
-            log.info("2. Вошли в удаление филиала из списка филиалов компании");
-            Company saveCompany = companyRepository.findById(companyId).orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", companyId)));
-            saveCompany.getFilial().remove(filialService.getFilial(filialId));
-            filialService.deleteFilial(filialId);
-            companyRepository.save(saveCompany);
-            log.info("3. Сохранили обновленную компанию в БД");
+            log.info("Безопасное удаление или архивирование филиала {} компании {}", filialId, companyId);
+            filialService.deleteOrArchive(companyId, filialId);
             return true;
         }
         catch (Exception e){

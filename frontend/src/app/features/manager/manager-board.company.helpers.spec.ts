@@ -113,8 +113,12 @@ describe('manager-board company helpers', () => {
     expect(managerCompanyWorkerDeleteKey(worker)).toBe('worker-12');
     expect(managerCompanyWorkerDeleteConfirm(worker)).toBe('Убрать специалиста "Иван" из компании?');
     expect(managerCompanyFilialDeleteKey(7)).toBe('filial-7');
-    expect(managerCompanyFilialDeleteConfirm(7, 'Филиал')).toBe('Удалить филиал "Филиал"?');
-    expect(managerCompanyFilialDeleteConfirm(7, '')).toBe('Удалить филиал "7"?');
+    expect(managerCompanyFilialDeleteConfirm(7, 'Филиал'))
+      .toBe('У филиала "Филиал" нет заказов. Удалить его окончательно?');
+    expect(managerCompanyFilialDeleteConfirm(7, 'Филиал', 3, true))
+      .toBe('Филиал "Филиал" используется в 3 заказах и будет отправлен в архив. Продолжить?');
+    expect(managerCompanyFilialDeleteConfirm(7, ''))
+      .toBe('У филиала "7" нет заказов. Удалить его окончательно?');
     expect(managerCompanyFilialDeletedLabel(7, 'Филиал')).toBe('Филиал');
     expect(managerCompanyFilialDeletedLabel(7, '')).toBe('#7');
   });

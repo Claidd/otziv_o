@@ -105,30 +105,32 @@
               <span>Филиалы</span>
               <div class="company-edit-list">
                 @for (filial of company.filials; track filial.id) {
-                  <div class="company-edit-row">
-                    <span>
-                      {{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}
-                    </span>
-                    <div class="company-edit-row-actions">
-                      <button
-                        type="button"
-                        class="secondary filial-edit"
-                        (click)="startFilialEdit(filial)"
-                        [disabled]="!!deleteKey || saving"
-                      >
-                        {{ deleteKey === filialEditKey(filial.id) ? 'Сохраняю...' : 'Редактировать' }}
-                      </button>
-                      <button
-                        type="button"
-                        class="secondary filial-delete"
-                        (click)="filialDeleted.emit({ filialId: filial.id, title: filial.title })"
-                        [disabled]="!!deleteKey || saving"
-                      >
-                        {{ deleteKey === 'filial-' + filial.id ? 'Удаляю...' : 'Удалить' }}
-                      </button>
+                  @if (!filial.archived) {
+                    <div class="company-edit-row">
+                      <span>
+                        {{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}
+                      </span>
+                      <div class="company-edit-row-actions">
+                        <button
+                          type="button"
+                          class="secondary filial-edit"
+                          (click)="startFilialEdit(filial)"
+                          [disabled]="!!deleteKey || saving"
+                        >
+                          {{ deleteKey === filialEditKey(filial.id) ? 'Сохраняю...' : 'Редактировать' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="secondary filial-delete"
+                          (click)="filialDeleted.emit({ filialId: filial.id, title: filial.title })"
+                          [disabled]="!!deleteKey || saving"
+                        >
+                          {{ deleteKey === 'filial-' + filial.id ? 'Проверяю...' : 'Удалить' }}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  @if (isFilialEditing(filial.id)) {
+                  }
+                  @if (!filial.archived && isFilialEditing(filial.id)) {
                     <div class="company-filial-edit">
                       <label class="lead-edit-field">
                         <span>Город филиала</span>
@@ -187,6 +189,27 @@
                   <small>Филиалы не добавлены</small>
                 }
               </div>
+
+              @if (hasArchivedFilials()) {
+                <div class="company-edit-list">
+                  <strong>Архивные филиалы</strong>
+                  @for (filial of company.filials; track filial.id) {
+                    @if (filial.archived) {
+                      <div class="company-edit-row">
+                        <span>{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</span>
+                        <button
+                          type="button"
+                          class="secondary"
+                          (click)="filialRestored.emit(filial.id)"
+                          [disabled]="!!deleteKey || saving"
+                        >
+                          {{ deleteKey === 'filial-restore-' + filial.id ? 'Восстанавливаю...' : 'Восстановить' }}
+                        </button>
+                      </div>
+                    }
+                  }
+                </div>
+              }
 
               <div class="company-extra-grid company-filial-create">
                 <label class="lead-edit-field company-edit-new-filial company-edit-new-filial--city">

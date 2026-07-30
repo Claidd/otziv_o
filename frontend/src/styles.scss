@@ -5289,6 +5289,48 @@ body.otziv-dark-theme .themed-detail .detail-example-field small,
 body.otziv-dark-theme .themed-detail .detail-example-badges span {
   color: rgba(195,209,229,.78);
 }
+body.otziv-dark-theme .themed-detail .client-reply-composer {
+  border-color: rgba(159,184,215,.24);
+  background: linear-gradient(145deg, rgba(37,45,56,.98), rgba(28,34,42,.98));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+}
+body.otziv-dark-theme .themed-detail .client-reply-heading {
+  color: #f3f7ff;
+}
+body.otziv-dark-theme .themed-detail .client-reply-heading > span {
+  color: #9fc4ff;
+}
+body.otziv-dark-theme .themed-detail .client-reply-heading small,
+body.otziv-dark-theme .themed-detail .client-audit-comment-field > span,
+body.otziv-dark-theme .themed-detail .client-audit-comment-field small {
+  color: #c3d1e5;
+}
+body.otziv-dark-theme .themed-detail .unanswered-reply textarea,
+body.otziv-dark-theme .themed-detail .detail-example-control textarea,
+body.otziv-dark-theme .themed-detail .detail-comment textarea {
+  color-scheme: dark;
+  appearance: none;
+  -webkit-appearance: none;
+  border-color: rgba(159,184,215,.3);
+  color: #f3f7ff;
+  background: #242c35;
+  caret-color: #8fc5ff;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.26);
+}
+body.otziv-dark-theme .themed-detail .unanswered-reply textarea::placeholder,
+body.otziv-dark-theme .themed-detail .detail-example-control textarea::placeholder,
+body.otziv-dark-theme .themed-detail .detail-comment textarea::placeholder {
+  color: #aebfd3;
+  opacity: 1;
+}
+body.otziv-dark-theme .themed-detail .unanswered-reply textarea:focus,
+body.otziv-dark-theme .themed-detail .detail-example-control textarea:focus,
+body.otziv-dark-theme .themed-detail .detail-comment textarea:focus {
+  outline: 2px solid rgba(122,167,220,.42);
+  outline-offset: 1px;
+  border-color: #7aa7dc;
+  background: #293440;
+}
 body.otziv-dark-theme .themed-detail .detail-example-status-link,
 body.otziv-dark-theme .themed-detail .detail-meta a,
 body.otziv-dark-theme .themed-detail .reminder-chat-link {

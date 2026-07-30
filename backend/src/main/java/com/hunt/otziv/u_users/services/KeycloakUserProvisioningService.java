@@ -231,6 +231,17 @@ public class KeycloakUserProvisioningService {
     }
 
     @Transactional
+    public AdminUserResponse resetPersonalTelegramLink(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+
+        user.setTelegramChatId(null);
+        userRepository.flush();
+        clearCabinetCaches();
+        return toAdminResponse(user);
+    }
+
+    @Transactional
     public void deleteUser(Long userId) {
         User user = findUserWithAssignments(userId);
 
@@ -724,6 +735,7 @@ public class KeycloakUserProvisioningService {
                 .phoneNumber(user.getPhoneNumber())
                 .coefficient(user.getCoefficient())
                 .workerChatUrl(user.getWorkerChatUrl())
+                .personalTelegramLinked(user.getTelegramChatId() != null)
                 .workerTelegramGroupChatId(user.getWorkerTelegramGroupChatId())
                 .workerTelegramBotInviteUrl(telegramGroupLinkService.buildWorkerInviteUrl(user))
                 .managerAuditChatUrl(manager == null ? null : manager.getAuditTelegramGroupUrl())

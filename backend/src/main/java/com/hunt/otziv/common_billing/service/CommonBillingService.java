@@ -4151,7 +4151,10 @@ public class CommonBillingService {
     private void markInvoiceOrdersToStatus(Long invoiceId, String status) {
         List<String> failures = new ArrayList<>();
         for (CommonInvoiceOrder item : invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId)) {
-            Order order = item == null ? null : item.getOrder();
+            if (item == null || item.isPaid()) {
+                continue;
+            }
+            Order order = item.getOrder();
             if (order == null || order.getId() == null || status.equals(statusTitle(order))) {
                 continue;
             }

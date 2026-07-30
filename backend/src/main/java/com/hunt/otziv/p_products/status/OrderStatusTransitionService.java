@@ -55,6 +55,14 @@ public class OrderStatusTransitionService {
     private static final String STATUS_ARCHIVE = "Архив";
     private static final String STATUS_BAN = "Бан";
     private static final String STATUS_REMINDER = "Напоминание";
+    private static final Set<String> COMPLETED_ORDER_REOPEN_STATUSES = Set.of(
+            "Новый",
+            STATUS_TO_CHECK,
+            STATUS_IN_CHECK,
+            STATUS_CORRECTION,
+            STATUS_TO_PUBLISH,
+            STATUS_PUBLIC
+    );
     private static final Set<String> COMMON_BILLING_FINANCIAL_STATUSES = Set.of(
             STATUS_PAYMENT,
             STATUS_TO_PAY,
@@ -116,6 +124,7 @@ public class OrderStatusTransitionService {
                     .orElseThrow(() -> new NotFoundException("Order not found for orderID: " + orderID));
 
             ensureCommonBillingStatusTransitionAllowed(order, title, allowCommonBillingFinancialStatus);
+            ensureCompletedOrderNotReopened(order, title);
             if (STATUS_ARCHIVE.equals(title) && !OrderManualArchivePolicy.isAllowed(order)) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -192,6 +201,21 @@ public class OrderStatusTransitionService {
         throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Заказ внутри общего счета архивируется только вместе с общим счетом"
+        );
+    }
+
+    private void ensureCompletedOrderNotReopened(Order order, String targetStatus) {
+        if (order == null
+                || (!order.isComplete() && order.getPayDay() == null)
+                || !COMPLETED_ORDER_REOPEN_STATUSES.contains(targetStatus)
+                || safeString(targetStatus).equals(safeStatusTitle(order))) {
+            return;
+        }
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Завершенный оплаченный заказ нельзя вернуть в рабочий статус. "
+                        + "Сначала отмените оплату штатным действием."
         );
     }
 

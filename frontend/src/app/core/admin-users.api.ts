@@ -39,6 +39,7 @@ export interface AdminUser {
   phoneNumber?: string;
   coefficient?: number;
   workerChatUrl?: string;
+  personalTelegramLinked: boolean;
   workerTelegramGroupChatId?: number | null;
   workerTelegramBotInviteUrl?: string;
   managerAuditChatUrl?: string;
@@ -125,6 +126,12 @@ export class AdminUsersApi {
 
   deleteUser(id: number): Observable<void> {
     return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/admin/users/${id}`);
+  }
+
+  resetPersonalTelegramLink(id: number): Observable<AdminUser> {
+    return this.http.delete<AdminUser>(
+      `${appEnvironment.apiBaseUrl}/api/admin/users/${id}/personal-telegram-link`
+    );
   }
 
   updateUserPhoto(id: number, photo: File): Observable<AdminUser> {

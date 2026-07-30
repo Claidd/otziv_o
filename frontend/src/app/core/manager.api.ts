@@ -326,6 +326,15 @@ export interface CompanyFilialEditItem {
   url: string;
   cityId?: number | null;
   city: string;
+  archived?: boolean;
+  archivedAt?: string | null;
+}
+
+export interface FilialDeletionPreview {
+  filialId: number;
+  orderCount: number;
+  reviewCount: number;
+  willArchive: boolean;
 }
 
 export interface CompanyFilialUpdateRequest {
@@ -932,6 +941,19 @@ export class ManagerApi {
   deleteCompanyFilial(companyId: number, filialId: number): Observable<CompanyEditPayload> {
     return this.http.delete<CompanyEditPayload>(
       `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/filials/${filialId}`
+    );
+  }
+
+  getCompanyFilialDeletionPreview(companyId: number, filialId: number): Observable<FilialDeletionPreview> {
+    return this.http.get<FilialDeletionPreview>(
+      `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/filials/${filialId}/deletion-preview`
+    );
+  }
+
+  restoreCompanyFilial(companyId: number, filialId: number): Observable<CompanyEditPayload> {
+    return this.http.post<CompanyEditPayload>(
+      `${appEnvironment.apiBaseUrl}/api/manager/companies/${companyId}/filials/${filialId}/restore`,
+      {}
     );
   }
 

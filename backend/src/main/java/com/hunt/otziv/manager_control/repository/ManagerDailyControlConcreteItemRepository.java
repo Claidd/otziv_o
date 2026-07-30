@@ -3,6 +3,7 @@ package com.hunt.otziv.manager_control.repository;
 import com.hunt.otziv.manager_control.model.ManagerDailyControl;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -74,11 +75,13 @@ public interface ManagerDailyControlConcreteItemRepository extends CrudRepositor
               AND item.workerNotificationSentAt IS NOT NULL
               AND item.workerNotificationSentAt <= :cutoff
               AND item.workerExplanationAt IS NULL
+              AND item.status = :status
               AND (item.workerReminderSentAt IS NULL OR item.workerReminderSentAt <= :cutoff)
             ORDER BY item.workerNotificationSentAt ASC
             """)
     List<ManagerDailyControlConcreteItem> findPendingWorkerExplanationReminders(
             @Param("cutoff") LocalDateTime cutoff,
+            @Param("status") ManagerDailyControlItemStatus status,
             Pageable pageable
     );
 }

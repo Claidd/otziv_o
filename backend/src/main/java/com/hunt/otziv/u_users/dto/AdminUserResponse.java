@@ -19,6 +19,7 @@ public record AdminUserResponse(
         String phoneNumber,
         BigDecimal coefficient,
         String workerChatUrl,
+        boolean personalTelegramLinked,
         Long workerTelegramGroupChatId,
         String workerTelegramBotInviteUrl,
         String managerAuditChatUrl,

@@ -163,7 +163,7 @@ public class ManagerBoardEditAssembler {
         List<OrderProductResponse> products = orderProductOptions();
         List<Integer> amounts = amountOptions();
         List<OptionResponse> workers = currentWorkerOptions(company);
-        List<FilialResponse> filials = filialOptions(company);
+        List<FilialResponse> filials = activeFilialOptions(company);
 
         return new CompanyOrderCreateResponse(
                 company.getId(),
@@ -220,7 +220,7 @@ public class ManagerBoardEditAssembler {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не назначен на компанию");
         }
 
-        boolean filialBelongsToCompany = filialOptions(company).stream()
+        boolean filialBelongsToCompany = activeFilialOptions(company).stream()
                 .anyMatch(filial -> Objects.equals(filial.id(), request.filialId()));
         if (!filialBelongsToCompany) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Филиал не найден у компании");
@@ -617,8 +617,16 @@ public class ManagerBoardEditAssembler {
                         safe(filial.getTitle()),
                         safe(filial.getUrl()),
                         filial.getCity() != null ? filial.getCity().getId() : null,
-                        filial.getCity() != null ? safe(filial.getCity().getTitle()) : ""
+                        filial.getCity() != null ? safe(filial.getCity().getTitle()) : "",
+                        filial.isArchived(),
+                        filial.getArchivedAt() != null ? filial.getArchivedAt().toString() : ""
                 ))
+                .toList();
+    }
+
+    private List<FilialResponse> activeFilialOptions(CompanyDTO company) {
+        return filialOptions(company).stream()
+                .filter(filial -> !filial.archived())
                 .toList();
     }
 
@@ -628,6 +636,8 @@ public class ManagerBoardEditAssembler {
         }
 
         return order.getCompany().getFilials().stream()
+                .filter(filial -> !filial.isArchived()
+                        || (order.getFilial() != null && Objects.equals(order.getFilial().getId(), filial.getId())))
                 .sorted(Comparator.comparing(filial -> safe(filial.getTitle())))
                 .map(this::option)
                 .filter(Objects::nonNull)

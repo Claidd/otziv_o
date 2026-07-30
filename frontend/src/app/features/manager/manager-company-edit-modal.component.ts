@@ -72,6 +72,7 @@ export class ManagerCompanyEditModalComponent implements OnInit, OnDestroy {
   @Output() readonly categoryChanged = new EventEmitter<number | null>();
   @Output() readonly workerDeleted = new EventEmitter<ManagerOption>();
   @Output() readonly filialDeleted = new EventEmitter<ManagerCompanyFilialDeleteRequest>();
+  @Output() readonly filialRestored = new EventEmitter<number>();
   @Output() readonly filialUpdated = new EventEmitter<ManagerCompanyFilialUpdateRequest>();
   @Output() readonly draftChange = new EventEmitter<ManagerCompanyEditDraftChange>();
   @Output() readonly billingAccountSelected = new EventEmitter<number | null>();
@@ -172,6 +173,10 @@ export class ManagerCompanyEditModalComponent implements OnInit, OnDestroy {
 
   filialEditKey(filialId: number): string {
     return `filial-edit-${filialId}`;
+  }
+
+  hasArchivedFilials(): boolean {
+    return this.company?.filials.some((filial) => filial.archived) ?? false;
   }
 
   optionLabel(option: ManagerOption): string {

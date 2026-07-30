@@ -1048,6 +1048,11 @@
     grid-template-rows: auto minmax(6.5rem, 1fr) auto;
   }
 
+  .review-card.review-card--fluid {
+    grid-template-rows: auto auto auto;
+    align-content: start;
+  }
+
   .review-field-editor--text {
     min-height: 0;
     grid-template-rows: minmax(0, 1fr) auto;
@@ -1058,14 +1063,21 @@
     min-height: 0;
   }
 
-  .review-field-editor--text textarea,
-  .review-field-editor--text.expanded textarea {
+  .review-field-editor--text textarea {
     height: 100%;
     min-height: 5.5rem;
     field-sizing: fixed;
   }
 
-  .review-field-editor--text.expanded textarea,
+  .review-field-editor--text.expanded textarea {
+    height: auto;
+    min-height: 14rem;
+    field-sizing: content;
+    overflow-y: hidden;
+    overscroll-behavior: auto;
+    scrollbar-width: auto;
+  }
+
   .review-field-editor--text.editing textarea {
     overflow-y: auto;
     overscroll-behavior: contain;

@@ -23,6 +23,8 @@ import java.util.*;
 @Repository
 public interface ReviewRepository extends CrudRepository<Review, Long> {
 
+    long countByFilial_Id(Long filialId);
+
     interface CityStatsRow {
         Long getCityId();
         String getCityTitle();

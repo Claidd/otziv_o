@@ -140,6 +140,14 @@ function createFacade(config: {
         calls.push(`delete-filial:${companyId}:${filialId}`);
         return of(config.filialDeletePayload ?? companyPayload({ filials: [] }));
       },
+      getCompanyFilialDeletionPreview: (companyId: number, filialId: number) => {
+        calls.push(`preview-filial:${companyId}:${filialId}`);
+        return of({ filialId, orderCount: 0, reviewCount: 0, willArchive: false });
+      },
+      restoreCompanyFilial: (companyId: number, filialId: number) => {
+        calls.push(`restore-filial:${companyId}:${filialId}`);
+        return of(companyPayload({ filials: [filial(filialId)] }));
+      },
       updateCompanyFilial: (companyId: number, filialId: number, request: CompanyFilialUpdateRequest) => {
         calls.push(`update-filial:${companyId}:${filialId}`);
         lastFilialUpdateRequest = request;

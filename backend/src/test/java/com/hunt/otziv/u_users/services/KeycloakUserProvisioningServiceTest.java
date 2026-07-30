@@ -119,6 +119,27 @@ class KeycloakUserProvisioningServiceTest {
     }
 
     @Test
+    void resetPersonalTelegramLinkKeepsWorkerGroupBinding() {
+        User user = User.builder()
+                .id(7L)
+                .username("transferred-worker")
+                .telegramChatId(123456L)
+                .workerTelegramGroupChatId(-100777L)
+                .active(true)
+                .roles(new HashSet<>())
+                .build();
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+
+        var response = service.resetPersonalTelegramLink(7L);
+
+        assertEquals(null, user.getTelegramChatId());
+        assertEquals(-100777L, user.getWorkerTelegramGroupChatId());
+        assertFalse(response.personalTelegramLinked());
+        assertEquals(-100777L, response.workerTelegramGroupChatId());
+        verify(userRepository).flush();
+    }
+
+    @Test
     void changingManagerAuditGroupUrlResetsChatIdAndReturnsInviteUrl() {
         Role managerRole = role("ROLE_MANAGER");
         User user = User.builder()

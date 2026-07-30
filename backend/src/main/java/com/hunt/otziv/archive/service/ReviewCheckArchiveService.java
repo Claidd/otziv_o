@@ -1,6 +1,7 @@
 package com.hunt.otziv.archive.service;
 
 import com.hunt.otziv.archive.dto.ArchiveRestoreResult;
+import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -42,7 +43,20 @@ public class ReviewCheckArchiveService {
                     COALESCE(aod.order_detail_comments, '') AS order_detail_comments,
                     COALESCE(aod.order_detail_amount, 0) AS order_detail_amount,
                     COALESCE(ao.order_counter, 0) AS order_counter,
-                    ao.order_sum
+                    ao.order_sum,
+                    CASE
+                        WHEN COALESCE(ao.order_complete, 0) = 1
+                          OR ao.order_pay_day IS NOT NULL
+                          OR LOWER(TRIM(COALESCE(os.order_status_title, ''))) = 'оплачено'
+                          OR EXISTS (
+                              SELECT 1
+                              FROM archive_payment_check payment
+                              WHERE payment.check_order = ao.order_id
+                                AND COALESCE(payment.check_active, 0) = 1
+                          )
+                        THEN 1
+                        ELSE 0
+                    END AS terminal_paid_order
                 FROM archive_order_details aod
                 JOIN archive_orders ao ON ao.order_id = aod.order_detail_order
                 LEFT JOIN companies c ON c.company_id = ao.order_company
@@ -73,16 +87,22 @@ public class ReviewCheckArchiveService {
                         base.amount(),
                         base.counter(),
                         base.sum(),
+                        base.terminalPaidOrder(),
                         findReviews(orderDetailId)
                 ));
     }
 
     @Transactional
     public ArchiveRestoreResult restoreByOrderDetailId(UUID orderDetailId, String targetStatus, String restoredBy) {
-        Long orderId = findOrderIdByOrderDetailId(orderDetailId)
+        ArchivedRestoreCandidate candidate = findRestoreCandidate(orderDetailId)
                 .orElseThrow(() -> new IllegalArgumentException("Archived review check not found: " + orderDetailId));
+        if (candidate.terminalPaidOrder()) {
+            throw new ArchiveRestoreConflictException(
+                    "Оплаченный или завершенный архивный заказ доступен по старой ссылке только для просмотра"
+            );
+        }
 
-        return restoreService.restoreOrder(orderId, targetStatus, restoredBy, true);
+        return restoreService.restoreOrder(candidate.orderId(), targetStatus, restoredBy, true);
     }
 
     @Transactional(readOnly = true)
@@ -100,6 +120,40 @@ public class ReviewCheckArchiveService {
                 LIMIT 1
                 """, orderDetailParams(orderDetailId), Long.class);
         return ids.stream().findFirst();
+    }
+
+    private Optional<ArchivedRestoreCandidate> findRestoreCandidate(UUID orderDetailId) {
+        if (orderDetailId == null) {
+            return Optional.empty();
+        }
+
+        List<ArchivedRestoreCandidate> candidates = jdbc.query("""
+                SELECT
+                    aod.order_detail_order AS order_id,
+                    CASE
+                        WHEN COALESCE(ao.order_complete, 0) = 1
+                          OR ao.order_pay_day IS NOT NULL
+                          OR LOWER(TRIM(COALESCE(status_row.order_status_title, ''))) = 'оплачено'
+                          OR EXISTS (
+                              SELECT 1
+                              FROM archive_payment_check payment
+                              WHERE payment.check_order = ao.order_id
+                                AND COALESCE(payment.check_active, 0) = 1
+                          )
+                        THEN 1
+                        ELSE 0
+                    END AS terminal_paid_order
+                FROM archive_order_details aod
+                JOIN archive_orders ao ON ao.order_id = aod.order_detail_order
+                LEFT JOIN order_statuses status_row ON status_row.order_status_id = ao.order_status
+                WHERE aod.order_detail_id = UUID_TO_BIN(:orderDetailId)
+                  AND ao.restored_at IS NULL
+                LIMIT 1
+                """, orderDetailParams(orderDetailId), (rs, rowNum) -> new ArchivedRestoreCandidate(
+                rowLong(rs, "order_id"),
+                rs.getBoolean("terminal_paid_order")
+        ));
+        return candidates.stream().findFirst();
     }
 
     private List<ArchivedReviewCheckReview> findReviews(UUID orderDetailId) {
@@ -152,7 +206,8 @@ public class ReviewCheckArchiveService {
                 safeString(rs.getString("order_detail_comments")),
                 rowInt(rs, "order_detail_amount"),
                 rowInt(rs, "order_counter"),
-                rs.getBigDecimal("order_sum")
+                rs.getBigDecimal("order_sum"),
+                rs.getBoolean("terminal_paid_order")
         );
     }
 
@@ -192,7 +247,14 @@ public class ReviewCheckArchiveService {
             String comment,
             int amount,
             int counter,
-            BigDecimal sum
+            BigDecimal sum,
+            boolean terminalPaidOrder
+    ) {
+    }
+
+    private record ArchivedRestoreCandidate(
+            Long orderId,
+            boolean terminalPaidOrder
     ) {
     }
 
@@ -210,6 +272,7 @@ public class ReviewCheckArchiveService {
             int amount,
             int counter,
             BigDecimal sum,
+            boolean terminalPaidOrder,
             List<ArchivedReviewCheckReview> reviews
     ) {
     }

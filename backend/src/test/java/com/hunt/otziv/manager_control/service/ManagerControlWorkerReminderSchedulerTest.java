@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -22,7 +23,11 @@ class ManagerControlWorkerReminderSchedulerTest {
                 Mockito.mock(ManagerDailyControlConcreteItemRepository.class);
         ManagerControlWorkerTaskTelegramCallbackService callbackService =
                 Mockito.mock(ManagerControlWorkerTaskTelegramCallbackService.class);
-        when(repository.findPendingWorkerExplanationReminders(any(), any(Pageable.class)))
+        when(repository.findPendingWorkerExplanationReminders(
+                any(),
+                any(ManagerDailyControlItemStatus.class),
+                any(Pageable.class)
+        ))
                 .thenReturn(List.of());
 
         LocalDateTime before = LocalDateTime.now().minusHours(3);
@@ -30,7 +35,11 @@ class ManagerControlWorkerReminderSchedulerTest {
         LocalDateTime after = LocalDateTime.now().minusHours(3);
 
         ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(repository).findPendingWorkerExplanationReminders(cutoff.capture(), any(Pageable.class));
+        verify(repository).findPendingWorkerExplanationReminders(
+                cutoff.capture(),
+                org.mockito.ArgumentMatchers.eq(ManagerDailyControlItemStatus.OPEN),
+                any(Pageable.class)
+        );
         assertTrue(!cutoff.getValue().isBefore(before) && !cutoff.getValue().isAfter(after),
                 "Повторное напоминание должно выбираться с интервалом ровно три часа");
         assertTrue(Duration.between(cutoff.getValue(), LocalDateTime.now()).toMinutes() >= 179);

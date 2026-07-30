@@ -2,6 +2,7 @@ package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -272,6 +273,21 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertTrue(textCaptor.getValue().startsWith("🔴 ПРОСРОЧЕНО"));
         assertTrue(textCaptor.getValue().contains("Код запроса: risk-77"));
         verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void pendingReminderSkipsResolvedControlCard() {
+        ManagerDailyControlConcreteItem item = riskConcreteItem();
+        LocalDateTime sentAt = LocalDateTime.of(2026, 7, 15, 10, 0);
+        item.setStatus(ManagerDailyControlItemStatus.RESOLVED);
+        item.setWorkerExplanationRequestedAt(sentAt);
+        item.setWorkerNotificationSentAt(sentAt);
+
+        boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(3));
+
+        assertFalse(sent);
+        verify(telegramService, never()).sendMessage(anyLong(), any());
+        verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
     }
 
     private CallbackQuery callbackFromGroup(long groupChatId, long actorTelegramId, String data) {

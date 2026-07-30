@@ -8,6 +8,7 @@ import com.hunt.otziv.c_companies.dto.CompanyDTO;
 import com.hunt.otziv.c_companies.dto.CompanyInfoDTO;
 import com.hunt.otziv.c_companies.dto.CompanyStatusDTO;
 import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.c_companies.dto.FilialDeletionPreview;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.model.CompanyContactType;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -284,6 +285,34 @@ public class ApiManagerCompanyController {
         }
 
         return managerBoardEditAssembler.buildCompanyEditResponse(companyService.getCompaniesDTOById(companyId), principal, authentication);
+    }
+
+    @GetMapping("/companies/{companyId}/filials/{filialId}/deletion-preview")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public FilialDeletionPreview getCompanyFilialDeletionPreview(
+            @PathVariable Long companyId,
+            @PathVariable Long filialId,
+            Authentication authentication
+    ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
+        return filialService.previewDeletion(companyId, filialId);
+    }
+
+    @PostMapping("/companies/{companyId}/filials/{filialId}/restore")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    public CompanyEditResponse restoreCompanyFilial(
+            @PathVariable Long companyId,
+            @PathVariable Long filialId,
+            Principal principal,
+            Authentication authentication
+    ) {
+        managerAccessService.requireCompanyAccess(companyId, authentication);
+        filialService.restoreFilial(companyId, filialId);
+        return managerBoardEditAssembler.buildCompanyEditResponse(
+                companyService.getCompaniesDTOById(companyId),
+                principal,
+                authentication
+        );
     }
 
     @PutMapping("/companies/{companyId}/filials/{filialId}")

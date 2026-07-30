@@ -441,6 +441,7 @@
       (categoryChanged)="changeCompanyCategory($event)"
       (workerDeleted)="deleteCompanyWorker($event)"
       (filialDeleted)="deleteCompanyFilial($event.filialId, $event.title)"
+      (filialRestored)="restoreCompanyFilial($event)"
       (filialUpdated)="updateCompanyFilial($event)"
       (draftChange)="handleCompanyEditDraftChange($event)"
       (billingAccountSelected)="selectCompanyBillingAccount($event)"

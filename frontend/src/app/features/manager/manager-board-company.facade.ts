@@ -47,6 +47,8 @@ type ManagerBoardCompanyApi = Pick<
   | 'updateCompany'
   | 'deleteCompanyWorker'
   | 'deleteCompanyFilial'
+  | 'getCompanyFilialDeletionPreview'
+  | 'restoreCompanyFilial'
   | 'updateCompanyFilial'
 >;
 
@@ -270,30 +272,65 @@ export class ManagerBoardCompanyFacade {
       return;
     }
 
-    const confirmed = window.confirm(managerCompanyFilialDeleteConfirm(filialId, title));
-    if (!confirmed) {
-      return;
-    }
-
     const key = managerCompanyFilialDeleteKey(filialId);
     this.editDeleteKey.set(key);
     this.editError.set(null);
 
-    this.deps.managerApi.deleteCompanyFilial(company.id, filialId).subscribe({
+    this.deps.managerApi.getCompanyFilialDeletionPreview(company.id, filialId).subscribe({
+      next: (preview) => {
+        const confirmed = window.confirm(managerCompanyFilialDeleteConfirm(
+          filialId,
+          title,
+          preview.orderCount,
+          preview.willArchive
+        ));
+        if (!confirmed) {
+          this.editDeleteKey.set(null);
+          return;
+        }
+        this.deps.managerApi.deleteCompanyFilial(company.id, filialId).subscribe({
+          next: (payload) => {
+            this.editDeleteKey.set(null);
+            this.applyCompanyEditPayload(payload);
+            this.applyCompanyCardPatch(payload);
+            this.deps.toastService.success(
+              preview.willArchive ? 'Филиал отправлен в архив' : 'Филиал удален',
+              managerCompanyFilialDeletedLabel(filialId, title)
+            );
+            this.deps.loadBoard();
+          },
+          error: (err) => this.handleFilialMutationError(err, 'Не удалось удалить филиал')
+        });
+      },
+      error: (err) => this.handleFilialMutationError(err, 'Не удалось проверить филиал')
+    });
+  }
+
+  restoreCompanyFilial(filialId: number): void {
+    const company = this.editCompany();
+    if (!company || this.editDeleteKey()) {
+      return;
+    }
+    const key = `filial-restore-${filialId}`;
+    this.editDeleteKey.set(key);
+    this.editError.set(null);
+    this.deps.managerApi.restoreCompanyFilial(company.id, filialId).subscribe({
       next: (payload) => {
         this.editDeleteKey.set(null);
         this.applyCompanyEditPayload(payload);
         this.applyCompanyCardPatch(payload);
-        this.deps.toastService.success('Филиал удален', managerCompanyFilialDeletedLabel(filialId, title));
+        this.deps.toastService.success('Филиал восстановлен', `#${filialId}`);
         this.deps.loadBoard();
       },
-      error: (err) => {
-        const message = this.deps.errorMessage(err, 'Не удалось удалить филиал');
-        this.editDeleteKey.set(null);
-        this.editError.set(message);
-        this.deps.toastService.error('Филиал не удален', message);
-      }
+      error: (err) => this.handleFilialMutationError(err, 'Не удалось восстановить филиал')
     });
+  }
+
+  private handleFilialMutationError(err: unknown, fallback: string): void {
+    const message = this.deps.errorMessage(err, fallback);
+    this.editDeleteKey.set(null);
+    this.editError.set(message);
+    this.deps.toastService.error('Операция с филиалом не выполнена', message);
   }
 
   updateCompanyFilial(request: ManagerCompanyFilialUpdateRequest): void {

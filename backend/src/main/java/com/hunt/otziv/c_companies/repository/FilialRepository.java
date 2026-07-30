@@ -13,7 +13,7 @@ public interface FilialRepository extends CrudRepository<Filial, Long> {
 
     Filial findByUrl(String url);
 
-    @Query("SELECT f FROM Filial f WHERE f.city.id = :cityId")
+    @Query("SELECT f FROM Filial f WHERE f.city.id = :cityId AND f.archived = false")
     List<Filial> findByCityId(@Param("cityId") Long cityId);
 
     @Query(value = """

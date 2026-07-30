@@ -1,6 +1,7 @@
 package com.hunt.otziv.c_companies.services;
 
 import com.hunt.otziv.c_companies.dto.FilialDTO;
+import com.hunt.otziv.c_companies.dto.FilialDeletionPreview;
 import com.hunt.otziv.c_companies.model.Filial;
 
 import java.util.List;
@@ -13,6 +14,9 @@ public interface FilialService {
     Filial getFilial(Long id);
 
     void deleteFilial(Long filialId);
+    FilialDeletionPreview previewDeletion(Long companyId, Long filialId);
+    FilialDeletionPreview deleteOrArchive(Long companyId, Long filialId);
+    void restoreFilial(Long companyId, Long filialId);
     Filial findFilialByTitleAndUrl(String title, String url);
 
     FilialDTO getFilialByIdToDTO(Long id);

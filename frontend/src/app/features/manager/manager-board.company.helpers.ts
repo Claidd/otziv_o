@@ -50,8 +50,17 @@ export function managerCompanyFilialDeleteKey(filialId: number): string {
   return `filial-${filialId}`;
 }
 
-export function managerCompanyFilialDeleteConfirm(filialId: number, title: string): string {
-  return `Удалить филиал "${title || filialId}"?`;
+export function managerCompanyFilialDeleteConfirm(
+  filialId: number,
+  title: string,
+  orderCount = 0,
+  willArchive = false
+): string {
+  const label = title || filialId;
+  if (willArchive) {
+    return `Филиал "${label}" используется в ${orderCount} заказах и будет отправлен в архив. Продолжить?`;
+  }
+  return `У филиала "${label}" нет заказов. Удалить его окончательно?`;
 }
 
 export function managerCompanyFilialDeletedLabel(filialId: number, title: string): string {

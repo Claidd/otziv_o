@@ -17,6 +17,7 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheck;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheckReview;
+import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import org.junit.jupiter.api.Test;
@@ -261,6 +262,51 @@ class ApiReviewCheckControllerTest {
     }
 
     @Test
+    void terminalPaidArchivedResponseIsReadOnly() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"));
+        when(reviewCheckArchiveService.findByOrderDetailId(orderDetailId))
+                .thenReturn(Optional.of(archivedReviewCheck(orderDetailId, true)));
+
+        ApiReviewCheckController.ReviewCheckResponse response = controller()
+                .getReviewCheck(orderDetailId, null);
+
+        assertThat(response.status()).isEqualTo("Архив");
+        assertThat(response.reviews()).hasSize(1);
+        assertThat(response.permissions().canSave()).isFalse();
+        assertThat(response.permissions().canApprovePublication()).isFalse();
+        assertThat(response.permissions().canSendCorrection()).isFalse();
+    }
+
+    @Test
+    void terminalPaidArchivedReviewCannotBeRestoredByAnonymousMutation() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"));
+        when(reviewCheckArchiveService.restoreByOrderDetailId(
+                orderDetailId,
+                "Коррекция",
+                "anonymous-review-check"
+        )).thenThrow(new ArchiveRestoreConflictException("read only"));
+
+        assertThatThrownBy(() -> controller().updateReviewText(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewTextUpdateRequest("client text"),
+                null
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(exception -> {
+                    ResponseStatusException responseException = (ResponseStatusException) exception;
+                    assertThat(responseException.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(responseException.getReason()).isEqualTo("read only");
+                });
+
+        verify(reviewService, never()).updateReviewText(anyLong(), anyLong(), any());
+    }
+
+    @Test
     void saveArchivedReviewCheckRestoresOrderToCorrectionAndPersistsChanges() {
         UUID orderDetailId = UUID.randomUUID();
         OrderDetails restoredDetails = orderDetails(orderDetailId, "Коррекция");
@@ -382,6 +428,10 @@ class ApiReviewCheckControllerTest {
     }
 
     private ArchivedReviewCheck archivedReviewCheck(UUID orderDetailId) {
+        return archivedReviewCheck(orderDetailId, false);
+    }
+
+    private ArchivedReviewCheck archivedReviewCheck(UUID orderDetailId, boolean terminalPaidOrder) {
         return new ArchivedReviewCheck(
                 orderDetailId,
                 101L,
@@ -396,6 +446,7 @@ class ApiReviewCheckControllerTest {
                 1,
                 0,
                 BigDecimal.valueOf(1000),
+                terminalPaidOrder,
                 List.of(new ArchivedReviewCheckReview(
                         501L,
                         "current text",

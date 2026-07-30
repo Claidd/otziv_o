@@ -261,6 +261,9 @@
                 <span class="status-pill" [class.warn]="selectedUser()?.workerChatUrl && !selectedUser()?.workerTelegramGroupChatId">
                   {{ workerChatStatus(selectedUser()) }}
                 </span>
+                <span class="status-pill" [class.warn]="!selectedUser()?.personalTelegramLinked">
+                  {{ personalTelegramStatus(selectedUser()) }}
+                </span>
                 @if (selectedUser()?.workerChatUrl) {
                   <a [href]="selectedUser()?.workerChatUrl" target="_blank" rel="noopener">
                     <span class="material-icons-sharp">forum</span>
@@ -277,7 +280,23 @@
                     Скопировать ссылку
                   </button>
                 }
+                @if (selectedUser()?.personalTelegramLinked) {
+                  <button
+                    type="button"
+                    class="telegram-reset-action"
+                    (click)="resetPersonalTelegramLink()"
+                    [disabled]="telegramResetting()"
+                    title="Сбросить личный Telegram при передаче аккаунта другому человеку"
+                  >
+                    <span class="material-icons-sharp">link_off</span>
+                    {{ telegramResetting() ? 'Сбрасываю…' : 'Сбросить личный Telegram' }}
+                  </button>
+                }
               </div>
+              <p class="form-hint">
+                Группа получает уведомления. Личная привязка определяет, кому разрешено нажимать кнопки бота.
+                При передаче аккаунта другому человеку сбросьте её и попросите нового специалиста написать боту свой логин.
+              </p>
             </section>
           }
 

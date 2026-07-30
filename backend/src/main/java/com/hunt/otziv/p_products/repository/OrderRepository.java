@@ -34,6 +34,8 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
 
     boolean existsByIdAndWorker_Id(Long id, Long workerId);
 
+    long countByFilial_Id(Long filialId);
+
     boolean existsByCompany_IdAndWorker_IdAndCompleteFalseAndIdNot(Long companyId, Long workerId, Long excludedOrderId);
 
     @Query("SELECT c.id FROM Order o LEFT JOIN o.company c WHERE o.id = :orderId")

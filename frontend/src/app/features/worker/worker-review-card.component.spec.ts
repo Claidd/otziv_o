@@ -183,6 +183,32 @@ describe('WorkerReviewCardComponent', () => {
     expect(cardFooter?.lastElementChild?.tagName).toBe('FOOTER');
   });
 
+  it('marks a card as fluid when a long review text is expanded', () => {
+    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ text: 'Длинный текст отзыва. '.repeat(12) });
+    component.expandedReviewTextIds = { [component.review.id]: true };
+    let toggleRequested = false;
+    component.reviewTextToggled.subscribe(() => {
+      toggleRequested = true;
+    });
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    const card = element.querySelector<HTMLElement>('.review-card');
+    const textEditor = element.querySelector<HTMLElement>('.review-field-editor--text');
+    const toggle = element.querySelector<HTMLElement>('.review-text-toggle');
+
+    expect(card?.classList.contains('review-card--fluid')).toBe(true);
+    expect(textEditor?.classList.contains('expanded')).toBe(true);
+    expect(toggle?.textContent?.trim()).toBe('свернуть');
+
+    toggle?.click();
+
+    expect(toggleRequested).toBe(true);
+  });
+
   it('adds soft section tones for review work cards', () => {
     const render = (
       activeSection: WorkerReviewCardComponent['activeSection'],

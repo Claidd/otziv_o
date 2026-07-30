@@ -1647,6 +1647,39 @@ class CommonBillingServiceTest {
         verify(messageSender).send(any(), any(), any(), messageCaptor.capture());
         String compactMessage = messageCaptor.getValue().replace(" ", "").replace("\u00A0", "");
         assertTrue(compactMessage.contains("Коплате:1000"));
+        verify(orderStatusTransitionService, never())
+                .changeStatusForCommonBillingOrder(101L, "Выставлен счет");
+        verify(orderStatusTransitionService)
+                .changeStatusForCommonBillingOrder(102L, "Выставлен счет");
+    }
+
+    @Test
+    void reminderChangesStatusOnlyForUnpaidInvoiceOrders() throws Exception {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.PARTIALLY_PAID);
+        invoice.setAmountKopecks(200_000L);
+        invoice.setPaidKopecks(100_000L);
+        Order paidOrder = order(101L);
+        Order unpaidOrder = order(102L);
+        CommonInvoiceOrder paidItem = item(invoice, paidOrder);
+        paidItem.setPaid(true);
+        CommonInvoiceOrder unpaidItem = item(invoice, unpaidOrder);
+
+        when(invoiceRepository.findByIdWithAccount(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L))
+                .thenReturn(List.of(paidItem, unpaidItem));
+        when(badReviewTaskService.getPayableSum(unpaidOrder)).thenReturn(BigDecimal.valueOf(1000));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true)).thenReturn(true);
+        when(properties.getPublicBaseUrl()).thenReturn("https://o-ogo.ru");
+        when(messageSender.send(any(), any(), any(), any())).thenReturn(ClientMessageSendResult.sent("test"));
+
+        service.sendManualReminder(10L);
+
+        verify(orderStatusTransitionService, never())
+                .changeStatusForCommonBillingOrder(101L, "Напоминание");
+        verify(orderStatusTransitionService)
+                .changeStatusForCommonBillingOrder(102L, "Напоминание");
     }
 
     @Test

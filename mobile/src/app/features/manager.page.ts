@@ -672,21 +672,39 @@ type CompanyPreservedFields = Pick<
                     <section class="company-edit-mobile-section">
                       <strong>Филиалы</strong>
                       @for (filial of company.filials; track filial.id) {
-                        <div class="company-edit-mobile-row company-edit-mobile-row--stack">
-                          <span>{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</span>
-                          <div>
-                            <button type="button" (click)="startFilialEdit(filial)" [disabled]="!!companyEditDeleteKey() || companyEditSaving()">
-                              Редактировать
-                            </button>
-                            <button type="button" (click)="deleteCompanyFilial(filial)" [disabled]="!!companyEditDeleteKey() || companyEditSaving()">
-                              {{ companyEditDeleteKey() === 'filial-' + filial.id ? '...' : 'Удалить' }}
-                            </button>
+                        @if (!filial.archived) {
+                          <div class="company-edit-mobile-row company-edit-mobile-row--stack">
+                            <span>{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</span>
+                            <div>
+                              <button type="button" (click)="startFilialEdit(filial)" [disabled]="!!companyEditDeleteKey() || companyEditSaving()">
+                                Редактировать
+                              </button>
+                              <button type="button" (click)="deleteCompanyFilial(filial)" [disabled]="!!companyEditDeleteKey() || companyEditSaving()">
+                                {{ companyEditDeleteKey() === 'filial-' + filial.id ? '...' : 'Удалить' }}
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        }
                       } @empty {
                         <small>Филиалы не добавлены</small>
                       }
                     </section>
+
+                    @if (hasArchivedCompanyFilials()) {
+                      <section class="company-edit-mobile-section">
+                        <strong>Архивные филиалы</strong>
+                        @for (filial of company.filials; track filial.id) {
+                          @if (filial.archived) {
+                            <div class="company-edit-mobile-row">
+                              <span>{{ filial.city || 'город' }}: {{ filial.title || 'филиал' }}</span>
+                              <button type="button" (click)="restoreCompanyFilial(filial)" [disabled]="!!companyEditDeleteKey() || companyEditSaving()">
+                                {{ companyEditDeleteKey() === 'filial-restore-' + filial.id ? '...' : 'Восстановить' }}
+                              </button>
+                            </div>
+                          }
+                        }
+                      </section>
+                    }
 
                     @if (companyFilialDraft(); as filialDraft) {
                       <section class="company-edit-mobile-section">
@@ -2912,6 +2930,14 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyEditError.set(null);
 
     try {
+      const preview = await firstValueFrom(this.api.getManagerCompanyFilialDeletionPreview(company.id, filial.id));
+      const label = filial.title || `#${filial.id}`;
+      const message = preview.willArchive
+        ? `Филиал "${label}" используется в ${preview.orderCount} заказах и будет отправлен в архив. Продолжить?`
+        : `У филиала "${label}" нет заказов. Удалить его окончательно?`;
+      if (!window.confirm(message)) {
+        return;
+      }
       const updated = await firstValueFrom(this.api.deleteManagerCompanyFilial(company.id, filial.id));
       this.applyCompanyEditPayload(updated);
       this.patchCompanyFromEdit(updated);
@@ -2920,6 +2946,29 @@ export class ManagerPage implements OnInit, OnDestroy {
     } finally {
       this.companyEditDeleteKey.set(null);
     }
+  }
+
+  async restoreCompanyFilial(filial: CompanyFilialEditItem): Promise<void> {
+    const company = this.companyEdit();
+    if (!company) {
+      return;
+    }
+    const key = `filial-restore-${filial.id}`;
+    this.companyEditDeleteKey.set(key);
+    this.companyEditError.set(null);
+    try {
+      const updated = await firstValueFrom(this.api.restoreManagerCompanyFilial(company.id, filial.id));
+      this.applyCompanyEditPayload(updated);
+      this.patchCompanyFromEdit(updated);
+    } catch (error) {
+      this.companyEditError.set(this.apiErrorMessage(error, 'Филиал не восстановлен.'));
+    } finally {
+      this.companyEditDeleteKey.set(null);
+    }
+  }
+
+  hasArchivedCompanyFilials(): boolean {
+    return this.companyEdit()?.filials.some((filial) => filial.archived) ?? false;
   }
 
   startFilialEdit(filial: CompanyFilialEditItem): void {

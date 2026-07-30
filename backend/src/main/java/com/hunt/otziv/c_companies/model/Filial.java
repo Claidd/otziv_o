@@ -5,6 +5,7 @@ import com.hunt.otziv.r_review.model.Review;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Entity
@@ -37,6 +38,13 @@ public class Filial {
     @JoinColumn(name = "company_id")
     @ToString.Exclude
     private Company company;
+
+    @Builder.Default
+    @Column(name = "filial_archived", nullable = false)
+    private boolean archived = false;
+
+    @Column(name = "filial_archived_at")
+    private LocalDateTime archivedAt;
 
     public Filial(int i, String нетФилиала, String пусто) {
     }

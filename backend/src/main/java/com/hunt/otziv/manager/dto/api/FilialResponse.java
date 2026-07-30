@@ -5,6 +5,8 @@ public record FilialResponse(
         String title,
         String url,
         Long cityId,
-        String city
+        String city,
+        boolean archived,
+        String archivedAt
 ) {
 }

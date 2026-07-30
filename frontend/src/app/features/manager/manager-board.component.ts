@@ -743,6 +743,10 @@ export class ManagerBoardComponent implements OnDestroy {
     this.companyFacade.deleteCompanyFilial(filialId, title);
   }
 
+  restoreCompanyFilial(filialId: number): void {
+    this.companyFacade.restoreCompanyFilial(filialId);
+  }
+
   updateCompanyFilial(request: ManagerCompanyFilialUpdateRequest): void {
     this.companyFacade.updateCompanyFilial(request);
   }

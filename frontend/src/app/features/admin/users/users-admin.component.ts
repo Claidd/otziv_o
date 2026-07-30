@@ -68,6 +68,7 @@ export class UsersAdminComponent implements OnDestroy {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly deleteSaving = signal(false);
+  readonly telegramResetting = signal(false);
   readonly assignmentsLoading = signal(false);
   readonly assignmentsSaving = signal(false);
   readonly passwordSaving = signal(false);
@@ -297,12 +298,51 @@ export class UsersAdminComponent implements OnDestroy {
     const currentUrl = this.form.controls.workerChatUrl.value.trim();
     const savedUrl = (user?.workerChatUrl ?? '').trim();
     if (!currentUrl) {
-      return 'Не указана';
+      return 'Группа: ссылка не указана';
     }
     if (currentUrl !== savedUrl) {
-      return 'Сохраните ссылку';
+      return 'Группа: сохраните ссылку';
     }
-    return user?.workerTelegramGroupChatId ? 'Telegram привязан' : 'Telegram не привязан';
+    return user?.workerTelegramGroupChatId ? 'Группа: привязана' : 'Группа: не привязана';
+  }
+
+  personalTelegramStatus(user: AdminUser | null | undefined): string {
+    return user?.personalTelegramLinked
+      ? 'Личный Telegram: привязан'
+      : 'Личный Telegram: не привязан';
+  }
+
+  resetPersonalTelegramLink(): void {
+    const user = this.selectedUser();
+    if (!user?.personalTelegramLinked || this.telegramResetting()) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Сбросить личную Telegram-привязку пользователя «${user.fio || user.username}»?\n\n`
+      + 'Группа специалиста останется привязанной. После сброса пользователь должен заново написать боту свой логин.'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    this.telegramResetting.set(true);
+    this.adminUsersApi.resetPersonalTelegramLink(user.id).subscribe({
+      next: (updatedUser) => {
+        this.selectedUser.set(updatedUser);
+        this.users.update((users) => users.map((item) => item.id === updatedUser.id ? updatedUser : item));
+        this.telegramResetting.set(false);
+        this.toastService.success(
+          'Личный Telegram отвязан',
+          `Попросите ${updatedUser.fio || updatedUser.username} написать боту логин «${updatedUser.username}».`
+        );
+      },
+      error: (err) => {
+        const message = this.errorMessage(err, 'Не удалось сбросить личную Telegram-привязку');
+        this.telegramResetting.set(false);
+        this.toastService.error('Telegram не отвязан', message);
+      }
+    });
   }
 
   managerAuditChatStatus(user: AdminUser | null | undefined): string {
