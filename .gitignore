@@ -37,6 +37,7 @@ backend/.idea
 !compose.prod.yaml
 !compose.prod-local.yaml
 !infrastructure/loki/*.yaml
+!infrastructure/tempo/*.yaml
 !infrastructure/grafana/provisioning/datasources/*.yaml
 ### NetBeans ###
 /nbproject/private/
