@@ -263,6 +263,28 @@ if (-not (Test-Path -LiteralPath $envResolverPath)) {
 $buildCompose = Join-Path $repoRoot "docker-compose.build.yaml"
 $appImage = "${DockerHubNamespace}/${AppRepository}:${Tag}"
 $webImage = "${DockerHubNamespace}/${WebRepository}:${Tag}"
+$deployBundlePaths = @(
+    "docker-compose.yaml",
+    ".dockerignore",
+    "Dockerfile.whatsapp",
+    "whatsapp\package.json",
+    "whatsapp\package-lock.json",
+    "whatsapp\index.js",
+    "whatsapp\message-webhook.js",
+    "whatsapp\group-invite.js",
+    "infrastructure\nginx",
+    "infrastructure\keycloak",
+    "infrastructure\prometheus",
+    "infrastructure\loki",
+    "infrastructure\tempo",
+    "infrastructure\alloy",
+    "infrastructure\grafana",
+    "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh",
+    "infrastructure\scripts\prod\validate-flyway-migrations.sh",
+    "infrastructure\scripts\prod\init-letsencrypt.sh",
+    "infrastructure\scripts\prod\renew-letsencrypt.sh",
+    "infrastructure\scripts\prod\register-max-webhook.ps1"
+)
 $remote = "${VpsUser}@${VpsHost}"
 $remoteBundle = "/tmp/otziv-deploy-${Tag}.tar.gz"
 $stageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-" + [System.Guid]::NewGuid().ToString("N"))
@@ -288,6 +310,11 @@ $scpArgs += @("-P", "$VpsPort") + $sshKeepAliveArgs
 
 if (-not (Test-Path -LiteralPath $buildCompose)) {
     throw "Missing build compose file: $buildCompose"
+}
+foreach ($relativePath in $deployBundlePaths) {
+    if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $relativePath))) {
+        throw "Required deploy path is missing: $relativePath"
+    }
 }
 
 $envFilePath = Resolve-OtzivEnvFile -EnvFile $EnvFile -RepoRoot $repoRoot -AllowMissing:$SkipEnvUpload
@@ -366,30 +393,9 @@ fi
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 try {
     Write-Host "Preparing deployment bundle..."
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "docker-compose.yaml"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath ".dockerignore"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "Dockerfile.whatsapp"
-    foreach ($whatsAppDeployFile in @(
-        "whatsapp\package.json",
-        "whatsapp\package-lock.json",
-        "whatsapp\index.js",
-        "whatsapp\message-webhook.js",
-        "whatsapp\group-invite.js"
-    )) {
-        Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $whatsAppDeployFile
+    foreach ($deployBundlePath in $deployBundlePaths) {
+        Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath $deployBundlePath
     }
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\nginx"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\keycloak"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\prometheus"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\loki"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\tempo"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\alloy"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\grafana"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\apply-keycloak-prod-settings.sh"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\validate-flyway-migrations.sh"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\init-letsencrypt.sh"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\renew-letsencrypt.sh"
-    Copy-DeployPath -RepoRoot $repoRoot -StageRoot $stageRoot -RelativePath "infrastructure\scripts\prod\register-max-webhook.ps1"
 
     $uploadedMobileRelease = "0"
     if ($null -ne $mobileRelease) {
