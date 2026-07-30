@@ -488,8 +488,11 @@ self_heal_was_active="0"
 
 resume_self_heal() {
   if [ "`$self_heal_was_active" = "1" ]; then
+    self_heal_was_active="0"
     echo "Resuming production self-heal timer..."
-    sudo -n systemctl start "`$self_heal_timer" || true
+    sudo -n systemctl start "`$self_heal_timer"
+    echo "Running final production self-heal reconciliation..."
+    sudo -n systemctl start "`$self_heal_service"
   fi
 }
 
@@ -914,6 +917,13 @@ if ! wait_service_healthy whatsapp_vika 720; then
   compose restart whatsapp_vika
   wait_service_healthy whatsapp_vika 300
 fi
+resume_self_heal
+trap - EXIT
+wait_service_healthy app 1200
+wait_service_healthy keycloak 900
+wait_service_healthy nginx 300
+wait_service_healthy whatsapp_lika 300
+wait_service_healthy whatsapp_vika 300
 compose ps
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"
