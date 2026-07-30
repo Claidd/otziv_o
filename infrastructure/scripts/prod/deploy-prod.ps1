@@ -351,7 +351,7 @@ else
   printf 'MISSING'
 fi
 "@
-    $remoteMobileState = (& ssh @sshArgs $remote $remoteMobileCheck).Trim()
+    $remoteMobileState = ($remoteMobileCheck | & ssh @sshArgs $remote "tr -d '\r' | bash -s").Trim()
     if ($LASTEXITCODE -ne 0) {
         throw "Failed to check the mobile release on VPS."
     }
