@@ -57,6 +57,12 @@ class WorkloadShadowInsertSelectUpsertContractTest {
                 "workload_shadow_worker_daily.worker_user_id",
                 "workload_shadow_worker_daily.manager_id",
                 "workload_shadow_worker_daily.completed_units",
+                "workload_shadow_worker_daily.reached_100_once = true",
+                "or values(reached_100) = true",
+                "workload_shadow_worker_daily.reached_100 = false",
+                "and values(reached_100) = true",
+                "workload_shadow_worker_daily.first_reached_100_at",
+                "workload_shadow_worker_daily.last_reached_100_at",
                 "workload_shadow_worker_daily.last_snapshot_at",
                 "workload_shadow_worker_daily.finalized_at"
         );

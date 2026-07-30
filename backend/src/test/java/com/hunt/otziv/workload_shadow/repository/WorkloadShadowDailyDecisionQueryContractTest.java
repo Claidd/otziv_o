@@ -33,7 +33,7 @@ class WorkloadShadowDailyDecisionQueryContractTest {
     }
 
     @Test
-    void decisionUpsertChangesOnlyTheLiveRemainderAndNeverRewritesTheFirstDecision()
+    void decisionUpsertPersistsTheMonotonicLateToMandatoryTransition()
             throws Exception {
         Method method = WorkloadShadowProjectionRepository.class.getDeclaredMethod(
                 "upsertDailyBatchDecisions",
@@ -43,14 +43,17 @@ class WorkloadShadowDailyDecisionQueryContractTest {
         String updateClause = sql.substring(sql.indexOf("on duplicate key update"));
 
         assertThat(updateClause).contains(
+                "decision_code = case",
+                "workload_shadow_late_batches.decision_code = 'mandatory'",
+                "or values(decision_code) = 'mandatory'",
+                "decision_origin = case",
+                "then values(decision_origin)",
                 "remaining_units = values(remaining_units)",
                 "remaining_estimated_minutes = values(remaining_estimated_minutes)",
                 "last_seen_at = values(last_seen_at)",
                 "active = true"
         );
         assertThat(updateClause).doesNotContain(
-                "decision_code =",
-                "decision_origin =",
                 "cohort_key =",
                 "initial_units =",
                 "initial_estimated_minutes =",

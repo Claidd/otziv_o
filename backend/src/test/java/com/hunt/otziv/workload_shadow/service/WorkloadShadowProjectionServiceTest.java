@@ -101,9 +101,10 @@ class WorkloadShadowProjectionServiceTest {
     }
 
     @Test
-    void lateDecisionRemainsLateAfterPartialCompletionMakesRemainderSmall() {
-        var remaining = batch("NAGUL:3", 100L, 1, 4, DATE.atTime(22, 50));
-        var late = decision(remaining, WorkloadShadowProjectionService.DecisionCode.LATE);
+    void partialCompletionInsideOneLateBatchMakesItsRemainderMandatory() {
+        var initial = batch("NAGUL:3", 100L, 4, 4, DATE.atTime(22, 50));
+        var remaining = batch("NAGUL:3", 100L, 3, 4, DATE.atTime(22, 50));
+        var late = decision(initial, WorkloadShadowProjectionService.DecisionCode.LATE);
 
         var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
                 List.of(remaining),
@@ -115,11 +116,18 @@ class WorkloadShadowProjectionServiceTest {
                 false
         );
 
-        assertEquals(late, decisions.get(remaining.batchKey()));
+        assertEquals(
+                WorkloadShadowProjectionService.DecisionCode.MANDATORY,
+                decisions.get(remaining.batchKey()).decisionCode()
+        );
+        assertEquals(
+                WorkloadShadowProjectionService.DecisionOrigin.PARTIAL_COMPLETION,
+                decisions.get(remaining.batchKey()).decisionOrigin()
+        );
     }
 
     @Test
-    void completedCardsDisappearButEveryRemainingCardKeepsTheLateDecision() {
+    void completingCardsFromLateCohortMakesEveryRemainingCardMandatory() {
         var first = batch("NAGUL:1", 100L, 1, 4, DATE.atTime(22, 50));
         var second = batch("NAGUL:2", 100L, 1, 4, DATE.atTime(22, 50));
         var third = batch("NAGUL:3", 100L, 1, 4, DATE.atTime(22, 50));
@@ -147,8 +155,31 @@ class WorkloadShadowProjectionServiceTest {
         assertEquals(2, afterTwoCompleted.size());
         assertTrue(afterTwoCompleted.values().stream().allMatch(
                 decision -> decision.decisionCode()
-                        == WorkloadShadowProjectionService.DecisionCode.LATE
+                        == WorkloadShadowProjectionService.DecisionCode.MANDATORY
         ));
+        assertTrue(afterTwoCompleted.values().stream().allMatch(
+                decision -> decision.decisionOrigin()
+                        == WorkloadShadowProjectionService.DecisionOrigin.PARTIAL_COMPLETION
+        ));
+    }
+
+    @Test
+    void untouchedLateCohortRemainsExcludedEvenWhenItsCurrentEstimateChanges() {
+        var initial = batch("NAGUL:1", 100L, 1, 4, DATE.atTime(22, 50));
+        var reestimated = batch("NAGUL:1", 100L, 1, 3, DATE.atTime(22, 50));
+        var late = decision(initial, WorkloadShadowProjectionService.DecisionCode.LATE);
+
+        var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
+                List.of(reestimated),
+                Map.of(initial.batchKey(), late),
+                DATE,
+                DATE.atTime(22, 58),
+                SHIFT_START,
+                SHIFT_END,
+                false
+        );
+
+        assertEquals(late, decisions.get(initial.batchKey()));
     }
 
     @Test
@@ -413,6 +444,36 @@ class WorkloadShadowProjectionServiceTest {
         assertTrue(finalized.lastDayReached100());
         assertEquals(DATE, finalized.latestProgressDate());
         assertEquals(1, repeated.hundredDays());
+    }
+
+    @Test
+    void emptyDayDoesNotProduceReachedOnceAchievement() {
+        assertFalse(WorkloadShadowProjectionService.reached100Now(
+                0,
+                BigDecimal.valueOf(100)
+        ));
+        assertTrue(WorkloadShadowProjectionService.reached100Now(
+                12,
+                BigDecimal.valueOf(100)
+        ));
+        assertFalse(WorkloadShadowProjectionService.reached100Now(
+                12,
+                BigDecimal.valueOf(99.99)
+        ));
+    }
+
+    @Test
+    void finalizationKeepsEarlierReachedOnceWhenCurrentPercentDropped() {
+        assertTrue(WorkloadShadowProjectionService.reached100ForFinalization(
+                true,
+                12,
+                BigDecimal.valueOf(91.67)
+        ));
+        assertFalse(WorkloadShadowProjectionService.reached100ForFinalization(
+                false,
+                12,
+                BigDecimal.valueOf(91.67)
+        ));
     }
 
     @Test

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,8 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -25,13 +28,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 
 class StaffDailyProgressServiceTest {
 
     private final NamedParameterJdbcTemplate jdbc = mock(NamedParameterJdbcTemplate.class);
     private final StaffDailyProgressService service = new StaffDailyProgressService(
             jdbc,
-            mock(AppSettingService.class)
+            mock(AppSettingService.class),
+            mock(WorkloadShadowProgressReadService.class)
     );
 
     @Test
@@ -42,7 +47,11 @@ class StaffDailyProgressServiceTest {
         when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of(
                 Map.of("worker_id", 7L, "active_work_seconds", 7_200L)
         ));
-        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings);
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc,
+                settings,
+                mock(WorkloadShadowProgressReadService.class)
+        );
 
         Map<Long, Long> averages = localService.averageDailyActiveWorkSecondsByWorkerIds(
                 List.of(7L),
@@ -67,7 +76,7 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
-    void endOfDayProgressExcludesCompletedTasksAddedAfterCutoff() {
+    void endOfDayProgressKeepsWorkCompletedBeforeCutoffEvenWithFutureAvailability() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
@@ -79,10 +88,16 @@ class StaffDailyProgressServiceTest {
             LocalDate date = LocalDate.of(2026, 7, 17);
             return List.of(
                     completedItem(7L, 1L, date.atTime(22, 50), date.atTime(22, 50), date.atTime(23, 30)),
-                    completedItem(7L, 2L, date.atTime(23, 20), date.atTime(23, 20), date.atTime(23, 40))
+                    completedItem(7L, 2L, date.atTime(23, 20), date.atTime(23, 20), date.atTime(23, 40)),
+                    completedItem(7L, 3L, date.plusDays(2).atTime(10, 0), date.plusDays(2).atTime(10, 0),
+                            date.atTime(18, 54))
             );
         });
-        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings);
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc,
+                settings,
+                mock(WorkloadShadowProgressReadService.class)
+        );
         Worker worker = Worker.builder()
                 .id(7L)
                 .user(User.builder().id(70L).fio("Анна").build())
@@ -95,9 +110,134 @@ class StaffDailyProgressServiceTest {
                 date.atTime(23, 0)
         ).get(7L);
 
-        assertEquals(1, progress.completed());
-        assertEquals(1, progress.total());
+        assertEquals(2, progress.completed());
+        assertEquals(2, progress.total());
         assertEquals(100, progress.percent());
+    }
+
+    @Test
+    void liveWorkerProgressUsesCurrentWorkloadSnapshot() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            if (sql.contains(") active_items")) {
+                return List.of(Map.of(
+                        "worker_id", 7L,
+                        "item_type", "order",
+                        "item_id", 99L,
+                        "opened_at", Timestamp.valueOf(date.atTime(12, 0)),
+                        "added_at", Timestamp.valueOf(date.atTime(12, 0))
+                ));
+            }
+            return List.of();
+        });
+        when(workload.findCurrentProgress(any(), eq(date)))
+                .thenReturn(Map.of(7L, new Progress(
+                        46,
+                        46,
+                        5,
+                        100,
+                        true,
+                        true,
+                        date.atTime(18, 54),
+                        date.atTime(18, 54)
+                )));
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Елена").build())
+                .build();
+
+        DailyWorkProgressResponse progress =
+                localService.workerProgressByWorkers(List.of(worker), date).get(7L);
+
+        assertEquals(46, progress.completed());
+        assertEquals(46, progress.total());
+        assertEquals(100, progress.percent());
+        assertTrue(progress.checked());
+        assertTrue(progress.reached100());
+        assertEquals(date.atTime(18, 54), progress.firstReached100At());
+    }
+
+    @Test
+    void liveWorkerProgressKeepsReachedOnceAfterNewFeasibleWorkArrives() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        LocalDateTime reachedAt = date.atTime(20, 0);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
+        when(workload.findCurrentProgress(any(), eq(date)))
+                .thenReturn(Map.of(7L, new Progress(
+                        30,
+                        35,
+                        0,
+                        86,
+                        false,
+                        true,
+                        reachedAt,
+                        reachedAt
+                )));
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Елена").build())
+                .build();
+
+        DailyWorkProgressResponse progress =
+                localService.workerProgressByWorkers(List.of(worker), date).get(7L);
+
+        assertEquals(30, progress.completed());
+        assertEquals(35, progress.total());
+        assertEquals(86, progress.percent());
+        assertFalse(progress.checked());
+        assertTrue(progress.reached100());
+        assertEquals(reachedAt, progress.firstReached100At());
+    }
+
+    @Test
+    void endOfDayResultKeepsReachedOnceAfterLaterFeasibleWorkArrives() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.of(2026, 7, 28);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
+        when(workload.findFinalizedProgress(any(), eq(date)))
+                .thenReturn(Map.of(7L, new Progress(
+                        30,
+                        35,
+                        0,
+                        86,
+                        false,
+                        true,
+                        date.atTime(20, 0),
+                        date.atTime(20, 0)
+                )));
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Елена").build())
+                .build();
+
+        DailyWorkProgressResponse progress = localService.workerEndOfDayProgressByWorkers(
+                List.of(worker),
+                date,
+                date.atTime(23, 0)
+        ).get(7L);
+
+        assertEquals(86, progress.percent());
+        assertEquals(5, progress.active());
+        assertTrue(progress.reached100());
+        assertEquals(date.atTime(20, 0), progress.firstReached100At());
     }
 
     @Test
@@ -161,7 +301,11 @@ class StaffDailyProgressServiceTest {
         AppSettingService settings = mock(AppSettingService.class);
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
         when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
-        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings);
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc,
+                settings,
+                mock(WorkloadShadowProgressReadService.class)
+        );
 
         localService.workerProgressBySubjects(
                 List.of(new StaffDailyProgressService.WorkerProgressSubject(7L, 70L, "worker")),
@@ -185,11 +329,64 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
+    void lifecycleUpsertUsesDeterministicKeyOrderAndKeepsCompletionAfterActiveDuplicate() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.of(2026, 7, 15);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            if (sql.contains(") active_items")) {
+                return List.of(
+                        activeItem(7L, "review_nagul", 11L, date.atTime(10, 0)),
+                        activeItem(7L, "order", 3L, date.atTime(10, 0)),
+                        activeItem(7L, "bad_task", 20L, date.atTime(10, 0))
+                );
+            }
+            if (sql.contains(") completed_items")) {
+                return List.of(
+                        completedItem(7L, 3L, date.atTime(10, 0), date.atTime(10, 0), date.atTime(12, 0)),
+                        completedItem(7L, 2L, date.atTime(10, 0), date.atTime(10, 0), date.atTime(11, 0))
+                );
+            }
+            return List.of();
+        });
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+
+        localService.workerProgressBySubjects(
+                List.of(new StaffDailyProgressService.WorkerProgressSubject(7L, 70L, "worker")),
+                date
+        );
+
+        ArgumentCaptor<SqlParameterSource[]> batchCaptor = ArgumentCaptor.forClass(SqlParameterSource[].class);
+        verify(localJdbc).batchUpdate(anyString(), batchCaptor.capture());
+        SqlParameterSource[] batch = batchCaptor.getValue();
+        assertEquals(List.of(
+                "bad_task:20",
+                "order:2",
+                "order:3",
+                "order:3",
+                "review_nagul:11"
+        ), java.util.Arrays.stream(batch)
+                .map(params -> String.valueOf(params.getValue("workItemKey")))
+                .toList());
+        assertTrue((Boolean) batch[2].getValue("active"));
+        assertFalse((Boolean) batch[3].getValue("active"));
+        assertEquals(date.atTime(12, 0), batch[3].getValue("closedAt"));
+    }
+
+    @Test
     void openMonthUsesPrimarySourcesForPublicationRates() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_MONTHLY_AGGREGATE_ENABLED, true)).thenReturn(true);
-        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings);
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc,
+                settings,
+                mock(WorkloadShadowProgressReadService.class)
+        );
 
         localService.rebuildMonthlyAggregates(LocalDate.of(2026, 7, 1), false);
 
@@ -236,5 +433,20 @@ class StaffDailyProgressServiceTest {
         row.put("added_at", Timestamp.valueOf(addedAt));
         row.put("done_at", Timestamp.valueOf(doneAt));
         return row;
+    }
+
+    private Map<String, Object> activeItem(
+            Long workerId,
+            String itemType,
+            Long itemId,
+            LocalDateTime openedAt
+    ) {
+        return Map.of(
+                "worker_id", workerId,
+                "item_type", itemType,
+                "item_id", itemId,
+                "opened_at", Timestamp.valueOf(openedAt),
+                "added_at", Timestamp.valueOf(openedAt)
+        );
     }
 }

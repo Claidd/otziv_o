@@ -17,6 +17,7 @@ import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
+import com.hunt.otziv.workload_shadow.service.WorkloadTransferTelegramCallbackService;
 import java.net.URI;
 import java.net.InetSocketAddress;
 import java.net.ProxySelector;
@@ -85,6 +86,8 @@ public class TelegramService extends TelegramLongPollingBot {
     private final ObjectProvider<WorkerRiskTelegramCallbackService> workerRiskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerControlWorkerTaskTelegramCallbackService> managerControlWorkerTaskTelegramCallbackServiceProvider;
     private final ObjectProvider<ManagerReportReviewTelegramService> managerReportReviewTelegramServiceProvider;
+    private ObjectProvider<WorkloadTransferTelegramCallbackService>
+            workloadTransferTelegramCallbackServiceProvider;
     private final TelegramChatMigrationService telegramChatMigrationService;
     private final ClientChatMessageTrackerService clientChatMessageTrackerService;
     private final HttpClient richMessageHttpClient;
@@ -119,6 +122,13 @@ public class TelegramService extends TelegramLongPollingBot {
                 null,
                 null
         );
+    }
+
+    @Autowired(required = false)
+    void setWorkloadTransferTelegramCallbackServiceProvider(
+            ObjectProvider<WorkloadTransferTelegramCallbackService> provider
+    ) {
+        this.workloadTransferTelegramCallbackServiceProvider = provider;
     }
 
     @Autowired
@@ -423,6 +433,23 @@ public class TelegramService extends TelegramLongPollingBot {
             if (reviewAnswer.isPresent()) {
                 log.info("Manager report review Telegram callback handled answer='{}'", reviewAnswer.get());
                 answerCallback(callbackQuery.getId(), reviewAnswer.get());
+                return;
+            }
+        }
+
+        WorkloadTransferTelegramCallbackService workloadTransferCallbackService =
+                workloadTransferTelegramCallbackServiceProvider == null
+                        ? null
+                        : workloadTransferTelegramCallbackServiceProvider.getIfAvailable();
+        if (workloadTransferCallbackService != null) {
+            Optional<String> workloadTransferAnswer =
+                    workloadTransferCallbackService.handle(callbackQuery);
+            if (workloadTransferAnswer.isPresent()) {
+                log.info(
+                        "Workload transfer Telegram callback handled answer='{}'",
+                        workloadTransferAnswer.get()
+                );
+                answerCallback(callbackQuery.getId(), workloadTransferAnswer.get());
                 return;
             }
         }

@@ -66,6 +66,24 @@ class ManagerTeamProgressServiceTest {
     }
 
     @Test
+    void snapshotKeepsPreservedAchievementAt100AfterLaterWorkArrives() {
+        LocalDate date = LocalDate.of(2026, 7, 17);
+        DailyWorkProgressResponse reachedEarlier = progress(date, 30, 5, 35, 86, true);
+
+        service.saveEndOfDaySnapshot(date, 7L, 70L, 1, List.of(reachedEarlier));
+
+        ArgumentCaptor<SqlParameterSource> captor = ArgumentCaptor.forClass(SqlParameterSource.class);
+        verify(jdbc).update(anyString(), captor.capture());
+        MapSqlParameterSource params = (MapSqlParameterSource) captor.getValue();
+        assertEquals(1, params.getValue("workerCount"));
+        assertEquals(1, params.getValue("workersAt100"));
+        assertEquals(30L, params.getValue("completed"));
+        assertEquals(35L, params.getValue("total"));
+        assertEquals("100.00", params.getValue("progressPercent").toString());
+        assertTrue((Boolean) params.getValue("reached100"));
+    }
+
+    @Test
     void snapshotIsRemovedWhenNoAssignedWorkerHadTasks() {
         LocalDate date = LocalDate.of(2026, 7, 17);
 
@@ -109,9 +127,28 @@ class ManagerTeamProgressServiceTest {
     }
 
     private DailyWorkProgressResponse progress(LocalDate date, long completed, long active, long total, int percent) {
-        return new DailyWorkProgressResponse(
+        return progress(date, completed, active, total, percent, total > 0 && percent >= 100 && active <= 0);
+    }
+
+    private DailyWorkProgressResponse progress(
+            LocalDate date,
+            long completed,
+            long active,
+            long total,
+            int percent,
+            boolean reached100
+    ) {
+        DailyWorkProgressResponse response = new DailyWorkProgressResponse(
                 true, "WORKER", date, completed, active, total, percent, false,
                 null, null, 0, 0, 0, null, null, 0, 0, 0, 0, 0
+        );
+        return response.withWorkloadProgress(
+                completed,
+                total,
+                percent,
+                reached100,
+                reached100 ? date.atTime(20, 0) : null,
+                reached100 ? date.atTime(20, 0) : null
         );
     }
 }

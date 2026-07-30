@@ -694,9 +694,7 @@ public class ApiAdminDictionaryController {
                 AppSettingService.REVIEW_ACCOUNT_WALK_DELAY_DAYS,
                 accountWalkDelayDays
         );
-        botAssignmentService.promoteReviewsWithWalkedAccounts(
-                reviewRepository.findByPublishFalseAndBotIsNotNull()
-        );
+        botAssignmentService.promoteAllUnpublishedReviewsWithWalkedAccounts();
         return new NagulSettingsResponse(
                 savedCooldownMinutes,
                 savedLookaheadDays,

@@ -5,6 +5,8 @@ import com.hunt.otziv.manager_performance.dto.ManagerPerformanceScoreResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Timestamp;
@@ -16,6 +18,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,6 +58,7 @@ public class StaffDailyProgressService {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AppSettingService appSettingService;
+    private final WorkloadShadowProgressReadService workloadShadowProgressReadService;
 
     @Transactional(readOnly = true)
     public boolean progressEnabled() {
@@ -267,7 +271,7 @@ public class StaffDailyProgressService {
         if (!progressEnabled() || workers == null || workers.isEmpty()) {
             return Map.of();
         }
-        return workerProgressBySubjectsInternal(workers.stream()
+        Map<Long, DailyWorkProgressResponse> legacy = workerProgressBySubjectsInternal(workers.stream()
                 .filter(Objects::nonNull)
                 .map(worker -> new WorkerProgressSubject(
                         worker.getId(),
@@ -275,11 +279,22 @@ public class StaffDailyProgressService {
                         workerName(worker.getUser())
                 ))
                 .toList(), date, ignoreOpenedAtOrAfter, false);
+        LocalDate safeDate = safeDate(date);
+        return applyWorkloadProgress(
+                legacy,
+                workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate)
+        );
     }
 
     @Transactional
     public Map<Long, DailyWorkProgressResponse> workerProgressBySubjects(Collection<WorkerProgressSubject> workers, LocalDate date) {
-        return workerProgressBySubjectsInternal(workers, date, null, true);
+        LocalDate safeDate = safeDate(date);
+        Map<Long, DailyWorkProgressResponse> legacy =
+                workerProgressBySubjectsInternal(workers, safeDate, null, true);
+        Map<Long, Progress> workload = safeDate.equals(progressToday())
+                ? workloadShadowProgressReadService.findCurrentProgress(legacy.keySet(), safeDate)
+                : workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate);
+        return applyWorkloadProgress(legacy, workload);
     }
 
     private Map<Long, DailyWorkProgressResponse> workerProgressBySubjectsInternal(
@@ -343,6 +358,31 @@ public class StaffDailyProgressService {
             rebuildMonthly(safeDate.withDayOfMonth(1), false);
         }
         return result;
+    }
+
+    private Map<Long, DailyWorkProgressResponse> applyWorkloadProgress(
+            Map<Long, DailyWorkProgressResponse> legacy,
+            Map<Long, Progress> workload
+    ) {
+        if (legacy == null || legacy.isEmpty() || workload == null || workload.isEmpty()) {
+            return legacy == null ? Map.of() : legacy;
+        }
+        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>(legacy);
+        workload.forEach((workerId, progress) -> {
+            DailyWorkProgressResponse current = result.get(workerId);
+            if (current == null || progress == null) {
+                return;
+            }
+            result.put(workerId, current.withWorkloadProgress(
+                    progress.completed(),
+                    progress.eligible(),
+                    progress.percent(),
+                    progress.reached100Once(),
+                    progress.firstReached100At(),
+                    progress.lastReached100At()
+            ));
+        });
+        return Map.copyOf(result);
     }
 
     static boolean includedInEndOfDay(LocalDateTime addedAt, LocalDateTime cutoff) {
@@ -1001,7 +1041,11 @@ public class StaffDailyProgressService {
                         effectiveSeconds(toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at"))),
                         isOverdue(stringValue(row.get("item_type")), toLocalDateTime(row.get("opened_at")), toLocalDateTime(row.get("done_at")))
                 );
-            if (includedInEndOfDay(item.addedAt(), ignoreOpenedAtOrAfter)) {
+            if (includedCompletedInEndOfDay(
+                    item.addedAt(),
+                    item.doneAt(),
+                    ignoreOpenedAtOrAfter
+            )) {
                 rowsByWorker.computeIfAbsent(item.workerId(), ignored -> new ArrayList<>()).add(item);
             }
         });
@@ -1147,6 +1191,16 @@ public class StaffDailyProgressService {
         return result;
     }
 
+    static boolean includedCompletedInEndOfDay(
+            LocalDateTime addedAt,
+            LocalDateTime doneAt,
+            LocalDateTime cutoff
+    ) {
+        return cutoff == null
+                || includedInEndOfDay(addedAt, cutoff)
+                || (doneAt != null && doneAt.isBefore(cutoff));
+    }
+
     /**
      * Reconstructs moments when the whole team's queue was empty. Individual
      * reached_100 flags cannot be aggregated because workers may have cleared
@@ -1274,6 +1328,14 @@ public class StaffDailyProgressService {
         if (batch.isEmpty()) {
             return;
         }
+        // Profile and team pages can recalculate overlapping workers concurrently.
+        // The source UNION queries do not guarantee row order, so updating the same
+        // lifecycle keys in different orders can create an InnoDB deadlock. Keep
+        // duplicate keys stable (active first, completion second) while acquiring
+        // locks in one deterministic order for every caller.
+        batch.sort(Comparator.comparing(params ->
+                String.valueOf(params.getValue("workItemKey"))
+        ));
         jdbc.batchUpdate("""
                 INSERT INTO worker_work_item_lifecycle (
                     work_item_key, worker_id, worker_user_id, section_code, item_type, item_id,
@@ -1517,7 +1579,12 @@ public class StaffDailyProgressService {
                        SUM(d.opened_count),
                        AVG(d.progress_percent),
                        SUM(CASE WHEN d.checked = 1 THEN 1 ELSE 0 END),
-                       SUM(CASE WHEN d.reached_100 = 1 THEN 1 ELSE 0 END),
+                       SUM(
+                           CASE
+                               WHEN COALESCE(shadow_daily.reached_100_once, d.reached_100) = 1 THEN 1
+                               ELSE 0
+                           END
+                       ),
                        SUM(d.order_completed_count),
                        SUM(d.nagul_completed_count),
                        CASE WHEN :closed THEN SUM(d.publish_completed_count) ELSE (
@@ -1575,8 +1642,11 @@ public class StaffDailyProgressService {
                        SUM(d.load_score),
                        AVG(d.efficiency_score),
                        :closed
-                FROM worker_daily_performance d
-                WHERE d.progress_date >= :monthStart
+                 FROM worker_daily_performance d
+                 LEFT JOIN workload_shadow_worker_daily shadow_daily
+                        ON shadow_daily.progress_date = d.progress_date
+                       AND shadow_daily.worker_id = d.worker_id
+                 WHERE d.progress_date >= :monthStart
                   AND d.progress_date < :nextMonth
                 GROUP BY d.worker_id
                 ON DUPLICATE KEY UPDATE

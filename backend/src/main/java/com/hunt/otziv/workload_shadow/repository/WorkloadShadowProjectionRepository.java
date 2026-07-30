@@ -21,6 +21,90 @@ public interface WorkloadShadowProjectionRepository
         extends Repository<WorkloadShadowWorkerDailyEntity, Long> {
 
     @Query(value = """
+            SELECT snapshot.worker_id AS workerId,
+                   snapshot.completed_units AS completedUnits,
+                   snapshot.eligible_units AS eligibleUnits,
+                   snapshot.late_excluded_units AS lateExcludedUnits,
+                   snapshot.progress_percent AS progressPercent,
+                   CASE
+                       WHEN snapshot.eligible_units > 0
+                        AND snapshot.progress_percent >= 100
+                       THEN 1
+                       ELSE 0
+                   END AS reached100,
+                   CASE
+                       WHEN daily.reached_100_once = TRUE
+                         OR (
+                             snapshot.eligible_units > 0
+                             AND snapshot.progress_percent >= 100
+                         )
+                       THEN 1
+                       ELSE 0
+                   END AS reached100Once,
+                   COALESCE(
+                       daily.first_reached_100_at,
+                       CASE
+                           WHEN snapshot.eligible_units > 0
+                            AND snapshot.progress_percent >= 100
+                           THEN snapshot.snapshot_at
+                           ELSE NULL
+                       END
+                   ) AS firstReached100At,
+                   COALESCE(
+                       daily.last_reached_100_at,
+                       CASE
+                           WHEN snapshot.eligible_units > 0
+                            AND snapshot.progress_percent >= 100
+                           THEN snapshot.snapshot_at
+                           ELSE NULL
+                       END
+                   ) AS lastReached100At
+            FROM workload_shadow_worker_current snapshot
+            LEFT JOIN workload_shadow_worker_daily daily
+                   ON daily.progress_date = snapshot.progress_date
+                  AND daily.worker_id = snapshot.worker_id
+            WHERE snapshot.progress_date = :progressDate
+              AND snapshot.worker_id IN (:workerIds)
+            """, nativeQuery = true)
+    List<WorkloadShadowProgressView> findCurrentWorkerProgress(
+            @Param("workerIds") Collection<Long> workerIds,
+            @Param("progressDate") LocalDate progressDate
+    );
+
+    @Query(value = """
+            SELECT daily.worker_id
+            FROM workload_shadow_worker_daily daily
+            WHERE daily.progress_date = :progressDate
+              AND daily.worker_id IN (:workerIds)
+              AND daily.reached_100_once = TRUE
+            """, nativeQuery = true)
+    List<Long> findWorkersReached100Once(
+            @Param("workerIds") Collection<Long> workerIds,
+            @Param("progressDate") LocalDate progressDate
+    );
+
+    @Query(value = """
+            SELECT daily.worker_id AS workerId,
+                   daily.completed_units AS completedUnits,
+                   daily.eligible_units AS eligibleUnits,
+                   daily.late_excluded_units AS lateExcludedUnits,
+                   daily.progress_percent AS progressPercent,
+                   CASE WHEN daily.reached_100 = TRUE THEN 1 ELSE 0 END AS reached100,
+                   CASE WHEN daily.reached_100_once = TRUE THEN 1 ELSE 0 END AS reached100Once,
+                   daily.first_reached_100_at AS firstReached100At,
+                   daily.last_reached_100_at AS lastReached100At
+            FROM workload_shadow_worker_daily daily
+            WHERE daily.progress_date = :progressDate
+              AND daily.worker_id IN (:workerIds)
+              AND daily.finalized = TRUE
+              AND daily.finalization_status = 'ON_TIME'
+            """, nativeQuery = true)
+    List<WorkloadShadowProgressView> findFinalizedWorkerProgress(
+            @Param("workerIds") Collection<Long> workerIds,
+            @Param("progressDate") LocalDate progressDate
+    );
+
+    @Query(value = """
             SELECT assignment.worker_id,
                    worker.user_id AS worker_user_id,
                    assignment.manager_id,
@@ -914,9 +998,9 @@ public interface WorkloadShadowProjectionRepository
                        ) AS latest_rank
                 FROM (
                     SELECT daily.worker_id,
-                           CASE WHEN daily.reached_100 = TRUE THEN 1 ELSE 0 END AS hundred_day,
+                           CASE WHEN daily.reached_100_once = TRUE THEN 1 ELSE 0 END AS hundred_day,
                            CASE
-                               WHEN daily.reached_100 = FALSE
+                               WHEN daily.reached_100_once = FALSE
                                 AND daily.freeze_applied = FALSE THEN 1
                                ELSE 0
                            END AS failure_day,
@@ -989,7 +1073,7 @@ public interface WorkloadShadowProjectionRepository
             SELECT daily.worker_id,
                    daily.progress_date,
                    daily.eligible_units,
-                   daily.reached_100,
+                   daily.reached_100_once AS reached_100,
                    COALESCE(account.available_credits, 0) AS available_credits,
                    COALESCE(account.successful_days_since_credit, 0) AS successful_days,
                    COALESCE(account.earned_total, 0) AS earned_total,
@@ -1109,6 +1193,19 @@ public interface WorkloadShadowProjectionRepository
                 )
             ) decision_row
             ON DUPLICATE KEY UPDATE
+                decision_code = CASE
+                    WHEN workload_shadow_late_batches.decision_code = 'MANDATORY'
+                      OR VALUES(decision_code) = 'MANDATORY'
+                        THEN 'MANDATORY'
+                    ELSE VALUES(decision_code)
+                END,
+                decision_origin = CASE
+                    WHEN workload_shadow_late_batches.decision_code = 'MANDATORY'
+                        THEN workload_shadow_late_batches.decision_origin
+                    WHEN VALUES(decision_code) = 'MANDATORY'
+                        THEN VALUES(decision_origin)
+                    ELSE VALUES(decision_origin)
+                END,
                 remaining_units = VALUES(remaining_units),
                 remaining_estimated_minutes = VALUES(remaining_estimated_minutes),
                 last_seen_at = VALUES(last_seen_at),
@@ -1282,7 +1379,9 @@ public interface WorkloadShadowProjectionRepository
                 completed_units, active_units, late_excluded_units, eligible_units,
                 progress_percent, rating, planned_units, incoming_units, urgent_units,
                 external_blocked_units, client_deferred_units, manager_deferred_units,
-                reached_100, finalized, finalization_status,
+                reached_100, reached_100_once,
+                first_reached_100_at, last_reached_100_at,
+                finalized, finalization_status,
                 first_snapshot_at, last_snapshot_at, finalized_at
             )
             SELECT snapshot.progress_date,
@@ -1302,6 +1401,15 @@ public interface WorkloadShadowProjectionRepository
                    snapshot.client_deferred_units,
                    snapshot.manager_deferred_units,
                    snapshot.reached_100,
+                   snapshot.reached_100,
+                   CASE
+                       WHEN snapshot.reached_100 = TRUE THEN snapshot.snapshot_at
+                       ELSE NULL
+                   END,
+                   CASE
+                       WHEN snapshot.reached_100 = TRUE THEN snapshot.snapshot_at
+                       ELSE NULL
+                   END,
                    :finalized,
                    CASE WHEN :finalized = TRUE THEN 'ON_TIME' ELSE 'LIVE' END,
                    snapshot.snapshot_at,
@@ -1404,6 +1512,40 @@ public interface WorkloadShadowProjectionRepository
                         workload_shadow_worker_daily.finalized = TRUE,
                         workload_shadow_worker_daily.manager_deferred_units,
                         VALUES(manager_deferred_units)
+                    ),
+                reached_100_once =
+                    IF(
+                        workload_shadow_worker_daily.finalized = TRUE,
+                        workload_shadow_worker_daily.reached_100_once,
+                        CASE
+                            WHEN workload_shadow_worker_daily.reached_100_once = TRUE
+                              OR VALUES(reached_100) = TRUE
+                            THEN TRUE
+                            ELSE FALSE
+                        END
+                    ),
+                first_reached_100_at =
+                    IF(
+                        workload_shadow_worker_daily.finalized = TRUE,
+                        workload_shadow_worker_daily.first_reached_100_at,
+                        CASE
+                            WHEN workload_shadow_worker_daily.first_reached_100_at IS NOT NULL
+                                THEN workload_shadow_worker_daily.first_reached_100_at
+                            WHEN VALUES(reached_100) = TRUE
+                                THEN VALUES(first_reached_100_at)
+                            ELSE NULL
+                        END
+                    ),
+                last_reached_100_at =
+                    IF(
+                        workload_shadow_worker_daily.finalized = TRUE,
+                        workload_shadow_worker_daily.last_reached_100_at,
+                        CASE
+                            WHEN workload_shadow_worker_daily.reached_100 = FALSE
+                             AND VALUES(reached_100) = TRUE
+                                THEN VALUES(last_reached_100_at)
+                            ELSE workload_shadow_worker_daily.last_reached_100_at
+                        END
                     ),
                 reached_100 = IF(
                     workload_shadow_worker_daily.finalized = TRUE,

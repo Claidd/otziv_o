@@ -9,6 +9,7 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
@@ -50,9 +51,11 @@ public class ReviewBotChangeService {
     private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final BusinessAuditService businessAuditService;
     private final ReviewBotAssignmentExclusionService assignmentExclusionService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public void changeBot(Long reviewId) {
+        assignmentMutationGuardService.assertReview(reviewId);
         try {
             log.info("1. Начинаем замену бота для отзыва ID {}", reviewId);
             Review review = getReviewToChangeBot(reviewId);
@@ -78,6 +81,7 @@ public class ReviewBotChangeService {
 
     @Transactional
     public void deActivateAndChangeBot(Long reviewId, Long botId) {
+        assignmentMutationGuardService.assertReview(reviewId);
         try {
             Review review = findReviewForBotChange(reviewId).orElse(null);
             if (review == null) {
@@ -122,6 +126,7 @@ public class ReviewBotChangeService {
 
     @Transactional
     public void assignNewAccount(Long reviewId) {
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = findReviewForBotChange(reviewId)
                 .orElseThrow(() -> new RuntimeException("Отзыв не найден"));
 

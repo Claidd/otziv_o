@@ -23,6 +23,7 @@ import com.hunt.otziv.p_products.statistics.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchiveSourceReason;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionService;
@@ -120,6 +121,9 @@ class OrderServiceImplTest {
 
     @Mock
     private ReviewBotAssignmentExclusionService botAssignmentExclusionService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @InjectMocks
     private OrderServiceImpl orderService;

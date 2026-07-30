@@ -449,6 +449,7 @@ input[type='month'] {
 .people-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr));
+  align-items: start;
   gap: 1rem;
 }
 
@@ -768,6 +769,15 @@ dd {
   font-size: 0.95rem;
 }
 
+.progress-details[open] {
+  padding-bottom: 0.55rem;
+}
+
+.progress-details[open] summary {
+  border-bottom: 1px solid var(--otziv-surface-border-neutral);
+  padding-bottom: 0.35rem;
+}
+
 .progress-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -946,6 +956,42 @@ dd {
 
 .empty-state span {
   font-size: 3rem;
+}
+
+@media (min-width: 861px) {
+  .person-card:has(.progress-details[open]),
+  .person-card:has(.network-violation-details[open]) {
+    grid-column: span 2;
+  }
+
+  .person-card:has(details[open]) .person-identity {
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: auto;
+    align-items: center;
+  }
+
+  .person-card:has(details[open]) .avatar-link {
+    width: 3.6rem;
+    height: 3.6rem;
+  }
+
+  .person-card:has(details[open]) .stats-grid,
+  .person-card:has(.progress-details[open]) .progress-detail-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .person-card:has(details[open]) .stat-cell dt,
+  .person-card:has(.progress-details[open]) .progress-detail-grid small {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .person-card:has(details[open]) .status-list {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
 }
 
 @media (max-width: 760px) {

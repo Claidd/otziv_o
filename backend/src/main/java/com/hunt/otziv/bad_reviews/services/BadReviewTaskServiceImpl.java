@@ -24,6 +24,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -83,6 +84,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewBotAssignmentGuardService assignmentGuardService;
     private final ReviewAccountWalkScheduleService accountWalkScheduleService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final SecureRandom random = new SecureRandom();
 
     @Override
@@ -816,6 +818,7 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         if (taskId == null || taskId <= 0) {
             throw new EntityNotFoundException("Плохая задача не найдена");
         }
+        assignmentMutationGuardService.assertBadTask(taskId);
         return badReviewTaskRepository.findByIdForMutation(taskId)
                 .or(() -> badReviewTaskRepository.findById(taskId))
                 .orElseThrow(() -> new EntityNotFoundException("Плохая задача не найдена: " + taskId));

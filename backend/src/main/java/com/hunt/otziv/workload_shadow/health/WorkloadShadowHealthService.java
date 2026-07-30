@@ -2,6 +2,7 @@ package com.hunt.otziv.workload_shadow.health;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.workload_shadow.metrics.WorkloadShadowMetrics;
+import com.hunt.otziv.workload_shadow.maintenance.WorkloadMaintenanceStatusService;
 import com.hunt.otziv.workload_shadow.notification.WorkloadShadowNotificationDispatcher;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowNotificationStore;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowBusinessTime;
@@ -17,6 +18,7 @@ public class WorkloadShadowHealthService {
     private static final String STALE_RUN_MINUTES = "workload.shadow.stale-run-minutes";
 
     private final WorkloadShadowNotificationStore store;
+    private final WorkloadMaintenanceStatusService maintenanceStatusService;
     private final AppSettingService settings;
     private final WorkloadShadowMetrics metrics;
     private final Clock clock;
@@ -24,19 +26,28 @@ public class WorkloadShadowHealthService {
     @Autowired
     public WorkloadShadowHealthService(
             WorkloadShadowNotificationStore store,
+            WorkloadMaintenanceStatusService maintenanceStatusService,
             AppSettingService settings,
             WorkloadShadowMetrics metrics
     ) {
-        this(store, settings, metrics, Clock.systemDefaultZone());
+        this(
+                store,
+                maintenanceStatusService,
+                settings,
+                metrics,
+                Clock.systemDefaultZone()
+        );
     }
 
     WorkloadShadowHealthService(
             WorkloadShadowNotificationStore store,
+            WorkloadMaintenanceStatusService maintenanceStatusService,
             AppSettingService settings,
             WorkloadShadowMetrics metrics,
             Clock clock
     ) {
         this.store = store;
+        this.maintenanceStatusService = maintenanceStatusService;
         this.settings = settings;
         this.metrics = metrics;
         this.clock = clock;
@@ -59,6 +70,12 @@ public class WorkloadShadowHealthService {
         long snapshotAgeSeconds = data.lastSnapshotAt() == null
                 ? 0
                 : Math.max(0, Duration.between(data.lastSnapshotAt(), now).toSeconds());
+        WorkloadMaintenanceHealthSnapshot maintenance;
+        try {
+            maintenance = maintenanceStatusService.health(now);
+        } catch (RuntimeException exception) {
+            maintenance = unavailableMaintenance(exception);
+        }
 
         String status;
         if (data.staleProcessingEvents() > 0
@@ -69,6 +86,7 @@ public class WorkloadShadowHealthService {
                 || data.missingGroupBindings() > 0
                 || data.graphWarningCases() > 0
                 || data.graphErrorCases() > 0
+                || !maintenance.healthy()
                 || (notificationsEnabled && oldestDueAgeSeconds > 300)) {
             status = "DEGRADED";
         } else if (!notificationsEnabled) {
@@ -95,7 +113,8 @@ public class WorkloadShadowHealthService {
                 oldestDueAgeSeconds,
                 data.oldestDueEventAt(),
                 data.lastSuccessfulRunAt(),
-                data.lastSnapshotAt()
+                data.lastSnapshotAt(),
+                maintenance
         );
         metrics.updateHealth(snapshot);
         return snapshot;
@@ -103,5 +122,29 @@ public class WorkloadShadowHealthService {
 
     private int bounded(int value, int minimum, int maximum) {
         return Math.max(minimum, Math.min(maximum, value));
+    }
+
+    private WorkloadMaintenanceHealthSnapshot unavailableMaintenance(
+            RuntimeException exception
+    ) {
+        String message = exception.getMessage();
+        if (message != null && message.length() > 1000) {
+            message = message.substring(0, 1000);
+        }
+        return new WorkloadMaintenanceHealthSnapshot(
+                false,
+                "HEALTH_CHECK_FAILED",
+                "HEALTH_CHECK_FAILED",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                0,
+                exception.getClass().getSimpleName(),
+                message
+        );
     }
 }

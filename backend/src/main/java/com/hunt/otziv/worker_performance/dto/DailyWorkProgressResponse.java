@@ -208,4 +208,62 @@ public record DailyWorkProgressResponse(
                 closedPeriod
         );
     }
+
+    public DailyWorkProgressResponse withWorkloadProgress(
+            long completedValue,
+            long eligibleValue,
+            int percentValue,
+            boolean reached100Value,
+            LocalDateTime firstReached100AtValue,
+            LocalDateTime lastReached100AtValue
+    ) {
+        long safeCompleted = Math.max(0, completedValue);
+        long safeEligible = Math.max(safeCompleted, eligibleValue);
+        boolean workloadChecked = safeEligible == 0 || safeCompleted >= safeEligible;
+        return new DailyWorkProgressResponse(
+                visible,
+                roleType,
+                date,
+                safeCompleted,
+                safeEligible - safeCompleted,
+                safeEligible,
+                Math.max(0, Math.min(100, percentValue)),
+                workloadChecked,
+                firstCompletedAt,
+                lastCompletedAt,
+                averageCloseSeconds,
+                medianCloseSeconds,
+                p90CloseSeconds,
+                firstActivityAt,
+                lastActivityAt,
+                activeWorkSeconds,
+                workWindowSeconds,
+                activityEvents,
+                loadScore,
+                efficiencyScore,
+                openedCount,
+                orderCompletedCount,
+                nagulCompletedCount,
+                publishCompletedCount,
+                badCompletedCount,
+                recoveryCompletedCount,
+                recoveryCreatedCount,
+                orderOverdueCount,
+                totalOverdueCount,
+                speedScore,
+                disciplineScore,
+                workloadScore,
+                botChangeCount,
+                botBlockCount,
+                reached100Value,
+                reached100Value ? firstReached100AtValue : null,
+                reached100Value ? lastReached100AtValue : null,
+                periodType,
+                workingDays,
+                checkedDays,
+                reached100Days,
+                closedPeriod
+        );
+    }
+
 }

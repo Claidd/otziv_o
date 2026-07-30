@@ -11,6 +11,7 @@ import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
 import com.hunt.otziv.config.email.EmailService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,6 +77,9 @@ class ReviewBotChangeServiceTest {
 
     @Mock
     private ReviewBotAssignmentExclusionService assignmentExclusionService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @BeforeEach
     void allowCompanyLocks() {
@@ -447,7 +451,8 @@ class ReviewBotChangeServiceTest {
                 botCooldownService,
                 assignmentGuardService,
                 businessAuditService,
-                assignmentExclusionService
+                assignmentExclusionService,
+                assignmentMutationGuardService
         );
     }
 

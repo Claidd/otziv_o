@@ -14,6 +14,176 @@ import org.springframework.data.repository.query.Param;
 public interface WorkloadShadowEventRepository
         extends Repository<WorkloadShadowEventEntity, Long> {
 
+    @Modifying
+    @Query(value = """
+            INSERT INTO workload_shadow_events (
+                deduplication_key,
+                severity,
+                event_type,
+                manager_id,
+                worker_id,
+                company_id,
+                transfer_case_id,
+                title,
+                message,
+                target_group_type,
+                target_group_chat_id,
+                delivery_status,
+                delivery_attempts,
+                occurrence_count,
+                first_seen_at,
+                last_seen_at,
+                next_attempt_at,
+                active
+            )
+            SELECT CONCAT(
+                       'LIVE_EXECUTION_FAILURE:',
+                       workflow.workload_transfer_workflow_id,
+                       ':',
+                       :errorCode
+                   ),
+                   'CRITICAL',
+                   'LIVE_EXECUTION_FAILURE',
+                   workflow.manager_id,
+                   workflow.source_worker_id,
+                   workflow.company_id,
+                   workflow.shadow_case_id,
+                   'Ошибка применения LIVE-передачи',
+                   CONCAT(
+                       'LIVE. Передача компании «',
+                       COALESCE(workflow.company_title, CONCAT('#', workflow.company_id)),
+                       '» не выполнена. Workflow #',
+                       workflow.workload_transfer_workflow_id,
+                       '. Код: ',
+                       :errorCode,
+                       '. ',
+                       :errorMessage,
+                       ' Назначения не изменены; workflow заблокирован для проверки.'
+                   ),
+                   'ADMIN_OWNER_MONITORING',
+                   :notificationGroupChatId,
+                   CASE
+                       WHEN :notificationsEnabled = FALSE THEN 'SKIPPED'
+                       WHEN :notificationGroupChatId IS NULL
+                         OR :notificationGroupChatId >= 0
+                           THEN 'MISSING_GROUP_BINDING'
+                       ELSE 'PENDING'
+                   END,
+                   0,
+                   1,
+                   :now,
+                   :now,
+                   CASE
+                       WHEN :notificationsEnabled = TRUE
+                        AND :notificationGroupChatId IS NOT NULL
+                        AND :notificationGroupChatId < 0
+                           THEN :now
+                       ELSE NULL
+                   END,
+                   TRUE
+            FROM workload_transfer_workflows workflow
+            WHERE workflow.workload_transfer_workflow_id = :workflowId
+            ON DUPLICATE KEY UPDATE
+                severity = 'CRITICAL',
+                title = 'Ошибка применения LIVE-передачи',
+                message = CONCAT(
+                    'LIVE. Повторная ошибка применения workflow #',
+                    :workflowId,
+                    '. Код: ',
+                    :errorCode,
+                    '. ',
+                    :errorMessage,
+                    ' Назначения не изменены; workflow заблокирован для проверки.'
+                ),
+                target_group_type = 'ADMIN_OWNER_MONITORING',
+                target_group_chat_id = :notificationGroupChatId,
+                delivery_attempts = CASE
+                    WHEN workload_shadow_events.active = FALSE THEN 0
+                    ELSE workload_shadow_events.delivery_attempts
+                END,
+                delivery_status = CASE
+                    WHEN :notificationsEnabled = FALSE THEN 'SKIPPED'
+                    WHEN :notificationGroupChatId IS NULL
+                      OR :notificationGroupChatId >= 0
+                        THEN 'MISSING_GROUP_BINDING'
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status IN (
+                         'PENDING',
+                         'RETRY',
+                         'PROCESSING'
+                     )
+                        THEN workload_shadow_events.delivery_status
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status = 'DEAD'
+                        THEN 'DEAD'
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status = 'SENT'
+                     AND workload_shadow_events.delivered_at >= :cooldownStart
+                        THEN 'SENT'
+                    ELSE 'PENDING'
+                END,
+                next_attempt_at = CASE
+                    WHEN :notificationsEnabled = FALSE
+                      OR :notificationGroupChatId IS NULL
+                      OR :notificationGroupChatId >= 0
+                        THEN NULL
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status IN (
+                         'PENDING',
+                         'RETRY',
+                         'PROCESSING',
+                         'DEAD'
+                     )
+                        THEN workload_shadow_events.next_attempt_at
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status = 'SENT'
+                     AND workload_shadow_events.delivered_at >= :cooldownStart
+                        THEN workload_shadow_events.next_attempt_at
+                    ELSE :now
+                END,
+                processing_started_at = CASE
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status = 'PROCESSING'
+                        THEN workload_shadow_events.processing_started_at
+                    ELSE NULL
+                END,
+                processing_lease_until = CASE
+                    WHEN workload_shadow_events.active = TRUE
+                     AND workload_shadow_events.delivery_status = 'PROCESSING'
+                        THEN workload_shadow_events.processing_lease_until
+                    ELSE NULL
+                END,
+                last_error_code = CASE
+                    WHEN :notificationsEnabled = FALSE
+                        THEN 'NOTIFICATIONS_DISABLED'
+                    WHEN :notificationGroupChatId IS NULL
+                      OR :notificationGroupChatId >= 0
+                        THEN 'MISSING_GROUP_BINDING'
+                    ELSE NULL
+                END,
+                last_error = CASE
+                    WHEN :notificationsEnabled = FALSE
+                        THEN 'Telegram-уведомления выключены'
+                    WHEN :notificationGroupChatId IS NULL
+                      OR :notificationGroupChatId >= 0
+                        THEN 'Не настроена общая Telegram-группа администраторов и владельцев'
+                    ELSE NULL
+                END,
+                occurrence_count = workload_shadow_events.occurrence_count + 1,
+                last_seen_at = :now,
+                active = TRUE,
+                resolved_at = NULL
+            """, nativeQuery = true)
+    int upsertLiveExecutionFailure(
+            @Param("workflowId") long workflowId,
+            @Param("errorCode") String errorCode,
+            @Param("errorMessage") String errorMessage,
+            @Param("notificationsEnabled") boolean notificationsEnabled,
+            @Param("notificationGroupChatId") Long notificationGroupChatId,
+            @Param("now") LocalDateTime now,
+            @Param("cooldownStart") LocalDateTime cooldownStart
+    );
+
     @Query(value = """
             SELECT workload_shadow_event_id
             FROM workload_shadow_events
@@ -183,7 +353,13 @@ public interface WorkloadShadowEventRepository
     @Modifying
     @Query(value = """
             DELETE FROM workload_shadow_events
-            WHERE active = 0
+            WHERE (
+                    active = 0
+                    OR (
+                        active = 1
+                        AND event_type = 'LIVE_EXECUTION_FAILURE'
+                    )
+              )
               AND delivery_status IN (
                 'SENT',
                 'CANCELLED',
@@ -259,6 +435,7 @@ public interface WorkloadShadowEventRepository
                            THEN first_seen_at
                        END) AS oldest_due_event_at
                 FROM workload_shadow_events
+                WHERE event_type <> 'MISSING_MANAGER_GROUP'
             ) event_counts
             CROSS JOIN (
                 SELECT COUNT(CASE

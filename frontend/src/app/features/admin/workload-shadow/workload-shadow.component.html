@@ -3,13 +3,20 @@
     <header class="page-toolbar">
       <div>
         <div class="eyebrow">
-          <span class="material-icons-sharp">visibility</span>
-          Теневой контур
+          <span class="material-icons-sharp">
+            {{ liveSettings()?.applyEnabled ? 'swap_horiz' : 'visibility' }}
+          </span>
+          {{ liveSettings()?.applyEnabled ? 'Защищённый контур' : 'Теневой контур' }}
         </div>
         <h1>Мониторинг нагрузки</h1>
         <p>
-          Система только рассчитывает и предлагает решения. Компании, заказы и карточки
-          автоматически не передаются.
+          @if (liveSettings()?.applyEnabled) {
+            Предложения и передачи выполняются только после всех предохранителей.
+            Актуальный режим: {{ statusLabel(liveSettings()?.mode) }}.
+          } @else {
+            Система только рассчитывает и предлагает решения. Компании, заказы и карточки
+            автоматически не передаются.
+          }
         </p>
       </div>
 
@@ -54,6 +61,56 @@
         />
       }
 
+      <section class="live-control" [attr.data-mode]="liveSettings()?.mode || 'SHADOW'">
+        <div>
+          <span class="material-icons-sharp">verified_user</span>
+          <div>
+            <strong>Режим передачи: {{ statusLabel(liveSettings()?.mode || 'SHADOW') }}</strong>
+            <small>
+              {{ liveSettings()?.applyEnabled
+                ? 'Разрешено защищённое применение'
+                : 'Назначения не изменяются' }}
+            </small>
+          </div>
+        </div>
+        <div class="live-actions">
+          <button type="button" class="secondary-button" [disabled]="liveBusy()" (click)="checkLiveReadiness('CANARY')">
+            Проверить CANARY
+          </button>
+          <button type="button" class="secondary-button" [disabled]="liveBusy()" (click)="checkLiveReadiness('LIVE')">
+            Проверить LIVE
+          </button>
+          @if (canControlLive() && !liveSettings()?.applyEnabled) {
+            <button type="button" class="primary-button" [disabled]="liveBusy()" (click)="activateLive('CANARY')">
+              Включить CANARY
+            </button>
+            <button type="button" class="secondary-button" [disabled]="liveBusy()" (click)="activateLive('LIVE')">
+              Включить LIVE
+            </button>
+          }
+          @if (liveSettings()?.applyEnabled) {
+            <button type="button" class="danger-button" [disabled]="liveBusy()" (click)="stopLive()">
+              Аварийная остановка
+            </button>
+          }
+        </div>
+        @if (liveReadiness()) {
+          <div class="readiness-grid">
+            @for (check of liveReadiness()!.checks; track check.code) {
+              <article [attr.data-status]="check.status">
+                <span class="material-icons-sharp">
+                  {{ check.status === 'PASS' ? 'check_circle' : 'error' }}
+                </span>
+                <div>
+                  <strong>{{ readinessCheckLabel(check.code) }}</strong>
+                  <small>{{ check.message }}</small>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
       <section class="metric-grid" aria-label="Сводные показатели">
         @for (metric of metrics(); track metric.label) {
           <article
@@ -91,7 +148,6 @@
                   <th>Специалисты 100%</th>
                   <th>Готовится передач</th>
                   <th>Кадровый сигнал</th>
-                  <th>Audit-группа</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,7 +158,6 @@
                     <td>{{ manager.workersAt100 ?? manager.hundredPercentWorkers ?? 0 }}/{{ manager.workerCount }}</td>
                     <td>{{ manager.transferCaseCount ?? manager.pendingProposals ?? 0 }}</td>
                     <td>{{ manager.staffingRequired ? 'Нужен сотрудник' : 'Нет' }}</td>
-                    <td>{{ manager.groupConnected ? 'Подключена' : 'Не подключена' }}</td>
                   </tr>
                 }
               </tbody>
@@ -196,6 +251,14 @@
             <strong>{{ health()?.repairedItems ?? 0 }}</strong>
           </div>
           <div>
+            <small>Самовосстановление</small>
+            <strong>{{ statusLabel(health()?.maintenance?.repairStatus) }}</strong>
+          </div>
+          <div>
+            <small>Очистка истории</small>
+            <strong>{{ statusLabel(health()?.maintenance?.retentionStatus) }}</strong>
+          </div>
+          <div>
             <small>Выгул одной карточки</small>
             <strong>{{ summary()?.walkEstimate?.effectiveMinutes ?? settings()?.walkMinutesPerCard ?? 4 }} мин</strong>
           </div>
@@ -243,6 +306,82 @@
             <span class="material-icons-sharp">verified</span>
             Активных диагностических предупреждений нет.
           </p>
+        }
+      </section>
+
+      <section class="monitor-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">emergency_share</span>
+            <div>
+              <h2>Аварийные межкомандные карточки</h2>
+              <p>Только одна карточка после кадрового сигнала. Компания и заказ между менеджерами не передаются.</p>
+            </div>
+          </div>
+          <span class="status-badge">{{ emergencyAssignments().length }}</span>
+        </div>
+        @if (emergencyAssignments().length) {
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Компания / карточка</th>
+                  <th>Исходная команда</th>
+                  <th>Резервная команда</th>
+                  <th>Причина</th>
+                  <th>Уведомления</th>
+                  <th>Статус</th>
+                  <th>Откат</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (assignment of emergencyAssignments(); track assignment.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ assignment.companyTitle }}</strong>
+                      <small class="stacked">карточка #{{ assignment.reviewId }}</small>
+                    </td>
+                    <td>
+                      {{ assignment.sourceWorkerName }}
+                      <small class="stacked">{{ assignment.sourceManagerName }}</small>
+                    </td>
+                    <td>
+                      {{ assignment.targetWorkerName }}
+                      <small class="stacked">{{ assignment.targetManagerName }}</small>
+                    </td>
+                    <td><span class="stacked">{{ assignment.reason }}</span></td>
+                    <td>
+                      <span class="stacked">
+                        группа специалиста: {{ statusLabel(assignment.targetNotificationStatus) }}
+                        audit-группа: {{ statusLabel(assignment.auditNotificationStatus) }}
+                        попыток: {{ assignment.notificationAttempts }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="status-badge" [attr.data-status]="assignment.status">
+                        {{ statusLabel(assignment.status) }}
+                      </span>
+                      @if (assignment.lastError) {
+                        <small class="stacked">{{ assignment.lastError }}</small>
+                      }
+                    </td>
+                    <td>
+                      @if (canControlLive() && canRollbackEmergency(assignment)) {
+                        <button type="button" class="danger-button compact-button" [disabled]="liveBusy()" (click)="rollbackEmergency(assignment)">
+                          Откатить
+                        </button>
+                        <small class="stacked">до {{ assignment.rollbackDeadlineAt | date:'HH:mm:ss' }}</small>
+                      } @else {
+                        <span class="muted">Недоступен</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="empty-state">Аварийных межкомандных назначений нет.</p>
         }
       </section>
 
@@ -382,6 +521,145 @@
             <span class="material-icons-sharp">person_search</span>
             По выбранным условиям специалистов нет.
           </p>
+        }
+      </section>
+
+      <section class="monitor-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">conversion_path</span>
+            <div>
+              <h2>Цепочки защищённой передачи</h2>
+              <p>Кому предложено, кто согласился, что ожидает владельца и почему остановлено.</p>
+            </div>
+          </div>
+          <span class="status-badge">{{ liveWorkflows().length }}</span>
+        </div>
+        @if (liveWorkflows().length) {
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Компания</th>
+                  <th>От кого → кому</th>
+                  <th>Менеджер</th>
+                  <th>Пакет</th>
+                  <th>Кандидаты</th>
+                  <th>Статус</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (workflow of liveWorkflows(); track workflow.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ workflow.companyTitle }}</strong>
+                      <small class="stacked">#{{ workflow.companyId }} · {{ workflow.mode }}</small>
+                    </td>
+                    <td>
+                      {{ workflow.sourceWorkerName }}
+                      <span aria-hidden="true">→</span>
+                      {{ workflow.targetWorkerName || 'ожидается' }}
+                    </td>
+                    <td>{{ workflow.managerName }}</td>
+                    <td>
+                      <span class="stacked">
+                        заказов {{ workflow.activeOrderCount }};
+                        карточек {{ workflow.newUnitCount + workflow.nagulCount + workflow.publishCount }};
+                        восстановлений {{ workflow.recoveryCount }};
+                        плохих {{ workflow.badCount }}
+                      </span>
+                    </td>
+                    <td>
+                      {{ workflow.candidateCount }}
+                      <small class="stacked">
+                        отказов {{ workflow.declinedCandidateCount }},
+                        недоступно {{ workflow.unavailableCandidateCount }}
+                      </small>
+                    </td>
+                    <td>
+                      <span class="status-badge" [attr.data-status]="workflow.status">
+                        {{ statusLabel(workflow.status) }}
+                      </span>
+                      @if (workflow.lastErrorMessage) {
+                        <small class="stacked danger-text">{{ workflow.lastErrorMessage }}</small>
+                      }
+                    </td>
+                    <td>
+                      @if (workflow.status === 'AWAITING_OWNER_CONFIRMATION' && canControlLive()) {
+                        <button type="button" class="primary-button compact-button" [disabled]="liveBusy()" (click)="confirmWorkflow(workflow)">
+                          Подтвердить
+                        </button>
+                      } @else {
+                        <span class="muted">—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="empty-state">Боевых цепочек пока нет. В SHADOW это нормальное состояние.</p>
+        }
+      </section>
+
+      <section class="monitor-section">
+        <div class="section-heading">
+          <div>
+            <span class="material-icons-sharp">history</span>
+            <div>
+              <h2>Журнал фактических передач</h2>
+              <p>Точный состав применённой транзакции и доступность безопасного отката.</p>
+            </div>
+          </div>
+          <span class="status-badge">{{ liveExecutions().length }}</span>
+        </div>
+        @if (liveExecutions().length) {
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Компания</th>
+                  <th>От кого → кому</th>
+                  <th>Состав</th>
+                  <th>Применено</th>
+                  <th>Статус</th>
+                  <th>Откат</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (execution of liveExecutions(); track execution.id) {
+                  <tr>
+                    <td><strong>{{ execution.companyTitle }}</strong><small class="stacked">операция #{{ execution.id }}</small></td>
+                    <td>{{ execution.sourceWorkerName }} → {{ execution.targetWorkerName }}</td>
+                    <td>
+                      <span class="stacked">
+                        заказов {{ execution.orderCount }};
+                        карточек {{ execution.reviewCount }};
+                        восстановлений {{ execution.recoveryTaskCount }};
+                        плохих {{ execution.badTaskCount }}
+                      </span>
+                    </td>
+                    <td>{{ execution.appliedAt ? (execution.appliedAt | date:'dd.MM HH:mm:ss') : '—' }}</td>
+                    <td><span class="status-badge" [attr.data-status]="execution.status">{{ statusLabel(execution.status) }}</span></td>
+                    <td>
+                      @if (canControlLive() && canRollback(execution)) {
+                        <button type="button" class="danger-button compact-button" [disabled]="liveBusy()" (click)="rollbackExecution(execution)">
+                          Откатить
+                        </button>
+                        <small class="stacked">до {{ execution.rollbackDeadlineAt | date:'HH:mm:ss' }}</small>
+                      } @else {
+                        <span class="muted">Недоступен</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="empty-state">Фактических передач нет.</p>
         }
       </section>
 
@@ -585,10 +863,10 @@
         <section class="safety-banner">
           <span class="material-icons-sharp">visibility</span>
           <div>
-            <strong>Перед сохранением действует жёсткая защита</strong>
+            <strong>Это параметры наблюдения и расчёта</strong>
             <p>
-              UI не позволяет включить LIVE или применение решений. Все передачи остаются
-              рекомендациями для администратора и владельцев.
+              Сохранение этой формы не включает передачу. Режим CANARY/LIVE управляется
+              отдельно и только владельцем после обязательной проверки готовности.
             </p>
           </div>
         </section>
@@ -769,6 +1047,60 @@
           <button type="submit" class="primary-button" [disabled]="saving() || settingsLoading() || !settings()">
             <span class="material-icons-sharp">save</span>
             {{ saving() ? 'Сохраняю' : 'Сохранить настройки' }}
+          </button>
+        </footer>
+      </form>
+
+      <form class="settings-form live-settings-form" [formGroup]="liveForm" (ngSubmit)="saveLiveSettings()">
+        <section class="settings-section">
+          <div class="settings-heading">
+            <span class="material-icons-sharp">verified_user</span>
+            <div>
+              <h2>Предохранители CANARY/LIVE</h2>
+              <p>
+                Текущий режим: {{ statusLabel(liveSettings()?.mode || 'SHADOW') }}.
+                Эти параметры не включают применение автоматически.
+              </p>
+            </div>
+          </div>
+          <div class="field-grid">
+            <label><span>История считается с даты</span><input type="date" formControlName="historyStartDate"></label>
+            <label><span>Минимум завершённых чистых дней</span><input type="number" formControlName="minFinalizedDays"></label>
+            <label><span>Стабильный период без ошибок, ч</span><input type="number" formControlName="stableHours"></label>
+            <label><span>Минимум кандидатов у менеджера</span><input type="number" formControlName="minCandidatesPerManager"></label>
+            <label>
+              <span>ID пилотных менеджеров через запятую</span>
+              <input type="text" formControlName="canaryManagerIds" placeholder="12, 18">
+            </label>
+            <label><span>Тайм-аут ответа сотрудника, мин</span><input type="number" formControlName="offerTimeoutMinutes"></label>
+            <label><span>Начало окна предложений</span><input type="time" formControlName="offerStartTime"></label>
+            <label><span>Конец окна предложений</span><input type="time" formControlName="offerEndTime"></label>
+            <label><span>Передач менеджера в день</span><input type="number" formControlName="maxTransfersPerManagerDay"></label>
+            <label><span>Передач всего в день</span><input type="number" formControlName="maxTransfersGlobalDay"></label>
+            <label><span>Безопасное окно отката, мин</span><input type="number" formControlName="rollbackWindowMinutes"></label>
+            <label><span>Первые передачи подтверждает владелец</span><input type="number" formControlName="firstLiveOwnerConfirmations"></label>
+            <label><span>Хранение истории LIVE, дней</span><input type="number" formControlName="retentionDays"></label>
+            <label class="switch-field">
+              <input type="checkbox" formControlName="emergencyFallbackEnabled">
+              <span>
+                <b>Резервное назначение карточки</b>
+                <small>Только в LIVE, когда все предложения исчерпаны и пройдена отдельная проверка получателя; в CANARY остаётся наблюдением</small>
+              </span>
+            </label>
+            <label><span>Ревизия</span><input type="number" formControlName="revision" readonly></label>
+          </div>
+        </section>
+        <footer class="settings-actions">
+          <div>
+            <strong>Включение режима здесь не выполняется</strong>
+            <small>Сначала сохраните параметры, затем проверьте готовность на вкладке мониторинга.</small>
+          </div>
+          <button type="button" class="secondary-button" [disabled]="settingsLoading()" (click)="loadSettings()">
+            Отменить изменения
+          </button>
+          <button type="submit" class="primary-button" [disabled]="liveBusy() || settingsLoading() || !liveSettings()">
+            <span class="material-icons-sharp">save</span>
+            {{ liveBusy() ? 'Сохраняю' : 'Сохранить предохранители' }}
           </button>
         </footer>
       </form>

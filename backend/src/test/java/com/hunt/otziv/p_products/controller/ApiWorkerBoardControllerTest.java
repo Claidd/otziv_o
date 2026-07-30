@@ -24,6 +24,7 @@ import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerFlowLockService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -153,6 +154,9 @@ class ApiWorkerBoardControllerTest {
     private WorkerCellularAccessService workerCellularAccessService;
 
     @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
+
+    @Mock
     private ScheduledClientMessageService scheduledClientMessageService;
 
     @Mock
@@ -208,6 +212,7 @@ class ApiWorkerBoardControllerTest {
                 credentialPreparationService,
                 staffDailyProgressService,
                 workerCellularAccessService,
+                assignmentMutationGuardService,
                 scheduledClientMessageService,
                 workerRiskAccessPolicy
         );

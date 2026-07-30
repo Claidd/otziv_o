@@ -43,8 +43,10 @@ public class WorkloadShadowProjectionService {
     private static final String SECTION_BAD = "BAD";
     private static final DateTimeFormatter SQL_DATE_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
-    private static final Set<String> PRODUCED_EVENT_TYPES = Set.of(
+    private static final Set<String> MANAGED_EVENT_TYPES = Set.of(
             "LATE_INCOMING_LOAD",
+            // Legacy type is retained only so the next run resolves old active rows.
+            // Per-manager audit groups are no longer a workload prerequisite.
             "MISSING_MANAGER_GROUP",
             "MISSING_WORKER_GROUP",
             "AMBIGUOUS_MANAGER_LINK"
@@ -118,6 +120,9 @@ public class WorkloadShadowProjectionService {
         );
         Map<Long, BigDecimal> historicalRatings = ratings(workerIds, progressDate, settings.lookbackDays());
         Map<Long, Integer> freezeCredits = freezeCredits(workerIds);
+        Set<Long> workersReached100Once = Set.copyOf(
+                repository.findWorkersReached100Once(workerIds, progressDate)
+        );
 
         Map<Long, WorkerSnapshot> snapshots = new LinkedHashMap<>();
         List<PendingEvent> pendingEvents = new ArrayList<>();
@@ -144,7 +149,8 @@ public class WorkloadShadowProjectionService {
                             WorkloadClassification.empty()
                     ),
                     dailyBatchDecisions.getOrDefault(worker.workerId(), Map.of()),
-                    observationWatermarks.get(worker.workerId())
+                    observationWatermarks.get(worker.workerId()),
+                    workersReached100Once.contains(worker.workerId())
             );
             snapshots.put(worker.workerId(), snapshot);
 
@@ -207,29 +213,6 @@ public class WorkloadShadowProjectionService {
         persistSnapshots(snapshots.values(), runId, observedAt, shiftEnd);
         persistDailyBatchDecisions(snapshots.values(), batchesByWorker);
 
-        Map<Long, WorkerSubject> managers = new LinkedHashMap<>();
-        workers.forEach(worker -> managers.putIfAbsent(worker.managerId(), worker));
-        for (WorkerSubject managerWorker : managers.values()) {
-            if (managerWorker.managerGroupConnected()) {
-                continue;
-            }
-            upsertEvent(
-                    pendingEvents,
-                    settings,
-                    "MISSING_MANAGER_GROUP:" + managerWorker.managerId(),
-                    "CRITICAL",
-                    "MISSING_MANAGER_GROUP",
-                    managerWorker,
-                    null,
-                    null,
-                    "Не подключена audit-группа менеджера",
-                    "У менеджера " + managerWorker.managerName()
-                            + " не привязана внутренняя audit Telegram-группа. "
-                            + "Предупреждения сохранены в мониторинге и не будут отправлены в личку.",
-                    observedAt
-            );
-            producedEvents++;
-        }
         persistEvents(pendingEvents, observedAt, settings.alertCooldownMinutes());
 
         repository.deleteCurrentExceptRun(runId);
@@ -270,8 +253,7 @@ public class WorkloadShadowProjectionService {
                 string(row.get("worker_name")),
                 string(row.get("manager_name")),
                 booleanValue(row.get("accepts_company_transfers")),
-                nullableLong(row.get("worker_telegram_group_chat_id")),
-                nullableLong(row.get("audit_telegram_group_chat_id"))
+                nullableLong(row.get("worker_telegram_group_chat_id"))
         )).toList();
     }
 
@@ -741,7 +723,8 @@ public class WorkloadShadowProjectionService {
             LocalDateTime shiftEnd,
             WorkloadClassification deferredAndBlocked,
             Map<String, BatchDecision> persistedBatchDecisions,
-            LocalDateTime previousObservationAt
+            LocalDateTime previousObservationAt,
+            boolean reached100OncePreviously
     ) {
         long active = batches.stream().mapToLong(WorkBatch::units).sum();
         long completed = completion.total();
@@ -811,7 +794,11 @@ public class WorkloadShadowProjectionService {
                 observedAt,
                 shiftEnd,
                 eligible,
-                progressPercent.compareTo(BigDecimal.valueOf(100)) >= 0,
+                reached100ForFinalization(
+                        reached100OncePreviously,
+                        eligible,
+                        progressPercent
+                ),
                 freezeCredits
         );
         MonthStats monthStats = currentMonthStats(finalizedHistory);
@@ -843,9 +830,7 @@ public class WorkloadShadowProjectionService {
         );
         String diagnosticStatus = worker.managerLinkCount() != 1
                 ? "AMBIGUOUS_MANAGER_LINK"
-                : (!worker.managerGroupConnected()
-                    ? "MISSING_MANAGER_GROUP"
-                    : (!worker.workerGroupConnected() ? "MISSING_WORKER_GROUP" : "OK"));
+                : (!worker.workerGroupConnected() ? "MISSING_WORKER_GROUP" : "OK");
 
         return new WorkerSnapshot(
                 worker,
@@ -934,6 +919,8 @@ public class WorkloadShadowProjectionService {
                 ? Map.of()
                 : persistedDecisions;
         Map<String, BatchDecision> result = new LinkedHashMap<>();
+        Set<String> partiallyCompletedLateCohorts =
+                partiallyCompletedLateCohorts(ordered, previous);
         long remainingCapacity = remainingShiftMinutes(observedAt, shiftStart, shiftEnd);
         long mandatoryMinutesBeforeIncoming = 0;
         List<WorkBatch> unseen = new ArrayList<>();
@@ -944,8 +931,26 @@ public class WorkloadShadowProjectionService {
                 unseen.add(batch);
                 continue;
             }
-            result.put(batch.batchKey(), persisted);
-            if (persisted.decisionCode() == DecisionCode.MANDATORY) {
+            BatchDecision effective = persisted;
+            if (persisted.decisionCode() == DecisionCode.LATE
+                    && partiallyCompletedLateCohorts.contains(
+                            effectiveCohortKey(persisted)
+                    )) {
+                effective = new BatchDecision(
+                        persisted.batchKey(),
+                        DecisionCode.MANDATORY,
+                        DecisionOrigin.PARTIAL_COMPLETION,
+                        persisted.cohortKey(),
+                        persisted.initialUnits(),
+                        persisted.initialEstimatedMinutes(),
+                        persisted.firstObservedAt(),
+                        persisted.sourceAvailableAt(),
+                        persisted.availableMinutesAtDecision(),
+                        persisted.cohortEstimatedMinutesAtDecision()
+                );
+            }
+            result.put(batch.batchKey(), effective);
+            if (effective.decisionCode() == DecisionCode.MANDATORY) {
                 mandatoryMinutesBeforeIncoming += batch.estimatedMinutes();
                 remainingCapacity = subtractCapacity(remainingCapacity, batch.estimatedMinutes());
             }
@@ -1058,6 +1063,74 @@ public class WorkloadShadowProjectionService {
         return Map.copyOf(result);
     }
 
+    /**
+     * A late cohort is forgiven only while nobody has started it. Once at least one
+     * unit disappears from an otherwise still-active cohort, the specialist has
+     * chosen to work on that cohort and every remaining unit becomes mandatory for
+     * the current day. Persisted rows for completed units intentionally remain in
+     * {@code workload_shadow_late_batches}, which lets this comparison survive
+     * scheduler restarts without relying on an in-memory counter.
+     */
+    private static Set<String> partiallyCompletedLateCohorts(
+            List<WorkBatch> activeBatches,
+            Map<String, BatchDecision> persistedDecisions
+    ) {
+        if (activeBatches == null
+                || activeBatches.isEmpty()
+                || persistedDecisions == null
+                || persistedDecisions.isEmpty()) {
+            return Set.of();
+        }
+        Map<String, Long> initialUnitsByCohort = new HashMap<>();
+        for (BatchDecision decision : persistedDecisions.values()) {
+            if (decision == null || decision.decisionCode() != DecisionCode.LATE) {
+                continue;
+            }
+            initialUnitsByCohort.merge(
+                    effectiveCohortKey(decision),
+                    Math.max(0, decision.initialUnits()),
+                    WorkloadShadowProjectionService::safeAdd
+            );
+        }
+        if (initialUnitsByCohort.isEmpty()) {
+            return Set.of();
+        }
+        Map<String, Long> remainingUnitsByCohort = new HashMap<>();
+        for (WorkBatch batch : activeBatches) {
+            BatchDecision decision = persistedDecisions.get(batch.batchKey());
+            if (decision == null || decision.decisionCode() != DecisionCode.LATE) {
+                continue;
+            }
+            remainingUnitsByCohort.merge(
+                    effectiveCohortKey(decision),
+                    Math.max(0, batch.units()),
+                    WorkloadShadowProjectionService::safeAdd
+            );
+        }
+        Set<String> result = new java.util.LinkedHashSet<>();
+        initialUnitsByCohort.forEach((cohort, initialUnits) -> {
+            long remainingUnits = remainingUnitsByCohort.getOrDefault(cohort, 0L);
+            if (remainingUnits > 0 && remainingUnits < initialUnits) {
+                result.add(cohort);
+            }
+        });
+        return Set.copyOf(result);
+    }
+
+    private static String effectiveCohortKey(BatchDecision decision) {
+        if (decision.cohortKey() == null || decision.cohortKey().isBlank()) {
+            return decision.batchKey();
+        }
+        return decision.cohortKey();
+    }
+
+    private static long safeAdd(long left, long right) {
+        if (right > 0 && left > Long.MAX_VALUE - right) {
+            return Long.MAX_VALUE;
+        }
+        return left + right;
+    }
+
     private static long remainingShiftMinutes(
             LocalDateTime from,
             LocalDateTime shiftStart,
@@ -1137,6 +1210,21 @@ public class WorkloadShadowProjectionService {
                 false,
                 progressDate
         );
+    }
+
+    static boolean reached100Now(long eligibleUnits, BigDecimal progressPercent) {
+        return eligibleUnits > 0
+                && progressPercent != null
+                && progressPercent.compareTo(BigDecimal.valueOf(100)) >= 0;
+    }
+
+    static boolean reached100ForFinalization(
+            boolean reached100OncePreviously,
+            long eligibleUnits,
+            BigDecimal progressPercent
+    ) {
+        return reached100OncePreviously
+                || reached100Now(eligibleUnits, progressPercent);
     }
 
     static MonthStats currentMonthStats(HistoryStats history) {
@@ -1234,7 +1322,10 @@ public class WorkloadShadowProjectionService {
         row.put("workerGroupConnected", snapshot.worker().workerGroupConnected());
         row.put("diagnosticStatus", snapshot.diagnosticStatus());
         row.put("lastAvailableAt", sqlDateTime(snapshot.lastAvailableAt()));
-        row.put("reached100", snapshot.progressPercent().compareTo(BigDecimal.valueOf(100)) >= 0);
+        row.put(
+                "reached100",
+                reached100Now(snapshot.eligibleUnits(), snapshot.progressPercent())
+        );
         return row;
     }
 
@@ -1373,7 +1464,7 @@ public class WorkloadShadowProjectionService {
     }
 
     private void resolveMissingEvents(LocalDateTime observedAt) {
-        repository.resolveMissingEvents(PRODUCED_EVENT_TYPES, observedAt);
+        repository.resolveMissingEvents(MANAGED_EVENT_TYPES, observedAt);
     }
 
     private String json(Object value) {
@@ -1500,6 +1591,7 @@ public class WorkloadShadowProjectionService {
     enum DecisionOrigin {
         LIVE,
         CARRY_OVER,
+        PARTIAL_COMPLETION,
         RECOVERED_MANDATORY,
         RECOVERED_LATE,
         LEGACY_LATE;
@@ -1553,15 +1645,10 @@ public class WorkloadShadowProjectionService {
             String workerName,
             String managerName,
             boolean acceptsCompanyTransfers,
-            Long workerGroupChatId,
-            Long managerGroupChatId
+            Long workerGroupChatId
     ) {
         boolean workerGroupConnected() {
             return workerGroupChatId != null && workerGroupChatId < 0;
-        }
-
-        boolean managerGroupConnected() {
-            return managerGroupChatId != null && managerGroupChatId < 0;
         }
     }
 

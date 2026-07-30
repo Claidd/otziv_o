@@ -3,6 +3,7 @@ package com.hunt.otziv.p_products.worker_access.service;
 import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties;
 import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse;
 import com.hunt.otziv.p_products.worker_access.dto.WorkerNetworkViolationStatsResponse.ViolationDetail;
+import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -20,8 +21,6 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -33,7 +32,7 @@ public class WorkerNetworkViolationService {
 
     private final WorkerCellularAccessProperties properties;
     private final UserRepository userRepository;
-    private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final WorkerNetworkViolationRepository violationRepository;
 
     public boolean statisticsVisibleForRole(String role) {
         if (!properties.isViolationStatisticsEnabled()) {
@@ -61,37 +60,19 @@ public class WorkerNetworkViolationService {
             userRepository.findByUsername(username).ifPresent(user -> {
                 LocalDateTime now = LocalDateTime.now(WORKER_ZONE);
                 LocalDateTime episodeSlot = episodeSlot(now, properties.getViolationEpisodeWindow());
-                MapSqlParameterSource parameters = new MapSqlParameterSource()
-                        .addValue("userId", user.getId())
-                        .addValue("username", trim(username, 150))
-                        .addValue("reason", trim(reason, 64))
-                        .addValue("scope", trim(scope, 64))
-                        .addValue("mode", mode.name())
-                        .addValue("result", blocked ? "BLOCKED" : "AUDIT_ALLOWED")
-                        .addValue("episodeSlot", episodeSlot)
-                        .addValue("now", now)
-                        .addValue("provider", nullableTrim(provider, 180))
-                        .addValue("ipPrefix", nullableTrim(ipPrefix, 80))
-                        .addValue("clientEvidence", nullableTrim(clientEvidence, 500));
-                jdbcTemplate.update("""
-                        INSERT INTO worker_network_violation_episodes (
-                            worker_user_id, worker_username, reason_code, scope_code,
-                            access_mode, access_result, episode_slot, first_seen_at, last_seen_at,
-                            attempt_count, provider, ip_prefix, client_evidence
-                        ) VALUES (
-                            :userId, :username, :reason, :scope,
-                            :mode, :result, :episodeSlot, :now, :now,
-                            1, :provider, :ipPrefix, :clientEvidence
-                        )
-                        ON DUPLICATE KEY UPDATE
-                            last_seen_at = VALUES(last_seen_at),
-                            attempt_count = attempt_count + 1,
-                            access_mode = VALUES(access_mode),
-                            access_result = VALUES(access_result),
-                            provider = VALUES(provider),
-                            ip_prefix = VALUES(ip_prefix),
-                            client_evidence = VALUES(client_evidence)
-                        """, parameters);
+                violationRepository.upsertEpisode(
+                        user.getId(),
+                        trim(username, 150),
+                        trim(reason, 64),
+                        trim(scope, 64),
+                        mode.name(),
+                        blocked ? "BLOCKED" : "AUDIT_ALLOWED",
+                        episodeSlot,
+                        now,
+                        nullableTrim(provider, 180),
+                        nullableTrim(ipPrefix, 80),
+                        nullableTrim(clientEvidence, 500)
+                );
             });
         } catch (RuntimeException exception) {
             // Статистика не должна ломать рабочий запрос специалиста или саму блокировку.
@@ -114,30 +95,23 @@ public class WorkerNetworkViolationService {
         }
 
         try {
-            MapSqlParameterSource parameters = new MapSqlParameterSource()
-                    .addValue("userIds", safeUserIds)
-                    .addValue("from", fromInclusive.atStartOfDay())
-                    .addValue("to", toExclusive.atStartOfDay());
-            List<ViolationRow> rows = jdbcTemplate.query("""
-                    SELECT worker_user_id, first_seen_at, last_seen_at, reason_code, scope_code,
-                           attempt_count, provider, client_evidence, access_result
-                    FROM worker_network_violation_episodes
-                    WHERE worker_user_id IN (:userIds)
-                      AND last_seen_at >= :from
-                      AND first_seen_at < :to
-                      AND access_result <> 'INVALIDATED'
-                    ORDER BY last_seen_at DESC
-                    """, parameters, (resultSet, rowNumber) -> new ViolationRow(
-                    resultSet.getLong("worker_user_id"),
-                    resultSet.getTimestamp("first_seen_at").toLocalDateTime(),
-                    resultSet.getTimestamp("last_seen_at").toLocalDateTime(),
-                    resultSet.getString("reason_code"),
-                    resultSet.getString("scope_code"),
-                    resultSet.getLong("attempt_count"),
-                    resultSet.getString("provider"),
-                    resultSet.getString("client_evidence"),
-                    "BLOCKED".equals(resultSet.getString("access_result"))
-            ));
+            List<ViolationRow> rows = violationRepository.findActiveForUsers(
+                            safeUserIds,
+                            fromInclusive.atStartOfDay(),
+                            toExclusive.atStartOfDay()
+                    ).stream()
+                    .map(row -> new ViolationRow(
+                            row.getUserId(),
+                            row.getFirstSeenAt(),
+                            row.getLastSeenAt(),
+                            row.getReason(),
+                            row.getScope(),
+                            row.getAttemptCount(),
+                            row.getProvider(),
+                            row.getClientEvidence(),
+                            "BLOCKED".equals(row.getAccessResult())
+                    ))
+                    .toList();
             return aggregate(safeUserIds, rows);
         } catch (RuntimeException exception) {
             log.warn("Не удалось загрузить статистику нарушений сети специалистов: {}", exception.getClass().getSimpleName());

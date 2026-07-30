@@ -16,6 +16,7 @@
     [switch]$WithReputationAiSmoke,
     [int]$ReputationAiCompanyId = 1,
     [switch]$SkipReputationAiOpenAiRouteCheck,
+    [switch]$SkipWorkloadShadowSmoke,
     [switch]$RestoreProdDb,
     [switch]$SkipProdDbRestore,
     [string]$VpsHost = "95.213.248.152",
@@ -1062,6 +1063,258 @@ function Invoke-ReputationAiRoleSmoke {
     }
 }
 
+function Invoke-WorkloadShadowSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootUrl,
+        [Parameter(Mandatory = $true)][string]$EnvPath,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments
+    )
+
+    Write-Host "Running workload SHADOW safety smoke..."
+    $apiRoot = $RootUrl.TrimEnd("/")
+    $mysqlUser = Get-EnvValue -Path $EnvPath -Name "MYSQL_USER"
+    $mysqlPassword = Get-EnvValue -Path $EnvPath -Name "MYSQL_PASSWORD"
+    $mysqlDatabase = Get-EnvValue -Path $EnvPath -Name "MYSQL_DATABASE"
+    if ([string]::IsNullOrWhiteSpace($mysqlUser) `
+            -or [string]::IsNullOrWhiteSpace($mysqlPassword) `
+            -or [string]::IsNullOrWhiteSpace($mysqlDatabase)) {
+        throw "MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE are required for workload schema smoke."
+    }
+
+    $workloadSchemaSql = @"
+SELECT CONCAT('MIGRATIONS=', COUNT(*))
+FROM flyway_schema_history
+WHERE version IN (
+  '1.10.152', '1.10.153', '1.10.154',
+  '1.10.155', '1.10.156', '1.10.157'
+)
+  AND success = 1;
+
+SELECT CONCAT('DELIVERY_DEADLINE=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'workload_transfer_offers'
+  AND column_name = 'delivery_deadline_at'
+  AND is_nullable = 'NO';
+
+SELECT CONCAT('OFFER_BATCH_INDEX=', COUNT(*))
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = 'workload_transfer_offers'
+  AND index_name = 'idx_workload_transfer_offer_processing_token'
+  AND non_unique = 1;
+
+SELECT CONCAT('EMERGENCY_BATCH_INDEX=', COUNT(*))
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = 'workload_transfer_emergency_assignments'
+  AND index_name = 'idx_workload_transfer_emergency_notification_token'
+  AND non_unique = 1;
+
+SELECT CONCAT('OBSOLETE_UNIQUE_BATCH_INDEXES=', COUNT(*))
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND (
+    (table_name = 'workload_transfer_offers'
+      AND index_name = 'uk_workload_transfer_offer_processing_token')
+    OR
+    (table_name = 'workload_transfer_emergency_assignments'
+      AND index_name = 'uk_workload_transfer_emergency_notification_token')
+  );
+
+SELECT CONCAT('STAGING_BATCH_COLUMN=', COUNT(*))
+FROM information_schema.columns
+WHERE table_schema = DATABASE()
+  AND table_name = 'workload_transfer_offers'
+  AND column_name = 'staging_batch_token'
+  AND is_nullable = 'YES';
+
+SELECT CONCAT('STAGING_BATCH_INDEX=', COUNT(DISTINCT index_name))
+FROM information_schema.statistics
+WHERE table_schema = DATABASE()
+  AND table_name = 'workload_transfer_offers'
+  AND index_name = 'idx_workload_transfer_offer_staging_batch'
+  AND non_unique = 1;
+"@
+    $schemaOutput = & docker @($ComposeArguments + @(
+        "exec", "-T", "-e", "MYSQL_PWD=$mysqlPassword", "mysql",
+        "mysql",
+        "--default-character-set=utf8mb4",
+        "-u$mysqlUser",
+        $mysqlDatabase,
+        "-N", "-B",
+        "-e",
+        $workloadSchemaSql
+    )) 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $schemaError = ($schemaOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        throw "Could not verify workload Flyway/schema state: $schemaError"
+    }
+    $schemaFacts = @(
+        $schemaOutput |
+            ForEach-Object { $_.ToString().Trim() } |
+            Where-Object { $_ -match "^[A-Z_]+=[0-9]+$" }
+    )
+    foreach ($expectedFact in @(
+        "MIGRATIONS=6",
+        "DELIVERY_DEADLINE=1",
+        "OFFER_BATCH_INDEX=1",
+        "EMERGENCY_BATCH_INDEX=1",
+        "OBSOLETE_UNIQUE_BATCH_INDEXES=0",
+        "STAGING_BATCH_COLUMN=1",
+        "STAGING_BATCH_INDEX=1"
+    )) {
+        if ($schemaFacts -notcontains $expectedFact) {
+            throw "Workload schema invariant '$expectedFact' is missing. Actual: $($schemaFacts -join ', ')."
+        }
+    }
+
+    $realm = Get-KeycloakRealm -EnvPath $EnvPath
+    $adminToken = Get-KeycloakAdminToken -RootUrl $RootUrl -EnvPath $EnvPath
+    $keycloakAdminHeaders = @{ Authorization = "Bearer $adminToken" }
+    $client = $null
+
+    Remove-KeycloakSmokeClientsByPrefix `
+        -RootUrl $RootUrl `
+        -Realm $realm `
+        -AdminHeaders $keycloakAdminHeaders
+    try {
+        $client = New-KeycloakSmokeClient `
+            -RootUrl $RootUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders `
+            -Role "ADMIN"
+        $roleToken = Get-KeycloakClientCredentialsToken `
+            -RootUrl $RootUrl `
+            -Realm $realm `
+            -ClientId $client.ClientId `
+            -ClientSecret $client.ClientSecret
+        $headers = @{ Authorization = "Bearer $roleToken" }
+
+        $frontendRoute = Invoke-WebRequest `
+            -Uri "$apiRoot/admin/workload-monitor" `
+            -UseBasicParsing `
+            -TimeoutSec 30
+        if ($frontendRoute.StatusCode -ne 200 `
+                -or -not ([string]$frontendRoute.Content).Contains("app-root")) {
+            throw "Workload monitor frontend route failed: HTTP $($frontendRoute.StatusCode)."
+        }
+
+        $shadowSettings = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/settings" `
+            -Headers $headers `
+            -TimeoutSec 30
+        if ([string]$shadowSettings.mode -ne "SHADOW" -or [bool]$shadowSettings.applyEnabled) {
+            throw "Unsafe workload SHADOW settings in prod-like: mode=$($shadowSettings.mode), applyEnabled=$($shadowSettings.applyEnabled)."
+        }
+        $shadowRevisionBeforeUpdate = [long]$shadowSettings.revision
+        $shadowSettings = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/settings" `
+            -Method Put `
+            -Headers $headers `
+            -ContentType "application/json" `
+            -Body ($shadowSettings | ConvertTo-Json -Depth 10 -Compress) `
+            -TimeoutSec 30
+        if ([string]$shadowSettings.mode -ne "SHADOW" `
+                -or [bool]$shadowSettings.applyEnabled `
+                -or [long]$shadowSettings.revision -ne ($shadowRevisionBeforeUpdate + 1)) {
+            throw "Workload SHADOW settings round-trip failed or became unsafe: $($shadowSettings | ConvertTo-Json -Compress)."
+        }
+
+        $liveSettings = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/live/settings" `
+            -Headers $headers `
+            -TimeoutSec 30
+        if ([string]$liveSettings.mode -ne "SHADOW" -or [bool]$liveSettings.applyEnabled) {
+            throw "Unsafe workload LIVE settings in prod-like: mode=$($liveSettings.mode), applyEnabled=$($liveSettings.applyEnabled)."
+        }
+        $liveRevisionBeforeUpdate = [long]$liveSettings.revision
+        $liveSettings = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/live/settings" `
+            -Method Put `
+            -Headers $headers `
+            -ContentType "application/json" `
+            -Body ($liveSettings | ConvertTo-Json -Depth 10 -Compress) `
+            -TimeoutSec 30
+        if ([string]$liveSettings.mode -ne "SHADOW" `
+                -or [bool]$liveSettings.applyEnabled `
+                -or [bool]$liveSettings.emergencyFallbackEnabled `
+                -or [long]$liveSettings.revision -ne ($liveRevisionBeforeUpdate + 1)) {
+            throw "Workload LIVE settings round-trip failed or became unsafe: $($liveSettings | ConvertTo-Json -Compress)."
+        }
+
+        $readiness = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/live/readiness?targetMode=CANARY" `
+            -Headers $headers `
+            -TimeoutSec 30
+        if ($null -eq $readiness.checks) {
+            throw "Workload CANARY readiness did not return its checks."
+        }
+
+        # This is deliberately a real DML call. It catches missing transaction
+        # boundaries that a fast container-health smoke cannot observe.
+        $repair = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/monitor/repair" `
+            -Method Post `
+            -Headers $headers `
+            -ContentType "application/json" `
+            -Body "{}" `
+            -TimeoutSec 30
+        if ($null -eq $repair.failedRuns -or $null -eq $repair.retriedLiveOffers) {
+            throw "Workload repair response is incomplete."
+        }
+
+        $health = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/workload-shadow/monitor/health" `
+            -Headers $headers `
+            -TimeoutSec 30
+        if ($null -ne $health.maintenance `
+                -and ([string]$health.maintenance.repairStatus -eq "FAILED" `
+                    -or [int]$health.maintenance.repairConsecutiveFailures -gt 0)) {
+            throw "Workload maintenance health is failed after repair: $($health.maintenance | ConvertTo-Json -Compress)."
+        }
+
+        $activationBody = @{
+            mode = "CANARY"
+            confirmation = "ВКЛЮЧИТЬ БОЕВОЙ РЕЖИМ"
+            revision = $liveSettings.revision
+        } | ConvertTo-Json -Compress
+        $activationAttempt = Invoke-SmokeWebRequest `
+            -Uri "$apiRoot/api/admin/workload-shadow/live/activate" `
+            -Method "Post" `
+            -Headers $headers `
+            -Body $activationBody `
+            -ContentType "application/json"
+        if ($activationAttempt.StatusCode -ne 403) {
+            throw "ADMIN must not activate workload CANARY/LIVE, got HTTP $($activationAttempt.StatusCode)."
+        }
+
+        $appLogs = & docker @($ComposeArguments + @("logs", "--since=10m", "app")) 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not read app logs after workload SHADOW smoke."
+        }
+        if ($appLogs -match "No active transaction for update or delete query" `
+                -or $appLogs -match "Workload shadow stale-state repair failed" `
+                -or $appLogs -match "Workload shadow nightly maintenance failed") {
+            throw "Workload maintenance error was found in prod-like app logs."
+        }
+
+        Write-Host "Workload SHADOW safety smoke OK: V152-V157 schema is complete, both settings round-trips succeeded without enabling mutations, repair DML succeeded, ADMIN activation is forbidden."
+    } finally {
+        if ($null -ne $client) {
+            Remove-KeycloakSmokeClient `
+                -RootUrl $RootUrl `
+                -Realm $realm `
+                -AdminHeaders $keycloakAdminHeaders `
+                -Client $client
+        }
+        Remove-KeycloakSmokeClientsByPrefix `
+            -RootUrl $RootUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders
+    }
+}
+
 function Invoke-ReputationAiSmoke {
     param(
         [Parameter(Mandatory = $true)][string]$RootUrl,
@@ -1546,6 +1799,12 @@ try {
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
     Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl
     Invoke-TbankPaymentConfigSmoke -BaseUrl $BaseUrl -EnvPath $envPath
+    if (-not $SkipWorkloadShadowSmoke) {
+        Invoke-WorkloadShadowSmoke `
+            -RootUrl $BaseUrl `
+            -EnvPath $envPath `
+            -ComposeArguments $composeArgs
+    }
     if ($WithReputationAiSmoke) {
         Invoke-ReputationAiSmoke `
             -RootUrl $BaseUrl `

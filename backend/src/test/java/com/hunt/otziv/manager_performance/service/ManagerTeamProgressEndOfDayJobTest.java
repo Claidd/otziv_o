@@ -8,6 +8,8 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.EndOfDayAchievementService;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -45,6 +47,8 @@ class ManagerTeamProgressEndOfDayJobTest {
     private ManagerPerformanceService managerPerformanceService;
     @Mock
     private EndOfDayAchievementService achievementService;
+    @Mock
+    private WorkloadShadowProgressReadService workloadShadowProgressReadService;
 
     @InjectMocks
     private ManagerTeamProgressEndOfDayJob job;
@@ -124,10 +128,125 @@ class ManagerTeamProgressEndOfDayJobTest {
         verifyNoInteractions(managerTeamProgressService, achievementService, managerPerformanceService);
     }
 
+    @Test
+    void reportsLateUnitsFromFinalizedWorkloadDecision() {
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        User workerUser = User.builder().id(5L).fio("Елена").build();
+        Worker worker = Worker.builder().id(1L).user(workerUser).build();
+        User managerUser = User.builder().id(30L).workers(Set.of(worker)).build();
+        Manager manager = Manager.builder().id(3L).user(managerUser).build();
+        DailyWorkProgressResponse unified = progress(date, 46, 0, 46, 100);
+        EndOfDayAchievementService.AchievementResult workerResult = result(
+                EndOfDayAchievementService.ROLE_WORKER, 1L, 46, 46, 5);
+        EndOfDayAchievementService.AchievementResult managerResult = result(
+                EndOfDayAchievementService.ROLE_MANAGER, 3L, 1, 1, 5);
+
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
+        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
+        when(staffDailyProgressService.workerProgressByWorkers(List.of(worker), date))
+                .thenReturn(Map.of(1L, unified));
+        when(staffDailyProgressService.workerEndOfDayProgressByWorkers(
+                List.of(worker), date, date.atTime(23, 0)))
+                .thenReturn(Map.of(1L, unified));
+        when(workloadShadowProgressReadService.findFinalizedProgress(Set.of(1L), date))
+                .thenReturn(Map.of(1L, new Progress(
+                        46,
+                        46,
+                        5,
+                        100,
+                        true,
+                        true,
+                        date.atTime(18, 54),
+                        date.atTime(18, 54)
+                )));
+        when(achievementService.saveResult(
+                eq(date), eq(EndOfDayAchievementService.ROLE_WORKER), eq(1L), eq(5L),
+                anyLong(), anyLong(), anyDouble(), anyLong(), anyBoolean()
+        )).thenReturn(workerResult);
+        when(achievementService.saveResult(
+                eq(date), eq(EndOfDayAchievementService.ROLE_MANAGER), eq(3L), eq(30L),
+                anyLong(), anyLong(), anyDouble(), anyLong(), anyBoolean()
+        )).thenReturn(managerResult);
+
+        job.capture();
+
+        verify(achievementService).saveResult(
+                date, EndOfDayAchievementService.ROLE_WORKER, 1L, 5L,
+                46, 46, 100, 5, true);
+        verify(achievementService).saveResult(
+                date, EndOfDayAchievementService.ROLE_MANAGER, 3L, 30L,
+                1, 1, 100, 5, true);
+    }
+
+    @Test
+    void reachedOnceCountsForWorkerAndManagerAfterLaterWorkArrives() {
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        User workerUser = User.builder().id(5L).fio("Елена").build();
+        Worker worker = Worker.builder().id(1L).user(workerUser).build();
+        User managerUser = User.builder().id(30L).workers(Set.of(worker)).build();
+        Manager manager = Manager.builder().id(3L).user(managerUser).build();
+        DailyWorkProgressResponse reachedEarlier = progress(date, 30, 5, 35, 86, true);
+        EndOfDayAchievementService.AchievementResult workerResult = result(
+                EndOfDayAchievementService.ROLE_WORKER, 1L, 35, 30, 0);
+        EndOfDayAchievementService.AchievementResult managerResult = result(
+                EndOfDayAchievementService.ROLE_MANAGER, 3L, 1, 1, 0);
+
+        when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
+        when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
+        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
+        when(staffDailyProgressService.workerProgressByWorkers(List.of(worker), date))
+                .thenReturn(Map.of(1L, reachedEarlier));
+        when(staffDailyProgressService.workerEndOfDayProgressByWorkers(
+                List.of(worker), date, date.atTime(23, 0)))
+                .thenReturn(Map.of(1L, reachedEarlier));
+        when(achievementService.saveResult(
+                eq(date), eq(EndOfDayAchievementService.ROLE_WORKER), eq(1L), eq(5L),
+                anyLong(), anyLong(), anyDouble(), anyLong(), anyBoolean()
+        )).thenReturn(workerResult);
+        when(achievementService.saveResult(
+                eq(date), eq(EndOfDayAchievementService.ROLE_MANAGER), eq(3L), eq(30L),
+                anyLong(), anyLong(), anyDouble(), anyLong(), anyBoolean()
+        )).thenReturn(managerResult);
+
+        job.capture();
+
+        verify(achievementService).saveResult(
+                date, EndOfDayAchievementService.ROLE_WORKER, 1L, 5L,
+                35, 30, 100, 0, true);
+        verify(achievementService).saveResult(
+                date, EndOfDayAchievementService.ROLE_MANAGER, 3L, 30L,
+                1, 1, 100, 0, true);
+        verify(managerTeamProgressService).saveEndOfDaySnapshot(
+                eq(date), eq(3L), eq(30L), eq(1),
+                argThat(items -> items.size() == 1 && items.iterator().next().reached100()));
+        verify(achievementService).notifyWorker(worker, workerResult);
+        verify(achievementService).notifyManager(manager, managerResult);
+    }
+
     private DailyWorkProgressResponse progress(LocalDate date, long completed, long active, long total, int percent) {
-        return new DailyWorkProgressResponse(
+        return progress(date, completed, active, total, percent, total > 0 && percent >= 100 && active <= 0);
+    }
+
+    private DailyWorkProgressResponse progress(
+            LocalDate date,
+            long completed,
+            long active,
+            long total,
+            int percent,
+            boolean reached100
+    ) {
+        DailyWorkProgressResponse response = new DailyWorkProgressResponse(
                 true, "WORKER", date, completed, active, total, percent, false,
                 null, null, 0, 0, 0, null, null, 0, 0, 0, 0, 0
+        );
+        return response.withWorkloadProgress(
+                completed,
+                total,
+                percent,
+                reached100,
+                reached100 ? date.atTime(20, 0) : null,
+                reached100 ? date.atTime(20, 0) : null
         );
     }
 

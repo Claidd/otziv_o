@@ -6,15 +6,26 @@ import com.hunt.otziv.archive.dto.ManagerArchiveOrderListItem;
 import com.hunt.otziv.archive.service.ManagerArchiveService;
 import com.hunt.otziv.archive.service.OrderArchiveDryRunService;
 import com.hunt.otziv.manager.dto.api.PageResponse;
+import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
+import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.workload_shadow.notification.WorkloadShadowDeliveryOutcome;
+import com.hunt.otziv.workload_shadow.repository.WorkloadLiveReadinessRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadShadowEventRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowMonitorRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowNotificationStore;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowRunRepository;
+import com.hunt.otziv.workload_shadow.repository.WorkloadTransferOfferRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferPreferenceRepository;
+import com.hunt.otziv.workload_shadow.maintenance.WorkloadShadowMaintenanceService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProjectionService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowRunService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowTransferSimulationService;
+import com.hunt.otziv.workload_shadow.service.WorkloadTransferExecutionService;
+import com.hunt.otziv.workload_shadow.service.WorkloadTransferExecutionTransactionService;
+import com.hunt.otziv.workload_shadow.service.WorkloadTransferOfferService;
+import com.hunt.otziv.workload_shadow.service.WorkloadTransferRollbackService;
+import com.hunt.otziv.workload_shadow.service.WorkloadTransferWorkflowService;
 import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -28,6 +39,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -104,6 +116,41 @@ class OtzivOApplicationTests {
 	@Autowired
 	private WorkloadTransferPreferenceRepository workloadTransferPreferenceRepository;
 
+	@Autowired
+	private WorkloadShadowMaintenanceService workloadShadowMaintenanceService;
+
+	@Autowired
+	private WorkloadTransferWorkflowService workloadTransferWorkflowService;
+
+	@Autowired
+	private WorkloadTransferOfferService workloadTransferOfferService;
+
+	@Autowired
+	private WorkloadTransferOfferRepository workloadTransferOfferRepository;
+
+	@Autowired
+	private WorkloadTransferExecutionService workloadTransferExecutionService;
+
+	@Autowired
+	private WorkloadTransferExecutionTransactionService
+			workloadTransferExecutionTransactionService;
+
+	@Autowired
+	private WorkloadTransferRollbackService workloadTransferRollbackService;
+
+	@Autowired
+	private WorkloadLiveReadinessRepository workloadLiveReadinessRepository;
+
+	@Autowired
+	private WorkloadShadowEventRepository workloadShadowEventRepository;
+
+	@Autowired
+	private WorkerAssignmentMutationGuardRepository
+			workerAssignmentMutationGuardRepository;
+
+	@Autowired
+	private WorkerNetworkViolationRepository workerNetworkViolationRepository;
+
 	@Test
 	void contextLoads() {
 	}
@@ -111,6 +158,156 @@ class OtzivOApplicationTests {
 	@Test
 	void flywayMigrationsApplyOnMySql() {
 		assertThat(flyway.info().applied()).isNotEmpty();
+	}
+
+	@Test
+	void workerNetworkViolationRepositoryExecutesEpisodeLifecycleOnMySql() {
+		String username = "network_violation_" + UUID.randomUUID();
+		LocalDateTime mainFirstSeen = LocalDateTime.of(
+				2026,
+				7,
+				20,
+				10,
+				0
+		);
+		LocalDateTime mainLastSeen = mainFirstSeen.plusMinutes(5);
+		LocalDateTime mainEpisodeSlot = mainFirstSeen.withMinute(0);
+		LocalDateTime cutoff = LocalDateTime.of(2026, 7, 10, 12, 0);
+
+		jdbcTemplate.update("""
+			INSERT INTO users (
+			    username,
+			    password,
+			    fio,
+			    email,
+			    active,
+			    create_time
+			)
+			VALUES (?, 'password', 'Network Violation Test', ?, 1, ?)
+			""", username, username + "@example.test", mainFirstSeen);
+		Long userId = jdbcTemplate.queryForObject(
+				"SELECT LAST_INSERT_ID()",
+				Long.class
+		);
+
+		try {
+			assertThat(workerNetworkViolationRepository.upsertEpisode(
+					userId,
+					username,
+					"NON_CELLULAR_NETWORK",
+					"publish",
+					"ENFORCE",
+					"BLOCKED",
+					mainEpisodeSlot,
+					mainFirstSeen,
+					"Provider One",
+					"192.0.2.0/24",
+					"first evidence"
+			)).isEqualTo(1);
+			assertThat(workerNetworkViolationRepository.upsertEpisode(
+					userId,
+					username,
+					"NON_CELLULAR_NETWORK",
+					"publish",
+					"ENFORCE",
+					"BLOCKED",
+					mainEpisodeSlot,
+					mainLastSeen,
+					"Provider Two",
+					"198.51.100.0/24",
+					"second evidence"
+			)).isGreaterThan(0);
+
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT attempt_count
+				FROM worker_network_violation_episodes
+				WHERE worker_user_id = ?
+				  AND reason_code = 'NON_CELLULAR_NETWORK'
+				  AND scope_code = 'publish'
+				""", Long.class, userId)).isEqualTo(2L);
+
+			var rows = workerNetworkViolationRepository.findActiveForUsers(
+					java.util.List.of(userId),
+					LocalDateTime.of(2026, 7, 1, 0, 0),
+					LocalDateTime.of(2026, 8, 1, 0, 0)
+			);
+			assertThat(rows).singleElement().satisfies(row -> {
+				assertThat(row.getUserId()).isEqualTo(userId);
+				assertThat(row.getFirstSeenAt()).isEqualTo(mainFirstSeen);
+				assertThat(row.getLastSeenAt()).isEqualTo(mainLastSeen);
+				assertThat(row.getAttemptCount()).isEqualTo(2);
+				assertThat(row.getReason()).isEqualTo("NON_CELLULAR_NETWORK");
+				assertThat(row.getScope()).isEqualTo("publish");
+				assertThat(row.getProvider()).isEqualTo("Provider Two");
+				assertThat(row.getClientEvidence()).isEqualTo("second evidence");
+				assertThat(row.getAccessResult()).isEqualTo("BLOCKED");
+			});
+
+			workerNetworkViolationRepository.upsertEpisode(
+					userId,
+					username,
+					"INVALIDATED_TEST",
+					"publish",
+					"AUDIT",
+					"INVALIDATED",
+					mainEpisodeSlot.plusHours(1),
+					mainLastSeen.plusHours(1),
+					null,
+					null,
+					null
+			);
+			assertThat(workerNetworkViolationRepository.findActiveForUsers(
+					java.util.List.of(userId),
+					LocalDateTime.of(2026, 7, 1, 0, 0),
+					LocalDateTime.of(2026, 8, 1, 0, 0)
+			)).singleElement()
+					.satisfies(row -> assertThat(row.getReason())
+							.isEqualTo("NON_CELLULAR_NETWORK"));
+
+			workerNetworkViolationRepository.upsertEpisode(
+					userId,
+					username,
+					"RETENTION_OLD",
+					"cleanup",
+					"AUDIT",
+					"AUDIT_ALLOWED",
+					cutoff.minusSeconds(1),
+					cutoff.minusSeconds(1),
+					null,
+					null,
+					null
+			);
+			workerNetworkViolationRepository.upsertEpisode(
+					userId,
+					username,
+					"RETENTION_BOUNDARY",
+					"cleanup",
+					"AUDIT",
+					"AUDIT_ALLOWED",
+					cutoff,
+					cutoff,
+					null,
+					null,
+					null
+			);
+
+			assertThat(workerNetworkViolationRepository.deleteBefore(cutoff))
+					.isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM worker_network_violation_episodes
+				WHERE worker_user_id = ?
+				  AND reason_code = 'RETENTION_OLD'
+				""", Integer.class, userId)).isZero();
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM worker_network_violation_episodes
+				WHERE worker_user_id = ?
+				  AND reason_code = 'RETENTION_BOUNDARY'
+				""", Integer.class, userId)).isEqualTo(1);
+		} finally {
+			jdbcTemplate.update("DELETE FROM users WHERE id = ?", userId);
+		}
 	}
 
 	@Test
@@ -488,6 +685,838 @@ class OtzivOApplicationTests {
 	}
 
 	@Test
+	@Transactional
+	void workloadTransferLiveFlowDeclinesThenAppliesAndRollsBackWholePackageOnMySql() {
+		java.util.Map<String, String> originalLiveSettings = jdbcTemplate.query("""
+			SELECT setting_key, setting_value
+			FROM app_settings
+			WHERE setting_key LIKE 'workload.live.%'
+			ORDER BY setting_key
+			""", resultSet -> {
+				java.util.Map<String, String> values = new java.util.LinkedHashMap<>();
+				while (resultSet.next()) {
+					values.put(
+							resultSet.getString("setting_key"),
+							resultSet.getString("setting_value")
+					);
+				}
+				return values;
+			});
+		assertThat(originalLiveSettings).isNotEmpty();
+
+		try {
+			LocalDateTime now = LocalDateTime.now(
+					java.time.ZoneId.of("Asia/Irkutsk")
+			).withNano(0);
+			String marker = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+			String sourceUsername = "live_source_" + marker;
+
+			jdbcTemplate.update("""
+				INSERT INTO users (
+				    username,
+				    password,
+				    fio,
+				    email,
+				    active,
+				    create_time
+				)
+				VALUES (?, 'password', 'LIVE E2E Manager', ?, 1, ?)
+				""",
+					"live_manager_" + marker,
+					"live_manager_" + marker + "@example.test",
+					now
+			);
+			Long managerUserId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+			jdbcTemplate.update("""
+				INSERT INTO managers (
+				    user_id,
+				    audit_telegram_group_chat_id
+				)
+				VALUES (?, ?)
+				""", managerUserId, -7_000_000_000L - managerUserId);
+			Long managerId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+			WorkloadTestWorker source = createWorkloadTestWorker(
+					sourceUsername,
+					"LIVE E2E Source",
+					now
+			);
+			WorkloadTestWorker firstRecipient = createWorkloadTestWorker(
+					"live_first_" + marker,
+					"LIVE E2E First Recipient",
+					now
+			);
+			WorkloadTestWorker secondRecipient = createWorkloadTestWorker(
+					"live_second_" + marker,
+					"LIVE E2E Second Recipient",
+					now
+			);
+			long firstGroupChatId = -8_100_000_000L - firstRecipient.userId();
+			long secondGroupChatId = -8_200_000_000L - secondRecipient.userId();
+			long firstTelegramId = 8_100_000_000L + firstRecipient.userId();
+			long secondTelegramId = 8_200_000_000L + secondRecipient.userId();
+			jdbcTemplate.update("""
+				UPDATE users
+				SET worker_telegram_group_chat_id = ?,
+				    telegram_chat_id = ?
+				WHERE id = ?
+				""", firstGroupChatId, firstTelegramId, firstRecipient.userId());
+			jdbcTemplate.update("""
+				UPDATE users
+				SET worker_telegram_group_chat_id = ?,
+				    telegram_chat_id = ?
+				WHERE id = ?
+				""", secondGroupChatId, secondTelegramId, secondRecipient.userId());
+			jdbcTemplate.update("""
+				UPDATE users
+				SET worker_telegram_group_chat_id = ?
+				WHERE id = ?
+				""", -8_000_000_000L - source.userId(), source.userId());
+			jdbcTemplate.update("""
+				INSERT INTO workers_users (worker_id, user_id)
+				VALUES (?, ?), (?, ?), (?, ?)
+				""",
+					source.workerId(), managerUserId,
+					firstRecipient.workerId(), managerUserId,
+					secondRecipient.workerId(), managerUserId
+			);
+
+			jdbcTemplate.update("""
+				INSERT INTO companies (
+				    company_title,
+				    company_active,
+				    company_user,
+				    company_manager,
+				    create_date
+				)
+				VALUES (?, 1, ?, ?, ?)
+				""",
+					"LIVE E2E Company " + marker,
+					managerUserId,
+					managerId,
+					now.toLocalDate()
+			);
+			Long companyId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+			jdbcTemplate.update(
+					"INSERT INTO workers_companies (worker_id, company_id) VALUES (?, ?)",
+					source.workerId(),
+					companyId
+			);
+
+			Long newStatusId = jdbcTemplate.queryForObject("""
+				SELECT order_status_id
+				FROM order_statuses
+				WHERE order_status_title = 'Новый'
+				ORDER BY order_status_id
+				LIMIT 1
+				""", Long.class);
+			jdbcTemplate.update("""
+				INSERT INTO orders (
+				    order_created,
+				    order_changed,
+				    order_status,
+				    order_company,
+				    order_manager,
+				    order_worker,
+				    order_amount,
+				    order_counter,
+				    order_complete,
+				    order_waiting_for_client,
+				    order_status_changed_at
+				)
+				VALUES (?, ?, ?, ?, ?, ?, 2, 1, 0, 0, ?)
+				""",
+					now.toLocalDate(),
+					now.toLocalDate(),
+					newStatusId,
+					companyId,
+					managerId,
+					source.workerId(),
+					now
+			);
+			Long orderId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+			String detailId = UUID.randomUUID().toString();
+			jdbcTemplate.update("""
+				INSERT INTO order_details (
+				    order_detail_id,
+				    order_detail_order,
+				    order_detail_amount
+				)
+				VALUES (UUID_TO_BIN(?), ?, 2)
+				""", detailId, orderId);
+			jdbcTemplate.update("""
+				INSERT INTO reviews (
+				    review_text,
+				    review_created,
+				    review_created_at,
+				    review_changed,
+				    review_publish,
+				    review_publish_date,
+				    review_order_details,
+				    review_worker,
+				    review_vigul,
+				    review_text_ready_at
+				)
+				VALUES ('Текст отзыва', ?, ?, ?, 0, ?, UUID_TO_BIN(?), ?, 0, NULL)
+				""",
+					now.toLocalDate(),
+					now,
+					now.toLocalDate(),
+					now.toLocalDate(),
+					detailId,
+					source.workerId()
+			);
+			Long firstReviewId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+			jdbcTemplate.update("""
+				INSERT INTO reviews (
+				    review_text,
+				    review_created,
+				    review_created_at,
+				    review_changed,
+				    review_publish,
+				    review_publish_date,
+				    review_order_details,
+				    review_worker,
+				    review_vigul,
+				    review_text_ready_at
+				)
+				VALUES ('Готовый текст для LIVE E2E', ?, ?, ?, 0, ?, UUID_TO_BIN(?), ?, 1, ?)
+				""",
+					now.toLocalDate(),
+					now,
+					now.toLocalDate(),
+					now.toLocalDate(),
+					detailId,
+					source.workerId(),
+					now
+			);
+			Long secondReviewId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+			jdbcTemplate.update("""
+				INSERT INTO bad_review_tasks (
+				    bad_review_task_order,
+				    bad_review_task_review,
+				    bad_review_task_worker,
+				    bad_review_task_status,
+				    bad_review_task_scheduled_date,
+				    bad_review_task_created,
+				    bad_review_task_changed,
+				    bad_review_task_created_at
+				)
+				VALUES (?, ?, ?, 'NEW', ?, ?, ?, ?)
+				""",
+					orderId,
+					firstReviewId,
+					source.workerId(),
+					now.toLocalDate(),
+					now.toLocalDate(),
+					now.toLocalDate(),
+					now
+			);
+			Long badTaskId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+			jdbcTemplate.update("""
+				INSERT INTO review_recovery_batches (
+				    review_recovery_batch_order,
+				    review_recovery_batch_manager,
+				    review_recovery_batch_status,
+				    review_recovery_batch_created_by,
+				    review_recovery_batch_created_at,
+				    review_recovery_batch_updated_at
+				)
+				VALUES (?, ?, 'OPEN', ?, ?, ?)
+				""", orderId, managerId, managerUserId, now, now);
+			Long recoveryBatchId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+			jdbcTemplate.update("""
+				INSERT INTO review_recovery_tasks (
+				    review_recovery_task_batch,
+				    review_recovery_task_order,
+				    review_recovery_task_review,
+				    review_recovery_task_worker,
+				    review_recovery_task_manager,
+				    review_recovery_task_status,
+				    review_recovery_task_recovery_text,
+				    review_recovery_task_scheduled_date,
+				    review_recovery_task_created_by,
+				    review_recovery_task_created_at,
+				    review_recovery_task_updated_at
+				)
+				VALUES (?, ?, ?, ?, ?, 'PLANNED', 'Восстановленный текст LIVE E2E',
+				        ?, ?, ?, ?)
+				""",
+					recoveryBatchId,
+					orderId,
+					secondReviewId,
+					source.workerId(),
+					managerId,
+					now.toLocalDate(),
+					managerUserId,
+					now,
+					now
+			);
+			Long recoveryTaskId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+			assertThat(workerAssignmentMutationGuardRepository.lockOwnedOrder(
+					orderId,
+					sourceUsername
+			)).contains(orderId);
+			assertThat(workerAssignmentMutationGuardRepository.lockOwnedReview(
+					firstReviewId,
+					sourceUsername
+			)).contains(firstReviewId);
+			assertThat(workerAssignmentMutationGuardRepository.lockOwnedBadTask(
+					badTaskId,
+					sourceUsername
+			)).contains(badTaskId);
+			assertThat(workerAssignmentMutationGuardRepository.lockOwnedRecoveryTask(
+					recoveryTaskId,
+					sourceUsername
+			)).contains(recoveryTaskId);
+
+			jdbcTemplate.update("""
+				INSERT INTO workload_shadow_runs (
+				    trigger_type,
+				    status,
+				    started_at,
+				    instance_id
+				)
+				VALUES ('LIVE_E2E', 'RUNNING', ?, ?)
+				""", now, "live-e2e-" + marker);
+			Long shadowRunId =
+					jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+			workloadShadowProjectionService.recalculate(shadowRunId, now);
+			assertThat(jdbcTemplate.queryForList("""
+				SELECT worker_id
+				FROM workload_shadow_worker_current
+				WHERE worker_id IN (?, ?, ?)
+				ORDER BY worker_id
+				""", Long.class,
+					source.workerId(),
+					firstRecipient.workerId(),
+					secondRecipient.workerId()
+			)).containsExactlyInAnyOrder(
+					source.workerId(),
+					firstRecipient.workerId(),
+					secondRecipient.workerId()
+			);
+			jdbcTemplate.update("""
+				UPDATE workload_shadow_worker_current
+				SET failure_days = 4,
+				    rating = 70,
+				    last_day_reached_100 = 0,
+				    recipient_eligible = 0,
+				    accepts_company_transfers = 0,
+				    worker_group_connected = 1,
+				    diagnostic_status = 'OK'
+				WHERE worker_id = ?
+				""", source.workerId());
+			jdbcTemplate.update("""
+				UPDATE workload_shadow_worker_current
+				SET failure_days = 0,
+				    hundred_percent_days = 12,
+				    rating = 98,
+				    last_day_reached_100 = 1,
+				    accepts_company_transfers = 1,
+				    recipient_eligible = 1,
+				    worker_group_connected = 1,
+				    estimated_remaining_minutes = 5,
+				    diagnostic_status = 'OK'
+				WHERE worker_id = ?
+				""", firstRecipient.workerId());
+			jdbcTemplate.update("""
+				UPDATE workload_shadow_worker_current
+				SET failure_days = 0,
+				    hundred_percent_days = 11,
+				    rating = 96,
+				    last_day_reached_100 = 1,
+				    accepts_company_transfers = 1,
+				    recipient_eligible = 1,
+				    worker_group_connected = 1,
+				    estimated_remaining_minutes = 10,
+				    diagnostic_status = 'OK'
+				WHERE worker_id = ?
+				""", secondRecipient.workerId());
+
+			var simulation = workloadShadowTransferSimulationService.rebuild(
+					shadowRunId,
+					now
+			);
+			assertThat(simulation.transferCaseCount()).isGreaterThanOrEqualTo(1);
+			Long transferCaseId = jdbcTemplate.queryForObject("""
+				SELECT workload_shadow_transfer_case_id
+				FROM workload_shadow_transfer_cases
+				WHERE source_worker_id = ?
+				  AND company_id = ?
+				  AND manager_id = ?
+				  AND active = 1
+				  AND status = 'SHADOW_PENDING'
+				  AND graph_error_count = 0
+				ORDER BY workload_shadow_transfer_case_id DESC
+				LIMIT 1
+				""", Long.class, source.workerId(), companyId, managerId);
+			assertThat(transferCaseId).isNotNull();
+			assertThat(jdbcTemplate.queryForList("""
+				SELECT worker_id
+				FROM workload_shadow_transfer_candidates
+				WHERE transfer_case_id = ?
+				ORDER BY sequence_number
+				""", Long.class, transferCaseId)).containsExactly(
+					firstRecipient.workerId(),
+					secondRecipient.workerId()
+			);
+
+			java.util.Map<String, String> liveOverrides = new java.util.LinkedHashMap<>();
+			liveOverrides.put("workload.live.mode", "CANARY");
+			liveOverrides.put("workload.live.apply-enabled", "true");
+			liveOverrides.put("workload.live.min-candidates-per-manager", "2");
+			liveOverrides.put("workload.live.canary-manager-ids", managerId.toString());
+			liveOverrides.put("workload.live.offer-timeout-minutes", "15");
+			liveOverrides.put("workload.live.offer-start-time", "00:00");
+			liveOverrides.put("workload.live.offer-end-time", "23:59:59");
+			liveOverrides.put("workload.live.max-transfers-per-manager-day", "100");
+			liveOverrides.put("workload.live.max-transfers-global-day", "500");
+			liveOverrides.put("workload.live.rollback-window-minutes", "30");
+			liveOverrides.put("workload.live.first-live-owner-confirmations", "100");
+			for (var entry : liveOverrides.entrySet()) {
+				assertThat(jdbcTemplate.update("""
+					UPDATE app_settings
+					SET setting_value = ?,
+					    updated_at = CURRENT_TIMESTAMP(6)
+					WHERE setting_key = ?
+					""", entry.getValue(), entry.getKey())).isEqualTo(1);
+			}
+			Long liveSettingsRevision = jdbcTemplate.queryForObject("""
+				SELECT CAST(TRIM(setting_value) AS UNSIGNED)
+				FROM app_settings
+				WHERE setting_key = 'workload.live.settings-revision'
+				""", Long.class);
+			assertThat(liveSettingsRevision).isNotNull();
+
+			var workflowStage = workloadTransferWorkflowService
+					.stageEligibleRecommendations();
+			assertThat(workflowStage.enabled()).isTrue();
+			assertThat(workflowStage.staged()).isEqualTo(1);
+			Long workflowId = jdbcTemplate.queryForObject("""
+				SELECT workload_transfer_workflow_id
+				FROM workload_transfer_workflows
+				WHERE shadow_case_id = ?
+				  AND manager_id = ?
+				  AND source_worker_id = ?
+				  AND company_id = ?
+				  AND active = 1
+				""", Long.class,
+					transferCaseId,
+					managerId,
+					source.workerId(),
+					companyId
+			);
+			assertThat(workflowId).isNotNull();
+			String liveFailureCode = "LIVE_E2E_SQL_CONTRACT";
+			long monitoringChatId = -5_181_415_104L;
+			assertThat(workloadShadowEventRepository.upsertLiveExecutionFailure(
+					workflowId,
+					liveFailureCode,
+					"Первая проверочная ошибка",
+					true,
+					monitoringChatId,
+					now,
+					now.minusMinutes(30)
+			)).isPositive();
+			assertThat(workloadShadowEventRepository.upsertLiveExecutionFailure(
+					workflowId,
+					liveFailureCode,
+					"Повторная проверочная ошибка",
+					true,
+					monitoringChatId,
+					now.plusSeconds(1),
+					now.minusMinutes(30)
+			)).isPositive();
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workload_shadow_events
+				WHERE deduplication_key = CONCAT(
+				        'LIVE_EXECUTION_FAILURE:',
+				        ?,
+				        ':',
+				        ?
+				      )
+				  AND event_type = 'LIVE_EXECUTION_FAILURE'
+				  AND manager_id = ?
+				  AND worker_id = ?
+				  AND company_id = ?
+				  AND transfer_case_id = ?
+				  AND target_group_type = 'ADMIN_OWNER_MONITORING'
+				  AND target_group_chat_id = ?
+				  AND delivery_status = 'PENDING'
+				  AND occurrence_count = 2
+				  AND active = 1
+				""", Integer.class,
+					workflowId,
+					liveFailureCode,
+					managerId,
+					source.workerId(),
+					companyId,
+					transferCaseId,
+					monitoringChatId
+			)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workload_transfer_workflow_candidates
+				WHERE workflow_id = ?
+				""", Integer.class, workflowId)).isEqualTo(2);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(DISTINCT current.manager_id)
+				FROM workload_transfer_workflow_candidates candidate
+				JOIN workload_shadow_worker_current current
+				  ON current.worker_id = candidate.worker_id
+				WHERE candidate.workflow_id = ?
+				  AND current.manager_id = ?
+				""", Integer.class, workflowId, managerId)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForList("""
+				SELECT candidate.worker_id
+				FROM workload_transfer_workflow_candidates candidate
+				JOIN workload_shadow_worker_current current
+				  ON current.worker_id = candidate.worker_id
+				WHERE candidate.workflow_id = ?
+				  AND current.manager_id = ?
+				ORDER BY candidate.sequence_number
+			""", Long.class, workflowId, managerId)).containsExactly(
+					firstRecipient.workerId(),
+					secondRecipient.workerId()
+			);
+			assertThat(workloadTransferWorkflowService
+					.stageEligibleRecommendations()
+					.staged()).isZero();
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workload_transfer_workflows
+				WHERE source_worker_id = ?
+				  AND company_id = ?
+				  AND active = 1
+				""", Integer.class,
+					source.workerId(),
+					companyId
+			)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workload_transfer_workflow_candidates
+				WHERE workflow_id = ?
+				""", Integer.class, workflowId)).isEqualTo(2);
+
+			var firstStage = workloadTransferOfferService.stageNextOffers();
+			assertThat(firstStage.staged()).isEqualTo(1);
+			WorkloadTestOffer firstOffer = findWorkloadTestOffer(workflowId, 1);
+			assertThat(firstOffer.candidateWorkerId())
+					.isEqualTo(firstRecipient.workerId());
+			var firstClaim = workloadTransferOfferService.claimDueOffers();
+			assertThat(firstClaim.offers())
+					.extracting(WorkloadTransferOfferRepository.DeliveryProjection::getOfferId)
+					.contains(firstOffer.offerId());
+			workloadTransferOfferService.markDelivered(
+					firstOffer.offerId(),
+					firstClaim.processingToken(),
+					91_001
+			);
+			assertThat(workloadTransferOfferRepository.decline(
+					firstOffer.offerToken(),
+					firstGroupChatId,
+					91_001,
+					firstTelegramId,
+					managerId,
+					liveSettingsRevision,
+					LocalDateTime.now(java.time.ZoneId.of("Asia/Irkutsk"))
+			)).isPositive();
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT status
+				FROM workload_transfer_offers
+				WHERE workload_transfer_offer_id = ?
+				""", String.class, firstOffer.offerId())).isEqualTo("DECLINED");
+
+			var secondStage = workloadTransferOfferService.stageNextOffers();
+			assertThat(secondStage.staged()).isEqualTo(1);
+			WorkloadTestOffer secondOffer = findWorkloadTestOffer(workflowId, 2);
+			assertThat(secondOffer.candidateWorkerId())
+					.isEqualTo(secondRecipient.workerId());
+			var secondClaim = workloadTransferOfferService.claimDueOffers();
+			assertThat(secondClaim.offers())
+					.extracting(WorkloadTransferOfferRepository.DeliveryProjection::getOfferId)
+					.contains(secondOffer.offerId());
+			workloadTransferOfferService.markDelivered(
+					secondOffer.offerId(),
+					secondClaim.processingToken(),
+					91_002
+			);
+			assertThat(workloadTransferOfferRepository.accept(
+					secondOffer.offerToken(),
+					secondGroupChatId,
+					91_002,
+					secondTelegramId,
+					managerId,
+					liveSettingsRevision,
+					LocalDateTime.now(java.time.ZoneId.of("Asia/Irkutsk"))
+			)).isPositive();
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT status
+				FROM workload_transfer_workflows
+				WHERE workload_transfer_workflow_id = ?
+				""", String.class, workflowId))
+					.isEqualTo("AWAITING_OWNER_CONFIRMATION");
+
+			workloadTransferExecutionService.confirmByOwner(workflowId);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT status
+				FROM workload_transfer_workflows
+				WHERE workload_transfer_workflow_id = ?
+				""", String.class, workflowId)).isEqualTo("ACCEPTED");
+			Long acceptedVersion = jdbcTemplate.queryForObject("""
+				SELECT workflow_version
+				FROM workload_transfer_workflows
+				WHERE workload_transfer_workflow_id = ?
+				  AND status = 'ACCEPTED'
+				""", Long.class, workflowId);
+			var applied = workloadTransferExecutionTransactionService.apply(
+					workflowId,
+					acceptedVersion
+			);
+			assertThat(applied.status()).isEqualTo("APPLIED");
+			assertThat(applied.executionId()).isNotNull();
+			long executionId = applied.executionId();
+
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT order_worker
+				FROM orders
+				WHERE order_id = ?
+				""", Long.class, orderId)).isEqualTo(secondRecipient.workerId());
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM orders
+				WHERE order_id = ?
+				  AND order_amount = 2
+				  AND order_counter = 1
+				""", Integer.class, orderId)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM reviews
+				WHERE review_id IN (?, ?)
+				  AND review_worker = ?
+				""", Integer.class,
+					firstReviewId,
+					secondReviewId,
+					secondRecipient.workerId()
+			)).isEqualTo(2);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM reviews
+				WHERE review_id = ?
+				  AND review_vigul = 1
+				  AND review_text_ready_at = ?
+				""", Integer.class, secondReviewId, now)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT bad_review_task_worker
+				FROM bad_review_tasks
+				WHERE bad_review_task_id = ?
+				""", Long.class, badTaskId)).isEqualTo(secondRecipient.workerId());
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT review_recovery_task_worker
+				FROM review_recovery_tasks
+				WHERE review_recovery_task_id = ?
+				""", Long.class, recoveryTaskId))
+					.isEqualTo(secondRecipient.workerId());
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workload_transfer_assignment_audit
+				WHERE execution_id = ?
+				  AND entity_type IN ('ORDER', 'REVIEW', 'BAD_TASK', 'RECOVERY_TASK')
+				""", Integer.class, executionId)).isEqualTo(5);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workers_companies
+				WHERE company_id = ?
+				  AND worker_id = ?
+				""", Integer.class, companyId, source.workerId())).isZero();
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workers_companies
+				WHERE company_id = ?
+				  AND worker_id = ?
+				""", Integer.class, companyId, secondRecipient.workerId())).isEqualTo(1);
+
+			var rollback = workloadTransferRollbackService.rollback(
+					executionId,
+					WorkloadTransferRollbackService.CONFIRMATION
+			);
+			assertThat(rollback.status()).isEqualTo("ROLLED_BACK");
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT order_worker
+				FROM orders
+				WHERE order_id = ?
+				""", Long.class, orderId)).isEqualTo(source.workerId());
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM orders
+				WHERE order_id = ?
+				  AND order_amount = 2
+				  AND order_counter = 1
+				""", Integer.class, orderId)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM reviews
+				WHERE review_id IN (?, ?)
+				  AND review_worker = ?
+				""", Integer.class,
+					firstReviewId,
+					secondReviewId,
+					source.workerId()
+			)).isEqualTo(2);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM reviews
+				WHERE review_id = ?
+				  AND review_vigul = 1
+				  AND review_text_ready_at = ?
+				""", Integer.class, secondReviewId, now)).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT bad_review_task_worker
+				FROM bad_review_tasks
+				WHERE bad_review_task_id = ?
+				""", Long.class, badTaskId)).isEqualTo(source.workerId());
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT review_recovery_task_worker
+				FROM review_recovery_tasks
+				WHERE review_recovery_task_id = ?
+				""", Long.class, recoveryTaskId)).isEqualTo(source.workerId());
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT status
+				FROM workload_transfer_executions
+				WHERE workload_transfer_execution_id = ?
+				""", String.class, executionId)).isEqualTo("ROLLED_BACK");
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT status
+				FROM workload_transfer_workflows
+				WHERE workload_transfer_workflow_id = ?
+				""", String.class, workflowId)).isEqualTo("ROLLED_BACK");
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workers_companies
+				WHERE company_id = ?
+				  AND worker_id = ?
+				""", Integer.class, companyId, source.workerId())).isEqualTo(1);
+			assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*)
+				FROM workers_companies
+				WHERE company_id = ?
+				  AND worker_id = ?
+				""", Integer.class, companyId, secondRecipient.workerId())).isZero();
+
+			LocalDateTime stableSince = LocalDateTime.of(2099, 1, 1, 0, 0);
+			LocalDateTime checkedAt = stableSince.plusMinutes(60);
+			jdbcTemplate.update("""
+				INSERT INTO workload_shadow_runs (
+				    trigger_type,
+				    status,
+				    started_at,
+				    finished_at,
+				    instance_id
+				)
+				VALUES (?, 'SUCCEEDED', ?, ?, ?),
+				       (?, 'SUCCEEDED', ?, ?, ?),
+				       (?, 'SUCCEEDED', ?, ?, ?)
+				""",
+					"LIVE_GAP_1_" + marker,
+					stableSince.plusMinutes(9),
+					stableSince.plusMinutes(10),
+					"live-gap-1-" + marker,
+					"LIVE_GAP_2_" + marker,
+					stableSince.plusMinutes(34),
+					stableSince.plusMinutes(35),
+					"live-gap-2-" + marker,
+					"LIVE_GAP_3_" + marker,
+					stableSince.plusMinutes(49),
+					stableSince.plusMinutes(50),
+					"live-gap-3-" + marker
+			);
+			assertThat(workloadLiveReadinessRepository
+					.maximumSuccessfulRunGapMinutes(stableSince, checkedAt))
+					.isEqualTo(25L);
+		} finally {
+			for (var entry : originalLiveSettings.entrySet()) {
+				assertThat(jdbcTemplate.update("""
+					UPDATE app_settings
+					SET setting_value = ?,
+					    updated_at = CURRENT_TIMESTAMP(6)
+					WHERE setting_key = ?
+					""", entry.getValue(), entry.getKey())).isEqualTo(1);
+			}
+		}
+	}
+
+	@Test
+	void workloadMaintenanceRepairAndRetentionDmlExecuteOnMySql() {
+		LocalDateTime now = LocalDateTime.now();
+		String staleTrigger = "MAINTENANCE_" + UUID.randomUUID().toString().substring(0, 8);
+		jdbcTemplate.update("""
+			INSERT INTO workload_shadow_runs (
+			    trigger_type,
+			    status,
+			    started_at,
+			    instance_id
+			)
+			VALUES (?, 'RUNNING', ?, 'maintenance-integration')
+			""", staleTrigger, now.minusHours(2));
+		Long staleRunId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+		assertThat(workloadShadowMaintenanceService.repairStaleState().failedRuns())
+				.isGreaterThanOrEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT status
+			FROM workload_shadow_runs
+			WHERE workload_shadow_run_id = ?
+			""", String.class, staleRunId)).isEqualTo("FAILED");
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT COUNT(*)
+			FROM workload_maintenance_status
+			WHERE maintenance_task = 'REPAIR'
+			  AND last_succeeded_at IS NOT NULL
+			""", Integer.class)).isEqualTo(1);
+
+		String oldTrigger = "RETENTION_" + UUID.randomUUID().toString().substring(0, 8);
+		jdbcTemplate.update("""
+			INSERT INTO workload_shadow_runs (
+			    trigger_type,
+			    status,
+			    started_at,
+			    finished_at,
+			    instance_id
+			)
+			VALUES (?, 'SUCCEEDED', ?, ?, 'maintenance-integration')
+			""", oldTrigger, now.minusYears(3), now.minusYears(2));
+		Long oldRunId = jdbcTemplate.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
+
+		workloadShadowMaintenanceService.cleanupRetention();
+
+		assertThat(countById(
+				"workload_shadow_runs",
+				"workload_shadow_run_id",
+				oldRunId
+		)).isZero();
+		assertThat(jdbcTemplate.queryForObject("""
+			SELECT COUNT(*)
+			FROM workload_maintenance_status
+			WHERE maintenance_task = 'RETENTION'
+			  AND last_succeeded_at IS NOT NULL
+			""", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
 	void reviewBotAssignmentExclusionCleanupQueryExecutesOnMySql() {
 		assertThat(botAssignmentExclusionService.clearPublishedBefore(java.time.LocalDateTime.now()))
 				.isGreaterThanOrEqualTo(0);
@@ -791,6 +1820,55 @@ class OtzivOApplicationTests {
 				.contains(orderId);
 	}
 
+	private WorkloadTestWorker createWorkloadTestWorker(
+			String username,
+			String fio,
+			LocalDateTime createdAt
+	) {
+		jdbcTemplate.update("""
+			INSERT INTO users (
+			    username,
+			    password,
+			    fio,
+			    email,
+			    active,
+			    create_time
+			)
+			VALUES (?, 'password', ?, ?, 1, ?)
+			""", username, fio, username + "@example.test", createdAt);
+		Long userId = jdbcTemplate.queryForObject(
+				"SELECT LAST_INSERT_ID()",
+				Long.class
+		);
+		jdbcTemplate.update(
+				"INSERT INTO workers (user_id) VALUES (?)",
+				userId
+		);
+		Long workerId = jdbcTemplate.queryForObject(
+				"SELECT LAST_INSERT_ID()",
+				Long.class
+		);
+		return new WorkloadTestWorker(userId, workerId);
+	}
+
+	private WorkloadTestOffer findWorkloadTestOffer(
+			long workflowId,
+			int sequenceNumber
+	) {
+		return jdbcTemplate.queryForObject("""
+			SELECT workload_transfer_offer_id,
+			       offer_token,
+			       candidate_worker_id
+			FROM workload_transfer_offers
+			WHERE workflow_id = ?
+			  AND sequence_number = ?
+			""", (resultSet, rowNumber) -> new WorkloadTestOffer(
+				resultSet.getLong("workload_transfer_offer_id"),
+				resultSet.getString("offer_token"),
+				resultSet.getLong("candidate_worker_id")
+		), workflowId, sequenceNumber);
+	}
+
 	private byte[] uuidBytes(UUID uuid) {
 		ByteBuffer buffer = ByteBuffer.allocate(16);
 		buffer.putLong(uuid.getMostSignificantBits());
@@ -804,5 +1882,15 @@ class OtzivOApplicationTests {
 				Integer.class,
 				id
 		);
+	}
+
+	private record WorkloadTestWorker(long userId, long workerId) {
+	}
+
+	private record WorkloadTestOffer(
+			long offerId,
+			String offerToken,
+			long candidateWorkerId
+	) {
 	}
 }

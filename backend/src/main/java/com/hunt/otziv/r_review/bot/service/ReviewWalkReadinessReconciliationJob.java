@@ -1,7 +1,6 @@
 package com.hunt.otziv.r_review.bot.service;
 
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReviewWalkReadinessReconciliationJob {
 
-    private final ReviewRepository reviewRepository;
     private final BotAssignmentService botAssignmentService;
 
     @Scheduled(
@@ -21,9 +19,7 @@ public class ReviewWalkReadinessReconciliationJob {
     )
     public void reconcile() {
         try {
-            int promoted = botAssignmentService.promoteReviewsWithWalkedAccounts(
-                    reviewRepository.findByPublishFalseAndBotIsNotNull()
-            );
+            int promoted = botAssignmentService.promoteAllUnpublishedReviewsWithWalkedAccounts();
             if (promoted > 0) {
                 log.warn("Исправлено несогласованных состояний готовности отзывов: {}", promoted);
             }

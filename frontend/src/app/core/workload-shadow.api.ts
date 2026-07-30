@@ -286,6 +286,22 @@ export interface WorkloadShadowHealthNode {
   lagSeconds?: number | null;
 }
 
+export interface WorkloadMaintenanceHealth {
+  healthy: boolean;
+  repairStatus: string;
+  retentionStatus: string;
+  lastRepairStartedAt?: string | null;
+  lastRepairSucceededAt?: string | null;
+  lastRepairFailedAt?: string | null;
+  lastRetentionStartedAt?: string | null;
+  lastRetentionSucceededAt?: string | null;
+  lastRetentionFailedAt?: string | null;
+  repairConsecutiveFailures?: number;
+  retentionConsecutiveFailures?: number;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+}
+
 export interface WorkloadShadowHealth {
   status: string;
   updatedAt?: string | null;
@@ -312,6 +328,7 @@ export interface WorkloadShadowHealth {
   oldestDueAgeSeconds?: number;
   oldestDueEventAt?: string | null;
   lastSnapshotAt?: string | null;
+  maintenance?: WorkloadMaintenanceHealth | null;
   nodes?: WorkloadShadowHealthNode[];
   issues?: WorkloadShadowHealthIssue[];
 }
@@ -346,6 +363,141 @@ export interface WorkloadTransferPreference {
   acceptsCompanyTransfers: boolean;
   changedAt?: string | null;
   updatedAt?: string | null;
+}
+
+export type WorkloadLiveMode = 'SHADOW' | 'CANARY' | 'LIVE';
+
+export interface WorkloadLiveSettings {
+  mode: WorkloadLiveMode | string;
+  applyEnabled: boolean;
+  historyStartDate: string;
+  minFinalizedDays: number;
+  stableHours: number;
+  minCandidatesPerManager: number;
+  canaryManagerIds: number[];
+  offerTimeoutMinutes: number;
+  offerStartTime: string;
+  offerEndTime: string;
+  maxTransfersPerManagerDay: number;
+  maxTransfersGlobalDay: number;
+  rollbackWindowMinutes: number;
+  firstLiveOwnerConfirmations: number;
+  emergencyFallbackEnabled: boolean;
+  revision: number;
+  retentionDays: number;
+}
+
+export type WorkloadLiveSettingsRequest = Omit<
+  WorkloadLiveSettings,
+  'mode' | 'applyEnabled'
+>;
+
+export interface WorkloadLiveReadinessCheck {
+  code: string;
+  status: 'PASS' | 'FAIL' | string;
+  message: string;
+  actual?: number | null;
+  required?: number | null;
+}
+
+export interface WorkloadLiveReadiness {
+  ready: boolean;
+  targetMode: WorkloadLiveMode | string;
+  checkedAt: string;
+  checks: WorkloadLiveReadinessCheck[];
+}
+
+export interface WorkloadTransferWorkflow {
+  id: number;
+  key: string;
+  mode: string;
+  status: string;
+  managerId: number;
+  managerName: string;
+  sourceWorkerId: number;
+  sourceWorkerName: string;
+  targetWorkerId?: number | null;
+  targetWorkerName?: string | null;
+  companyId: number;
+  companyTitle: string;
+  failureNumber: number;
+  transferPercent: number;
+  problemUnits: number;
+  estimatedMinutes: number;
+  activeOrderCount: number;
+  newUnitCount: number;
+  correctionCount: number;
+  nagulCount: number;
+  publishCount: number;
+  recoveryCount: number;
+  badCount: number;
+  ownerConfirmationRequired: boolean;
+  ownerConfirmedAt?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  decisionDate: string;
+  lastTransitionAt: string;
+  createdAt: string;
+  currentOfferExpiresAt?: string | null;
+  candidateCount: number;
+  declinedCandidateCount: number;
+  unavailableCandidateCount: number;
+}
+
+export interface WorkloadTransferExecution {
+  id: number;
+  workflowId: number;
+  status: string;
+  managerId: number;
+  managerName: string;
+  sourceWorkerId: number;
+  sourceWorkerName: string;
+  targetWorkerId: number;
+  targetWorkerName: string;
+  companyId: number;
+  companyTitle: string;
+  orderCount: number;
+  reviewCount: number;
+  badTaskCount: number;
+  recoveryTaskCount: number;
+  startedAt?: string | null;
+  appliedAt?: string | null;
+  rollbackDeadlineAt?: string | null;
+  rolledBackAt?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+export interface WorkloadEmergencyAssignment {
+  id: number;
+  mode: string;
+  status: string;
+  sourceManagerId: number;
+  sourceManagerName: string;
+  sourceWorkerId: number;
+  sourceWorkerName: string;
+  targetManagerId: number;
+  targetManagerName: string;
+  targetWorkerId: number;
+  targetWorkerName: string;
+  companyId: number;
+  companyTitle: string;
+  reviewId: number;
+  reason: string;
+  targetNotificationStatus: string;
+  auditNotificationStatus: string;
+  notificationAttempts: number;
+  decisionDate: string;
+  appliedAt: string | null;
+  rollbackDeadlineAt: string | null;
+  rolledBackAt: string | null;
+  lastError: string | null;
+}
+
+export interface WorkloadTransferAction {
+  id: number;
+  status: string;
+  message: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -404,6 +556,103 @@ export class WorkloadShadowApi {
     return this.http.post<WorkloadShadowActionResult>(
       `${this.adminBaseUrl}/monitor/repair`,
       {}
+    );
+  }
+
+  getLiveSettings(): Observable<WorkloadLiveSettings> {
+    return this.http.get<WorkloadLiveSettings>(`${this.adminBaseUrl}/live/settings`);
+  }
+
+  updateLiveSettings(
+    request: WorkloadLiveSettingsRequest
+  ): Observable<WorkloadLiveSettings> {
+    return this.http.put<WorkloadLiveSettings>(
+      `${this.adminBaseUrl}/live/settings`,
+      request
+    );
+  }
+
+  getLiveReadiness(
+    targetMode: 'CANARY' | 'LIVE'
+  ): Observable<WorkloadLiveReadiness> {
+    return this.http.get<WorkloadLiveReadiness>(
+      `${this.adminBaseUrl}/live/readiness`,
+      { params: new HttpParams().set('targetMode', targetMode) }
+    );
+  }
+
+  activateLive(
+    mode: 'CANARY' | 'LIVE',
+    revision: number,
+    confirmation: string
+  ): Observable<WorkloadLiveSettings> {
+    return this.http.post<WorkloadLiveSettings>(
+      `${this.adminBaseUrl}/live/activate`,
+      { mode, revision, confirmation }
+    );
+  }
+
+  stopLive(revision: number): Observable<WorkloadLiveSettings> {
+    return this.http.post<WorkloadLiveSettings>(
+      `${this.adminBaseUrl}/live/stop`,
+      { revision }
+    );
+  }
+
+  getLiveWorkflows(
+    managerId?: number | null
+  ): Observable<WorkloadTransferWorkflow[]> {
+    return this.http.get<WorkloadTransferWorkflow[]>(
+      `${this.adminBaseUrl}/live/workflows`,
+      { params: this.managerParams(managerId) }
+    );
+  }
+
+  getLiveExecutions(
+    managerId?: number | null
+  ): Observable<WorkloadTransferExecution[]> {
+    return this.http.get<WorkloadTransferExecution[]>(
+      `${this.adminBaseUrl}/live/executions`,
+      { params: this.managerParams(managerId) }
+    );
+  }
+
+  getLiveEmergencyAssignments(
+    managerId?: number | null
+  ): Observable<WorkloadEmergencyAssignment[]> {
+    return this.http.get<WorkloadEmergencyAssignment[]>(
+      `${this.adminBaseUrl}/live/emergency-assignments`,
+      { params: this.managerParams(managerId) }
+    );
+  }
+
+  confirmLiveWorkflow(
+    workflowId: number,
+    confirmation: string
+  ): Observable<WorkloadTransferAction> {
+    return this.http.post<WorkloadTransferAction>(
+      `${this.adminBaseUrl}/live/workflows/${workflowId}/confirm`,
+      { confirmation }
+    );
+  }
+
+  rollbackLiveExecution(
+    executionId: number,
+    confirmation: string
+  ): Observable<WorkloadTransferAction> {
+    return this.http.post<WorkloadTransferAction>(
+      `${this.adminBaseUrl}/live/executions/${executionId}/rollback`,
+      { confirmation }
+    );
+  }
+
+  rollbackEmergencyAssignment(
+    assignmentId: number,
+    confirmation: string
+  ): Observable<WorkloadTransferAction> {
+    return this.http.post<WorkloadTransferAction>(
+      `${this.adminBaseUrl}/live/emergency-assignments/${assignmentId}/rollback`,
+      { confirmation }
     );
   }
 

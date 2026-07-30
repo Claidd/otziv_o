@@ -25,10 +25,10 @@ public interface WorkloadShadowSettingsRepository extends Repository<AppSetting,
                 :settingsJson,
                 '$[*]' COLUMNS (
                     setting_key VARCHAR(100)
-                        CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
                         PATH '$.settingKey',
                     setting_value VARCHAR(500)
-                        CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
                         PATH '$.settingValue'
                 )
             ) requested_setting

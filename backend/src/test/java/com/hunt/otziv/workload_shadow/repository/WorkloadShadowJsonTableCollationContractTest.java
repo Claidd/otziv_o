@@ -13,11 +13,14 @@ import org.springframework.data.jpa.repository.Query;
 
 class WorkloadShadowJsonTableCollationContractTest {
 
-    private static final String REQUIRED_CHARACTER_DEFINITION =
+    private static final String WORKLOAD_TABLE_CHARACTER_DEFINITION =
             "character set utf8mb4 collate utf8mb4_unicode_ci";
+    private static final String APP_SETTINGS_CHARACTER_DEFINITION =
+            "character set utf8mb4 collate utf8mb4_0900_ai_ci";
     private static final Pattern JSON_CHARACTER_COLUMN = Pattern.compile(
             "\\b[a-z0-9_]+\\s+"
-                    + "(?:varchar\\s*\\(\\s*\\d+\\s*\\)|char\\s*\\(\\s*\\d+\\s*\\)|text)\\s+"
+                    + "(?:varchar\\s*\\(\\s*\\d+\\s*\\)|char\\s*\\(\\s*\\d+\\s*\\)"
+                    + "|longtext|mediumtext|text)\\s+"
                     + "(.*?)\\bpath\\b",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
@@ -28,8 +31,11 @@ class WorkloadShadowJsonTableCollationContractTest {
             WorkloadShadowRecalculationLockRepository.class,
             WorkloadShadowRunRepository.class,
             WorkloadShadowSettingsRepository.class,
+            WorkloadLiveSettingsRepository.class,
             WorkloadShadowTransferRepository.class,
             WorkloadShadowWorkerDailyRepository.class,
+            WorkloadTransferOfferRepository.class,
+            WorkloadTransferWorkflowRepository.class,
             WorkloadTransferGraphRepository.class,
             WorkloadTransferPreferenceRepository.class
     );
@@ -44,13 +50,17 @@ class WorkloadShadowJsonTableCollationContractTest {
                     continue;
                 }
                 Matcher column = JSON_CHARACTER_COLUMN.matcher(query.value());
+                String requiredCharacterDefinition =
+                        usesAppSettingsCollation(repositoryType)
+                                ? APP_SETTINGS_CHARACTER_DEFINITION
+                                : WORKLOAD_TABLE_CHARACTER_DEFINITION;
                 while (column.find()) {
                     checkedColumns++;
                     assertThat(normalized(column.group(1)))
                             .as(repositoryType.getSimpleName() + "." + method.getName()
                                     + ": строковая JSON_TABLE-колонка должна использовать "
                                     + "ту же collation, что runtime-таблицы")
-                            .contains(REQUIRED_CHARACTER_DEFINITION);
+                            .contains(requiredCharacterDefinition);
                 }
             }
         }
@@ -67,7 +77,18 @@ class WorkloadShadowJsonTableCollationContractTest {
                         String.class,
                         long.class
                 ),
-                "setting_key varchar(100) " + REQUIRED_CHARACTER_DEFINITION,
+                "setting_key varchar(100) " + APP_SETTINGS_CHARACTER_DEFINITION,
+                "requested_setting.setting_key = target_setting.setting_key"
+        );
+        assertCollatedComparison(
+                WorkloadLiveSettingsRepository.class.getDeclaredMethod(
+                        "updateAllWithRevision",
+                        String.class,
+                        String.class,
+                        String.class,
+                        long.class
+                ),
+                "setting_key varchar(100) " + APP_SETTINGS_CHARACTER_DEFINITION,
                 "requested_setting.setting_key = target_setting.setting_key"
         );
         assertCollatedComparison(
@@ -76,7 +97,7 @@ class WorkloadShadowJsonTableCollationContractTest {
                         String.class,
                         String.class
                 ),
-                "case_key varchar(160) " + REQUIRED_CHARACTER_DEFINITION,
+                "case_key varchar(160) " + WORKLOAD_TABLE_CHARACTER_DEFINITION,
                 "case_row.case_key = transfer_case.case_key",
                 "candidate_row.case_key = transfer_case.case_key"
         );
@@ -85,7 +106,7 @@ class WorkloadShadowJsonTableCollationContractTest {
                         "upsertCandidates",
                         String.class
                 ),
-                "case_key varchar(160) " + REQUIRED_CHARACTER_DEFINITION,
+                "case_key varchar(160) " + WORKLOAD_TABLE_CHARACTER_DEFINITION,
                 "transfer_case.case_key = candidate_row.case_key"
         );
         assertCollatedComparison(
@@ -95,7 +116,7 @@ class WorkloadShadowJsonTableCollationContractTest {
                         LocalDateTime.class,
                         LocalDateTime.class
                 ),
-                "case_key varchar(160) " + REQUIRED_CHARACTER_DEFINITION,
+                "case_key varchar(160) " + WORKLOAD_TABLE_CHARACTER_DEFINITION,
                 "transfer_case.case_key = event_row.case_key"
         );
     }
@@ -113,6 +134,11 @@ class WorkloadShadowJsonTableCollationContractTest {
         String sql = normalized(query.value());
         assertThat(sql).contains(collatedColumn);
         assertThat(sql).contains(comparisons);
+    }
+
+    private boolean usesAppSettingsCollation(Class<?> repositoryType) {
+        return repositoryType == WorkloadShadowSettingsRepository.class
+                || repositoryType == WorkloadLiveSettingsRepository.class;
     }
 
     private String normalized(String value) {

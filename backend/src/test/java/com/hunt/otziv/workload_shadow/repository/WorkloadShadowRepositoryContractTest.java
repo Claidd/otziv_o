@@ -20,7 +20,16 @@ class WorkloadShadowRepositoryContractTest {
             WorkloadShadowSettingsRepository.class,
             WorkloadShadowTransferRepository.class,
             WorkloadShadowWorkerDailyRepository.class,
+            WorkloadEmergencyAssignmentRepository.class,
+            WorkloadMaintenanceStatusRepository.class,
+            WorkloadLiveReadinessRepository.class,
+            WorkloadLiveSettingsRepository.class,
+            WorkloadTransferExecutionRepository.class,
             WorkloadTransferGraphRepository.class,
+            WorkloadTransferLiveMonitorRepository.class,
+            WorkloadTransferMaintenanceRepository.class,
+            WorkloadTransferOfferRepository.class,
+            WorkloadTransferWorkflowRepository.class,
             WorkloadTransferPreferenceRepository.class
     );
 

@@ -101,7 +101,8 @@ class EndOfDayAchievementServiceTest {
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         verify(telegramService).sendMessage(eq(-700L), text.capture(), eq("HTML"));
         assertTrue(text.getValue().contains("3 дня подряд на 100%"));
-        assertTrue(text.getValue().contains("после 23:00"));
+        assertTrue(text.getValue().contains("Поздняя входящая нагрузка"));
+        assertTrue(text.getValue().contains("2 ед. работы"));
         assertTrue(text.getValue().contains("Анна &lt;А&gt;"));
         verify(gamificationEventService).recordWorkerMilestone(
                 eq(GamificationEventService.WORKER_DAY_100), eq(worker), anyString(), any(), anyString());
@@ -131,9 +132,33 @@ class EndOfDayAchievementServiceTest {
         assertTrue(text.getValue().contains("28 из 35"));
         assertTrue(text.getValue().contains("Осталось выполнить: <b>7</b>"));
         assertTrue(text.getValue().contains("Счётчик дней на 100%: <b>0 дней</b>"));
-        assertTrue(text.getValue().contains("после 23:00"));
+        assertTrue(text.getValue().contains("Поздняя входящая нагрузка"));
         verify(gamificationEventService, never()).recordWorkerMilestone(
                 anyString(), eq(worker), anyString(), any(), anyString());
+    }
+
+    @Test
+    void explainsPreservedAchievementWhenNewWorkArrivedLater() {
+        User user = User.builder()
+                .id(70L)
+                .fio("Елена")
+                .workerTelegramGroupChatId(-700L)
+                .build();
+        Worker worker = Worker.builder().id(7L).user(user).build();
+        EndOfDayAchievementService.AchievementResult result = new EndOfDayAchievementService.AchievementResult(
+                DATE, EndOfDayAchievementService.ROLE_WORKER, 7L,
+                35, 30, 100, 0, true, 2, false
+        );
+        when(telegramService.sendMessage(eq(-700L), anyString(), eq("HTML"))).thenReturn(true);
+
+        service.notifyWorker(worker, result);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-700L), text.capture(), eq("HTML"));
+        assertTrue(text.getValue().contains("День засчитан на 100%"));
+        assertTrue(text.getValue().contains("была полностью закрыта в течение дня"));
+        assertTrue(text.getValue().contains("30 из 35"));
+        assertTrue(text.getValue().contains("Достигнутые 100% сохранены"));
     }
 
     @Test

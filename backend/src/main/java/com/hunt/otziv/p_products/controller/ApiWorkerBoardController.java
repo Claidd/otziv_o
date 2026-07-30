@@ -24,6 +24,7 @@ import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerCellularAccessService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationGateService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerPublicationSessionService;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
@@ -67,6 +68,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.security.Principal;
@@ -144,6 +146,7 @@ public class ApiWorkerBoardController {
     private final WorkerCredentialPreparationService credentialPreparationService;
     private final StaffDailyProgressService staffDailyProgressService;
     private final WorkerCellularAccessService workerCellularAccessService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final ScheduledClientMessageService scheduledClientMessageService;
     private final WorkerRiskAccessPolicy workerRiskAccessPolicy;
 
@@ -280,6 +283,7 @@ public class ApiWorkerBoardController {
     @PostMapping("/orders/{orderId}/status")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'WORKER')")
+    @Transactional
     public void updateOrderStatus(
             @PathVariable Long orderId,
             @RequestBody StatusChangeRequest request,
@@ -289,6 +293,7 @@ public class ApiWorkerBoardController {
     ) throws Exception {
         String status = requireStatus(request);
         servletRequest.setAttribute("status", status);
+        assignmentMutationGuardService.assertOrder(orderId);
         Order order = orderService.getOrder(orderId);
         enforceWorkerWaitingReviewTransition(order, status, principal, authentication);
 
@@ -355,6 +360,7 @@ public class ApiWorkerBoardController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка заказа не указана");
         }
 
+        assignmentMutationGuardService.assertOrder(orderId);
         Order order = orderService.getOrder(orderId);
         order.setZametka(request.orderComments());
         orderService.save(order);
@@ -372,6 +378,7 @@ public class ApiWorkerBoardController {
     @PutMapping("/orders/{orderId}/company-note")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
     public void updateOrderCompanyNote(
             @PathVariable Long orderId,
             @RequestBody CompanyNoteUpdateRequest request
@@ -380,6 +387,7 @@ public class ApiWorkerBoardController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
         }
 
+        assignmentMutationGuardService.assertOrder(orderId);
         Order order = orderService.getOrder(orderId);
         Company company = order.getCompany();
         if (company == null) {
@@ -526,6 +534,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
         String field = normalizeReviewCopyField(request);
         ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
 
@@ -566,6 +575,7 @@ public class ApiWorkerBoardController {
 
         try {
             Review review = reviewService.getReviewById(reviewId);
+            assignmentMutationGuardService.assertReview(reviewId);
             credentialPreparationService.blockUntilReady(
                     authentication,
                     WorkerCredentialPreparationScope.PUBLISH,
@@ -605,6 +615,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
+        assignmentMutationGuardService.assertBadTask(taskId);
         try {
             BadReviewTask task = badReviewTaskService.completeTask(taskId);
             workerActivityService.recordSafely(
@@ -631,6 +642,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
+        assignmentMutationGuardService.assertBadTask(taskId);
         if (request == null || request.taskText() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст плохой задачи не указан");
         }
@@ -688,6 +700,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
         if (request == null || request.recoveryText() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст восстановления не указан");
         }
@@ -749,6 +762,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.completeTask(taskId, currentUser(authentication));
             workerActivityService.recordSafely(
@@ -770,6 +784,7 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotChangeResponse changeRecoveryTaskBot(@PathVariable Long taskId) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.changeTaskBot(taskId);
             workerActivityService.recordCurrentAuthenticationSafely(
@@ -795,6 +810,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long botId
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_RECOVERY);
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
         try {
             ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
             reviewRecoveryTaskService.deactivateAndChangeTaskBot(taskId, botId);
@@ -816,6 +832,7 @@ public class ApiWorkerBoardController {
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
     public BotChangeResponse changeBadReviewTaskBot(@PathVariable Long taskId) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
+        assignmentMutationGuardService.assertBadTask(taskId);
         try {
             BadReviewTask task = badReviewTaskService.changeTaskBot(taskId);
             workerActivityService.recordCurrentAuthenticationSafely(
@@ -841,6 +858,7 @@ public class ApiWorkerBoardController {
             @PathVariable Long botId
     ) {
         workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
+        assignmentMutationGuardService.assertBadTask(taskId);
         try {
             BadReviewTask task = badReviewTaskService.getTask(taskId);
             badReviewTaskService.deactivateAndChangeTaskBot(taskId, botId);
@@ -868,6 +886,7 @@ public class ApiWorkerBoardController {
         workerCellularAccessService.enforceProtectedAccess(SECTION_NAGUL);
         try {
             Review review = reviewService.getReviewById(reviewId);
+            assignmentMutationGuardService.assertReview(reviewId);
             credentialPreparationService.blockUntilReady(
                     authentication,
                     WorkerCredentialPreparationScope.NAGUL,
@@ -928,6 +947,7 @@ public class ApiWorkerBoardController {
     @PutMapping("/reviews/{reviewId}/bot-name")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    @Transactional
     public void updateReviewBotName(
             @PathVariable Long reviewId,
             @RequestBody ReviewBotNameUpdateRequest request
@@ -944,6 +964,7 @@ public class ApiWorkerBoardController {
         }
 
         Review review = reviewService.getReviewById(reviewId);
+        assignmentMutationGuardService.assertReview(reviewId);
         Bot bot = review == null ? null : review.getBot();
         if (bot == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "У отзыва нет назначенного аккаунта");
@@ -1584,6 +1605,9 @@ public class ApiWorkerBoardController {
     }
 
     private void enforceReviewSourceAccess(Review review, String sourceSection) {
+        if (review != null && review.getId() != null) {
+            assignmentMutationGuardService.assertReview(review.getId());
+        }
         String normalized = safe(sourceSection).trim().toLowerCase(Locale.ROOT);
         String orderSection = reviewOrderSection(review);
         if (orderSection != null) {

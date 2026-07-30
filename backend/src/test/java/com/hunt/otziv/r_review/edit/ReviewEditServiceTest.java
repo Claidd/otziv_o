@@ -3,6 +3,7 @@ package com.hunt.otziv.r_review.edit;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,9 @@ class ReviewEditServiceTest {
 
     @Mock
     private OrderDetailsService orderDetailsService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Test
     void updateReviewTextSavesReviewWhenReviewBelongsToOrder() {
@@ -83,7 +87,11 @@ class ReviewEditServiceTest {
     }
 
     private ReviewEditService service() {
-        return new ReviewEditService(reviewRepository, orderDetailsService);
+        return new ReviewEditService(
+                reviewRepository,
+                orderDetailsService,
+                assignmentMutationGuardService
+        );
     }
 
     private Review reviewForOrder(Long orderId) {

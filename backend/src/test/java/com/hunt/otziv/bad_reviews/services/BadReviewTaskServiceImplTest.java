@@ -19,6 +19,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
@@ -104,6 +105,9 @@ class BadReviewTaskServiceImplTest {
 
     @Mock
     private ReviewAccountWalkScheduleService accountWalkScheduleService;
+
+    @Mock
+    private WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @InjectMocks
     private BadReviewTaskServiceImpl service;

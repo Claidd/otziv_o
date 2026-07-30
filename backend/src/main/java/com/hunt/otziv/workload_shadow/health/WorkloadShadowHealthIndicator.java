@@ -38,6 +38,27 @@ public class WorkloadShadowHealthIndicator implements HealthIndicator {
                     .withDetail("expiredRecalculationLocks", snapshot.expiredRecalculationLocks())
                     .withDetail("snapshotAgeSeconds", snapshot.snapshotAgeSeconds())
                     .withDetail("oldestDueAgeSeconds", snapshot.oldestDueAgeSeconds())
+                    .withDetail("maintenanceHealthy", snapshot.maintenanceHealthy())
+                    .withDetail(
+                            "repairMaintenanceStatus",
+                            snapshot.maintenance().repairStatus()
+                    )
+                    .withDetail(
+                            "retentionMaintenanceStatus",
+                            snapshot.maintenance().retentionStatus()
+                    )
+                    .withDetail(
+                            "lastRepairSucceededAt",
+                            value(snapshot.maintenance().lastRepairSucceededAt())
+                    )
+                    .withDetail(
+                            "lastRetentionSucceededAt",
+                            value(snapshot.maintenance().lastRetentionSucceededAt())
+                    )
+                    .withDetail(
+                            "maintenanceLastErrorCode",
+                            value(snapshot.maintenance().lastErrorCode())
+                    )
                     .withDetail("lastSnapshotAt", value(snapshot.lastSnapshotAt()))
                     .withDetail("lastSuccessfulRunAt", value(snapshot.lastSuccessfulRunAt()))
                     .build();

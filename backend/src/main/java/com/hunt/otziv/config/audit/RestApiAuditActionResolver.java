@@ -279,6 +279,17 @@ public class RestApiAuditActionResolver {
         put(actions, "PUT", "/api/admin/workload-shadow/settings", "редактирование настроек наблюдения за нагрузкой");
         put(actions, "POST", "/api/admin/workload-shadow/monitor/recalculate", "ручной теневой пересчёт нагрузки");
         put(actions, "POST", "/api/admin/workload-shadow/monitor/repair", "ручная самоналадка теневого контура нагрузки");
+        put(actions, "GET", "/api/admin/workload-shadow/live/settings", "загрузка предохранителей передачи нагрузки");
+        put(actions, "PUT", "/api/admin/workload-shadow/live/settings", "редактирование предохранителей передачи нагрузки");
+        put(actions, "GET", "/api/admin/workload-shadow/live/readiness", "проверка готовности передачи нагрузки");
+        put(actions, "POST", "/api/admin/workload-shadow/live/activate", "включение защищённого режима передачи нагрузки");
+        put(actions, "POST", "/api/admin/workload-shadow/live/stop", "аварийная остановка передачи нагрузки");
+        put(actions, "GET", "/api/admin/workload-shadow/live/workflows", "загрузка журнала предложений передачи");
+        put(actions, "GET", "/api/admin/workload-shadow/live/executions", "загрузка журнала выполненных передач");
+        put(actions, "GET", "/api/admin/workload-shadow/live/emergency-assignments", "загрузка журнала аварийных карточек");
+        put(actions, "POST", "/api/admin/workload-shadow/live/workflows/{workflowId}/confirm", "подтверждение владельцем передачи {workflowId}");
+        put(actions, "POST", "/api/admin/workload-shadow/live/executions/{executionId}/rollback", "безопасный откат передачи {executionId}");
+        put(actions, "POST", "/api/admin/workload-shadow/live/emergency-assignments/{assignmentId}/rollback", "безопасный откат аварийной карточки {assignmentId}");
         put(actions, "GET", "/api/workload-shadow/preferences/me", "загрузка настройки получения компаний специалистом");
         put(actions, "PUT", "/api/workload-shadow/preferences/me", "изменение настройки получения компаний специалистом: {acceptsCompanyTransfers}");
         put(actions, "GET", "/api/admin/settings/telegram-reports", "загрузка настроек Telegram-рассылок");

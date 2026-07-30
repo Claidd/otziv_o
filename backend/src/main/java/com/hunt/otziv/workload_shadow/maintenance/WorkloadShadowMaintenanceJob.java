@@ -22,12 +22,20 @@ public class WorkloadShadowMaintenanceJob {
                     maintenanceService.repairStaleState();
             if (summary.failedRuns() > 0
                     || summary.retriedEvents() > 0
-                    || summary.cancelledEvents() > 0) {
+                    || summary.cancelledEvents() > 0
+                    || summary.retriedLiveOffers() > 0
+                    || summary.repairedOrphanReadyOffers() > 0
+                    || summary.cancelledExpiredWorkflows() > 0) {
                 log.warn(
-                        "Workload shadow self-heal: failedRuns={}, retriedEvents={}, cancelledEvents={}",
+                        "Workload self-heal: failedRuns={}, retriedEvents={}, cancelledEvents={}, "
+                                + "retriedLiveOffers={}, repairedOrphanReadyOffers={}, "
+                                + "cancelledExpiredWorkflows={}",
                         summary.failedRuns(),
                         summary.retriedEvents(),
-                        summary.cancelledEvents()
+                        summary.cancelledEvents(),
+                        summary.retriedLiveOffers(),
+                        summary.repairedOrphanReadyOffers(),
+                        summary.cancelledExpiredWorkflows()
                 );
             }
         } catch (RuntimeException exception) {
@@ -40,26 +48,40 @@ public class WorkloadShadowMaintenanceJob {
             zone = "${workload.shadow.maintenance-zone:Asia/Irkutsk}"
     )
     public void cleanupRetention() {
+        WorkloadShadowMaintenanceService.RepairSummary repair = null;
         try {
-            WorkloadShadowMaintenanceService.RepairSummary repair =
-                    maintenanceService.repairStaleState();
+            repair = maintenanceService.repairStaleState();
+        } catch (RuntimeException exception) {
+            log.error(
+                    "Workload stale-state repair failed before nightly retention; "
+                            + "bounded retention will still run",
+                    exception
+            );
+        }
+        try {
             WorkloadShadowMaintenanceService.RetentionSummary retention =
                     maintenanceService.cleanupRetention();
             log.info(
                     "Workload shadow maintenance complete: failedRuns={}, retriedEvents={}, "
                             + "cancelledEvents={}, deletedEvents={}, deletedRuns={}, deletedDaily={}, "
-                            + "deletedTransferCases={}, deletedLateBatches={}",
-                    repair.failedRuns(),
-                    repair.retriedEvents(),
-                    repair.cancelledEvents(),
+                            + "deletedTransferCases={}, deletedLateBatches={}, "
+                            + "deletedAssignmentAudit={}, deletedExecutions={}, deletedWorkflows={}, "
+                            + "deletedEmergencyAssignments={}",
+                    repair == null ? 0 : repair.failedRuns(),
+                    repair == null ? 0 : repair.retriedEvents(),
+                    repair == null ? 0 : repair.cancelledEvents(),
                     retention.deletedEvents(),
                     retention.deletedRuns(),
                     retention.deletedDaily(),
                     retention.deletedTransferCases(),
-                    retention.deletedLateBatches()
+                    retention.deletedLateBatches(),
+                    retention.deletedAssignmentAudit(),
+                    retention.deletedExecutions(),
+                    retention.deletedWorkflows(),
+                    retention.deletedEmergencyAssignments()
             );
         } catch (RuntimeException exception) {
-            log.error("Workload shadow nightly maintenance failed", exception);
+            log.error("Workload bounded retention failed", exception);
         }
     }
 }

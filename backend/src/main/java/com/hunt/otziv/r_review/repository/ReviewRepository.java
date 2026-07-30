@@ -472,8 +472,17 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     int findAllByReviewsListStatus(@Param("localDate") LocalDate localDate,
                                    @Param("worker") Worker worker);
 
-    @Query("SELECT r FROM Review r WHERE r.publish = false AND r.bot IS NOT NULL")
-    List<Review> findByPublishFalseAndBotIsNotNull();
+    @Query("""
+        SELECT r
+        FROM Review r
+        JOIN FETCH r.bot
+        LEFT JOIN FETCH r.orderDetails od
+        LEFT JOIN FETCH od.order
+        WHERE r.publish = false
+          AND r.bot IS NOT NULL
+        ORDER BY r.id
+    """)
+    List<Review> findAllForWalkReadinessReconciliation();
 
     @Query("""
         SELECT DISTINCT r

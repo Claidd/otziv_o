@@ -14,7 +14,12 @@ import {
   WorkloadShadowMonitorSummary,
   WorkloadShadowProposal,
   WorkloadShadowSettings,
-  WorkloadShadowWorker
+  WorkloadShadowWorker,
+  WorkloadLiveReadiness,
+  WorkloadLiveSettings,
+  WorkloadTransferExecution,
+  WorkloadEmergencyAssignment,
+  WorkloadTransferWorkflow
 } from '../../../core/workload-shadow.api';
 import { AdminLayoutComponent } from '../../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../../shared/api-error-message';
@@ -161,11 +166,17 @@ export class WorkloadShadowComponent implements OnDestroy {
   readonly proposals = signal<WorkloadShadowProposal[]>([]);
   readonly events = signal<WorkloadShadowEvent[]>([]);
   readonly health = signal<WorkloadShadowHealth | null>(null);
+  readonly liveSettings = signal<WorkloadLiveSettings | null>(null);
+  readonly liveReadiness = signal<WorkloadLiveReadiness | null>(null);
+  readonly liveWorkflows = signal<WorkloadTransferWorkflow[]>([]);
+  readonly liveExecutions = signal<WorkloadTransferExecution[]>([]);
+  readonly emergencyAssignments = signal<WorkloadEmergencyAssignment[]>([]);
   readonly settingsLoading = signal(false);
   readonly monitorLoading = signal(false);
   readonly saving = signal(false);
   readonly recalculating = signal(false);
   readonly repairing = signal(false);
+  readonly liveBusy = signal(false);
   readonly settingsError = signal<string | null>(null);
   readonly monitorError = signal<string | null>(null);
   readonly selectedManagerId = signal<number | null>(null);
@@ -177,6 +188,10 @@ export class WorkloadShadowComponent implements OnDestroy {
   readonly canRepair = computed(() => {
     this.auth.tokenParsed();
     return this.auth.hasRealmRole('ADMIN') || this.auth.hasRealmRole('OWNER');
+  });
+  readonly canControlLive = computed(() => {
+    this.auth.tokenParsed();
+    return this.auth.hasRealmRole('OWNER');
   });
   readonly managers = computed(() => {
     const summaryManagers = this.summary()?.managers ?? [];
@@ -452,6 +467,24 @@ export class WorkloadShadowComponent implements OnDestroy {
     revision: [0, [Validators.required, Validators.min(0)]]
   });
 
+  readonly liveForm = this.fb.nonNullable.group({
+    historyStartDate: ['2026-08-01', Validators.required],
+    minFinalizedDays: [14, [Validators.required, Validators.min(1), Validators.max(400)]],
+    stableHours: [168, [Validators.required, Validators.min(1), Validators.max(720)]],
+    minCandidatesPerManager: [2, [Validators.required, Validators.min(1), Validators.max(20)]],
+    canaryManagerIds: [''],
+    offerTimeoutMinutes: [15, [Validators.required, Validators.min(1), Validators.max(240)]],
+    offerStartTime: ['10:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
+    offerEndTime: ['21:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
+    maxTransfersPerManagerDay: [1, [Validators.required, Validators.min(1), Validators.max(100)]],
+    maxTransfersGlobalDay: [3, [Validators.required, Validators.min(1), Validators.max(500)]],
+    rollbackWindowMinutes: [30, [Validators.required, Validators.min(1), Validators.max(1440)]],
+    firstLiveOwnerConfirmations: [5, [Validators.required, Validators.min(0), Validators.max(100)]],
+    emergencyFallbackEnabled: [false],
+    retentionDays: [400, [Validators.required, Validators.min(31), Validators.max(3650)]],
+    revision: [0, [Validators.required, Validators.min(0)]]
+  });
+
   constructor() {
     this.loadSettings();
     this.loadMonitor();
@@ -496,16 +529,220 @@ export class WorkloadShadowComponent implements OnDestroy {
   loadSettings(): void {
     this.settingsLoading.set(true);
     this.settingsError.set(null);
-    this.api.getSettings().subscribe({
-      next: (settings) => {
-        this.applySettings(settings);
+    forkJoin({
+      shadow: this.api.getSettings(),
+      live: this.api.getLiveSettings()
+    }).subscribe({
+      next: ({ shadow, live }) => {
+        this.applySettings(shadow);
+        this.applyLiveSettings(live);
         this.settingsLoading.set(false);
+        this.checkLiveReadiness(live.mode === 'LIVE' ? 'LIVE' : 'CANARY', true);
       },
       error: (error) => {
         this.settingsError.set(apiErrorMessage(error, 'Не удалось загрузить настройки наблюдения'));
         this.settingsLoading.set(false);
       }
     });
+  }
+
+  saveLiveSettings(): void {
+    const current = this.liveSettings();
+    if (!current) {
+      this.settingsError.set('Сначала загрузите текущую ревизию боевых настроек.');
+      return;
+    }
+    if (this.liveForm.invalid) {
+      this.liveForm.markAllAsTouched();
+      this.settingsError.set('Проверьте параметры защищённого контура.');
+      return;
+    }
+    const value = this.liveForm.getRawValue();
+    const canaryManagerIds = value.canaryManagerIds
+      .split(',')
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isInteger(item) && item > 0);
+    if (value.canaryManagerIds.trim() && canaryManagerIds.length === 0) {
+      this.settingsError.set('Укажите ID пилотных менеджеров через запятую.');
+      return;
+    }
+    if (value.maxTransfersGlobalDay < value.maxTransfersPerManagerDay) {
+      this.settingsError.set('Общий лимит не может быть меньше лимита одного менеджера.');
+      return;
+    }
+    this.liveBusy.set(true);
+    this.settingsError.set(null);
+    this.api.updateLiveSettings({
+      historyStartDate: value.historyStartDate,
+      minFinalizedDays: value.minFinalizedDays,
+      stableHours: value.stableHours,
+      minCandidatesPerManager: value.minCandidatesPerManager,
+      canaryManagerIds: [...new Set(canaryManagerIds)],
+      offerTimeoutMinutes: value.offerTimeoutMinutes,
+      offerStartTime: value.offerStartTime,
+      offerEndTime: value.offerEndTime,
+      maxTransfersPerManagerDay: value.maxTransfersPerManagerDay,
+      maxTransfersGlobalDay: value.maxTransfersGlobalDay,
+      rollbackWindowMinutes: value.rollbackWindowMinutes,
+      firstLiveOwnerConfirmations: value.firstLiveOwnerConfirmations,
+      emergencyFallbackEnabled: value.emergencyFallbackEnabled,
+      retentionDays: value.retentionDays,
+      revision: value.revision
+    }).subscribe({
+      next: (settings) => {
+        this.applyLiveSettings(settings);
+        this.liveBusy.set(false);
+        this.toast.success('Боевые предохранители сохранены', `Ревизия ${settings.revision}`);
+        this.checkLiveReadiness(settings.mode === 'LIVE' ? 'LIVE' : 'CANARY', true);
+      },
+      error: (error) => {
+        const message = apiErrorMessage(error, 'Не удалось сохранить боевые предохранители');
+        this.settingsError.set(message);
+        this.liveBusy.set(false);
+        this.toast.error('Настройки не сохранены', message);
+      }
+    });
+  }
+
+  checkLiveReadiness(mode: 'CANARY' | 'LIVE', quiet = false): void {
+    if (!quiet) this.liveBusy.set(true);
+    this.api.getLiveReadiness(mode).subscribe({
+      next: (readiness) => {
+        this.liveReadiness.set(readiness);
+        this.liveBusy.set(false);
+        if (!quiet) {
+          const detail = readiness.ready
+            ? 'Все обязательные проверки пройдены'
+            : `Не пройдено: ${readiness.checks.filter((item) => item.status !== 'PASS').map((item) => item.code).join(', ')}`;
+          readiness.ready
+            ? this.toast.success('Проверка готовности', detail)
+            : this.toast.error('Боевой режим пока заблокирован', detail);
+        }
+      },
+      error: (error) => {
+        this.liveBusy.set(false);
+        if (!quiet) {
+          this.toast.error('Проверка не выполнена', apiErrorMessage(error, 'Ошибка готовности'));
+        }
+      }
+    });
+  }
+
+  activateLive(mode: 'CANARY' | 'LIVE'): void {
+    const settings = this.liveSettings();
+    if (!settings || !this.canControlLive() || this.liveBusy()) return;
+    const confirmation = window.prompt(
+      `Для включения ${mode} введите точную фразу:\nВКЛЮЧИТЬ БОЕВОЙ РЕЖИМ`
+    );
+    if (confirmation == null) return;
+    this.liveBusy.set(true);
+    this.api.activateLive(mode, settings.revision, confirmation).subscribe({
+      next: (updated) => {
+        this.applyLiveSettings(updated);
+        this.liveBusy.set(false);
+        this.toast.success('Защищённый контур включён', `Режим ${updated.mode}`);
+        this.loadMonitor(true);
+      },
+      error: (error) => {
+        const message = apiErrorMessage(error, 'Боевой режим не включён');
+        this.liveBusy.set(false);
+        this.toast.error('Включение заблокировано', message);
+        this.checkLiveReadiness(mode, true);
+      }
+    });
+  }
+
+  stopLive(): void {
+    const settings = this.liveSettings();
+    if (!settings || this.liveBusy()) return;
+    if (!window.confirm(
+      'Аварийно остановить предложения и новые передачи? Уже завершённые передачи не откатываются.'
+    )) return;
+    this.liveBusy.set(true);
+    this.api.stopLive(settings.revision).subscribe({
+      next: (updated) => {
+        this.applyLiveSettings(updated);
+        this.liveBusy.set(false);
+        this.toast.success('Боевой контур остановлен', 'Режим возвращён в SHADOW');
+        this.loadMonitor(true);
+      },
+      error: (error) => {
+        this.liveBusy.set(false);
+        this.toast.error('Остановка не выполнена', apiErrorMessage(error, 'Ошибка остановки'));
+      }
+    });
+  }
+
+  confirmWorkflow(workflow: WorkloadTransferWorkflow): void {
+    if (!this.canControlLive() || this.liveBusy()) return;
+    const confirmation = window.prompt(
+      `Подтвердить передачу «${workflow.companyTitle}» от ${workflow.sourceWorkerName} к ${workflow.targetWorkerName || 'получателю'}?\nВведите: ПОДТВЕРЖДАЮ ПЕРЕДАЧУ`
+    );
+    if (confirmation == null) return;
+    this.liveBusy.set(true);
+    this.api.confirmLiveWorkflow(workflow.id, confirmation).subscribe({
+      next: (result) => {
+        this.liveBusy.set(false);
+        this.toast.success('Передача подтверждена', result.message);
+        this.loadMonitor(true);
+      },
+      error: (error) => {
+        this.liveBusy.set(false);
+        this.toast.error('Подтверждение не принято', apiErrorMessage(error, 'Workflow изменился'));
+      }
+    });
+  }
+
+  rollbackExecution(execution: WorkloadTransferExecution): void {
+    if (!this.canControlLive() || this.liveBusy()) return;
+    const confirmation = window.prompt(
+      `Откатить передачу «${execution.companyTitle}»? Это допустимо только до начала работы получателя.\nВведите: ОТКАТИТЬ ПЕРЕДАЧУ`
+    );
+    if (confirmation == null) return;
+    this.liveBusy.set(true);
+    this.api.rollbackLiveExecution(execution.id, confirmation).subscribe({
+      next: (result) => {
+        this.liveBusy.set(false);
+        this.toast.success('Передача отменена', result.message);
+        this.loadMonitor(true);
+      },
+      error: (error) => {
+        this.liveBusy.set(false);
+        this.toast.error('Откат запрещён', apiErrorMessage(error, 'После передачи уже начата работа'));
+      }
+    });
+  }
+
+  canRollback(execution: WorkloadTransferExecution): boolean {
+    return execution.status === 'APPLIED'
+      && !!execution.rollbackDeadlineAt
+      && new Date(execution.rollbackDeadlineAt).getTime() >= Date.now();
+  }
+
+  rollbackEmergency(assignment: WorkloadEmergencyAssignment): void {
+    if (!this.canControlLive() || this.liveBusy()) return;
+    const confirmation = window.prompt(
+      `Вернуть карточку #${assignment.reviewId} исходному специалисту? Это допустимо только до начала работы получателя.\nВведите: ОТКАТИТЬ АВАРИЙНУЮ КАРТОЧКУ`
+    );
+    if (confirmation == null) return;
+    this.liveBusy.set(true);
+    this.api.rollbackEmergencyAssignment(assignment.id, confirmation).subscribe({
+      next: (result) => {
+        this.liveBusy.set(false);
+        this.toast.success('Карточка возвращена', result.message);
+        this.loadMonitor(true);
+      },
+      error: (error) => {
+        this.liveBusy.set(false);
+        this.toast.error('Откат запрещён', apiErrorMessage(error, 'Карточка уже изменена'));
+      }
+    });
+  }
+
+  canRollbackEmergency(assignment: WorkloadEmergencyAssignment): boolean {
+    return ['APPLIED', 'NOTIFIED', 'NOTIFY_RETRY', 'NOTIFY_FAILED'].includes(assignment.status)
+      && !!assignment.rollbackDeadlineAt
+      && new Date(assignment.rollbackDeadlineAt).getTime() >= Date.now();
   }
 
   saveSettings(): void {
@@ -568,14 +805,29 @@ export class WorkloadShadowComponent implements OnDestroy {
       health: this.api.getHealth().pipe(catchError((error) => {
         errors.push(apiErrorMessage(error, 'самодиагностика'));
         return of(null);
+      })),
+      workflows: this.api.getLiveWorkflows(managerId).pipe(catchError((error) => {
+        errors.push(apiErrorMessage(error, 'боевые цепочки'));
+        return of(null);
+      })),
+      executions: this.api.getLiveExecutions(managerId).pipe(catchError((error) => {
+        errors.push(apiErrorMessage(error, 'журнал передач'));
+        return of(null);
+      })),
+      emergencyAssignments: this.api.getLiveEmergencyAssignments(managerId).pipe(catchError((error) => {
+        errors.push(apiErrorMessage(error, 'аварийные карточки'));
+        return of(null);
       }))
     }).subscribe({
-      next: ({ summary, workers, proposals, events, health }) => {
+      next: ({ summary, workers, proposals, events, health, workflows, executions, emergencyAssignments }) => {
         if (summary) this.summary.set(summary);
         if (workers) this.workers.set(this.collectionItems(workers));
         if (proposals) this.proposals.set(this.collectionItems(proposals));
         if (events) this.events.set(this.collectionItems(events));
         if (health) this.health.set(health);
+        if (workflows) this.liveWorkflows.set(workflows);
+        if (executions) this.liveExecutions.set(executions);
+        if (emergencyAssignments) this.emergencyAssignments.set(emergencyAssignments);
         this.monitorError.set(errors.length ? `Часть данных не обновилась: ${errors.join('; ')}` : null);
         this.monitorLoading.set(false);
       }
@@ -682,7 +934,7 @@ export class WorkloadShadowComponent implements OnDestroy {
       const diagnostic = worker.diagnosticStatus.toUpperCase();
       const diagnosticLabels: Record<string, string> = {
         AMBIGUOUS_MANAGER_LINK: 'Найдено несколько связей с менеджерами — распределение заблокировано',
-        MISSING_MANAGER_GROUP: 'Не подключена audit-группа менеджера',
+        MISSING_MANAGER_GROUP: 'Историческое событие: отдельная audit-группа менеджера больше не используется',
         MISSING_WORKER_GROUP: 'Не подключена рабочая группа специалиста',
       };
       reasons.push(diagnosticLabels[diagnostic] || worker.diagnosticStatus);
@@ -756,6 +1008,7 @@ export class WorkloadShadowComponent implements OnDestroy {
   statusLabel(value: string | null | undefined): string {
     switch (String(value || '').toUpperCase()) {
       case 'SHADOW': return 'Наблюдение';
+      case 'CANARY': return 'Пилотный режим';
       case 'OFF': return 'Выключено';
       case 'LIVE': return 'Боевой';
       case 'HEALTHY':
@@ -765,13 +1018,40 @@ export class WorkloadShadowComponent implements OnDestroy {
       case 'WARNING':
       case 'STALE': return 'Требует внимания';
       case 'PAUSED': return 'На паузе';
+      case 'INITIALIZING': return 'Первичная проверка';
+      case 'NEVER_RUN': return 'Ещё не запускалось';
+      case 'MISSING': return 'Нет данных';
       case 'SHADOW_PENDING': return 'Теневое предложение';
       case 'BLOCKED_GRAPH': return 'Пакет заблокирован';
       case 'DOWN':
       case 'CRITICAL':
+      case 'HEALTH_CHECK_FAILED':
       case 'FAILED': return 'Ошибка';
       case 'PENDING': return 'Ожидает';
+      case 'PASS': return 'Пройдено';
+      case 'FAIL': return 'Не пройдено';
       case 'PROCESSING': return 'Отправляется';
+      case 'PREPARED': return 'Подготовлено';
+      case 'READY_TO_OFFER': return 'Готово к предложению';
+      case 'OFFERED': return 'Предложено сотруднику';
+      case 'ACCEPTED': return 'Принято сотрудником';
+      case 'DECLINED': return 'Сотрудник отказался';
+      case 'EXPIRED': return 'Время ответа истекло';
+      case 'UNAVAILABLE': return 'Получатель недоступен';
+      case 'AWAITING_OWNER_CONFIRMATION': return 'Ожидает владельца';
+      case 'STAFFING_REQUIRED': return 'Нужен сотрудник';
+      case 'APPLYING': return 'Применяется';
+      case 'APPLIED': return 'Применено';
+      case 'ROLLING_BACK': return 'Выполняется откат';
+      case 'ROLLED_BACK': return 'Откачено';
+      case 'BLOCKED': return 'Заблокировано';
+      case 'DELIVERY_FAILED': return 'Ошибка доставки';
+      case 'CANCELLED_EXPIRED': return 'Закрыто по окончании дня';
+      case 'EMERGENCY_APPLIED': return 'Применено резервное назначение';
+      case 'NOTIFYING': return 'Отправляется уведомление';
+      case 'NOTIFY_RETRY': return 'Повтор уведомления';
+      case 'NOTIFIED': return 'Уведомлено';
+      case 'NOTIFY_FAILED': return 'Уведомление не доставлено';
       case 'RETRY': return 'Повторная попытка';
       case 'SENT': return 'Отправлено в общую группу';
       case 'SKIPPED': return 'Только мониторинг — не отправлялось';
@@ -780,6 +1060,22 @@ export class WorkloadShadowComponent implements OnDestroy {
       case 'CANCELLED': return 'Событие закрыто до отправки';
       case 'READY': return 'Готово';
       default: return value || '—';
+    }
+  }
+
+  readinessCheckLabel(code: string | null | undefined): string {
+    switch (String(code || '').toUpperCase()) {
+      case 'OBSERVATION_ENABLED': return 'Сбор наблюдений';
+      case 'AUDIT_GROUP_ROUTING': return 'Общая группа администраторов и владельцев';
+      case 'SHADOW_HEALTH': return 'Здоровье теневого контура';
+      case 'MAINTENANCE_HEALTH': return 'Самовосстановление и хранение';
+      case 'FINALIZED_HISTORY': return 'Завершённая история';
+      case 'STABLE_RUNS': return 'Стабильность расчётов';
+      case 'FRESH_SNAPSHOT': return 'Свежесть данных';
+      case 'RECIPIENT_CAPACITY': return 'Доступные получатели';
+      case 'GRAPH_ERRORS': return 'Целостность пакетов';
+      case 'NO_IN_FLIGHT_EXECUTIONS': return 'Нет незавершённых применений';
+      default: return code || 'Проверка';
     }
   }
 
@@ -842,6 +1138,27 @@ export class WorkloadShadowComponent implements OnDestroy {
       eventRetentionDays: settings.eventRetentionDays,
       decisionRetentionDays: settings.decisionRetentionDays,
       staleRunMinutes: settings.staleRunMinutes,
+      revision: settings.revision
+    });
+  }
+
+  private applyLiveSettings(settings: WorkloadLiveSettings): void {
+    this.liveSettings.set(settings);
+    this.liveForm.reset({
+      historyStartDate: settings.historyStartDate,
+      minFinalizedDays: settings.minFinalizedDays,
+      stableHours: settings.stableHours,
+      minCandidatesPerManager: settings.minCandidatesPerManager,
+      canaryManagerIds: (settings.canaryManagerIds ?? []).join(', '),
+      offerTimeoutMinutes: settings.offerTimeoutMinutes,
+      offerStartTime: settings.offerStartTime,
+      offerEndTime: settings.offerEndTime,
+      maxTransfersPerManagerDay: settings.maxTransfersPerManagerDay,
+      maxTransfersGlobalDay: settings.maxTransfersGlobalDay,
+      rollbackWindowMinutes: settings.rollbackWindowMinutes,
+      firstLiveOwnerConfirmations: settings.firstLiveOwnerConfirmations,
+      emergencyFallbackEnabled: settings.emergencyFallbackEnabled,
+      retentionDays: settings.retentionDays ?? 400,
       revision: settings.revision
     });
   }

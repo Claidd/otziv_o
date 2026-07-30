@@ -21,7 +21,7 @@ public interface WorkloadShadowMonitorRepository
                    worker_totals.at_risk_workers AS atRiskWorkers,
                    worker_totals.late_excluded_units AS lateExcludedUnits,
                    worker_totals.missing_worker_groups AS missingWorkerGroups,
-                   worker_totals.missing_manager_groups AS missingManagerGroups,
+                   0 AS missingManagerGroups,
                    worker_totals.updated_at AS updatedAt,
                    worker_totals.progress_date AS progressDate,
                    transfer_totals.transfer_case_count AS transferCases,
@@ -42,19 +42,9 @@ public interface WorkloadShadowMonitorRepository
                            WHEN wsc.worker_group_connected = FALSE THEN 1
                            ELSE 0
                        END), 0) AS missing_worker_groups,
-                       COUNT(DISTINCT CASE
-                           WHEN manager.manager_id IS NOT NULL
-                            AND (
-                              manager.audit_telegram_group_chat_id IS NULL
-                              OR manager.audit_telegram_group_chat_id >= 0
-                            )
-                           THEN wsc.manager_id
-                       END) AS missing_manager_groups,
                        COALESCE(MAX(wsc.snapshot_at), CURRENT_TIMESTAMP(6)) AS updated_at,
                        COALESCE(MAX(wsc.progress_date), CURRENT_DATE()) AS progress_date
                 FROM workload_shadow_worker_current wsc
-                LEFT JOIN managers manager
-                  ON manager.manager_id = wsc.manager_id
             ) worker_totals
             CROSS JOIN (
                 SELECT COUNT(*) AS transfer_case_count,
@@ -83,10 +73,7 @@ public interface WorkloadShadowMonitorRepository
                    ROUND(AVG(wsc.progress_percent), 2) AS progressPercent,
                    COALESCE(transfer_stats.transfer_case_count, 0) AS transferCaseCount,
                    COALESCE(transfer_stats.staffing_required, FALSE) AS staffingRequired,
-                   CASE
-                     WHEN manager.audit_telegram_group_chat_id < 0 THEN TRUE
-                     ELSE FALSE
-                   END AS groupConnected
+                   TRUE AS groupConnected
             FROM workload_shadow_worker_current wsc
             JOIN managers manager
               ON manager.manager_id = wsc.manager_id
@@ -104,8 +91,7 @@ public interface WorkloadShadowMonitorRepository
             GROUP BY wsc.manager_id,
                      managerName,
                      transfer_stats.transfer_case_count,
-                     transfer_stats.staffing_required,
-                     manager.audit_telegram_group_chat_id
+                     transfer_stats.staffing_required
             ORDER BY progressPercent ASC, managerName
             """, nativeQuery = true)
     List<ManagerSummaryProjection> managerSummaries();

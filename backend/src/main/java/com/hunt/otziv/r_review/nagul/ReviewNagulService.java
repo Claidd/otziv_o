@@ -3,6 +3,7 @@ package com.hunt.otziv.r_review.nagul;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -28,6 +29,7 @@ public class ReviewNagulService {
     private final WorkerService workerService;
     private final ReviewNagulPolicy reviewNagulPolicy;
     private final AppSettingService appSettingService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -66,6 +68,7 @@ public class ReviewNagulService {
 
     @Transactional
     public void performNagulWithExceptions(Long reviewId, String username) {
+        assignmentMutationGuardService.assertReview(reviewId);
         User currentUser = userService.findByUserName(username)
                 .orElseThrow(() -> new RuntimeException("Пользователь не найден"));
 

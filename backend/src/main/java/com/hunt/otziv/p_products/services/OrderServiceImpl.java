@@ -27,6 +27,7 @@ import com.hunt.otziv.p_products.statistics.OrderStatisticsService;
 import com.hunt.otziv.p_products.status.OrderBotLifecycleService;
 import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentExclusionService;
@@ -89,6 +90,7 @@ public class OrderServiceImpl implements OrderService {
     private final GamificationEventService gamificationEventService;
     private final ReviewBotCooldownService botCooldownService;
     private final ReviewBotAssignmentExclusionService botAssignmentExclusionService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
     private final PlatformTransactionManager transactionManager;
 
     public static final String ADMIN = "ROLE_ADMIN";
@@ -488,6 +490,7 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public boolean changeStatusAndOrderCounter(Long reviewId) throws Exception {
         try {
+            assignmentMutationGuardService.assertReview(reviewId);
             ReviewPublicationTarget target = validateAndRetrievePublicationTarget(reviewId);
             Review review = target.review();
             Order order = target.order();
@@ -866,7 +869,11 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public void save(Order order) {
+        if (order != null && order.getId() != null) {
+            assignmentMutationGuardService.assertOrder(order.getId());
+        }
         orderRepository.save(order);
     }
 

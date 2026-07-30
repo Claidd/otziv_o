@@ -141,7 +141,7 @@ public class EndOfDayAchievementService {
             return;
         }
         String text = "🏆 <b>Команда закрыла день на 100%!</b>\n\n"
-                + "👥 Все работники выполнили задачи, поступившие до <b>23:00</b>: <b>"
+                + "👥 Все работники выполнили обязательную нагрузку дня: <b>"
                 + result.completedCount() + " из " + result.eligibleCount() + "</b>.\n"
                 + streakLine(result.streakDays(), true)
                 + ignoredLine(result.ignoredLateCount())
@@ -279,14 +279,15 @@ public class EndOfDayAchievementService {
         if (ignoredLateCount <= 0) {
             return "";
         }
-        return "🕚 Новые задачи после 23:00 (<b>" + ignoredLateCount
-                + "</b>) результат не снизили — они перейдут на следующий день.\n";
+        return "⏳ Поздняя входящая нагрузка: <b>" + ignoredLateCount
+                + " ед. работы</b>. Она не снизила результат дня, осталась у специалиста "
+                + "и войдёт в обязательную нагрузку следующего дня.\n";
     }
 
     private String workerWorkdayText(String name, AchievementResult result) {
         if (result.reached100()) {
-            return "🏆 <b>День закрыт на 100%!</b>\n\n"
-                    + "✨ " + escape(name) + ", все задачи, поступившие до <b>23:00</b>, выполнены.\n"
+            return "🏆 <b>День засчитан на 100%!</b>\n\n"
+                    + workerAchievementLine(name, result)
                     + streakLine(result.streakDays(), false)
                     + ignoredLine(result.ignoredLateCount())
                     + "\nОтличный финиш дня — так держать! 🚀";
@@ -300,6 +301,17 @@ public class EndOfDayAchievementService {
                 + "🔥 Счётчик дней на 100%: <b>0 дней</b>.\n"
                 + ignoredLine(result.ignoredLateCount())
                 + "\nЗавтра можно начать новую серию.";
+    }
+
+    private String workerAchievementLine(String name, AchievementResult result) {
+        if (result.completedCount() >= result.eligibleCount()) {
+            return "✨ " + escape(name) + ", вся обязательная нагрузка дня выполнена.\n";
+        }
+        return "✨ " + escape(name)
+                + ", обязательная нагрузка была полностью закрыта в течение дня.\n"
+                + "📊 После достижения цели поступила новая нагрузка: к окончанию дня выполнено <b>"
+                + result.completedCount() + " из " + result.eligibleCount()
+                + "</b>. Достигнутые 100% сохранены.\n";
     }
 
     private String managerWorkdayText(String name, AchievementResult result, long confirmedActiveSeconds) {

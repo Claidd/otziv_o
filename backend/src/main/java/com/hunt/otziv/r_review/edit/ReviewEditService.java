@@ -2,6 +2,7 @@ package com.hunt.otziv.r_review.edit;
 
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,9 +17,11 @@ public class ReviewEditService {
 
     private final ReviewRepository reviewRepository;
     private final OrderDetailsService orderDetailsService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Transactional
     public boolean updateReviewText(Long orderId, Long reviewId, String text) {
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null) {
             return false;
@@ -31,6 +34,7 @@ public class ReviewEditService {
 
     @Transactional
     public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer) {
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null) {
             return false;
@@ -43,6 +47,7 @@ public class ReviewEditService {
 
     @Transactional
     public boolean updateReviewNote(Long orderId, Long reviewId, String comment) {
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null || review.getOrderDetails() == null) {
             return false;

@@ -53,7 +53,7 @@ public class ManagerTeamProgressService {
         long completed = progress.stream().mapToLong(DailyWorkProgressResponse::completed).sum();
         long total = progress.stream().mapToLong(DailyWorkProgressResponse::total).sum();
         double progressPercent = progress.stream()
-                .mapToInt(DailyWorkProgressResponse::percent)
+                .mapToInt(ManagerTeamProgressService::recognizedPercent)
                 .sum() / (double) safeWorkerCount;
         boolean reached100 = workersAt100 >= safeWorkerCount;
         MapSqlParameterSource params = new MapSqlParameterSource()
@@ -138,7 +138,11 @@ public class ManagerTeamProgressService {
     }
 
     private static boolean isAt100(DailyWorkProgressResponse progress) {
-        return isEligible(progress) && progress.percent() >= 100 && progress.active() <= 0;
+        return isEligible(progress) && progress.reached100();
+    }
+
+    private static int recognizedPercent(DailyWorkProgressResponse progress) {
+        return isAt100(progress) ? 100 : progress.percent();
     }
 
     private static boolean isEligible(DailyWorkProgressResponse progress) {

@@ -151,6 +151,31 @@ class BotAssignmentServiceImplTest {
     }
 
     @Test
+    void reconciliationLoadsAndPromotesReviewsInsideServiceTransaction() {
+        BotAssignmentServiceImpl service = service();
+        Bot bot = bot(101L, "Готовый аккаунт", 2);
+        Review pending = new Review();
+        pending.setId(1L);
+        pending.setBot(bot);
+
+        when(reviewRepository.findAllForWalkReadinessReconciliation())
+                .thenReturn(List.of(pending));
+        when(accountWalkScheduleService.isWalkedAccount(bot)).thenReturn(true);
+        doAnswer(invocation -> {
+            Review review = invocation.getArgument(0);
+            review.setVigul(true);
+            return null;
+        }).when(accountWalkScheduleService).synchronizeAfterAccountChange(pending);
+
+        int promoted = service.promoteAllUnpublishedReviewsWithWalkedAccounts();
+
+        assertEquals(1, promoted);
+        assertTrue(pending.isVigul());
+        verify(reviewRepository).findAllForWalkReadinessReconciliation();
+        verify(reviewRepository).saveAll(List.of(pending));
+    }
+
+    @Test
     void getAvailableBotsByRulesExcludesBotsAlreadyUsedInCompany() {
         BotAssignmentServiceImpl service = service();
         City city = city(5L, "Иркутск");

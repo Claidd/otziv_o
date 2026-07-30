@@ -60,5 +60,10 @@ public interface BotAssignmentService {
      */
     int promoteReviewsWithWalkedAccounts(Collection<Review> reviews);
 
+    /**
+     * Loads and promotes every eligible unpublished review in one transaction.
+     */
+    int promoteAllUnpublishedReviewsWithWalkedAccounts();
+
     int promoteUnpublishedReviewsForBot(Bot bot);
 }

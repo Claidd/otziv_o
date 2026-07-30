@@ -17,6 +17,7 @@ import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotCooldownService;
 import com.hunt.otziv.r_review.bot.service.ReviewBotAssignmentGuardService;
@@ -99,6 +100,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private final PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final ApplicationEventPublisher eventPublisher;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Override
     @Transactional(readOnly = true)
@@ -920,7 +922,7 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         if (taskId == null || taskId <= 0) {
             throw new EntityNotFoundException("Задача восстановления не найдена");
         }
-
+        assignmentMutationGuardService.assertRecoveryTask(taskId);
         return taskRepository.findByIdForMutation(taskId)
                 .orElseThrow(() -> new EntityNotFoundException("Задача восстановления не найдена: " + taskId));
     }

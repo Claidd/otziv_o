@@ -566,6 +566,14 @@ public class BotAssignmentServiceImpl implements BotAssignmentService {
 
     @Override
     @Transactional
+    public int promoteAllUnpublishedReviewsWithWalkedAccounts() {
+        return promoteReviewsWithWalkedAccounts(
+                reviewRepository.findAllForWalkReadinessReconciliation()
+        );
+    }
+
+    @Override
+    @Transactional
     public int promoteUnpublishedReviewsForBot(Bot bot) {
         if (bot == null || bot.getId() == null) {
             return 0;

@@ -38,6 +38,7 @@ public class WorkloadShadowMetrics {
     private final AtomicLong expiredRecalculationLocks = new AtomicLong();
     private final AtomicLong snapshotAgeSeconds = new AtomicLong();
     private final AtomicLong oldestDueAgeSeconds = new AtomicLong();
+    private final AtomicLong maintenanceHealthy = new AtomicLong();
 
     public WorkloadShadowMetrics(MeterRegistry meterRegistry) {
         sent = deliveryCounter(meterRegistry, "sent");
@@ -65,6 +66,7 @@ public class WorkloadShadowMetrics {
         gauge(meterRegistry, "otziv.workload.shadow.locks.expired", expiredRecalculationLocks);
         gauge(meterRegistry, "otziv.workload.shadow.snapshot.age.seconds", snapshotAgeSeconds);
         gauge(meterRegistry, "otziv.workload.shadow.events.oldest.due.seconds", oldestDueAgeSeconds);
+        gauge(meterRegistry, "otziv.workload.shadow.maintenance.healthy", maintenanceHealthy);
     }
 
     public void recordSent() {
@@ -116,6 +118,7 @@ public class WorkloadShadowMetrics {
         expiredRecalculationLocks.set(snapshot.expiredRecalculationLocks());
         snapshotAgeSeconds.set(snapshot.snapshotAgeSeconds());
         oldestDueAgeSeconds.set(snapshot.oldestDueAgeSeconds());
+        maintenanceHealthy.set(snapshot.maintenanceHealthy() ? 1 : 0);
     }
 
     private Counter deliveryCounter(MeterRegistry meterRegistry, String outcome) {

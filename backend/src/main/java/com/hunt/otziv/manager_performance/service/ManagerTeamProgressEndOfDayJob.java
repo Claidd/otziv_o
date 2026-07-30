@@ -8,6 +8,8 @@ import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.EndOfDayAchievementService;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -33,6 +35,7 @@ public class ManagerTeamProgressEndOfDayJob {
     private final ManagerTeamProgressService managerTeamProgressService;
     private final ManagerPerformanceService managerPerformanceService;
     private final EndOfDayAchievementService achievementService;
+    private final WorkloadShadowProgressReadService workloadShadowProgressReadService;
 
     @Scheduled(cron = "${manager.performance.team-progress-cron:50 59 23 * * *}", zone = "${worker.progress.zone:Asia/Irkutsk}")
     public void capture() {
@@ -62,15 +65,19 @@ public class ManagerTeamProgressEndOfDayJob {
             log.warn("Skipped end-of-day achievements for {}: adjusted worker progress is unavailable", date);
             return;
         }
+        Map<Long, Progress> finalizedWorkload =
+                workloadShadowProgressReadService.findFinalizedProgress(expectedWorkerIds, date);
         Map<Long, Long> ignoredLateByWorker = allWorkers.stream()
                 .filter(Objects::nonNull)
                 .filter(worker -> worker.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(
                         Worker::getId,
-                        worker -> ignoredLateCount(
-                                rawProgressByWorker.get(worker.getId()),
-                                progressByWorker.get(worker.getId())
-                        ),
+                        worker -> finalizedWorkload.containsKey(worker.getId())
+                                ? finalizedWorkload.get(worker.getId()).lateExcluded()
+                                : ignoredLateCount(
+                                        rawProgressByWorker.get(worker.getId()),
+                                        progressByWorker.get(worker.getId())
+                                ),
                         Math::max
                 ));
         for (Worker worker : allWorkers) {
@@ -88,7 +95,7 @@ public class ManagerTeamProgressEndOfDayJob {
                     worker.getUser() == null ? null : worker.getUser().getId(),
                     progress.total(),
                     progress.completed(),
-                    progress.percent(),
+                    recognizedPercent(progress),
                     ignoredLateByWorker.getOrDefault(worker.getId(), 0L),
                     isAt100(progress)
             );
@@ -127,7 +134,7 @@ public class ManagerTeamProgressEndOfDayJob {
                     .mapToLong(workerId -> ignoredLateByWorker.getOrDefault(workerId, 0L))
                     .sum();
             double averageProgress = eligibleProgress.stream()
-                    .mapToInt(DailyWorkProgressResponse::percent)
+                    .mapToInt(ManagerTeamProgressEndOfDayJob::recognizedPercent)
                     .sum() / (double) eligibleProgress.size();
             EndOfDayAchievementService.AchievementResult managerResult = achievementService.saveResult(
                     date,
@@ -147,7 +154,11 @@ public class ManagerTeamProgressEndOfDayJob {
     }
 
     private static boolean isAt100(DailyWorkProgressResponse progress) {
-        return isEligible(progress) && progress.percent() >= 100 && progress.active() <= 0;
+        return isEligible(progress) && progress.reached100();
+    }
+
+    private static int recognizedPercent(DailyWorkProgressResponse progress) {
+        return isAt100(progress) ? 100 : progress.percent();
     }
 
     private static boolean isEligible(DailyWorkProgressResponse progress) {

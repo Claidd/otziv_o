@@ -127,10 +127,10 @@ public class WorkloadShadowTransferSimulationService {
                         ? ++diagnosticRank
                         : ++recommendationRank;
                 boolean staffingRequired = !graphBlocked && rankedRecipients.isEmpty();
-                Long fallbackReviewId = staffingRequired
+                Long fallbackReviewId = !graphBlocked
                         ? emergencyReviewId(selectedProblem.graph())
                         : null;
-                Recipient fallbackRecipient = staffingRequired && fallbackReviewId != null
+                Recipient fallbackRecipient = !graphBlocked && fallbackReviewId != null
                         ? chooseFallback(
                                 emergencyPool,
                                 source,
