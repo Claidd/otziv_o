@@ -154,7 +154,6 @@ public interface WorkerAssignmentMutationGuardRepository
                     OR (
                         orders.order_worker =
                             task.review_recovery_task_worker
-                        AND COALESCE(orders.order_complete, 0) = 0
                     )
               )
             """, nativeQuery = true)
@@ -184,7 +183,6 @@ public interface WorkerAssignmentMutationGuardRepository
                     OR (
                         orders.order_worker =
                             task.review_recovery_task_worker
-                        AND COALESCE(orders.order_complete, 0) = 0
                     )
               )
             FOR UPDATE
