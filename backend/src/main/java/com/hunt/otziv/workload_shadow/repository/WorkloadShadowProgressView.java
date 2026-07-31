@@ -16,6 +16,8 @@ public interface WorkloadShadowProgressView {
 
     Long getLateExcludedUnits();
 
+    Long getExternalBlockedUnits();
+
     BigDecimal getProgressPercent();
 
     Long getReached100();

@@ -282,7 +282,8 @@ public class StaffDailyProgressService {
         LocalDate safeDate = safeDate(date);
         return applyWorkloadProgress(
                 legacy,
-                workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate)
+                workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate),
+                false
         );
     }
 
@@ -294,7 +295,11 @@ public class StaffDailyProgressService {
         Map<Long, Progress> workload = safeDate.equals(progressToday())
                 ? workloadShadowProgressReadService.findCurrentProgress(legacy.keySet(), safeDate)
                 : workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate);
-        return applyWorkloadProgress(legacy, workload);
+        return applyWorkloadProgress(
+                legacy,
+                workload,
+                safeDate.equals(progressToday())
+        );
     }
 
     private Map<Long, DailyWorkProgressResponse> workerProgressBySubjectsInternal(
@@ -362,7 +367,8 @@ public class StaffDailyProgressService {
 
     private Map<Long, DailyWorkProgressResponse> applyWorkloadProgress(
             Map<Long, DailyWorkProgressResponse> legacy,
-            Map<Long, Progress> workload
+            Map<Long, Progress> workload,
+            boolean preserveReached100Once
     ) {
         if (legacy == null || legacy.isEmpty() || workload == null || workload.isEmpty()) {
             return legacy == null ? Map.of() : legacy;
@@ -373,11 +379,14 @@ public class StaffDailyProgressService {
             if (current == null || progress == null) {
                 return;
             }
+            boolean reached100 = preserveReached100Once
+                    ? progress.reached100Once()
+                    : progress.reached100();
             result.put(workerId, current.withWorkloadProgress(
                     progress.completed(),
                     progress.eligible(),
                     progress.percent(),
-                    progress.reached100Once(),
+                    reached100,
                     progress.firstReached100At(),
                     progress.lastReached100At()
             ));
@@ -1581,7 +1590,7 @@ public class StaffDailyProgressService {
                        SUM(CASE WHEN d.checked = 1 THEN 1 ELSE 0 END),
                        SUM(
                            CASE
-                               WHEN COALESCE(shadow_daily.reached_100_once, d.reached_100) = 1 THEN 1
+                               WHEN COALESCE(shadow_daily.reached_100, d.reached_100) = 1 THEN 1
                                ELSE 0
                            END
                        ),

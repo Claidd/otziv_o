@@ -1,6 +1,7 @@
 package com.hunt.otziv.workload_shadow.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -24,10 +25,11 @@ class WorkloadShadowProgressReadServiceTest {
         LocalDate date = LocalDate.of(2026, 7, 28);
         when(row.getWorkerId()).thenReturn(1L);
         when(row.getCompletedUnits()).thenReturn(46L);
-        when(row.getEligibleUnits()).thenReturn(46L);
+        when(row.getEligibleUnits()).thenReturn(47L);
         when(row.getLateExcludedUnits()).thenReturn(5L);
-        when(row.getProgressPercent()).thenReturn(new BigDecimal("100.00"));
-        when(row.getReached100()).thenReturn(1L);
+        when(row.getExternalBlockedUnits()).thenReturn(1L);
+        when(row.getProgressPercent()).thenReturn(new BigDecimal("97.87"));
+        when(row.getReached100()).thenReturn(0L);
         when(row.getReached100Once()).thenReturn(1L);
         when(row.getFirstReached100At()).thenReturn(date.atTime(18, 54));
         when(row.getLastReached100At()).thenReturn(date.atTime(18, 54));
@@ -40,10 +42,11 @@ class WorkloadShadowProgressReadServiceTest {
                 service.findFinalizedProgress(List.of(1L), date);
 
         assertEquals(46, result.get(1L).completed());
-        assertEquals(46, result.get(1L).eligible());
+        assertEquals(47, result.get(1L).eligible());
         assertEquals(5, result.get(1L).lateExcluded());
-        assertEquals(100, result.get(1L).percent());
-        assertTrue(result.get(1L).reached100());
+        assertEquals(1, result.get(1L).externalBlocked());
+        assertEquals(98, result.get(1L).percent());
+        assertFalse(result.get(1L).reached100());
         assertTrue(result.get(1L).reached100Once());
         assertEquals(date.atTime(18, 54), result.get(1L).firstReached100At());
         assertEquals(date.atTime(18, 54), result.get(1L).lastReached100At());

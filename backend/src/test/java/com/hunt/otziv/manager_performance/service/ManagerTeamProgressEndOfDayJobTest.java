@@ -154,6 +154,7 @@ class ManagerTeamProgressEndOfDayJobTest {
                         46,
                         46,
                         5,
+                        0,
                         100,
                         true,
                         true,

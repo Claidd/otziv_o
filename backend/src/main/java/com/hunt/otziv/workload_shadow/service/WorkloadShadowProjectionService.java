@@ -120,10 +120,6 @@ public class WorkloadShadowProjectionService {
         );
         Map<Long, BigDecimal> historicalRatings = ratings(workerIds, progressDate, settings.lookbackDays());
         Map<Long, Integer> freezeCredits = freezeCredits(workerIds);
-        Set<Long> workersReached100Once = Set.copyOf(
-                repository.findWorkersReached100Once(workerIds, progressDate)
-        );
-
         Map<Long, WorkerSnapshot> snapshots = new LinkedHashMap<>();
         List<PendingEvent> pendingEvents = new ArrayList<>();
         int producedEvents = 0;
@@ -149,8 +145,7 @@ public class WorkloadShadowProjectionService {
                             WorkloadClassification.empty()
                     ),
                     dailyBatchDecisions.getOrDefault(worker.workerId(), Map.of()),
-                    observationWatermarks.get(worker.workerId()),
-                    workersReached100Once.contains(worker.workerId())
+                    observationWatermarks.get(worker.workerId())
             );
             snapshots.put(worker.workerId(), snapshot);
 
@@ -723,8 +718,7 @@ public class WorkloadShadowProjectionService {
             LocalDateTime shiftEnd,
             WorkloadClassification deferredAndBlocked,
             Map<String, BatchDecision> persistedBatchDecisions,
-            LocalDateTime previousObservationAt,
-            boolean reached100OncePreviously
+            LocalDateTime previousObservationAt
     ) {
         long active = batches.stream().mapToLong(WorkBatch::units).sum();
         long completed = completion.total();
@@ -781,24 +775,21 @@ public class WorkloadShadowProjectionService {
         }
 
         long feasible = Math.max(0, active - lateExcluded);
-        long eligible = completed + feasible;
-        BigDecimal progressPercent = eligible == 0
-                ? BigDecimal.valueOf(100)
-                : BigDecimal.valueOf(completed)
-                        .multiply(BigDecimal.valueOf(100))
-                        .divide(BigDecimal.valueOf(eligible), 2, RoundingMode.HALF_UP)
-                        .min(BigDecimal.valueOf(100));
+        boolean currentDayFinalized = !observedAt.isBefore(shiftEnd);
+        long eligible = eligibleUnitsForSnapshot(
+                completed,
+                feasible,
+                deferredAndBlocked.externalBlockedUnits(),
+                currentDayFinalized
+        );
+        BigDecimal progressPercent = progressPercent(completed, eligible);
         HistoryStats finalizedHistory = includeCurrentFinalizedDay(
                 history,
                 progressDate,
                 observedAt,
                 shiftEnd,
                 eligible,
-                reached100ForFinalization(
-                        reached100OncePreviously,
-                        eligible,
-                        progressPercent
-                ),
+                reached100ForFinalization(eligible, progressPercent),
                 freezeCredits
         );
         MonthStats monthStats = currentMonthStats(finalizedHistory);
@@ -1218,13 +1209,37 @@ public class WorkloadShadowProjectionService {
                 && progressPercent.compareTo(BigDecimal.valueOf(100)) >= 0;
     }
 
+    static BigDecimal progressPercent(long completedUnits, long eligibleUnits) {
+        long safeEligible = Math.max(0, eligibleUnits);
+        if (safeEligible == 0) {
+            return BigDecimal.valueOf(100);
+        }
+        return BigDecimal.valueOf(Math.max(0, completedUnits))
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(safeEligible), 2, RoundingMode.HALF_UP)
+                .min(BigDecimal.valueOf(100));
+    }
+
+    static long eligibleUnitsForSnapshot(
+            long completedUnits,
+            long feasibleUnits,
+            long externalBlockedUnits,
+            boolean currentDayFinalized
+    ) {
+        long eligible = safeAdd(
+                Math.max(0, completedUnits),
+                Math.max(0, feasibleUnits)
+        );
+        return currentDayFinalized
+                ? safeAdd(eligible, Math.max(0, externalBlockedUnits))
+                : eligible;
+    }
+
     static boolean reached100ForFinalization(
-            boolean reached100OncePreviously,
             long eligibleUnits,
             BigDecimal progressPercent
     ) {
-        return reached100OncePreviously
-                || reached100Now(eligibleUnits, progressPercent);
+        return reached100Now(eligibleUnits, progressPercent);
     }
 
     static MonthStats currentMonthStats(HistoryStats history) {

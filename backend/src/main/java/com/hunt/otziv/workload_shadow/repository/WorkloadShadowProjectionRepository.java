@@ -25,6 +25,7 @@ public interface WorkloadShadowProjectionRepository
                    snapshot.completed_units AS completedUnits,
                    snapshot.eligible_units AS eligibleUnits,
                    snapshot.late_excluded_units AS lateExcludedUnits,
+                   snapshot.external_blocked_units AS externalBlockedUnits,
                    snapshot.progress_percent AS progressPercent,
                    CASE
                        WHEN snapshot.eligible_units > 0
@@ -72,22 +73,11 @@ public interface WorkloadShadowProjectionRepository
     );
 
     @Query(value = """
-            SELECT daily.worker_id
-            FROM workload_shadow_worker_daily daily
-            WHERE daily.progress_date = :progressDate
-              AND daily.worker_id IN (:workerIds)
-              AND daily.reached_100_once = TRUE
-            """, nativeQuery = true)
-    List<Long> findWorkersReached100Once(
-            @Param("workerIds") Collection<Long> workerIds,
-            @Param("progressDate") LocalDate progressDate
-    );
-
-    @Query(value = """
             SELECT daily.worker_id AS workerId,
                    daily.completed_units AS completedUnits,
                    daily.eligible_units AS eligibleUnits,
                    daily.late_excluded_units AS lateExcludedUnits,
+                   daily.external_blocked_units AS externalBlockedUnits,
                    daily.progress_percent AS progressPercent,
                    CASE WHEN daily.reached_100 = TRUE THEN 1 ELSE 0 END AS reached100,
                    CASE WHEN daily.reached_100_once = TRUE THEN 1 ELSE 0 END AS reached100Once,
@@ -998,9 +988,9 @@ public interface WorkloadShadowProjectionRepository
                        ) AS latest_rank
                 FROM (
                     SELECT daily.worker_id,
-                           CASE WHEN daily.reached_100_once = TRUE THEN 1 ELSE 0 END AS hundred_day,
+                           CASE WHEN daily.reached_100 = TRUE THEN 1 ELSE 0 END AS hundred_day,
                            CASE
-                               WHEN daily.reached_100_once = FALSE
+                               WHEN daily.reached_100 = FALSE
                                 AND daily.freeze_applied = FALSE THEN 1
                                ELSE 0
                            END AS failure_day,
@@ -1073,7 +1063,7 @@ public interface WorkloadShadowProjectionRepository
             SELECT daily.worker_id,
                    daily.progress_date,
                    daily.eligible_units,
-                   daily.reached_100_once AS reached_100,
+                   daily.reached_100 AS reached_100,
                    COALESCE(account.available_credits, 0) AS available_credits,
                    COALESCE(account.successful_days_since_credit, 0) AS successful_days,
                    COALESCE(account.earned_total, 0) AS earned_total,

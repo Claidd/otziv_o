@@ -463,17 +463,35 @@ class WorkloadShadowProjectionServiceTest {
     }
 
     @Test
-    void finalizationKeepsEarlierReachedOnceWhenCurrentPercentDropped() {
-        assertTrue(WorkloadShadowProjectionService.reached100ForFinalization(
-                true,
-                12,
-                BigDecimal.valueOf(91.67)
-        ));
+    void finalizationUsesFinalPercentInsteadOfEarlierReachedOnceMarker() {
         assertFalse(WorkloadShadowProjectionService.reached100ForFinalization(
-                false,
                 12,
                 BigDecimal.valueOf(91.67)
         ));
+        assertTrue(WorkloadShadowProjectionService.reached100ForFinalization(
+                12,
+                BigDecimal.valueOf(100)
+        ));
+    }
+
+    @Test
+    void finalSnapshotCountsExternalBlockedUnitsButLiveSnapshotDoesNot() {
+        assertEquals(2, WorkloadShadowProjectionService.eligibleUnitsForSnapshot(
+                2,
+                0,
+                1,
+                false
+        ));
+        assertEquals(3, WorkloadShadowProjectionService.eligibleUnitsForSnapshot(
+                2,
+                0,
+                1,
+                true
+        ));
+        assertEquals(
+                new BigDecimal("66.67"),
+                WorkloadShadowProjectionService.progressPercent(2, 3)
+        );
     }
 
     @Test

@@ -140,6 +140,7 @@ class StaffDailyProgressServiceTest {
                         46,
                         46,
                         5,
+                        0,
                         100,
                         true,
                         true,
@@ -178,6 +179,7 @@ class StaffDailyProgressServiceTest {
                         30,
                         35,
                         0,
+                        0,
                         86,
                         false,
                         true,
@@ -203,7 +205,7 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
-    void endOfDayResultKeepsReachedOnceAfterLaterFeasibleWorkArrives() {
+    void endOfDayResultUsesFinalPercentAfterLaterFeasibleWorkArrives() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
         WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
@@ -214,6 +216,7 @@ class StaffDailyProgressServiceTest {
                 .thenReturn(Map.of(7L, new Progress(
                         30,
                         35,
+                        0,
                         0,
                         86,
                         false,
@@ -236,8 +239,50 @@ class StaffDailyProgressServiceTest {
 
         assertEquals(86, progress.percent());
         assertEquals(5, progress.active());
-        assertTrue(progress.reached100());
-        assertEquals(date.atTime(20, 0), progress.firstReached100At());
+        assertFalse(progress.reached100());
+        assertNull(progress.firstReached100At());
+    }
+
+    @Test
+    void endOfDayExternalBlockerPreventsFalseHundredPercentResult() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.of(2026, 7, 30);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
+        when(workload.findFinalizedProgress(any(), eq(date)))
+                .thenReturn(Map.of(7L, new Progress(
+                        2,
+                        3,
+                        0,
+                        1,
+                        67,
+                        false,
+                        true,
+                        date.atTime(17, 19),
+                        date.atTime(20, 59)
+                )));
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Люба").build())
+                .build();
+
+        DailyWorkProgressResponse progress = localService.workerEndOfDayProgressByWorkers(
+                List.of(worker),
+                date,
+                date.atTime(23, 0)
+        ).get(7L);
+
+        assertEquals(2, progress.completed());
+        assertEquals(1, progress.active());
+        assertEquals(3, progress.total());
+        assertEquals(67, progress.percent());
+        assertFalse(progress.checked());
+        assertFalse(progress.reached100());
+        assertNull(progress.firstReached100At());
     }
 
     @Test
@@ -396,6 +441,8 @@ class StaffDailyProgressServiceTest {
         assertTrue(sql.contains("FROM reviews monthly_review"));
         assertTrue(sql.contains("FROM review_recovery_tasks monthly_recovery"));
         assertTrue(sql.contains("monthly_block.action = 'REVIEW_BOT_DEACTIVATE'"));
+        assertTrue(sql.contains("COALESCE(shadow_daily.reached_100, d.reached_100)"));
+        assertFalse(sql.contains("shadow_daily.reached_100_once"));
         assertTrue(sql.matches("(?s).*SELECT COUNT\\(\\*\\)\\s+FROM reviews monthly_review.*"));
         assertFalse(sql.contains("SUBSTRING_INDEX(monthly_block.details"));
         assertFalse(sql.contains("monthly_block.action = 'BAD_TASK_BOT_DEACTIVATE'"));
