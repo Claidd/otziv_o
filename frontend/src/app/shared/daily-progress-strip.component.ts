@@ -9,6 +9,7 @@ import { DailyWorkProgress } from '../core/daily-progress';
         class="daily-progress-strip"
         [class.complete]="progress?.checked"
         [class.empty]="isEmpty()"
+        [class.updating]="progress?.updating"
         [attr.aria-label]="tooltipText()"
         [attr.title]="tooltipText()"
       >
@@ -18,7 +19,9 @@ import { DailyWorkProgress } from '../core/daily-progress';
         </div>
         <strong>{{ progress?.completed || 0 }}/{{ progress?.total || 0 }}</strong>
         <em>{{ safePercent() }}%</em>
-        @if (progress?.checked) {
+        @if (progress?.updating) {
+          <span class="material-icons-sharp daily-progress-refresh" aria-label="Прогресс обновляется">sync</span>
+        } @else if (progress?.checked) {
           <span class="material-icons-sharp daily-progress-check" aria-label="Выполнено">check_circle</span>
         }
       </section>
@@ -105,6 +108,21 @@ import { DailyWorkProgress } from '../core/daily-progress';
       line-height: 1;
     }
 
+    .daily-progress-strip.updating {
+      border-color: rgba(226, 157, 66, 0.48);
+    }
+
+    .daily-progress-refresh {
+      color: #d99132;
+      font-size: 0.95rem;
+      line-height: 1;
+      animation: daily-progress-refresh-spin 1.1s linear infinite;
+    }
+
+    @keyframes daily-progress-refresh-spin {
+      to { transform: rotate(360deg); }
+    }
+
     @media (max-width: 760px) {
       .daily-progress-strip {
         grid-template-columns: minmax(2.3rem, auto) minmax(0, 1fr) auto auto auto;
@@ -156,6 +174,10 @@ export class DailyProgressStripComponent {
     const percent = this.safePercent();
     const name = this.label || this.defaultLabel();
     const base = `${completed}/${total} — ${percent}%, осталось ${active}.`;
+
+    if (progress.updating) {
+      return `Прогресс обновляется после последнего действия. Текущие данные: ${base}`;
+    }
 
     if (progress.periodType === 'MONTH' || progress.roleType === 'WORKER_MONTH' || progress.roleType === 'WORKER_TEAM_MONTH') {
       const days = progress.workingDays || 0;

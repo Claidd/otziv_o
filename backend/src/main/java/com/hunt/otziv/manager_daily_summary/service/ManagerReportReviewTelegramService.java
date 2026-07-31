@@ -10,6 +10,8 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewIssueStatus
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -58,6 +60,7 @@ public class ManagerReportReviewTelegramService {
     private final ManagerReportReviewQualityService qualityService;
     private final ManagerSummaryFormatter formatter;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final UserService userService;
     private final ManagerRepository managerRepository;
     private final AppSettingService appSettingService;
@@ -220,6 +223,8 @@ public class ManagerReportReviewTelegramService {
         review = sessionRepository.save(review);
         issueService.ensureIssues(review, preparedQuestions);
 
+        sendAuditMedia(review, recipientUser, recipientChatId);
+
         LocalDateTime now = LocalDateTime.now();
         if (review.getIssueCount() == 0) {
             Optional<Integer> messageId = telegramService.sendRichMessageWithInlineKeyboardMessageId(
@@ -294,6 +299,28 @@ public class ManagerReportReviewTelegramService {
             accessPolicy.invalidate(review.getManagerUserId());
         }
         return true;
+    }
+
+    private void sendAuditMedia(
+            ManagerReportReviewSession review,
+            User recipientUser,
+            Long recipientChatId
+    ) {
+        String eventCode = review.getIssueCount() == 0
+                ? NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_GROWING.code()
+                : NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_SLOWED.code();
+        try {
+            notificationMediaDeliveryService.sendMediaOnly(
+                    eventCode,
+                    recipientChatId,
+                    recipientUser.getId(),
+                    "📘 <b>Персональный разбор готов</b>\n\nЖека подготовил аудит за день.",
+                    "HTML"
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось отправить картинку персонального разбора managerUserId={}: {}",
+                    recipientUser.getId(), exception.getMessage());
+        }
     }
 
     @Transactional

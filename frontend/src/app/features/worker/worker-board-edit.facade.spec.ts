@@ -288,14 +288,25 @@ describe('WorkerBoardEditFacade', () => {
       details: orderDetails({ reviews: [detailsReview] })
     });
 
-    facade.openReviewEdit(workerReview({ id: 7, text: 'stale board text' }));
+    facade.openReviewEdit(workerReview({
+      id: 7,
+      text: 'stale board text',
+      recoveryTask: true,
+      recoveryTaskId: 91,
+      taskWorkerId: 101
+    }));
 
     expect(calls).toContain('get-details:20');
     expect(facade.editReview()?.text).toBe('fresh details text');
+    expect((facade.editReview() as WorkerReviewItem | null)?.recoveryTaskId).toBe(91);
+    expect((facade.editReview() as WorkerReviewItem | null)?.taskWorkerId).toBe(101);
     expect(facade.reviewEditDraft()?.text).toBe('fresh details text');
     expect(facade.reviewEditDraft()?.publish).toBe(true);
     expect(facade.reviewEditDraft()?.url).toBe('details-photo.jpg');
     expect(facade.productOptions()).toEqual([{ id: 5, label: 'Product', photo: true }]);
+
+    facade.setReviewTaskWorker(202);
+    expect((facade.editReview() as WorkerReviewItem | null)?.taskWorkerId).toBe(202);
   });
 
   it('validates and saves full review edit', () => {

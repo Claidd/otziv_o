@@ -3,6 +3,7 @@ package com.hunt.otziv.whatsapp.service;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
+import com.hunt.otziv.c_companies.services.CompanyChatBindingPolicy;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.whatsapp.config.WhatsAppProperties;
 import com.hunt.otziv.whatsapp.dto.WhatsAppGroupInfo;
@@ -100,10 +101,15 @@ public class WhatsAppGroupLinkSyncService {
         return settings();
     }
 
-    @Transactional
     public WhatsAppGroupRepairResult repairCompanyLink(Company company) {
         if (company == null || company.getId() == null) {
             return WhatsAppGroupRepairResult.failed("У компании нет данных для проверки WhatsApp-группы");
+        }
+        if (!CompanyChatBindingPolicy.isRequired(company)) {
+            return WhatsAppGroupRepairResult.failed(
+                    "Привязка WhatsApp-группы не требуется, пока компания в статусе «"
+                            + company.getStatus().getTitle() + "»"
+            );
         }
         if (WhatsAppGroupCompanyLinker.whatsAppInviteCode(company.getUrlChat()).isEmpty()) {
             return WhatsAppGroupRepairResult.failed("В карточке компании нет корректной WhatsApp invite-ссылки");
@@ -154,7 +160,7 @@ public class WhatsAppGroupLinkSyncService {
             if (client == null || !hasText(client.getId()) || !hasText(client.getUrl())) {
                 continue;
             }
-            List<WhatsAppGroupInfo> clientGroups = whatsAppService.listGroups(client.getId(), true);
+            List<WhatsAppGroupInfo> clientGroups = whatsAppService.listGroups(client.getId());
             if (clientGroups == null) {
                 clientGroups = List.of();
             }

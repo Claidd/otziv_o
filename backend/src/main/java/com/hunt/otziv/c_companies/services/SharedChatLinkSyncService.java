@@ -44,7 +44,9 @@ public class SharedChatLinkSyncService {
 
     @Transactional
     public SharedChatLinkSyncResponse syncSharedChatIds() {
-        List<Company> companies = companyRepository.findAllWithChatUrl();
+        List<Company> companies = companyRepository.findAllWithChatUrl().stream()
+                .filter(CompanyChatBindingPolicy::isRequired)
+                .toList();
         Map<String, List<Company>> companiesByChat = new LinkedHashMap<>();
         for (Company company : companies) {
             normalizedChatKey(company.getUrlChat())

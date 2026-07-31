@@ -34,11 +34,17 @@ export type SideNoteField = 'order' | 'company';
 export type ReviewEditItem = WorkerReviewItem | OrderReviewItem;
 export type ReviewEditDraft = ReviewUpdateRequest;
 export type ReviewCopyKind = 'url' | 'login' | 'password' | 'text' | 'answer' | 'vk';
-export type WorkerCredentialCopyTarget = { resource: 'review' | 'recovery-task'; id: number };
+export type WorkerCredentialCopyTarget = {
+  resource: 'review' | 'bad-review-task' | 'recovery-task';
+  id: number;
+};
 
 export function workerCredentialCopyTarget(review: WorkerReviewItem): WorkerCredentialCopyTarget {
   if (review.recoveryTask && review.recoveryTaskId) {
     return { resource: 'recovery-task', id: review.recoveryTaskId };
+  }
+  if (review.badTask && review.badTaskId) {
+    return { resource: 'bad-review-task', id: review.badTaskId };
   }
   return { resource: 'review', id: review.id };
 }

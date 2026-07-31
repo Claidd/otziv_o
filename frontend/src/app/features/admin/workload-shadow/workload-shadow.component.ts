@@ -95,7 +95,7 @@ export function workloadShadowSettingsError(value: WorkloadShadowSafetyValues): 
     return 'Перед включением уведомлений укажите Telegram chat ID общей группы администраторов и владельцев.';
   }
   if (value.shiftStart === value.shiftEnd) {
-    return 'Начало и окончание смены не могут совпадать.';
+    return 'Начало смены и контроль входящей нагрузки не могут совпадать.';
   }
   if (value.walkMinimumMinutesPerCard < 3) {
     return 'Минимальное время выгула не может быть меньше 3 минут.';
@@ -430,7 +430,7 @@ export class WorkloadShadowComponent implements OnDestroy {
     nearEndWindowMinutes: [120, [Validators.required, Validators.min(15), Validators.max(360)]],
     businessZone: ['Asia/Irkutsk', Validators.required],
     shiftStart: ['10:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
-    shiftEnd: ['23:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
+    shiftEnd: ['22:00', [Validators.required, Validators.pattern(TIME_PATTERN)]],
     walkMinutesPerCard: [4, [Validators.required, Validators.min(3), Validators.max(30)]],
     walkMinimumMinutesPerCard: [3, [Validators.required, Validators.min(3), Validators.max(30)]],
     newMinutesPerCard: [5, [Validators.required, Validators.min(1), Validators.max(120)]],

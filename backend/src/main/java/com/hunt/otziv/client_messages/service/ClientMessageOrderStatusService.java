@@ -5,23 +5,17 @@ import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
-import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
-import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -34,15 +28,14 @@ import org.springframework.stereotype.Service;
 public class ClientMessageOrderStatusService {
 
     private static final String STATUS_PUBLIC = "Опубликовано";
+    private static final String COMPANY_STATUS_STOP = "На стопе";
+    private static final String COMPANY_STATUS_BAN = "Бан";
     public static final int DEFAULT_MANUAL_CONTROL_FAILURE_THRESHOLD = 3;
     public static final int DEFAULT_MANUAL_CONTROL_AFTER_MINUTES = 60;
 
     private final ScheduledClientMessageStateRepository stateRepository;
     private final AppSettingService appSettingService;
     private final ScheduledClientMessageService scheduledClientMessageService;
-    private final CompanyRepository companyRepository;
-    private final SharedChatLinkSyncService sharedChatLinkSyncService;
-    private final WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
 
     public void enrichOrderList(List<OrderDTOList> orders) {
         if (orders == null || orders.isEmpty()) {
@@ -57,8 +50,6 @@ public class ClientMessageOrderStatusService {
         if (orderIds.isEmpty()) {
             return;
         }
-
-        recoverMissingChatBindings(orders);
 
         Map<Long, List<ScheduledClientMessageState>> statesByOrder = stateRepository.findByOrderIdIn(orderIds).stream()
                 .filter(state -> state.getOrderId() != null)
@@ -85,122 +76,6 @@ public class ClientMessageOrderStatusService {
                     ? bindingStatus
                     : savedStatus != null ? savedStatus : missingStateStatus);
         });
-    }
-
-    private void recoverMissingChatBindings(List<OrderDTOList> orders) {
-        List<OrderDTOList> candidates = orders.stream()
-                .filter(this::needsChatBindingRepair)
-                .toList();
-        if (candidates.isEmpty()) {
-            return;
-        }
-
-        repairSharedChatBindings(candidates);
-        repairWhatsAppChatBindings(candidates);
-        clearAutomationErrorsForRecoveredBindings(candidates);
-    }
-
-    private void repairSharedChatBindings(List<OrderDTOList> candidates) {
-        try {
-            sharedChatLinkSyncService.syncSharedChatIds();
-            refreshCompanyChatBindings(candidates);
-        } catch (RuntimeException e) {
-            log.warn("Автопочинка общих ссылок чатов автоответчика не выполнена", e);
-        }
-    }
-
-    private void repairWhatsAppChatBindings(List<OrderDTOList> candidates) {
-        Set<Long> companyIds = candidates.stream()
-                .filter(this::needsWhatsAppBindingRepair)
-                .map(OrderDTOList::getCompanyId)
-                .filter(id -> id != null && id > 0)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        if (companyIds.isEmpty()) {
-            return;
-        }
-
-        for (Long companyId : companyIds) {
-            try {
-                Company company = companyRepository.findById(companyId).orElse(null);
-                if (company == null || hasText(company.getGroupId())) {
-                    continue;
-                }
-                WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult result =
-                        whatsAppGroupLinkSyncService.repairCompanyLink(company);
-                if (result != null && result.linked()) {
-                    log.info("Автопочинка WhatsApp-группы привязала companyId={}: {}", companyId, result.message());
-                }
-            } catch (RuntimeException e) {
-                log.warn("Автопочинка WhatsApp-группы автоответчика не выполнена companyId={}", companyId, e);
-            }
-        }
-        refreshCompanyChatBindings(candidates);
-    }
-
-    private void refreshCompanyChatBindings(List<OrderDTOList> orders) {
-        Set<Long> companyIds = orders.stream()
-                .map(OrderDTOList::getCompanyId)
-                .filter(id -> id != null && id > 0)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        for (Long companyId : companyIds) {
-            companyRepository.findById(companyId)
-                    .ifPresent(company -> orders.stream()
-                            .filter(order -> Objects.equals(order.getCompanyId(), companyId))
-                            .forEach(order -> applyCompanyChatBinding(order, company)));
-        }
-    }
-
-    private void applyCompanyChatBinding(OrderDTOList order, Company company) {
-        order.setCompanyUrlChat(company.getUrlChat());
-        order.setGroupId(company.getGroupId());
-        order.setTelegramGroupChatId(company.getTelegramGroupChatId());
-        order.setTelegramGroupLinked(company.getTelegramGroupChatId() != null);
-        order.setMaxGroupChatId(company.getMaxGroupChatId());
-        order.setMaxGroupLinked(company.getMaxGroupChatId() != null);
-    }
-
-    private void clearAutomationErrorsForRecoveredBindings(List<OrderDTOList> candidates) {
-        candidates.stream()
-                .filter(order -> !needsChatBindingRepair(order))
-                .filter(order -> order.getId() != null && order.getId() > 0)
-                .forEach(order -> {
-                    try {
-                        scheduledClientMessageService.ensureClientMessageStateForOrderId(order.getId());
-                    } catch (RuntimeException e) {
-                        log.warn("Не удалось сбросить ошибку автоответчика после автопривязки чата orderId={}",
-                                order.getId(), e);
-                    }
-                });
-    }
-
-    private boolean needsChatBindingRepair(OrderDTOList order) {
-        return needsWhatsAppBindingRepair(order)
-                || needsTelegramBindingRepair(order)
-                || needsMaxBindingRepair(order);
-    }
-
-    private boolean needsWhatsAppBindingRepair(OrderDTOList order) {
-        if (order == null || !hasText(order.getCompanyUrlChat())) {
-            return false;
-        }
-        return isWhatsAppUrl(order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT))
-                && !hasText(order.getGroupId());
-    }
-
-    private boolean needsTelegramBindingRepair(OrderDTOList order) {
-        if (order == null || !hasText(order.getCompanyUrlChat())) {
-            return false;
-        }
-        return isTelegramUrl(order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT))
-                && order.getTelegramGroupChatId() == null;
-    }
-
-    private boolean needsMaxBindingRepair(OrderDTOList order) {
-        if (order == null || !hasText(order.getCompanyUrlChat())) {
-            return false;
-        }
-        return isMaxUrl(order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT))
-                && order.getMaxGroupChatId() == null;
     }
 
     private ClientMessageOrderStatusResponse recoverMissingScheduledState(OrderDTOList order) {
@@ -483,13 +358,13 @@ public class ClientMessageOrderStatusService {
 
         String normalizedUrl = order.getCompanyUrlChat().trim().toLowerCase(Locale.ROOT);
         if (isWhatsAppUrl(normalizedUrl) && !hasText(order.getGroupId())) {
-            return manualBindingResponse("whatsapp_group_missing", "Контроль: WhatsApp-группа не привязана");
+            return bindingResponse(order, "whatsapp_group_missing", "Контроль: WhatsApp-группа не привязана");
         }
         if (isTelegramUrl(normalizedUrl) && order.getTelegramGroupChatId() == null) {
-            return manualBindingResponse("telegram_group_missing", "Контроль: Telegram-группа не привязана");
+            return bindingResponse(order, "telegram_group_missing", "Контроль: Telegram-группа не привязана");
         }
         if (isMaxUrl(normalizedUrl) && order.getMaxGroupChatId() == null) {
-            return manualBindingResponse("max_group_missing", "Контроль: MAX-группа не привязана");
+            return bindingResponse(order, "max_group_missing", "Контроль: MAX-группа не привязана");
         }
 
         return null;
@@ -506,6 +381,31 @@ public class ClientMessageOrderStatusService {
 
     private boolean isMaxUrl(String normalizedUrl) {
         return normalizedUrl.matches("^(?:https?://)?(?:web\\.)?max\\.ru/.+");
+    }
+
+    private ClientMessageOrderStatusResponse bindingResponse(OrderDTOList order, String errorCode, String label) {
+        if (chatBindingNotRequired(order)) {
+            return new ClientMessageOrderStatusResponse(
+                    "not_required",
+                    "Привязка чата пока не требуется",
+                    "muted",
+                    null,
+                    null,
+                    "Компания в статусе «" + order.getCompanyStatus()
+                            + "». Проверка включится автоматически после смены статуса.",
+                    null,
+                    null,
+                    null,
+                    0,
+                    0
+            );
+        }
+        return manualBindingResponse(errorCode, label);
+    }
+
+    private boolean chatBindingNotRequired(OrderDTOList order) {
+        String status = normalize(order == null ? null : order.getCompanyStatus());
+        return status.equals(normalize(COMPANY_STATUS_STOP)) || status.equals(normalize(COMPANY_STATUS_BAN));
     }
 
     private ClientMessageOrderStatusResponse manualBindingResponse(String errorCode, String label) {

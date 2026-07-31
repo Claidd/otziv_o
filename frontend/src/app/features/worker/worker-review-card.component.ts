@@ -1,6 +1,6 @@
 import { Component, DestroyRef, EventEmitter, inject, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import type { WorkerOption, WorkerReviewItem, WorkerSection } from '../../core/worker.api';
+import type { WorkerReviewItem, WorkerSection } from '../../core/worker.api';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
 import {
   ReviewCopyKind,
@@ -53,8 +53,6 @@ export class WorkerReviewCardComponent {
   @Input() canInlineEditBotName = false;
   @Input() canOpenTitleLink = true;
   @Input() canEditRecoveryTaskDate = false;
-  @Input() canReassignTask = false;
-  @Input() workerOptions: WorkerOption[] = [];
   @Input() showFilialCityInFooter = false;
   @Input() reviewFieldDrafts: Record<string, string> = {};
   @Input() editingReviewFieldKey: string | null = null;
@@ -91,7 +89,6 @@ export class WorkerReviewCardComponent {
   @Output() readonly recoveryTaskDateDraftChanged = new EventEmitter<string>();
   @Output() readonly recoveryTaskDateEditCanceled = new EventEmitter<void>();
   @Output() readonly recoveryTaskDateSaveRequested = new EventEmitter<void>();
-  @Output() readonly taskWorkerChangeRequested = new EventEmitter<number>();
   @Output() readonly sideNoteEditStarted = new EventEmitter<SideNoteField>();
   @Output() readonly sideNoteDraftChanged = new EventEmitter<SideNoteValueChange>();
   @Output() readonly sideNoteEditCanceled = new EventEmitter<SideNoteField>();
@@ -172,23 +169,6 @@ export class WorkerReviewCardComponent {
 
   isRecoveryTask(): boolean {
     return !!this.review.recoveryTask;
-  }
-
-  isAssignableTask(): boolean {
-    return this.isBadTask() || this.isRecoveryTask();
-  }
-
-  taskWorkerMutationKey(): string {
-    const taskId = this.isRecoveryTask() ? this.review.recoveryTaskId : this.review.badTaskId;
-    return `task-worker-${taskId ?? this.review.id}`;
-  }
-
-  requestTaskWorkerChange(value: number | string | null): void {
-    const workerId = Number(value);
-    if (!Number.isFinite(workerId) || workerId <= 0 || workerId === this.review.taskWorkerId) {
-      return;
-    }
-    this.taskWorkerChangeRequested.emit(workerId);
   }
 
   isWalkTone(): boolean {

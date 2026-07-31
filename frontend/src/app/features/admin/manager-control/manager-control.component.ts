@@ -1757,7 +1757,7 @@ export class ManagerControlComponent implements OnInit {
       return true;
     }
     if (example.type === 'COMMON_INVOICE') {
-      return true;
+      return !reason.includes('допубликационные позиции блокируют сбор');
     }
     if (example.type === 'TELEGRAM_CHAT') {
       return true;

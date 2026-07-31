@@ -65,6 +65,7 @@ class WorkloadShadowSettingsServiceTest {
         assertThat(result.observationEnabled()).isTrue();
         assertThat(result.groupNotificationsEnabled()).isFalse();
         assertThat(result.notificationGroupChatId()).isNull();
+        assertThat(result.shiftEnd()).isEqualTo("22:00");
         assertThat(result.walkMinutesPerCard()).isEqualTo(4);
         assertThat(result.walkMinimumMinutesPerCard()).isEqualTo(3);
         assertThat(result.decisionRetentionDays()).isEqualTo(60);
@@ -343,7 +344,7 @@ class WorkloadShadowSettingsServiceTest {
                 120,
                 zone,
                 "10:00",
-                "23:00",
+                "22:00",
                 4,
                 3,
                 5,

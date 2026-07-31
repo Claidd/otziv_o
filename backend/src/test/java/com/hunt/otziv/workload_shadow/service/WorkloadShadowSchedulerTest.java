@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class WorkloadShadowSchedulerTest {
 
     @Test
-    void usesFiveMinutesNearShiftEndAndTenMinutesOtherwise() {
+    void usesFrequentChecksNearAndAfterIntakeCutoff() {
         WorkloadShadowSettingsResponse settings = settings();
 
         assertEquals(10, WorkloadShadowScheduler.effectiveIntervalMinutes(
@@ -19,6 +19,10 @@ class WorkloadShadowSchedulerTest {
         assertEquals(5, WorkloadShadowScheduler.effectiveIntervalMinutes(
                 settings,
                 LocalTime.of(22, 0)
+        ));
+        assertEquals(5, WorkloadShadowScheduler.effectiveIntervalMinutes(
+                settings,
+                LocalTime.of(23, 55)
         ));
     }
 
@@ -34,7 +38,7 @@ class WorkloadShadowSchedulerTest {
                 120,
                 "Asia/Irkutsk",
                 "10:00",
-                "23:00",
+                "22:00",
                 4,
                 3,
                 5,

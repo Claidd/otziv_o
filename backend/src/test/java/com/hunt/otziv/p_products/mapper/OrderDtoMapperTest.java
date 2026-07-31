@@ -4,6 +4,7 @@ import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.maxbot.service.MaxBotClient;
@@ -56,6 +57,7 @@ class OrderDtoMapperTest {
         assertEquals(5L, dto.getCompanyId());
         assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000010"), dto.getOrderDetailsId());
         assertEquals("Компания", dto.getCompanyTitle());
+        assertEquals("В работе", dto.getCompanyStatus());
         assertEquals("Комментарий компании", dto.getCompanyComments());
         assertEquals("Центр", dto.getFilialTitle());
         assertEquals("https://filial.example", dto.getFilialUrl());
@@ -110,7 +112,9 @@ class OrderDtoMapperTest {
                 null,
                 true,
                 "group-row",
-                statusChangedAt
+                statusChangedAt,
+                null,
+                "На стопе"
         };
 
         OrderDTOList dto = mapper.toBoardDTO(row);
@@ -119,6 +123,7 @@ class OrderDtoMapperTest {
         assertEquals(5L, dto.getCompanyId());
         assertEquals(detailId, dto.getOrderDetailsId());
         assertEquals("Компания", dto.getCompanyTitle());
+        assertEquals("На стопе", dto.getCompanyStatus());
         assertEquals("", dto.getCompanyComments());
         assertEquals("Центр", dto.getFilialTitle());
         assertEquals("Иркутск", dto.getFilialCity());
@@ -227,6 +232,7 @@ class OrderDtoMapperTest {
                 .telephone("79000000000")
                 .urlChat("https://chat.example")
                 .commentsCompany("Комментарий компании")
+                .status(CompanyStatus.builder().id(1L).title("В работе").build())
                 .manager(manager)
                 .workers(Set.of(worker))
                 .filial(Set.of(filial))

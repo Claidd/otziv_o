@@ -5,6 +5,9 @@ import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.model.WorkerActivityAction;
 import com.hunt.otziv.worker_activity.model.WorkerActivityEvent;
 import com.hunt.otziv.worker_activity.repository.WorkerActivityEventRepository;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowRefreshSignal;
+import java.util.EnumSet;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -19,21 +22,41 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class WorkerActivityService {
 
     private static final int TEXT_LIMIT = 1_000;
+    private static final Set<WorkerActivityAction> WORKLOAD_CHANGING_ACTIONS = EnumSet.of(
+            WorkerActivityAction.REVIEW_PUBLISH,
+            WorkerActivityAction.REVIEW_NAGUL,
+            WorkerActivityAction.REVIEW_BOT_CHANGE,
+            WorkerActivityAction.REVIEW_BOT_NAME_UPDATE,
+            WorkerActivityAction.REVIEW_BOT_DEACTIVATE,
+            WorkerActivityAction.REVIEW_TEXT_UPDATE,
+            WorkerActivityAction.REVIEW_PUBLISH_DATE_UPDATE,
+            WorkerActivityAction.BAD_TASK_COMPLETE,
+            WorkerActivityAction.BAD_TASK_UPDATE,
+            WorkerActivityAction.BAD_TASK_BOT_CHANGE,
+            WorkerActivityAction.BAD_TASK_BOT_DEACTIVATE,
+            WorkerActivityAction.RECOVERY_TASK_COMPLETE,
+            WorkerActivityAction.RECOVERY_TASK_UPDATE,
+            WorkerActivityAction.RECOVERY_TASK_BOT_CHANGE,
+            WorkerActivityAction.RECOVERY_TASK_BOT_DEACTIVATE
+    );
 
     private final WorkerActivityEventRepository eventRepository;
     private final UserService userService;
     private final WorkerRiskEvaluationService riskEvaluationService;
+    private final WorkloadShadowRefreshSignal workloadRefreshSignal;
     private final TransactionTemplate transactionTemplate;
 
     public WorkerActivityService(
             WorkerActivityEventRepository eventRepository,
             UserService userService,
             WorkerRiskEvaluationService riskEvaluationService,
+            WorkloadShadowRefreshSignal workloadRefreshSignal,
             PlatformTransactionManager transactionManager
     ) {
         this.eventRepository = eventRepository;
         this.userService = userService;
         this.riskEvaluationService = riskEvaluationService;
+        this.workloadRefreshSignal = workloadRefreshSignal;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -77,6 +100,10 @@ public class WorkerActivityService {
             log.warn("Активность специалиста не записана action={}, entityType={}, entityId={}: {}",
                     action, entityType, entityId, e.getMessage());
             log.debug("Worker activity write failed", e);
+        } finally {
+            if (WORKLOAD_CHANGING_ACTIONS.contains(action)) {
+                workloadRefreshSignal.markDirty();
+            }
         }
     }
 

@@ -386,6 +386,8 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/worker/reviews/{reviewId}/change-bot", "смена аккаунта отзыва {reviewId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/bots/{botId}/deactivate", "деактивация аккаунта {botId} отзыва {reviewId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве {reviewId}");
+        put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в плохом отзыве {taskId}");
+        put(actions, "POST", "/api/worker/recovery-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в восстановлении {taskId}");
         put(actions, "POST", "/api/worker/reviews/{reviewId}/publish", "публикация отзыва {reviewId}");
         put(actions, "POST", "/api/worker/bad-review-tasks/{taskId}/complete", "выполнение плохого отзыва {taskId}");
         put(actions, "PUT", "/api/worker/bad-review-tasks/{taskId}", "редактирование плохого отзыва {taskId}");

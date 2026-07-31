@@ -73,12 +73,18 @@ describe('worker-board config helpers', () => {
     expect(trackWorkerOption(0, { id: 14 } as never)).toBe(14);
   });
 
-  it('records credential copies against recovery tasks instead of deleted source reviews', () => {
+  it('records credential copies against task ownership instead of source-review ownership', () => {
     expect(workerCredentialCopyTarget({
       id: 143065,
       recoveryTask: true,
       recoveryTaskId: 465
     } as never)).toEqual({ resource: 'recovery-task', id: 465 });
+
+    expect(workerCredentialCopyTarget({
+      id: 172291,
+      badTask: true,
+      badTaskId: 597
+    } as never)).toEqual({ resource: 'bad-review-task', id: 597 });
 
     expect(workerCredentialCopyTarget({ id: 177434 } as never))
       .toEqual({ resource: 'review', id: 177434 });

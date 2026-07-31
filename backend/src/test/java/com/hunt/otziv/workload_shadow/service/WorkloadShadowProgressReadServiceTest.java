@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowProgressView;
@@ -36,7 +37,7 @@ class WorkloadShadowProgressReadServiceTest {
         when(repository.findFinalizedWorkerProgress(List.of(1L), date))
                 .thenReturn(List.of(row));
         WorkloadShadowProgressReadService service =
-                new WorkloadShadowProgressReadService(repository);
+                new WorkloadShadowProgressReadService(repository, freshSignal());
 
         Map<Long, WorkloadShadowProgressReadService.Progress> result =
                 service.findFinalizedProgress(List.of(1L), date);
@@ -61,11 +62,47 @@ class WorkloadShadowProgressReadServiceTest {
                 .when(repository)
                 .findFinalizedWorkerProgress(List.of(1L), date);
         WorkloadShadowProgressReadService service =
-                new WorkloadShadowProgressReadService(repository);
+                new WorkloadShadowProgressReadService(repository, freshSignal());
 
         Map<Long, WorkloadShadowProgressReadService.Progress> result =
                 service.findFinalizedProgress(List.of(1L), date);
 
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void currentProgressFallsBackToLiveCalculationWhileProjectionIsDirty() {
+        WorkloadShadowProjectionRepository repository =
+                mock(WorkloadShadowProjectionRepository.class);
+        WorkloadShadowRefreshSignal refreshSignal = new WorkloadShadowRefreshSignal();
+        WorkloadShadowProgressReadService service =
+                new WorkloadShadowProgressReadService(repository, refreshSignal);
+
+        WorkloadShadowProgressReadService.CurrentProgress result =
+                service.findCurrentProgressWithState(List.of(1L), LocalDate.of(2026, 7, 31));
+
+        assertTrue(result.updating());
+        assertTrue(result.progress().isEmpty());
+    }
+
+    @Test
+    void reconcilesFinalProgressThroughCanonicalRepository() {
+        WorkloadShadowProjectionRepository repository =
+                mock(WorkloadShadowProjectionRepository.class);
+        LocalDate date = LocalDate.of(2026, 7, 31);
+        when(repository.reconcileCompletedFinalProgress(date)).thenReturn(4);
+        WorkloadShadowProgressReadService service =
+                new WorkloadShadowProgressReadService(repository, freshSignal());
+
+        assertEquals(4, service.reconcileFinalizedProgress(date));
+
+        verify(repository).reconcileCompletedFinalProgress(date);
+    }
+
+    private WorkloadShadowRefreshSignal freshSignal() {
+        WorkloadShadowRefreshSignal signal = new WorkloadShadowRefreshSignal();
+        WorkloadShadowRefreshSignal.RefreshToken token = signal.beginRefresh();
+        signal.completeRefresh(token);
+        return signal;
     }
 }

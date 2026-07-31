@@ -6,15 +6,10 @@ import com.hunt.otziv.client_messages.model.ClientMessageTargetType;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
 import com.hunt.otziv.client_messages.repository.ScheduledClientMessageStateRepository;
-import com.hunt.otziv.c_companies.model.Company;
-import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
-import com.hunt.otziv.whatsapp.service.WhatsAppGroupLinkSyncService;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,15 +40,6 @@ class ClientMessageOrderStatusServiceTest {
     @Mock
     private ScheduledClientMessageService scheduledClientMessageService;
 
-    @Mock
-    private CompanyRepository companyRepository;
-
-    @Mock
-    private SharedChatLinkSyncService sharedChatLinkSyncService;
-
-    @Mock
-    private WhatsAppGroupLinkSyncService whatsAppGroupLinkSyncService;
-
     private ClientMessageOrderStatusService service;
 
     @BeforeEach
@@ -61,40 +47,13 @@ class ClientMessageOrderStatusServiceTest {
         service = new ClientMessageOrderStatusService(
                 stateRepository,
                 appSettingService,
-                scheduledClientMessageService,
-                companyRepository,
-                sharedChatLinkSyncService,
-                whatsAppGroupLinkSyncService
+                scheduledClientMessageService
         );
     }
 
     @Test
-    void clearsRemarkCardWhenTelegramBindingIsRecoveredAutomatically() {
+    void reportsMissingTelegramBindingWithoutTryingToRepairItDuringBoardLoad() {
         OrderDTOList order = order(10L, 1L, "https://t.me/company_chat");
-        Company repairedCompany = Company.builder()
-                .id(1L)
-                .urlChat("https://t.me/company_chat")
-                .telegramGroupChatId(100500L)
-                .build();
-        when(companyRepository.findById(1L)).thenReturn(Optional.of(repairedCompany));
-        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
-
-        service.enrichOrderList(List.of(order));
-
-        assertNull(order.getClientMessageStatus());
-        assertEquals(100500L, order.getTelegramGroupChatId());
-        verify(sharedChatLinkSyncService).syncSharedChatIds();
-        verify(scheduledClientMessageService).ensureClientMessageStateForOrderId(10L);
-    }
-
-    @Test
-    void keepsManagerRemarkCardWhenTelegramBindingCannotBeRecovered() {
-        OrderDTOList order = order(11L, 2L, "https://t.me/company_without_binding");
-        Company companyWithoutBinding = Company.builder()
-                .id(2L)
-                .urlChat("https://t.me/company_without_binding")
-                .build();
-        when(companyRepository.findById(2L)).thenReturn(Optional.of(companyWithoutBinding));
         when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
 
         service.enrichOrderList(List.of(order));
@@ -109,15 +68,8 @@ class ClientMessageOrderStatusServiceTest {
     }
 
     @Test
-    void attemptsWhatsAppGroupRepairBeforeCreatingManagerRemarkCard() {
+    void reportsMissingWhatsAppBindingWithoutWaitingForGatewayDuringBoardLoad() {
         OrderDTOList order = order(12L, 3L, "https://chat.whatsapp.com/invite-code");
-        Company companyWithoutBinding = Company.builder()
-                .id(3L)
-                .urlChat("https://chat.whatsapp.com/invite-code")
-                .build();
-        when(companyRepository.findById(3L)).thenReturn(Optional.of(companyWithoutBinding));
-        when(whatsAppGroupLinkSyncService.repairCompanyLink(companyWithoutBinding))
-                .thenReturn(new WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult(false, "не найдено"));
         when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
 
         service.enrichOrderList(List.of(order));
@@ -127,9 +79,38 @@ class ClientMessageOrderStatusServiceTest {
         assertEquals("manual_control", status.state());
         assertEquals("whatsapp_group_missing", status.errorCode());
         assertEquals("Контроль: WhatsApp-группа не привязана", status.label());
-        verify(sharedChatLinkSyncService).syncSharedChatIds();
-        verify(whatsAppGroupLinkSyncService).repairCompanyLink(companyWithoutBinding);
         verify(scheduledClientMessageService, never()).ensureClientMessageStateForOrderId(any());
+    }
+
+    @Test
+    void marksMissingBindingAsNotRequiredWhileCompanyIsStopped() {
+        OrderDTOList order = order(17L, 4L, "https://chat.whatsapp.com/invite-code");
+        order.setCompanyStatus("На стопе");
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
+
+        service.enrichOrderList(List.of(order));
+
+        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
+        assertNotNull(status);
+        assertEquals("not_required", status.state());
+        assertEquals("muted", status.tone());
+        assertEquals("Привязка чата пока не требуется", status.label());
+        assertNull(status.errorCode());
+        verify(scheduledClientMessageService, never()).recoverMissingClientMessageStateForOrderId(any());
+    }
+
+    @Test
+    void bindingCheckReturnsImmediatelyAfterCompanyLeavesBan() {
+        OrderDTOList order = order(18L, 5L, "https://chat.whatsapp.com/invite-code");
+        order.setCompanyStatus("В работе");
+        when(stateRepository.findByOrderIdIn(anyCollection())).thenReturn(List.of());
+
+        service.enrichOrderList(List.of(order));
+
+        ClientMessageOrderStatusResponse status = order.getClientMessageStatus();
+        assertNotNull(status);
+        assertEquals("manual_control", status.state());
+        assertEquals("whatsapp_group_missing", status.errorCode());
     }
 
     @Test

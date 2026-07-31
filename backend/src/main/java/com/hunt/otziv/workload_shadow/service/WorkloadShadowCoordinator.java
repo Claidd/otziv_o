@@ -73,9 +73,9 @@ public class WorkloadShadowCoordinator {
             WorkloadShadowSettingsResponse settings,
             WorkloadShadowRecalculationLease lease
     ) {
-        // Сбрасываем только сигнал, накопленный до старта. Изменения, которые придут
-        // во время расчёта, останутся dirty и инициируют следующий актуализирующий запуск.
-        refreshSignal.consume();
+        // Токен фиксирует ревизию источников на старте. Изменения, которые придут
+        // во время расчёта, увеличат ревизию и инициируют следующий запуск.
+        WorkloadShadowRefreshSignal.RefreshToken refreshToken = refreshSignal.beginRefresh();
         LocalDateTime startedAt = LocalDateTime.now(settingsService.zone(settings));
         Long runId = null;
         try {
@@ -96,6 +96,7 @@ public class WorkloadShadowCoordinator {
             );
             LocalDateTime finishedAt = LocalDateTime.now(settingsService.zone(settings));
             runService.complete(runId, result, startedAt, finishedAt);
+            refreshSignal.completeRefresh(refreshToken);
             return new WorkloadShadowRunResponse(
                     runId,
                     "SUCCEEDED",
@@ -126,7 +127,7 @@ public class WorkloadShadowCoordinator {
                     );
                 }
             }
-            refreshSignal.markDirty();
+            refreshSignal.failRefresh();
             log.error("Workload shadow recalculation failed, runId={}", runId, exception);
             throw exception;
         }

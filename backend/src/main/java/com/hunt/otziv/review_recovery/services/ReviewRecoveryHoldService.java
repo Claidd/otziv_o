@@ -1,13 +1,10 @@
 package com.hunt.otziv.review_recovery.services;
 
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
 import com.hunt.otziv.review_recovery.repository.ReviewRecoveryBatchRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,7 +18,6 @@ public class ReviewRecoveryHoldService {
     private static final Set<String> CLIENT_SILENT_RECOVERY_STATUSES = Set.of("Архив", "Бан");
 
     private final ReviewRecoveryBatchRepository batchRepository;
-    private final OrderRepository orderRepository;
     private final ReviewRecoveryGateService recoveryGateService;
 
     @Transactional(readOnly = true)
@@ -46,19 +42,14 @@ public class ReviewRecoveryHoldService {
         Instant releasedAt = managed.getClientNotifiedAt() == null ? Instant.now() : managed.getClientNotifiedAt();
         managed.setHoldReleasedAt(releasedAt);
 
-        Order order = managed.getOrder();
         long shiftSeconds = holdDurationSeconds(managed, releasedAt);
         managed.setDeadlineShiftSeconds(shiftSeconds);
         managed.setDeadlineShiftAppliedAt(Instant.now());
 
-        if (order != null && order.getId() != null && !isTerminal(order) && shiftSeconds > 0) {
-            Order managedOrder = orderRepository.findByIdForMutation(order.getId()).orElse(order);
-            managedOrder.setStatusChangedAt(shift(managedOrder.getStatusChangedAt(), shiftSeconds));
-            if (managedOrder.isWaitingForClient()) {
-                managedOrder.setWaitingForClientChangedAt(shift(managedOrder.getWaitingForClientChangedAt(), shiftSeconds));
-            }
-            orderRepository.save(managedOrder);
-        }
+        // Do not rewrite order.statusChangedAt/waitingForClientChangedAt here.
+        // Those fields identify the real business-status cycle and are part of
+        // client-message deduplication keys. The recovery-release listener wakes
+        // the paused scheduled states directly.
 
         batchRepository.save(managed);
     }
@@ -97,12 +88,5 @@ public class ReviewRecoveryHoldService {
             return 0;
         }
         return Math.max(0, Duration.between(startedAt, releasedAt).getSeconds());
-    }
-
-    private LocalDateTime shift(LocalDateTime value, long shiftSeconds) {
-        if (value == null) {
-            return LocalDateTime.ofInstant(Instant.now().plusSeconds(shiftSeconds), ZoneId.systemDefault());
-        }
-        return value.plusSeconds(shiftSeconds);
     }
 }

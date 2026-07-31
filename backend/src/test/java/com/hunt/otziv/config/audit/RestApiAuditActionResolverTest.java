@@ -236,6 +236,8 @@ class RestApiAuditActionResolverTest {
                 arguments("PUT", "/api/review-check/{orderDetailId}/reviews/{reviewId}/text", "редактирование текста отзыва 25 при проверке"),
                 arguments("GET", "/api/worker/overdue-orders", "проверка заказов специалиста, которые давно не менялись"),
                 arguments("POST", "/api/worker/reviews/{reviewId}/copy-click", "нажатие кнопки копирования данных аккаунта в отзыве 25"),
+                arguments("POST", "/api/worker/bad-review-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в плохом отзыве 8"),
+                arguments("POST", "/api/worker/recovery-tasks/{taskId}/copy-click", "нажатие кнопки копирования данных аккаунта в восстановлении 8"),
                 arguments("GET", "/api/ai/reputation/status", "загрузка статуса AI-помощника репутации"),
                 arguments("POST", "/api/ai/reputation/status/openai-check", "проверка маршрута OpenAI для AI-помощника репутации"),
                 arguments("GET", "/api/ai/reputation/prompts", "загрузка промптов AI-помощника репутации"),

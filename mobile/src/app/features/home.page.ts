@@ -3329,7 +3329,7 @@ export class HomePage implements OnInit, OnDestroy {
       parts.push('100% уже был');
     }
     if ((progress.orderOverdueCount || 0) > 0) {
-      parts.push(`проср. заказов ${progress.orderOverdueCount}`);
+      parts.push(`за день просрочено заказов: ${progress.orderOverdueCount}`);
     }
     if (progress.medianCloseSeconds > 0) {
       parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
@@ -3402,8 +3402,8 @@ export class HomePage implements OnInit, OnDestroy {
 
     this.addCountRow(rows, 'Восст. создано', progress.recoveryCreatedCount);
     this.addCountRow(rows, 'Восст. закрыто', progress.recoveryCompletedCount);
-    this.addCountRow(rows, 'Проср. заказов', progress.orderOverdueCount);
-    this.addCountRow(rows, 'Просрочки', progress.totalOverdueCount);
+    this.addCountRow(rows, 'Просрочено заказов за период', progress.orderOverdueCount);
+    this.addCountRow(rows, 'Просрочено карточек за период', progress.totalOverdueCount);
     this.addCountRow(rows, 'Смена бота', progress.botChangeCount);
     this.addCountRow(rows, 'Блок бота', progress.botBlockCount);
 

@@ -1453,6 +1453,62 @@ class ApiWorkerBoardControllerTest {
         verify(reviewRecoveryTaskService, never()).getTask(92L);
     }
 
+    @Test
+    void logBadReviewTaskCredentialCopyClickUsesTaskOwnershipInsteadOfSourceReviewOwnership() {
+        Bot bot = new Bot();
+        bot.setId(82L);
+        Review sourceReview = new Review();
+        sourceReview.setId(172291L);
+        BadReviewTask task = BadReviewTask.builder()
+                .id(597L)
+                .sourceReview(sourceReview)
+                .bot(bot)
+                .build();
+        when(badReviewTaskService.getTask(597L)).thenReturn(task);
+
+        controller.logBadReviewTaskCredentialCopyClick(
+                597L,
+                new ApiWorkerBoardController.ReviewCopyClickRequest(
+                        "login",
+                        "worker-board",
+                        null,
+                        "bad"
+                ),
+                principal,
+                workerAuth
+        );
+
+        verify(assignmentMutationGuardService).assertBadTask(597L);
+        verify(assignmentMutationGuardService, never()).assertReview(172291L);
+        verify(badReviewTaskService).getTask(597L);
+        verify(workerActivityService).recordSafely(
+                eq(workerAuth),
+                eq(WorkerActivityAction.REVIEW_COPY_LOGIN),
+                eq("bad_review_task"),
+                eq(597L),
+                any(),
+                eq(172291L),
+                eq("bad"),
+                anyString()
+        );
+    }
+
+    @Test
+    void logBadReviewTaskCredentialCopyClickRejectsUnsupportedFieldBeforeLoadingTask() {
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.logBadReviewTaskCredentialCopyClick(
+                        597L,
+                        new ApiWorkerBoardController.ReviewCopyClickRequest("text"),
+                        principal,
+                        workerAuth
+                )
+        );
+
+        assertEquals("Кнопка для логирования не поддерживается", exception.getReason());
+        verify(badReviewTaskService, never()).getTask(597L);
+    }
+
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section) {
         return controller.getBoard(section, "", 0, 10, "desc", null, principal, workerAuth);
     }

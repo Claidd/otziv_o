@@ -5,6 +5,7 @@ import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.u_users.model.Manager;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -570,6 +571,7 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
     @Query("""
     SELECT c
     FROM Company c
+    LEFT JOIN FETCH c.status
     WHERE c.urlChat IS NOT NULL
       AND TRIM(c.urlChat) <> ''
 """)
@@ -579,5 +581,6 @@ public interface CompanyRepository extends CrudRepository<Company, Long> {
 
     List<Company> findTop3ByTelegramGroupChatIdIsNullAndUrlChatContainingIgnoreCase(String chatUsername);
 
+    @EntityGraph(attributePaths = "status")
     List<Company> findByUrlChatContainingIgnoreCase(String inviteCode);
 }

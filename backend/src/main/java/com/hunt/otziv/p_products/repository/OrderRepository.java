@@ -168,18 +168,10 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         SELECT COUNT(DISTINCT o.id)
         FROM Order o
         JOIN o.company c
-        LEFT JOIN o.status os
         LEFT JOIN c.status cs
         WHERE o.complete = false
           AND o.manager = :manager
-          AND (os.title IS NULL OR os.title <> 'Бан')
-          AND (cs.title IS NULL OR cs.title <> 'Бан')
-          AND NOT EXISTS (
-              SELECT 1
-              FROM CommonInvoiceOrder item
-              WHERE item.order = o
-                AND item.invoice.status <> :disabledCommonInvoiceStatus
-          )
+          AND (cs.title IS NULL OR cs.title NOT IN ('Бан', 'На стопе'))
           AND c.urlChat IS NOT NULL
           AND TRIM(c.urlChat) <> ''
           AND (
@@ -214,10 +206,7 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
               AND c.maxGroupChatId IS NULL
           )
     """)
-    long countManagerControlChatBindingIssuesByManager(
-            @Param("manager") Manager manager,
-            @Param("disabledCommonInvoiceStatus") CommonInvoiceStatus disabledCommonInvoiceStatus
-    );
+    long countManagerControlChatBindingIssuesByManager(@Param("manager") Manager manager);
 
     @Query("""
         SELECT DISTINCT o
@@ -226,17 +215,10 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
         LEFT JOIN FETCH o.filial f
         LEFT JOIN FETCH f.city
         JOIN FETCH o.company c
-        LEFT JOIN c.status cs
+        LEFT JOIN FETCH c.status cs
         WHERE o.complete = false
           AND o.manager = :manager
-          AND (os.title IS NULL OR os.title <> 'Бан')
-          AND (cs.title IS NULL OR cs.title <> 'Бан')
-          AND NOT EXISTS (
-              SELECT 1
-              FROM CommonInvoiceOrder item
-              WHERE item.order = o
-                AND item.invoice.status <> :disabledCommonInvoiceStatus
-          )
+          AND (cs.title IS NULL OR cs.title NOT IN ('Бан', 'На стопе'))
           AND c.urlChat IS NOT NULL
           AND TRIM(c.urlChat) <> ''
           AND (
@@ -274,7 +256,6 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
     """)
     List<Order> findManagerControlChatBindingIssueOrdersByManager(
             @Param("manager") Manager manager,
-            @Param("disabledCommonInvoiceStatus") CommonInvoiceStatus disabledCommonInvoiceStatus,
             Pageable pageable
     );
 
@@ -361,13 +342,15 @@ public interface OrderRepository extends CrudRepository<Order, Long> {
             END,
             c.groupId,
             o.statusChangedAt,
-            o.waitingForClientChangedAt
+            o.waitingForClientChangedAt,
+            cs.title
         FROM Order o
         LEFT JOIN o.details d
         LEFT JOIN o.status s
         LEFT JOIN o.filial f
         LEFT JOIN f.city city
         LEFT JOIN o.company c
+        LEFT JOIN c.status cs
         LEFT JOIN c.categoryCompany cat
         LEFT JOIN c.subCategory sub
         LEFT JOIN o.worker w

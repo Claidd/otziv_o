@@ -326,6 +326,17 @@ export class WorkerApi {
     });
   }
 
+  logBadReviewTaskCopyClick(
+    taskId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<void> {
+    return this.http.post<void>(`${appEnvironment.apiBaseUrl}/api/worker/bad-review-tasks/${taskId}/copy-click`, {
+      field,
+      ...source
+    });
+  }
+
   deleteBot(botId: number): Observable<void> {
     return this.http.delete<void>(`${appEnvironment.apiBaseUrl}/api/worker/bots/${botId}`);
   }

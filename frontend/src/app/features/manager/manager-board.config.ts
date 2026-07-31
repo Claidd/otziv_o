@@ -319,6 +319,9 @@ export function managerHasMeaningfulNote(value?: string | null): boolean {
 }
 
 export function managerCompanyChatUrl(company: CompanyCardItem): string {
+  if (managerCompanyChatBindingNotRequired(company)) {
+    return company.urlChat || `tel:${company.telephone ?? ''}`;
+  }
   return managerChatBotInviteUrl(company) || company.urlChat || `tel:${company.telephone ?? ''}`;
 }
 
@@ -327,10 +330,17 @@ export function managerOrderChatUrl(order: OrderCardItem): string {
     return order.commonInvoicePublicUrl || order.companyUrlChat || '';
   }
 
+  if (managerOrderChatBindingNotRequired(order)) {
+    return order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
+  }
+
   return managerChatBotInviteUrl(order) || order.companyUrlChat || `tel:${order.companyTelephone ?? ''}`;
 }
 
 export function managerCompanyNeedsChatBot(company: CompanyCardItem): boolean {
+  if (managerCompanyChatBindingNotRequired(company)) {
+    return false;
+  }
   return Boolean(managerChatBotInviteUrl(company));
 }
 
@@ -339,18 +349,31 @@ export function managerOrderNeedsChatBot(order: OrderCardItem): boolean {
     return false;
   }
 
+  if (managerOrderChatBindingNotRequired(order)) {
+    return false;
+  }
+
   return Boolean(managerChatBotInviteUrl(order));
 }
 
 export function managerCompanyChatBotInviteKind(company: CompanyCardItem): ManagerChatBotInviteKind {
+  if (managerCompanyChatBindingNotRequired(company)) {
+    return null;
+  }
   return managerChatBotInviteKind(company);
 }
 
 export function managerOrderChatBotInviteKind(order: OrderCardItem): ManagerChatBotInviteKind {
+  if (managerOrderChatBindingNotRequired(order)) {
+    return null;
+  }
   return managerChatBotInviteKind(order);
 }
 
 export function managerCompanyChatBindingWarning(company: CompanyCardItem): string {
+  if (managerCompanyChatBindingNotRequired(company)) {
+    return '';
+  }
   return managerChatBindingWarningForValues(
     company.urlChat,
     company.groupId,
@@ -364,6 +387,10 @@ export function managerOrderChatBindingWarning(order: OrderCardItem): string {
     return order.commonInvoiceLastError || '';
   }
 
+  if (managerOrderChatBindingNotRequired(order)) {
+    return '';
+  }
+
   return managerChatBindingWarningForValues(
     order.companyUrlChat,
     order.groupId,
@@ -372,13 +399,46 @@ export function managerOrderChatBindingWarning(order: OrderCardItem): string {
   );
 }
 
+export function managerCompanyChatBindingNotRequired(company: CompanyCardItem): boolean {
+  return managerInactiveCompanyStatus(company.status)
+    && Boolean(managerChatBindingWarningForValues(
+      company.urlChat,
+      company.groupId,
+      company.telegramGroupChatId,
+      company.maxGroupChatId
+    ));
+}
+
+export function managerOrderChatBindingNotRequired(order: OrderCardItem): boolean {
+  return !order.commonInvoice
+    && managerInactiveCompanyStatus(order.companyStatus)
+    && Boolean(managerChatBindingWarningForValues(
+      order.companyUrlChat,
+      order.groupId,
+      order.telegramGroupChatId,
+      order.maxGroupChatId
+    ));
+}
+
+function managerInactiveCompanyStatus(status?: string | null): boolean {
+  const normalized = (status ?? '').trim().toLocaleLowerCase('ru-RU');
+  return normalized === 'на стопе' || normalized === 'бан';
+}
+
 export function managerCompanyHeaderUrl(company: CompanyCardItem): string {
+  if (managerCompanyChatBindingNotRequired(company)) {
+    return company.urlChat || managerCompanyFilialUrl(company);
+  }
   return managerChatBotInviteUrl(company) || company.urlChat || managerCompanyFilialUrl(company);
 }
 
 export function managerOrderHeaderUrl(order: OrderCardItem): string {
   if (order.commonInvoice) {
     return order.commonInvoicePublicUrl || managerOrderDetailsUrl(order);
+  }
+
+  if (managerOrderChatBindingNotRequired(order)) {
+    return order.companyUrlChat || managerOrderDetailsUrl(order);
   }
 
   return managerChatBotInviteUrl(order) || order.companyUrlChat || managerOrderDetailsUrl(order);

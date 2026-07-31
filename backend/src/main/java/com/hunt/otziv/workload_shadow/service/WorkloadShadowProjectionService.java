@@ -110,13 +110,14 @@ public class WorkloadShadowProjectionService {
                 dailyObservationWatermarks(workerIds, progressDate, settingsService.zone(settings));
         repository.deactivateDailyBatchDecisions(progressDate);
         LocalDateTime shiftStart = progressDate.atTime(settingsService.shiftStart(settings));
-        LocalDateTime shiftEnd = progressDate.atTime(settingsService.shiftEnd(settings));
+        LocalDateTime intakeCutoff = progressDate.atTime(settingsService.shiftEnd(settings));
+        LocalDateTime resultSealAt = resultSealAt(progressDate);
         Map<Long, CompletionStats> completions = completedUnits(workerIds, progressDate);
         Map<Long, HistoryStats> history = history(
                 workerIds,
                 progressDate,
                 settings.lookbackDays(),
-                !observedAt.isBefore(shiftEnd)
+                !observedAt.isBefore(resultSealAt)
         );
         Map<Long, BigDecimal> historicalRatings = ratings(workerIds, progressDate, settings.lookbackDays());
         Map<Long, Integer> freezeCredits = freezeCredits(workerIds);
@@ -139,7 +140,8 @@ public class WorkloadShadowProjectionService {
                     progressDate,
                     observedAt,
                     shiftStart,
-                    shiftEnd,
+                    intakeCutoff,
+                    resultSealAt,
                     deferredAndBlocked.getOrDefault(
                             worker.workerId(),
                             WorkloadClassification.empty()
@@ -205,7 +207,7 @@ public class WorkloadShadowProjectionService {
                 producedEvents++;
             }
         }
-        persistSnapshots(snapshots.values(), runId, observedAt, shiftEnd);
+        persistSnapshots(snapshots.values(), runId, observedAt, resultSealAt);
         persistDailyBatchDecisions(snapshots.values(), batchesByWorker);
 
         persistEvents(pendingEvents, observedAt, settings.alertCooldownMinutes());
@@ -214,12 +216,10 @@ public class WorkloadShadowProjectionService {
         resolveMissingEvents(observedAt);
 
         finalizePreviousSnapshots(progressDate, observedAt, settings);
-        boolean finalizing = !observedAt.toLocalTime().isBefore(settingsService.shiftEnd(settings));
-        LocalDate freezeThroughDate = finalizing ? progressDate : progressDate.minusDays(1);
-        applyPendingFreezeSimulations(freezeThroughDate, settings);
-        if (finalizing) {
-            refreshCurrentFreezeCredits(progressDate);
-        }
+        // The current day can still change during the final minute. Freeze credits
+        // are therefore evaluated only on the next day, after the final snapshot
+        // can no longer be amended by work completed before midnight.
+        applyPendingFreezeSimulations(progressDate.minusDays(1), settings);
 
         int managerCount = (int) workers.stream().map(WorkerSubject::managerId).distinct().count();
         return new WorkloadShadowRunService.RunResult(
@@ -715,7 +715,8 @@ public class WorkloadShadowProjectionService {
             LocalDate progressDate,
             LocalDateTime observedAt,
             LocalDateTime shiftStart,
-            LocalDateTime shiftEnd,
+            LocalDateTime intakeCutoff,
+            LocalDateTime resultSealAt,
             WorkloadClassification deferredAndBlocked,
             Map<String, BatchDecision> persistedBatchDecisions,
             LocalDateTime previousObservationAt
@@ -746,7 +747,7 @@ public class WorkloadShadowProjectionService {
                 progressDate,
                 observedAt,
                 shiftStart,
-                shiftEnd,
+                intakeCutoff,
                 recoveredObservation
         );
         for (WorkBatch batch : orderedBatches) {
@@ -775,7 +776,7 @@ public class WorkloadShadowProjectionService {
         }
 
         long feasible = Math.max(0, active - lateExcluded);
-        boolean currentDayFinalized = !observedAt.isBefore(shiftEnd);
+        boolean currentDayFinalized = !observedAt.isBefore(resultSealAt);
         long eligible = eligibleUnitsForSnapshot(
                 completed,
                 feasible,
@@ -787,7 +788,7 @@ public class WorkloadShadowProjectionService {
                 history,
                 progressDate,
                 observedAt,
-                shiftEnd,
+                resultSealAt,
                 eligible,
                 reached100ForFinalization(eligible, progressPercent),
                 freezeCredits
@@ -869,12 +870,14 @@ public class WorkloadShadowProjectionService {
         if (observedAt == null || shiftStart == null || !observedAt.isAfter(shiftStart)) {
             return false;
         }
-        long minutesUntilShiftEnd = ChronoUnit.MINUTES.between(
+        long minutesUntilIntakeCutoff = ChronoUnit.MINUTES.between(
                 observedAt.toLocalTime(),
                 settingsService.shiftEnd(settings)
         );
-        int expectedInterval = minutesUntilShiftEnd >= 0
-                && minutesUntilShiftEnd <= settings.nearEndWindowMinutes()
+        boolean eveningWindow = !observedAt.toLocalTime().isBefore(settingsService.shiftEnd(settings))
+                || minutesUntilIntakeCutoff >= 0
+                && minutesUntilIntakeCutoff <= settings.nearEndWindowMinutes();
+        int expectedInterval = eveningWindow
                 ? settings.nearEndIntervalMinutes()
                 : settings.schedulerIntervalMinutes();
         long maximumExpectedGap = Math.max(10L, Math.multiplyExact(expectedInterval, 2L));
@@ -893,7 +896,7 @@ public class WorkloadShadowProjectionService {
             LocalDate progressDate,
             LocalDateTime observedAt,
             LocalDateTime shiftStart,
-            LocalDateTime shiftEnd,
+            LocalDateTime intakeCutoff,
             boolean recoveredObservation
     ) {
         if (batches == null || batches.isEmpty()) {
@@ -912,7 +915,12 @@ public class WorkloadShadowProjectionService {
         Map<String, BatchDecision> result = new LinkedHashMap<>();
         Set<String> partiallyCompletedLateCohorts =
                 partiallyCompletedLateCohorts(ordered, previous);
-        long remainingCapacity = remainingShiftMinutes(observedAt, shiftStart, shiftEnd);
+        LocalDateTime completionDeadline = completionDeadline(progressDate);
+        long remainingCapacity = remainingShiftMinutes(
+                observedAt,
+                shiftStart,
+                completionDeadline
+        );
         long mandatoryMinutesBeforeIncoming = 0;
         List<WorkBatch> unseen = new ArrayList<>();
 
@@ -1005,7 +1013,14 @@ public class WorkloadShadowProjectionService {
             long decisionCapacity = remainingCapacity;
             DecisionCode decisionCode;
             DecisionOrigin decisionOrigin;
-            if (recoveredObservation) {
+            boolean arrivedAfterCutoff = intakeCutoff != null
+                    && first.availableAt() != null
+                    && !first.availableAt().isBefore(intakeCutoff);
+            if (arrivedAfterCutoff) {
+                decisionCapacity = 0;
+                decisionCode = DecisionCode.LATE;
+                decisionOrigin = DecisionOrigin.AFTER_CUTOFF;
+            } else if (recoveredObservation) {
                 LocalDateTime recoveredStart = recoveredCursor;
                 if (recoveredStart == null
                         || first.availableAt() != null
@@ -1015,7 +1030,7 @@ public class WorkloadShadowProjectionService {
                 decisionCapacity = remainingShiftMinutes(
                         recoveredStart,
                         shiftStart,
-                        shiftEnd
+                        completionDeadline
                 );
                 decisionCode = cohortMinutes > decisionCapacity
                         ? DecisionCode.LATE
@@ -1125,9 +1140,9 @@ public class WorkloadShadowProjectionService {
     private static long remainingShiftMinutes(
             LocalDateTime from,
             LocalDateTime shiftStart,
-            LocalDateTime shiftEnd
+            LocalDateTime completionDeadline
     ) {
-        if (shiftEnd == null) {
+        if (completionDeadline == null) {
             return 0;
         }
         LocalDateTime effectiveStart = from == null ? shiftStart : from;
@@ -1137,10 +1152,18 @@ public class WorkloadShadowProjectionService {
         if (shiftStart != null && effectiveStart.isBefore(shiftStart)) {
             effectiveStart = shiftStart;
         }
-        if (!effectiveStart.isBefore(shiftEnd)) {
+        if (!effectiveStart.isBefore(completionDeadline)) {
             return 0;
         }
-        return Math.max(0, ChronoUnit.MINUTES.between(effectiveStart, shiftEnd));
+        return Math.max(0, ChronoUnit.MINUTES.between(effectiveStart, completionDeadline));
+    }
+
+    static LocalDateTime completionDeadline(LocalDate progressDate) {
+        return progressDate == null ? null : progressDate.plusDays(1).atStartOfDay();
+    }
+
+    static LocalDateTime resultSealAt(LocalDate progressDate) {
+        return progressDate == null ? null : progressDate.atTime(23, 59);
     }
 
     private static long subtractCapacity(long capacity, long requiredMinutes) {
@@ -1164,7 +1187,7 @@ public class WorkloadShadowProjectionService {
             HistoryStats history,
             LocalDate progressDate,
             LocalDateTime observedAt,
-            LocalDateTime shiftEnd,
+            LocalDateTime resultSealAt,
             long eligibleUnits,
             boolean reached100,
             int availableFreezeCredits
@@ -1173,7 +1196,9 @@ public class WorkloadShadowProjectionService {
         boolean currentDayAlreadyIncluded =
                 progressDate != null && progressDate.equals(safeHistory.latestProgressDate());
         boolean currentDayFinalized =
-                observedAt != null && shiftEnd != null && !observedAt.isBefore(shiftEnd);
+                observedAt != null
+                        && resultSealAt != null
+                        && !observedAt.isBefore(resultSealAt);
         if (!currentDayFinalized
                 || currentDayAlreadyIncluded
                 || eligibleUnits <= 0
@@ -1289,12 +1314,12 @@ public class WorkloadShadowProjectionService {
             Collection<WorkerSnapshot> snapshots,
             long runId,
             LocalDateTime observedAt,
-            LocalDateTime shiftEnd
+            LocalDateTime resultSealAt
     ) {
         if (snapshots.isEmpty()) {
             return;
         }
-        boolean finalized = !observedAt.isBefore(shiftEnd);
+        boolean finalized = !observedAt.isBefore(resultSealAt);
         String snapshotsJson = json(snapshots.stream().map(this::snapshotRow).toList());
         repository.upsertCurrentSnapshots(snapshotsJson, runId);
         repository.upsertDailySnapshots(snapshotsJson, finalized, observedAt);
@@ -1391,10 +1416,6 @@ public class WorkloadShadowProjectionService {
                 .toList();
         repository.upsertFreezeAccounts(json(accountOutcomes));
         repository.applyDailyFreezes(json(dailyOutcomes));
-    }
-
-    private void refreshCurrentFreezeCredits(LocalDate progressDate) {
-        repository.refreshCurrentFreezeCredits(progressDate);
     }
 
     private void finalizePreviousSnapshots(
@@ -1605,6 +1626,7 @@ public class WorkloadShadowProjectionService {
 
     enum DecisionOrigin {
         LIVE,
+        AFTER_CUTOFF,
         CARRY_OVER,
         PARTIAL_COMPLETION,
         RECOVERED_MANDATORY,

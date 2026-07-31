@@ -176,6 +176,8 @@ export class WorkerBoardComponent implements OnDestroy {
   private boardNoticeTimer: number | null = null;
   private searchTimer: number | null = null;
   private publishCredentialWaitTimer: number | null = null;
+  private progressRefreshTimer: number | null = null;
+  private progressRefreshAttempts = 0;
 
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
   readonly currentReviews = computed(() => this.board()?.reviews.content ?? []);
@@ -289,6 +291,11 @@ export class WorkerBoardComponent implements OnDestroy {
   readonly reviewEditError = this.editFacade.reviewEditError;
   readonly productOptions = this.editFacade.productOptions;
   readonly reviewEditBusy = this.editFacade.reviewEditBusy;
+  readonly reviewEditTaskWorkerSaving = computed(() => {
+    const review = this.editedTaskReview();
+    const taskId = review?.recoveryTask ? review.recoveryTaskId : review?.badTaskId;
+    return !!taskId && this.mutationKey() === `task-worker-${taskId}`;
+  });
   readonly editingOrderNoteId = this.noteFacade.editingOrderNoteId;
   readonly savedOrderNoteId = this.noteFacade.savedOrderNoteId;
   readonly expandedOrderNoteIds = this.noteFacade.expandedOrderNoteIds;
@@ -365,6 +372,7 @@ export class WorkerBoardComponent implements OnDestroy {
     this.clearSearchTimer();
     this.clearBoardNoticeTimer();
     this.clearPublishCredentialWaitTimer();
+    this.clearProgressRefreshTimer();
   }
 
   @HostListener('window:keydown.escape')
@@ -389,6 +397,7 @@ export class WorkerBoardComponent implements OnDestroy {
     }).subscribe({
       next: (board) => {
         this.board.set(board);
+        this.scheduleProgressRefresh(board.dailyProgress?.updating === true);
         this.selectedWorkerId.set(board.selectedWorkerId ?? null);
         this.loading.set(false);
 
@@ -424,6 +433,29 @@ export class WorkerBoardComponent implements OnDestroy {
         this.toastService.error('Специалист не загрузился', message);
       }
     });
+  }
+
+  private scheduleProgressRefresh(updating: boolean): void {
+    this.clearProgressRefreshTimer();
+    if (!updating) {
+      this.progressRefreshAttempts = 0;
+      return;
+    }
+    if (this.progressRefreshAttempts >= 8) {
+      return;
+    }
+    this.progressRefreshTimer = window.setTimeout(() => {
+      this.progressRefreshTimer = null;
+      this.progressRefreshAttempts++;
+      this.loadBoard();
+    }, 8_000);
+  }
+
+  private clearProgressRefreshTimer(): void {
+    if (this.progressRefreshTimer !== null) {
+      window.clearTimeout(this.progressRefreshTimer);
+      this.progressRefreshTimer = null;
+    }
   }
 
   setSection(section: WorkerBoardTabKey): void {
@@ -614,6 +646,7 @@ export class WorkerBoardComponent implements OnDestroy {
     request.subscribe({
       next: () => {
         this.mutationKey.set(null);
+        this.editFacade.setReviewTaskWorker(workerId);
         this.toastService.success('Специалист изменен', 'Задача переназначена');
         this.loadBoard();
       },
@@ -625,6 +658,18 @@ export class WorkerBoardComponent implements OnDestroy {
         );
       }
     });
+  }
+
+  editedTaskReview(): WorkerReviewItem | null {
+    const review = this.editReview() as WorkerReviewItem | null;
+    return review && (review.badTaskId || review.recoveryTaskId) ? review : null;
+  }
+
+  reassignEditedTaskWorker(workerId: number): void {
+    const review = this.editedTaskReview();
+    if (review) {
+      this.reassignTaskWorker(review, workerId);
+    }
   }
 
   markReviewDone(review: WorkerReviewItem): void {
@@ -871,6 +916,8 @@ export class WorkerBoardComponent implements OnDestroy {
       const target = workerCredentialCopyTarget(review);
       const request = target.resource === 'recovery-task'
         ? this.workerApi.logRecoveryTaskCopyClick(target.id, kind, this.workerActivitySource())
+        : target.resource === 'bad-review-task'
+          ? this.workerApi.logBadReviewTaskCopyClick(target.id, kind, this.workerActivitySource())
         : this.workerApi.logReviewCopyClick(target.id, kind, this.workerActivitySource());
       await firstValueFrom(request);
       return true;

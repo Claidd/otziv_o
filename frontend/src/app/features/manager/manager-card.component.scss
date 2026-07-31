@@ -623,6 +623,43 @@
   text-overflow: ellipsis;
 }
 
+.chat-link-note {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 1.72rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  overflow: hidden;
+  border: 1px solid rgba(126, 142, 151, 0.28);
+  border-radius: 0.65rem;
+  padding: 0.28rem 0.55rem;
+  color: #65747c;
+  background: rgba(239, 243, 245, 0.88);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+:host-context(body.otziv-dark-theme) .chat-link-note {
+  color: #9eacb3;
+  border-color: rgba(158, 172, 179, 0.22);
+  background: rgba(38, 45, 49, 0.86);
+}
+
+.chat-link-note .material-icons-sharp {
+  flex: 0 0 auto;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.chat-link-note span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .category-row {
   flex-wrap: wrap;
   overflow: visible;
@@ -1059,7 +1096,8 @@
   }
 
   .next-order-alert,
-  .chat-link-warning {
+  .chat-link-warning,
+  .chat-link-note {
     min-height: var(--otziv-card-pill-height, 2.35rem);
     padding-inline: 0.7rem;
     font-size: var(--otziv-card-pill-font-size, 0.82rem);

@@ -6,6 +6,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.CurrentProgress;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -47,6 +48,8 @@ public class StaffDailyProgressService {
     private static final String TYPE_PUBLISH = "review_publish";
     private static final String TYPE_BAD = "bad_task";
     private static final String TYPE_RECOVERY = "recovery_task";
+    private static final String WORKLOAD_SHADOW_OBSERVATION_ENABLED =
+            "workload.shadow.observation-enabled";
     private static final List<String> BOT_CHANGE_ACTIONS = List.of(
             "REVIEW_BOT_CHANGE",
             "BAD_TASK_BOT_CHANGE",
@@ -262,7 +265,7 @@ public class StaffDailyProgressService {
                 .toList(), date);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<Long, DailyWorkProgressResponse> workerEndOfDayProgressByWorkers(
             Collection<Worker> workers,
             LocalDate date,
@@ -280,6 +283,20 @@ public class StaffDailyProgressService {
                 ))
                 .toList(), date, ignoreOpenedAtOrAfter, false);
         LocalDate safeDate = safeDate(date);
+        if (safeDate.equals(progressToday())
+                && appSettingService.getBoolean(WORKLOAD_SHADOW_OBSERVATION_ENABLED, true)) {
+            CurrentProgress current = workloadShadowProgressReadService
+                    .findCurrentProgressWithState(legacy.keySet(), safeDate);
+            if (current != null && current.updating()) {
+                return markProgressUpdating(legacy);
+            }
+            return applyWorkloadProgress(
+                    legacy,
+                    current == null ? Map.of() : current.progress(),
+                    true
+            );
+        }
+        workloadShadowProgressReadService.reconcileFinalizedProgress(safeDate);
         return applyWorkloadProgress(
                 legacy,
                 workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate),
@@ -292,14 +309,42 @@ public class StaffDailyProgressService {
         LocalDate safeDate = safeDate(date);
         Map<Long, DailyWorkProgressResponse> legacy =
                 workerProgressBySubjectsInternal(workers, safeDate, null, true);
-        Map<Long, Progress> workload = safeDate.equals(progressToday())
-                ? workloadShadowProgressReadService.findCurrentProgress(legacy.keySet(), safeDate)
-                : workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate);
+        if (safeDate.equals(progressToday())) {
+            if (!appSettingService.getBoolean(WORKLOAD_SHADOW_OBSERVATION_ENABLED, true)) {
+                return legacy;
+            }
+            CurrentProgress current = workloadShadowProgressReadService
+                    .findCurrentProgressWithState(legacy.keySet(), safeDate);
+            if (current != null && current.updating()) {
+                return markProgressUpdating(legacy);
+            }
+            Map<Long, DailyWorkProgressResponse> result = applyWorkloadProgress(
+                    legacy,
+                    current == null ? Map.of() : current.progress(),
+                    true
+            );
+            return result;
+        }
+        workloadShadowProgressReadService.reconcileFinalizedProgress(safeDate);
         return applyWorkloadProgress(
                 legacy,
-                workload,
-                safeDate.equals(progressToday())
+                workloadShadowProgressReadService.findFinalizedProgress(legacy.keySet(), safeDate),
+                false
         );
+    }
+
+    private Map<Long, DailyWorkProgressResponse> markProgressUpdating(
+            Map<Long, DailyWorkProgressResponse> progress
+    ) {
+        if (progress == null || progress.isEmpty()) {
+            return progress == null ? Map.of() : progress;
+        }
+        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
+        progress.forEach((workerId, value) -> result.put(
+                workerId,
+                value == null ? null : value.withUpdating(true)
+        ));
+        return Map.copyOf(result);
     }
 
     private Map<Long, DailyWorkProgressResponse> workerProgressBySubjectsInternal(
@@ -618,7 +663,7 @@ public class StaffDailyProgressService {
                 visible.stream().mapToInt(DailyWorkProgressResponse::checkedDays).sum(),
                 visible.stream().mapToInt(DailyWorkProgressResponse::reached100Days).sum(),
                 visible.stream().allMatch(DailyWorkProgressResponse::closedPeriod)
-        );
+        ).withUpdating(visible.stream().anyMatch(DailyWorkProgressResponse::updating));
     }
 
     private DailyWorkProgressResponse monthlyResponse(LocalDate monthStart, Map<String, Object> row) {
@@ -783,6 +828,25 @@ public class StaffDailyProgressService {
                       AND COALESCE(o.order_complete, 0) = 0
                       AND s.order_status_title IN ('Новый', 'Коррекция')
                       AND o.order_waiting_for_client = FALSE
+                      AND (
+                          s.order_status_title = 'Коррекция'
+                          OR EXISTS (
+                              SELECT 1
+                              FROM order_details pending_detail
+                              JOIN reviews pending_review
+                                ON pending_review.review_order_details = pending_detail.order_detail_id
+                              WHERE pending_detail.order_detail_order = o.order_id
+                                AND (
+                                    pending_review.review_text IS NULL
+                                    OR TRIM(pending_review.review_text) = ''
+                                    OR LOWER(TRIM(pending_review.review_text)) LIKE 'текст отзыва%'
+                                    OR LOWER(TRIM(pending_review.review_text)) LIKE 'нужно подставить%'
+                                    OR LOWER(TRIM(pending_review.review_text)) LIKE 'нужно подсавить%'
+                                    OR LOWER(TRIM(pending_review.review_text)) LIKE 'подставить текст%'
+                                    OR LOWER(TRIM(pending_review.review_text)) LIKE 'подсавить текст%'
+                                )
+                          )
+                      )
 
                     UNION ALL
 
@@ -860,7 +924,13 @@ public class StaffDailyProgressService {
                     SELECT t.review_recovery_task_worker AS worker_id,
                            'recovery_task' AS item_type,
                            t.review_recovery_task_id AS item_id,
-                           COALESCE(t.review_recovery_task_created_at, TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR) AS opened_at
+                           GREATEST(
+                               COALESCE(
+                                   t.review_recovery_task_created_at,
+                                   TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR
+                               ),
+                               TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR
+                           ) AS opened_at
                     FROM review_recovery_tasks t
                     JOIN review_recovery_batches b ON b.review_recovery_batch_id = t.review_recovery_task_batch
                     WHERE t.review_recovery_task_worker IN (:workerIds)
@@ -1021,7 +1091,13 @@ public class StaffDailyProgressService {
                     SELECT t.review_recovery_task_worker AS worker_id,
                            'recovery_task' AS item_type,
                            t.review_recovery_task_id AS item_id,
-                           COALESCE(t.review_recovery_task_created_at, TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR) AS opened_at,
+                           GREATEST(
+                               COALESCE(
+                                   t.review_recovery_task_created_at,
+                                   TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR
+                               ),
+                               TIMESTAMP(t.review_recovery_task_scheduled_date) + INTERVAL 10 HOUR
+                           ) AS opened_at,
                            COALESCE((
                                SELECT MAX(e.created_at)
                                FROM worker_activity_events e

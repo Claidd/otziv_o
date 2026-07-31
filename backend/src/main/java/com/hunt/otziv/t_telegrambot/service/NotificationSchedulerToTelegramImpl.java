@@ -2,6 +2,8 @@ package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.dto.presonal.UserData;
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -36,6 +38,7 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
     private final UserService userService;
     private final PersonalService personalService;
     private final TelegramReportScheduleSettingsService reportScheduleSettingsService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final AtomicReference<String> lastDecisionLogKey = new AtomicReference<>("");
     private Clock clock = Clock.systemDefaultZone();
 
@@ -215,6 +218,9 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
             Long chatId = chatIds.get(fio);
             if (chatId != null && chatId != 0) {
                 String message = generateMessageForRecipient(fio, data, userDataMap);
+                findRecipientWithAssignments(fio)
+                        .filter(user -> hasRole(user, "ROLE_WORKER"))
+                        .ifPresent(user -> sendWorkerReportMedia(chatId, user, data));
                 sendMessageSafe(chatId, message, fio);
             } else {
 //                log.warn("У сотрудника {} chatId отсутствует", fio);
@@ -271,6 +277,25 @@ public class NotificationSchedulerToTelegramImpl implements NotificationSchedule
             telegramService.sendMessage(chatId, message, "HTML");
         } catch (Exception e) {
             log.error("Ошибка отправки Telegram-сообщения для {}: {}", who, e.getMessage());
+        }
+    }
+
+    private void sendWorkerReportMedia(Long chatId, User recipient, UserData data) {
+        DailyWorkProgressResponse progress = data == null ? null : data.getDailyProgress();
+        String eventCode = progress != null && progress.reached100()
+                ? NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code()
+                : NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code();
+        try {
+            notificationMediaDeliveryService.sendMediaOnly(
+                    eventCode,
+                    chatId,
+                    recipient.getId(),
+                    "📊 <b>Личный отчёт готов</b>\n\nЖека подводит итоги дня.",
+                    "HTML"
+            );
+        } catch (RuntimeException exception) {
+            log.warn("Не удалось отправить картинку личного отчёта для {}: {}",
+                    recipient.getFio(), exception.getMessage());
         }
     }
 

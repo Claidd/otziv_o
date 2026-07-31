@@ -2,6 +2,7 @@ package com.hunt.otziv.c_companies.services;
 
 import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -76,6 +77,23 @@ class SharedChatLinkSyncServiceTest {
         assertEquals(1, response.whatsappLinked());
         assertEquals(0, response.conflictGroups());
         verify(companyRepository).saveAll(any());
+    }
+
+    @Test
+    void doesNotCopyChatIdToStoppedOrBannedCompany() {
+        Company source = company(1L, "Source", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        source.setGroupId("120363123@g.us");
+        Company stopped = company(2L, "Stopped", "https://chat.whatsapp.com/AbCdEfGhIjKlMnOpQrStUv");
+        stopped.setStatus(CompanyStatus.builder().title("На стопе").build());
+
+        when(companyRepository.findAllWithChatUrl()).thenReturn(List.of(source, stopped));
+
+        SharedChatLinkSyncResponse response = service.syncSharedChatIds();
+
+        assertNull(stopped.getGroupId());
+        assertEquals(1, response.scannedCompanies());
+        assertEquals(0, response.updatedCompanies());
+        verify(companyRepository, never()).saveAll(any());
     }
 
     @Test

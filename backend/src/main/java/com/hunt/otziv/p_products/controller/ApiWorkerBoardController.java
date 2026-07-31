@@ -559,6 +559,41 @@ public class ApiWorkerBoardController {
         );
     }
 
+    @PostMapping("/bad-review-tasks/{taskId}/copy-click")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
+    public void logBadReviewTaskCredentialCopyClick(
+            @PathVariable Long taskId,
+            @RequestBody ReviewCopyClickRequest request,
+            Principal principal,
+            Authentication authentication
+    ) {
+        workerCellularAccessService.enforceProtectedAccess(SECTION_BAD);
+        assignmentMutationGuardService.assertBadTask(taskId);
+        String field = normalizeReviewCopyField(request);
+        BadReviewTask task = badReviewTaskService.getTask(taskId);
+
+        log.info(
+                "Специалист {} нажал кнопку \"{}\" для плохой задачи ID {}, исходного отзыва ID {}, заказа ID {}, бота ID {}",
+                principalName(principal),
+                copyFieldLabel(field),
+                task.getId(),
+                reviewId(task),
+                orderId(task),
+                botId(task)
+        );
+        workerActivityService.recordSafely(
+                authentication,
+                "login".equals(field) ? WorkerActivityAction.REVIEW_COPY_LOGIN : WorkerActivityAction.REVIEW_COPY_PASSWORD,
+                "bad_review_task",
+                task.getId(),
+                orderId(task),
+                reviewId(task),
+                SECTION_BAD,
+                withSource(credentialCopyDetails(field, task.getBot()), request)
+        );
+    }
+
     @PostMapping("/reviews/{reviewId}/publish")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")

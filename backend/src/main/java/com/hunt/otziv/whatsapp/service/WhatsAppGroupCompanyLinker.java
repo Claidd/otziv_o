@@ -2,6 +2,7 @@ package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.services.CompanyChatBindingPolicy;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -69,7 +70,8 @@ public class WhatsAppGroupCompanyLinker {
                 : companiesWithSameInviteCode(code, companiesWithChatUrl);
         int updated = 0;
         for (Company candidate : candidates) {
-            if (!code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))
+            if (!CompanyChatBindingPolicy.isRequired(candidate)
+                    || !code.equals(whatsAppInviteCode(candidate.getUrlChat()).orElse(null))
                     || Objects.equals(candidate.getGroupId(), groupId)) {
                 continue;
             }
@@ -96,7 +98,8 @@ public class WhatsAppGroupCompanyLinker {
 
         List<Company> result = new ArrayList<>();
         for (Company company : companies) {
-            if (company != null && code.equals(whatsAppInviteCode(company.getUrlChat()).orElse(null))) {
+            if (CompanyChatBindingPolicy.isRequired(company)
+                    && code.equals(whatsAppInviteCode(company.getUrlChat()).orElse(null))) {
                 result.add(company);
             }
         }
@@ -236,6 +239,9 @@ public class WhatsAppGroupCompanyLinker {
         }
 
         for (Company company : companies) {
+            if (!CompanyChatBindingPolicy.isRequired(company)) {
+                continue;
+            }
             String title = normalizeTitle(company == null ? null : company.getTitle());
             if (title.isBlank()) {
                 continue;

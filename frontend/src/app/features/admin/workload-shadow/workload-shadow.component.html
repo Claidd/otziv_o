@@ -918,15 +918,15 @@
         <section class="settings-section">
           <div class="settings-heading">
             <span class="material-icons-sharp">schedule</span>
-            <div><h2>Расписание расчётов</h2><p>Обычный интервал и более частая проверка к завершению смены.</p></div>
+            <div><h2>Расписание расчётов</h2><p>После контрольного времени новая нагрузка относится к следующему дню, а принятые ранее задачи можно завершать до 24:00.</p></div>
           </div>
           <div class="field-grid">
             <label><span>Интервал планировщика, мин</span><input type="number" formControlName="schedulerIntervalMinutes"></label>
-            <label><span>Интервал у конца смены, мин</span><input type="number" formControlName="nearEndIntervalMinutes"></label>
-            <label><span>Окно до конца смены, мин</span><input type="number" formControlName="nearEndWindowMinutes"></label>
+            <label><span>Интервал вечерней проверки, мин</span><input type="number" formControlName="nearEndIntervalMinutes"></label>
+            <label><span>Окно до контрольного времени, мин</span><input type="number" formControlName="nearEndWindowMinutes"></label>
             <label><span>Часовой пояс</span><input type="text" formControlName="businessZone"></label>
             <label><span>Начало смены</span><input type="time" formControlName="shiftStart"></label>
-            <label><span>Конец смены</span><input type="time" formControlName="shiftEnd"></label>
+            <label><span>Контроль входящей нагрузки</span><input type="time" formControlName="shiftEnd"><small>По умолчанию 22:00; выполнение принятого — до 24:00</small></label>
             <label><span>Просроченный запуск через, мин</span><input type="number" formControlName="staleRunMinutes"></label>
           </div>
         </section>

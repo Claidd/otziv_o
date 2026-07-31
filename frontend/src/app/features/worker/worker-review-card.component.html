@@ -503,30 +503,6 @@
     </div>
   }
 
-  @if (canReassignTask && isAssignableTask() && workerOptions.length > 0) {
-    <label class="task-worker-editor">
-      <span class="material-icons-sharp" aria-hidden="true">manage_accounts</span>
-      <span class="task-worker-editor__label">Специалист</span>
-      <select
-        [name]="'task-worker-' + (review.recoveryTaskId || review.badTaskId || review.id)"
-        [ngModel]="review.taskWorkerId"
-        (ngModelChange)="requestTaskWorkerChange($event)"
-        [disabled]="isMutating(taskWorkerMutationKey())"
-        aria-label="Назначенный специалист"
-      >
-        @if (!review.taskWorkerId) {
-          <option [ngValue]="null" disabled>Выберите специалиста</option>
-        }
-        @for (worker of workerOptions; track worker.id) {
-          <option [ngValue]="worker.id">{{ worker.label }}</option>
-        }
-      </select>
-      @if (isMutating(taskWorkerMutationKey())) {
-        <span class="material-icons-sharp task-worker-editor__progress" aria-hidden="true">sync</span>
-      }
-    </label>
-  }
-
   <button
     type="button"
     class="publish-button"

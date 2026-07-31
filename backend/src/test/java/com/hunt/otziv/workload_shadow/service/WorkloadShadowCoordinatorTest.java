@@ -105,7 +105,7 @@ class WorkloadShadowCoordinatorTest {
                 transferSimulationService,
                 refreshSignal
         );
-        ordered.verify(refreshSignal).consume();
+        ordered.verify(refreshSignal).beginRefresh();
         ordered.verify(runService).start(
                 eq("MANUAL"),
                 eq("node-a"),
@@ -122,6 +122,7 @@ class WorkloadShadowCoordinatorTest {
                 any(LocalDateTime.class),
                 any(LocalDateTime.class)
         );
+        ordered.verify(refreshSignal).completeRefresh(any());
         ordered.verify(lease).close();
     }
 
@@ -151,7 +152,7 @@ class WorkloadShadowCoordinatorTest {
                 any(LocalDateTime.class),
                 any(LocalDateTime.class)
         );
-        verify(refreshSignal).markDirty();
+        verify(refreshSignal).failRefresh();
         verify(lease).close();
         assertThat(coordinator.isRunning()).isFalse();
     }
@@ -178,7 +179,7 @@ class WorkloadShadowCoordinatorTest {
                 any(LocalDateTime.class)
         );
         verify(lease).close();
-        verify(refreshSignal).markDirty();
+        verify(refreshSignal).failRefresh();
         assertThat(coordinator.isRunning()).isFalse();
     }
 
@@ -194,7 +195,7 @@ class WorkloadShadowCoordinatorTest {
                 120,
                 "Asia/Irkutsk",
                 "10:00",
-                "23:00",
+                "22:00",
                 4,
                 3,
                 5,

@@ -208,6 +208,16 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             )
             OR COALESCE(invoice.lastError, '') <> ''
             OR COALESCE(invoice.paymentSuccessNotificationError, '') <> ''
+            OR (
+              invoice.status = :collectingStatus
+              AND EXISTS (
+              SELECT publicationBlocker.id
+              FROM CommonInvoiceOrder publicationBlocker
+              WHERE publicationBlocker.invoice = invoice
+                AND publicationBlocker.publicationBlockerSince IS NOT NULL
+                AND publicationBlocker.publicationBlockerSince <= :publicationBlockerBefore
+              )
+            )
           )
     """)
     long countManagerControlInvoices(
@@ -216,7 +226,8 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("staleStatuses") Collection<CommonInvoiceStatus> staleStatuses,
             @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
             @Param("collectingStatus") CommonInvoiceStatus collectingStatus,
-            @Param("staleBefore") LocalDateTime staleBefore
+            @Param("staleBefore") LocalDateTime staleBefore,
+            @Param("publicationBlockerBefore") LocalDateTime publicationBlockerBefore
     );
 
     @Query("""
@@ -264,6 +275,16 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             )
             OR COALESCE(invoice.lastError, '') <> ''
             OR COALESCE(invoice.paymentSuccessNotificationError, '') <> ''
+            OR (
+              invoice.status = :collectingStatus
+              AND EXISTS (
+              SELECT publicationBlocker.id
+              FROM CommonInvoiceOrder publicationBlocker
+              WHERE publicationBlocker.invoice = invoice
+                AND publicationBlocker.publicationBlockerSince IS NOT NULL
+                AND publicationBlocker.publicationBlockerSince <= :publicationBlockerBefore
+              )
+            )
           )
         ORDER BY invoice.updatedAt ASC, invoice.id ASC
     """)
@@ -274,6 +295,7 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             @Param("partiallyPaidStatus") CommonInvoiceStatus partiallyPaidStatus,
             @Param("collectingStatus") CommonInvoiceStatus collectingStatus,
             @Param("staleBefore") LocalDateTime staleBefore,
+            @Param("publicationBlockerBefore") LocalDateTime publicationBlockerBefore,
             Pageable pageable
     );
 

@@ -2776,6 +2776,7 @@ export interface DailyWorkProgress {
   checkedDays?: number;
   reached100Days?: number;
   closedPeriod?: boolean;
+  updating?: boolean;
 }
 
 export interface TeamMember {
@@ -4156,6 +4157,28 @@ export class ApiService {
   ): Observable<WorkerCredentialPreparation | null> {
     return this.http.post<WorkerCredentialPreparation | null>(
       this.apiUrl(`/api/worker/reviews/${reviewId}/copy-click`),
+      { field, ...source }
+    );
+  }
+
+  logWorkerBadReviewTaskCopyClick(
+    taskId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<void> {
+    return this.http.post<void>(
+      this.apiUrl(`/api/worker/bad-review-tasks/${taskId}/copy-click`),
+      { field, ...source }
+    );
+  }
+
+  logWorkerRecoveryTaskCopyClick(
+    taskId: number,
+    field: 'login' | 'password',
+    source?: WorkerActivitySource
+  ): Observable<void> {
+    return this.http.post<void>(
+      this.apiUrl(`/api/worker/recovery-tasks/${taskId}/copy-click`),
       { field, ...source }
     );
   }

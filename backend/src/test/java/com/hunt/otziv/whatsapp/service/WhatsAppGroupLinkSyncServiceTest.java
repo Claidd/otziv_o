@@ -1,6 +1,7 @@
 package com.hunt.otziv.whatsapp.service;
 
 import com.hunt.otziv.c_companies.model.Company;
+import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.dto.SharedChatLinkSyncResponse;
 import com.hunt.otziv.c_companies.services.SharedChatLinkSyncService;
@@ -619,7 +620,7 @@ class WhatsAppGroupLinkSyncServiceTest {
     }
 
     @Test
-    void repairCompanyLinkForcesGatewayRefreshAndLinksByVisibleGroupName() {
+    void repairCompanyLinkUsesGatewayCacheAndLinksByVisibleGroupName() {
         WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
         client.setId("whatsapp_lika");
         client.setUrl("http://whatsapp_lika:3000");
@@ -630,7 +631,7 @@ class WhatsAppGroupLinkSyncServiceTest {
         company.setTitle("Элит");
         company.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
 
-        when(whatsAppService.listGroups("whatsapp_lika", true)).thenReturn(List.of(
+        when(whatsAppService.listGroups("whatsapp_lika")).thenReturn(List.of(
                 new WhatsAppGroupInfo("1203631181@g.us", "The Best Shop и Элит. Отзывы", null)
         ));
 
@@ -638,8 +639,29 @@ class WhatsAppGroupLinkSyncServiceTest {
 
         assertTrue(result.linked());
         assertEquals("1203631181@g.us", company.getGroupId());
-        verify(whatsAppService).listGroups("whatsapp_lika", true);
+        verify(whatsAppService).listGroups("whatsapp_lika");
         verify(companyRepository).save(company);
+    }
+
+    @Test
+    void repairCompanyLinkDoesNotCallGatewayForStoppedCompany() {
+        WhatsAppProperties.ClientConfig client = new WhatsAppProperties.ClientConfig();
+        client.setId("whatsapp_lika");
+        client.setUrl("http://whatsapp_lika:3000");
+        properties.setClients(List.of(client));
+
+        Company company = new Company();
+        company.setId(1182L);
+        company.setTitle("Stopped company");
+        company.setUrlChat("https://chat.whatsapp.com/GfRcWynyKdYBRFxyLQdUBL");
+        company.setStatus(CompanyStatus.builder().title("На стопе").build());
+
+        WhatsAppGroupLinkSyncService.WhatsAppGroupRepairResult result = service.repairCompanyLink(company);
+
+        assertFalse(result.linked());
+        assertTrue(result.message().contains("не требуется"));
+        verify(whatsAppService, never()).resolveGroupByInvite("whatsapp_lika", company.getUrlChat());
+        verify(whatsAppService, never()).listGroups("whatsapp_lika");
     }
 
     @Test

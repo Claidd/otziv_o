@@ -44,11 +44,13 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -129,6 +131,14 @@ public class ScheduledClientMessageService {
     private static final String STATUS_ARCHIVE = "Архив";
     private static final String STATUS_BAN = "Бан";
     private static final String STATUS_REMINDER = "Напоминание";
+    private static final Set<ClientMessageScenario> ORDER_STATUS_AUTOMATION_SCENARIOS = Set.of(
+            ClientMessageScenario.REVIEW_CHECK_REMINDER,
+            ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY,
+            ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE,
+            ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+            ClientMessageScenario.PAYMENT_REMINDER,
+            ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION
+    );
 
     private final ScheduledClientMessageStateRepository stateRepository;
     private final ScheduledClientMessageAttemptRepository attemptRepository;
@@ -425,12 +435,7 @@ public class ScheduledClientMessageService {
         }
 
         boolean eligible = synchronizeClientTextReminderForOrder(order);
-        Optional<ClientMessageScenario> scenario = orderAutomationScenario(order);
-        if (scenario.isPresent()) {
-            ensureOrderStateOnSchedule(scenario.get(), order);
-            eligible = true;
-        }
-        return eligible;
+        return synchronizeOrderAutomationStates(order) || eligible;
     }
 
     public Optional<ClientMessageScenario> orderAutomationScenario(Order order) {
@@ -529,9 +534,87 @@ public class ScheduledClientMessageService {
             case REVIEW_CHECK_DELIVERY_RETRY -> scheduleAtStorage(nowStorage.plusHours(reviewCheckRetryDelayHours()));
             case PAYMENT_INVOICE_RETRY -> scheduleAtStorage(nowStorage.plusHours(paymentInvoiceRetryDelayHours()));
             case REVIEW_CHECK_REMINDER -> scheduleAtStorage(statusChangedAt.plusDays(reviewCheckIntervalDays()));
+            case REVIEW_CHECK_AUTO_ARCHIVE -> scheduleAtStorage(statusChangedAt.plusDays(reviewCheckAutoArchiveDays()));
             case PAYMENT_REMINDER -> scheduleAtStorage(statusChangedAt.plusDays(paymentReminderIntervalDays()));
+            case PAYMENT_OVERDUE_ESCALATION -> scheduleAtStorage(statusChangedAt.plusDays(
+                    intSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS, DEFAULT_PAYMENT_OVERDUE_DAYS, 1, 365)
+            ));
             default -> scheduleAtStorage(nowStorage.plusDays(DEFAULT_REMINDER_INTERVAL_DAYS));
         };
+    }
+
+    /**
+     * Immediately aligns every status-driven state with the current order cycle.
+     * This is deliberately called from the AFTER_COMMIT status listener so a
+     * manager's manual transition cancels obsolete notifications without waiting
+     * for the next scheduled attempt.
+     */
+    private boolean synchronizeOrderAutomationStates(Order order) {
+        Set<ClientMessageScenario> expectedScenarios = orderAutomationScenarios(order);
+        String currentTargetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
+        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        boolean changed = false;
+
+        for (ScheduledClientMessageState state : stateRepository.findByOrderIdIn(List.of(order.getId()))) {
+            if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE
+                    || !ORDER_STATUS_AUTOMATION_SCENARIOS.contains(state.getScenario())) {
+                continue;
+            }
+            if (!expectedScenarios.contains(state.getScenario())
+                    || !Objects.equals(currentTargetKey, state.getTargetKey())) {
+                markDone(
+                        state,
+                        nowStorage,
+                        "order_status_synchronized",
+                        "Задача автоответчика закрыта после смены статуса заказа на \"" + statusTitle(order) + "\""
+                );
+                changed = true;
+            }
+        }
+
+        for (ClientMessageScenario scenario : expectedScenarios) {
+            ensureOrderStateOnSchedule(scenario, order);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private Set<ClientMessageScenario> orderAutomationScenarios(Order order) {
+        LinkedHashSet<ClientMessageScenario> scenarios = new LinkedHashSet<>();
+        String status = statusTitle(order);
+        if (STATUS_PUBLIC.equals(status)) {
+            scenarios.add(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+        } else if (STATUS_TO_CHECK.equals(status)) {
+            if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, true)) {
+                scenarios.add(ClientMessageScenario.REVIEW_CHECK_DELIVERY_RETRY);
+            }
+        } else if (listSetting(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES, DEFAULT_REVIEW_CHECK_STATUSES)
+                .contains(status)) {
+            if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_ENABLED, true)) {
+                scenarios.add(ClientMessageScenario.REVIEW_CHECK_REMINDER);
+            }
+            if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_AUTO_ARCHIVE_ENABLED, true)) {
+                scenarios.add(ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE);
+            }
+        } else if (listSetting(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_STATUSES, DEFAULT_PAYMENT_REMINDER_STATUSES)
+                .contains(status)) {
+            if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true)) {
+                scenarios.add(ClientMessageScenario.PAYMENT_REMINDER);
+            }
+            if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, true)) {
+                scenarios.add(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
+            }
+        }
+
+        boolean hasPaymentAutomation = scenarios.contains(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
+                || scenarios.contains(ClientMessageScenario.PAYMENT_REMINDER)
+                || scenarios.contains(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
+        if (hasPaymentAutomation && isManagedByActiveCommonInvoice(order)) {
+            scenarios.remove(ClientMessageScenario.PAYMENT_INVOICE_RETRY);
+            scenarios.remove(ClientMessageScenario.PAYMENT_REMINDER);
+            scenarios.remove(ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION);
+        }
+        return scenarios;
     }
 
     private void ensureOrderStateNow(ClientMessageScenario scenario, Order order) {
@@ -570,6 +653,7 @@ public class ScheduledClientMessageService {
         int clientTextReminderCandidates = 0;
         int reviewCheckCandidates = 0;
         int reviewCheckAutoArchiveCandidates = 0;
+        int paymentInvoiceCandidates = 0;
         int paymentReminderCandidates = 0;
         int paymentOverdueCandidates = 0;
         int archiveReorderCandidates = 0;
@@ -601,6 +685,8 @@ public class ScheduledClientMessageService {
             );
         }
 
+        paymentInvoiceCandidates = ensurePaymentInvoiceStates(nowStorage);
+
         if (appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true)) {
             int intervalDays = paymentReminderIntervalDays();
             paymentReminderCandidates = ensureOrderStates(
@@ -628,6 +714,7 @@ public class ScheduledClientMessageService {
                 clientTextReminderCandidates,
                 reviewCheckCandidates,
                 reviewCheckAutoArchiveCandidates,
+                paymentInvoiceCandidates,
                 paymentReminderCandidates,
                 paymentOverdueCandidates,
                 archiveReorderCandidates
@@ -1213,6 +1300,39 @@ public class ScheduledClientMessageService {
         if (summary != null && summary.pending() == 0 && summary.done() > 0) {
             paymentInvoiceRetryScheduler.scheduleBadReviewAutoBan(order);
         }
+    }
+
+    private int ensurePaymentInvoiceStates(LocalDateTime nowStorage) {
+        int delayHours = paymentInvoiceRetryDelayHours();
+        List<OrderRepository.ClientMessageCandidate> candidates = orderRepository.findClientMessageCandidates(
+                List.of(STATUS_PUBLIC),
+                nowStorage.minusHours(delayHours),
+                PageRequest.of(0, candidateLimit())
+        );
+        int created = 0;
+        CommonBillingService commonBillingService = commonBillingServiceProvider.getIfAvailable();
+        for (OrderRepository.ClientMessageCandidate order : candidates) {
+            if (commonBillingService != null && commonBillingService.isOrderInActiveCommonInvoice(order.getId())) {
+                continue;
+            }
+            LocalDateTime statusChangedAt = order.getStatusChangedAt();
+            if (ensureState(
+                    ClientMessageScenario.PAYMENT_INVOICE_RETRY,
+                    ClientMessageTargetType.ORDER,
+                    orderTargetKey(order.getId(), statusChangedAt),
+                    order.getCompanyId(),
+                    order.getId(),
+                    null,
+                    scheduleAtStorage(statusChangedAt.plusHours(delayHours))
+            )) {
+                created++;
+            }
+        }
+        if (created > 0) {
+            log.info("Client messages restored missing payment-invoice states created={} candidates={}",
+                    created, candidates.size());
+        }
+        return candidates.size();
     }
 
     private ManualRetryResult manualRetryResult(ScheduledClientMessageState state, boolean attempted) {
@@ -2521,7 +2641,7 @@ public class ScheduledClientMessageService {
         long activeStates = stateRepository.countByStatus(ScheduledMessageStateStatus.ACTIVE);
         long disabledStates = stateRepository.countByStatus(ScheduledMessageStateStatus.DISABLED);
         log.info(
-                "Client messages tick: live={} nowIrkutsk={} windowAllowed={} windows=\"{}\" candidates clientText={} reviewCheck={} reviewCheckAutoArchive={} paymentReminder={} paymentOverdue={} archiveReorder={} states active={} disabled={} due={} processed={}",
+                "Client messages tick: live={} nowIrkutsk={} windowAllowed={} windows=\"{}\" candidates clientText={} reviewCheck={} reviewCheckAutoArchive={} paymentInvoice={} paymentReminder={} paymentOverdue={} archiveReorder={} states active={} disabled={} due={} processed={}",
                 appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_LIVE_ENABLED, true),
                 nowIrkutsk,
                 windowAllowed,
@@ -2529,6 +2649,7 @@ public class ScheduledClientMessageService {
                 reconcileSummary.clientTextReminderCandidates(),
                 reconcileSummary.reviewCheckCandidates(),
                 reconcileSummary.reviewCheckAutoArchiveCandidates(),
+                reconcileSummary.paymentInvoiceCandidates(),
                 reconcileSummary.paymentReminderCandidates(),
                 reconcileSummary.paymentOverdueCandidates(),
                 reconcileSummary.archiveReorderCandidates(),
@@ -2597,12 +2718,13 @@ public class ScheduledClientMessageService {
             int clientTextReminderCandidates,
             int reviewCheckCandidates,
             int reviewCheckAutoArchiveCandidates,
+            int paymentInvoiceCandidates,
             int paymentReminderCandidates,
             int paymentOverdueCandidates,
             int archiveReorderCandidates
     ) {
         private static ClientMessageReconcileSummary empty() {
-            return new ClientMessageReconcileSummary(0, 0, 0, 0, 0, 0);
+            return new ClientMessageReconcileSummary(0, 0, 0, 0, 0, 0, 0);
         }
     }
 

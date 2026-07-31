@@ -22,6 +22,8 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDispute;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewDisputeStatus;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -50,6 +52,7 @@ class ManagerReportReviewTelegramServiceTest {
     @Mock private ManagerReportReviewQualityService qualityService;
     @Mock private ManagerSummaryFormatter formatter;
     @Mock private TelegramService telegramService;
+    @Mock private NotificationMediaDeliveryService notificationMediaDeliveryService;
     @Mock private UserService userService;
     @Mock private ManagerRepository managerRepository;
     @Mock private AppSettingService appSettingService;
@@ -127,6 +130,13 @@ class ManagerReportReviewTelegramServiceTest {
 
         assertThat(service.deliver(manager, summary)).isTrue();
 
+        verify(notificationMediaDeliveryService).sendMediaOnly(
+                eq(NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_GROWING.code()),
+                eq(700L),
+                eq(17L),
+                any(String.class),
+                eq("HTML")
+        );
         verify(qualityService, never()).generateQuestions(any(String.class), anyInt());
         verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
                 review.getStatus() == ManagerReportReviewStatus.COMPLETED
@@ -171,6 +181,13 @@ class ManagerReportReviewTelegramServiceTest {
 
         assertThat(service.deliver(manager, summary)).isTrue();
 
+        verify(notificationMediaDeliveryService).sendMediaOnly(
+                eq(NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_SLOWED.code()),
+                eq(700L),
+                eq(17L),
+                any(String.class),
+                eq("HTML")
+        );
         verify(sessionRepository, atLeastOnce()).save(org.mockito.ArgumentMatchers.argThat(review ->
                 review.getStatus() == ManagerReportReviewStatus.DELIVERED
                         && review.getIssueCount() == 2

@@ -284,7 +284,7 @@ export class TeamComponent implements OnDestroy {
             : `Заблокировано аккаунтов за выбранный день: ${this.formatNumber(blocks)}.`
         },
         {
-          label: 'Проср. заказов',
+          label: 'Просрочено за период',
           value: this.count(overdue),
           tone: overdue > 0 ? 'warn' : 'neutral',
           hint: 'Заказы, которые не были выполнены день-в-день за выбранный период.'
@@ -486,8 +486,8 @@ export class TeamComponent implements OnDestroy {
     this.pushCountRow(rows, 'Плохие закрыто', progress.badCompletedCount, `Сколько задач по плохим отзывам выполнено ${periodHint}.`);
     this.pushCountRow(rows, 'Восст. закрыто', progress.recoveryCompletedCount, `Сколько задач восстановления выполнено ${periodHint}.`);
     this.pushCountRow(rows, 'Восст. создано', progress.recoveryCreatedCount, `Сколько задач восстановления назначили специалисту ${periodHint}.`);
-    this.pushCountRow(rows, 'Проср. заказов', progress.orderOverdueCount, `Заказы, которые не были выполнены день-в-день ${periodHint}.`);
-    this.pushCountRow(rows, 'Просрочек всего', progress.totalOverdueCount, `Все просроченные карточки в расчёте ${periodHint}.`);
+    this.pushCountRow(rows, 'Просрочено заказов за период', progress.orderOverdueCount, `Заказы, которые не были выполнены день-в-день ${periodHint}.`);
+    this.pushCountRow(rows, 'Просрочено карточек за период', progress.totalOverdueCount, `Все просроченные карточки в расчёте ${periodHint}.`);
     this.pushCountRow(rows, 'Смена бота', progress.botChangeCount, `Сколько раз специалист нажал «смена» у аккаунта ${periodHint}.`);
     this.pushCountRow(rows, 'Блок бота', progress.botBlockCount, `Сколько раз специалист увёл аккаунт в блок ${periodHint}.`);
     const publications = Number(progress.publishCompletedCount || 0);
@@ -626,7 +626,7 @@ export class TeamComponent implements OnDestroy {
       return `${base} · 100% был`;
     }
     if ((progress.orderOverdueCount || 0) > 0) {
-      return `${base} · проср. заказов ${this.formatNumber(progress.orderOverdueCount)}`;
+      return `${base} · за день просрочено заказов: ${this.formatNumber(progress.orderOverdueCount)}`;
     }
     if (median) {
       return `${base} · медиана ${median}`;

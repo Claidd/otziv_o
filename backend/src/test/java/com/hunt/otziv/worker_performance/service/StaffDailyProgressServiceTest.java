@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,12 +19,14 @@ import com.hunt.otziv.u_users.model.Worker;
 import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.CurrentProgress;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -66,13 +69,50 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
-    void endOfDayGraceHourUsesActualQueueAppearanceTime() {
+    void endOfDayCutoffUsesActualQueueAppearanceTime() {
         LocalDate date = LocalDate.of(2026, 7, 17);
-        LocalDateTime cutoff = date.atTime(23, 0);
+        LocalDateTime cutoff = date.atTime(22, 0);
 
-        assertTrue(StaffDailyProgressService.includedInEndOfDay(date.atTime(22, 59, 59), cutoff));
-        assertFalse(StaffDailyProgressService.includedInEndOfDay(date.atTime(23, 0), cutoff));
+        assertTrue(StaffDailyProgressService.includedInEndOfDay(date.atTime(21, 59, 59), cutoff));
+        assertFalse(StaffDailyProgressService.includedInEndOfDay(date.atTime(22, 0), cutoff));
         assertFalse(StaffDailyProgressService.includedInEndOfDay(date.atTime(23, 58), cutoff));
+    }
+
+    @Test
+    void newOrderContainerIsActiveOnlyWhileItHasPendingReviewCards() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(false);
+        AtomicBoolean activeQueryChecked = new AtomicBoolean();
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            if (sql.contains(") active_items")) {
+                activeQueryChecked.set(true);
+                assertTrue(sql.contains("s.order_status_title = 'Коррекция'"));
+                assertTrue(sql.contains("JOIN reviews pending_review"));
+                assertTrue(sql.contains("pending_review.review_text IS NULL"));
+            }
+            return List.of();
+        });
+        StaffDailyProgressService localService = new StaffDailyProgressService(
+                localJdbc,
+                settings,
+                mock(WorkloadShadowProgressReadService.class)
+        );
+        Worker worker = Worker.builder()
+                .id(17L)
+                .user(User.builder().id(33L).fio("Татьяна").build())
+                .build();
+
+        DailyWorkProgressResponse progress = localService.workerProgressByWorkers(
+                List.of(worker),
+                LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"))
+        ).get(17L);
+
+        assertTrue(activeQueryChecked.get());
+        assertEquals(0, progress.active());
+        assertEquals(0, progress.orderOverdueCount());
     }
 
     @Test
@@ -87,8 +127,8 @@ class StaffDailyProgressServiceTest {
             }
             LocalDate date = LocalDate.of(2026, 7, 17);
             return List.of(
-                    completedItem(7L, 1L, date.atTime(22, 50), date.atTime(22, 50), date.atTime(23, 30)),
-                    completedItem(7L, 2L, date.atTime(23, 20), date.atTime(23, 20), date.atTime(23, 40)),
+                    completedItem(7L, 1L, date.atTime(21, 50), date.atTime(21, 50), date.atTime(23, 30)),
+                    completedItem(7L, 2L, date.atTime(22, 20), date.atTime(22, 20), date.atTime(23, 40)),
                     completedItem(7L, 3L, date.plusDays(2).atTime(10, 0), date.plusDays(2).atTime(10, 0),
                             date.atTime(18, 54))
             );
@@ -107,7 +147,7 @@ class StaffDailyProgressServiceTest {
         DailyWorkProgressResponse progress = localService.workerEndOfDayProgressByWorkers(
                 List.of(worker),
                 date,
-                date.atTime(23, 0)
+                date.atTime(22, 0)
         ).get(7L);
 
         assertEquals(2, progress.completed());
@@ -122,6 +162,7 @@ class StaffDailyProgressServiceTest {
         WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
         LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(true);
         when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
             String sql = invocation.getArgument(0);
             if (sql.contains(") active_items")) {
@@ -135,8 +176,8 @@ class StaffDailyProgressServiceTest {
             }
             return List.of();
         });
-        when(workload.findCurrentProgress(any(), eq(date)))
-                .thenReturn(Map.of(7L, new Progress(
+        when(workload.findCurrentProgressWithState(any(), eq(date)))
+                .thenReturn(new CurrentProgress(Map.of(7L, new Progress(
                         46,
                         46,
                         5,
@@ -146,7 +187,7 @@ class StaffDailyProgressServiceTest {
                         true,
                         date.atTime(18, 54),
                         date.atTime(18, 54)
-                )));
+                )), false));
         StaffDailyProgressService localService =
                 new StaffDailyProgressService(localJdbc, settings, workload);
         Worker worker = Worker.builder()
@@ -166,6 +207,92 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
+    void dirtyWorkloadSnapshotDoesNotOverrideLiveCompletedWork() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenAnswer(invocation -> {
+            String sql = invocation.getArgument(0);
+            if (!sql.contains(") completed_items")) {
+                return List.of();
+            }
+            return List.of(
+                    completedItem(7L, 1L, date.atTime(10, 0), date.atTime(10, 0), date.atTime(18, 0)),
+                    completedItem(7L, 2L, date.atTime(10, 0), date.atTime(10, 0), date.atTime(18, 5)),
+                    completedItem(7L, 3L, date.atTime(10, 0), date.atTime(10, 0), date.atTime(18, 10))
+            );
+        });
+        when(workload.findCurrentProgressWithState(any(), eq(date)))
+                .thenReturn(new CurrentProgress(Map.of(7L, new Progress(
+                        2,
+                        3,
+                        0,
+                        0,
+                        67,
+                        false,
+                        false,
+                        null,
+                        null
+                )), true));
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Альфия").build())
+                .build();
+
+        DailyWorkProgressResponse progress =
+                localService.workerProgressByWorkers(List.of(worker), date).get(7L);
+
+        assertEquals(3, progress.completed());
+        assertEquals(3, progress.total());
+        assertEquals(100, progress.percent());
+        assertTrue(progress.checked());
+        assertTrue(progress.updating());
+    }
+
+    @Test
+    void disabledObservationModeUsesLiveProgressWithoutUpdatingState() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(false);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Альфия").build())
+                .build();
+
+        DailyWorkProgressResponse progress =
+                localService.workerProgressByWorkers(List.of(worker), date).get(7L);
+
+        assertEquals(100, progress.percent());
+        assertFalse(progress.updating());
+        verify(workload, never()).findCurrentProgressWithState(any(), any());
+    }
+
+    @Test
+    void aggregateProgressKeepsUpdatingStateFromAnyWorker() {
+        DailyWorkProgressResponse worker = progress(2, 0, false);
+        when(worker.updating()).thenReturn(true);
+
+        DailyWorkProgressResponse team = service.aggregateProgressResponses(
+                List.of(worker),
+                LocalDate.of(2026, 7, 31),
+                "WORKER_TEAM"
+        );
+
+        assertTrue(team.updating());
+    }
+
+    @Test
     void liveWorkerProgressKeepsReachedOnceAfterNewFeasibleWorkArrives() {
         NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
         AppSettingService settings = mock(AppSettingService.class);
@@ -173,9 +300,10 @@ class StaffDailyProgressServiceTest {
         LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
         LocalDateTime reachedAt = date.atTime(20, 0);
         when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(true);
         when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
-        when(workload.findCurrentProgress(any(), eq(date)))
-                .thenReturn(Map.of(7L, new Progress(
+        when(workload.findCurrentProgressWithState(any(), eq(date)))
+                .thenReturn(new CurrentProgress(Map.of(7L, new Progress(
                         30,
                         35,
                         0,
@@ -185,7 +313,7 @@ class StaffDailyProgressServiceTest {
                         true,
                         reachedAt,
                         reachedAt
-                )));
+                )), false));
         StaffDailyProgressService localService =
                 new StaffDailyProgressService(localJdbc, settings, workload);
         Worker worker = Worker.builder()
@@ -202,6 +330,48 @@ class StaffDailyProgressServiceTest {
         assertFalse(progress.checked());
         assertTrue(progress.reached100());
         assertEquals(reachedAt, progress.firstReached100At());
+    }
+
+    @Test
+    void endOfDayUsesFreshCurrentSnapshotInsteadOfEarlierFinalizedSnapshot() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of());
+        when(workload.findCurrentProgressWithState(any(), eq(date)))
+                .thenReturn(new CurrentProgress(Map.of(7L, new Progress(
+                        40,
+                        40,
+                        2,
+                        0,
+                        100,
+                        true,
+                        true,
+                        date.atTime(23, 59, 29),
+                        date.atTime(23, 59, 29)
+                )), false));
+        StaffDailyProgressService localService =
+                new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder()
+                .id(7L)
+                .user(User.builder().id(70L).fio("Татьяна").build())
+                .build();
+
+        DailyWorkProgressResponse progress = localService.workerEndOfDayProgressByWorkers(
+                List.of(worker),
+                date,
+                date.atTime(22, 0)
+        ).get(7L);
+
+        assertEquals(40, progress.completed());
+        assertEquals(40, progress.total());
+        assertEquals(100, progress.percent());
+        assertTrue(progress.reached100());
+        verify(workload).findCurrentProgressWithState(any(), eq(date));
+        verify(workload, never()).findFinalizedProgress(any(), eq(date));
     }
 
     @Test
@@ -241,6 +411,7 @@ class StaffDailyProgressServiceTest {
         assertEquals(5, progress.active());
         assertFalse(progress.reached100());
         assertNull(progress.firstReached100At());
+        verify(workload).reconcileFinalizedProgress(date);
     }
 
     @Test

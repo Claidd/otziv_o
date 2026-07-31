@@ -5,6 +5,7 @@ import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
 import {
   ManagerChatBotInviteKind,
   StatusAction,
+  managerCompanyChatBindingNotRequired,
   managerCompanyChatBindingWarning,
   managerCompanyChatBotInviteKind,
   managerCompanyHeaderUrl,
@@ -89,6 +90,10 @@ export class ManagerCompanyCardComponent {
 
   chatBindingWarning(): string {
     return managerCompanyChatBindingWarning(this.company);
+  }
+
+  chatBindingNotRequired(): boolean {
+    return managerCompanyChatBindingNotRequired(this.company);
   }
 
   handleChatLinkClick(): void {

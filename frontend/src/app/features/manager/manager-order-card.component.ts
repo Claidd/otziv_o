@@ -8,6 +8,7 @@ import {
   ManagerChatBotInviteKind,
   SelectedCompany,
   StatusAction,
+  managerOrderChatBindingNotRequired,
   managerOrderChatBindingWarning,
   managerOrderChatBotInviteKind,
   managerHasMeaningfulNote,
@@ -94,6 +95,10 @@ export class ManagerOrderCardComponent implements OnDestroy {
 
   chatBindingWarning(): string {
     return managerOrderChatBindingWarning(this.order);
+  }
+
+  chatBindingNotRequired(): boolean {
+    return managerOrderChatBindingNotRequired(this.order);
   }
 
   hasCommunicationIndicator(): boolean {

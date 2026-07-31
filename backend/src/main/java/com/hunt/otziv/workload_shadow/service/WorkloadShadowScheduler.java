@@ -25,7 +25,7 @@ public class WorkloadShadowScheduler {
             return;
         }
         LocalDateTime now = LocalDateTime.now(settingsService.zone(settings));
-        boolean dirty = refreshSignal.consume();
+        boolean dirty = refreshSignal.isDirty();
         int intervalMinutes = effectiveIntervalMinutes(settings, now.toLocalTime());
         LocalDateTime lastSuccess = runService.lastSuccessfulFinishedAt();
         boolean due = lastSuccess == null
@@ -47,9 +47,11 @@ public class WorkloadShadowScheduler {
             com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse settings,
             LocalTime now
     ) {
-        LocalTime shiftEnd = LocalTime.parse(settings.shiftEnd());
-        long minutesUntilEnd = Duration.between(now, shiftEnd).toMinutes();
-        boolean nearEnd = minutesUntilEnd >= 0 && minutesUntilEnd <= settings.nearEndWindowMinutes();
+        LocalTime intakeCutoff = LocalTime.parse(settings.shiftEnd());
+        long minutesUntilCutoff = Duration.between(now, intakeCutoff).toMinutes();
+        boolean nearEnd = !now.isBefore(intakeCutoff)
+                || minutesUntilCutoff >= 0
+                && minutesUntilCutoff <= settings.nearEndWindowMinutes();
         return nearEnd ? settings.nearEndIntervalMinutes() : settings.schedulerIntervalMinutes();
     }
 }

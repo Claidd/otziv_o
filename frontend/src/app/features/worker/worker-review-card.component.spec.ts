@@ -67,41 +67,6 @@ describe('WorkerReviewCardComponent', () => {
     expect(element.querySelector('.publish-button')?.textContent?.trim()).toBe('Сменил');
   });
 
-  it('lets privileged users reassign bad and recovery tasks', async () => {
-    const fixture = TestBed.createComponent(WorkerReviewCardComponent);
-    const component = fixture.componentInstance;
-    component.review = review({
-      recoveryTask: true,
-      recoveryTaskId: 91,
-      taskWorkerId: 101,
-    });
-    component.activeSection = 'recovery';
-    component.canReassignTask = true;
-    component.workerOptions = [
-      { id: 101, label: 'Анна' },
-      { id: 202, label: 'Борис' },
-    ];
-    let selectedWorkerId: number | null = null;
-    component.taskWorkerChangeRequested.subscribe((workerId) => {
-      selectedWorkerId = workerId;
-    });
-
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
-      '.task-worker-editor select',
-    );
-    expect(select).not.toBeNull();
-    expect(select?.selectedOptions.item(0)?.textContent).toBe('Анна');
-
-    select!.selectedIndex = 1;
-    select!.dispatchEvent(new Event('change', { bubbles: true }));
-
-    expect(selectedWorkerId).toBe(202);
-  });
-
   it('edits the account name inline during walk with explicit save and without hiding its counter', () => {
     const fixture = TestBed.createComponent(WorkerReviewCardComponent);
     const component = fixture.componentInstance;

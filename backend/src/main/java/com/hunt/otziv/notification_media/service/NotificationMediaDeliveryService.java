@@ -41,6 +41,29 @@ public class NotificationMediaDeliveryService {
         return telegramService.sendMessageWithInlineKeyboard(chatId, text, parseMode, keyboard);
     }
 
+    /**
+     * Sends only the media card for flows where the main Telegram message must remain separate
+     * (for example, long reports or messages that are edited later by an inline-keyboard flow).
+     * If no card is configured, the caller can continue sending its regular message unchanged.
+     */
+    public boolean sendMediaOnly(
+            String eventCode,
+            long chatId,
+            Long recipientUserId,
+            String caption,
+            String parseMode
+    ) {
+        NotificationMediaSelector.Selection selection =
+                selector.select(eventCode, chatId, LocalDateTime.now()).orElse(null);
+        if (selection == null) {
+            return false;
+        }
+        boolean photoSent = sendPhoto(selection, chatId, caption, parseMode, List.of());
+        record(selection, chatId, recipientUserId, photoSent,
+                photoSent ? "PHOTO_SENT" : "PHOTO_FAILED_NO_TEXT_FALLBACK");
+        return photoSent;
+    }
+
     private boolean sendPhoto(
             NotificationMediaSelector.Selection selection,
             long chatId,

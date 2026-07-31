@@ -62,7 +62,7 @@ public class WorkloadShadowSettingsService {
                 settings.getInt("near-end-window-minutes", 120),
                 settings.getString("business-zone", "Asia/Irkutsk"),
                 settings.getString("shift-start", "10:00"),
-                settings.getString("shift-end", "23:00"),
+                settings.getString("shift-end", "22:00"),
                 walkMinutes,
                 effectiveMinimum,
                 settings.getInt("new-minutes-per-card", 5),
@@ -325,9 +325,9 @@ public class WorkloadShadowSettingsService {
             throw badRequest("Неизвестный часовой пояс: " + request.businessZone());
         }
         LocalTime shiftStart = parseTime(request.shiftStart(), "Начало смены");
-        LocalTime shiftEnd = parseTime(request.shiftEnd(), "Окончание смены");
+        LocalTime shiftEnd = parseTime(request.shiftEnd(), "Контрольное время входящей нагрузки");
         if (!shiftEnd.isAfter(shiftStart)) {
-            throw badRequest("Окончание смены должно быть позже начала смены в пределах одного рабочего дня");
+            throw badRequest("Контрольное время входящей нагрузки должно быть позже начала смены");
         }
 
         range(request.schedulerIntervalMinutes(), 5, 60, "Обычный интервал пересчёта");

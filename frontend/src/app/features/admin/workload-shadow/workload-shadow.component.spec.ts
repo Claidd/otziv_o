@@ -13,7 +13,7 @@ const validSettings: WorkloadShadowSafetyValues = {
   groupNotificationsEnabled: false,
   notificationGroupChatId: null,
   shiftStart: '10:00',
-  shiftEnd: '23:00',
+  shiftEnd: '22:00',
   schedulerIntervalMinutes: 10,
   nearEndIntervalMinutes: 5,
   walkMinimumMinutesPerCard: 3,

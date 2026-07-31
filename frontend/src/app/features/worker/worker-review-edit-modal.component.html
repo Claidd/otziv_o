@@ -118,6 +118,28 @@
               </select>
             </label>
 
+            @if (canReassignTask && workerOptions.length > 0) {
+              <label class="lead-edit-field">
+                <span>Специалист</span>
+                <select
+                  name="reviewTaskWorker"
+                  [ngModel]="taskWorkerId"
+                  (ngModelChange)="requestTaskWorkerChange($event)"
+                  [disabled]="taskWorkerSaving"
+                >
+                  @if (!taskWorkerId) {
+                    <option [ngValue]="null" disabled>Выберите специалиста</option>
+                  }
+                  @for (worker of workerOptions; track worker.id) {
+                    <option [ngValue]="worker.id">{{ worker.label }}</option>
+                  }
+                </select>
+                @if (taskWorkerSaving) {
+                  <small>Переназначаю...</small>
+                }
+              </label>
+            }
+
             <label class="lead-edit-field">
               <span>Имя бота</span>
               <input

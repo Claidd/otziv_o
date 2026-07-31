@@ -61,6 +61,11 @@
       <span class="material-icons-sharp">warning</span>
       <span>{{ warning }}</span>
     </div>
+  } @else if (chatBindingNotRequired()) {
+    <div class="chat-link-note" title="Проверка включится после вывода компании из этого статуса">
+      <span class="material-icons-sharp">link_off</span>
+      <span>Привязка чата пока не требуется</span>
+    </div>
   }
 
   <div class="meta-row">

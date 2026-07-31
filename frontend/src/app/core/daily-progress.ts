@@ -41,4 +41,5 @@ export interface DailyWorkProgress {
   checkedDays?: number;
   reached100Days?: number;
   closedPeriod?: boolean;
+  updating?: boolean;
 }

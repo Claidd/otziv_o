@@ -28,7 +28,9 @@ import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlCloseResponse;
 import com.hunt.otziv.manager_control.dto.ManagerControlConcreteItemResponse;
@@ -126,6 +128,8 @@ class ManagerControlServiceTest {
     @Mock
     private TelegramService telegramService;
     @Mock
+    private NotificationMediaDeliveryService notificationMediaDeliveryService;
+    @Mock
     private OrderService orderService;
     @Mock
     private ClientMessageOrderStatusService clientMessageOrderStatusService;
@@ -167,6 +171,8 @@ class ManagerControlServiceTest {
     private CommonInvoiceRepository commonInvoiceRepository;
     @Mock
     private CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+    @Mock
+    private CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
     @Mock
     private CommonBillingService commonBillingService;
     @Mock
@@ -326,7 +332,7 @@ class ManagerControlServiceTest {
     @Test
     void commonInvoiceControlPassesStatusesThatRequireAllOrdersReady() throws Exception {
         Manager manager = new Manager();
-        when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any(), any()))
+        when(commonInvoiceRepository.countManagerControlInvoices(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(0L);
 
         Method method = ManagerControlService.class.getDeclaredMethod("commonInvoiceActionCount", Manager.class);
@@ -339,6 +345,7 @@ class ManagerControlServiceTest {
                 any(),
                 eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.PARTIALLY_PAID),
                 eq(com.hunt.otziv.common_billing.model.CommonInvoiceStatus.COLLECTING),
+                any(),
                 any()
         );
     }
@@ -365,7 +372,14 @@ class ManagerControlServiceTest {
         concrete.setReason("Заказ ждет текст клиента, но автоответчик не отправляет напоминания: нет записи в очереди CLIENT_TEXT_REMINDER.");
         concrete.setComment("Специалисту отправлено напоминание. Повторный контроль завтра.");
         when(badReviewTaskService.getTask(concrete.getEntityId())).thenReturn(task);
-        when(telegramService.sendMessageWithInlineKeyboard(eq(-100123L), any(), any(), any())).thenReturn(true);
+        when(notificationMediaDeliveryService.send(
+                any(),
+                eq(-100123L),
+                eq(501L),
+                any(),
+                any(),
+                any()
+        )).thenReturn(true);
 
         LocalDateTime before = LocalDateTime.now();
         ManagerControlConcreteItemResponse response = service.actionConcreteItem(
@@ -388,7 +402,14 @@ class ManagerControlServiceTest {
         assertTrue(concrete.getComment().contains("Повторный контроль через 3 ч."));
         assertEquals("ACTION_TAKEN", response.itemStatus());
         ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessageWithInlineKeyboard(eq(-100123L), messageCaptor.capture(), any(), any());
+        verify(notificationMediaDeliveryService).send(
+                any(),
+                eq(-100123L),
+                eq(501L),
+                messageCaptor.capture(),
+                any(),
+                any()
+        );
         String message = messageCaptor.getValue();
         assertTrue(message.contains("Причина: Заказ ждет текст клиента, автонапоминание не ушло."));
         assertTrue(message.contains("Заказ: #777"));

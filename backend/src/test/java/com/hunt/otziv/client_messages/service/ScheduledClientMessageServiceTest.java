@@ -665,6 +665,64 @@ class ScheduledClientMessageServiceTest {
     }
 
     @Test
+    void manualInvoiceStatusImmediatelyReplacesObsoleteInvoiceRetryWithPaymentTasks() {
+        LocalDateTime previousChangedAt = LocalDateTime.of(2026, 8, 1, 0, 50);
+        LocalDateTime currentChangedAt = LocalDateTime.of(2026, 8, 1, 0, 59, 38);
+        ScheduledClientMessageState obsoleteInvoiceRetry = ScheduledClientMessageState.builder()
+                .id(944L)
+                .scenario(ClientMessageScenario.PAYMENT_INVOICE_RETRY)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24466:" + previousChangedAt)
+                .companyId(866L)
+                .orderId(24_466L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .nextAttemptAt(previousChangedAt.plusHours(2))
+                .build();
+        Company company = new Company();
+        company.setId(866L);
+        Order order = new Order();
+        order.setId(24_466L);
+        order.setCompany(company);
+        order.setStatus(OrderStatus.builder().title("Выставлен счет").build());
+        order.setStatusChangedAt(currentChangedAt);
+
+        when(orderRepository.findByIdForMutation(24_466L)).thenReturn(Optional.of(order));
+        when(stateRepository.findByOrderIdIn(List.of(24_466L))).thenReturn(List.of(obsoleteInvoiceRetry));
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_ENABLED, true)).thenReturn(true);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_REMINDER_INTERVAL_DAYS,
+                ScheduledClientMessageService.DEFAULT_REMINDER_INTERVAL_DAYS
+        )).thenReturn(2);
+        when(appSettingService.getInt(
+                AppSettingService.CLIENT_MESSAGES_PAYMENT_OVERDUE_DAYS,
+                ScheduledClientMessageService.DEFAULT_PAYMENT_OVERDUE_DAYS
+        )).thenReturn(30);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertTrue(service.ensureClientMessageStateAfterOrderStatusChange(24_466L));
+
+        assertEquals(ScheduledMessageStateStatus.DONE, obsoleteInvoiceRetry.getStatus());
+        assertNull(obsoleteInvoiceRetry.getNextAttemptAt());
+        ArgumentCaptor<ScheduledClientMessageState> states = ArgumentCaptor.forClass(ScheduledClientMessageState.class);
+        verify(stateRepository, times(3)).save(states.capture());
+        List<ScheduledClientMessageState> saved = states.getAllValues();
+        ScheduledClientMessageState reminder = saved.stream()
+                .filter(state -> state.getScenario() == ClientMessageScenario.PAYMENT_REMINDER)
+                .findFirst()
+                .orElseThrow();
+        ScheduledClientMessageState overdue = saved.stream()
+                .filter(state -> state.getScenario() == ClientMessageScenario.PAYMENT_OVERDUE_ESCALATION)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("order:24466:2026-08-01T00:59:38", reminder.getTargetKey());
+        assertEquals(currentChangedAt.plusDays(2), reminder.getNextAttemptAt());
+        assertEquals(currentChangedAt.plusDays(30), overdue.getNextAttemptAt());
+        verify(attemptRepository).save(any(ScheduledClientMessageAttempt.class));
+    }
+
+    @Test
     void clientTextReminderAutoClearsWaitingFlagAfterSevenUnchangedDays() {
         LocalDateTime waitingChangedAt = LocalDateTime.of(2026, 5, 20, 10, 0);
         LocalDateTime now = LocalDateTime.of(2026, 5, 27, 10, 0);

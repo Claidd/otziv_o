@@ -255,6 +255,16 @@ describe('manager-board config helpers', () => {
       companyUrlChat: 'https://t.me/+abc',
       telegramGroupChatId: null
     }))).toBe('Telegram-группа не привязана');
+    expect(managerCompanyChatBindingWarning(company({
+      status: 'На стопе',
+      urlChat: 'https://chat.whatsapp.com/abc',
+      groupId: ''
+    }))).toBe('');
+    expect(managerOrderChatBindingWarning(order({
+      companyStatus: 'Бан',
+      companyUrlChat: 'https://t.me/+abc',
+      telegramGroupChatId: null
+    }))).toBe('');
     expect(managerChatBindingWarningForValues(
       'https://max.ru/join/abc',
       undefined,

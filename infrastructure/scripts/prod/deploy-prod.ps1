@@ -272,6 +272,7 @@ $deployBundlePaths = @(
     "whatsapp\index.js",
     "whatsapp\message-webhook.js",
     "whatsapp\group-invite.js",
+    "whatsapp\groups-cache.js",
     "infrastructure\nginx",
     "infrastructure\keycloak",
     "infrastructure\prometheus",

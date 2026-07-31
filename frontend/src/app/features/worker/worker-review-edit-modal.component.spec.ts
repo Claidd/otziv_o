@@ -109,6 +109,37 @@ describe('WorkerReviewEditModalComponent', () => {
     expect(element.textContent).not.toContain('Пароль бота');
   });
 
+  it('lets privileged users reassign a task worker inside review editing', async () => {
+    const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
+    const component = fixture.componentInstance;
+    component.review = review({ recoveryTask: true, recoveryTaskId: 91, taskWorkerId: 101 });
+    component.draft = draft();
+    component.canReassignTask = true;
+    component.taskWorkerId = 101;
+    component.workerOptions = [
+      { id: 101, label: 'Анна' },
+      { id: 202, label: 'Борис' }
+    ];
+    let selectedWorkerId: number | null = null;
+    component.taskWorkerChangeRequested.subscribe((workerId) => {
+      selectedWorkerId = workerId;
+    });
+
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector<HTMLSelectElement>(
+      'select[name="reviewTaskWorker"]'
+    );
+    expect(select).not.toBeNull();
+    expect(select?.selectedOptions.item(0)?.textContent).toBe('Анна');
+
+    select!.selectedIndex = 1;
+    select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(selectedWorkerId).toBe(202);
+  });
+
   it('emits form actions', async () => {
     const fixture = TestBed.createComponent(WorkerReviewEditModalComponent);
     const component = fixture.componentInstance;

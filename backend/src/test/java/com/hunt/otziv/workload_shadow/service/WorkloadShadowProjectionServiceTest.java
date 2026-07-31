@@ -15,7 +15,8 @@ class WorkloadShadowProjectionServiceTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 7, 27);
     private static final LocalDateTime SHIFT_START = DATE.atTime(10, 0);
-    private static final LocalDateTime SHIFT_END = DATE.atTime(23, 0);
+    private static final LocalDateTime SHIFT_END = DATE.atTime(22, 0);
+    private static final LocalDateTime RESULT_SEAL = DATE.atTime(23, 59);
 
     @Test
     void firstDecisionUsesActualObservationTimeAndTreatsSimultaneousCohortAtomically() {
@@ -47,7 +48,57 @@ class WorkloadShadowProjectionServiceTest {
                 decisions.get("NAGUL:2").decisionCode()
         );
         assertEquals(8, decisions.get("NAGUL:1").cohortEstimatedMinutesAtDecision());
-        assertEquals(5, decisions.get("NAGUL:1").availableMinutesAtDecision());
+        assertEquals(0, decisions.get("NAGUL:1").availableMinutesAtDecision());
+    }
+
+    @Test
+    void workArrivingBeforeCutoffUsesCapacityUntilMidnight() {
+        var fits = batch("NAGUL:1", 100L, 30, 4, DATE.atTime(21, 50));
+        var doesNotFit = batch("NAGUL:2", 101L, 2, 4, DATE.atTime(21, 50));
+
+        var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
+                List.of(fits, doesNotFit),
+                Map.of(),
+                DATE,
+                DATE.atTime(21, 55),
+                SHIFT_START,
+                SHIFT_END,
+                false
+        );
+
+        assertEquals(
+                WorkloadShadowProjectionService.DecisionCode.MANDATORY,
+                decisions.get(fits.batchKey()).decisionCode()
+        );
+        assertEquals(
+                WorkloadShadowProjectionService.DecisionCode.LATE,
+                decisions.get(doesNotFit.batchKey()).decisionCode()
+        );
+        assertEquals(125, decisions.get(fits.batchKey()).availableMinutesAtDecision());
+    }
+
+    @Test
+    void workArrivingAtCutoffMovesToNextDayEvenWhenItWouldFit() {
+        var afterCutoff = batch("NAGUL:1", 100L, 1, 3, DATE.atTime(22, 0));
+
+        var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
+                List.of(afterCutoff),
+                Map.of(),
+                DATE,
+                DATE.atTime(22, 1),
+                SHIFT_START,
+                SHIFT_END,
+                false
+        );
+
+        assertEquals(
+                WorkloadShadowProjectionService.DecisionCode.LATE,
+                decisions.get(afterCutoff.batchKey()).decisionCode()
+        );
+        assertEquals(
+                WorkloadShadowProjectionService.DecisionOrigin.AFTER_CUTOFF,
+                decisions.get(afterCutoff.batchKey()).decisionOrigin()
+        );
     }
 
     @Test
@@ -213,7 +264,7 @@ class WorkloadShadowProjectionServiceTest {
     }
 
     @Test
-    void recoveredObservationForgivesOnlyWorkThatWasImpossibleAtArrival() {
+    void recoveredObservationStillMovesWorkAtCutoffToNextDay() {
         var feasibleAtArrival = batch(
                 "NAGUL:1",
                 100L,
@@ -244,16 +295,16 @@ class WorkloadShadowProjectionServiceTest {
                 decisions.get(feasibleAtArrival.batchKey()).decisionOrigin()
         );
         assertEquals(
-                WorkloadShadowProjectionService.DecisionOrigin.RECOVERED_LATE,
+                WorkloadShadowProjectionService.DecisionOrigin.AFTER_CUTOFF,
                 decisions.get(impossibleAtArrival.batchKey()).decisionOrigin()
         );
     }
 
     @Test
     void recoveredCohortsShareOneReconstructedTimeline() {
-        var first = batch("NAGUL:1", 100L, 1, 40, DATE.atTime(21, 30));
-        var second = batch("NAGUL:2", 101L, 1, 40, DATE.atTime(21, 30));
-        var third = batch("NAGUL:3", 102L, 1, 40, DATE.atTime(21, 30));
+        var first = batch("NAGUL:1", 100L, 1, 60, DATE.atTime(21, 30));
+        var second = batch("NAGUL:2", 101L, 1, 60, DATE.atTime(21, 30));
+        var third = batch("NAGUL:3", 102L, 1, 60, DATE.atTime(21, 30));
 
         var decisions = WorkloadShadowProjectionService.classifyDailyBatchDecisions(
                 List.of(first, second, third),
@@ -413,8 +464,8 @@ class WorkloadShadowProjectionServiceTest {
         var unfinished = WorkloadShadowProjectionService.includeCurrentFinalizedDay(
                 history,
                 DATE,
-                SHIFT_END.minusMinutes(1),
-                SHIFT_END,
+                RESULT_SEAL.minusMinutes(1),
+                RESULT_SEAL,
                 10,
                 true,
                 0
@@ -422,8 +473,8 @@ class WorkloadShadowProjectionServiceTest {
         var finalized = WorkloadShadowProjectionService.includeCurrentFinalizedDay(
                 history,
                 DATE,
-                SHIFT_END,
-                SHIFT_END,
+                RESULT_SEAL,
+                RESULT_SEAL,
                 10,
                 true,
                 0
@@ -431,8 +482,8 @@ class WorkloadShadowProjectionServiceTest {
         var repeated = WorkloadShadowProjectionService.includeCurrentFinalizedDay(
                 finalized,
                 DATE,
-                SHIFT_END.plusMinutes(5),
-                SHIFT_END,
+                RESULT_SEAL.plusMinutes(5),
+                RESULT_SEAL,
                 10,
                 true,
                 0
@@ -444,6 +495,16 @@ class WorkloadShadowProjectionServiceTest {
         assertTrue(finalized.lastDayReached100());
         assertEquals(DATE, finalized.latestProgressDate());
         assertEquals(1, repeated.hundredDays());
+    }
+
+    @Test
+    void intakeCutoffDoesNotSealResultBeforeMidnight() {
+        assertEquals(
+                DATE.plusDays(1).atStartOfDay(),
+                WorkloadShadowProjectionService.completionDeadline(DATE)
+        );
+        assertEquals(RESULT_SEAL, WorkloadShadowProjectionService.resultSealAt(DATE));
+        assertTrue(SHIFT_END.isBefore(WorkloadShadowProjectionService.resultSealAt(DATE)));
     }
 
     @Test

@@ -1,0 +1,24 @@
+{
+  "version": "2026-07-31-v2",
+  "mascot": "Жека",
+  "format": "png",
+  "files_per_theme": 10,
+  "file_names": ["01.png", "02.png", "03.png", "04.png", "05.png", "06.png", "07.png", "08.png", "09.png", "10.png"],
+  "themes": [
+    {"directory": "worker_day_start", "event_code": "WORKER_DAY_START", "recipient_type": "WORKER"},
+    {"directory": "worker_site_inactive", "event_code": "WORKER_SITE_INACTIVE", "recipient_type": "WORKER"},
+    {"directory": "worker_publication_pending", "event_code": "WORKER_PUBLICATION_PENDING", "recipient_type": "WORKER"},
+    {"directory": "worker_progress_slowed", "event_code": "WORKER_PROGRESS_SLOWED", "recipient_type": "WORKER"},
+    {"directory": "worker_progress_growing", "event_code": "WORKER_PROGRESS_GROWING", "recipient_type": "WORKER"},
+    {"directory": "worker_streak", "event_code": "WORKER_STREAK", "recipient_type": "WORKER"},
+    {"directory": "worker_task_first", "event_code": "WORKER_TASK_FIRST", "recipient_type": "WORKER"},
+    {"directory": "worker_task_overdue", "event_code": "WORKER_TASK_OVERDUE", "recipient_type": "WORKER"},
+    {"directory": "worker_task_repeat", "event_code": "WORKER_TASK_REPEAT", "recipient_type": "WORKER"},
+    {"directory": "manager_report_reminder", "event_code": "MANAGER_REPORT_REMINDER", "recipient_type": "MANAGER"},
+    {"directory": "manager_report_overdue", "event_code": "MANAGER_REPORT_OVERDUE", "recipient_type": "MANAGER"},
+    {"directory": "manager_team_progress_growing", "event_code": "MANAGER_TEAM_PROGRESS_GROWING", "recipient_type": "MANAGER"},
+    {"directory": "manager_team_progress_slowed", "event_code": "MANAGER_TEAM_PROGRESS_SLOWED", "recipient_type": "MANAGER"},
+    {"directory": "manager_team_streak", "event_code": "MANAGER_TEAM_STREAK", "recipient_type": "MANAGER"},
+    {"directory": "manager_worker_completion_warning", "event_code": "MANAGER_WORKER_COMPLETION_WARNING", "recipient_type": "MANAGER"}
+  ]
+}

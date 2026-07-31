@@ -77,6 +77,9 @@ public class OrderDtoMapper {
                 .companyId(order.getCompany() != null ? order.getCompany().getId() : null)
                 .orderDetailsId(firstDetail != null ? firstDetail.getId() : null)
                 .companyTitle(order.getCompany() != null ? order.getCompany().getTitle() : "Без компании")
+                .companyStatus(order.getCompany() != null && order.getCompany().getStatus() != null
+                        ? safeString(order.getCompany().getStatus().getTitle())
+                        : "")
                 .companyComments(order.getCompany() != null ? safeString(order.getCompany().getCommentsCompany()) : "")
                 .filialTitle(order.getFilial() != null ? safeString(order.getFilial().getTitle()) : "Без филиала")
                 .filialUrl(order.getFilial() != null ? safeString(order.getFilial().getUrl()) : "")
@@ -130,6 +133,7 @@ public class OrderDtoMapper {
                 .companyId(rowLong(row, 1))
                 .orderDetailsId(rowUuid(row, 2))
                 .companyTitle(rowString(row, 3, "Без компании"))
+                .companyStatus(rowString(row, 29, ""))
                 .companyComments(rowString(row, 4, ""))
                 .filialTitle(rowString(row, 5, "Без филиала"))
                 .filialUrl(rowString(row, 6, ""))

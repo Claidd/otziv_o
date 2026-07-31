@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { ManagerOption, ProductOption } from '../../core/manager.api';
+import type { WorkerOption } from '../../core/worker.api';
 import {
   ReviewEditDraft,
   ReviewEditItem,
@@ -46,6 +47,10 @@ export class WorkerReviewEditModalComponent {
   @Input() canOnlyUnsetVigul = false;
   @Input() canDelete = false;
   @Input() hideBotPassword = false;
+  @Input() canReassignTask = false;
+  @Input() workerOptions: WorkerOption[] = [];
+  @Input() taskWorkerId: number | null = null;
+  @Input() taskWorkerSaving = false;
   readonly reviewPublicationDateMax = localDateInputValue(REVIEW_PUBLICATION_MAX_FUTURE_DAYS);
 
   @Output() readonly closed = new EventEmitter<void>();
@@ -53,6 +58,7 @@ export class WorkerReviewEditModalComponent {
   @Output() readonly deleted = new EventEmitter<void>();
   @Output() readonly newAccountRequested = new EventEmitter<void>();
   @Output() readonly photoSelected = new EventEmitter<File>();
+  @Output() readonly taskWorkerChangeRequested = new EventEmitter<number>();
   @Output() readonly draftChange = new EventEmitter<WorkerReviewEditDraftChange>();
 
   setField<K extends keyof ReviewEditDraft>(field: K, value: ReviewEditDraft[K]): void {
@@ -61,6 +67,15 @@ export class WorkerReviewEditModalComponent {
     }
 
     this.draftChange.emit({ field, value } as WorkerReviewEditDraftChange);
+  }
+
+  requestTaskWorkerChange(value: number | string | null): void {
+    const workerId = Number(value);
+    if (!Number.isFinite(workerId) || workerId <= 0 || workerId === this.taskWorkerId) {
+      return;
+    }
+
+    this.taskWorkerChangeRequested.emit(workerId);
   }
 
   canShowVigulControl(draft: ReviewEditDraft): boolean {

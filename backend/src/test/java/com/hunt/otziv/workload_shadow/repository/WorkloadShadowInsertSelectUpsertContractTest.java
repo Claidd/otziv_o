@@ -43,7 +43,7 @@ class WorkloadShadowInsertSelectUpsertContractTest {
     }
 
     @Test
-    void dailySnapshotUpsertQualifiesTheExistingFinalizedRow() throws Exception {
+    void dailySnapshotUpsertKeepsIntradayAchievementAndAcceptsNewerFinalValues() throws Exception {
         Method method = WorkloadShadowProjectionRepository.class.getDeclaredMethod(
                 "upsertDailySnapshots",
                 String.class,
@@ -54,17 +54,44 @@ class WorkloadShadowInsertSelectUpsertContractTest {
 
         assertThat(sql).contains(
                 "workload_shadow_worker_daily.finalized = true",
-                "workload_shadow_worker_daily.worker_user_id",
-                "workload_shadow_worker_daily.manager_id",
-                "workload_shadow_worker_daily.completed_units",
+                "completed_units = values(completed_units)",
+                "active_units = values(active_units)",
                 "workload_shadow_worker_daily.reached_100_once = true",
                 "or values(reached_100) = true",
                 "workload_shadow_worker_daily.reached_100 = false",
                 "and values(reached_100) = true",
                 "workload_shadow_worker_daily.first_reached_100_at",
                 "workload_shadow_worker_daily.last_reached_100_at",
-                "workload_shadow_worker_daily.last_snapshot_at",
+                "last_snapshot_at = values(last_snapshot_at)",
                 "workload_shadow_worker_daily.finalized_at"
+        );
+        assertThat(sql).doesNotContain(
+                "completed_units = if( workload_shadow_worker_daily.finalized = true"
+        );
+    }
+
+    @Test
+    void finalReconciliationKeepsWorkloadDenominatorAndExternalBlockersAuthoritative() throws Exception {
+        Method method = WorkloadShadowProjectionRepository.class.getDeclaredMethod(
+                "reconcileCompletedFinalProgress",
+                java.time.LocalDate.class
+        );
+        Query query = method.getAnnotation(Query.class);
+        assertThat(query).isNotNull();
+        String sql = normalized(query.value());
+
+        assertThat(sql).contains(
+                "daily.completed_units = daily.eligible_units",
+                "daily.external_blocked_units = 0",
+                "actual.active_count = 0",
+                "actual.reached_100 = true",
+                "actual.last_completed_at < date_add(daily.progress_date, interval 1 day)",
+                "daily.reached_100_once = true"
+        );
+        assertThat(sql).doesNotContain(
+                "daily.eligible_units = actual.total_count",
+                "daily.completed_units = actual.completed_count",
+                "actual.last_completed_at > daily.last_snapshot_at"
         );
     }
 

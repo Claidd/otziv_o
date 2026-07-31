@@ -121,6 +121,35 @@ class NotificationMediaDeliveryServiceTest {
                 .sendMessageWithInlineKeyboard(any(Long.class), any(), any(), any());
     }
 
+    @Test
+    void mediaOnlyDoesNotSendTextFallbackWhenPhotoFails() {
+        String eventCode = NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code();
+        NotificationMediaSelector.Selection selection = selection(eventCode);
+        when(selector.select(eq(eventCode), eq(-400L), any())).thenReturn(Optional.of(selection));
+        when(storageService.load("notification-media/card.png")).thenReturn(new byte[]{1, 2, 3});
+        when(telegramService.sendPhotoBytesWithInlineKeyboard(
+                -400L,
+                new byte[]{1, 2, 3},
+                "card.png",
+                "Личный отчёт готов",
+                "HTML",
+                List.of()
+        )).thenReturn(false);
+
+        boolean sent = service.sendMediaOnly(
+                eventCode, -400L, 6L, "Личный отчёт готов", "HTML"
+        );
+
+        assertThat(sent).isFalse();
+        verify(telegramService, never())
+                .sendMessageWithInlineKeyboard(any(Long.class), any(), any(), any());
+        ArgumentCaptor<NotificationMediaDelivery> captor =
+                ArgumentCaptor.forClass(NotificationMediaDelivery.class);
+        verify(deliveryRepository).save(captor.capture());
+        assertThat(captor.getValue().getDeliveryNote())
+                .isEqualTo("PHOTO_FAILED_NO_TEXT_FALLBACK");
+    }
+
     private NotificationMediaSelector.Selection selection(String eventCode) {
         return new NotificationMediaSelector.Selection(
                 3L,

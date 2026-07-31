@@ -10,12 +10,17 @@ import com.hunt.otziv.worker_performance.service.EndOfDayAchievementService;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowSettingsService;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowCoordinator;
+import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -28,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -49,13 +55,30 @@ class ManagerTeamProgressEndOfDayJobTest {
     private EndOfDayAchievementService achievementService;
     @Mock
     private WorkloadShadowProgressReadService workloadShadowProgressReadService;
+    @Mock
+    private WorkloadShadowSettingsService workloadShadowSettingsService;
+    @Mock
+    private WorkloadShadowSettingsResponse workloadSettings;
+    @Mock
+    private WorkloadShadowCoordinator workloadShadowCoordinator;
 
     @InjectMocks
     private ManagerTeamProgressEndOfDayJob job;
 
+    @BeforeEach
+    void setUp() {
+        lenient().when(workloadShadowSettingsService.current()).thenReturn(workloadSettings);
+        lenient().when(workloadShadowSettingsService.shiftEnd(workloadSettings))
+                .thenReturn(LocalTime.of(22, 0));
+        lenient().when(workloadSettings.observationEnabled()).thenReturn(true);
+        Progress complete = new Progress(1, 1, 0, 0, 100, true, true, null, null);
+        lenient().when(workloadShadowProgressReadService.findFinalizedProgress(any(), any()))
+                .thenReturn(Map.of(1L, complete, 7L, complete, 9L, complete));
+    }
+
     @Test
     void excludesTasksOpenedDuringLastHourFromWorkerAndManagerAchievement() {
-        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk")).minusDays(1);
         User workerUser = User.builder().id(70L).fio("Анна").build();
         Worker worker = Worker.builder().id(7L).user(workerUser).build();
         User idleWorkerUser = User.builder().id(90L).fio("Ирина").build();
@@ -76,8 +99,13 @@ class ManagerTeamProgressEndOfDayJobTest {
         when(staffDailyProgressService.workerProgressByWorkers(List.of(worker, idleWorker), date))
                 .thenReturn(Map.of(7L, raw, 9L, withoutTasks));
         when(staffDailyProgressService.workerEndOfDayProgressByWorkers(
-                List.of(worker, idleWorker), date, date.atTime(23, 0)))
+                List.of(worker, idleWorker), date, date.atTime(22, 0)))
                 .thenReturn(Map.of(7L, adjusted, 9L, withoutTasks));
+        when(workloadShadowProgressReadService.findFinalizedProgress(Set.of(7L, 9L), date))
+                .thenReturn(Map.of(
+                        7L, new Progress(34, 34, 1, 0, 100, true, true, null, null),
+                        9L, new Progress(0, 0, 0, 0, 100, false, false, null, null)
+                ));
         when(achievementService.saveResult(
                 eq(date), eq(EndOfDayAchievementService.ROLE_WORKER), eq(7L), eq(70L),
                 anyLong(), anyLong(), anyDouble(), anyLong(), anyBoolean()
@@ -87,10 +115,12 @@ class ManagerTeamProgressEndOfDayJobTest {
                 anyLong(), anyLong(), anyDouble(), anyLong(), anyBoolean()
         )).thenReturn(managerResult);
 
+        job.prepareFinalProjection();
         job.capture();
 
+        verify(workloadShadowCoordinator).recalculate("END_OF_DAY");
         verify(staffDailyProgressService).workerEndOfDayProgressByWorkers(
-                List.of(worker, idleWorker), date, date.atTime(23, 0));
+                List.of(worker, idleWorker), date, date.atTime(22, 0));
         verify(achievementService).saveResult(
                 date, EndOfDayAchievementService.ROLE_WORKER, 7L, 70L,
                 34, 34, 100, 1, true);
@@ -110,7 +140,7 @@ class ManagerTeamProgressEndOfDayJobTest {
 
     @Test
     void skipsWholeDayWhenAdjustedProgressIsIncomplete() {
-        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk")).minusDays(1);
         Worker first = Worker.builder().id(7L).build();
         Worker second = Worker.builder().id(9L).build();
         DailyWorkProgressResponse completed = progress(date, 1, 0, 1, 100);
@@ -120,7 +150,7 @@ class ManagerTeamProgressEndOfDayJobTest {
         when(staffDailyProgressService.workerProgressByWorkers(List.of(first, second), date))
                 .thenReturn(Map.of(7L, completed, 9L, completed));
         when(staffDailyProgressService.workerEndOfDayProgressByWorkers(
-                List.of(first, second), date, date.atTime(23, 0)))
+                List.of(first, second), date, date.atTime(22, 0)))
                 .thenReturn(Map.of(7L, completed));
 
         job.capture();
@@ -130,7 +160,7 @@ class ManagerTeamProgressEndOfDayJobTest {
 
     @Test
     void reportsLateUnitsFromFinalizedWorkloadDecision() {
-        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk")).minusDays(1);
         User workerUser = User.builder().id(5L).fio("Елена").build();
         Worker worker = Worker.builder().id(1L).user(workerUser).build();
         User managerUser = User.builder().id(30L).workers(Set.of(worker)).build();
@@ -147,7 +177,7 @@ class ManagerTeamProgressEndOfDayJobTest {
         when(staffDailyProgressService.workerProgressByWorkers(List.of(worker), date))
                 .thenReturn(Map.of(1L, unified));
         when(staffDailyProgressService.workerEndOfDayProgressByWorkers(
-                List.of(worker), date, date.atTime(23, 0)))
+                List.of(worker), date, date.atTime(22, 0)))
                 .thenReturn(Map.of(1L, unified));
         when(workloadShadowProgressReadService.findFinalizedProgress(Set.of(1L), date))
                 .thenReturn(Map.of(1L, new Progress(
@@ -182,7 +212,7 @@ class ManagerTeamProgressEndOfDayJobTest {
 
     @Test
     void reachedOnceCountsForWorkerAndManagerAfterLaterWorkArrives() {
-        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk"));
+        LocalDate date = LocalDate.now(ZoneId.of("Asia/Irkutsk")).minusDays(1);
         User workerUser = User.builder().id(5L).fio("Елена").build();
         Worker worker = Worker.builder().id(1L).user(workerUser).build();
         User managerUser = User.builder().id(30L).workers(Set.of(worker)).build();
@@ -199,7 +229,7 @@ class ManagerTeamProgressEndOfDayJobTest {
         when(staffDailyProgressService.workerProgressByWorkers(List.of(worker), date))
                 .thenReturn(Map.of(1L, reachedEarlier));
         when(staffDailyProgressService.workerEndOfDayProgressByWorkers(
-                List.of(worker), date, date.atTime(23, 0)))
+                List.of(worker), date, date.atTime(22, 0)))
                 .thenReturn(Map.of(1L, reachedEarlier));
         when(achievementService.saveResult(
                 eq(date), eq(EndOfDayAchievementService.ROLE_WORKER), eq(1L), eq(5L),

@@ -143,6 +143,7 @@ type CredentialWaitSection = 'publish' | 'nagul';
                 class="worker-day-progress"
                 [class.complete]="progress.checked"
                 [class.empty]="(progress.total || 0) <= 0"
+                [class.updating]="progress.updating"
                 [title]="workerProgressTitle(progress)"
                 aria-label="Дневной прогресс специалиста"
               >
@@ -150,7 +151,9 @@ type CredentialWaitSection = 'publish' | 'nagul';
                 <i><b [style.width.%]="workerProgressPercent(progress)"></b></i>
                 <strong>{{ progress.completed || 0 }}/{{ progress.total || 0 }}</strong>
                 <em>{{ workerProgressPercent(progress) }}%</em>
-                @if (progress.checked) {
+                @if (progress.updating) {
+                  <span class="material-icons-sharp progress-refresh-icon">sync</span>
+                } @else if (progress.checked) {
                   <span class="material-icons-sharp">check_circle</span>
                 }
               </section>
@@ -729,6 +732,19 @@ type CredentialWaitSection = 'publish' | 'nagul';
 
     .worker-day-progress.complete i b {
       background: linear-gradient(90deg, #54b894 0%, #6fcba5 100%);
+    }
+
+    .worker-day-progress.updating {
+      border-color: rgba(226, 157, 66, 0.48);
+    }
+
+    .worker-day-progress.updating .progress-refresh-icon {
+      color: #d99132;
+      animation: progress-refresh-spin 1.1s linear infinite;
+    }
+
+    @keyframes progress-refresh-spin {
+      to { transform: rotate(360deg); }
     }
 
     .worker-day-progress.empty i b {
@@ -1579,6 +1595,8 @@ export class WorkerPage implements OnInit, OnDestroy {
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private publishCredentialWaitTimer: ReturnType<typeof setInterval> | null = null;
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private progressRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private progressRefreshAttempts = 0;
   private readonly publishCredentialPreparationStorageKeys: Record<CredentialWaitSection, string> = {
     publish: 'otziv-mobile-worker-publish-prep:v1',
     nagul: 'otziv-mobile-worker-nagul-prep:v1'
@@ -1701,6 +1719,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.clearNoticeTimer();
     this.clearPublishCredentialWaitTimer();
     this.clearMidnightRefresh();
+    this.clearProgressRefreshTimer();
   }
 
   async refresh(event: RefresherCustomEvent): Promise<void> {
@@ -2136,10 +2155,6 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
 
     if (kind === 'login' || kind === 'password') {
-      if (!this.shouldUsePublishCredentialWait()) {
-        return;
-      }
-
       await this.logReviewCredentialCopyClick(review, kind);
     }
   }
@@ -2169,14 +2184,26 @@ export class WorkerPage implements OnInit, OnDestroy {
     }
 
     try {
+      const source = this.workerActivitySource();
+      if (review.recoveryTask && review.recoveryTaskId) {
+        await firstValueFrom(this.api.logWorkerRecoveryTaskCopyClick(review.recoveryTaskId, kind, source));
+        return true;
+      }
+      if (review.badTask && review.badTaskId) {
+        await firstValueFrom(this.api.logWorkerBadReviewTaskCopyClick(review.badTaskId, kind, source));
+        return true;
+      }
+
       const preparation = await firstValueFrom(
-        this.api.logWorkerReviewCopyClick(review.id, kind, this.workerActivitySource())
+        this.api.logWorkerReviewCopyClick(review.id, kind, source)
       );
-      if (!preparation) {
+      if (this.shouldUsePublishCredentialWait() && !preparation) {
         this.error.set('Данные скопированы, но сервер не подтвердил подготовку аккаунта. Повторите копирование.');
         return false;
       }
-      this.applyServerCredentialPreparation(preparation);
+      if (preparation) {
+        this.applyServerCredentialPreparation(preparation);
+      }
       return true;
     } catch {
       this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
@@ -2569,11 +2596,14 @@ export class WorkerPage implements OnInit, OnDestroy {
       `Прогресс дня: закрыто ${progress.completed || 0} из ${progress.total || 0}`,
       `${this.workerProgressPercent(progress)}%`
     ];
+    if (progress.updating) {
+      parts.push('динамический расчёт обновляется');
+    }
     if (progress.active > 0) {
       parts.push(`осталось ${progress.active}`);
     }
     if ((progress.orderOverdueCount || 0) > 0) {
-      parts.push(`проср. заказов ${progress.orderOverdueCount}`);
+      parts.push(`за день просрочено заказов: ${progress.orderOverdueCount}`);
     }
     if (progress.medianCloseSeconds > 0) {
       parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
@@ -2589,6 +2619,9 @@ export class WorkerPage implements OnInit, OnDestroy {
       return 'Нет задач за день';
     }
     const parts: string[] = [];
+    if (progress.updating) {
+      parts.push('Прогресс обновляется');
+    }
     if (progress.checked) {
       parts.push('День закрыт');
     } else {
@@ -2598,7 +2631,7 @@ export class WorkerPage implements OnInit, OnDestroy {
       parts.push('100% уже был');
     }
     if ((progress.orderOverdueCount || 0) > 0) {
-      parts.push(`проср. заказов ${progress.orderOverdueCount}`);
+      parts.push(`за день просрочено заказов: ${progress.orderOverdueCount}`);
     }
     if (progress.medianCloseSeconds > 0) {
       parts.push(`медиана ${this.formatDurationSeconds(progress.medianCloseSeconds)}`);
@@ -3064,6 +3097,7 @@ export class WorkerPage implements OnInit, OnDestroy {
         workerId: this.selectedWorkerId()
       }));
       this.board.set(board);
+      this.scheduleProgressRefresh(board.dailyProgress?.updating === true);
       this.selectedWorkerId.set(board.selectedWorkerId ?? null);
       if (board.section && board.section !== this.activeSection()) {
         this.activeSection.set(board.section);
@@ -3079,6 +3113,29 @@ export class WorkerPage implements OnInit, OnDestroy {
       this.error.set(this.apiErrorMessage(error, 'Не удалось загрузить раздел специалиста.'));
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  private scheduleProgressRefresh(updating: boolean): void {
+    this.clearProgressRefreshTimer();
+    if (!updating) {
+      this.progressRefreshAttempts = 0;
+      return;
+    }
+    if (this.progressRefreshAttempts >= 8) {
+      return;
+    }
+    this.progressRefreshTimer = setTimeout(() => {
+      this.progressRefreshTimer = null;
+      this.progressRefreshAttempts++;
+      void this.load();
+    }, 8_000);
+  }
+
+  private clearProgressRefreshTimer(): void {
+    if (this.progressRefreshTimer) {
+      clearTimeout(this.progressRefreshTimer);
+      this.progressRefreshTimer = null;
     }
   }
 

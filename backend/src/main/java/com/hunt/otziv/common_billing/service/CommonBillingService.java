@@ -300,6 +300,7 @@ public class CommonBillingService {
     private final TbankClient tbankClient;
     private final TbankTokenSigner tokenSigner;
     private final ReviewRecoveryGateService recoveryGateService;
+    private final CommonInvoicePublicationBlockerService publicationBlockerService;
     private final ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -430,12 +431,7 @@ public class CommonBillingService {
         invoices.stream()
                 .filter(invoice -> visibleToManager(invoice, itemsByInvoice.getOrDefault(invoice.getId(), List.of()), visibleManagerIds))
                 .map(invoice -> boardStatus(invoice, itemsByInvoice.getOrDefault(invoice.getId(), List.of())))
-                .forEach(status -> {
-                    counts.merge(status, 1, Integer::sum);
-                    if (STATUS_WAITING_COMMON_INVOICE.equals(status)) {
-                        counts.merge("Новый", 1, Integer::sum);
-                    }
-                });
+                .forEach(status -> counts.merge(status, 1, Integer::sum));
         return counts;
     }
 
@@ -1002,6 +998,7 @@ public class CommonBillingService {
         invoiceOrderRepository.delete(item);
         List<CommonInvoiceOrder> items = invoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId);
         recalculateInvoice(invoice, items);
+        publicationBlockerService.reconcileInvoice(invoiceId);
         if (items.isEmpty()) {
             invoice.setStatus(CommonInvoiceStatus.DISABLED);
             invoice.setNextReminderAt(null);
@@ -2126,14 +2123,18 @@ public class CommonBillingService {
                 .map(CommonInvoiceOrder::getInvoice)
                 .filter(invoice -> invoice != null && invoice.getId() != null)
                 .collect(Collectors.toSet());
+        LocalDateTime movedAt = LocalDateTime.now();
         for (CommonInvoiceOrder item : movableItems) {
             item.setInvoice(targetInvoice);
+            item.setInvoiceLinkedAt(movedAt);
+            item.setPublicationBlockerSince(null);
         }
         invoiceOrderRepository.saveAll(movableItems);
 
         List<CommonInvoiceOrder> targetItems = invoiceOrderRepository.findByInvoiceIdWithOrders(targetInvoice.getId());
         recalculateInvoice(targetInvoice, targetItems);
         promoteCollectingInvoiceToReadyIfPossible(targetInvoice, targetItems);
+        publicationBlockerService.reconcileInvoice(targetInvoice.getId());
 
         for (CommonInvoice sourceInvoice : sourceInvoices) {
             List<CommonInvoiceOrder> remainingItems = invoiceOrderRepository.findByInvoiceIdWithOrders(sourceInvoice.getId());
@@ -2149,6 +2150,7 @@ public class CommonBillingService {
             }
             recalculateInvoice(sourceInvoice, remainingItems);
             promoteCollectingInvoiceToReadyIfPossible(sourceInvoice, remainingItems);
+            publicationBlockerService.reconcileInvoice(sourceInvoice.getId());
         }
 
         log.info("Moved detached common invoice items to account {} invoice {} for company {}: moved={}, sources={}",
@@ -2217,6 +2219,7 @@ public class CommonBillingService {
         item.setOriginalOrderStatusTitle(limit(statusTitle(order), 64));
         item = invoiceOrderRepository.save(item);
         recalculateInvoice(invoice);
+        publicationBlockerService.reconcileInvoice(invoice.getId());
         return item;
     }
 
@@ -2304,8 +2307,11 @@ public class CommonBillingService {
 
         List<Long> duplicateIds = duplicates.stream().map(CommonInvoice::getId).toList();
         List<CommonInvoiceOrder> movedItems = invoiceOrderRepository.findByInvoiceIdsWithOrders(duplicateIds);
+        LocalDateTime movedAt = LocalDateTime.now();
         for (CommonInvoiceOrder item : movedItems) {
             item.setInvoice(target);
+            item.setInvoiceLinkedAt(movedAt);
+            item.setPublicationBlockerSince(null);
         }
         if (!movedItems.isEmpty()) {
             invoiceOrderRepository.saveAll(movedItems);
@@ -2319,6 +2325,7 @@ public class CommonBillingService {
         List<CommonInvoiceOrder> targetItems = invoiceOrderRepository.findByInvoiceIdWithOrders(target.getId());
         recalculateInvoice(target, targetItems);
         promoteCollectingInvoiceToReadyIfPossible(target, targetItems);
+        publicationBlockerService.reconcileInvoice(target.getId());
         log.warn("Объединены дубли открытых общих счетов accountId={}, targetInvoice={}, duplicates={}",
                 account == null ? null : account.getId(), target.getId(), duplicateIds);
         return target;
@@ -3570,8 +3577,7 @@ public class CommonBillingService {
         String invoiceBoardStatus = boardStatus(invoice, items);
         return boardStatus.isBlank()
                 || "Все".equals(boardStatus)
-                || invoiceBoardStatus.equals(boardStatus)
-                || ("Новый".equals(boardStatus) && STATUS_WAITING_COMMON_INVOICE.equals(invoiceBoardStatus));
+                || invoiceBoardStatus.equals(boardStatus);
     }
 
     private boolean matchesBoardCompany(List<CommonInvoiceOrder> items, Long companyId) {
@@ -3874,6 +3880,11 @@ public class CommonBillingService {
     }
 
     private String boardStatus(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
+        if (invoice != null
+                && invoice.getStatus() == CommonInvoiceStatus.COLLECTING
+                && publicationBlockerService.hasOverdueBlockers(items, LocalDateTime.now())) {
+            return STATUS_NEEDS_ATTENTION;
+        }
         return switch (effectiveInvoiceStatus(invoice, items)) {
             case COLLECTING -> STATUS_WAITING_COMMON_INVOICE;
             case READY -> STATUS_PUBLIC;

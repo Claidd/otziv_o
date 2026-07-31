@@ -10,6 +10,8 @@ import com.hunt.otziv.worker_performance.service.EndOfDayAchievementService;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProgressReadService.Progress;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowCoordinator;
+import com.hunt.otziv.workload_shadow.service.WorkloadShadowSettingsService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -36,10 +38,28 @@ public class ManagerTeamProgressEndOfDayJob {
     private final ManagerPerformanceService managerPerformanceService;
     private final EndOfDayAchievementService achievementService;
     private final WorkloadShadowProgressReadService workloadShadowProgressReadService;
+    private final WorkloadShadowSettingsService workloadShadowSettingsService;
+    private final WorkloadShadowCoordinator workloadShadowCoordinator;
 
-    @Scheduled(cron = "${manager.performance.team-progress-cron:50 59 23 * * *}", zone = "${worker.progress.zone:Asia/Irkutsk}")
+    @Scheduled(cron = "${manager.performance.team-progress-prepare-cron:45 59 23 * * *}", zone = "${worker.progress.zone:Asia/Irkutsk}")
+    public void prepareFinalProjection() {
+        var workloadSettings = workloadShadowSettingsService.current();
+        if (workloadSettings.observationEnabled()) {
+            refreshFinalProjection(LocalDate.now(PROGRESS_ZONE));
+        }
+    }
+
+    @Scheduled(cron = "${manager.performance.team-progress-cron:10 4 0 * * *}", zone = "${worker.progress.zone:Asia/Irkutsk}")
     public void capture() {
-        LocalDate date = LocalDate.now(PROGRESS_ZONE);
+        // The report is deliberately settled after midnight so an action made at
+        // 23:59:59 belongs to the day that has just ended.
+        LocalDate date = LocalDate.now(PROGRESS_ZONE).minusDays(1);
+        var workloadSettings = workloadShadowSettingsService.current();
+        if (workloadSettings.observationEnabled()
+                && workloadShadowCoordinator.isRunning()
+                && !waitForProjection(date)) {
+            return;
+        }
         List<Manager> managers = managerRepository.findAllWithUserAndImage();
         if (!managers.isEmpty()) {
             managers = managerRepository.findAllManagersWorkers(managers);
@@ -54,26 +74,34 @@ public class ManagerTeamProgressEndOfDayJob {
                 allWorkers,
                 date
         );
-        if (!expectedWorkerIds.isEmpty() && !rawProgressByWorker.keySet().containsAll(expectedWorkerIds)) {
+        if (!completeAndStable(rawProgressByWorker, expectedWorkerIds)) {
             log.warn("Skipped manager team end-of-day snapshot for {}: worker progress is unavailable", date);
             return;
         }
-        LocalDateTime cutoff = date.atTime(23, 0);
+        LocalDateTime cutoff = date.atTime(
+                workloadShadowSettingsService.shiftEnd(workloadSettings)
+        );
         Map<Long, DailyWorkProgressResponse> progressByWorker = staffDailyProgressService
                 .workerEndOfDayProgressByWorkers(allWorkers, date, cutoff);
-        if (!expectedWorkerIds.isEmpty() && !progressByWorker.keySet().containsAll(expectedWorkerIds)) {
+        if (!completeAndStable(progressByWorker, expectedWorkerIds)) {
             log.warn("Skipped end-of-day achievements for {}: adjusted worker progress is unavailable", date);
             return;
         }
-        Map<Long, Progress> finalizedWorkload =
-                workloadShadowProgressReadService.findFinalizedProgress(expectedWorkerIds, date);
+        Map<Long, Progress> finalWorkload = workloadSettings.observationEnabled()
+                ? workloadShadowProgressReadService.findFinalizedProgress(expectedWorkerIds, date)
+                : Map.of();
+        if (workloadSettings.observationEnabled()
+                && !canonicalCoverageComplete(finalWorkload, progressByWorker)) {
+            log.warn("Skipped end-of-day achievements for {}: finalized workload progress is incomplete", date);
+            return;
+        }
         Map<Long, Long> ignoredLateByWorker = allWorkers.stream()
                 .filter(Objects::nonNull)
                 .filter(worker -> worker.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(
                         Worker::getId,
-                        worker -> finalizedWorkload.containsKey(worker.getId())
-                                ? finalizedWorkload.get(worker.getId()).lateExcluded()
+                        worker -> finalWorkload.containsKey(worker.getId())
+                                ? finalWorkload.get(worker.getId()).lateExcluded()
                                 : ignoredLateCount(
                                         rawProgressByWorker.get(worker.getId()),
                                         progressByWorker.get(worker.getId())
@@ -155,6 +183,70 @@ public class ManagerTeamProgressEndOfDayJob {
 
     private static boolean isAt100(DailyWorkProgressResponse progress) {
         return isEligible(progress) && progress.reached100();
+    }
+
+    private static boolean completeAndStable(
+            Map<Long, DailyWorkProgressResponse> progress,
+            Set<Long> expectedWorkerIds
+    ) {
+        if (progress == null) {
+            return false;
+        }
+        if (expectedWorkerIds != null
+                && !expectedWorkerIds.isEmpty()
+                && !progress.keySet().containsAll(expectedWorkerIds)) {
+            return false;
+        }
+        return progress.values().stream()
+                .filter(Objects::nonNull)
+                .noneMatch(DailyWorkProgressResponse::updating);
+    }
+
+    private static boolean canonicalCoverageComplete(
+            Map<Long, Progress> workload,
+            Map<Long, DailyWorkProgressResponse> visibleProgress
+    ) {
+        if (workload == null || visibleProgress == null) {
+            return false;
+        }
+        return visibleProgress.entrySet().stream()
+                .filter(entry -> isEligible(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .allMatch(workload::containsKey);
+    }
+
+    private boolean refreshFinalProjection(LocalDate date) {
+        if (workloadShadowCoordinator.isRunning()) {
+            return waitForProjection(date);
+        }
+        try {
+            workloadShadowCoordinator.recalculate("END_OF_DAY");
+            return true;
+        } catch (RuntimeException exception) {
+            if (workloadShadowCoordinator.isRunning()) {
+                return waitForProjection(date);
+            }
+            log.error("Skipped end-of-day achievements for {}: final workload refresh failed", date, exception);
+            return false;
+        }
+    }
+
+    private boolean waitForProjection(LocalDate date) {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        while (workloadShadowCoordinator.isRunning() && System.nanoTime() < deadline) {
+            try {
+                Thread.sleep(250L);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                log.warn("Skipped end-of-day achievements for {}: final workload refresh was interrupted", date);
+                return false;
+            }
+        }
+        if (workloadShadowCoordinator.isRunning()) {
+            log.warn("Skipped end-of-day achievements for {}: final workload refresh did not finish in time", date);
+            return false;
+        }
+        return true;
     }
 
     private static int recognizedPercent(DailyWorkProgressResponse progress) {

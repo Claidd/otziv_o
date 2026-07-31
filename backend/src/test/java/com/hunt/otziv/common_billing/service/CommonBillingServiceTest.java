@@ -144,6 +144,8 @@ class CommonBillingServiceTest {
     @Mock
     private PaymentInvoiceRetryScheduler paymentInvoiceRetryScheduler;
     @Mock
+    private CommonInvoicePublicationBlockerService publicationBlockerService;
+    @Mock
     private ManualPaymentAutoConfirmationService manualPaymentAutoConfirmationService;
     @Mock
     private AppSettingService appSettingService;
@@ -820,7 +822,7 @@ class CommonBillingServiceTest {
     }
 
     @Test
-    void managerBoardShowsCollectingCommonInvoiceInNewOrders() {
+    void managerBoardDoesNotAliasCollectingCommonInvoiceAsNewOrder() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
         invoice.setStatus(CommonInvoiceStatus.COLLECTING);
@@ -833,12 +835,35 @@ class CommonBillingServiceTest {
 
         when(invoiceRepository.findBoardInvoices(any())).thenReturn(List.of(invoice));
         when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L))).thenReturn(List.of(item));
-        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
 
         List<OrderDTOList> cards = service.managerBoardCards("Новый", "", null, null, "desc");
 
+        assertTrue(cards.isEmpty());
+    }
+
+    @Test
+    void managerBoardShowsCollectingInvoiceWithOverduePublicationBlockerAsAttention() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.COLLECTING);
+        CommonInvoiceOrder advanced = item(invoice, order(101L));
+        advanced.getOrder().setStatus(status("Публикация"));
+        advanced.setReady(false);
+        CommonInvoiceOrder blocker = item(invoice, order(102L));
+        blocker.getOrder().setStatus(status("На проверке"));
+        blocker.setReady(false);
+        blocker.setPublicationBlockerSince(LocalDateTime.now().minusHours(49));
+        List<CommonInvoiceOrder> items = List.of(advanced, blocker);
+
+        when(invoiceRepository.findBoardInvoices(any())).thenReturn(List.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L))).thenReturn(items);
+        when(publicationBlockerService.hasOverdueBlockers(eq(items), any())).thenReturn(true);
+
+        List<OrderDTOList> cards = service.managerBoardCards("Требует внимания", "", null, null, "desc");
+
         assertEquals(1, cards.size());
-        assertEquals("Ожидает общего счета", cards.get(0).getStatus());
+        assertEquals("Требует внимания", cards.getFirst().getStatus());
+        assertEquals(CommonInvoiceStatus.COLLECTING.name(), cards.getFirst().getCommonInvoiceStatus());
     }
 
     @Test

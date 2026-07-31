@@ -94,6 +94,59 @@ public interface WorkloadShadowProjectionRepository
             @Param("progressDate") LocalDate progressDate
     );
 
+    /**
+     * Repairs a final snapshot that disagrees with a confirmed 100% operational
+     * result for the same completed day. The operational counter is deliberately
+     * used only as a completion watermark: the workload projection remains the
+     * owner of the eligible denominator and of all late/external-blocker decisions.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE workload_shadow_worker_daily daily
+            JOIN worker_daily_performance actual
+              ON actual.progress_date = daily.progress_date
+             AND actual.worker_id = daily.worker_id
+            SET daily.active_units = GREATEST(
+                    daily.late_excluded_units,
+                    daily.active_units - (daily.eligible_units - daily.completed_units)
+                ),
+                daily.completed_units = daily.eligible_units,
+                daily.progress_percent = 100,
+                daily.reached_100 = TRUE,
+                daily.reached_100_once = TRUE,
+                daily.first_reached_100_at = COALESCE(
+                    daily.first_reached_100_at,
+                    actual.last_completed_at
+                ),
+                daily.last_reached_100_at = CASE
+                    WHEN daily.last_reached_100_at IS NULL
+                      OR actual.last_completed_at > daily.last_reached_100_at
+                    THEN actual.last_completed_at
+                    ELSE daily.last_reached_100_at
+                END,
+                daily.last_snapshot_at = GREATEST(
+                    daily.last_snapshot_at,
+                    actual.last_completed_at
+                ),
+                daily.finalized_at = GREATEST(
+                    COALESCE(daily.finalized_at, actual.last_completed_at),
+                    actual.last_completed_at
+                ),
+                daily.finalization_status = 'ON_TIME'
+            WHERE daily.progress_date = :progressDate
+              AND daily.finalized = TRUE
+              AND daily.finalization_status = 'ON_TIME'
+              AND daily.eligible_units > 0
+              AND daily.completed_units < daily.eligible_units
+              AND daily.external_blocked_units = 0
+              AND actual.completed_count > 0
+              AND actual.active_count = 0
+              AND actual.reached_100 = TRUE
+              AND actual.last_completed_at IS NOT NULL
+              AND actual.last_completed_at < DATE_ADD(daily.progress_date, INTERVAL 1 DAY)
+            """, nativeQuery = true)
+    int reconcileCompletedFinalProgress(@Param("progressDate") LocalDate progressDate);
+
     @Query(value = """
             SELECT assignment.worker_id,
                    worker.user_id AS worker_user_id,
@@ -1429,130 +1482,50 @@ public interface WorkloadShadowProjectionRepository
                 )
             ) snapshot
             ON DUPLICATE KEY UPDATE
-                worker_user_id = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.worker_user_id,
-                    VALUES(worker_user_id)
-                ),
-                manager_id = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.manager_id,
-                    VALUES(manager_id)
-                ),
-                completed_units = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.completed_units,
-                    VALUES(completed_units)
-                ),
-                active_units = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.active_units,
-                    VALUES(active_units)
-                ),
-                late_excluded_units =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.late_excluded_units,
-                        VALUES(late_excluded_units)
-                    ),
-                eligible_units = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.eligible_units,
-                    VALUES(eligible_units)
-                ),
-                progress_percent = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.progress_percent,
-                    VALUES(progress_percent)
-                ),
-                rating = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.rating,
-                    VALUES(rating)
-                ),
-                planned_units = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.planned_units,
-                    VALUES(planned_units)
-                ),
-                incoming_units = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.incoming_units,
-                    VALUES(incoming_units)
-                ),
-                urgent_units = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.urgent_units,
-                    VALUES(urgent_units)
-                ),
-                external_blocked_units =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.external_blocked_units,
-                        VALUES(external_blocked_units)
-                    ),
-                client_deferred_units =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.client_deferred_units,
-                        VALUES(client_deferred_units)
-                    ),
-                manager_deferred_units =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.manager_deferred_units,
-                        VALUES(manager_deferred_units)
-                    ),
+                worker_user_id = VALUES(worker_user_id),
+                manager_id = VALUES(manager_id),
+                completed_units = VALUES(completed_units),
+                active_units = VALUES(active_units),
+                late_excluded_units = VALUES(late_excluded_units),
+                eligible_units = VALUES(eligible_units),
+                progress_percent = VALUES(progress_percent),
+                rating = VALUES(rating),
+                planned_units = VALUES(planned_units),
+                incoming_units = VALUES(incoming_units),
+                urgent_units = VALUES(urgent_units),
+                external_blocked_units = VALUES(external_blocked_units),
+                client_deferred_units = VALUES(client_deferred_units),
+                manager_deferred_units = VALUES(manager_deferred_units),
                 reached_100_once =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.reached_100_once,
-                        CASE
-                            WHEN workload_shadow_worker_daily.reached_100_once = TRUE
-                              OR VALUES(reached_100) = TRUE
-                            THEN TRUE
-                            ELSE FALSE
-                        END
-                    ),
+                    CASE
+                        WHEN workload_shadow_worker_daily.reached_100_once = TRUE
+                          OR VALUES(reached_100) = TRUE
+                        THEN TRUE
+                        ELSE FALSE
+                    END,
                 first_reached_100_at =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.first_reached_100_at,
-                        CASE
-                            WHEN workload_shadow_worker_daily.first_reached_100_at IS NOT NULL
-                                THEN workload_shadow_worker_daily.first_reached_100_at
-                            WHEN VALUES(reached_100) = TRUE
-                                THEN VALUES(first_reached_100_at)
-                            ELSE NULL
-                        END
-                    ),
+                    CASE
+                        WHEN workload_shadow_worker_daily.first_reached_100_at IS NOT NULL
+                            THEN workload_shadow_worker_daily.first_reached_100_at
+                        WHEN VALUES(reached_100) = TRUE
+                            THEN VALUES(first_reached_100_at)
+                        ELSE NULL
+                    END,
                 last_reached_100_at =
-                    IF(
-                        workload_shadow_worker_daily.finalized = TRUE,
-                        workload_shadow_worker_daily.last_reached_100_at,
-                        CASE
-                            WHEN workload_shadow_worker_daily.reached_100 = FALSE
-                             AND VALUES(reached_100) = TRUE
-                                THEN VALUES(last_reached_100_at)
-                            ELSE workload_shadow_worker_daily.last_reached_100_at
-                        END
-                    ),
-                reached_100 = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.reached_100,
-                    VALUES(reached_100)
-                ),
+                    CASE
+                        WHEN workload_shadow_worker_daily.reached_100 = FALSE
+                         AND VALUES(reached_100) = TRUE
+                            THEN VALUES(last_reached_100_at)
+                        ELSE workload_shadow_worker_daily.last_reached_100_at
+                    END,
+                reached_100 = VALUES(reached_100),
                 finalization_status =
                     IF(
                         workload_shadow_worker_daily.finalized = TRUE,
                         workload_shadow_worker_daily.finalization_status,
                         VALUES(finalization_status)
                     ),
-                last_snapshot_at = IF(
-                    workload_shadow_worker_daily.finalized = TRUE,
-                    workload_shadow_worker_daily.last_snapshot_at,
-                    VALUES(last_snapshot_at)
-                ),
+                last_snapshot_at = VALUES(last_snapshot_at),
                 finalized_at = CASE
                     WHEN workload_shadow_worker_daily.finalized_at IS NOT NULL
                         THEN workload_shadow_worker_daily.finalized_at

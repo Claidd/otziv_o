@@ -31,6 +31,8 @@ public class OrderDTOList {
 
     private String companyTitle;
 
+    private String companyStatus;
+
     private String filialTitle;
 
     private String filialUrl;

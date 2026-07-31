@@ -72,6 +72,19 @@ public class CommonInvoiceOrder {
     @Column(name = "manual_payment_receipt_url", length = 1024)
     private String manualPaymentReceiptUrl;
 
+    /**
+     * Moment when this position first became a pre-publication outlier while at
+     * least one sibling position had already reached publication. The value is
+     * deliberately independent from the order creation/status timestamps: a
+     * transition between pre-publication statuses must not restart the timer.
+     */
+    @Column(name = "publication_blocker_since")
+    private LocalDateTime publicationBlockerSince;
+
+    /** Timestamp of the latest attachment to the current common invoice. */
+    @Column(name = "invoice_linked_at")
+    private LocalDateTime invoiceLinkedAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -82,6 +95,9 @@ public class CommonInvoiceOrder {
     void onCreate() {
         LocalDateTime now = LocalDateTime.now();
         createdAt = now;
+        if (invoiceLinkedAt == null) {
+            invoiceLinkedAt = now;
+        }
         updatedAt = now;
     }
 

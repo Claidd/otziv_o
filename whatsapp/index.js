@@ -15,6 +15,7 @@ const {
   groupFromInviteInfo,
   normalizeInviteCode,
 } = require("./group-invite");
+const { selectGroupsCache } = require("./groups-cache");
 
 const CLIENT_ID = process.env.CLIENT_ID || "whatsapp_default";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
@@ -860,14 +861,18 @@ app.get("/groups", asyncRoute(async (req, res) => {
   }
 
   const forceRefresh = String(req.query.refresh || "") === "1";
-  const cached = forceRefresh ? null : freshGroupsCache();
-  if (cached) {
-    if (!groupsRefreshPromise) {
+  const cacheSelection = selectGroupsCache(forceRefresh, freshGroupsCache(), groupsCache);
+  if (cacheSelection.snapshot) {
+    if (cacheSelection.stale && !groupsRefreshPromise) {
       void startGroupsRefresh().catch((error) => {
         log("warn", "Background groups cache refresh failed", { error: error.message });
       });
     }
-    res.json(groupsPayload(cached, { cached: true, refreshInProgress: Boolean(groupsRefreshPromise) }));
+    res.json(groupsPayload(cacheSelection.snapshot, {
+      cached: true,
+      stale: cacheSelection.stale,
+      refreshInProgress: Boolean(groupsRefreshPromise),
+    }));
     return;
   }
 

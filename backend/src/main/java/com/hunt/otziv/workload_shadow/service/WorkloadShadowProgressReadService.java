@@ -13,6 +13,7 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -20,16 +21,24 @@ import org.springframework.stereotype.Service;
 public class WorkloadShadowProgressReadService {
 
     private final WorkloadShadowProjectionRepository repository;
+    private final WorkloadShadowRefreshSignal refreshSignal;
 
-    public Map<Long, Progress> findCurrentProgress(
+    public CurrentProgress findCurrentProgressWithState(
             Collection<Long> workerIds,
             LocalDate progressDate
     ) {
         if (emptyRequest(workerIds, progressDate)) {
-            return Map.of();
+            return new CurrentProgress(Map.of(), false);
+        }
+        if (refreshSignal.isProjectionStale()) {
+            return new CurrentProgress(Map.of(), true);
         }
         try {
-            return map(repository.findCurrentWorkerProgress(workerIds, progressDate));
+            Map<Long, Progress> progress = map(repository.findCurrentWorkerProgress(workerIds, progressDate));
+            if (refreshSignal.isProjectionStale()) {
+                return new CurrentProgress(Map.of(), true);
+            }
+            return new CurrentProgress(progress, false);
         } catch (RuntimeException exception) {
             log.warn(
                     "Current workload progress is unavailable for {} workers on {}; legacy progress will be used: {}",
@@ -37,8 +46,15 @@ public class WorkloadShadowProgressReadService {
                     progressDate,
                     exception.getMessage()
             );
-            return Map.of();
+            return new CurrentProgress(Map.of(), true);
         }
+    }
+
+    public Map<Long, Progress> findCurrentProgress(
+            Collection<Long> workerIds,
+            LocalDate progressDate
+    ) {
+        return findCurrentProgressWithState(workerIds, progressDate).progress();
     }
 
     public Map<Long, Progress> findFinalizedProgress(
@@ -58,6 +74,32 @@ public class WorkloadShadowProgressReadService {
                     exception.getMessage()
             );
             return Map.of();
+        }
+    }
+
+    /**
+     * Keeps every consumer on the workload projection while allowing the
+     * projection to absorb completions that happened after its last end-of-day
+     * snapshot but before midnight.
+     */
+    @Transactional
+    public int reconcileFinalizedProgress(LocalDate progressDate) {
+        if (progressDate == null) {
+            return 0;
+        }
+        try {
+            int repaired = repository.reconcileCompletedFinalProgress(progressDate);
+            if (repaired > 0) {
+                log.info("Reconciled {} completed workload progress rows for {}", repaired, progressDate);
+            }
+            return repaired;
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Final workload progress reconciliation failed for {}: {}",
+                    progressDate,
+                    exception.getMessage()
+            );
+            return 0;
         }
     }
 
@@ -116,5 +158,11 @@ public class WorkloadShadowProgressReadService {
             java.time.LocalDateTime firstReached100At,
             java.time.LocalDateTime lastReached100At
     ) {
+    }
+
+    public record CurrentProgress(Map<Long, Progress> progress, boolean updating) {
+        public CurrentProgress {
+            progress = progress == null ? Map.of() : Map.copyOf(progress);
+        }
     }
 }

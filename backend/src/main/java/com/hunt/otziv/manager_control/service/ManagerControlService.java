@@ -29,6 +29,7 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
 import com.hunt.otziv.common_billing.service.CommonBillingService;
+import com.hunt.otziv.common_billing.service.CommonInvoicePublicationBlockerService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplyRequest;
 import com.hunt.otziv.manager_control.dto.ManagerControlClientReplySuggestionResponse;
@@ -145,6 +146,8 @@ public class ManagerControlService {
     private static final int OVERDUE_NOTIFICATION_DAYS = 4;
     private static final int WORKER_ORDER_UNCHANGED_DAYS = 2;
     private static final int COMMON_INVOICE_STALE_DAYS = 3;
+    private static final int COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS =
+            CommonInvoicePublicationBlockerService.ATTENTION_AFTER_HOURS;
     private static final LocalTime MORNING_STAGE_START = LocalTime.of(5, 0);
     private static final LocalTime START_DAY_DEADLINE = LocalTime.of(14, 0);
     private static final LocalTime FINAL_STAGE_START = LocalTime.of(20, 0);
@@ -275,6 +278,7 @@ public class ManagerControlService {
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
     private final CommonInvoiceRepository commonInvoiceRepository;
     private final CommonInvoiceOrderRepository commonInvoiceOrderRepository;
+    private final CommonInvoicePublicationBlockerService commonInvoicePublicationBlockerService;
     private final ManagerAutomationFailureService managerAutomationFailureService;
     private final CommonBillingService commonBillingService;
     private final OrderPublicationApprovalService publicationApprovalService;
@@ -1296,6 +1300,17 @@ public class ManagerControlService {
         }
         CommonInvoice invoice = commonInvoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
+        if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING
+                && commonInvoicePublicationBlockerService.hasOverdueBlockers(
+                commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoiceId),
+                LocalDateTime.now()
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Это не техническая ошибка счета: один или несколько заказов отстают от публикации более 48 часов. "
+                            + "Откройте карточки блокеров и проверьте клиента/автоответчик. Состав общего счета автоматически не меняется."
+            );
+        }
         if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING
                 || invoice.getStatus() == CommonInvoiceStatus.READY) {
             CommonInvoiceDetailsResponse details = commonBillingService.invoice(invoiceId);
@@ -2322,10 +2337,7 @@ public class ManagerControlService {
         long automationFailureCount = automationFailures.size();
         long commonInvoiceActionCount = commonInvoiceActionCount(manager, automationInvoiceIds);
         long publicationDateIssueCount = reviewRepository.countPublicationDateIssuesByManager(manager);
-        long chatBindingIssueCount = orderRepository.countManagerControlChatBindingIssuesByManager(
-                manager,
-                CommonInvoiceStatus.DISABLED
-        );
+        long chatBindingIssueCount = orderRepository.countManagerControlChatBindingIssuesByManager(manager);
         long paymentIntegrityIssueCount = orderRepository.countPaymentIntegrityIssuesByManager(
                 manager,
                 PAYMENT_AUTOMATION_STATUSES
@@ -3992,7 +4004,6 @@ public class ManagerControlService {
     private List<ManagerControlConcreteItemResponse> chatBindingIssueExamples(Manager manager, LocalDate today, int limit) {
         return orderRepository.findManagerControlChatBindingIssueOrdersByManager(
                         manager,
-                        CommonInvoiceStatus.DISABLED,
                         PageRequest.of(0, Math.max(1, limit))
                 ).stream()
                 .map(this::orderDtoFromOrder)
@@ -4009,6 +4020,7 @@ public class ManagerControlService {
                 .id(order == null ? null : order.getId())
                 .companyId(company == null ? null : company.getId())
                 .companyTitle(company == null ? null : company.getTitle())
+                .companyStatus(company == null || company.getStatus() == null ? null : company.getStatus().getTitle())
                 .filialTitle(filial == null ? null : filial.getTitle())
                 .filialUrl(filial == null ? null : filial.getUrl())
                 .filialCity(city == null ? null : city.getTitle())
@@ -4117,7 +4129,10 @@ public class ManagerControlService {
     private String chatBindingManualInstruction(OrderDTOList order) {
         String chat = safe(order == null ? null : order.getCompanyUrlChat()).toLowerCase(Locale.ROOT);
         if (isWhatsAppChat(chat)) {
-            return "Если починка не помогла: убедитесь, что подключенный WhatsApp-аккаунт состоит в этой группе, ссылка группы в карточке актуальна, затем отправьте любое сообщение в группу или запустите синхронизацию WhatsApp-групп вручную.";
+            return "Как перепривязать: 1) откройте карточку компании и проверьте, что WhatsApp-ссылка ведет в нужную группу; "
+                    + "2) если ссылка устарела, замените ее на актуальную; "
+                    + "3) убедитесь, что хотя бы один подключенный WhatsApp-аккаунт состоит в группе; "
+                    + "4) отправьте любое сообщение в группу; 5) вернитесь в замечание и нажмите «Починить».";
         }
         if (isTelegramChat(chat)) {
             String invite = safe(order == null ? null : order.getTelegramBotInviteUrl());
@@ -5479,7 +5494,8 @@ public class ManagerControlService {
                 effectiveCommonInvoiceStaleStatuses(),
                 CommonInvoiceStatus.PARTIALLY_PAID,
                 CommonInvoiceStatus.COLLECTING,
-                LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS)
+                LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
+                LocalDateTime.now().minusHours(COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS)
         );
     }
 
@@ -5491,6 +5507,7 @@ public class ManagerControlService {
                 CommonInvoiceStatus.PARTIALLY_PAID,
                 CommonInvoiceStatus.COLLECTING,
                 LocalDateTime.now().minusDays(COMMON_INVOICE_STALE_DAYS),
+                LocalDateTime.now().minusHours(COMMON_INVOICE_PUBLICATION_BLOCKER_HOURS),
                 PageRequest.of(0, 10_000)
         );
     }
@@ -5577,6 +5594,11 @@ public class ManagerControlService {
                 && (invoice.getSentAt() == null || invoice.getNextReminderAt() == null)) {
             return true;
         }
+        List<CommonInvoiceOrder> invoiceItems = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        if (status == CommonInvoiceStatus.COLLECTING
+                && commonInvoicePublicationBlockerService.hasOverdueBlockers(invoiceItems, now)) {
+            return true;
+        }
         LocalDateTime updatedAt = invoice.getUpdatedAt();
         LocalDateTime staleBefore = (now == null ? LocalDateTime.now() : now).minusDays(COMMON_INVOICE_STALE_DAYS);
         if (!effectiveCommonInvoiceStaleStatuses().contains(status)
@@ -5588,7 +5610,7 @@ public class ManagerControlService {
                 && status != CommonInvoiceStatus.COLLECTING) {
             return true;
         }
-        return commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId()).stream()
+        return invoiceItems.stream()
                 .noneMatch(item -> item != null && !item.isReady());
     }
 
@@ -5785,15 +5807,27 @@ public class ManagerControlService {
     private ManagerControlConcreteItemResponse commonInvoiceExample(CommonInvoice invoice, LocalDate today) {
         String accountName = invoice.getAccount() == null ? "" : safe(invoice.getAccount().getName());
         long remainingKopecks = Math.max(0, invoice.getAmountKopecks() - invoice.getPaidKopecks());
+        List<CommonInvoiceOrder> items = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
+        List<CommonInvoiceOrder> publicationBlockers = commonInvoicePublicationBlockerService.overdueBlockers(
+                items,
+                LocalDateTime.now()
+        );
+        LocalDateTime attentionStartedAt = publicationBlockers.stream()
+                .map(CommonInvoiceOrder::getPublicationBlockerSince)
+                .filter(Objects::nonNull)
+                .min(LocalDateTime::compareTo)
+                .orElse(invoice.getUpdatedAt());
         return new ManagerControlConcreteItemResponse(
                 null,
                 "COMMON_INVOICE",
                 invoice.getId(),
                 safe(invoice.getTitle()).isBlank() ? "Общий счет #" + invoice.getId() : invoice.getTitle(),
                 commonInvoiceSubtitle(accountName, invoice.getAmountKopecks(), remainingKopecks),
-                commonInvoiceStatusLabel(invoice.getStatus()),
-                invoice.getUpdatedAt() == null ? null : daysSince(invoice.getUpdatedAt().toLocalDate(), today),
-                commonInvoiceReason(invoice, today),
+                publicationBlockers.isEmpty()
+                        ? commonInvoiceStatusLabel(invoice.getStatus())
+                        : "Требует внимания · блокеров " + publicationBlockers.size(),
+                attentionStartedAt == null ? null : daysSince(attentionStartedAt.toLocalDate(), today),
+                commonInvoiceReason(invoice, today, items, publicationBlockers),
                 "/admin/common-billing?invoiceId=" + invoice.getId(),
                 null,
                 null,
@@ -5805,7 +5839,7 @@ public class ManagerControlService {
                 null,
                 null,
                 null
-        ).withSla(invoice.getUpdatedAt(), null, null, null);
+        ).withSla(attentionStartedAt, null, null, null);
     }
 
     private String commonInvoiceSubtitle(String accountName, long amountKopecks, long remainingKopecks) {
@@ -5820,7 +5854,12 @@ public class ManagerControlService {
         return String.join(" · ", parts);
     }
 
-    private String commonInvoiceReason(CommonInvoice invoice, LocalDate today) {
+    private String commonInvoiceReason(
+            CommonInvoice invoice,
+            LocalDate today,
+            List<CommonInvoiceOrder> items,
+            List<CommonInvoiceOrder> publicationBlockers
+    ) {
         String lastError = safe(invoice.getLastError());
         if (!lastError.isBlank()) {
             return commonInvoiceLastErrorReason(invoice, lastError);
@@ -5839,9 +5878,29 @@ public class ManagerControlService {
         if (status == CommonInvoiceStatus.BAN) {
             return "Счет в бане. Рекомендация: проверьте причину блокировки в карточке счета.";
         }
+        if (publicationBlockers != null && !publicationBlockers.isEmpty()) {
+            String blockers = publicationBlockers.stream()
+                    .limit(5)
+                    .map(item -> {
+                        Order order = item.getOrder();
+                        String orderId = order == null || order.getId() == null ? "?" : String.valueOf(order.getId());
+                        long hours = item.getPublicationBlockerSince() == null
+                                ? 0
+                                : Math.max(0, Duration.between(item.getPublicationBlockerSince(), LocalDateTime.now()).toHours());
+                        return "#" + orderId + " «" + orderStatusTitle(order) + "» (" + hours + " ч.)";
+                    })
+                    .collect(Collectors.joining(", "));
+            long publicationOrLater = (items == null ? List.<CommonInvoiceOrder>of() : items).stream()
+                    .map(CommonInvoiceOrder::getOrder)
+                    .filter(commonInvoicePublicationBlockerService::isPublicationOrLater)
+                    .count();
+            return "Почему в замечаниях: в общем счете уже есть " + publicationOrLater
+                    + " заказ(а) в «Публикации» или выше, но допубликационные позиции блокируют сбор более 48 часов. "
+                    + "Блокеры: " + blockers
+                    + ". Проверьте доставку напоминаний и состояние заказов. Состав счета автоматически не меняется.";
+        }
         long ageDays = invoice.getUpdatedAt() == null ? 0 : daysSince(invoice.getUpdatedAt().toLocalDate(), today);
         if (status == CommonInvoiceStatus.COLLECTING) {
-            List<CommonInvoiceOrder> items = commonInvoiceOrderRepository.findByInvoiceIdWithOrders(invoice.getId());
             long ready = items.stream().filter(CommonInvoiceOrder::isReady).count();
             String waitingStatuses = items.stream()
                     .filter(item -> !item.isReady())

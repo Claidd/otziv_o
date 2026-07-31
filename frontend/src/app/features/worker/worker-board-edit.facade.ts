@@ -183,7 +183,8 @@ export class WorkerBoardEditFacade {
 
     this.deps.managerApi.getOrderDetails(review.orderId).subscribe({
       next: (details) => {
-        const currentReview = details.reviews.find((item) => item.id === review.id) ?? review;
+        const detailsReview = details.reviews.find((item) => item.id === review.id);
+        const currentReview: ReviewEditItem = detailsReview ? { ...review, ...detailsReview } : review;
         this.reviewEditDetails.set(details);
         this.editReview.set(currentReview);
         this.reviewEditDraft.set(this.toReviewEditDraft(currentReview));
@@ -215,6 +216,13 @@ export class WorkerBoardEditFacade {
     }
 
     this.reviewEditDraft.update((draft) => draft ? { ...draft, [change.field]: change.value } : draft);
+  }
+
+  setReviewTaskWorker(workerId: number): void {
+    this.editReview.update((review) => review
+      ? { ...review, taskWorkerId: workerId } as ReviewEditItem
+      : review
+    );
   }
 
   canOnlyUnsetReviewVigul(): boolean {

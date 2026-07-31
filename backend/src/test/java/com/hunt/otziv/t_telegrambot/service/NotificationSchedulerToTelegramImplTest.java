@@ -1,6 +1,8 @@
 package com.hunt.otziv.t_telegrambot.service;
 
 import com.hunt.otziv.admin.services.PersonalService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.dto.TelegramReportScheduleSettingsResponse;
 import com.hunt.otziv.u_users.model.Role;
 import com.hunt.otziv.u_users.model.User;
@@ -38,6 +40,9 @@ class NotificationSchedulerToTelegramImplTest {
 
     @Mock
     private TelegramReportScheduleSettingsService settingsService;
+
+    @Mock
+    private NotificationMediaDeliveryService notificationMediaDeliveryService;
 
     @Test
     void sendsMorningReportWithinCatchUpWindowAndClaimsRunKey() {
@@ -102,6 +107,13 @@ class NotificationSchedulerToTelegramImplTest {
 
         scheduler.sendDailyReportToWorkers();
 
+        verify(notificationMediaDeliveryService).sendMediaOnly(
+                eq(NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code()),
+                eq(-123L),
+                eq(77L),
+                anyString(),
+                eq("HTML")
+        );
         verify(telegramService).sendMessage(eq(-123L), eq("worker-only report"), eq("HTML"));
     }
 
@@ -110,7 +122,8 @@ class NotificationSchedulerToTelegramImplTest {
                 telegramService,
                 userService,
                 personalService,
-                settingsService
+                settingsService,
+                notificationMediaDeliveryService
         );
         scheduler.setClock(Clock.fixed(Instant.parse(instant), ZoneId.of("UTC")));
         scheduler.setCatchUpWindow(Duration.ofMinutes(15));
