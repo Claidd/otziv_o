@@ -51,6 +51,30 @@ class WorkerAssignmentMutationGuardServiceTest {
         verify(repository, never()).lockOwnedOrder(11L, "worker");
     }
 
+    @Test
+    void workerCanMutateOwnedRecoveryTaskThroughFreshOwnershipQuery() {
+        authenticateWorker("worker");
+        when(repository.countOwnedRecoveryTask(597L, "worker")).thenReturn(1L);
+
+        new WorkerAssignmentMutationGuardService(repository).assertRecoveryTask(597L);
+
+        verify(repository).countOwnedRecoveryTask(597L, "worker");
+        verify(repository, never()).lockOwnedRecoveryTask(597L, "worker");
+    }
+
+    @Test
+    void transactionalWorkerRecoveryMutationLocksOwnershipUntilCommit() {
+        authenticateWorker("worker");
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        when(repository.lockOwnedRecoveryTask(597L, "worker"))
+                .thenReturn(Optional.of(597L));
+
+        new WorkerAssignmentMutationGuardService(repository).assertRecoveryTask(597L);
+
+        verify(repository).lockOwnedRecoveryTask(597L, "worker");
+        verify(repository, never()).countOwnedRecoveryTask(597L, "worker");
+    }
+
     private void authenticateWorker(String username) {
         var authentication = new TestingAuthenticationToken(
                 username,
