@@ -22,6 +22,15 @@ public class ReviewEditService {
     @Transactional
     public boolean updateReviewText(Long orderId, Long reviewId, String text) {
         assignmentMutationGuardService.assertReview(reviewId);
+        return updateReviewTextInternal(orderId, reviewId, text);
+    }
+
+    @Transactional
+    public boolean updateReviewTextFromSharedCheck(Long orderId, Long reviewId, String text) {
+        return updateReviewTextInternal(orderId, reviewId, text);
+    }
+
+    private boolean updateReviewTextInternal(Long orderId, Long reviewId, String text) {
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null) {
             return false;
@@ -35,6 +44,15 @@ public class ReviewEditService {
     @Transactional
     public boolean updateReviewAnswer(Long orderId, Long reviewId, String answer) {
         assignmentMutationGuardService.assertReview(reviewId);
+        return updateReviewAnswerInternal(orderId, reviewId, answer);
+    }
+
+    @Transactional
+    public boolean updateReviewAnswerFromSharedCheck(Long orderId, Long reviewId, String answer) {
+        return updateReviewAnswerInternal(orderId, reviewId, answer);
+    }
+
+    private boolean updateReviewAnswerInternal(Long orderId, Long reviewId, String answer) {
         Review review = findReviewForOrder(orderId, reviewId);
         if (review == null) {
             return false;

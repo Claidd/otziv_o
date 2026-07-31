@@ -175,6 +175,16 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['ADMIN', 'OWNER']
   },
   {
+    id: 'notification-media',
+    label: 'Уведомления',
+    description: 'Картинки Telegram-отправок',
+    icon: 'collections',
+    active: 'notification-media',
+    group: 'home',
+    routerLink: '/admin/notification-media',
+    roles: ['ADMIN', 'OWNER']
+  },
+  {
     id: 'dictionaries',
     label: 'Справочники',
     description: 'Настройки данных и аккаунты',

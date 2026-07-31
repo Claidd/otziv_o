@@ -102,7 +102,7 @@ public class ApiReviewCheckController {
         Order order = requireOrder(orderDetails);
         requireReviewInDetails(orderDetails, reviewId);
 
-        if (!reviewService.updateReviewText(order.getId(), reviewId, request.text())) {
+        if (!reviewService.updateReviewTextFromSharedCheck(order.getId(), reviewId, request.text())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
 
@@ -126,7 +126,7 @@ public class ApiReviewCheckController {
         Order order = requireOrder(orderDetails);
         requireReviewInDetails(orderDetails, reviewId);
 
-        if (!reviewService.updateReviewAnswer(order.getId(), reviewId, request.answer())) {
+        if (!reviewService.updateReviewAnswerFromSharedCheck(order.getId(), reviewId, request.answer())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден в этом заказе");
         }
 

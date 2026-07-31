@@ -58,7 +58,7 @@ public class ManagerReportReviewTaskContextService {
         if (sourceTaskId == null || sourceTaskId <= 0) return false;
         return concreteItemRepository.findById(sourceTaskId)
                 .map(this::resolvedSatisfactorily)
-                .orElse(false);
+                .orElse(true);
     }
 
     private boolean resolvedSatisfactorily(ManagerDailyControlConcreteItem source) {

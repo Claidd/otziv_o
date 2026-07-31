@@ -1,6 +1,8 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -41,6 +43,8 @@ class WorkerRiskResponseSlaJobTest {
     @Mock
     private TelegramService telegramService;
     @Mock
+    private NotificationMediaDeliveryService notificationMediaDeliveryService;
+    @Mock
     private AppSettingService appSettingService;
 
     private WorkerRiskResponseSlaJob job;
@@ -52,6 +56,7 @@ class WorkerRiskResponseSlaJobTest {
                 eventService,
                 userService,
                 telegramService,
+                notificationMediaDeliveryService,
                 appSettingService
         );
         when(appSettingService.getInt(AppSettingService.WORKER_RISK_EXPLANATION_DEADLINE_MINUTES, 180))
@@ -87,8 +92,10 @@ class WorkerRiskResponseSlaJobTest {
                 any(Pageable.class)
         )).thenReturn(List.of(incident));
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
-        when(telegramService.sendMessageWithInlineKeyboard(
+        when(notificationMediaDeliveryService.send(
+                eq(NotificationMediaEventCatalog.WORKER_RISK_OVERDUE.code()),
                 eq(-100123L),
+                eq(2L),
                 contains("Код запроса: risk-77"),
                 eq(null),
                 any()
@@ -118,8 +125,10 @@ class WorkerRiskResponseSlaJobTest {
                 any()
         );
         ArgumentCaptor<String> reminder = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessageWithInlineKeyboard(
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_RISK_OVERDUE.code()),
                 eq(-100123L),
+                eq(2L),
                 reminder.capture(),
                 eq(null),
                 any()
@@ -151,8 +160,10 @@ class WorkerRiskResponseSlaJobTest {
                 any(Pageable.class)
         )).thenReturn(List.of(incident));
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
-        when(telegramService.sendMessageWithInlineKeyboard(
+        when(notificationMediaDeliveryService.send(
+                eq(NotificationMediaEventCatalog.WORKER_RISK_REMINDER.code()),
                 eq(-100123L),
+                eq(2L),
                 contains("Код запроса: risk-78"),
                 eq(null),
                 any()
@@ -165,8 +176,10 @@ class WorkerRiskResponseSlaJobTest {
         assertNotNull(incident.getExplanationReminderAt());
         assertNull(incident.getSectionRestrictedAt());
         ArgumentCaptor<String> reminder = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessageWithInlineKeyboard(
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_RISK_REMINDER.code()),
                 eq(-100123L),
+                eq(2L),
                 reminder.capture(),
                 eq(null),
                 any()

@@ -1,6 +1,8 @@
 package com.hunt.otziv.manager_daily_summary.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewEvent;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewStatus;
@@ -32,6 +34,7 @@ public class ManagerReportReviewReminderJob {
     private final ManagerReportReviewSessionRepository repository;
     private final ManagerReportReviewEventRepository eventRepository;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final AppSettingService appSettingService;
     private final ManagerReportReviewAccessPolicy accessPolicy;
     private final ManagerReportReviewQualityService qualityService;
@@ -98,8 +101,12 @@ public class ManagerReportReviewReminderJob {
             case DISPUTE_PENDING -> "Вы начали оспаривать отчёт, но не описали конкретную неточность.";
             default -> "Отчёт доставлен, но разбор ещё не начат.";
         };
-        return telegramService.sendMessageWithInlineKeyboard(
+        return notificationMediaDeliveryService.send(
+                repeated
+                        ? NotificationMediaEventCatalog.MANAGER_REPORT_OVERDUE.code()
+                        : NotificationMediaEventCatalog.MANAGER_REPORT_REMINDER.code(),
                 review.getRecipientChatId(),
+                review.getManagerUserId(),
                 (repeated ? "🔒 <b>Разбор не завершён за 3 часа</b>" : "🔔 <b>Напоминание</b>")
                         + "\n\n" + progress
                         + (repeated

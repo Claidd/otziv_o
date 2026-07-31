@@ -105,7 +105,6 @@ public interface WorkerAssignmentMutationGuardRepository
             WHERE task.bad_review_task_id = :taskId
               AND user.username = :username
               AND task.bad_review_task_status = 'NEW'
-              AND COALESCE(orders.order_complete, 0) = 0
             """, nativeQuery = true)
     long countOwnedBadTask(
             @Param("taskId") long taskId,
@@ -125,7 +124,6 @@ public interface WorkerAssignmentMutationGuardRepository
             WHERE task.bad_review_task_id = :taskId
               AND user.username = :username
               AND task.bad_review_task_status = 'NEW'
-              AND COALESCE(orders.order_complete, 0) = 0
             FOR UPDATE
             """, nativeQuery = true)
     Optional<Long> lockOwnedBadTask(

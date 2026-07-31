@@ -13,6 +13,7 @@ import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewSession;
 import com.hunt.otziv.manager_daily_summary.model.ManagerReportReviewStatus;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewEventRepository;
 import com.hunt.otziv.manager_daily_summary.repository.ManagerReportReviewSessionRepository;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,6 +26,8 @@ class ManagerReportReviewReminderJobTest {
         ManagerReportReviewSessionRepository repository = mock(ManagerReportReviewSessionRepository.class);
         ManagerReportReviewEventRepository eventRepository = mock(ManagerReportReviewEventRepository.class);
         TelegramService telegramService = mock(TelegramService.class);
+        NotificationMediaDeliveryService notificationMediaDeliveryService =
+                mock(NotificationMediaDeliveryService.class);
         AppSettingService settings = mock(AppSettingService.class);
         ManagerReportReviewAccessPolicy accessPolicy = mock(ManagerReportReviewAccessPolicy.class);
         ManagerReportReviewQualityService qualityService = mock(ManagerReportReviewQualityService.class);
@@ -44,7 +47,9 @@ class ManagerReportReviewReminderJobTest {
         review.setStatus(ManagerReportReviewStatus.PLAN_PENDING);
         when(repository.findPendingForReminder(anyList(), any(LocalDateTime.class)))
                 .thenReturn(List.of(review));
-        when(telegramService.sendMessageWithInlineKeyboard(
+        when(notificationMediaDeliveryService.send(
+                any(String.class),
+                any(Long.class),
                 any(Long.class),
                 any(String.class),
                 any(String.class),
@@ -55,6 +60,7 @@ class ManagerReportReviewReminderJobTest {
                 repository,
                 eventRepository,
                 telegramService,
+                notificationMediaDeliveryService,
                 settings,
                 accessPolicy,
                 qualityService,
@@ -74,6 +80,8 @@ class ManagerReportReviewReminderJobTest {
         ManagerReportReviewSessionRepository repository = mock(ManagerReportReviewSessionRepository.class);
         ManagerReportReviewEventRepository eventRepository = mock(ManagerReportReviewEventRepository.class);
         TelegramService telegramService = mock(TelegramService.class);
+        NotificationMediaDeliveryService notificationMediaDeliveryService =
+                mock(NotificationMediaDeliveryService.class);
         AppSettingService settings = mock(AppSettingService.class);
         ManagerReportReviewAccessPolicy accessPolicy = mock(ManagerReportReviewAccessPolicy.class);
         ManagerReportReviewQualityService qualityService = mock(ManagerReportReviewQualityService.class);
@@ -97,6 +105,7 @@ class ManagerReportReviewReminderJobTest {
                 repository,
                 eventRepository,
                 telegramService,
+                notificationMediaDeliveryService,
                 settings,
                 accessPolicy,
                 qualityService,

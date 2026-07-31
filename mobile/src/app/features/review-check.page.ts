@@ -19,6 +19,7 @@ import {
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
+import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-editor.component';
 
 type ReviewEditableField = 'text' | 'answer';
 type ReviewCheckAction = 'load' | 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
@@ -30,7 +31,7 @@ type ReviewDraft = {
 
 @Component({
   selector: 'app-review-check-mobile',
-  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent],
+  imports: [FormsModule, IonContent, IonRefresher, IonRefresherContent, MobileBottomPagerComponent, MobileHeaderComponent, MobileRemindersComponent, MobileReviewFieldEditorComponent],
   template: `
     <div class="ion-page">
       <app-mobile-header title="Проверка отзывов" />
@@ -50,12 +51,19 @@ type ReviewDraft = {
             </div>
           }
 
-          @if (error()) {
+          @if (error() && !details()) {
             <button class="mobile-error-card" type="button" (click)="loadReviewCheck()">
               <span class="material-icons-sharp">error</span>
               <strong>{{ error() }}</strong>
               <small>Нажмите, чтобы повторить</small>
             </button>
+          }
+
+          @if (error() && details()) {
+            <div class="mobile-error-card" role="alert">
+              <span class="material-icons-sharp">error</span>
+              <strong>{{ error() }}</strong>
+            </div>
           }
 
           @if (statusMessage()) {
@@ -127,66 +135,39 @@ type ReviewDraft = {
                     </span>
                   </header>
 
-                  <section
-                    class="review-text-editor"
+                  <app-mobile-review-field-editor
+                    class="review-text-editor review-field--text"
                     [class.open]="isReviewTextOpen(review)"
                     [class.editing]="isReviewFieldEditing(review, 'text')"
-                  >
-                    @if (isReviewFieldEditing(review, 'text')) {
-                      <textarea
-                        [name]="'text-' + review.id"
-                        [ngModel]="reviewFieldValue(review, 'text')"
-                        (ngModelChange)="setReviewFieldDraft(review, 'text', $event)"
-                        placeholder="Текст отзыва"
-                      ></textarea>
-                      <div class="field-actions mobile-keyboard-actions">
-                        <button type="button" (click)="cancelReviewFieldEdit(review, 'text')" [disabled]="isMutating(fieldMutationKey(review, 'text'))">Отмена</button>
-                        <button type="button" class="save" (click)="saveReviewField(review, 'text')" [disabled]="!canSaveReviewField(review, 'text')">
-                          {{ isMutating(fieldMutationKey(review, 'text')) ? '...' : 'Сохранить' }}
-                        </button>
-                      </div>
-                    } @else {
-                      <button
-                        class="review-display-field"
-                        type="button"
-                        [class.empty]="!reviewFieldValue(review, 'text').trim()"
-                        (click)="startReviewFieldEdit(review, 'text')"
-                      >
-                        {{ reviewFieldValue(review, 'text').trim() || 'Текст отзыва' }}
-                      </button>
-                      @if (shouldShowTextToggle(review)) {
-                        <button class="text-toggle" type="button" (click)="toggleReviewText(review)">
-                          {{ isReviewTextOpen(review) ? 'свернуть' : 'развернуть' }}
-                        </button>
-                      }
-                    }
-                  </section>
+                    placeholder="Текст отзыва"
+                    [context]="(details.companyTitle || 'Компания') + ' · #' + review.id"
+                    [value]="reviewFieldValue(review, 'text')"
+                    [editing]="isReviewFieldEditing(review, 'text')"
+                    [disabled]="isMutating(fieldMutationKey(review, 'text'))"
+                    [showToggle]="shouldShowTextToggle(review)"
+                    [expanded]="isReviewTextOpen(review)"
+                    [saveDisabled]="!canSaveReviewField(review, 'text')"
+                    (start)="startReviewFieldEdit(review, 'text')"
+                    (valueChange)="setReviewFieldDraft(review, 'text', $event)"
+                    (toggle)="toggleReviewText(review)"
+                    (cancel)="cancelReviewFieldEdit(review, 'text')"
+                    (save)="saveReviewField(review, 'text')"
+                  />
 
-                  <section class="review-answer-editor" [class.editing]="isReviewFieldEditing(review, 'answer')">
-                    @if (isReviewFieldEditing(review, 'answer')) {
-                      <textarea
-                        [name]="'answer-' + review.id"
-                        [ngModel]="reviewFieldValue(review, 'answer')"
-                        (ngModelChange)="setReviewFieldDraft(review, 'answer', $event)"
-                        placeholder="Ответ на отзыв или замечание"
-                      ></textarea>
-                      <div class="field-actions mobile-keyboard-actions">
-                        <button type="button" (click)="cancelReviewFieldEdit(review, 'answer')" [disabled]="isMutating(fieldMutationKey(review, 'answer'))">Отмена</button>
-                        <button type="button" class="save" (click)="saveReviewField(review, 'answer')" [disabled]="!canSaveReviewField(review, 'answer')">
-                          {{ isMutating(fieldMutationKey(review, 'answer')) ? '...' : 'Сохранить' }}
-                        </button>
-                      </div>
-                    } @else {
-                      <button
-                        class="review-display-field review-display-field--answer"
-                        type="button"
-                        [class.empty]="!reviewFieldValue(review, 'answer').trim()"
-                        (click)="startReviewFieldEdit(review, 'answer')"
-                      >
-                        {{ reviewFieldValue(review, 'answer').trim() || 'Ответ на отзыв или замечание' }}
-                      </button>
-                    }
-                  </section>
+                  <app-mobile-review-field-editor
+                    class="review-answer-editor review-field--answer"
+                    [class.editing]="isReviewFieldEditing(review, 'answer')"
+                    placeholder="Ответ на отзыв или замечание"
+                    [context]="(details.companyTitle || 'Компания') + ' · #' + review.id"
+                    [value]="reviewFieldValue(review, 'answer')"
+                    [editing]="isReviewFieldEditing(review, 'answer')"
+                    [disabled]="isMutating(fieldMutationKey(review, 'answer'))"
+                    [saveDisabled]="!canSaveReviewField(review, 'answer')"
+                    (start)="startReviewFieldEdit(review, 'answer')"
+                    (valueChange)="setReviewFieldDraft(review, 'answer', $event)"
+                    (cancel)="cancelReviewFieldEdit(review, 'answer')"
+                    (save)="saveReviewField(review, 'answer')"
+                  />
 
                   <div class="bot-line">
                     {{ botOrProductLabel(details, review) }}

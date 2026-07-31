@@ -43,6 +43,37 @@ class ReviewEditServiceTest {
 
         assertTrue(updated);
         assertEquals("Новый текст", review.getText());
+        verify(assignmentMutationGuardService).assertReview(5L);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void sharedReviewCheckAnswerDoesNotRequireAssignmentOwnership() {
+        ReviewEditService service = service();
+        Review review = reviewForOrder(10L);
+
+        when(reviewRepository.findById(5L)).thenReturn(Optional.of(review));
+
+        boolean updated = service.updateReviewAnswerFromSharedCheck(10L, 5L, "Один этаж");
+
+        assertTrue(updated);
+        assertEquals("Один этаж", review.getAnswer());
+        verify(assignmentMutationGuardService, never()).assertReview(5L);
+        verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void sharedReviewCheckTextDoesNotRequireAssignmentOwnership() {
+        ReviewEditService service = service();
+        Review review = reviewForOrder(10L);
+
+        when(reviewRepository.findById(5L)).thenReturn(Optional.of(review));
+
+        boolean updated = service.updateReviewTextFromSharedCheck(10L, 5L, "Исправленный текст");
+
+        assertTrue(updated);
+        assertEquals("Исправленный текст", review.getText());
+        verify(assignmentMutationGuardService, never()).assertReview(5L);
         verify(reviewRepository).save(review);
     }
 
@@ -71,6 +102,7 @@ class ReviewEditServiceTest {
 
         assertTrue(updated);
         assertEquals("Заметка", orderDetails.getComment());
+        verify(assignmentMutationGuardService).assertReview(5L);
         verify(orderDetailsService).save(orderDetails);
     }
 

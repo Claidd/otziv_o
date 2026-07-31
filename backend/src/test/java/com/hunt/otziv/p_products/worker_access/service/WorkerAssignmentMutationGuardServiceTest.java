@@ -1,7 +1,9 @@
 package com.hunt.otziv.p_products.worker_access.service;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
@@ -14,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class WorkerAssignmentMutationGuardServiceTest {
@@ -75,11 +78,40 @@ class WorkerAssignmentMutationGuardServiceTest {
         verify(repository, never()).countOwnedRecoveryTask(597L, "worker");
     }
 
+    @Test
+    void rejectedMutationDoesNotClaimThatATransferDefinitelyHappened() {
+        authenticateWorker("worker");
+
+        assertThatThrownBy(() ->
+                new WorkerAssignmentMutationGuardService(repository).assertReview(17L)
+        )
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("назначение или состояние объекта изменилось")
+                .hasMessageNotContaining("передана другому специалисту");
+    }
+
+    @Test
+    void clientsManagersOwnersAndAdminsAreNotSubjectToWorkerOwnershipGuard() {
+        WorkerAssignmentMutationGuardService service = new WorkerAssignmentMutationGuardService(repository);
+
+        for (String role : new String[]{"ROLE_CLIENT", "ROLE_MANAGER", "ROLE_OWNER", "ROLE_ADMIN"}) {
+            authenticate("actor", role);
+            service.assertReview(17L);
+            service.assertOrder(11L);
+        }
+
+        verifyNoInteractions(repository);
+    }
+
     private void authenticateWorker(String username) {
+        authenticate(username, "ROLE_WORKER");
+    }
+
+    private void authenticate(String username, String... roles) {
         var authentication = new TestingAuthenticationToken(
                 username,
                 "n/a",
-                "ROLE_WORKER"
+                roles
         );
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);

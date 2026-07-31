@@ -1404,6 +1404,16 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    public boolean updateReviewTextFromSharedCheck(Long orderId, Long reviewId, String text) {
+        return reviewEditService.updateReviewTextFromSharedCheck(orderId, reviewId, text);
+    }
+
+    @Override
+    public boolean updateReviewAnswerFromSharedCheck(Long orderId, Long reviewId, String answer) {
+        return reviewEditService.updateReviewAnswerFromSharedCheck(orderId, reviewId, answer);
+    }
+
+    @Override
     public boolean updateReviewNote(Long orderId, Long reviewId, String comment) {
         return reviewEditService.updateReviewNote(orderId, reviewId, comment);
     }

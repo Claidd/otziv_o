@@ -1,6 +1,8 @@
 package com.hunt.otziv.worker_activity.service;
 
 import com.hunt.otziv.config.settings.service.AppSettingService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
@@ -26,6 +28,7 @@ public class WorkerRiskResponseSlaJob {
     private final WorkerRiskEventService eventService;
     private final UserService userService;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final AppSettingService appSettingService;
 
     @Scheduled(
@@ -101,8 +104,10 @@ public class WorkerRiskResponseSlaJob {
                 + "\nОтвет будет проверен DeepSeek."
                 + "\nКод запроса: risk-" + incident.getId()
                 + "\nБез пояснения раздел «Специалист» будет временно ограничен.";
-        if (telegramService.sendMessageWithInlineKeyboard(
+        if (notificationMediaDeliveryService.send(
+                NotificationMediaEventCatalog.WORKER_RISK_REMINDER.code(),
                 chatId,
+                worker.getId(),
                 text,
                 null,
                 WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())
@@ -139,8 +144,10 @@ public class WorkerRiskResponseSlaJob {
                 + "\n\nНажмите «Пояснить причину» и отправьте конкретный ответ."
                 + "\nОтвет будет проверен DeepSeek."
                 + "\nКод запроса: risk-" + incident.getId();
-        if (telegramService.sendMessageWithInlineKeyboard(
+        if (notificationMediaDeliveryService.send(
+                NotificationMediaEventCatalog.WORKER_RISK_OVERDUE.code(),
                 chatId,
+                worker.getId(),
                 text,
                 null,
                 WorkerRiskTelegramCallbackService.explanationKeyboard(incident.getId())

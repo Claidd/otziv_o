@@ -75,6 +75,8 @@ import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
@@ -252,6 +254,7 @@ public class ManagerControlService {
     private final ManagerPermissionService managerPermissionService;
     private final PersonalReminderService personalReminderService;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final OrderService orderService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final ScheduledClientMessageService scheduledClientMessageService;
@@ -4316,14 +4319,16 @@ public class ManagerControlService {
             concreteItem.setWorkerNotificationFailureReason("Telegram-группа специалиста не привязана");
             return false;
         }
-        boolean sent = explanationRequired
-                ? telegramService.sendMessageWithInlineKeyboard(
+        boolean sent = notificationMediaDeliveryService.send(
+                NotificationMediaEventCatalog.WORKER_TASK_FIRST.code(),
                 workerUser.getWorkerTelegramGroupChatId(),
+                workerUser.getId(),
                 text,
                 null,
-                List.of(List.of(workerTaskTelegramButton(concreteItem)))
-        )
-                : telegramService.sendMessage(workerUser.getWorkerTelegramGroupChatId(), text);
+                explanationRequired
+                        ? List.of(List.of(workerTaskTelegramButton(concreteItem)))
+                        : List.of()
+        );
         if (sent) {
             concreteItem.setWorkerNotificationSentAt(now);
             if (isWorkerRiskConcrete(concreteItem)) {

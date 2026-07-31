@@ -13,7 +13,7 @@
       </div>
     }
 
-    @if (error()) {
+    @if (error() && !details()) {
       <app-load-error-card title="Проверка отзывов не загрузилась" [message]="error()!" actionLabel="Повторить" [loading]="loading()" (retry)="loadReviewCheck()" />
     }
 

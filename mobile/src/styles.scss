@@ -964,6 +964,10 @@ ion-button {
   min-height: 2.25rem;
 }
 
+.review-text-edit-head h2 {
+  display: none;
+}
+
 .review-edit-sheet .sheet-form-content {
   padding-right: 0.04rem;
   scrollbar-width: none;
@@ -997,6 +1001,21 @@ ion-button {
   font-weight: 650;
   resize: none;
   scrollbar-width: thin;
+}
+
+body.otziv-keyboard-open .review-text-edit-sheet {
+  --height: var(--otziv-viewport-height);
+  --max-height: var(--otziv-viewport-height);
+  align-items: flex-start;
+}
+
+body.otziv-keyboard-open .review-text-edit-sheet::part(content) {
+  height: var(--otziv-viewport-height);
+  max-height: var(--otziv-viewport-height);
+}
+
+body.otziv-keyboard-open .review-text-edit-sheet .review-text-edit-actions {
+  position: static !important;
 }
 
 .company-create-sheet {

@@ -194,7 +194,70 @@ class ApiReviewCheckControllerTest {
                 .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
                 .isEqualTo(HttpStatus.NOT_FOUND);
 
+        verify(reviewService, never()).updateReviewTextFromSharedCheck(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void workerReviewerCanSaveAnswerThroughSharedReviewCheck() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(reviewService.updateReviewAnswerFromSharedCheck(101L, 501L, "Один этаж"))
+                .thenReturn(true);
+
+        ApiReviewCheckController.ReviewCheckReviewResponse response = controller()
+                .updateReviewAnswer(
+                        orderDetailId,
+                        501L,
+                        new ApiReviewCheckController.ReviewCheckReviewAnswerUpdateRequest("Один этаж"),
+                        authentication("ROLE_WORKER")
+                );
+
+        assertThat(response.id()).isEqualTo(501L);
+        verify(reviewService).updateReviewAnswerFromSharedCheck(101L, 501L, "Один этаж");
+        verify(reviewService, never()).updateReviewAnswer(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void authenticatedClientCanSaveTextThroughSharedReviewCheck() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(reviewService.updateReviewTextFromSharedCheck(101L, 501L, "Исправленный текст"))
+                .thenReturn(true);
+
+        ApiReviewCheckController.ReviewCheckReviewResponse response = controller()
+                .updateReviewText(
+                        orderDetailId,
+                        501L,
+                        new ApiReviewCheckController.ReviewCheckReviewTextUpdateRequest("Исправленный текст"),
+                        authentication("ROLE_CLIENT")
+                );
+
+        assertThat(response.id()).isEqualTo(501L);
+        verify(reviewService).updateReviewTextFromSharedCheck(101L, 501L, "Исправленный текст");
         verify(reviewService, never()).updateReviewText(anyLong(), anyLong(), any());
+    }
+
+    @Test
+    void managerCanSaveAnswerThroughSharedReviewCheck() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(reviewService.updateReviewAnswerFromSharedCheck(101L, 501L, "Уточните этаж"))
+                .thenReturn(true);
+
+        ApiReviewCheckController.ReviewCheckReviewResponse response = controller()
+                .updateReviewAnswer(
+                        orderDetailId,
+                        501L,
+                        new ApiReviewCheckController.ReviewCheckReviewAnswerUpdateRequest("Уточните этаж"),
+                        authentication("ROLE_MANAGER")
+                );
+
+        assertThat(response.id()).isEqualTo(501L);
+        verify(reviewService).updateReviewAnswerFromSharedCheck(101L, 501L, "Уточните этаж");
+        verify(reviewService, never()).updateReviewAnswer(anyLong(), anyLong(), any());
     }
 
     @Test
@@ -303,7 +366,7 @@ class ApiReviewCheckControllerTest {
                     assertThat(responseException.getReason()).isEqualTo("read only");
                 });
 
-        verify(reviewService, never()).updateReviewText(anyLong(), anyLong(), any());
+        verify(reviewService, never()).updateReviewTextFromSharedCheck(anyLong(), anyLong(), any());
     }
 
     @Test
@@ -352,7 +415,7 @@ class ApiReviewCheckControllerTest {
                 .thenThrow(new UsernameNotFoundException("not live"))
                 .thenReturn(restoredDetails)
                 .thenReturn(restoredDetails);
-        when(reviewService.updateReviewText(101L, 501L, "client text")).thenReturn(true);
+        when(reviewService.updateReviewTextFromSharedCheck(101L, 501L, "client text")).thenReturn(true);
 
         ApiReviewCheckController.ReviewCheckReviewResponse response = controller()
                 .updateReviewText(
@@ -367,7 +430,7 @@ class ApiReviewCheckControllerTest {
                 "Коррекция",
                 "anonymous-review-check"
         );
-        verify(reviewService).updateReviewText(101L, 501L, "client text");
+        verify(reviewService).updateReviewTextFromSharedCheck(101L, 501L, "client text");
         assertThat(response.id()).isEqualTo(501L);
     }
 

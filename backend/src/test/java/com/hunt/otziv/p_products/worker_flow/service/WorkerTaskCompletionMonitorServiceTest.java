@@ -2,6 +2,8 @@ package com.hunt.otziv.p_products.worker_flow.service;
 
 import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -20,6 +22,8 @@ import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -42,6 +46,8 @@ class WorkerTaskCompletionMonitorServiceTest {
 
     @Mock
     private TelegramService telegramService;
+    @Mock
+    private NotificationMediaDeliveryService notificationMediaDeliveryService;
 
     @Test
     void plainWorkerThresholdCreatesWarningsForWorkerManagersAndOwners() {
@@ -70,8 +76,14 @@ class WorkerTaskCompletionMonitorServiceTest {
                 isNull()
         );
         verify(telegramService).sendMessage(eq(-101L), org.mockito.ArgumentMatchers.contains("массовое закрытие задач"));
-        verify(telegramService).sendMessage(eq(102L), org.mockito.ArgumentMatchers.contains("Иван Работник"));
-        verify(telegramService).sendMessage(eq(103L), org.mockito.ArgumentMatchers.contains("Иван Работник"));
+        verify(notificationMediaDeliveryService, times(2)).send(
+                eq(NotificationMediaEventCatalog.MANAGER_WORKER_COMPLETION_WARNING.code()),
+                anyLong(),
+                anyLong(),
+                org.mockito.ArgumentMatchers.contains("Иван Работник"),
+                isNull(),
+                anyList()
+        );
     }
 
     @Test
@@ -96,7 +108,8 @@ class WorkerTaskCompletionMonitorServiceTest {
                 auditEventRepository,
                 personalReminderService,
                 userService,
-                telegramService
+                telegramService,
+                notificationMediaDeliveryService
         );
     }
 

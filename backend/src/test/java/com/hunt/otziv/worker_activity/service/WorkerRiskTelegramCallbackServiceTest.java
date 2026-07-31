@@ -245,6 +245,51 @@ class WorkerRiskTelegramCallbackServiceTest {
     }
 
     @Test
+    void explanationPromptForResolvedRiskDoesNotReopenItAndRemovesStaleButton() {
+        WorkerRiskIncident incident = incident();
+        incident.setStatus(WorkerRiskIncidentStatus.RESOLVED);
+        incident.setResolutionAction(WorkerRiskResolutionAction.VERIFIED);
+        incident.setTelegramNotificationChatId(-100123L);
+        incident.setTelegramNotificationMessageId(12);
+        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 888L, "worker-risk-explain:77"));
+
+        assertEquals(Optional.of("Риск уже обработан"), answer);
+        verify(incidentRepository, never()).save(any());
+        verify(telegramService, never()).sendMessage(anyLong(), any());
+        verify(telegramService).editMessageText(
+                eq(-100123L),
+                eq(12),
+                contains("Ответ специалиста больше не требуется"),
+                eq("HTML"),
+                eq(List.of())
+        );
+    }
+
+    @Test
+    void resolvedRiskMessageShowsFinalStateAndRemovesKeyboard() {
+        WorkerRiskIncident incident = incident();
+        incident.setStatus(WorkerRiskIncidentStatus.IGNORED);
+        incident.setResolutionAction(WorkerRiskResolutionAction.FALSE_POSITIVE);
+        incident.setTelegramNotificationChatId(-100123L);
+        incident.setTelegramNotificationMessageId(12);
+
+        service.markOriginalRiskTelegramMessageResolved(incident);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).editMessageText(
+                eq(-100123L),
+                eq(12),
+                text.capture(),
+                eq("HTML"),
+                eq(List.of())
+        );
+        assertEquals(true, text.getValue().contains("🟢 РИСК ОБРАБОТАН"));
+        assertEquals(true, text.getValue().contains("Статус: ложное срабатывание"));
+    }
+
+    @Test
     void explanationPromptWithoutWorkerTelegramBindingDoesNotForceReplyForWholeGroup() {
         WorkerRiskIncident incident = incident();
         User worker = user(2L, "worker", null, "ROLE_WORKER");

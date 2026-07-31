@@ -20,6 +20,7 @@ import com.hunt.otziv.worker_activity.repository.WorkerRiskIncidentRepository;
 import com.hunt.otziv.worker_activity.service.WorkerRiskRollbackService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskEventService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskDecisionPolicy;
+import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,6 +68,9 @@ class ApiWorkerRiskControllerTest {
     @Mock
     private WorkerRiskEventService riskEventService;
 
+    @Mock
+    private WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService;
+
     private ApiWorkerRiskController controller;
 
     @BeforeEach
@@ -81,7 +85,8 @@ class ApiWorkerRiskControllerTest {
                 managerControlConcreteItemRepository,
                 riskEventService,
                 new WorkerRiskDecisionPolicy(),
-                mock(com.hunt.otziv.config.settings.service.AppSettingService.class)
+                mock(com.hunt.otziv.config.settings.service.AppSettingService.class),
+                workerRiskTelegramCallbackService
         );
     }
 
@@ -156,6 +161,7 @@ class ApiWorkerRiskControllerTest {
                 WorkerRiskEvaluationService.SOURCE_WORKER_RISK_INCIDENT,
                 77L
         );
+        verify(workerRiskTelegramCallbackService).markOriginalRiskTelegramMessageResolved(incident);
     }
 
     @Test

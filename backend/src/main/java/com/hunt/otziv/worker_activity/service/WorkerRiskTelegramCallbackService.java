@@ -162,7 +162,7 @@ public class WorkerRiskTelegramCallbackService {
 
         Long incidentId = explanationMarkerId(replyToMessageText);
         WorkerRiskIncident incident = incidentId == null ? null : incidentRepository.findById(incidentId).orElse(null);
-        if (incident == null) {
+        if (incident == null || incident.getStatus() != WorkerRiskIncidentStatus.OPEN) {
             return false;
         }
 
@@ -351,10 +351,39 @@ public class WorkerRiskTelegramCallbackService {
             String status,
             boolean waitingForExplanation
     ) {
+        String heading = waitingForExplanation ? "🟡 ОЖИДАЕМ ОТВЕТ" : "🟢 ОТВЕТ ПОЛУЧЕН";
+        String footer = waitingForExplanation
+                ? "\n\nОтветьте на отдельное сообщение бота с кодом запроса."
+                : "\n\nОтвет получен: " + formatTelegramTime(incident.getWorkerExplanationAt())
+                + "\nПояснение:\n" + html(clean(incident.getWorkerExplanation()));
+        updateOriginalRiskTelegramMessage(incident, heading, status, footer);
+    }
+
+    public void markOriginalRiskTelegramMessageResolved(WorkerRiskIncident incident) {
+        if (incident == null || incident.getStatus() == WorkerRiskIncidentStatus.OPEN) {
+            return;
+        }
+        String heading = incident.getStatus() == WorkerRiskIncidentStatus.VIOLATION
+                ? "🔴 РИСК ОБРАБОТАН"
+                : "🟢 РИСК ОБРАБОТАН";
+        updateOriginalRiskTelegramMessage(
+                incident,
+                heading,
+                finalResolutionLabel(incident),
+                "\n\nИтоговое решение принято. Ответ специалиста больше не требуется."
+        );
+    }
+
+    private void updateOriginalRiskTelegramMessage(
+            WorkerRiskIncident incident,
+            String heading,
+            String status,
+            String footer
+    ) {
         if (incident.getTelegramNotificationChatId() == null || incident.getTelegramNotificationMessageId() == null) {
             return;
         }
-        String text = (waitingForExplanation ? "🟡 ОЖИДАЕМ ОТВЕТ" : "🟢 ОТВЕТ ПОЛУЧЕН")
+        String text = heading
                 + "\nСистема заметила риск по действию специалиста."
                 + "\nСтатус: " + status
                 + "\nСпециалист: " + html(firstNonBlank(incident.getWorkerName(), incident.getWorkerUsername()))
@@ -366,18 +395,33 @@ public class WorkerRiskTelegramCallbackService {
                 + "\nОтзыв: #" + valueOrDash(incident.getReviewId())
                 + "\nОбъект: " + html(clean(incident.getEntityType())) + " #" + valueOrDash(incident.getEntityId())
                 + "\nДетали: " + html(clean(incident.getDetails()))
-                + (waitingForExplanation
-                        ? "\n\nОтветьте на отдельное сообщение бота с кодом запроса."
-                        : "\n\nОтвет получен: " + formatTelegramTime(incident.getWorkerExplanationAt())
-                        + "\nПояснение:\n" + html(clean(incident.getWorkerExplanation())));
+                + footer;
 
         telegramService.editMessageText(
                 incident.getTelegramNotificationChatId(),
                 incident.getTelegramNotificationMessageId(),
                 text,
                 "HTML",
-                null
+                List.of()
         );
+    }
+
+    private String finalResolutionLabel(WorkerRiskIncident incident) {
+        if (incident.getResolutionAction() == null) {
+            return switch (incident.getStatus()) {
+                case RESOLVED -> "проверено";
+                case IGNORED -> "закрыто без нарушения";
+                case VIOLATION -> "нарушение подтверждено";
+                case OPEN -> "открыт";
+            };
+        }
+        return switch (incident.getResolutionAction()) {
+            case VERIFIED -> "проверено";
+            case FALSE_POSITIVE -> "ложное срабатывание";
+            case NORMAL_ACCOUNT_SELECTION -> "нормальный выбор аккаунта";
+            case VIOLATION_CONFIRMED -> "нарушение подтверждено";
+            case EXPLANATION_REQUESTED, WORKER_WARNED -> "ожидается пояснение";
+        };
     }
 
     private String companyLine(WorkerRiskIncident incident) {
@@ -430,6 +474,10 @@ public class WorkerRiskTelegramCallbackService {
         WorkerRiskIncident incident = incidentRepository.findById(incidentId).orElse(null);
         if (incident == null) {
             return Optional.of("Инцидент не найден");
+        }
+        if (incident.getStatus() != WorkerRiskIncidentStatus.OPEN) {
+            markOriginalRiskTelegramMessageResolved(incident);
+            return Optional.of("Риск уже обработан");
         }
         if (incident.getExplanationAcceptedAt() != null) {
             return Optional.of("Пояснение уже отправлено");
@@ -611,6 +659,9 @@ public class WorkerRiskTelegramCallbackService {
             );
         }
         deleteResolvedRiskReminders(savedIncident);
+        if (decisionPolicy.isFinalAction(action)) {
+            markOriginalRiskTelegramMessageResolved(savedIncident);
+        }
     }
 
     private void rememberPromptMessage(WorkerRiskIncident incident, Long chatId, Integer messageId) {

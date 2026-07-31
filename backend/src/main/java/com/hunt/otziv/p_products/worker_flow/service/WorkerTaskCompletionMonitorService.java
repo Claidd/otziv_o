@@ -2,6 +2,8 @@ package com.hunt.otziv.p_products.worker_flow.service;
 
 import com.hunt.otziv.business_audit.repository.BusinessAuditEventRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -34,6 +36,7 @@ public class WorkerTaskCompletionMonitorService {
     private final PersonalReminderService personalReminderService;
     private final UserService userService;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
 
     public void warnIfSuspiciousCompletion(Authentication authentication, String taskSection, Long taskId) {
         if (!isPlainWorker(authentication)) {
@@ -58,12 +61,20 @@ public class WorkerTaskCompletionMonitorService {
                 "Предупреждение по закрытию задач",
                 workerText,
                 workerUser.getId(),
-                workerUser.getWorkerTelegramGroupChatId()
+                workerUser.getWorkerTelegramGroupChatId(),
+                null
         );
 
         String managerText = managerWarningText(workerUser, counters, taskSection, taskId);
         recipients(workerUser).values().forEach(user ->
-                notifyUser(user, "Проверьте закрытия специалиста", managerText, workerUser.getId(), user.getTelegramChatId())
+                notifyUser(
+                        user,
+                        "Проверьте закрытия специалиста",
+                        managerText,
+                        workerUser.getId(),
+                        user.getTelegramChatId(),
+                        NotificationMediaEventCatalog.MANAGER_WORKER_COMPLETION_WARNING.code()
+                )
         );
 
         log.warn(
@@ -121,7 +132,14 @@ public class WorkerTaskCompletionMonitorService {
         recipients.putIfAbsent(user.getId(), user);
     }
 
-    private void notifyUser(User user, String title, String text, Long sourceId, Long telegramChatId) {
+    private void notifyUser(
+            User user,
+            String title,
+            String text,
+            Long sourceId,
+            Long telegramChatId,
+            String notificationEventCode
+    ) {
         boolean alreadyOpen = false;
         try {
             alreadyOpen = personalReminderService.hasOpenSystemReminder(user, SOURCE_SUSPICIOUS_COMPLETION, sourceId);
@@ -142,7 +160,18 @@ public class WorkerTaskCompletionMonitorService {
 
         if (!alreadyOpen && telegramChatId != null) {
             try {
-                telegramService.sendMessage(telegramChatId, text);
+                if (notificationEventCode == null) {
+                    telegramService.sendMessage(telegramChatId, text);
+                } else {
+                    notificationMediaDeliveryService.send(
+                            notificationEventCode,
+                            telegramChatId,
+                            user.getId(),
+                            text,
+                            null,
+                            List.of()
+                    );
+                }
             } catch (RuntimeException e) {
                 log.warn("Не удалось отправить Telegram-предупреждение о массовом закрытии задач userId={}", user.getId(), e);
             }

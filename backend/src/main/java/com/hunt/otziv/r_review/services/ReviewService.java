@@ -116,6 +116,10 @@ public interface ReviewService {
 
     boolean updateReviewAnswer(Long orderId, Long reviewId, String answer);
 
+    boolean updateReviewTextFromSharedCheck(Long orderId, Long reviewId, String text);
+
+    boolean updateReviewAnswerFromSharedCheck(Long orderId, Long reviewId, String answer);
+
     boolean updateReviewNote(Long orderId, Long reviewId, String comment);
 
     Page<ReviewDTOOne> getAllReviewDTOAndDateToAdminToVigul(LocalDate localDate, int pageNumber, int pageSize);

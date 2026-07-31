@@ -18,6 +18,7 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
 import com.hunt.otziv.workload_shadow.service.WorkloadTransferTelegramCallbackService;
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.InetSocketAddress;
 import java.net.ProxySelector;
@@ -49,12 +50,14 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ForceReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -69,6 +72,7 @@ public class TelegramService extends TelegramLongPollingBot {
 
     private static final Pattern BOT_TOKEN_PATTERN = Pattern.compile("\\d{6,}:[A-Za-z0-9_-]{20,}");
     private static final int MAX_TELEGRAM_MESSAGE_LENGTH = 3900;
+    private static final int MAX_TELEGRAM_CAPTION_LENGTH = 1000;
     private static final int MAX_TELEGRAM_RICH_MESSAGE_LENGTH = 32_000;
     private static final int SEND_ATTEMPTS = 3;
     private static final long SEND_RETRY_DELAY_MS = 1_500L;
@@ -670,6 +674,195 @@ public class TelegramService extends TelegramLongPollingBot {
         return sendSingleMessage(chatId, text, parseMode, markup);
     }
 
+    public boolean sendPhotoWithInlineKeyboard(
+            long chatId,
+            String imageUrl,
+            String caption,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-фото не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-фото не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return false;
+        }
+        if (!hasText(imageUrl)) {
+            log.warn("Telegram-фото для {} не отправлено: URL пустой", chatId);
+            return false;
+        }
+        if (caption != null && caption.length() > MAX_TELEGRAM_CAPTION_LENGTH) {
+            log.debug("Telegram-фото для {} не отправлено: подпись длиннее {} символов",
+                    chatId, MAX_TELEGRAM_CAPTION_LENGTH);
+            return false;
+        }
+
+        InlineKeyboardMarkup markup = null;
+        if (keyboard != null && !keyboard.isEmpty()) {
+            markup = new InlineKeyboardMarkup();
+            markup.setKeyboard(keyboard);
+        }
+        return sendSinglePhoto(chatId, imageUrl, caption, parseMode, markup);
+    }
+
+    public boolean sendPhotoBytesWithInlineKeyboard(
+            long chatId,
+            byte[] imageBytes,
+            String fileName,
+            String caption,
+            String parseMode,
+            List<List<InlineKeyboardButton>> keyboard
+    ) {
+        if (!sendingEnabled) {
+            log.debug("Telegram-фото не отправлено chatId={}: отправка отключена настройкой", chatId);
+            return false;
+        }
+        if (!looksLikeTelegramBotToken(getBotToken())) {
+            log.warn("Telegram-фото не отправлено: TELEGRAM_BOT_TOKEN пустой или имеет неверный формат");
+            return false;
+        }
+        if (imageBytes == null || imageBytes.length == 0) {
+            log.warn("Telegram-фото для {} не отправлено: файл пустой", chatId);
+            return false;
+        }
+        if (caption != null && caption.length() > MAX_TELEGRAM_CAPTION_LENGTH) {
+            log.debug("Telegram-фото для {} не отправлено: подпись длиннее {} символов",
+                    chatId, MAX_TELEGRAM_CAPTION_LENGTH);
+            return false;
+        }
+
+        InlineKeyboardMarkup markup = null;
+        if (keyboard != null && !keyboard.isEmpty()) {
+            markup = new InlineKeyboardMarkup();
+            markup.setKeyboard(keyboard);
+        }
+        return sendSinglePhoto(chatId, imageBytes, fileName, caption, parseMode, markup);
+    }
+
+    private boolean sendSinglePhoto(
+            long chatId,
+            String imageUrl,
+            String caption,
+            String parseMode,
+            InlineKeyboardMarkup replyMarkup
+    ) {
+        SendPhoto photo = new SendPhoto();
+        photo.setChatId(String.valueOf(chatId));
+        photo.setPhoto(new InputFile(imageUrl));
+        if (hasText(caption)) {
+            photo.setCaption(caption);
+        }
+        if (hasText(parseMode)) {
+            photo.setParseMode(parseMode);
+        }
+        if (replyMarkup != null) {
+            photo.setReplyMarkup(replyMarkup);
+        }
+
+        for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
+            try {
+                executeTelegramPhoto(photo);
+                log.info("Telegram-фото отправлено chatId={} imageUrl={}", chatId, imageUrl);
+                return true;
+            } catch (TelegramApiRequestException exception) {
+                Optional<Long> migratedChatId = migrateToChatId(exception);
+                if (migratedChatId.isPresent()) {
+                    if (telegramChatMigrationService != null) {
+                        telegramChatMigrationService.migrateChatId(chatId, migratedChatId.get());
+                    }
+                    return sendSinglePhoto(
+                            migratedChatId.get(),
+                            imageUrl,
+                            caption,
+                            parseMode,
+                            replyMarkup
+                    );
+                }
+                log.warn("Telegram API не принял фото chatId={}: {}", chatId, exception.getMessage());
+                return false;
+            } catch (TelegramApiException exception) {
+                if (handleRetryableSendException(chatId, attempt, exception)) {
+                    continue;
+                }
+                log.warn("Не удалось отправить Telegram-фото chatId={}: {}", chatId, exception.getMessage());
+                return false;
+            } catch (RuntimeException exception) {
+                if (handleRetryableSendException(chatId, attempt, exception)) {
+                    continue;
+                }
+                log.warn("Не удалось отправить Telegram-фото chatId={}: {}", chatId, exception.getMessage());
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private boolean sendSinglePhoto(
+            long chatId,
+            byte[] imageBytes,
+            String fileName,
+            String caption,
+            String parseMode,
+            InlineKeyboardMarkup replyMarkup
+    ) {
+        String safeFileName = hasText(fileName) ? fileName.trim() : "notification.jpg";
+        for (int attempt = 1; attempt <= SEND_ATTEMPTS; attempt++) {
+            SendPhoto photo = new SendPhoto();
+            photo.setChatId(String.valueOf(chatId));
+            photo.setPhoto(new InputFile(new ByteArrayInputStream(imageBytes), safeFileName));
+            if (hasText(caption)) {
+                photo.setCaption(caption);
+            }
+            if (hasText(parseMode)) {
+                photo.setParseMode(parseMode);
+            }
+            if (replyMarkup != null) {
+                photo.setReplyMarkup(replyMarkup);
+            }
+            try {
+                executeTelegramPhoto(photo);
+                log.info("Telegram-фото загружено файлом chatId={} fileName={} bytes={}",
+                        chatId, safeFileName, imageBytes.length);
+                return true;
+            } catch (TelegramApiRequestException exception) {
+                Optional<Long> migratedChatId = migrateToChatId(exception);
+                if (migratedChatId.isPresent()) {
+                    if (telegramChatMigrationService != null) {
+                        telegramChatMigrationService.migrateChatId(chatId, migratedChatId.get());
+                    }
+                    return sendSinglePhoto(
+                            migratedChatId.get(),
+                            imageBytes,
+                            safeFileName,
+                            caption,
+                            parseMode,
+                            replyMarkup
+                    );
+                }
+                log.warn("Telegram API не принял загруженное фото chatId={}: {}",
+                        chatId, exception.getMessage());
+                return false;
+            } catch (TelegramApiException exception) {
+                if (handleRetryableSendException(chatId, attempt, exception)) {
+                    continue;
+                }
+                log.warn("Не удалось загрузить Telegram-фото chatId={}: {}",
+                        chatId, exception.getMessage());
+                return false;
+            } catch (RuntimeException exception) {
+                if (handleRetryableSendException(chatId, attempt, exception)) {
+                    continue;
+                }
+                log.warn("Не удалось загрузить Telegram-фото chatId={}: {}",
+                        chatId, exception.getMessage());
+                return false;
+            }
+        }
+        return false;
+    }
+
     public boolean sendForceReplyMessage(long chatId, String text) {
         return sendForceReplyMessageId(chatId, text).isPresent();
     }
@@ -789,7 +982,7 @@ public class TelegramService extends TelegramLongPollingBot {
             if (hasText(parseMode)) {
                 edit.setParseMode(parseMode);
             }
-            if (keyboard != null && !keyboard.isEmpty()) {
+            if (keyboard != null) {
                 InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
                 markup.setKeyboard(keyboard);
                 edit.setReplyMarkup(markup);
@@ -1210,6 +1403,10 @@ public class TelegramService extends TelegramLongPollingBot {
 
     Message executeTelegramMessage(SendMessage message) throws TelegramApiException {
         return execute(message);
+    }
+
+    Message executeTelegramPhoto(SendPhoto photo) throws TelegramApiException {
+        return execute(photo);
     }
 
     Chat executeGetChat(GetChat request) throws TelegramApiException {

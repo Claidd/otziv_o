@@ -1,18 +1,18 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { IonModal } from '@ionic/angular/standalone';
 
 @Component({
   selector: 'app-mobile-review-field-editor',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, IonModal],
   template: `
     <textarea
-      [readonly]="readOnly || disabled"
+      readonly
       [disabled]="disabled"
       [ngModel]="value"
-      (focus)="start.emit()"
-      (click)="start.emit()"
-      (ngModelChange)="valueChange.emit($event)"
+      (focus)="requestStart()"
+      (click)="requestStart()"
       [placeholder]="placeholder"
     ></textarea>
 
@@ -22,14 +22,46 @@ import { FormsModule } from '@angular/forms';
       </button>
     }
 
-    @if (editing) {
-      <div class="note-actions mobile-keyboard-actions">
-        <button type="button" class="cancel" (click)="cancel.emit()" [disabled]="disabled">X</button>
-        <button type="button" class="save" (click)="save.emit()" [disabled]="saveDisabled">
-          <span class="material-icons-sharp">{{ saveIcon }}</span>
-        </button>
-      </div>
-    }
+    <ion-modal
+      class="sheet-modal review-edit-sheet review-text-edit-sheet"
+      [isOpen]="editing"
+      (didPresent)="focusEditor($event)"
+      (didDismiss)="handleDismiss()"
+    >
+      <ng-template>
+        <form class="sheet-body sheet-form review-text-edit-form" (ngSubmit)="save.emit()">
+          <header class="sheet-head review-text-edit-head">
+            <div>
+              @if (context) {
+                <p class="sheet-note">{{ context }}</p>
+              }
+            </div>
+            <button class="icon-button" type="button" (click)="cancel.emit()" [disabled]="disabled" aria-label="Закрыть">
+              <span class="material-icons-sharp">close</span>
+            </button>
+          </header>
+
+          <label class="sheet-field review-text-edit-field">
+            <span>{{ placeholder }}</span>
+            <textarea
+              name="reviewTextFullEditor"
+              autofocus
+              [ngModel]="value"
+              (ngModelChange)="valueChange.emit($event)"
+              [placeholder]="placeholder"
+              [disabled]="disabled"
+            ></textarea>
+          </label>
+
+          <footer class="sheet-actions review-text-edit-actions mobile-keyboard-actions">
+            <button class="secondary" type="button" (click)="cancel.emit()" [disabled]="disabled">Отмена</button>
+            <button type="submit" [disabled]="saveDisabled">
+              {{ disabled ? 'Сохраняю' : 'Сохранить' }}
+            </button>
+          </footer>
+        </form>
+      </ng-template>
+    </ion-modal>
   `,
   styles: [`
     :host {
@@ -97,47 +129,39 @@ import { FormsModule } from '@angular/forms';
       display: none;
     }
 
-    .note-actions {
-      display: flex;
-      justify-content: space-between;
-      gap: 0.35rem;
-    }
-
-    .note-actions button {
-      display: grid;
-      width: 1.85rem;
-      height: 1.85rem;
-      place-items: center;
-      border: 1px solid rgba(103, 116, 131, 0.22);
-      border-radius: 0.55rem;
-      color: var(--otziv-dark);
-      background: var(--otziv-white);
-      font: 900 0.8rem/1 var(--otziv-font-family);
-    }
-
-    .note-actions .save {
-      color: var(--otziv-success);
-    }
-
-    .note-actions .cancel {
-      color: var(--otziv-danger);
-    }
   `]
 })
 export class MobileReviewFieldEditorComponent {
   @Input() value = '';
   @Input() placeholder = '';
+  @Input() context = '';
   @Input() readOnly = false;
   @Input() disabled = false;
   @Input() editing = false;
   @Input() showToggle = false;
   @Input() expanded = false;
   @Input() saveDisabled = false;
-  @Input() saveIcon = 'save';
 
   @Output() start = new EventEmitter<void>();
   @Output() valueChange = new EventEmitter<string>();
   @Output() toggle = new EventEmitter<void>();
   @Output() cancel = new EventEmitter<void>();
   @Output() save = new EventEmitter<void>();
+
+  requestStart(): void {
+    if (!this.readOnly && !this.disabled) {
+      this.start.emit();
+    }
+  }
+
+  handleDismiss(): void {
+    if (this.editing && !this.disabled) {
+      this.cancel.emit();
+    }
+  }
+
+  focusEditor(event: CustomEvent): void {
+    const modal = event.target as HTMLElement | null;
+    window.setTimeout(() => modal?.querySelector<HTMLTextAreaElement>('textarea[name="reviewTextFullEditor"]')?.focus(), 50);
+  }
 }

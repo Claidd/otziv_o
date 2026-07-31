@@ -161,6 +161,34 @@ class WorkloadLiveActivationGateTest {
                 );
     }
 
+    @Test
+    void canaryWithoutSelectedManagersExplainsThatPilotManagerIsMissing() {
+        LocalDate today = LocalDate.now(ZONE);
+        WorkloadLiveSettingsResponse settings = settings(
+                today.minusDays(20),
+                List.of()
+        );
+        when(healthService.snapshot()).thenReturn(healthy());
+        when(repository.countFinalizedDates(today.minusDays(20), today))
+                .thenReturn(14L);
+        when(repository.countFailedRunsSince(any())).thenReturn(0L);
+        when(repository.maximumSuccessfulRunGapMinutes(any(), any()))
+                .thenReturn(15L);
+        when(repository.lastSuccessfulRunAt())
+                .thenReturn(Optional.of(LocalDateTime.now(ZONE).minusMinutes(1)));
+        when(repository.managerCapacity()).thenReturn(List.of());
+
+        var result = gate.readiness("CANARY", settings);
+
+        var capacityCheck = result.checks().stream()
+                .filter(check -> "RECIPIENT_CAPACITY".equals(check.code()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(capacityCheck.passed()).isFalse();
+        assertThat(capacityCheck.message())
+                .isEqualTo("Для пилотного режима не выбран ни один менеджер");
+    }
+
     private WorkloadLiveSettingsResponse settings(
             LocalDate historyStart,
             List<Long> managers

@@ -79,8 +79,8 @@ public class WorkerAssignmentMutationGuardService {
         }
         throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
-                "Назначение изменилось: " + label
-                        + " уже передана другому специалисту. Обновите страницу."
+                "Действие не выполнено: назначение или состояние объекта изменилось. "
+                        + "Обновите страницу и повторите попытку."
         );
     }
 

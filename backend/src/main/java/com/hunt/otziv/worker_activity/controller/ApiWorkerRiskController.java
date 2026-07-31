@@ -73,6 +73,7 @@ public class ApiWorkerRiskController {
     private final WorkerRiskEventService riskEventService;
     private final WorkerRiskDecisionPolicy decisionPolicy;
     private final AppSettingService appSettingService;
+    private final WorkerRiskTelegramCallbackService workerRiskTelegramCallbackService;
 
     @GetMapping("/incidents")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
@@ -356,6 +357,9 @@ public class ApiWorkerRiskController {
             );
         }
         deleteResolvedRiskReminders(savedIncident);
+        if (decisionPolicy.isFinalAction(action)) {
+            workerRiskTelegramCallbackService.markOriginalRiskTelegramMessageResolved(savedIncident);
+        }
         return WorkerRiskIncidentResponse.from(savedIncident);
     }
 

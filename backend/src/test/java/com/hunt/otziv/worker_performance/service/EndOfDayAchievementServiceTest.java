@@ -1,6 +1,8 @@
 package com.hunt.otziv.worker_performance.service;
 
 import com.hunt.otziv.gamification.service.GamificationEventService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
@@ -23,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -39,6 +42,8 @@ class EndOfDayAchievementServiceTest {
     private TelegramService telegramService;
     @Mock
     private GamificationEventService gamificationEventService;
+    @Mock
+    private NotificationMediaDeliveryService notificationMediaDeliveryService;
 
     @InjectMocks
     private EndOfDayAchievementService service;
@@ -94,12 +99,21 @@ class EndOfDayAchievementServiceTest {
                 DATE, EndOfDayAchievementService.ROLE_WORKER, 7L,
                 35, 35, 100, 2, true, 3, false
         );
-        when(telegramService.sendMessage(eq(-700L), anyString(), eq("HTML"))).thenReturn(true);
+        when(notificationMediaDeliveryService.send(
+                anyString(), eq(-700L), eq(70L), anyString(), eq("HTML"), anyList()
+        )).thenReturn(true);
 
         service.notifyWorker(worker, result);
 
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessage(eq(-700L), text.capture(), eq("HTML"));
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_STREAK.code()),
+                eq(-700L),
+                eq(70L),
+                text.capture(),
+                eq("HTML"),
+                eq(List.of())
+        );
         assertTrue(text.getValue().contains("3 дня подряд на 100%"));
         assertTrue(text.getValue().contains("Поздняя входящая нагрузка"));
         assertTrue(text.getValue().contains("2 ед. работы"));
@@ -122,12 +136,21 @@ class EndOfDayAchievementServiceTest {
                 DATE, EndOfDayAchievementService.ROLE_WORKER, 7L,
                 35, 28, 80, 2, false, 0, false
         );
-        when(telegramService.sendMessage(eq(-700L), anyString(), eq("HTML"))).thenReturn(true);
+        when(notificationMediaDeliveryService.send(
+                anyString(), eq(-700L), eq(70L), anyString(), eq("HTML"), anyList()
+        )).thenReturn(true);
 
         service.notifyWorker(worker, result);
 
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessage(eq(-700L), text.capture(), eq("HTML"));
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code()),
+                eq(-700L),
+                eq(70L),
+                text.capture(),
+                eq("HTML"),
+                eq(List.of())
+        );
         assertTrue(text.getValue().contains("цель на день не выполнена"));
         assertTrue(text.getValue().contains("28 из 35"));
         assertTrue(text.getValue().contains("Осталось выполнить: <b>7</b>"));
@@ -149,12 +172,21 @@ class EndOfDayAchievementServiceTest {
                 DATE, EndOfDayAchievementService.ROLE_WORKER, 7L,
                 35, 30, 100, 0, true, 2, false
         );
-        when(telegramService.sendMessage(eq(-700L), anyString(), eq("HTML"))).thenReturn(true);
+        when(notificationMediaDeliveryService.send(
+                anyString(), eq(-700L), eq(70L), anyString(), eq("HTML"), anyList()
+        )).thenReturn(true);
 
         service.notifyWorker(worker, result);
 
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessage(eq(-700L), text.capture(), eq("HTML"));
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code()),
+                eq(-700L),
+                eq(70L),
+                text.capture(),
+                eq("HTML"),
+                eq(List.of())
+        );
         assertTrue(text.getValue().contains("День засчитан на 100%"));
         assertTrue(text.getValue().contains("была полностью закрыта в течение дня"));
         assertTrue(text.getValue().contains("30 из 35"));
@@ -177,6 +209,41 @@ class EndOfDayAchievementServiceTest {
                 eq(GamificationEventService.MANAGER_TEAM_DAY_100), eq(manager), anyString(), any(), anyString());
         verify(gamificationEventService).recordManagerMilestone(
                 eq(GamificationEventService.MANAGER_TEAM_100_STREAK), eq(manager), anyString(), any(), anyString());
+    }
+
+    @Test
+    void sendsManagerTeamProgressReminderWhenTeamDidNotReachGoal() {
+        User user = User.builder().id(80L).telegramChatId(800L).build();
+        Manager manager = Manager.builder()
+                .id(8L)
+                .user(user)
+                .auditTelegramGroupChatId(-800L)
+                .build();
+        EndOfDayAchievementService.AchievementResult result = new EndOfDayAchievementService.AchievementResult(
+                DATE, EndOfDayAchievementService.ROLE_MANAGER, 8L,
+                5, 3, 72.5, 0, false, 0, false
+        );
+        when(notificationMediaDeliveryService.send(
+                anyString(), eq(-800L), eq(80L), anyString(), eq("HTML"), anyList()
+        )).thenReturn(true);
+
+        service.notifyManager(manager, result);
+
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_SLOWED.code()),
+                eq(-800L),
+                eq(80L),
+                text.capture(),
+                eq("HTML"),
+                eq(List.of())
+        );
+        assertTrue(text.getValue().contains("Итоги общего прогресса команды"));
+        assertTrue(text.getValue().contains("3 из 5"));
+        assertTrue(text.getValue().contains("72.5%"));
+        assertTrue(text.getValue().contains("не закрыли обязательную нагрузку: <b>2</b>"));
+        verify(gamificationEventService, never()).recordManagerMilestone(
+                anyString(), eq(manager), anyString(), any(), anyString());
     }
 
     @Test

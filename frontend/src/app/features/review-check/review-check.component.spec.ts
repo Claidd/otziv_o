@@ -283,4 +283,17 @@ describe('ReviewCheckComponent', () => {
       mutationKey: 'save-text-101'
     });
   });
+
+  it('does not describe a save error as a review-check loading failure', () => {
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+    component.details.set(details());
+    component.error.set('Замечание не сохранено');
+
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.textContent).not.toContain('Проверка отзывов не загрузилась');
+    expect(element.querySelector('.review-check-form')).not.toBeNull();
+  });
 });

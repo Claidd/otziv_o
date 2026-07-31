@@ -4,6 +4,8 @@ import com.hunt.otziv.t_telegrambot.dto.TelegramChatMigrationResult;
 import org.junit.jupiter.api.Test;
 import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.ResponseParameters;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -14,6 +16,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelegramServiceSendRetryTest {
@@ -67,6 +70,58 @@ class TelegramServiceSendRetryTest {
         );
 
         assertTrue(service.protectContent);
+    }
+
+    @Test
+    void photoNotificationKeepsCaptionParseModeAndKeyboard() {
+        CapturingPhotoTelegramService service = new CapturingPhotoTelegramService();
+
+        boolean sent = service.sendPhotoWithInlineKeyboard(
+                -100123L,
+                "https://cdn.example/card.png",
+                "<b>Напоминание</b>",
+                "HTML",
+                List.of(List.of(new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton(
+                        "Открыть"
+                )))
+        );
+
+        assertTrue(sent);
+        assertEquals("-100123", service.photo.getChatId());
+        assertEquals("<b>Напоминание</b>", service.photo.getCaption());
+        assertEquals("HTML", service.photo.getParseMode());
+        assertTrue(service.photo.getReplyMarkup() != null);
+    }
+
+    @Test
+    void photoBytesAreUploadedAsMultipartFile() throws Exception {
+        CapturingPhotoTelegramService service = new CapturingPhotoTelegramService();
+        byte[] image = new byte[]{1, 2, 3, 4};
+
+        boolean sent = service.sendPhotoBytesWithInlineKeyboard(
+                -100123L,
+                image,
+                "card.jpg",
+                "<b>Напоминание</b>",
+                "HTML",
+                List.of()
+        );
+
+        assertTrue(sent);
+        assertTrue(service.photo.getPhoto().isNew());
+        assertEquals("card.jpg", service.photo.getPhoto().getMediaName());
+        assertArrayEquals(image, service.photo.getPhoto().getNewMediaStream().readAllBytes());
+    }
+
+    @Test
+    void editMessageWithEmptyKeyboardExplicitlyRemovesInlineButtons() {
+        CapturingEditTelegramService service = new CapturingEditTelegramService();
+
+        boolean edited = service.editMessageText(-100123L, 12, "Риск обработан", "HTML", List.of());
+
+        assertTrue(edited);
+        assertTrue(service.edit.getReplyMarkup() != null);
+        assertTrue(service.edit.getReplyMarkup().getKeyboard().isEmpty());
     }
 
     private static final class RetryableTelegramService extends TelegramService {
@@ -168,6 +223,61 @@ class TelegramServiceSendRetryTest {
             Message result = new Message();
             result.setMessageId(1);
             return result;
+        }
+    }
+
+    private static final class CapturingPhotoTelegramService extends TelegramService {
+        private SendPhoto photo;
+
+        private CapturingPhotoTelegramService() {
+            super(new DefaultBotOptions(),
+                    "123456:abcdefghijklmnopqrstuvwxyz",
+                    "test_bot",
+                    true,
+                    "",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        @Override
+        Message executeTelegramPhoto(SendPhoto photo) {
+            this.photo = photo;
+            return new Message();
+        }
+    }
+
+    private static final class CapturingEditTelegramService extends TelegramService {
+        private EditMessageText edit;
+
+        private CapturingEditTelegramService() {
+            super(new DefaultBotOptions(),
+                    "123456:abcdefghijklmnopqrstuvwxyz",
+                    "test_bot",
+                    true,
+                    "",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+        }
+
+        @Override
+        void executeEditMessageText(EditMessageText edit) {
+            this.edit = edit;
         }
     }
 

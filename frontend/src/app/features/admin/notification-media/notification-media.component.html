@@ -1,0 +1,129 @@
+<app-admin-layout title="Уведомления" active="notification-media">
+  <main class="notification-media-page">
+    <section class="hero panel">
+      <div>
+        <span class="eyebrow">Telegram-группы</span>
+        <h1>Картинки уведомлений</h1>
+        <p>
+          Для одного события можно загрузить несколько картинок. Система выбирает их случайно
+          и не повторяет предыдущую картинку в том же чате.
+        </p>
+      </div>
+      <span class="material-icons-sharp hero-icon">collections</span>
+    </section>
+
+    <section class="toolbar panel">
+      <div class="segments" aria-label="Получатель">
+        <button type="button" [class.active]="audience() === 'ALL'" (click)="setAudience('ALL')">Все</button>
+        <button type="button" [class.active]="audience() === 'MANAGER'" (click)="setAudience('MANAGER')">Менеджеры</button>
+        <button type="button" [class.active]="audience() === 'WORKER'" (click)="setAudience('WORKER')">Специалисты</button>
+      </div>
+
+      <div class="add-rule">
+        <label>
+          <span>Добавить событие</span>
+          <select [ngModel]="newEventCode()" (ngModelChange)="newEventCode.set($event)">
+            <option value="">Выберите функцию отправки</option>
+            @for (event of availableEvents(); track event.code) {
+              <option [value]="event.code">{{ roleLabel(event.recipientType) }} · {{ event.label }}</option>
+            }
+          </select>
+        </label>
+        <button type="button" (click)="createRule()" [disabled]="!newEventCode() || saving()">
+          <span class="material-icons-sharp">add</span>
+          Добавить
+        </button>
+      </div>
+    </section>
+
+    @if (loading()) {
+      <section class="panel empty">Загружаем настройки…</section>
+    } @else {
+      <section class="rules">
+        @for (rule of filteredRules(); track rule.id) {
+          <article class="rule panel" [class.rule-off]="!rule.enabled">
+            <header>
+              <div>
+                <div class="badges">
+                  <span class="badge role">{{ roleLabel(rule.recipientType) }}</span>
+                  @if (rule.serious) { <span class="badge serious">Серьёзное событие</span> }
+                  <span class="badge count">{{ rule.images.length }} фото</span>
+                </div>
+                <h2>{{ rule.eventLabel }}</h2>
+                <p>{{ rule.eventDescription }}</p>
+                <code>{{ rule.eventCode }}</code>
+              </div>
+              <label class="switch">
+                <input type="checkbox" [(ngModel)]="rule.enabled">
+                <span>{{ rule.enabled ? 'Включено' : 'Выключено' }}</span>
+              </label>
+            </header>
+
+            <div class="rule-settings">
+              <label>
+                <span>Вероятность картинки, %</span>
+                <input type="number" min="0" max="100" [(ngModel)]="rule.imageProbabilityPercent">
+              </label>
+              <label>
+                <span>Пауза между картинками, мин.</span>
+                <input type="number" min="0" max="10080" [(ngModel)]="rule.cooldownMinutes">
+              </label>
+              <button type="button" class="secondary" (click)="saveRule(rule)" [disabled]="saving()">Сохранить</button>
+              <button type="button" class="secondary" (click)="sendTest(rule)" [disabled]="saving()">Тест себе</button>
+              <button type="button" class="danger ghost" (click)="deleteRule(rule)" [disabled]="saving()">Удалить</button>
+            </div>
+
+            <div class="images-head">
+              <div>
+                <h3>Варианты изображения</h3>
+                <p>JPG, PNG или WEBP, до 5 МБ. Можно выбрать сразу несколько файлов.</p>
+              </div>
+              <label class="upload-button">
+                <span class="material-icons-sharp">cloud_upload</span>
+                Загрузить картинки
+                <input type="file" accept="image/jpeg,image/png,image/webp" multiple
+                       (change)="upload(rule, $event)" [disabled]="saving()">
+              </label>
+            </div>
+
+            <div class="image-grid">
+              @for (asset of rule.images; track asset.id) {
+                <figure [class.asset-off]="!asset.active">
+                  <a [href]="asset.imageUrl" target="_blank" rel="noopener">
+                    <img [src]="asset.imageUrl" [alt]="asset.originalFilename || rule.eventLabel">
+                  </a>
+                  <figcaption>
+                    <strong>{{ asset.originalFilename || 'Картинка уведомления' }}</strong>
+                    <span>{{ asset.active ? 'Участвует в случайном выборе' : 'Временно отключена' }}</span>
+                  </figcaption>
+                  <div class="asset-actions">
+                    <button type="button" class="secondary" (click)="toggleAsset(asset)" [disabled]="saving()">
+                      {{ asset.active ? 'Отключить' : 'Включить' }}
+                    </button>
+                    <label class="replace-button">
+                      Заменить
+                      <input type="file" accept="image/jpeg,image/png,image/webp"
+                             (change)="replace(asset, $event)" [disabled]="saving()">
+                    </label>
+                    <button type="button" class="danger ghost" (click)="deleteAsset(asset)" [disabled]="saving()">
+                      Удалить
+                    </button>
+                  </div>
+                </figure>
+              } @empty {
+                <div class="no-images">
+                  <span class="material-icons-sharp">image_not_supported</span>
+                  <p>Картинок пока нет. Уведомление продолжит отправляться обычным текстом.</p>
+                </div>
+              }
+            </div>
+          </article>
+        } @empty {
+          <section class="panel empty">
+            Для выбранного получателя настройки ещё не созданы. Выберите событие выше и нажмите «Добавить».
+          </section>
+        }
+      </section>
+    }
+  </main>
+</app-admin-layout>

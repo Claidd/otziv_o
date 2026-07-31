@@ -154,14 +154,28 @@ public class WorkloadLiveActivationGate {
         boolean capacitySafe = !selected.isEmpty()
                 && allManagersPresent
                 && insufficientManagers == 0;
+        String capacityMessage;
+        if (capacitySafe) {
+            capacityMessage = "У каждого выбранного менеджера достаточно получателей";
+        } else if (WorkloadLiveSettingsService.MODE_CANARY.equals(mode)
+                && targetManagers.isEmpty()) {
+            capacityMessage = "Для пилотного режима не выбран ни один менеджер";
+        } else if (!allManagersPresent && selected.isEmpty()) {
+            capacityMessage = "Не найдены данные по выбранным пилотным менеджерам";
+        } else if (!allManagersPresent) {
+            capacityMessage = "Часть выбранных пилотных менеджеров не найдена; "
+                    + "менеджеров с недостаточным числом получателей: "
+                    + insufficientManagers;
+        } else if (selected.isEmpty()) {
+            capacityMessage = "Нет менеджеров с данными для проверки получателей";
+        } else {
+            capacityMessage = "Менеджеров без требуемого числа получателей: "
+                    + insufficientManagers;
+        }
         checks.add(check(
                 "RECIPIENT_CAPACITY",
                 capacitySafe,
-                capacitySafe
-                        ? "У каждого выбранного менеджера достаточно получателей"
-                        : "Менеджеров без требуемого числа получателей: "
-                                + insufficientManagers
-                                + (allManagersPresent ? "" : "; часть менеджеров не найдена"),
+                capacityMessage,
                 insufficientManagers,
                 0L
         ));

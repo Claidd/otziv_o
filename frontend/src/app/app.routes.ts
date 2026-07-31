@@ -374,6 +374,13 @@ export const routes: Routes = [
     data: { roles: ['ADMIN', 'OWNER'] }
   },
   {
+    path: 'admin/notification-media',
+    loadComponent: () => import('./features/admin/notification-media/notification-media.component')
+      .then((m) => m.NotificationMediaComponent),
+    canActivate: [roleGuard],
+    data: { roles: ['ADMIN', 'OWNER'] }
+  },
+  {
     path: 'admin/performers',
     loadComponent: () => import('./features/admin/performers/admin-performers.component')
       .then((m) => m.AdminPerformersComponent),

@@ -68,6 +68,13 @@ class ManagerReportReviewTaskContextServiceTest {
         assertThat(service.resolvedSatisfactorily(3545L)).isFalse();
     }
 
+    @Test
+    void treatsDeletedSourceTaskAsWithdrawn() {
+        when(concreteRepository.findById(3545L)).thenReturn(Optional.empty());
+
+        assertThat(service.resolvedSatisfactorily(3545L)).isTrue();
+    }
+
     private ManagerDailyControlConcreteItem source(
             Long id,
             ManagerDailyControlItemStatus status

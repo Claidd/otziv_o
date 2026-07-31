@@ -6,6 +6,8 @@ import com.hunt.otziv.manager_control.model.ManagerDailyControlItemStatus;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
@@ -65,6 +67,8 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
     private UserRepository userRepository;
     @Mock
     private TelegramService telegramService;
+    @Mock
+    private NotificationMediaDeliveryService notificationMediaDeliveryService;
 
     private ManagerControlWorkerTaskTelegramCallbackService service;
 
@@ -80,7 +84,8 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
                 orderRepository,
                 riskIncidentRepository,
                 userRepository,
-                telegramService
+                telegramService,
+                notificationMediaDeliveryService
         );
     }
 
@@ -239,13 +244,27 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
 
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
-        when(telegramService.sendMessageWithInlineKeyboard(eq(-100123L), any(), eq(null), any())).thenReturn(true);
+        when(notificationMediaDeliveryService.send(
+                eq(NotificationMediaEventCatalog.WORKER_TASK_REPEAT.code()),
+                eq(-100123L),
+                eq(2L),
+                any(),
+                eq(null),
+                any()
+        )).thenReturn(true);
 
         boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(1));
 
         assertTrue(sent);
         ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessageWithInlineKeyboard(eq(-100123L), textCaptor.capture(), eq(null), any());
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_TASK_REPEAT.code()),
+                eq(-100123L),
+                eq(2L),
+                textCaptor.capture(),
+                eq(null),
+                any()
+        );
         assertTrue(textCaptor.getValue().startsWith("🟡 ОЖИДАЕМ ОТВЕТ"));
         assertEquals(1, item.getWorkerReminderCount());
         assertEquals(sentAt.plusHours(1), item.getWorkerReminderSentAt());
@@ -263,13 +282,27 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
 
         when(riskIncidentRepository.findById(77L)).thenReturn(Optional.of(incident));
         when(userRepository.findById(2L)).thenReturn(Optional.of(worker));
-        when(telegramService.sendMessage(eq(-100123L), any())).thenReturn(true);
+        when(notificationMediaDeliveryService.send(
+                eq(NotificationMediaEventCatalog.WORKER_TASK_REPEAT.code()),
+                eq(-100123L),
+                eq(2L),
+                any(),
+                eq(null),
+                any()
+        )).thenReturn(true);
 
         boolean sent = service.remindPendingExplanation(item, sentAt.plusHours(3));
 
         assertTrue(sent);
         ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
-        verify(telegramService).sendMessage(eq(-100123L), textCaptor.capture());
+        verify(notificationMediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_TASK_REPEAT.code()),
+                eq(-100123L),
+                eq(2L),
+                textCaptor.capture(),
+                eq(null),
+                any()
+        );
         assertTrue(textCaptor.getValue().startsWith("🔴 ПРОСРОЧЕНО"));
         assertTrue(textCaptor.getValue().contains("Код запроса: risk-77"));
         verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
@@ -288,6 +321,7 @@ class ManagerControlWorkerTaskTelegramCallbackServiceTest {
         assertFalse(sent);
         verify(telegramService, never()).sendMessage(anyLong(), any());
         verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
+        verify(notificationMediaDeliveryService, never()).send(any(), anyLong(), any(), any(), any(), any());
     }
 
     private CallbackQuery callbackFromGroup(long groupChatId, long actorTelegramId, String data) {

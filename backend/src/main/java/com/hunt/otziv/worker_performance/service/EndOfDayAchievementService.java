@@ -2,6 +2,8 @@ package com.hunt.otziv.worker_performance.service;
 
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
@@ -30,6 +32,7 @@ public class EndOfDayAchievementService {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
     private final GamificationEventService gamificationEventService;
 
     @Transactional
@@ -124,29 +127,70 @@ public class EndOfDayAchievementService {
         }
         String name = user == null ? "Специалист" : firstNonBlank(user.getFio(), user.getUsername(), "Специалист");
         String text = workerWorkdayText(name, result);
-        if (telegramService.sendMessage(chatId, text, "HTML")) {
+        String eventCode = result.reached100()
+                ? result.streakDays() >= 3
+                ? NotificationMediaEventCatalog.WORKER_STREAK.code()
+                : NotificationMediaEventCatalog.WORKER_PROGRESS_GROWING.code()
+                : NotificationMediaEventCatalog.WORKER_PROGRESS_SLOWED.code();
+        if (notificationMediaDeliveryService.send(
+                eventCode,
+                chatId,
+                user == null ? null : user.getId(),
+                text,
+                "HTML",
+                List.of()
+        )) {
             markNotified(result);
         }
     }
 
     public void notifyManager(Manager manager, AchievementResult result) {
-        if (manager == null || result == null || !result.reached100()) {
+        if (manager == null || result == null) {
             return;
         }
-        recordManagerEvents(manager, result);
+        if (result.reached100()) {
+            recordManagerEvents(manager, result);
+        }
         if (result.notified()) return;
         User user = manager.getUser();
-        Long chatId = user == null ? null : user.getTelegramChatId();
+        Long chatId = user == null
+                ? manager.getAuditTelegramGroupChatId()
+                : firstNonNull(manager.getAuditTelegramGroupChatId(), user.getTelegramChatId());
         if (chatId == null) {
             return;
         }
-        String text = "🏆 <b>Команда закрыла день на 100%!</b>\n\n"
-                + "👥 Все работники выполнили обязательную нагрузку дня: <b>"
-                + result.completedCount() + " из " + result.eligibleCount() + "</b>.\n"
-                + streakLine(result.streakDays(), true)
-                + ignoredLine(result.ignoredLateCount())
-                + "\nСильная командная работа! 🔥";
-        if (telegramService.sendMessage(chatId, text, "HTML")) {
+        String text;
+        String eventCode;
+        if (result.reached100()) {
+            text = "🏆 <b>Команда закрыла день на 100%!</b>\n\n"
+                    + "👥 Все работники выполнили обязательную нагрузку дня: <b>"
+                    + result.completedCount() + " из " + result.eligibleCount() + "</b>.\n"
+                    + streakLine(result.streakDays(), true)
+                    + ignoredLine(result.ignoredLateCount())
+                    + "\nСильная командная работа! 🔥";
+            eventCode = result.streakDays() >= 3
+                    ? NotificationMediaEventCatalog.MANAGER_TEAM_STREAK.code()
+                    : NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_GROWING.code();
+        } else {
+            long remaining = Math.max(0, result.eligibleCount() - result.completedCount());
+            text = "📊 <b>Итоги общего прогресса команды</b>\n\n"
+                    + "✅ Дневную цель выполнили: <b>" + result.completedCount()
+                    + " из " + result.eligibleCount() + "</b>.\n"
+                    + "📈 Средний прогресс команды: <b>"
+                    + formatPercent(result.progressPercent()) + "%</b>.\n"
+                    + "📌 Ещё не закрыли обязательную нагрузку: <b>" + remaining + "</b>.\n"
+                    + ignoredLine(result.ignoredLateCount())
+                    + "\nПроверьте, кому нужна помощь, чтобы завтра команда закрыла день увереннее.";
+            eventCode = NotificationMediaEventCatalog.MANAGER_TEAM_PROGRESS_SLOWED.code();
+        }
+        if (notificationMediaDeliveryService.send(
+                eventCode,
+                chatId,
+                user == null ? null : user.getId(),
+                text,
+                "HTML",
+                List.of()
+        )) {
             markNotified(result);
         }
     }

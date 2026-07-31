@@ -9,6 +9,8 @@ import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItem
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
+import com.hunt.otziv.notification_media.service.NotificationMediaDeliveryService;
+import com.hunt.otziv.notification_media.service.NotificationMediaEventCatalog;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
@@ -54,6 +56,7 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
     private final WorkerRiskIncidentRepository riskIncidentRepository;
     private final UserRepository userRepository;
     private final TelegramService telegramService;
+    private final NotificationMediaDeliveryService notificationMediaDeliveryService;
 
     public static InlineKeyboardButton acceptButton(Long concreteItemId) {
         InlineKeyboardButton button = new InlineKeyboardButton();
@@ -489,18 +492,27 @@ public class ManagerControlWorkerTaskTelegramCallbackService {
                 + "\nПричина: " + withoutFinancialInfo(item.getReason());
 
         long chatId = worker.getWorkerTelegramGroupChatId();
+        String eventCode = item.getWorkerReminderCount() > 0
+                ? NotificationMediaEventCatalog.WORKER_TASK_OVERDUE.code()
+                : NotificationMediaEventCatalog.WORKER_TASK_REPEAT.code();
         boolean sent;
         if (item.getWorkerExplanationPromptedAt() != null) {
             String marker = isRiskTask(item)
                     ? GROUP_RISK_EXPLANATION_MARKER + item.getEntityId()
                     : GROUP_TASK_EXPLANATION_MARKER + item.getId();
-            sent = telegramService.sendMessage(
+            sent = notificationMediaDeliveryService.send(
+                    eventCode,
                     chatId,
-                    text + "\nТолько назначенный специалист: ответьте на это сообщение коротким пояснением.\n" + marker
+                    worker.getId(),
+                    text + "\nТолько назначенный специалист: ответьте на это сообщение коротким пояснением.\n" + marker,
+                    null,
+                    List.of()
             );
         } else {
-            sent = telegramService.sendMessageWithInlineKeyboard(
+            sent = notificationMediaDeliveryService.send(
+                    eventCode,
                     chatId,
+                    worker.getId(),
                     text + "\nНажмите кнопку и отправьте короткое пояснение.",
                     null,
                     List.of(List.of(isRiskTask(item) ? riskExplanationButton(item.getId()) : explanationButton(item.getId())))
