@@ -9,4 +9,9 @@ import org.springframework.context.annotation.Configuration;
 @Data
 public class MultiBrowserProperties {
     private String baseUrl;
+    private int heartbeatIntervalSeconds = 20;
+    private int heartbeatTimeoutSeconds = 75;
+    private int sessionMaxSeconds = 1800;
+    private int openingTimeoutSeconds = 90;
+    private int stopRetrySeconds = 30;
 }

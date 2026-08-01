@@ -201,8 +201,10 @@ public class ApiManagerReviewController {
         }
 
         ReviewDTO current = requireReviewForOrder(orderId, reviewId);
-        String newUrl = s3UploadService.uploadFile(file, "reviews", current.getUrl(), reviewId);
+        String oldUrl = current.getUrl();
+        String newUrl = s3UploadService.uploadFile(file, "reviews", oldUrl, reviewId);
         reviewService.updateReviewPhoto(reviewId, newUrl);
+        s3UploadService.deleteFileAfterCommit(oldUrl, "reviews", reviewId);
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }

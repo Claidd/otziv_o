@@ -4,14 +4,45 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "17 2 * * 1"
+  pull_request:
+    paths:
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "mobile/package.json"
+      - "mobile/package-lock.json"
+      - "whatsapp/package.json"
+      - "whatsapp/package-lock.json"
+      - "backend/external-review-worker/package.json"
+      - "backend/external-review-worker/package-lock.json"
+      - "backend/pom.xml"
+      - "backend/.mvn/**"
+      - ".github/workflows/dependency-audit.yml"
+  push:
+    paths:
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "mobile/package.json"
+      - "mobile/package-lock.json"
+      - "whatsapp/package.json"
+      - "whatsapp/package-lock.json"
+      - "backend/external-review-worker/package.json"
+      - "backend/external-review-worker/package-lock.json"
+      - "backend/pom.xml"
+      - "backend/.mvn/**"
+      - ".github/workflows/dependency-audit.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   npm-audit:
     name: npm audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -19,21 +50,29 @@ jobs:
           - frontend
           - mobile
           - whatsapp
+          - backend/external-review-worker
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22.18.0"
           cache: npm
           cache-dependency-path: ${{ matrix.project }}/package-lock.json
-      - run: npm ci --ignore-scripts
+      - name: Verify locked install
+        run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: ${{ matrix.project }}
-      - run: npm audit --omit=dev --audit-level=moderate
+      - name: Full dependency audit (report only)
+        continue-on-error: true
+        run: npm audit --audit-level=low
+        working-directory: ${{ matrix.project }}
+      - name: Production dependency audit (blocking)
+        run: npm audit --omit=dev --audit-level=moderate
         working-directory: ${{ matrix.project }}
 
   maven-audit:
     name: Maven dependency-check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -41,5 +80,16 @@ jobs:
           distribution: temurin
           java-version: "26"
           cache: maven
-      - run: ./mvnw -Psecurity-audit -DskipTests verify
+      - name: OWASP dependency-check (CVSS 7+ blocks)
+        run: bash ./mvnw -B -ntp -Psecurity-audit -DskipTests verify
         working-directory: backend
+      - name: Upload dependency-check reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-dependency-check
+          path: |
+            backend/target/dependency-check-report.html
+            backend/target/dependency-check-report.json
+          if-no-files-found: ignore
+          retention-days: 14

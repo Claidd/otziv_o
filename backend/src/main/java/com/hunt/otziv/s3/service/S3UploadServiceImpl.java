@@ -9,6 +9,8 @@ import net.coobird.thumbnailator.geometry.Positions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -45,9 +47,6 @@ public class S3UploadServiceImpl implements S3UploadService {
         FileUploadGuard.ImageCheck imageCheck = fileUploadGuard.requireSupportedImage(file);
         String filename = generatedImageName(reviewId);
         String key = normalizeFolder(folder) + "/" + filename;
-
-        deleteOldFile(oldUrl);
-
         byte[] processedImage = processImage(imageCheck.bytes());
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
@@ -64,15 +63,37 @@ public class S3UploadServiceImpl implements S3UploadService {
         return url;
     }
 
-    private void deleteOldFile(@Nullable String oldUrl) {
-        if (oldUrl == null) return;
-
-        String oldKey = extractObjectKey(oldUrl);
-        if (oldKey == null) {
-            log.warn("Пропущено удаление: старый URL не из нашего хранилища: {}", oldUrl);
+    @Override
+    public void deleteFileAfterCommit(
+            @Nullable String url,
+            String folder,
+            @Nullable Long ownerId
+    ) {
+        if (url == null || url.isBlank() || ownerId == null) {
             return;
         }
 
+        String ownedKey = extractOwnedObjectKey(url, folder, ownerId);
+        if (ownedKey == null) {
+            log.warn("Пропущено удаление: URL не принадлежит ожидаемому объекту");
+            return;
+        }
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    deleteOldFileBestEffort(ownedKey);
+                }
+            });
+            return;
+        }
+
+        deleteOldFileBestEffort(ownedKey);
+    }
+
+    private void deleteOldFileBestEffort(String oldKey) {
         log.info("Удаление старого файла: {}", oldKey);
 
         DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
@@ -80,7 +101,14 @@ public class S3UploadServiceImpl implements S3UploadService {
                 .key(oldKey)
                 .build();
 
-        s3Client.deleteObject(deleteRequest);
+        try {
+            s3Client.deleteObject(deleteRequest);
+        } catch (RuntimeException exception) {
+            // The new object is already durable. Keep the upload successful so
+            // callers can persist its URL; orphan cleanup can safely retry the
+            // old object later without risking loss of the active image.
+            log.warn("Не удалось удалить старый файл из хранилища: {}", oldKey, exception);
+        }
     }
 
     private byte[] processImage(byte[] source) {
@@ -130,6 +158,21 @@ public class S3UploadServiceImpl implements S3UploadService {
         }
 
         return null;
+    }
+
+    private String extractOwnedObjectKey(String oldUrl, String folder, Long ownerId) {
+        String key = extractObjectKey(oldUrl);
+        if (key == null) {
+            return null;
+        }
+
+        // Historical uploads used "<id>-<original filename>" while current
+        // uploads use "<id>-<uuid>.jpg". Requiring the stable folder/id prefix
+        // supports both formats and prevents cross-entity object deletion.
+        String expectedPrefix = normalizeFolder(folder) + "/" + ownerId + "-";
+        return key.startsWith(expectedPrefix) && key.length() > expectedPrefix.length()
+                ? key
+                : null;
     }
 
     private String publicObjectBaseUrl() {

@@ -17,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentLinkArchiveServiceTest {
@@ -55,6 +57,33 @@ class PaymentLinkArchiveServiceTest {
 
         assertEquals("Payment link archive verification failed: selected=2, archived=1", exception.getMessage());
         verify(repository, never()).deleteLiveIds(ids);
+    }
+
+    @Test
+    void refusesToArchiveDeletedOrderWhileBankPaymentNeedsReconciliation() {
+        when(repository.hasLiveReconciliationForOrder(42L)).thenReturn(true);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service().archiveForDeletedOrder(42L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        verify(repository, never()).findLiveIdsByOrderId(42L);
+        verify(repository, never()).archiveIds(any(), any(), any(), any());
+    }
+
+    @Test
+    void refusesPreparedOrderArchiveOnLateReconciliationCandidate() {
+        when(repository.hasPreparedOrderReconciliationCandidate()).thenReturn(true);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service().archiveForPreparedOrderArchiveCandidates(77L)
+        );
+
+        assertEquals("Order archive blocked: a bank payment still needs reconciliation", exception.getMessage());
+        verify(repository, never()).findLiveIdsForPreparedOrderArchiveCandidates();
     }
 
     private PaymentLinkArchiveService service() {

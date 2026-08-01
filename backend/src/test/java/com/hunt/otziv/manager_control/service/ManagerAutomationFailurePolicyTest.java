@@ -57,6 +57,28 @@ class ManagerAutomationFailurePolicyTest {
         assertFalse(policy.isActionable(state, now, 3, 60));
     }
 
+    @Test
+    void exposesUncertainTransactionOutcomeImmediately() {
+        ScheduledClientMessageState state = state(
+                "state_transaction_outcome_uncertain",
+                1,
+                now
+        );
+
+        assertTrue(policy.isActionable(state, now, 3, 60));
+    }
+
+    @Test
+    void exposesInProgressTransactionOnlyAfterItsClaimExpires() {
+        ScheduledClientMessageState state = state("state_transaction_in_progress", 0, null);
+        state.setLockedUntil(now.plusMinutes(1));
+
+        assertFalse(policy.isActionable(state, now, 3, 60));
+
+        state.setLockedUntil(now.minusSeconds(1));
+        assertTrue(policy.isActionable(state, now, 3, 60));
+    }
+
     private ScheduledClientMessageState state(String code, int failures, LocalDateTime attemptedAt) {
         return ScheduledClientMessageState.builder()
                 .id(1L)

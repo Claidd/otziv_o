@@ -138,9 +138,32 @@ class ManualPaymentAutoConfirmationServiceTest {
 
         assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
         assertEquals(
-                "У заказа есть авторизованный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.",
+                "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием.",
                 exception.getReason()
         );
+    }
+
+    @Test
+    void blocksManualCloseWhileProviderPaymentNeedsReconciliation() {
+        ManualPaymentAutoConfirmationService service = service();
+        Order order = new Order();
+        order.setId(46L);
+        PaymentLink link = new PaymentLink();
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankPaymentId("8634010698");
+        when(paymentLinkRepository.findByOrder_IdAndStatusIn(eq(46L), any(Collection.class)))
+                .thenAnswer(invocation -> {
+                    Collection<PaymentLinkStatus> statuses = invocation.getArgument(1);
+                    return statuses.contains(link.getStatus()) ? List.of(link) : List.of();
+                });
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.ensureCanCloseOrderManually(order)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
     }
 
     @Test

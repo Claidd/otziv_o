@@ -10,12 +10,24 @@ export interface MobilePushTokenRequest {
   appVersion?: string;
 }
 
+export interface MobilePushTokenRevokeRequest {
+  token: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class MobilePushApiService {
   constructor(private readonly http: HttpClient) {}
 
   registerToken(request: MobilePushTokenRequest): Observable<void> {
     return this.http.post<void>(this.apiUrl('/api/mobile/push-token'), request);
+  }
+
+  revokeToken(request: MobilePushTokenRevokeRequest): Observable<void> {
+    return this.http.post<void>(this.apiUrl('/api/mobile/push-token/revoke'), request);
+  }
+
+  revokeAllTokens(): Observable<void> {
+    return this.http.post<void>(this.apiUrl('/api/mobile/push-token/revoke-all'), {});
   }
 
   private apiUrl(path: string): string {

@@ -21,7 +21,8 @@ public class PaymentBankStatusReconciliationService {
 
     private static final Set<PaymentLinkStatus> RECONCILABLE_STATUSES = Set.of(
             PaymentLinkStatus.INITIATED,
-            PaymentLinkStatus.AUTHORIZED
+            PaymentLinkStatus.AUTHORIZED,
+            PaymentLinkStatus.NEEDS_RECONCILIATION
     );
     private static final int BATCH_SIZE = 50;
 
@@ -33,15 +34,17 @@ public class PaymentBankStatusReconciliationService {
             initialDelayString = "${otziv.payments.bank-reconciliation.initial-delay-ms:120000}"
     )
     public void reconcileStaleBankPayments() {
+        LocalDateTime attemptBefore = LocalDateTime.now().minusMinutes(5);
         List<Long> candidates = paymentLinkRepository.findBankReconciliationCandidateIds(
                 RECONCILABLE_STATUSES,
-                LocalDateTime.now().minusMinutes(5),
+                attemptBefore,
+                attemptBefore,
                 PageRequest.of(0, BATCH_SIZE)
         );
         int changed = 0;
         for (Long linkId : candidates) {
             try {
-                if (paymentLinkService.reconcileBankLink(linkId)) {
+                if (paymentLinkService.reconcileBankLink(linkId, attemptBefore)) {
                     changed++;
                 }
             } catch (RuntimeException exception) {

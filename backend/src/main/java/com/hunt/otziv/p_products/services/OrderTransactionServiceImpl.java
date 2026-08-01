@@ -5,6 +5,7 @@ import com.hunt.otziv.bad_reviews.services.BadReviewTaskService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.gamification.service.GamificationEventService;
 import com.hunt.otziv.mobile_push.service.MobilePushBusinessNotificationService;
 import com.hunt.otziv.p_products.model.Order;
@@ -22,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.OPEN_NEXT_ORDER;
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFlow.ORDER_PAYMENT;
+
 @Service
 @Slf4j
 public class OrderTransactionServiceImpl implements OrderTransactionService {
@@ -37,6 +41,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     private final NextOrderRequestService nextOrderRequestService;
     private final MobilePushBusinessNotificationService mobilePushBusinessNotificationService;
     private final GamificationEventService gamificationEventService;
+    private final R0ObservabilityMetrics observabilityMetrics;
 
     public static final String STATUS_PAYMENT = "Оплачено";
     public static final String STATUS_COMPANY_IN_NEW_ORDER = "Новый заказ";
@@ -52,7 +57,8 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
             NextOrderFailureNotifier nextOrderFailureNotifier,
             NextOrderRequestService nextOrderRequestService,
             MobilePushBusinessNotificationService mobilePushBusinessNotificationService,
-            GamificationEventService gamificationEventService
+            GamificationEventService gamificationEventService,
+            R0ObservabilityMetrics observabilityMetrics
     ) {
         this.companyService = companyService;
         this.zpService = zpService;
@@ -65,6 +71,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
         this.nextOrderRequestService = nextOrderRequestService;
         this.mobilePushBusinessNotificationService = mobilePushBusinessNotificationService;
         this.gamificationEventService = gamificationEventService;
+        this.observabilityMetrics = observabilityMetrics;
     }
 
     @Override
@@ -76,6 +83,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
     @Override
     @Transactional
     public boolean handlePaymentStatus(Order order, boolean createNextOrder) throws Exception {
+        observabilityMetrics.observeTransactionCompletion(ORDER_PAYMENT);
         if (order == null || order.getId() == null) {
             throw new IllegalArgumentException("Для зачисления оплаты нужен заказ с ID");
         }
@@ -123,6 +131,7 @@ public class OrderTransactionServiceImpl implements OrderTransactionService {
                     try {
                         nextOrderRequestService.openForPaidOrder(order);
                     } catch (RuntimeException e) {
+                        observabilityMetrics.recordCaughtFailure(ORDER_PAYMENT, OPEN_NEXT_ORDER);
                         log.warn("Не удалось открыть заявку на следующий заказ после оплаты заказа {}", order.getId(), e);
                         nextOrderFailureNotifier.notifyManager(order, null, "оплата обычного заказа", e);
                     }

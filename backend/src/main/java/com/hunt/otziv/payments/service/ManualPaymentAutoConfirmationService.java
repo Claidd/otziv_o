@@ -37,7 +37,8 @@ public class ManualPaymentAutoConfirmationService {
             PaymentLinkStatus.MANUAL_REPORTED
     );
     private static final Set<PaymentLinkStatus> BLOCKING_BANK_STATUSES = Set.of(
-            PaymentLinkStatus.AUTHORIZED
+            PaymentLinkStatus.AUTHORIZED,
+            PaymentLinkStatus.NEEDS_RECONCILIATION
     );
     private static final Set<PaymentMethod> BANK_PAYMENT_METHODS = Set.of(
             PaymentMethod.BANK_FORM,
@@ -64,7 +65,7 @@ public class ManualPaymentAutoConfirmationService {
         if (hasBankPaymentInProgress) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "У заказа есть авторизованный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием."
+                    "У заказа есть незавершенный T-Bank/СБП платеж. Проверьте его в журнале перед ручным закрытием."
             );
         }
     }

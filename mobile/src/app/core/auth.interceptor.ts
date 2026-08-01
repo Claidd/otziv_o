@@ -10,16 +10,62 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
   const router = inject(Router);
   const apiBaseUrl = mobileEnvironment.apiBaseUrl;
   const requestPath = pathFromRequestUrl(request.url, apiBaseUrl);
-  const isPublicApi = requestPath.startsWith('/api/payments/public')
+  const anonymousRequest = request.clone({
+    headers: request.headers.delete('Authorization')
+  });
+  const isOptionalReviewApi = requestPath === '/api/review-check'
+    || requestPath.startsWith('/api/review-check/');
+  const isBestEffortLogoutRevoke = requestPath === '/api/mobile/push-token/revoke';
+  const isAlwaysAnonymousApi = requestPath.startsWith('/api/payments/public')
+    || requestPath === '/api/auth'
     || requestPath.startsWith('/api/auth/')
-    || requestPath.startsWith('/api/review-check/')
+    || requestPath === '/api/review-capability'
+    || requestPath.startsWith('/api/review-capability/')
     || requestPath.startsWith('/api/mobile-update');
-  const shouldAttachToken = !isPublicApi && (
-    request.url.startsWith('/api') || (apiBaseUrl.length > 0 && request.url.startsWith(apiBaseUrl))
-  );
+  const targetsApi = request.url.startsWith('/api')
+    || (apiBaseUrl.length > 0 && request.url.startsWith(apiBaseUrl));
 
-  if (!shouldAttachToken) {
-    return next(request);
+  if (!targetsApi || isAlwaysAnonymousApi) {
+    return next(isAlwaysAnonymousApi ? anonymousRequest : request);
+  }
+
+  if (isBestEffortLogoutRevoke) {
+    const cachedToken = auth.getOptionalAccessToken(0);
+    return next(cachedToken
+      ? anonymousRequest.clone({ setHeaders: { Authorization: `Bearer ${cachedToken}` } })
+      : anonymousRequest
+    );
+  }
+
+  if (isOptionalReviewApi) {
+    const cachedToken = auth.getOptionalAccessToken();
+    if (!cachedToken) {
+      return next(anonymousRequest);
+    }
+
+    return next(anonymousRequest.clone({
+      setHeaders: {
+        Authorization: `Bearer ${cachedToken}`
+      }
+    })).pipe(
+      catchError((error: unknown) => {
+        if (error instanceof HttpErrorResponse && error.status === 401) {
+          // A stale/revoked cached session must not break the public link.
+          // Retry once without Authorization and do not refresh/logout/redirect.
+          return next(anonymousRequest);
+        }
+        if (
+          error instanceof HttpErrorResponse
+          && error.status === 423
+          && error.error?.code === 'MANAGER_REPORT_REVIEW_REQUIRED'
+        ) {
+          void router.navigate(['/tabs/home/profile'], {
+            queryParams: { reportReviewRequired: '1' }
+          });
+        }
+        return throwError(() => error);
+      })
+    );
   }
 
   return from(auth.getAccessToken()).pipe(

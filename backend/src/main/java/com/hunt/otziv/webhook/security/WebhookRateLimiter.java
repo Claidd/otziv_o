@@ -1,29 +1,48 @@
 package com.hunt.otziv.webhook.security;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Ticker;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 @Component
 public class WebhookRateLimiter {
 
+    private static final int DEFAULT_MAX_BUCKETS = 10_000;
+
     private final boolean enabled;
     private final int maxRequests;
     private final Duration window;
-    private final ConcurrentMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> buckets;
 
+    @Autowired
     public WebhookRateLimiter(
             @Value("${webhook.rate-limit.enabled:true}") boolean enabled,
             @Value("${webhook.rate-limit.max-requests:120}") int maxRequests,
-            @Value("${webhook.rate-limit.window:PT1M}") Duration window
+            @Value("${webhook.rate-limit.window:PT1M}") Duration window,
+            @Value("${webhook.rate-limit.max-buckets:10000}") int maxBuckets
     ) {
+        this(enabled, maxRequests, window, maxBuckets, Ticker.systemTicker());
+    }
+
+    public WebhookRateLimiter(boolean enabled, int maxRequests, Duration window) {
+        this(enabled, maxRequests, window, DEFAULT_MAX_BUCKETS, Ticker.systemTicker());
+    }
+
+    WebhookRateLimiter(boolean enabled, int maxRequests, Duration window, int maxBuckets, Ticker ticker) {
         this.enabled = enabled;
         this.maxRequests = Math.max(1, maxRequests);
         this.window = window == null || window.isNegative() || window.isZero() ? Duration.ofMinutes(1) : window;
+        this.buckets = Caffeine.newBuilder()
+                .maximumSize(Math.max(1, maxBuckets))
+                .expireAfterAccess(expirationTtl(this.window))
+                .ticker(ticker == null ? Ticker.systemTicker() : ticker)
+                .build();
     }
 
     public boolean tryAcquire(String key) {
@@ -36,17 +55,27 @@ public class WebhookRateLimiter {
         }
 
         String safeKey = hasText(key) ? key : "unknown";
-        cleanup(now);
-        return buckets
-                .computeIfAbsent(safeKey, ignored -> new Bucket(now))
-                .tryAcquire(now, maxRequests, window);
+        Bucket bucket = buckets.getIfPresent(safeKey);
+        if (bucket == null) {
+            bucket = buckets.get(safeKey, ignored -> new Bucket(now));
+            // Caffeine performs eviction incrementally. Explicit maintenance after a new key
+            // keeps the configured maximum deterministic even during a high-cardinality flood.
+            buckets.cleanUp();
+        }
+        return bucket.tryAcquire(now, maxRequests, window);
     }
 
-    private void cleanup(Instant now) {
-        if (buckets.size() < 10_000) {
-            return;
+    long bucketCount() {
+        buckets.cleanUp();
+        return buckets.estimatedSize();
+    }
+
+    private static Duration expirationTtl(Duration window) {
+        try {
+            return window.multipliedBy(2);
+        } catch (ArithmeticException ignored) {
+            return window;
         }
-        buckets.entrySet().removeIf(entry -> entry.getValue().isExpired(now, window.multipliedBy(2)));
     }
 
     private static boolean hasText(String value) {
@@ -70,8 +99,5 @@ public class WebhookRateLimiter {
             return count <= maxRequests;
         }
 
-        private synchronized boolean isExpired(Instant now, Duration ttl) {
-            return !now.isBefore(windowStart.plus(ttl));
-        }
     }
 }

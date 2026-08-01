@@ -18,20 +18,25 @@ import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.capability.ReviewCheckMutationLockService;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.math.BigDecimal;
 import java.time.format.DateTimeParseException;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -57,6 +62,10 @@ import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholde
 @RequestMapping("/api/review-check")
 public class ApiReviewCheckController {
 
+    private static final int MAX_PUBLIC_TEXT_LENGTH = 5_000;
+    private static final int MAX_PUBLIC_URL_LENGTH = 2_048;
+    private static final int MAX_PUBLIC_REVIEW_ITEMS = 1_000;
+
     private final OrderDetailsService orderDetailsService;
     private final OrderService orderService;
     private final ReviewService reviewService;
@@ -64,6 +73,7 @@ public class ApiReviewCheckController {
     private final ReviewCheckArchiveService reviewCheckArchiveService;
     private final BusinessAuditService businessAuditService;
     private final OrderPublicationApprovalService publicationApprovalService;
+    private final ReviewCheckMutationLockService mutationLockService;
 
     @GetMapping("/{orderDetailId}")
     public ReviewCheckResponse getReviewCheck(
@@ -74,11 +84,13 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckResponse saveReviews(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckUpdateRequest request,
             Authentication authentication
     ) {
+        mutationLockService.lock(orderDetailId);
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
         updateReviews(orderDetails, request, permissions(authentication).canSeeInternalInfo());
@@ -86,16 +98,19 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}/reviews/{reviewId}/text")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckReviewResponse updateReviewText(
             @PathVariable UUID orderDetailId,
             @PathVariable Long reviewId,
             @RequestBody ReviewCheckReviewTextUpdateRequest request,
             Authentication authentication
     ) {
+        mutationLockService.lock(orderDetailId);
         requireCanSave(authentication);
         if (request == null || isBlank(request.text())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Текст отзыва не указан");
         }
+        requireMaxLength(request.text(), MAX_PUBLIC_TEXT_LENGTH, "Текст отзыва слишком длинный");
 
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
@@ -110,16 +125,19 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}/reviews/{reviewId}/answer")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckReviewResponse updateReviewAnswer(
             @PathVariable UUID orderDetailId,
             @PathVariable Long reviewId,
             @RequestBody ReviewCheckReviewAnswerUpdateRequest request,
             Authentication authentication
     ) {
+        mutationLockService.lock(orderDetailId);
         requireCanSave(authentication);
         if (request == null || request.answer() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Замечание к отзыву не указано");
         }
+        requireMaxLength(request.answer(), MAX_PUBLIC_TEXT_LENGTH, "Замечание к отзыву слишком длинное");
 
         OrderDetails orderDetails = reviewCheckDetailsForAction(orderDetailId, "Коррекция", authentication);
         requireLiveClientMutationAllowed(orderDetails, authentication);
@@ -134,13 +152,14 @@ public class ApiReviewCheckController {
     }
 
     @PostMapping("/{orderDetailId}/approve")
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckResponse approveReviews(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckUpdateRequest request,
             Authentication authentication,
             HttpServletRequest servletRequest
     ) throws Exception {
+        mutationLockService.lock(orderDetailId);
         ReviewCheckPermissions permissions = permissions(authentication);
         if (!permissions.canApprovePublication()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для разрешения публикации");
@@ -163,11 +182,13 @@ public class ApiReviewCheckController {
     }
 
     @PostMapping("/{orderDetailId}/correction")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckResponse sendToCorrection(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckUpdateRequest request,
             Authentication authentication
     ) throws Exception {
+        mutationLockService.lock(orderDetailId);
         ReviewCheckPermissions permissions = permissions(authentication);
         if (!permissions.canSendCorrection()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на коррекцию");
@@ -187,11 +208,13 @@ public class ApiReviewCheckController {
     }
 
     @PostMapping("/{orderDetailId}/send-to-check")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckResponse sendToCheck(
             @PathVariable UUID orderDetailId,
             @RequestBody(required = false) ReviewCheckUpdateRequest request,
             Authentication authentication
     ) throws Exception {
+        mutationLockService.lock(orderDetailId);
         ReviewCheckPermissions permissions = permissions(authentication);
         if (!permissions.canSendToCheck()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отправки на проверку");
@@ -214,10 +237,12 @@ public class ApiReviewCheckController {
     }
 
     @PostMapping("/{orderDetailId}/pay-ok")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckResponse markPaid(
             @PathVariable UUID orderDetailId,
             Authentication authentication
     ) throws Exception {
+        mutationLockService.lock(orderDetailId);
         ReviewCheckPermissions permissions = permissions(authentication);
         if (!permissions.canMarkPaid()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Недостаточно прав для отметки оплаты");
@@ -238,12 +263,14 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}/reviews/{reviewId}/note")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckReviewResponse updateReviewNote(
             @PathVariable UUID orderDetailId,
             @PathVariable Long reviewId,
             @RequestBody ReviewCheckReviewNoteUpdateRequest request,
             Authentication authentication
     ) {
+        mutationLockService.lock(orderDetailId);
         requireCanEditNotes(authentication);
         if (request == null || request.comment() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка отзыва не указана");
@@ -261,11 +288,13 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}/order-note")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckNotesResponse updateOrderNote(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckOrderNoteUpdateRequest request,
             Authentication authentication
     ) {
+        mutationLockService.lock(orderDetailId);
         requireCanEditNotes(authentication);
         if (request == null || request.orderComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка заказа не указана");
@@ -283,11 +312,13 @@ public class ApiReviewCheckController {
     }
 
     @PutMapping("/{orderDetailId}/company-note")
+    @Transactional(rollbackFor = Exception.class)
     public ReviewCheckNotesResponse updateCompanyNote(
             @PathVariable UUID orderDetailId,
             @RequestBody ReviewCheckCompanyNoteUpdateRequest request,
             Authentication authentication
     ) {
+        mutationLockService.lock(orderDetailId);
         requireCanEditNotes(authentication);
         if (request == null || request.companyComments() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Заметка компании не указана");
@@ -343,23 +374,49 @@ public class ApiReviewCheckController {
         if (request == null || request.reviews() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзывы не переданы");
         }
+        if (request.comment() != null) {
+            requireMaxLength(
+                    request.comment(),
+                    MAX_PUBLIC_TEXT_LENGTH,
+                    "Комментарий к проверке слишком длинный"
+            );
+        }
 
         List<Review> currentReviews = safeReviews(orderDetails);
-        Set<Long> currentReviewIds = currentReviews.stream()
-                .map(Review::getId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        if (request.reviews().size() > MAX_PUBLIC_REVIEW_ITEMS
+                || request.reviews().size() > currentReviews.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Передано слишком много отзывов");
+        }
+        Map<Long, Review> currentReviewsById = new HashMap<>();
+        for (Review currentReview : currentReviews) {
+            if (currentReview.getId() != null) {
+                currentReviewsById.put(currentReview.getId(), currentReview);
+            }
+        }
+        Set<Long> submittedReviewIds = new HashSet<>();
 
         List<ReviewDTO> reviews = request.reviews().stream()
                 .map(item -> {
-                    if (item == null || item.id() == null || !currentReviewIds.contains(item.id())) {
+                    if (item == null
+                            || item.id() == null
+                            || !submittedReviewIds.add(item.id())
+                            || !currentReviewsById.containsKey(item.id())) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзыв не относится к этой проверке");
                     }
 
-                    Review current = currentReviews.stream()
-                            .filter(review -> Objects.equals(review.getId(), item.id()))
-                            .findFirst()
-                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Отзыв не найден"));
+                    Review current = currentReviewsById.get(item.id());
+
+                    if (item.text() != null) {
+                        requireMaxLength(item.text(), MAX_PUBLIC_TEXT_LENGTH, "Текст отзыва слишком длинный");
+                    }
+                    if (item.answer() != null) {
+                        requireMaxLength(item.answer(), MAX_PUBLIC_TEXT_LENGTH, "Замечание к отзыву слишком длинное");
+                    }
+                    if (allowPublicationFields
+                            && item.url() != null
+                            && !Objects.equals(item.url(), current.getUrl())) {
+                        validateChangedReviewUrl(item.url());
+                    }
 
                     return ReviewDTO.builder()
                             .id(current.getId())
@@ -807,6 +864,41 @@ public class ApiReviewCheckController {
 
     private String valueOrCurrent(String value, String current) {
         return value != null ? value : safe(current);
+    }
+
+    private void requireMaxLength(String value, int maxLength, String message) {
+        if (value != null && value.codePointCount(0, value.length()) > maxLength) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+    }
+
+    private void validateChangedReviewUrl(String value) {
+        requireMaxLength(value, MAX_PUBLIC_URL_LENGTH, "Ссылка на отзыв слишком длинная");
+        if (value.isBlank()) {
+            return;
+        }
+        if (value.codePoints().anyMatch(Character::isISOControl)) {
+            throw invalidReviewUrl();
+        }
+
+        try {
+            URI uri = new URI(value);
+            String scheme = uri.getScheme();
+            boolean webScheme = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+            boolean hasAuthority = uri.getRawAuthority() != null && !uri.getRawAuthority().isBlank();
+            if (!webScheme || !hasAuthority || uri.getRawUserInfo() != null) {
+                throw invalidReviewUrl();
+            }
+        } catch (URISyntaxException exception) {
+            throw invalidReviewUrl();
+        }
+    }
+
+    private ResponseStatusException invalidReviewUrl() {
+        return new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Ссылка на отзыв должна использовать http или https без учетных данных"
+        );
     }
 
     private String dateValue(LocalDate date) {

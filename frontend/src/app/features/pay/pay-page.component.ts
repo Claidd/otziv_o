@@ -4,6 +4,11 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
+import {
+  configuredPaymentTarget,
+  navigateToPaymentTarget,
+  type PaymentNavigationPurpose
+} from '../../shared/payment-navigation';
 import { PaymentsApi, PublicPaymentLink, PublicSbpBank, TbankPaymentPageMode } from '../../core/payments.api';
 
 @Component({
@@ -157,6 +162,7 @@ export class PayPageComponent {
   readonly canReportManual = computed(() => Boolean(
     this.payment()?.payable &&
     this.manualPayment() &&
+    this.manualPaymentDestinationAvailable() &&
     this.payment()?.status !== 'MANUAL_REPORTED' &&
     !this.manualSubmitting()
   ));
@@ -165,9 +171,11 @@ export class PayPageComponent {
     return label || 'Оплатить через Альфа-Банк';
   });
   readonly manualPaymentUrl = computed(() => {
-    const url = this.payment()?.manualPaymentUrl?.trim();
-    return url || 'https://pay.alfabank.ru/sc/EWwpfrArNZotkqOR';
+    return configuredPaymentTarget(this.payment()?.manualPaymentUrl);
   });
+  readonly manualPaymentDestinationAvailable = computed(() => this.externalManualPayment()
+    ? Boolean(this.manualPaymentUrl())
+    : Boolean(this.payment()?.manualPhone?.trim()));
   readonly hasSbpLink = computed(() => Boolean(this.sbpPaymentPayload() || this.sbpPaymentUrl()));
   readonly featuredSbpBanks = computed(() => this.sbpBanks()
     .filter((bank) => bank.featured && this.isQuickAccessSbpBank(bank.name))
@@ -236,11 +244,14 @@ export class PayPageComponent {
         this.sbpPaymentUrl.set(response.paymentUrl ?? '');
         if (response.qrPayload) {
           const bankName = bankId ? this.selectedSbpBank()?.name : '';
+          this.sbpSubmitting.set(false);
+          if (!this.navigatePayment(response.qrPayload, 'sbp')) {
+            this.error.set('Банк вернул недопустимую ссылку СБП. Переход отменен.');
+            return;
+          }
           this.message.set(bankName
             ? `Открываем ${bankName}. Если приложение не открылось, нажмите кнопку еще раз.`
             : 'Открываем оплату через СБП. Если переход не сработал, нажмите кнопку еще раз.');
-          this.sbpSubmitting.set(false);
-          window.location.href = response.qrPayload;
           return;
         }
         if (response.paymentUrl) {
@@ -276,7 +287,11 @@ export class PayPageComponent {
     ).subscribe({
       next: (response) => {
         if (response.paymentUrl) {
-          window.location.assign(response.paymentUrl);
+          if (this.navigatePayment(response.paymentUrl, 'payment')) {
+            return;
+          }
+          this.error.set('Банк вернул недопустимую ссылку оплаты. Переход отменен.');
+          this.bankSubmitting.set(false);
           return;
         }
         this.message.set('Банк не вернул ссылку на оплату. Попробуйте еще раз позже.');
@@ -327,7 +342,9 @@ export class PayPageComponent {
     if (!url) {
       return;
     }
-    window.location.href = url;
+    if (!this.navigatePayment(url, 'manual')) {
+      this.error.set('Ссылка ручной оплаты имеет недопустимый формат.');
+    }
   }
 
   selectSbpBank(bank: PublicSbpBank): void {
@@ -345,7 +362,13 @@ export class PayPageComponent {
     if (!payload) {
       return;
     }
-    window.location.href = payload;
+    if (!this.navigatePayment(payload, 'sbp')) {
+      this.error.set('Ссылка СБП имеет недопустимый формат.');
+    }
+  }
+
+  private navigatePayment(value: unknown, purpose: PaymentNavigationPurpose): boolean {
+    return navigateToPaymentTarget(value, purpose, (target) => window.location.assign(target));
   }
 
   bankInitials(name?: string | null): string {
@@ -519,6 +542,8 @@ export class PayPageComponent {
         return 'Тестовая оплата подтверждена';
       case 'EXPIRED':
         return 'Срок истек';
+      case 'NEEDS_RECONCILIATION':
+        return 'Сверяем платеж с банком';
       case 'CANCELED':
       case 'REJECTED':
         return 'Недоступна';

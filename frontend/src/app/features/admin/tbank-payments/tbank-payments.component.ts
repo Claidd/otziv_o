@@ -30,6 +30,11 @@ import { apiErrorDetail } from '../../../shared/api-error-message';
 import { copyTextToClipboard } from '../../../shared/clipboard-copy';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { MobileBottomPagerComponent } from '../../../shared/mobile/mobile-bottom-pager.component';
+import {
+  paymentTargetForUpdate,
+  safePaymentNavigationTarget,
+  type PaymentNavigationPurpose
+} from '../../../shared/payment-navigation';
 import { ToastService } from '../../../shared/toast.service';
 
 type PaymentMetric = {
@@ -301,7 +306,9 @@ export class TbankPaymentsComponent implements OnDestroy {
     const total = summary?.totalElements ?? links.length;
     const paid = summary?.paid ?? links.filter((link) => this.isPaid(link.status)).length;
     const refunded = summary?.refunded ?? links.filter((link) => this.isRefunded(link.status) || link.status === 'CANCELED').length;
-    const rejected = summary?.rejected ?? links.filter((link) => link.status === 'REJECTED' || link.status === 'FAILED').length;
+    const rejected = summary?.rejected ?? links.filter((link) =>
+      link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'NEEDS_RECONCILIATION'
+    ).length;
     const manualPending = this.manualPendingCount();
     const confirmed = summary?.confirmed ?? links.filter((link) => link.status === 'CONFIRMED').length;
     const notificationsSent = summary?.notificationsSent ?? links.filter((link) => link.status === 'CONFIRMED' && Boolean(link.paymentSuccessNotifiedAt)).length;
@@ -649,9 +656,6 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   setProfileManualPaymentType(profileId: number, value: ManualPaymentType): void {
     const patch: Partial<ProfilePolicyDraft> = { manualPaymentType: value };
-    if (value === 'EXTERNAL_LINK' && !this.policyDraft(profileId).manualPaymentUrl.trim()) {
-      patch.manualPaymentUrl = TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL;
-    }
     if (!this.policyDraft(profileId).manualRecipientName.trim()) {
       patch.manualRecipientName = TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME;
     }
@@ -700,11 +704,13 @@ export class TbankPaymentsComponent implements OnDestroy {
         manualPaymentType: draft.manualPaymentType,
         manualPhone: draft.manualPhone.trim(),
         manualRecipientName: draft.manualRecipientName.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
-        manualPaymentUrl: draft.manualPaymentUrl.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentUrl: paymentTargetForUpdate(draft.manualPaymentUrl, profile.manualPaymentUrlConfigured),
         manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
         manualComment: draft.manualComment.trim(),
         manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
-        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
+        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks,
+        manualPaymentUrlReplacementConfirmed: profile.manualPaymentUrlConfigured === false
+          && Boolean(draft.manualPaymentUrl.trim())
       };
     });
     this.savingProfilePolicies.set(true);
@@ -735,11 +741,13 @@ export class TbankPaymentsComponent implements OnDestroy {
         manualPaymentType: draft.manualPaymentType,
         manualPhone: draft.manualPhone.trim(),
         manualRecipientName: draft.manualRecipientName.trim(),
-        manualPaymentUrl: draft.manualPaymentUrl.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentUrl: paymentTargetForUpdate(draft.manualPaymentUrl, profile.manualPaymentUrlConfigured),
         manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
         manualComment: draft.manualComment.trim(),
         manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
-        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
+        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks,
+        manualPaymentUrlReplacementConfirmed: profile.manualPaymentUrlConfigured === false
+          && Boolean(draft.manualPaymentUrl.trim())
       };
     });
     const assignments = this.managerProfiles().map((manager) => ({
@@ -893,7 +901,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     this.editTaskPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
     this.editTaskPhone.set(task.manualPhone ?? '');
     this.editTaskRecipient.set(task.manualRecipientName || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
-    this.editTaskPaymentUrl.set(task.manualPaymentUrl || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
+    this.editTaskPaymentUrl.set(task.manualPaymentUrl?.trim() ?? '');
     this.editTaskPaymentButtonLabel.set(task.manualPaymentButtonLabel || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL);
     this.editTaskAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
     this.editTaskComment.set(task.comment ?? '');
@@ -905,9 +913,6 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   setEditTaskPaymentType(value: ManualPaymentType): void {
     this.editTaskPaymentType.set(value);
-    if (value === 'EXTERNAL_LINK' && !this.editTaskPaymentUrl().trim()) {
-      this.editTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
-    }
     if (!this.editTaskRecipient().trim()) {
       this.editTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
     }
@@ -958,10 +963,13 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualPaymentType: this.editTaskPaymentType(),
       manualPhone: this.editTaskPhone().trim(),
       manualRecipientName: this.editTaskRecipient().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
-      manualPaymentUrl: this.editTaskPaymentUrl().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentUrl: this.editTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.editTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.editTaskTargetKopecks(),
-      comment: this.editTaskComment().trim() || null
+      comment: this.editTaskComment().trim() || null,
+      manualPaymentUrlReplacementConfirmed: this.editTaskPaymentType() === 'EXTERNAL_LINK'
+        && !Boolean(task.manualPaymentUrl?.trim())
+        && Boolean(this.editTaskPaymentUrl().trim())
     }).subscribe({
       next: (updated) => {
         this.manualTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
@@ -984,9 +992,6 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   setAdminTaskPaymentType(value: ManualPaymentType): void {
     this.adminTaskPaymentType.set(value);
-    if (value === 'EXTERNAL_LINK' && !this.adminTaskPaymentUrl().trim()) {
-      this.adminTaskPaymentUrl.set(TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL);
-    }
     if (!this.adminTaskRecipient().trim()) {
       this.adminTaskRecipient.set(TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME);
     }
@@ -1026,7 +1031,7 @@ export class TbankPaymentsComponent implements OnDestroy {
       manualPaymentType: this.adminTaskPaymentType(),
       manualPhone: this.adminTaskPhone().trim(),
       manualRecipientName: this.adminTaskRecipient().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_RECIPIENT_NAME,
-      manualPaymentUrl: this.adminTaskPaymentUrl().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL,
+      manualPaymentUrl: this.adminTaskPaymentUrl().trim(),
       manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
       targetAmountKopecks: this.adminTaskTargetKopecks(),
       comment: this.adminTaskComment().trim() || null
@@ -1086,7 +1091,8 @@ export class TbankPaymentsComponent implements OnDestroy {
       REFUNDED: 'Возвращен полностью',
       PARTIAL_REFUNDED: 'Возвращен частично',
       EXPIRED: 'Истек',
-      FAILED: 'Ошибка'
+      FAILED: 'Ошибка',
+      NEEDS_RECONCILIATION: 'Требует сверки с банком'
     };
     return labels[status] ?? status;
   }
@@ -1101,7 +1107,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (this.isRefunded(status) || status === 'CANCELED') {
       return 'status-pill refunded';
     }
-    if (status === 'REJECTED' || status === 'FAILED' || status === 'EXPIRED') {
+    if (status === 'REJECTED' || status === 'FAILED' || status === 'NEEDS_RECONCILIATION' || status === 'EXPIRED') {
       return 'status-pill failed';
     }
     return 'status-pill neutral';
@@ -1125,7 +1131,7 @@ export class TbankPaymentsComponent implements OnDestroy {
 
   manualTaskTargetLine(task: ManualPaymentTaskResponse): string {
     if (this.isExternalManualTask(task)) {
-      return `${task.manualPaymentUrl || TbankPaymentsComponent.DEFAULT_MANUAL_PAYMENT_URL} · ${task.managerTitle || task.username}`;
+      return `${task.manualPaymentUrl?.trim() || 'ссылка не настроена'} · ${task.managerTitle || task.username}`;
     }
     return `${task.manualPhone || 'телефон не указан'} · ${task.managerTitle || task.username}`;
   }
@@ -1309,6 +1315,13 @@ export class TbankPaymentsComponent implements OnDestroy {
     return this.mutatingId() === link.id;
   }
 
+  safePaymentHref(
+    value: unknown,
+    purpose: PaymentNavigationPurpose = 'payment'
+  ): string | null {
+    return safePaymentNavigationTarget(value, purpose);
+  }
+
   trackLink(_index: number, link: AdminPaymentLinkResponse): number {
     return link.id;
   }
@@ -1350,7 +1363,7 @@ export class TbankPaymentsComponent implements OnDestroy {
     if (this.isManualPayment(link) && (link.status === 'WAITING_MANUAL_PAYMENT' || link.status === 'MANUAL_REPORTED')) {
       return 'manual';
     }
-    if (link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED') {
+    if (link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'NEEDS_RECONCILIATION' || link.status === 'EXPIRED') {
       return 'failed';
     }
     return 'neutral';
@@ -1445,7 +1458,10 @@ export class TbankPaymentsComponent implements OnDestroy {
       case 'refunded':
         return this.isRefunded(link.status) || link.status === 'CANCELED';
       case 'failed':
-        return link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED';
+        return link.status === 'REJECTED'
+          || link.status === 'FAILED'
+          || link.status === 'NEEDS_RECONCILIATION'
+          || link.status === 'EXPIRED';
       case 'created':
         return link.status === 'CREATED';
       case 'manual':

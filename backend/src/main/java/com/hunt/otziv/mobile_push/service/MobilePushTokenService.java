@@ -3,6 +3,7 @@ package com.hunt.otziv.mobile_push.service;
 import com.hunt.otziv.mobile_push.dto.MobilePushTokenRequest;
 import com.hunt.otziv.mobile_push.dto.MobilePushSendResponse;
 import com.hunt.otziv.mobile_push.dto.MobilePushTestRequest;
+import com.hunt.otziv.mobile_push.dto.MobilePushTokenRevokeRequest;
 import com.hunt.otziv.mobile_push.model.MobilePushToken;
 import com.hunt.otziv.mobile_push.repository.MobilePushTokenRepository;
 import com.hunt.otziv.u_users.model.User;
@@ -26,7 +27,7 @@ public class MobilePushTokenService {
 
     @Transactional
     public void register(Principal principal, MobilePushTokenRequest request) {
-        User user = currentUser(principal);
+        User user = currentActiveUser(principal);
         Instant now = Instant.now();
         MobilePushToken token = tokenRepository.findByToken(request.token())
                 .orElseGet(MobilePushToken::new);
@@ -37,14 +38,41 @@ public class MobilePushTokenService {
         token.setDeviceId(trimToNull(request.deviceId()));
         token.setAppVersion(trimToNull(request.appVersion()));
         token.setActive(true);
+        token.setAuthEpoch(user.getAuthEpoch());
+        token.setRevokedAt(null);
+        token.setRevokedReason(null);
+        token.setRevokedByUserId(null);
         token.setLastSeenAt(now);
 
         tokenRepository.save(token);
     }
 
     @Transactional
-    public MobilePushSendResponse sendTest(Principal principal, MobilePushTestRequest request) {
+    public void revokeCurrent(Principal principal, MobilePushTokenRevokeRequest request) {
         User user = currentUser(principal);
+        tokenRepository.revokeActiveOwnedToken(
+                user.getId(),
+                request.token(),
+                Instant.now(),
+                "USER_LOGOUT",
+                user.getId()
+        );
+    }
+
+    @Transactional
+    public void revokeAll(Principal principal) {
+        User user = currentUser(principal);
+        tokenRepository.revokeAllActiveForUser(
+                user.getId(),
+                Instant.now(),
+                "USER_LOGOUT_ALL",
+                user.getId()
+        );
+    }
+
+    @Transactional
+    public MobilePushSendResponse sendTest(Principal principal, MobilePushTestRequest request) {
+        User user = currentActiveUser(principal);
         String title = request == null ? null : request.title();
         String body = request == null ? null : request.body();
         String route = request == null ? "/tabs/home" : request.route();
@@ -58,6 +86,14 @@ public class MobilePushTokenService {
 
         return userService.findByUserName(principal.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден"));
+    }
+
+    private User currentActiveUser(Principal principal) {
+        User user = currentUser(principal);
+        if (!user.isActive()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь деактивирован");
+        }
+        return user;
     }
 
     private String trimToNull(String value) {

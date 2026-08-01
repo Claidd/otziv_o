@@ -2,19 +2,24 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, from, switchMap, throwError } from 'rxjs';
-import { SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
+import { OPTIONAL_AUTH_TOKEN, SKIP_AUTH_REDIRECT_ON_401, SKIP_AUTH_TOKEN } from './auth-http-context';
 import { AuthService } from './auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router, { optional: true });
   const shouldAttachToken = req.url.startsWith('/api') && !req.context.get(SKIP_AUTH_TOKEN);
+  const optionalAuth = req.context.get(OPTIONAL_AUTH_TOKEN);
 
   if (!shouldAttachToken) {
     return next(req);
   }
 
-  return from(auth.getToken()).pipe(
+  const token = optionalAuth
+    ? Promise.resolve(auth.getOptionalToken())
+    : auth.getToken();
+
+  return from(token).pipe(
     switchMap((token) => {
       if (!token) {
         return next(req);
@@ -27,6 +32,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       }));
     }),
     catchError((error) => {
+      if (optionalAuth && isUnauthorized(error)) {
+        // The capability carried by the URL remains valid independently of a
+        // stale/revoked login. Retry once without Authorization and let the
+        // controller expose its anonymous public-link permissions.
+        return next(req);
+      }
       if (isManagerReportReviewRequired(error)) {
         void router?.navigate(['/'], {
           queryParams: { reportReviewRequired: '1' }

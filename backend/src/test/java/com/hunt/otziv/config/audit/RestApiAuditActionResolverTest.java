@@ -118,6 +118,29 @@ class RestApiAuditActionResolverTest {
         assertEquals("создание личной заметки или напоминания \"Позвонить клиенту\"", action);
     }
 
+    @Test
+    void legacyMigrationAuditDoesNotExposeUsernameOrPassword() {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST",
+                "/api/auth/legacy-migration"
+        );
+        request.setAttribute(
+                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE,
+                "/api/auth/legacy-migration"
+        );
+        request.setAttribute(
+                RestApiAuditActionResolver.REQUEST_BODY_ATTRIBUTE,
+                Map.of(
+                        "username", "sensitive-user",
+                        "password", "SensitivePassword123"
+                )
+        );
+
+        String action = resolver.resolve(request, null);
+
+        assertEquals("миграция legacy-пользователя", action);
+    }
+
     @ParameterizedTest
     @MethodSource("previouslyMissingRoutes")
     void resolvesPreviouslyMissingRoutes(String method, String pattern, String expected) {

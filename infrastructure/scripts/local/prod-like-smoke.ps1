@@ -181,6 +181,105 @@ function Invoke-PublicFrontendSmoke {
     }
 }
 
+function Get-SmokeResponseHeader {
+    param(
+        [AllowNull()][object]$Response,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    if ($null -eq $Response -or $null -eq $Response.Headers) {
+        return $null
+    }
+
+    try {
+        $values = $Response.Headers.GetValues($Name)
+        if ($null -ne $values) {
+            return (@($values) -join ", ")
+        }
+    } catch {
+        # Windows PowerShell exposes WebHeaderCollection through an indexer.
+    }
+
+    try {
+        return [string]$Response.Headers[$Name]
+    } catch {
+        return $null
+    }
+}
+
+function Invoke-SmokeHttpRequest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [ValidateSet("GET", "PUT", "POST")][string]$Method = "GET",
+        [AllowNull()][string]$Body
+    )
+
+    $request = @{
+        Uri = $Url
+        Method = $Method
+        UseBasicParsing = $true
+        TimeoutSec = 30
+    }
+    if ($null -ne $Body) {
+        $request.Body = $Body
+        $request.ContentType = "application/json; charset=utf-8"
+    }
+
+    try {
+        $response = Invoke-WebRequest @request
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            WwwAuthenticate = Get-SmokeResponseHeader -Response $response -Name "WWW-Authenticate"
+        }
+    } catch {
+        $response = $_.Exception.Response
+        if ($null -eq $response) {
+            throw
+        }
+
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            WwwAuthenticate = Get-SmokeResponseHeader -Response $response -Name "WWW-Authenticate"
+        }
+    }
+}
+
+function Assert-AnonymousMissingCapability {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [ValidateSet("GET", "PUT", "POST")][string]$Method = "GET",
+        [AllowNull()][string]$Body
+    )
+
+    $response = Invoke-SmokeHttpRequest -Url $Url -Method $Method -Body $Body
+    if ($response.StatusCode -ne 404) {
+        throw "Anonymous capability contract failed for ${Name}: expected HTTP 404 for a missing resource, got $($response.StatusCode)."
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$response.WwwAuthenticate)) {
+        throw "Anonymous capability contract failed for ${Name}: response unexpectedly contains WWW-Authenticate."
+    }
+
+    Write-Host "Anonymous capability route OK: $Name (missing resource returned 404 without auth challenge)."
+}
+
+function Invoke-PublicCapabilityAuthorizationSmoke {
+    param([Parameter(Mandatory = $true)][string]$BaseUrl)
+
+    Write-Host "Running anonymous review/payment capability smoke..."
+    $root = $BaseUrl.TrimEnd("/")
+    $missingReviewId = [guid]::NewGuid().ToString()
+    $missingPaymentToken = "smoke-missing-$([guid]::NewGuid().ToString('N'))"
+    $reviewBody = '{"reviews":[]}'
+
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId" -Name "review read"
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId" -Name "review save" -Method "PUT" -Body $reviewBody
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId/approve" -Name "review approve" -Method "POST" -Body $reviewBody
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId/correction" -Name "review correction" -Method "POST" -Body $reviewBody
+    Assert-AnonymousMissingCapability -Url "$root/api/payments/public/$missingPaymentToken" -Name "single payment link"
+    Assert-AnonymousMissingCapability -Url "$root/api/payments/public/group/$missingPaymentToken" -Name "group payment link"
+}
+
 function Convert-EnvBool {
     param(
         [AllowNull()][string]$Value,
@@ -1715,6 +1814,7 @@ if (
 }
 
 $composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
+$dbAdminComposeArgs = $composeArgs + @("--profile", "db-admin")
 if (-not $NoDbAdmin) {
     $composeArgs += @("--profile", "db-admin")
     $phpMyAdminPort = Get-EnvValue -Path $envPath -Name "LOCAL_PHPMYADMIN_PORT"
@@ -1736,6 +1836,10 @@ if ($WithObservability) {
     Write-Host "Local observability is disabled. Pass -WithObservability to start Loki, Tempo, Alloy, Prometheus, Grafana and Dozzle."
 }
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
+if ($NoDbAdmin -and -not $NoUp) {
+    Write-Host "Stopping any previously started local phpMyAdmin container."
+    Invoke-External -FilePath "docker" -Arguments ($dbAdminComposeArgs + @("stop", "phpmyadmin"))
+}
 
 $localServices = & docker @($composeArgs + @("config", "--services"))
 if ($LASTEXITCODE -ne 0) {
@@ -1780,11 +1884,28 @@ try {
         }
     }
 
+    if (-not $NoUp) {
+        Write-Host "Restarting nginx so its upstream resolves the currently running backend container."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("restart", "nginx"))
+    }
+
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
+    if (-not $NoUp) {
+        Write-Host "Checking external-review DNS reachability and data-network isolation."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+            "exec", "-T", "app", "getent", "hosts", "external-review-worker"
+        ))
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+            "exec", "-T", "external-review-worker", "node", "-e",
+            "require('node:dns').lookup('mysql', error => process.exit(error ? 0 : 1))"
+        ))
+    }
     Disable-LocalExternalMessaging -ComposeArguments $composeArgs -EnvPath $envPath
     if (-not $NoUp) {
         Write-Host "Restarting backend so local safety settings are loaded from the refreshed DB."
         Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "--force-recreate", "--no-deps", "app"))
+        Write-Host "Restarting nginx so its upstream resolves the recreated backend container."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "--force-recreate", "--no-deps", "nginx"))
         Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health after local safety reload" -Deadline $deadline
     }
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
@@ -1798,6 +1919,7 @@ try {
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
     Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl
+    Invoke-PublicCapabilityAuthorizationSmoke -BaseUrl $BaseUrl
     Invoke-TbankPaymentConfigSmoke -BaseUrl $BaseUrl -EnvPath $envPath
     if (-not $SkipWorkloadShadowSmoke) {
         Invoke-WorkloadShadowSmoke `

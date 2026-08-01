@@ -1,5 +1,6 @@
 package com.hunt.otziv.reputationai.infrastructure.search.service;
 
+import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.infrastructure.search.dto.SearchQuery;
 import com.hunt.otziv.reputationai.infrastructure.search.dto.SearchResult;
@@ -14,14 +15,22 @@ import java.util.Locale;
 public class SearchProviderRouter {
 
     private final ReputationAiProperties properties;
+    private final ReputationAiRuntimeSwitch runtimeSwitch;
     private final List<SearchProvider> providers;
 
     public List<SearchResult> search(SearchQuery query) {
+        if (!runtimeSwitch.isEnabled()) {
+            return List.of();
+        }
         SearchProvider provider = resolveProvider();
         if (!provider.isAvailable()) {
             return List.of();
         }
-
+        // Re-read at the outbound call boundary so an operator flip after
+        // provider resolution still prevents a new external request.
+        if (!runtimeSwitch.isEnabled()) {
+            return List.of();
+        }
         return provider.search(query);
     }
 
@@ -30,7 +39,7 @@ public class SearchProviderRouter {
     }
 
     public boolean activeProviderAvailable() {
-        return resolveProvider().isAvailable();
+        return runtimeSwitch.isEnabled() && resolveProvider().isAvailable();
     }
 
     private SearchProvider resolveProvider() {

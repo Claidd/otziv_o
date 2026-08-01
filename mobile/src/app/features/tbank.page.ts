@@ -35,6 +35,7 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
+import { paymentTargetForUpdate } from '../shared/payment-navigation';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
@@ -2576,9 +2577,6 @@ export class TbankPage implements OnInit {
 
   setProfileManualPaymentType(profileId: number, value: ManualPaymentType): void {
     const patch: Partial<ProfilePolicyDraft> = { manualPaymentType: value };
-    if (value === 'EXTERNAL_LINK' && !this.policyDraft(profileId).manualPaymentUrl.trim()) {
-      patch.manualPaymentUrl = DEFAULT_MANUAL_PAYMENT_URL;
-    }
     if (!this.policyDraft(profileId).manualRecipientName.trim()) {
       patch.manualRecipientName = DEFAULT_MANUAL_RECIPIENT_NAME;
     }
@@ -2618,9 +2616,6 @@ export class TbankPage implements OnInit {
 
   setAdminTaskPaymentType(value: ManualPaymentType): void {
     this.adminTaskPaymentType.set(value);
-    if (value === 'EXTERNAL_LINK' && !this.adminTaskPaymentUrl().trim()) {
-      this.adminTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
-    }
     if (!this.adminTaskRecipient().trim()) {
       this.adminTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
     }
@@ -2663,7 +2658,7 @@ export class TbankPage implements OnInit {
         manualPaymentType: this.adminTaskPaymentType(),
         manualPhone: this.adminTaskPhone().trim(),
         manualRecipientName: this.adminTaskRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
-        manualPaymentUrl: this.adminTaskPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentUrl: this.adminTaskPaymentUrl().trim(),
         manualPaymentButtonLabel: this.adminTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
         targetAmountKopecks: this.adminTaskTargetKopecks(),
         comment: this.adminTaskComment().trim() || null
@@ -2852,7 +2847,7 @@ export class TbankPage implements OnInit {
   }
 
   openUrl(value: string | null | undefined): void {
-    void this.externalLink.open(value);
+    void this.externalLink.openPayment(value, 'payment');
   }
 
   statusCount(filter: PaymentStatusFilter): number {
@@ -2926,7 +2921,7 @@ export class TbankPage implements OnInit {
 
   manualTaskTargetLine(task: ManualPaymentTaskResponse): string {
     if (this.isExternalManualTask(task)) {
-      return `${task.manualPaymentUrl || DEFAULT_MANUAL_PAYMENT_URL} · ${task.managerTitle || task.username}`;
+      return `${task.manualPaymentUrl?.trim() || 'ссылка не настроена'} · ${task.managerTitle || task.username}`;
     }
     return `${task.manualPhone || 'телефон не указан'} · ${task.managerTitle || task.username}`;
   }
@@ -3002,7 +2997,8 @@ export class TbankPage implements OnInit {
       REFUNDED: 'Возвращен',
       PARTIAL_REFUNDED: 'Частичный возврат',
       EXPIRED: 'Истек',
-      FAILED: 'Ошибка'
+      FAILED: 'Ошибка',
+      NEEDS_RECONCILIATION: 'Требует сверки с банком'
     };
     return labels[status] ?? status;
   }
@@ -3017,7 +3013,7 @@ export class TbankPage implements OnInit {
     if (this.isRefunded(status) || status === 'CANCELED') {
       return 'refunded';
     }
-    if (status === 'REJECTED' || status === 'FAILED' || status === 'EXPIRED') {
+    if (status === 'REJECTED' || status === 'FAILED' || status === 'NEEDS_RECONCILIATION' || status === 'EXPIRED') {
       return 'failed';
     }
     return 'neutral';
@@ -3033,7 +3029,7 @@ export class TbankPage implements OnInit {
     if (this.isRefunded(link.status) || link.status === 'CANCELED') {
       return 'teal';
     }
-    if (link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED') {
+    if (link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'NEEDS_RECONCILIATION' || link.status === 'EXPIRED') {
       return 'red';
     }
     if (link.status === 'CREATED' || link.status === 'INITIATED') {
@@ -3189,7 +3185,10 @@ export class TbankPage implements OnInit {
       case 'refunded':
         return this.isRefunded(link.status) || link.status === 'CANCELED';
       case 'failed':
-        return link.status === 'REJECTED' || link.status === 'FAILED' || link.status === 'EXPIRED';
+        return link.status === 'REJECTED'
+          || link.status === 'FAILED'
+          || link.status === 'NEEDS_RECONCILIATION'
+          || link.status === 'EXPIRED';
       case 'created':
         return link.status === 'CREATED';
       case 'manual':
@@ -3249,11 +3248,13 @@ export class TbankPage implements OnInit {
         manualPaymentType: draft.manualPaymentType,
         manualPhone: draft.manualPhone.trim(),
         manualRecipientName: draft.manualRecipientName.trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
-        manualPaymentUrl: draft.manualPaymentUrl.trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentUrl: paymentTargetForUpdate(draft.manualPaymentUrl, profile.manualPaymentUrlConfigured),
         manualPaymentButtonLabel: draft.manualPaymentButtonLabel.trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
         manualComment: draft.manualComment.trim(),
         manualMonthlySoftLimitKopecks: manualMonthlyLimitKopecks,
-        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks
+        manualMonthlyHardLimitKopecks: manualMonthlyLimitKopecks,
+        manualPaymentUrlReplacementConfirmed: profile.manualPaymentUrlConfigured === false
+          && Boolean(draft.manualPaymentUrl.trim())
       };
     });
   }

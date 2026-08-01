@@ -61,6 +61,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
@@ -1507,6 +1508,38 @@ class ApiWorkerBoardControllerTest {
 
         assertEquals("Кнопка для логирования не поддерживается", exception.getReason());
         verify(badReviewTaskService, never()).getTask(597L);
+    }
+
+    @Test
+    void deactivateRecoveryTaskBotPreservesDomainConflictStatus() {
+        ReviewRecoveryTask task = ReviewRecoveryTask.builder().id(40L).build();
+        when(reviewRecoveryTaskService.getTask(40L)).thenReturn(task);
+        when(reviewRecoveryTaskService.deactivateAndChangeTaskBot(40L, 99L))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "bot mismatch"));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.deactivateRecoveryTaskBot(40L, 99L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("bot mismatch", exception.getReason());
+    }
+
+    @Test
+    void deactivateBadReviewTaskBotPreservesDomainConflictStatus() {
+        BadReviewTask task = BadReviewTask.builder().id(42L).build();
+        when(badReviewTaskService.getTask(42L)).thenReturn(task);
+        when(badReviewTaskService.deactivateAndChangeTaskBot(42L, 99L))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "bot mismatch"));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> controller.deactivateBadReviewTaskBot(42L, 99L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals("bot mismatch", exception.getReason());
     }
 
     private ApiWorkerBoardController.WorkerBoardResponse getBoard(String section) {

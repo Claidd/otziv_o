@@ -90,9 +90,12 @@ public class GamificationRewardService {
     public GamificationRewardResponse uploadImage(Long rewardId, MultipartFile file) {
         GamificationReward reward = rewardRepository.findById(rewardId)
                 .orElseThrow(() -> notFound("Награда не найдена"));
-        String imageUrl = s3UploadService.uploadFile(file, "gamification/rewards", reward.getImageUrl(), reward.getId());
+        String oldImageUrl = reward.getImageUrl();
+        String imageUrl = s3UploadService.uploadFile(file, "gamification/rewards", oldImageUrl, reward.getId());
         reward.setImageUrl(imageUrl);
-        return response(rewardRepository.save(reward), null);
+        GamificationReward saved = rewardRepository.save(reward);
+        s3UploadService.deleteFileAfterCommit(oldImageUrl, "gamification/rewards", reward.getId());
+        return response(saved, null);
     }
 
     @Transactional(readOnly = true)

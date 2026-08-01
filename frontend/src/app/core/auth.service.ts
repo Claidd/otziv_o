@@ -88,6 +88,25 @@ export class AuthService {
     return this.keycloak.token ?? null;
   }
 
+  /**
+   * Returns an already-valid token without refreshing or starting a login
+   * redirect. Public capability pages use this to retain authenticated role
+   * features when possible while still remaining usable anonymously.
+   */
+  getOptionalToken(minValiditySeconds = 5): string | null {
+    if (!this.keycloak.authenticated || !this.keycloak.token) {
+      return null;
+    }
+
+    const expiresAtSeconds = this.keycloak.tokenParsed?.exp;
+    if (!expiresAtSeconds
+      || expiresAtSeconds <= Math.floor(Date.now() / 1000) + Math.max(0, minValiditySeconds)) {
+      return null;
+    }
+
+    return this.keycloak.token;
+  }
+
   isAuthenticated(): boolean {
     return this.keycloak.authenticated === true;
   }

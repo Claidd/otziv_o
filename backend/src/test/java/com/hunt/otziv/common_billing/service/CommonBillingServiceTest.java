@@ -8,8 +8,10 @@ import com.hunt.otziv.client_messages.dto.ClientMessageSendResult;
 import com.hunt.otziv.client_messages.service.ClientChatMessageSender;
 import com.hunt.otziv.client_messages.service.PaymentInvoiceRetryScheduler;
 import com.hunt.otziv.common_billing.dto.CommonBillingAccountRequest;
+import com.hunt.otziv.common_billing.dto.CommonBillingAccountResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.dto.CommonInvoiceCloseRequest;
+import com.hunt.otziv.common_billing.dto.CommonInvoiceSummaryResponse;
 import com.hunt.otziv.common_billing.dto.ManualPaymentConfirmationRequest;
 import com.hunt.otziv.common_billing.model.CommonBillingAccount;
 import com.hunt.otziv.common_billing.model.CommonBillingAccountCompany;
@@ -22,6 +24,7 @@ import com.hunt.otziv.common_billing.repository.CommonBillingAccountRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -92,11 +95,16 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.CLOSE_ORDER;
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.OPEN_NEXT_ORDER;
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFlow.COMMON_INVOICE_CLOSE;
 
 @ExtendWith(MockitoExtension.class)
 class CommonBillingServiceTest {
@@ -167,6 +175,8 @@ class CommonBillingServiceTest {
     private OrderPublicationApprovalService publicationApprovalService;
     @Mock
     private ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
+    @Mock
+    private R0ObservabilityMetrics observabilityMetrics;
 
     @InjectMocks
     private CommonBillingService service;
@@ -182,6 +192,95 @@ class CommonBillingServiceTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void accountsBulkLoadsLatestInvoicesAndItemsWithoutPerAccountQueries() {
+        CommonBillingAccount firstAccount = account();
+        CommonBillingAccount secondAccount = account();
+        secondAccount.setId(2L);
+        secondAccount.setName("Второй плательщик");
+
+        CommonInvoice firstInvoice = invoice(firstAccount);
+        CommonInvoice secondInvoice = invoice(secondAccount);
+        secondInvoice.setId(20L);
+        secondInvoice.setToken("second-token");
+        CommonInvoiceOrder firstItem = item(firstInvoice, order(101L));
+        CommonInvoiceOrder secondItem = item(secondInvoice, order(202L));
+        firstItem.setPaid(true);
+        secondItem.setPaid(true);
+
+        when(accountRepository.findAllForAdmin()).thenReturn(List.of(firstAccount, secondAccount));
+        when(accountCompanyRepository.findByAccountIds(List.of(1L, 2L))).thenReturn(List.of());
+        when(invoiceRepository.findLatestCurrentForAccounts(eq(List.of(1L, 2L)), any()))
+                .thenReturn(List.of(firstInvoice, secondInvoice));
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L, 20L)))
+                .thenReturn(List.of(firstItem, secondItem));
+
+        List<CommonBillingAccountResponse> responses = service.accounts();
+
+        assertEquals(List.of(1L, 2L), responses.stream().map(CommonBillingAccountResponse::id).toList());
+        assertEquals(List.of(10L, 20L), responses.stream()
+                .map(CommonBillingAccountResponse::currentInvoice)
+                .map(CommonInvoiceSummaryResponse::id)
+                .toList());
+        verify(invoiceRepository, times(1)).findLatestCurrentForAccounts(eq(List.of(1L, 2L)), any());
+        verify(invoiceOrderRepository, times(1)).findByInvoiceIdsWithOrders(List.of(10L, 20L));
+        verify(invoiceRepository, never()).findCurrentForAccount(any(), any(), any(Pageable.class));
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(any());
+    }
+
+    @Test
+    void closePaidInvoiceObservesCompletionAndCaughtOrderFailure() throws Exception {
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(501L);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setAmountKopecks(10_000L);
+
+        Order order = new Order();
+        order.setId(601L);
+        CommonInvoiceOrder item = new CommonInvoiceOrder();
+        item.setInvoice(invoice);
+        item.setOrder(order);
+        item.setAmountKopecks(10_000L);
+
+        doThrow(new IllegalStateException("synthetic close failure"))
+                .when(orderTransactionService).handlePaymentStatus(order, false);
+
+        ReflectionTestUtils.invokeMethod(service, "closePaidInvoice", invoice, List.of(item));
+
+        verify(observabilityMetrics).observeTransactionCompletion(COMMON_INVOICE_CLOSE);
+        verify(observabilityMetrics).recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
+        verify(invoiceRepository).save(invoice);
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+    }
+
+    @Test
+    void openNextOrdersRecordsCaughtFailureWithoutChangingControlFlow() {
+        CommonBillingAccount account = new CommonBillingAccount();
+        account.setAutoRepeatOrders(true);
+        CommonInvoice invoice = new CommonInvoice();
+        invoice.setId(502L);
+        invoice.setAccount(account);
+
+        Order order = new Order();
+        order.setId(602L);
+        CommonInvoiceOrder item = new CommonInvoiceOrder();
+        item.setOrder(order);
+        item.setInvoice(invoice);
+        doThrow(new IllegalStateException("synthetic next-order failure"))
+                .when(nextOrderRequestService).openForPaidOrder(order);
+
+        List<String> failures = ReflectionTestUtils.invokeMethod(
+                service,
+                "openNextOrdersIfEnabled",
+                invoice,
+                List.of(item)
+        );
+
+        assertNotNull(failures);
+        assertEquals(1, failures.size());
+        verify(observabilityMetrics).recordCaughtFailure(COMMON_INVOICE_CLOSE, OPEN_NEXT_ORDER);
     }
 
     @Test
@@ -906,6 +1005,55 @@ class CommonBillingServiceTest {
     }
 
     @Test
+    void managerBoardPageUsesOneBoundedPassForCardsAndLinkedTotal() {
+        CommonBillingAccount firstAccount = account();
+        CommonBillingAccount secondAccount = account();
+        secondAccount.setId(2L);
+        secondAccount.setName("Второй плательщик");
+        CommonInvoice firstInvoice = invoice(firstAccount);
+        firstInvoice.setStatus(CommonInvoiceStatus.INVOICED);
+        CommonInvoice secondInvoice = invoice(secondAccount);
+        secondInvoice.setId(20L);
+        secondInvoice.setToken("second-board-token");
+        secondInvoice.setStatus(CommonInvoiceStatus.INVOICED);
+        CommonInvoiceOrder firstItem = item(firstInvoice, order(101L));
+        CommonInvoiceOrder secondItem = item(secondInvoice, order(202L));
+        firstItem.setPaid(true);
+        secondItem.setPaid(true);
+
+        when(invoiceRepository.findAccountIdsWithDuplicateCurrentInvoices(any())).thenReturn(List.of());
+        when(invoiceRepository.findBoardInvoices(any(), any(Pageable.class)))
+                .thenReturn(List.of(firstInvoice, secondInvoice));
+        when(invoiceOrderRepository.findByInvoiceIdsWithOrders(List.of(10L, 20L)))
+                .thenReturn(List.of(firstItem, secondItem));
+
+        CommonBillingService.ManagerBoardPage page = service.managerBoardPage(
+                "Все",
+                "",
+                null,
+                null,
+                "desc",
+                1,
+                1
+        );
+
+        assertEquals(2L, page.totalCards());
+        assertEquals(2, page.linkedOrderCount());
+        assertEquals(List.of(20L), page.cards().stream().map(OrderDTOList::getCommonInvoiceId).toList());
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(invoiceRepository, times(1)).findBoardInvoices(any(), pageableCaptor.capture());
+        verify(invoiceOrderRepository, times(1)).findByInvoiceIdsWithOrders(List.of(10L, 20L));
+        verify(invoiceOrderRepository, never()).findByInvoiceIdWithOrders(any());
+        verify(invoiceRepository, never()).findBoardInvoices(any());
+        assertEquals(0, pageableCaptor.getValue().getPageNumber());
+        assertEquals(200, pageableCaptor.getValue().getPageSize());
+        assertEquals(
+                org.springframework.data.domain.Sort.Direction.ASC,
+                pageableCaptor.getValue().getSort().getOrderFor("updatedAt").getDirection()
+        );
+    }
+
+    @Test
     void initPublicPaymentAcceptsCollectingInvoiceAsPrepayment() {
         CommonBillingAccount account = account();
         CommonInvoice invoice = invoice(account);
@@ -1157,6 +1305,90 @@ class CommonBillingServiceTest {
         assertEquals("terminal", invoice.getTbankTerminalKey());
         assertEquals(100_000L, invoice.getTbankPaymentAmountKopecks());
         assertEquals(null, invoice.getLastError());
+    }
+
+    @Test
+    void initPublicPaymentRejectsUnsafeUrlAndKeepsCreatedPaymentForReconciliation() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        Order order = order(101L);
+        CommonInvoiceOrder item = item(invoice, order);
+        PaymentProfile profile = paymentProfile();
+        TbankPaymentProfile runtimeProfile = runtimeProfile();
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByIdWithAccountForUpdate(10L)).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(order)).thenReturn(BigDecimal.valueOf(1000));
+        when(paymentProfileService.selectForManager(null)).thenReturn(profile);
+        when(paymentProfileService.lockForRouting(profile)).thenReturn(profile);
+        when(paymentProfileService.toRuntime(profile)).thenReturn(runtimeProfile);
+        when(properties.getRedirectDue()).thenReturn(Duration.ofMinutes(20));
+        when(paymentRefRepository.findByTbankOrderId(any())).thenReturn(Optional.empty());
+        when(paymentRefRepository.findByTbankPaymentId("payment-unsafe-url")).thenReturn(Optional.empty());
+        when(tbankClient.init(any(), any())).thenReturn(new TbankInitResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "NEW",
+                "payment-unsafe-url",
+                "ignored",
+                100_000L,
+                "javascript:alert(document.cookie)"
+        ));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        ArgumentCaptor<CommonInvoicePaymentRef> captor = ArgumentCaptor.forClass(CommonInvoicePaymentRef.class);
+        verify(paymentRefRepository).save(captor.capture());
+        assertEquals("payment-unsafe-url", captor.getValue().getTbankPaymentId());
+        assertEquals("CANCEL_PENDING", captor.getValue().getStatus());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertTrue(invoice.getLastError().startsWith("payment_init_invalid_url"));
+        assertEquals(null, invoice.getPaymentUrl());
+    }
+
+    @Test
+    void initPublicPaymentQuarantinesExpiredUnsafeCachedUrlBeforeStartingAnotherPayment() {
+        CommonBillingAccount account = account();
+        CommonInvoice invoice = invoice(account);
+        invoice.setStatus(CommonInvoiceStatus.READY);
+        invoice.setTbankOrderId("cached-order");
+        invoice.setTbankPaymentId("cached-payment");
+        invoice.setTbankTerminalKey("terminal");
+        invoice.setTbankPaymentAmountKopecks(100_000L);
+        invoice.setTbankPaymentCreatedAt(LocalDateTime.now().minusHours(2));
+        invoice.setPaymentUrl("javascript:cached-recipient()");
+        CommonInvoiceOrder item = item(invoice, order(101L));
+
+        when(runtimeSettingsService.isPaymentLinksEnabled()).thenReturn(true);
+        when(runtimeSettingsService.isTbankEnabled()).thenReturn(true);
+        when(invoiceRepository.findByTokenWithAccountForUpdate("token")).thenReturn(Optional.of(invoice));
+        when(invoiceOrderRepository.findByInvoiceIdWithOrders(10L)).thenReturn(List.of(item));
+        when(badReviewTaskService.getPayableSum(item.getOrder())).thenReturn(BigDecimal.valueOf(1000));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initPublicPayment("token", "client@example.com", true, true, true)
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        assertEquals(CommonInvoiceStatus.NEEDS_ATTENTION, invoice.getStatus());
+        assertNull(invoice.getPaymentUrl());
+        assertTrue(invoice.getLastError().startsWith("payment_cached_invalid_url"));
+        verify(tbankClient, never()).init(any(), any());
+        // refreshInvoiceAmounts persists the recalculated total first; the
+        // second save commits the durable NEEDS_ATTENTION quarantine.
+        verify(invoiceRepository, times(2)).save(invoice);
     }
 
     @Test

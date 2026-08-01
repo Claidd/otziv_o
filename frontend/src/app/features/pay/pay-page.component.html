@@ -30,6 +30,7 @@
 
           <div class="manual-details" aria-label="Реквизиты ручной оплаты">
             @if (externalManualPayment()) {
+              @if (manualPaymentUrl()) {
               <button type="button" class="manual-external-pay" (click)="openManualPaymentUrl()">
                 <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
                 {{ manualPaymentButtonLabel() }}
@@ -39,12 +40,18 @@
                 <strong>{{ manualPaymentUrl() }}</strong>
                 <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
               </button>
+              } @else {
+              <p class="pay-error" role="alert">Ссылка оплаты не настроена. Не переводите деньги и обратитесь к менеджеру.</p>
+              }
               <button type="button" (click)="copyManualValue(item?.manualRecipientName)" title="Скопировать получателя">
                 <small>Получатель</small>
-                <strong>{{ item?.manualRecipientName || 'Сивохин И.И.' }}</strong>
+                <strong>{{ item?.manualRecipientName || 'не указан' }}</strong>
                 <span class="material-icons-sharp" aria-hidden="true">content_copy</span>
               </button>
             } @else {
+              @if (!item?.manualPhone) {
+              <p class="pay-error" role="alert">Телефон получателя не настроен. Не переводите деньги и обратитесь к менеджеру.</p>
+              }
               <button type="button" (click)="copyManualValue(item?.manualPhone)" title="Скопировать телефон">
                 <small>Телефон</small>
                 <strong>{{ item?.manualPhone || 'не указан' }}</strong>

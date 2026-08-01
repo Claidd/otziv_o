@@ -4,6 +4,7 @@ import com.hunt.otziv.reputationai.api.dto.ReputationContentPackRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationDeepReviewIdeasUpdateRequest;
 import com.hunt.otziv.reputationai.api.dto.OpenAiProviderDiagnostics;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiModelProfile;
+import com.hunt.otziv.reputationai.api.dto.ReputationAiEnabledUpdateRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationAiStatus;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationReviewCheckRequest;
@@ -24,6 +25,7 @@ import com.hunt.otziv.reputationai.application.ReputationAiMarkdownExportService
 import com.hunt.otziv.reputationai.application.ReputationAiPdfExportService;
 import com.hunt.otziv.reputationai.application.ReputationAiPromptService;
 import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.application.ReputationContentPackService;
 import com.hunt.otziv.reputationai.application.ReputationContentPackJobService;
 import com.hunt.otziv.reputationai.application.ReputationReviewTemplateService;
@@ -93,6 +95,7 @@ public class ReputationAiController {
     private final ReviewSafetyService reviewSafetyService;
     private final ReputationAiPromptService promptService;
     private final ReputationAiProviderSelectionService providerSelectionService;
+    private final ReputationAiRuntimeSwitch runtimeSwitch;
     private final AiProviderRouter aiProviderRouter;
     private final SearchProviderRouter searchProviderRouter;
     private final OpenAiResponsesClient openAiResponsesClient;
@@ -100,6 +103,7 @@ public class ReputationAiController {
 
     @GetMapping("/status")
     public ReputationAiStatus status() {
+        boolean enabled = runtimeSwitch.isEnabled();
         boolean aiAvailable = aiProviderRouter.activeProviderAvailable();
         boolean searchAvailable = searchProviderRouter.activeProviderAvailable();
         boolean yandexGptConfigured = !isBlank(properties.getYandex().getApiKey())
@@ -114,14 +118,17 @@ public class ReputationAiController {
         boolean openAiProxyEnabled = properties.getOpenai().getProxy().isEnabled()
                 && !isBlank(properties.getOpenai().getProxy().getHost());
         List<String> warnings = new ArrayList<>();
-        if (!aiAvailable || "local".equalsIgnoreCase(aiProviderRouter.activeProviderName())) {
+        if (!enabled) {
+            warnings.add("AI и внешний поиск временно отключены оператором.");
+        }
+        if (enabled && (!aiAvailable || "local".equalsIgnoreCase(aiProviderRouter.activeProviderName()))) {
             warnings.add("AI-провайдер недоступен. Для DeepSeek укажите REPUTATION_AI_PROVIDER=deepseek и DEEPSEEK_API_KEY.");
         }
-        if (isYandexProvider()
+        if (enabled && isYandexProvider()
                 && (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName()))) {
             warnings.add("Публичный поиск выключен. Для Yandex Search укажите REPUTATION_SEARCH_PROVIDER=yandex и ключи.");
         }
-        if (isDeepSeekProvider()
+        if (enabled && isDeepSeekProvider()
                 && (!searchAvailable || "local".equalsIgnoreCase(searchProviderRouter.activeProviderName()))) {
             warnings.add("Дополнительный сборщик карт и сайтов недоступен. DeepSeek Web Search продолжит работать, но охват 2ГИС, Яндекс Карт и Google Maps может быть ниже.");
         }
@@ -154,7 +161,8 @@ public class ReputationAiController {
                 openAiDiagnostics(),
                 deepResearchProfiles(),
                 contentPackProfiles(),
-                warnings
+                warnings,
+                enabled
         );
     }
 
@@ -172,6 +180,16 @@ public class ReputationAiController {
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
         }
+        return status();
+    }
+
+    @PutMapping("/status/enabled")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public ReputationAiStatus setEnabled(@RequestBody ReputationAiEnabledUpdateRequest request) {
+        if (request == null || request.enabled() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не передано состояние AI");
+        }
+        runtimeSwitch.setEnabled(request.enabled());
         return status();
     }
 

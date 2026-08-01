@@ -3,12 +3,14 @@ package com.hunt.otziv.client_messages.repository;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +20,22 @@ import org.springframework.stereotype.Repository;
 public interface ScheduledClientMessageStateRepository extends CrudRepository<ScheduledClientMessageState, Long> {
 
     Optional<ScheduledClientMessageState> findByScenarioAndTargetKey(ClientMessageScenario scenario, String targetKey);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT s
+        FROM ScheduledClientMessageState s
+        WHERE s.scenario = :scenario
+          AND s.targetKey = :targetKey
+    """)
+    Optional<ScheduledClientMessageState> findByScenarioAndTargetKeyForUpdate(
+            @Param("scenario") ClientMessageScenario scenario,
+            @Param("targetKey") String targetKey
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM ScheduledClientMessageState s WHERE s.id = :id")
+    Optional<ScheduledClientMessageState> findByIdForUpdate(@Param("id") Long id);
 
     List<ScheduledClientMessageState> findByOrderIdIn(Collection<Long> orderIds);
 
@@ -333,6 +351,19 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
                                               Pageable pageable);
 
     @Query("""
+        SELECT s.id
+        FROM ScheduledClientMessageState s
+        WHERE s.status = :status
+          AND s.nextAttemptAt IS NOT NULL
+          AND s.nextAttemptAt <= :now
+          AND (s.lockedUntil IS NULL OR s.lockedUntil < :now)
+        ORDER BY s.nextAttemptAt ASC, s.id ASC
+    """)
+    List<Long> findDueIds(@Param("status") ScheduledMessageStateStatus status,
+                          @Param("now") LocalDateTime now,
+                          Pageable pageable);
+
+    @Query("""
         SELECT s
         FROM ScheduledClientMessageState s
         WHERE s.status = :status
@@ -382,14 +413,40 @@ public interface ScheduledClientMessageStateRepository extends CrudRepository<Sc
     @Modifying
     @Query(value = """
         UPDATE scheduled_client_message_state state
-        SET state.locked_until = :lockedUntil
+        SET state.locked_until = :lockedUntil,
+            state.next_attempt_at = NULL,
+            state.last_error_code = :claimCode,
+            state.last_error_message = :claimMessage,
+            state.updated_at = :now
+        WHERE state.state_id = :id
+          AND state.state_status = 'ACTIVE'
+          AND state.next_attempt_at IS NOT NULL
+          AND state.next_attempt_at <= :now
+          AND (state.locked_until IS NULL OR state.locked_until < :now)
+        """, nativeQuery = true)
+    int lockDueState(@Param("id") Long id,
+                     @Param("now") LocalDateTime now,
+                     @Param("lockedUntil") LocalDateTime lockedUntil,
+                     @Param("claimCode") String claimCode,
+                     @Param("claimMessage") String claimMessage);
+
+    @Modifying
+    @Query(value = """
+        UPDATE scheduled_client_message_state state
+        SET state.locked_until = :lockedUntil,
+            state.next_attempt_at = NULL,
+            state.last_error_code = :claimCode,
+            state.last_error_message = :claimMessage,
+            state.updated_at = :now
         WHERE state.state_id = :id
           AND state.state_status = 'ACTIVE'
           AND (state.locked_until IS NULL OR state.locked_until < :now)
-    """, nativeQuery = true)
-    int lockDueState(@Param("id") Long id,
-                     @Param("now") LocalDateTime now,
-                     @Param("lockedUntil") LocalDateTime lockedUntil);
+        """, nativeQuery = true)
+    int lockActiveState(@Param("id") Long id,
+                        @Param("now") LocalDateTime now,
+                        @Param("lockedUntil") LocalDateTime lockedUntil,
+                        @Param("claimCode") String claimCode,
+                        @Param("claimMessage") String claimMessage);
 
     @Modifying
     @Query("DELETE FROM ScheduledClientMessageState s WHERE s.status IN :statuses AND s.updatedAt < :cutoff")

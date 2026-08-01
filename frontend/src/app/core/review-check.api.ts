@@ -1,8 +1,10 @@
-import { HttpClient, HttpContext } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
+import { OPTIONAL_AUTH_TOKEN, SKIP_AUTH_REDIRECT_ON_401 } from './auth-http-context';
 import { appEnvironment } from './app-environment';
+
+const OPAQUE_REVIEW_CAPABILITY = /^rc1_[A-Za-z0-9_-]{43}$/;
 
 export interface ReviewCheckPermissions {
   authenticated: boolean;
@@ -73,54 +75,55 @@ export interface ReviewCheckNotes {
 @Injectable({ providedIn: 'root' })
 export class ReviewCheckApi {
   private readonly publicContext = new HttpContext()
-    .set(SKIP_AUTH_REDIRECT_ON_401, true);
+    .set(SKIP_AUTH_REDIRECT_ON_401, true)
+    .set(OPTIONAL_AUTH_TOKEN, true);
 
   constructor(private readonly http: HttpClient) {}
 
-  getReviewCheck(orderDetailId: string): Observable<ReviewCheckPayload> {
+  getReviewCheck(orderDetailId: string, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
     return this.http.get<ReviewCheckPayload>(
-      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}`,
-      { context: this.publicContext }
+      this.endpoint(orderDetailId, capabilityToken),
+      this.options(capabilityToken)
     );
   }
 
-  saveReviews(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
+  saveReviews(orderDetailId: string, request: ReviewCheckUpdateRequest, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
     return this.http.put<ReviewCheckPayload>(
-      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}`,
+      this.endpoint(orderDetailId, capabilityToken),
       request,
-      { context: this.publicContext }
+      this.options(capabilityToken)
     );
   }
 
-  updateReviewText(orderDetailId: string, reviewId: number, text: string): Observable<ReviewCheckReview> {
+  updateReviewText(orderDetailId: string, reviewId: number, text: string, capabilityToken?: string | null): Observable<ReviewCheckReview> {
     return this.http.put<ReviewCheckReview>(
-      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/reviews/${reviewId}/text`,
+      this.endpoint(orderDetailId, capabilityToken, `/reviews/${reviewId}/text`),
       { text },
-      { context: this.publicContext }
+      this.options(capabilityToken)
     );
   }
 
-  updateReviewAnswer(orderDetailId: string, reviewId: number, answer: string): Observable<ReviewCheckReview> {
+  updateReviewAnswer(orderDetailId: string, reviewId: number, answer: string, capabilityToken?: string | null): Observable<ReviewCheckReview> {
     return this.http.put<ReviewCheckReview>(
-      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/reviews/${reviewId}/answer`,
+      this.endpoint(orderDetailId, capabilityToken, `/reviews/${reviewId}/answer`),
       { answer },
-      { context: this.publicContext }
+      this.options(capabilityToken)
     );
   }
 
-  approveReviews(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
+  approveReviews(orderDetailId: string, request: ReviewCheckUpdateRequest, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
     return this.http.post<ReviewCheckPayload>(
-      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/approve`,
+      this.endpoint(orderDetailId, capabilityToken, '/approve'),
       request,
-      { context: this.publicContext }
+      this.options(capabilityToken)
     );
   }
 
-  sendToCorrection(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
+  sendToCorrection(orderDetailId: string, request: ReviewCheckUpdateRequest, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
     return this.http.post<ReviewCheckPayload>(
-      `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}/correction`,
+      this.endpoint(orderDetailId, capabilityToken, '/correction'),
       request,
-      { context: this.publicContext }
+      this.options(capabilityToken)
     );
   }
 
@@ -162,5 +165,22 @@ export class ReviewCheckApi {
       { companyComments },
       { context: this.publicContext }
     );
+  }
+
+  private endpoint(orderDetailId: string, capabilityToken?: string | null, suffix = ''): string {
+    if (capabilityToken) {
+      return `${appEnvironment.apiBaseUrl}/api/review-capability${suffix}`;
+    }
+    return `${appEnvironment.apiBaseUrl}/api/review-check/${orderDetailId}${suffix}`;
+  }
+
+  private options(capabilityToken?: string | null): { context: HttpContext; headers?: HttpHeaders } {
+    if (!capabilityToken || !OPAQUE_REVIEW_CAPABILITY.test(capabilityToken)) {
+      return { context: this.publicContext };
+    }
+    return {
+      context: this.publicContext,
+      headers: new HttpHeaders({ 'X-Review-Capability': capabilityToken })
+    };
   }
 }

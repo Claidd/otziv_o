@@ -140,7 +140,7 @@ public class PaymentInvoiceRetryScheduler {
         if (!canSchedule(order)) {
             return;
         }
-        stateRepository.findByScenarioAndTargetKey(scenario, targetKey).ifPresent(state -> {
+        stateRepository.findByScenarioAndTargetKeyForUpdate(scenario, targetKey).ifPresent(state -> {
             if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
                 return;
             }
@@ -175,9 +175,21 @@ public class PaymentInvoiceRetryScheduler {
             LocalDateTime nextAttemptAt,
             boolean replaceNextAttempt
     ) {
-        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(scenario, targetKey);
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
+                scenario,
+                targetKey
+        );
         if (existing.isPresent()) {
             ScheduledClientMessageState state = existing.get();
+            if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+                log.warn(
+                        "Scheduled client message rearm blocked pending manual review stateId={} scenario={} code={}",
+                        state.getId(),
+                        scenario,
+                        state.getLastErrorCode()
+                );
+                return;
+            }
             state.setCompanyId(order.getCompany().getId());
             state.setOrderId(order.getId());
             state.setArchiveOrderId(null);

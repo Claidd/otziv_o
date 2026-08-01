@@ -16,6 +16,7 @@ import {
   ReviewCheckReview,
   ReviewCheckUpdateRequest
 } from '../core/api.service';
+import { reviewCapabilityToken } from '../core/review-capability-token';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
@@ -988,6 +989,7 @@ type ReviewDraft = {
 })
 export class ReviewCheckPage implements OnInit, OnDestroy {
   readonly orderDetailId = signal<string | null>(null);
+  readonly capabilityToken = signal<string | null>(null);
   readonly details = signal<ReviewCheckPayload | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
@@ -1014,6 +1016,19 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.routeSubscription = this.route.paramMap.subscribe((params) => {
+      const routeSnapshot = this.route.snapshot;
+      const capabilityRoute = routeSnapshot?.routeConfig?.path === 'review/c';
+      const capabilityToken = capabilityRoute
+        ? reviewCapabilityToken()
+        : null;
+      if (capabilityToken) {
+        this.capabilityToken.set(capabilityToken);
+        this.orderDetailId.set('secure-capability');
+        this.loadReviewCheck();
+        return;
+      }
+
+      this.capabilityToken.set(null);
       const id = params.get('orderDetailId');
       if (!id) {
         this.error.set('Ссылка на проверку некорректна.');
@@ -1044,7 +1059,11 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     this.error.set(null);
     this.statusMessage.set(null);
 
-    this.api.getReviewCheck(orderDetailId).subscribe({
+    const token = this.capabilityToken();
+    const request = token
+      ? this.api.getReviewCheck(orderDetailId, token)
+      : this.api.getReviewCheck(orderDetailId);
+    request.subscribe({
       next: (details) => {
         this.applyDetails(details);
         this.activeReviewIndex.set(0);
@@ -1077,13 +1096,17 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
 
   approveReviews(): void {
     this.runAction('approve', 'Публикация разрешена', () =>
-      this.api.approveReviewCheck(this.requiredOrderDetailId(), this.buildRequest())
+      this.capabilityToken()
+        ? this.api.approveReviewCheck(this.requiredOrderDetailId(), this.buildRequest(), this.capabilityToken())
+        : this.api.approveReviewCheck(this.requiredOrderDetailId(), this.buildRequest())
     );
   }
 
   sendToCorrection(): void {
     this.runAction('correction', 'Отзывы отправлены на коррекцию', () =>
-      this.api.sendReviewCheckToCorrection(this.requiredOrderDetailId(), this.buildRequest())
+      this.capabilityToken()
+        ? this.api.sendReviewCheckToCorrection(this.requiredOrderDetailId(), this.buildRequest(), this.capabilityToken())
+        : this.api.sendReviewCheckToCorrection(this.requiredOrderDetailId(), this.buildRequest())
     );
   }
 
@@ -1186,9 +1209,14 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
     this.error.set(null);
     this.statusMessage.set(null);
 
+    const token = this.capabilityToken();
     const request = field === 'text'
-      ? this.api.updateReviewCheckText(orderDetailId, review.id, value)
-      : this.api.updateReviewCheckAnswer(orderDetailId, review.id, value);
+      ? (token
+          ? this.api.updateReviewCheckText(orderDetailId, review.id, value, token)
+          : this.api.updateReviewCheckText(orderDetailId, review.id, value))
+      : (token
+          ? this.api.updateReviewCheckAnswer(orderDetailId, review.id, value, token)
+          : this.api.updateReviewCheckAnswer(orderDetailId, review.id, value));
 
     request.subscribe({
       next: (updatedReview) => {

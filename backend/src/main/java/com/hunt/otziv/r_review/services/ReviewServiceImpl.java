@@ -1115,6 +1115,18 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
         OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
 
+        UUID reviewOrderDetailsId = saveReview.getOrderDetails() == null
+                ? null
+                : saveReview.getOrderDetails().getId();
+        if (saveOrderDetails == null
+                || saveOrderDetails.getId() == null
+                || !Objects.equals(saveOrderDetails.getId(), reviewOrderDetailsId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Отзыв не относится к указанным деталям заказа"
+            );
+        }
+
         boolean isChanged = false;
         boolean oldPublish = saveReview.isPublish();
 

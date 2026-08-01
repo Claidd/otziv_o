@@ -25,6 +25,7 @@ import {
   ReviewCheckUpdateRequest
 } from '../../core/review-check.api';
 import { AuthService } from '../../core/auth.service';
+import { reviewCapabilityToken } from '../../core/review-capability-token';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -155,6 +156,7 @@ export class ReviewCheckComponent {
   readonly auth = inject(AuthService);
 
   readonly orderDetailId = signal<string | null>(null);
+  readonly capabilityToken = signal<string | null>(null);
   readonly details = signal<ReviewCheckPayload | null>(null);
   readonly draft = signal<ReviewCheckDraft | null>(null);
   readonly loading = signal(false);
@@ -228,6 +230,19 @@ export class ReviewCheckComponent {
     this.route.paramMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
+        const routeSnapshot = this.route.snapshot;
+        const capabilityRoute = routeSnapshot?.routeConfig?.path === 'review/c';
+        const capabilityToken = capabilityRoute
+          ? reviewCapabilityToken()
+          : null;
+        if (capabilityToken) {
+          this.capabilityToken.set(capabilityToken);
+          this.orderDetailId.set('secure-capability');
+          this.loadReviewCheck();
+          return;
+        }
+
+        this.capabilityToken.set(null);
         const id = params.get('orderDetailId');
         if (!id) {
           this.error.set('Ссылка на проверку некорректна');
@@ -253,7 +268,11 @@ export class ReviewCheckComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    this.reviewCheckApi.getReviewCheck(orderDetailId).subscribe({
+    const token = this.capabilityToken();
+    const request = token
+      ? this.reviewCheckApi.getReviewCheck(orderDetailId, token)
+      : this.reviewCheckApi.getReviewCheck(orderDetailId);
+    request.subscribe({
       next: (details) => {
         this.applyDetails(details);
         this.activeReviewSlide.set(0);
@@ -275,7 +294,9 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'save',
-      this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest()),
+      this.capabilityToken()
+        ? this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest(), this.capabilityToken())
+        : this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest()),
       'Отзывы сохранены',
       'Правки применены'
     );
@@ -290,7 +311,9 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'approve',
-      this.reviewCheckApi.approveReviews(orderDetailId, this.buildRequest()),
+      this.capabilityToken()
+        ? this.reviewCheckApi.approveReviews(orderDetailId, this.buildRequest(), this.capabilityToken())
+        : this.reviewCheckApi.approveReviews(orderDetailId, this.buildRequest()),
       'Публикация разрешена',
       'Заказ переведен в публикацию'
     );
@@ -305,7 +328,9 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'correction',
-      this.reviewCheckApi.sendToCorrection(orderDetailId, this.buildRequest()),
+      this.capabilityToken()
+        ? this.reviewCheckApi.sendToCorrection(orderDetailId, this.buildRequest(), this.capabilityToken())
+        : this.reviewCheckApi.sendToCorrection(orderDetailId, this.buildRequest()),
       'Отправлено на коррекцию',
       'Замечания сохранены'
     );
@@ -727,9 +752,14 @@ export class ReviewCheckComponent {
     this.actionKey.set(key);
     this.error.set(null);
 
+    const token = this.capabilityToken();
     const request = field === 'text'
-      ? this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value)
-      : this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value);
+      ? (token
+          ? this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value, token)
+          : this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value))
+      : (token
+          ? this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value, token)
+          : this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value));
 
     request.subscribe({
       next: (updatedReview) => {
@@ -1429,6 +1459,9 @@ export class ReviewCheckComponent {
   }
 
   private reviewCheckSessionDraftKey(orderDetailId = this.orderDetailId()): string | null {
+    if (this.capabilityToken()) {
+      return null;
+    }
     return orderDetailId ? `review-check:${orderDetailId}` : null;
   }
 

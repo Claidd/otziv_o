@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
 import { ApiService, PublicCommonInvoice } from '../core/api.service';
+import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 
 @Component({
   selector: 'app-public-pay-group-page',
@@ -100,7 +101,10 @@ export class PublicPayGroupPage {
   readonly readyOrders = computed(() => this.invoice()?.orders.filter((order) => order.ready).length ?? 0);
   readonly canSubmit = computed(() => Boolean(this.invoice()?.payable && this.email().includes('@') && this.offerConsent() && this.privacyConsent() && this.receiptConsent() && !this.submitting()));
 
-  constructor(private readonly api: ApiService) {
+  constructor(
+    private readonly api: ApiService,
+    private readonly externalLink: MobileExternalLinkService
+  ) {
     this.loadInvoice();
   }
 
@@ -122,12 +126,16 @@ export class PublicPayGroupPage {
     this.message.set('');
     this.api.initPublicCommonInvoicePayment(this.token(), this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
       next: (response) => {
+        this.submitting.set(false);
         if (response.paymentUrl) {
-          window.location.href = response.paymentUrl;
+          void this.externalLink.openPayment(response.paymentUrl, 'payment').then((opened) => {
+            if (!opened) {
+              this.error.set('Банк вернул недопустимую ссылку оплаты. Переход отменен.');
+            }
+          }).catch(() => this.error.set('Не удалось открыть ссылку оплаты.'));
           return;
         }
         this.message.set('Банк не вернул ссылку на оплату.');
-        this.submitting.set(false);
       },
       error: (error) => {
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));

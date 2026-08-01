@@ -56,6 +56,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -137,6 +138,55 @@ class PaymentLinkServiceTest {
 
         assertNotNull(transactional);
         assertTrue(List.of(transactional.noRollbackFor()).contains(ResponseStatusException.class));
+    }
+
+    @Test
+    void scheduledReconciliationRecordsAttemptEvenWhenBankStatusIsUnchanged() {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        PaymentLink link = new PaymentLink();
+        link.setId(444L);
+        link.setOrder(order(444L, "ООО Ротация", BigDecimal.valueOf(100)));
+        link.setAmountKopecks(10000L);
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setTbankPaymentId("payment-444");
+        link.setTbankOrderId("order-444");
+        link.setTbankTerminalKey("terminal");
+        when(paymentLinkRepository.findByIdForUpdate(444L)).thenReturn(Optional.of(link));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-444")))
+                .thenReturn(new TbankGetStateResponse(
+                        true,
+                        "0",
+                        null,
+                        null,
+                        "terminal",
+                        "NEW",
+                        "payment-444",
+                        "order-444",
+                        10000L
+                ));
+
+        boolean changed = service.reconcileBankLink(444L);
+
+        assertFalse(changed);
+        assertNotNull(link.getBankReconciliationAttemptedAt());
+        verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-444"));
+    }
+
+    @Test
+    void scheduledReconciliationSkipsARecentlyAttemptedLockedLink() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setId(445L);
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setTbankPaymentId("payment-445");
+        link.setBankReconciliationAttemptedAt(LocalDateTime.now());
+        when(paymentLinkRepository.findByIdForUpdate(445L)).thenReturn(Optional.of(link));
+
+        assertFalse(service.reconcileBankLink(445L));
+
+        verify(tbankClient, never()).getState(any(), anyString());
     }
 
     @Test
@@ -623,6 +673,26 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void createForOrderBlocksNewInvoiceWhileBankPaymentNeedsReconciliation() {
+        PaymentLinkService service = service(properties());
+        Order order = order(191L, "ООО Сверка", BigDecimal.valueOf(1000));
+        when(orderRepository.findByIdForMutation(191L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.existsByOrder_IdAndStatusIn(eq(191L), anyCollection()))
+                .thenReturn(true);
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createForOrder(191L)
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        ArgumentCaptor<Collection<PaymentLinkStatus>> statuses = paymentStatusCollectionCaptor();
+        verify(paymentLinkRepository).existsByOrder_IdAndStatusIn(eq(191L), statuses.capture());
+        assertTrue(statuses.getValue().contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
+        verify(paymentLinkRepository, never()).save(any(PaymentLink.class));
+    }
+
+    @Test
     void reportManualPaymentMarksLinkAsReportedWithoutConfirmingOrder() throws Exception {
         PaymentLinkService service = service(properties());
         Order order = order(14L, "ООО Оплатил", BigDecimal.valueOf(500));
@@ -633,6 +703,7 @@ class PaymentLinkServiceTest {
         link.setDescription("Оплата услуг");
         link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
         link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        link.setManualPhone("+79000000000");
         link.setExpiresAt(LocalDateTime.now().plusDays(1));
 
         when(paymentLinkRepository.findByTokenWithOrder("manual-token")).thenReturn(Optional.of(link));
@@ -674,6 +745,83 @@ class PaymentLinkServiceTest {
         verify(orderTransactionService).handlePaymentStatus(order);
         verify(paymentInvoiceRetryScheduler).cancelBadReviewAutoBan(order, "Ручная оплата подтверждена");
         verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void reportManualPaymentRejectsMissingOrUnsafeExternalPaymentTarget() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(141L, "ООО Безопасная ручная оплата", BigDecimal.valueOf(500)));
+        link.setToken("manual-external-unsafe");
+        link.setAmountKopecks(50000L);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setPaymentMethod(PaymentMethod.MANUAL_EXTERNAL_LINK);
+        link.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        link.setManualPaymentUrl("javascript:alert(document.cookie)");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("manual-external-unsafe"))
+                .thenReturn(Optional.of(link));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reportManualPayment("manual-external-unsafe")
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, link.getStatus());
+        assertNull(link.getManualReportedAt());
+        verify(paymentLinkRepository, never()).save(link);
+    }
+
+    @Test
+    void blankLegacyExternalTargetUsesTheSameEffectiveDefaultForReadAndReport() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(143L, "ООО Резервная ручная оплата", BigDecimal.valueOf(500)));
+        link.setToken("manual-external-default");
+        link.setAmountKopecks(50000L);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setPaymentMethod(PaymentMethod.MANUAL_EXTERNAL_LINK);
+        link.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        link.setManualPaymentUrl(null);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("manual-external-default"))
+                .thenReturn(Optional.of(link));
+
+        var response = service.publicLink("manual-external-default");
+        service.reportManualPayment("manual-external-default");
+
+        assertEquals(ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL, response.manualPaymentUrl());
+        assertTrue(response.payable());
+        assertEquals(PaymentLinkStatus.MANUAL_REPORTED, link.getStatus());
+        assertNotNull(link.getManualReportedAt());
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void reportManualPaymentRejectsMobileBankTargetWithoutPhone() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(142L, "ООО Без телефона", BigDecimal.valueOf(500)));
+        link.setToken("manual-mobile-no-phone");
+        link.setAmountKopecks(50000L);
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setPaymentMethod(PaymentMethod.MANUAL_MOBILE_BANK);
+        link.setManualPaymentType(ManualPaymentType.MOBILE_BANK);
+        link.setManualPhone("  ");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("manual-mobile-no-phone"))
+                .thenReturn(Optional.of(link));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.reportManualPayment("manual-mobile-no-phone")
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.WAITING_MANUAL_PAYMENT, link.getStatus());
+        assertNull(link.getManualReportedAt());
+        verify(paymentLinkRepository, never()).save(link);
     }
 
     @Test
@@ -745,6 +893,54 @@ class PaymentLinkServiceTest {
         assertNotNull(order.getCompany().getLastPayerEmailAt());
         verify(orderTransactionService, never()).handlePaymentStatus(order);
         verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void unknownFailedWebhookCannotReleaseReconciliationQuarantineOrAllowNewInvoice() throws Exception {
+        TbankPaymentProperties properties = properties();
+        properties.setTerminalKey("terminal");
+        properties.setPassword("password");
+        TbankTokenSigner signer = new TbankTokenSigner();
+        PaymentLinkService service = service(properties, signer);
+        Order order = order(23L, "ООО Карантин", BigDecimal.valueOf(11.11));
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order);
+        link.setToken("quarantined-token");
+        link.setTbankOrderId("o23-quarantine");
+        link.setTbankPaymentId("payment-created-by-bank");
+        link.setAmountKopecks(1111L);
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        Map<String, String> payload = new LinkedHashMap<>();
+        payload.put("TerminalKey", "terminal");
+        payload.put("OrderId", "o23-quarantine");
+        payload.put("Success", "false");
+        payload.put("Status", "UNKNOWN_PROVIDER_STATE");
+        payload.put("PaymentId", "payment-created-by-bank");
+        payload.put("ErrorCode", "999");
+        payload.put("Amount", "1111");
+        payload.put("Token", signer.sign(payload, "password"));
+
+        when(paymentLinkRepository.findByTbankOrderIdWithOrder("o23-quarantine"))
+                .thenReturn(Optional.of(link));
+
+        service.handleTbankWebhook(payload);
+
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertTrue(link.getLastError().startsWith("bank_status_reconciliation_error:"));
+
+        when(orderRepository.findByIdForMutation(23L)).thenReturn(Optional.of(order));
+        when(paymentLinkRepository.existsByOrder_IdAndStatusIn(eq(23L), anyCollection()))
+                .thenReturn(true);
+
+        ResponseStatusException conflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createForOrder(23L)
+        );
+
+        assertEquals(409, conflict.getStatusCode().value());
+        verify(tbankClient, never()).init(any(), any(TbankInitCommand.class));
     }
 
     @Test
@@ -879,6 +1075,28 @@ class PaymentLinkServiceTest {
         when(paymentLinkRepository.findByTokenWithOrder("token")).thenReturn(Optional.of(link));
 
         assertEquals("client@example.ru", service.publicLink("token").payerEmail());
+    }
+
+    @Test
+    void publicManualLinkHidesUnsafeLegacyUrlWithoutBreakingThePage() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(22L, "ООО Старые реквизиты", BigDecimal.valueOf(200)));
+        link.setToken("legacy-unsafe-manual");
+        link.setAmountKopecks(20000L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.WAITING_MANUAL_PAYMENT);
+        link.setPaymentMethod(PaymentMethod.MANUAL_EXTERNAL_LINK);
+        link.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        link.setManualPaymentUrl("javascript:alert(document.cookie)");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("legacy-unsafe-manual"))
+                .thenReturn(Optional.of(link));
+
+        var response = service.publicLink("legacy-unsafe-manual");
+
+        assertEquals("", response.manualPaymentUrl());
+        assertFalse(response.payable());
     }
 
     @Test
@@ -1070,6 +1288,139 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void publicLinkReconcilesQuarantinedProviderPaymentAndKeepsItNonPayable() {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(231L, "ООО Сверка ссылки", BigDecimal.valueOf(250));
+        PaymentLink link = new PaymentLink();
+        link.setId(231L);
+        link.setOrder(order);
+        link.setToken("needs-reconciliation");
+        link.setAmountKopecks(25000L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setTbankPaymentId("payment-231");
+        link.setTbankTerminalKey("terminal");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("needs-reconciliation"))
+                .thenReturn(Optional.of(link));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-231")))
+                .thenReturn(new TbankGetStateResponse(
+                        true,
+                        "0",
+                        null,
+                        null,
+                        "terminal",
+                        "CONFIRMED",
+                        "payment-231",
+                        "order-231",
+                        25000L
+                ));
+
+        var response = service.publicLink("needs-reconciliation");
+
+        assertEquals(PaymentLinkStatus.TEST_CONFIRMED, link.getStatus());
+        assertEquals("TEST_CONFIRMED", response.status());
+        assertFalse(response.payable());
+        verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-231"));
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void publicLinkDoesNotReplaceOrExposeQuarantinedProviderPaymentAsPayable() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setId(232L);
+        link.setOrder(order(232L, "ООО Ссылка на сверке", BigDecimal.valueOf(250)));
+        link.setToken("quarantined-provider-payment");
+        link.setAmountKopecks(25000L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setTbankPaymentId("payment-232");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("quarantined-provider-payment"))
+                .thenReturn(Optional.of(link));
+
+        var response = service.publicLink("quarantined-provider-payment");
+
+        assertEquals("quarantined-provider-payment", response.token());
+        assertEquals("NEEDS_RECONCILIATION", response.status());
+        assertFalse(response.payable());
+        verify(paymentLinkRepository, never())
+                .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
+                        eq(232L),
+                        anyCollection(),
+                        any(LocalDateTime.class)
+                );
+        verify(orderRepository, never()).findByIdForMutation(232L);
+    }
+
+    @Test
+    void initDoesNotExpireOrRetryQuarantinedProviderPaymentAfterPublicTtl() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setId(233L);
+        link.setOrder(order(233L, "ООО Просроченная сверка", BigDecimal.valueOf(250)));
+        link.setToken("expired-reconciliation");
+        link.setAmountKopecks(25000L);
+        link.setStatus(PaymentLinkStatus.NEEDS_RECONCILIATION);
+        link.setTbankPaymentId("payment-233");
+        link.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        when(paymentLinkRepository.findByTokenWithOrder("expired-reconciliation"))
+                .thenReturn(Optional.of(link));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.init(
+                        "expired-reconciliation",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "203.0.113.9",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        verify(tbankClient, never()).init(any(TbankPaymentProfile.class), any(TbankInitCommand.class));
+        verify(paymentLinkRepository, never()).save(link);
+    }
+
+    @Test
+    void initDoesNotCreateAnotherBankPaymentAfterAuthorization() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setId(234L);
+        link.setOrder(order(234L, "ООО Авторизовано", BigDecimal.valueOf(250)));
+        link.setToken("authorized-payment");
+        link.setAmountKopecks(25000L);
+        link.setStatus(PaymentLinkStatus.AUTHORIZED);
+        link.setTbankPaymentId("payment-234");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+        when(paymentLinkRepository.findByTokenWithOrder("authorized-payment"))
+                .thenReturn(Optional.of(link));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.init(
+                        "authorized-payment",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "203.0.113.9",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(409, error.getStatusCode().value());
+        verify(tbankClient, never()).init(any(TbankPaymentProfile.class), any(TbankInitCommand.class));
+    }
+
+    @Test
     void initUsesShortBankRedirectDueInsteadOfPublicLinkTtl() {
         TbankPaymentProperties properties = properties();
         properties.setLinkTtl(Duration.ofDays(90));
@@ -1099,7 +1450,15 @@ class PaymentLinkServiceTest {
         ));
 
         OffsetDateTime minExpected = OffsetDateTime.now(ZoneId.of("Europe/Moscow")).plusDays(7).minusSeconds(2);
-        service.init("token", "PAYER@EXAMPLE.RU", true, true, true, "203.0.113.7", "JUnit UA");
+        PublicPaymentInitResponse response = service.init(
+                "token",
+                "PAYER@EXAMPLE.RU",
+                true,
+                true,
+                true,
+                "203.0.113.7",
+                "JUnit UA"
+        );
 
         ArgumentCaptor<TbankInitCommand> captor = ArgumentCaptor.forClass(TbankInitCommand.class);
         ArgumentCaptor<TbankPaymentProfile> profileCaptor = ArgumentCaptor.forClass(TbankPaymentProfile.class);
@@ -1121,6 +1480,155 @@ class PaymentLinkServiceTest {
         assertNotNull(link.getReceiptConsentAt());
         assertEquals(PaymentLinkStatus.INITIATED, link.getStatus());
         assertEquals("https://securepay.tinkoff.ru/pay", link.getPaymentUrl());
+        assertEquals("https://securepay.tinkoff.ru/pay", response.paymentUrl());
+    }
+
+    @Test
+    void initRejectsUnsafeProviderUrlAndRetainsPaymentIdForReconciliation() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(301L, "ООО Опасная ссылка", BigDecimal.valueOf(123.45)));
+        link.setToken("unsafe-provider-url");
+        link.setAmountKopecks(12345L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("unsafe-provider-url")).thenReturn(Optional.of(link));
+        when(tbankClient.init(any(TbankPaymentProfile.class), any(TbankInitCommand.class))).thenReturn(new TbankInitResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "NEW",
+                "payment-unsafe-url",
+                "order-unsafe-url",
+                12345L,
+                "javascript:alert(document.cookie)"
+        ));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.init(
+                        "unsafe-provider-url",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "203.0.113.7",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals("payment-unsafe-url", link.getTbankPaymentId());
+        assertNull(link.getPaymentUrl());
+        assertTrue(link.getLastError().startsWith("unsafe_tbank_payment_url:"));
+        verify(paymentLinkRepository).save(link);
+
+        ResponseStatusException retryException = assertThrows(
+                ResponseStatusException.class,
+                () -> service.init(
+                        "unsafe-provider-url",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "203.0.113.7",
+                        "JUnit UA"
+                )
+        );
+        assertEquals(409, retryException.getStatusCode().value());
+        verify(tbankClient, times(1)).init(any(TbankPaymentProfile.class), any(TbankInitCommand.class));
+    }
+
+    @Test
+    void initQuarantinesUnsafeCachedProviderUrlWithoutCreatingAnotherPayment() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(303L, "ООО Старая опасная ссылка", BigDecimal.valueOf(123.45)));
+        link.setToken("unsafe-cached-provider-url");
+        link.setAmountKopecks(12345L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.BANK_FORM);
+        link.setTbankPaymentId("cached-payment-id");
+        link.setPaymentUrl("javascript:cached-recipient()");
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+        when(paymentLinkRepository.findByTokenWithOrder("unsafe-cached-provider-url"))
+                .thenReturn(Optional.of(link));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.init(
+                        "unsafe-cached-provider-url",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "203.0.113.7",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertNull(link.getPaymentUrl());
+        assertTrue(link.getLastError().startsWith("unsafe_cached_tbank_payment_url:"));
+        verify(tbankClient, never()).init(any(TbankPaymentProfile.class), any(TbankInitCommand.class));
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void initSbpQuarantinesUnsafeFallbackUrlAfterBankPaymentWasCreated() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(302L, "ООО Опасная резервная ссылка", BigDecimal.valueOf(123.45)));
+        link.setToken("unsafe-sbp-provider-url");
+        link.setAmountKopecks(12345L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.CREATED);
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+        when(paymentLinkRepository.findByTokenWithOrder("unsafe-sbp-provider-url"))
+                .thenReturn(Optional.of(link));
+        when(tbankClient.init(any(TbankPaymentProfile.class), any(TbankInitCommand.class)))
+                .thenReturn(new TbankInitResponse(
+                        true,
+                        "0",
+                        null,
+                        null,
+                        "terminal",
+                        "NEW",
+                        "payment-unsafe-sbp-url",
+                        "order-unsafe-sbp-url",
+                        12345L,
+                        "data:text/html,<script>alert(1)</script>"
+                ));
+
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initSbp(
+                        "unsafe-sbp-provider-url",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        null,
+                        "203.0.113.8",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(502, error.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertEquals(PaymentMethod.SBP_QR, link.getPaymentMethod());
+        assertEquals("payment-unsafe-sbp-url", link.getTbankPaymentId());
+        assertNull(link.getPaymentUrl());
+        assertTrue(link.getLastError().startsWith("unsafe_tbank_payment_url:"));
+        verify(tbankClient, never()).getQr(any(TbankPaymentProfile.class), any(TbankGetQrCommand.class));
+        verify(paymentLinkRepository).save(link);
     }
 
     @Test
@@ -1252,6 +1760,134 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void initSbpQuarantinesFreshUnsafePayloadWithoutReturningIt() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(331L, "ООО Опасный СБП", BigDecimal.valueOf(321)));
+        link.setToken("unsafe-sbp");
+        link.setAmountKopecks(32100L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setTbankPaymentId("payment-unsafe-sbp");
+        link.setPaymentUrl("https://securepay.tinkoff.ru/pay");
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("unsafe-sbp")).thenReturn(Optional.of(link));
+        when(tbankClient.getQr(any(TbankPaymentProfile.class), any(TbankGetQrCommand.class))).thenReturn(new TbankGetQrResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "payment-unsafe-sbp",
+                "data:text/html,<script>alert(1)</script>"
+        ));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initSbp(
+                        "unsafe-sbp",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        "bank-1",
+                        "203.0.113.8",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertNull(link.getPaymentUrl());
+        assertNull(link.getSbpQrPayload());
+        assertTrue(link.getLastError().startsWith("unsafe_tbank_sbp_payload:"));
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void initSbpQuarantinesUnsafeCachedPayloadWithoutRefreshingIt() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(333L, "ООО Старый опасный СБП", BigDecimal.valueOf(321)));
+        link.setToken("unsafe-cached-sbp");
+        link.setAmountKopecks(32100L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankPaymentId("payment-unsafe-cached-sbp");
+        link.setPaymentUrl("https://securepay.tinkoff.ru/pay");
+        link.setSbpQrPayload("data:text/html,<script>alert(1)</script>");
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+        when(paymentLinkRepository.findByTokenWithOrder("unsafe-cached-sbp"))
+                .thenReturn(Optional.of(link));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.initSbp(
+                        "unsafe-cached-sbp",
+                        "payer@example.ru",
+                        true,
+                        true,
+                        true,
+                        null,
+                        "203.0.113.8",
+                        "JUnit UA"
+                )
+        );
+
+        assertEquals(502, exception.getStatusCode().value());
+        assertEquals(PaymentLinkStatus.NEEDS_RECONCILIATION, link.getStatus());
+        assertNull(link.getPaymentUrl());
+        assertNull(link.getSbpQrPayload());
+        assertTrue(link.getLastError().startsWith("unsafe_cached_tbank_sbp_payload:"));
+        verify(tbankClient, never()).getQr(any(TbankPaymentProfile.class), any(TbankGetQrCommand.class));
+        verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void genericSbpRequestDoesNotReuseBankSpecificCachedDeeplink() {
+        PaymentLinkService service = service(properties());
+        PaymentLink link = new PaymentLink();
+        link.setOrder(order(332L, "ООО Новый QR", BigDecimal.valueOf(321)));
+        link.setToken("generic-after-bank");
+        link.setAmountKopecks(32100L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setPaymentMethod(PaymentMethod.SBP_QR);
+        link.setTbankPaymentId("payment-generic-after-bank");
+        link.setPaymentUrl("https://securepay.tinkoff.ru/pay");
+        link.setSbpQrPayload("bank100000000111://qr.nspk.ru/AS100000000111");
+        link.setExpiresAt(LocalDateTime.now().plusDays(90));
+
+        when(paymentLinkRepository.findByTokenWithOrder("generic-after-bank")).thenReturn(Optional.of(link));
+        when(tbankClient.getQr(any(TbankPaymentProfile.class), any(TbankGetQrCommand.class))).thenReturn(new TbankGetQrResponse(
+                true,
+                "0",
+                null,
+                null,
+                "terminal",
+                "payment-generic-after-bank",
+                "https://qr.nspk.ru/AS100000000222"
+        ));
+
+        PublicPaymentInitResponse response = service.initSbp(
+                "generic-after-bank",
+                "payer@example.ru",
+                true,
+                true,
+                true,
+                null,
+                "203.0.113.8",
+                "JUnit UA"
+        );
+
+        assertEquals("https://qr.nspk.ru/AS100000000222", response.qrPayload());
+        assertEquals("https://qr.nspk.ru/AS100000000222", link.getSbpQrPayload());
+        verify(tbankClient).getQr(any(TbankPaymentProfile.class), any(TbankGetQrCommand.class));
+    }
+
+    @Test
     void publicSbpBanksLoadsBankListFromTbankAndMarksFeatured() {
         PaymentLinkService service = service(properties());
         Order order = order(34L, "ООО Банки СБП", BigDecimal.valueOf(321));
@@ -1345,6 +1981,63 @@ class PaymentLinkServiceTest {
         assertEquals("REFUNDED", response.status());
         assertFalse(response.refundable());
         verify(paymentLinkRepository).save(link);
+    }
+
+    @Test
+    void adminFailedFilterAndRejectedSummaryIncludeReconciliationQuarantine() {
+        PaymentLinkService service = service(properties());
+        when(paymentLinkRepository.findAdminPage(
+                anyString(),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                any()
+        )).thenReturn(new PageImpl<>(List.of()));
+
+        service.adminLinks(0, 25, "failed", null, null, null, "live");
+
+        ArgumentCaptor<Collection<PaymentLinkStatus>> pageFailedStatuses = paymentStatusCollectionCaptor();
+        verify(paymentLinkRepository).findAdminPage(
+                eq("failed"),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                pageFailedStatuses.capture(),
+                anyCollection(),
+                any()
+        );
+        ArgumentCaptor<Collection<PaymentLinkStatus>> summaryFailedStatuses = paymentStatusCollectionCaptor();
+        ArgumentCaptor<Collection<PaymentLinkStatus>> rejectedStatuses = paymentStatusCollectionCaptor();
+        verify(paymentLinkRepository).summarizeAdminPage(
+                eq("failed"),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                summaryFailedStatuses.capture(),
+                anyCollection(),
+                anyCollection(),
+                anyCollection(),
+                rejectedStatuses.capture(),
+                any(),
+                any()
+        );
+        assertTrue(pageFailedStatuses.getValue().contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
+        assertTrue(summaryFailedStatuses.getValue().contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
+        assertTrue(rejectedStatuses.getValue().contains(PaymentLinkStatus.NEEDS_RECONCILIATION));
     }
 
     @Test
@@ -1660,5 +2353,10 @@ class PaymentLinkServiceTest {
         profile.setDefaultProfile(TbankPaymentProfile.PRIMARY_CODE.equals(code));
         profile.setTestMode(true);
         return profile;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private ArgumentCaptor<Collection<PaymentLinkStatus>> paymentStatusCollectionCaptor() {
+        return ArgumentCaptor.forClass((Class) Collection.class);
     }
 }

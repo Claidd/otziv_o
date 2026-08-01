@@ -3,6 +3,8 @@ package com.hunt.otziv.b_bots.controller;
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.b_bots.dto.BotDTO;
+import com.hunt.otziv.b_bots.dto.BrowserBotMetadataResponse;
+import com.hunt.otziv.b_bots.services.BotBrowserAccessService;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.b_bots.services.StatusBotService;
 import com.hunt.otziv.b_bots.utils.BotValidation;
@@ -30,12 +32,20 @@ public class BotsController {
     private final UserService userService;
     private final StatusBotService statusBotService;
     private final BotValidation botValidation;
+    private final BotBrowserAccessService botBrowserAccessService;
 
-    public BotsController(BotService botService, UserService userService, StatusBotService statusBotService, BotValidation botValidation) {
+    public BotsController(
+            BotService botService,
+            UserService userService,
+            StatusBotService statusBotService,
+            BotValidation botValidation,
+            BotBrowserAccessService botBrowserAccessService
+    ) {
         this.botService = botService;
         this.userService = userService;
         this.statusBotService = statusBotService;
         this.botValidation = botValidation;
+        this.botBrowserAccessService = botBrowserAccessService;
     }
 
     //Открываем страницу со списком ботов
@@ -128,10 +138,16 @@ public class BotsController {
     } // Берем роль пользователя
 
     @GetMapping("/{botId}/browser")
-    public String botBrowserPage(@PathVariable Long botId, Model model) {
-        BotDTO bot = botService.findById(botId);
+    public String botBrowserPage(@PathVariable Long botId, Model model, Authentication authentication) {
+        BotBrowserAccessService.AuthorizedBot authorizedBot =
+                botBrowserAccessService.requireAccess(botId, authentication);
+        BrowserBotMetadataResponse bot = new BrowserBotMetadataResponse(
+                authorizedBot.id(),
+                authorizedBot.login(),
+                authorizedBot.fio()
+        );
 
-        model.addAttribute("botId", bot.getId());
+        model.addAttribute("botId", bot.botId());
         model.addAttribute("bot", bot);
         return "bots/bot_browser";   // templates/bot-browser.html
     }

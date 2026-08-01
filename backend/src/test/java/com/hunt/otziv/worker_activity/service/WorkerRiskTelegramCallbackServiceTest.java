@@ -34,6 +34,8 @@ import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -117,10 +119,12 @@ class WorkerRiskTelegramCallbackServiceTest {
         worker.setWorkerTelegramGroupChatId(-100456L);
 
         when(userService.findByChatId(777L)).thenReturn(Optional.of(admin));
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
         when(personalReminderService.hasOpenSystemReminder(worker, "WORKER_RISK_MANAGER_WARNING", 77L))
                 .thenReturn(false);
+        when(telegramService.sendMessageWithInlineKeyboard(eq(-100456L), any(), eq(null), any()))
+                .thenReturn(true);
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         Order riskOrder = new Order();
         riskOrder.setId(100L);
@@ -154,6 +158,49 @@ class WorkerRiskTelegramCallbackServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals(WorkerRiskIncidentStatus.OPEN, captor.getValue().getStatus());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
+    }
+
+    @Test
+    void managerExplanationCallbackWithUnlinkedWorkerDoesNotStartSlaOrSendKeyboard() {
+        WorkerRiskIncident incident = incident();
+        incident.setResponseDueAt(java.time.LocalDateTime.now().plusHours(2));
+        incident.setExplanationReminderAt(java.time.LocalDateTime.now().minusMinutes(5));
+        incident.setSectionRestrictedAt(java.time.LocalDateTime.now().minusMinutes(1));
+        incident.setSlaDeliveryClaimToken("claim-token");
+        incident.setSlaDeliveryClaimedAt(java.time.LocalDateTime.now());
+        incident.setSlaDeliveryClaimKind("REMINDER");
+
+        User admin = user(1L, "admin", 777L, "ROLE_ADMIN");
+        User worker = user(2L, "secret-login", null, "ROLE_WORKER");
+        worker.setWorkerTelegramGroupChatId(-100456L);
+
+        when(userService.findByChatId(777L)).thenReturn(Optional.of(admin));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
+        when(incidentRepository.save(any(WorkerRiskIncident.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<String> answer = service.handle(callbackFromGroup(-100123L, 777L, "worker-risk:77:e"));
+
+        assertEquals(Optional.of("Личный Telegram не привязан; срок ответа не запущен"), answer);
+        assertNull(incident.getResponseDueAt());
+        assertNull(incident.getExplanationReminderAt());
+        assertNull(incident.getSlaDeliveryClaimToken());
+        assertNotNull(incident.getSectionRestrictionReleasedAt());
+        verify(telegramService, never()).sendMessageWithInlineKeyboard(anyLong(), any(), any(), any());
+        ArgumentCaptor<String> warning = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-100456L), warning.capture());
+        assertEquals(true, warning.getValue().contains("срок и ограничение раздела не запущены"));
+        assertFalse(warning.getValue().contains("secret-login"));
+        assertFalse(warning.getValue().contains("worker"));
+        verify(riskEventService).record(
+                eq(incident),
+                eq(com.hunt.otziv.worker_activity.model.WorkerRiskEventType.EXPLANATION_REQUEST_FAILED),
+                eq(2L),
+                eq("WORKER"),
+                eq("telegram"),
+                any()
+        );
     }
 
     @Test
@@ -206,11 +253,14 @@ class WorkerRiskTelegramCallbackServiceTest {
     @Test
     void explanationPromptCallbackFromWorkerGroupAllowsOnlyAssignedWorkerWithoutForcingReplyForOthers() {
         WorkerRiskIncident incident = incident();
-        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        incident.setExplanationReminderAt(java.time.LocalDateTime.now().minusMinutes(30));
+        incident.setSectionRestrictedAt(java.time.LocalDateTime.now().minusMinutes(20));
+        incident.setSectionRestrictionReleasedAt(java.time.LocalDateTime.now().minusMinutes(10));
+        User worker = user(2L, "worker-renamed", 888L, "ROLE_WORKER");
         worker.setWorkerTelegramGroupChatId(-100123L);
 
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
         when(userService.findByChatId(888L)).thenReturn(Optional.of(worker));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -221,6 +271,10 @@ class WorkerRiskTelegramCallbackServiceTest {
         verify(incidentRepository).save(captor.capture());
         assertEquals(WorkerRiskResolutionAction.EXPLANATION_REQUESTED, captor.getValue().getResolutionAction());
         assertEquals(WorkerRiskIncidentStatus.OPEN, captor.getValue().getStatus());
+        assertNotNull(captor.getValue().getResponseDueAt());
+        assertNull(captor.getValue().getExplanationReminderAt());
+        assertNull(captor.getValue().getSectionRestrictedAt());
+        assertNull(captor.getValue().getSectionRestrictionReleasedAt());
         verify(telegramService).sendMessage(eq(-100123L), contains("Код запроса: risk-77"));
         verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
         verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
@@ -233,8 +287,8 @@ class WorkerRiskTelegramCallbackServiceTest {
         worker.setWorkerTelegramGroupChatId(-100123L);
         User manager = user(9L, "manager", 999L, "ROLE_MANAGER");
 
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
         when(userService.findByChatId(999L)).thenReturn(Optional.of(manager));
 
         Optional<String> answer = service.handle(callbackFromGroup(-100123L, 999L, "worker-risk-explain:77"));
@@ -251,7 +305,7 @@ class WorkerRiskTelegramCallbackServiceTest {
         incident.setResolutionAction(WorkerRiskResolutionAction.VERIFIED);
         incident.setTelegramNotificationChatId(-100123L);
         incident.setTelegramNotificationMessageId(12);
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
 
         Optional<String> answer = service.handle(callbackFromGroup(-100123L, 888L, "worker-risk-explain:77"));
 
@@ -290,22 +344,21 @@ class WorkerRiskTelegramCallbackServiceTest {
     }
 
     @Test
-    void explanationPromptWithoutWorkerTelegramBindingDoesNotForceReplyForWholeGroup() {
+    void explanationPromptFromUnlinkedTelegramExplainsHowToBindAccount() {
         WorkerRiskIncident incident = incident();
         User worker = user(2L, "worker", null, "ROLE_WORKER");
         worker.setWorkerTelegramGroupChatId(-100123L);
 
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
-        when(userService.findByChatId(444L)).thenReturn(Optional.of(worker));
-        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
 
-        service.handle(callbackFromGroup(-100123L, 444L, "worker-risk-explain:77"));
-
-        verify(telegramService).sendMessage(
-                eq(-100123L),
-                contains("Telegram специалиста не привязан")
+        Optional<String> answer = service.handle(
+                callbackFromGroup(-100123L, 444L, "worker-risk-explain:77")
         );
+
+        assertEquals(true, answer.orElse("").contains("администратору для безопасной привязки"));
+        verify(incidentRepository, never()).save(any());
+        verify(telegramService, never()).sendMessage(anyLong(), any());
         verify(telegramService, never()).sendSelectiveForceReplyMessage(anyLong(), anyLong(), any());
         verify(telegramService, never()).sendForceReplyMessage(anyLong(), any());
     }
@@ -324,8 +377,8 @@ class WorkerRiskTelegramCallbackServiceTest {
         manager.setUser(managerUser);
         worker.setManagers(Set.of(manager));
 
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
         when(userService.findByChatId(888L)).thenReturn(Optional.of(worker));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of());
@@ -352,14 +405,41 @@ class WorkerRiskTelegramCallbackServiceTest {
     }
 
     @Test
+    void workerGroupReplyFromUnrelatedWorkerIsRejected() {
+        WorkerRiskIncident incident = incident();
+        incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        incident.setExplanationRequestedAt(java.time.LocalDateTime.now());
+        incident.setExplanationPromptedAt(java.time.LocalDateTime.now());
+        User assignedWorker = user(2L, "worker", 888L, "ROLE_WORKER");
+        assignedWorker.setWorkerTelegramGroupChatId(-100123L);
+        User coveringWorker = user(5L, "cover", 555L, "ROLE_WORKER");
+
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(assignedWorker);
+        when(userService.findByChatId(555L)).thenReturn(Optional.of(coveringWorker));
+        boolean handled = service.handleWorkerGroupTextMessage(
+                -100123L,
+                555L,
+                "Нажмите «Ответить» на это сообщение.\nКод запроса: risk-77",
+                true,
+                "Проверила аккаунт дважды перед блокировкой"
+        );
+
+        assertEquals(false, handled);
+        assertNull(incident.getWorkerExplanationByUserId());
+        assertNull(incident.getWorkerExplanation());
+        verify(incidentRepository, never()).save(any());
+    }
+
+    @Test
     void workerGroupReplyFromManagerIsNotStoredAsWorkerExplanation() {
         WorkerRiskIncident incident = incident();
         User worker = user(2L, "worker", 888L, "ROLE_WORKER");
         worker.setWorkerTelegramGroupChatId(-100123L);
         User manager = user(4L, "manager", 444L, "ROLE_MANAGER");
 
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
         when(userService.findByChatId(444L)).thenReturn(Optional.of(manager));
 
         boolean handled = service.handleWorkerGroupTextMessage(
@@ -371,6 +451,33 @@ class WorkerRiskTelegramCallbackServiceTest {
         );
 
         assertEquals(false, handled);
+        verify(incidentRepository, never()).save(any());
+    }
+
+    @Test
+    void workerGroupReplyFromUnlinkedTelegramIsRejectedWithVisibleInstruction() {
+        WorkerRiskIncident incident = incident();
+        incident.setResolutionAction(WorkerRiskResolutionAction.EXPLANATION_REQUESTED);
+        incident.setExplanationRequestedAt(java.time.LocalDateTime.now());
+        User worker = user(2L, "worker", 888L, "ROLE_WORKER");
+        worker.setWorkerTelegramGroupChatId(-100123L);
+
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
+
+        boolean handled = service.handleWorkerGroupTextMessage(
+                -100123L,
+                444L,
+                "Нажмите «Ответить» на это сообщение.\nКод запроса: risk-77",
+                true,
+                "Проверила аккаунт дважды"
+        );
+
+        assertEquals(false, handled);
+        ArgumentCaptor<String> instruction = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-100123L), instruction.capture());
+        assertEquals(true, instruction.getValue().contains("Ответ не засчитан: Telegram не привязан"));
+        assertFalse(instruction.getValue().contains(worker.getUsername()));
         verify(incidentRepository, never()).save(any());
     }
 
@@ -468,7 +575,7 @@ class WorkerRiskTelegramCallbackServiceTest {
         User admin = user(1L, "admin", 777L, "ROLE_ADMIN");
 
         when(userService.findByChatId(777L)).thenReturn(Optional.of(admin));
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Optional<String> answer = service.handle(callbackFromGroup(-100123L, 777L, "worker-risk:77:v"));

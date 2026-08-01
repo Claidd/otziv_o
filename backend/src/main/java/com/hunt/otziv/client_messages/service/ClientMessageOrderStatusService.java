@@ -268,6 +268,13 @@ public class ClientMessageOrderStatusService {
             return false;
         }
 
+        if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)) {
+            return true;
+        }
+        if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code)) {
+            return state.getLockedUntil() == null || !state.getLockedUntil().isAfter(LocalDateTime.now());
+        }
+
         if (isOperationalSkip(code)) {
             return false;
         }

@@ -30,6 +30,7 @@ import com.hunt.otziv.common_billing.repository.CommonBillingAccountRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceOrderRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoicePaymentRefRepository;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
+import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
@@ -61,6 +62,7 @@ import com.hunt.otziv.payments.model.PaymentProfile;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentProfileService;
+import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import com.hunt.otziv.payments.service.TbankClient;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.payments.service.TbankTokenSigner;
@@ -100,6 +102,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -113,12 +116,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.CLOSE_ORDER;
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.CaughtFailureStage.OPEN_NEXT_ORDER;
+import static com.hunt.otziv.config.metrics.R0ObservabilityMetrics.TransactionFlow.COMMON_INVOICE_CLOSE;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class CommonBillingService {
 
     public static final String STATUS_WAITING_COMMON_INVOICE = "Ожидает общего счета";
+    private static final int BULK_QUERY_CHUNK_SIZE = 500;
+    private static final int BOARD_BATCH_SIZE = 200;
     private static final String STATUS_NEEDS_ATTENTION = "Требует внимания";
     private static final String STATUS_NOT_PAID = "Не оплачено";
     private static final String STATUS_PUBLIC = "Опубликовано";
@@ -302,6 +311,7 @@ public class CommonBillingService {
     private final ReviewRecoveryGateService recoveryGateService;
     private final CommonInvoicePublicationBlockerService publicationBlockerService;
     private final ObjectProvider<OrderPublicationApprovalService> publicationApprovalServiceProvider;
+    private final R0ObservabilityMetrics observabilityMetrics;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -312,9 +322,16 @@ public class CommonBillingService {
         Map<Long, List<CommonBillingAccountCompany>> companies = accountCompanyRepository.findByAccountIds(ids)
                 .stream()
                 .collect(Collectors.groupingBy(link -> link.getAccount().getId()));
-        return accounts.stream()
+        List<CommonBillingAccount> visibleAccounts = accounts.stream()
                 .filter(account -> accountVisibleToManager(account, companies.getOrDefault(account.getId(), List.of()), visibleManagerIds))
-                .map(account -> toAccountResponse(account, companies.getOrDefault(account.getId(), List.of())))
+                .toList();
+        Map<Long, CommonInvoiceSummaryResponse> currentInvoices = currentInvoiceSummaries(visibleAccounts);
+        return visibleAccounts.stream()
+                .map(account -> toAccountResponse(
+                        account,
+                        companies.getOrDefault(account.getId(), List.of()),
+                        currentInvoices.get(account.getId())
+                ))
                 .toList();
     }
 
@@ -337,9 +354,16 @@ public class CommonBillingService {
                 : accountCompanyRepository.findByAccountIds(ids)
                         .stream()
                         .collect(Collectors.groupingBy(link -> link.getAccount().getId()));
-        return accounts.stream()
+        List<CommonBillingAccount> visibleAccounts = accounts.stream()
                 .filter(account -> accountVisibleToManager(account, companies.getOrDefault(account.getId(), List.of()), visibleManagerIds))
-                .map(account -> toAccountResponse(account, companies.getOrDefault(account.getId(), List.of())))
+                .toList();
+        Map<Long, CommonInvoiceSummaryResponse> currentInvoices = currentInvoiceSummaries(visibleAccounts);
+        return visibleAccounts.stream()
+                .map(account -> toAccountResponse(
+                        account,
+                        companies.getOrDefault(account.getId(), List.of()),
+                        currentInvoices.get(account.getId())
+                ))
                 .toList();
     }
 
@@ -454,6 +478,110 @@ public class CommonBillingService {
                 .filter(status -> !status.isBlank())
                 .forEach(status -> counts.merge(status, 1, Integer::sum));
         return counts;
+    }
+
+    /**
+     * Loads the common-invoice portion of a manager board in bounded database
+     * batches. The same pass calculates both the common-card total and the
+     * linked-order deduction, so the board does not read every invoice/item
+     * graph twice before composing one page.
+     */
+    @Transactional
+    public ManagerBoardPage managerBoardPage(
+            String boardStatus,
+            String keyword,
+            Long companyId,
+            Set<Long> visibleManagerIds,
+            String sortDirection,
+            int pageNumber,
+            int pageSize
+    ) {
+        int safePageNumber = Math.max(0, pageNumber);
+        int safePageSize = Math.max(1, pageSize);
+        long pageStart = (long) safePageNumber * safePageSize;
+        long pageEnd = pageStart + safePageSize;
+        String normalizedStatus = normalize(boardStatus);
+        String normalizedKeyword = normalize(keyword).toLowerCase(Locale.ROOT);
+
+        normalizeBoardInvoiceDuplicates();
+
+        long matchedCards = 0L;
+        Set<Long> matchingLinkedOrderIds = new HashSet<>();
+        List<BoardInvoiceView> selectedCards = new ArrayList<>(safePageSize);
+        int batchNumber = 0;
+        boolean exhausted;
+        do {
+            BoardInvoiceBatch batch = boardInvoiceBatch(batchNumber++, sortDirection);
+            exhausted = batch.exhausted();
+            for (BoardInvoiceView view : batch.invoices()) {
+                CommonInvoice invoice = view.invoice();
+                List<CommonInvoiceOrder> items = view.items();
+                if (!visibleToManager(invoice, items, visibleManagerIds)) {
+                    continue;
+                }
+
+                items.stream()
+                        .filter(item -> itemVisibleInOrderMetrics(item, visibleManagerIds))
+                        .filter(item -> matchesLinkedOrderStatus(item, normalizedStatus))
+                        .filter(item -> matchesLinkedOrderCompany(item, companyId))
+                        .filter(item -> matchesLinkedOrderKeyword(item, normalizedKeyword))
+                        .map(CommonInvoiceOrder::getOrder)
+                        .filter(order -> order != null && order.getId() != null)
+                        .map(Order::getId)
+                        .forEach(matchingLinkedOrderIds::add);
+
+                if (!matchesBoardStatus(invoice, items, normalizedStatus)
+                        || !matchesBoardCompany(items, companyId)
+                        || !matchesBoardKeyword(invoice, items, normalizedKeyword)) {
+                    continue;
+                }
+                if (matchedCards >= pageStart && matchedCards < pageEnd) {
+                    selectedCards.add(view);
+                }
+                matchedCards++;
+            }
+        } while (!exhausted);
+
+        List<OrderDTOList> cards = selectedCards.stream()
+                .map(view -> {
+                    refreshInvoiceAmounts(view.invoice(), view.items());
+                    return toManagerBoardCard(view.invoice(), view.items());
+                })
+                .toList();
+        return new ManagerBoardPage(cards, matchedCards, matchingLinkedOrderIds.size());
+    }
+
+    /**
+     * Produces both common-card and linked-order metric maps in one bounded
+     * traversal. ManagerBoardService previously invoked two full graph loads.
+     */
+    @Transactional
+    public ManagerBoardMetrics managerBoardMetrics(Set<Long> visibleManagerIds) {
+        normalizeBoardInvoiceDuplicates();
+
+        Map<String, Integer> cardCounts = new HashMap<>();
+        Map<String, Integer> linkedOrderCounts = new HashMap<>();
+        int batchNumber = 0;
+        boolean exhausted;
+        do {
+            BoardInvoiceBatch batch = boardInvoiceBatch(batchNumber++, "desc");
+            exhausted = batch.exhausted();
+            for (BoardInvoiceView view : batch.invoices()) {
+                CommonInvoice invoice = view.invoice();
+                List<CommonInvoiceOrder> items = view.items();
+                if (!visibleToManager(invoice, items, visibleManagerIds)) {
+                    continue;
+                }
+                cardCounts.merge(boardStatus(invoice, items), 1, Integer::sum);
+                items.stream()
+                        .filter(item -> itemVisibleInOrderMetrics(item, visibleManagerIds))
+                        .map(item -> statusTitle(item.getOrder()))
+                        .filter(status -> !status.isBlank())
+                        .forEach(status -> linkedOrderCounts.merge(status, 1, Integer::sum));
+            }
+        } while (!exhausted);
+
+        return new ManagerBoardMetrics(cardCounts, linkedOrderCounts);
     }
 
     @Transactional
@@ -1576,6 +1704,9 @@ public class CommonBillingService {
         }
 
         PreparedCommonPaymentInit prepared = writeTransaction(() -> preparePaymentInit(cleanToken(token), cleanEmail));
+        if (prepared.deferredFailure() != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, prepared.deferredFailure());
+        }
         if (prepared.cachedResponse() != null) {
             return prepared.cachedResponse();
         }
@@ -1598,7 +1729,25 @@ public class CommonBillingService {
             });
             throw e;
         }
-        return writeTransaction(() -> finishPaymentInit(prepared, response));
+        String paymentUrl = "";
+        if (response.success()) {
+            try {
+                paymentUrl = PaymentUrlPolicy.require(
+                        response.paymentUrl(),
+                        PaymentUrlPolicy.Purpose.TBANK_PAYMENT,
+                        HttpStatus.BAD_GATEWAY,
+                        "Т-Банк вернул недопустимую ссылку оплаты"
+                );
+            } catch (ResponseStatusException e) {
+                writeTransaction(() -> {
+                    failUnsafePaymentUrl(prepared, response);
+                    return null;
+                });
+                throw e;
+            }
+        }
+        String validatedPaymentUrl = paymentUrl;
+        return writeTransaction(() -> finishPaymentInit(prepared, response, validatedPaymentUrl));
     }
 
     private PreparedCommonPaymentInit preparePaymentInit(String token, String cleanEmail) {
@@ -1619,7 +1768,8 @@ public class CommonBillingService {
                         0,
                         null,
                         null,
-                        new PublicPaymentInitResponse("", "", invoice.getStatus().name())
+                        new PublicPaymentInitResponse("", "", invoice.getStatus().name()),
+                        null
                 );
             }
             closePaidInvoice(invoice, items);
@@ -1629,11 +1779,40 @@ public class CommonBillingService {
                     0,
                     null,
                     null,
-                    new PublicPaymentInitResponse("", "", invoice.getStatus().name())
+                    new PublicPaymentInitResponse("", "", invoice.getStatus().name()),
+                    null
             );
         }
 
-        if (invoice.getPaymentUrl() != null
+        String cachedPaymentUrl = PaymentUrlPolicy.safe(
+                invoice.getPaymentUrl(),
+                PaymentUrlPolicy.Purpose.TBANK_PAYMENT
+        );
+        boolean hasPersistedProviderRef = !normalize(invoice.getTbankPaymentId()).isBlank()
+                || !normalize(invoice.getTbankOrderId()).isBlank();
+        if (hasPersistedProviderRef && cachedPaymentUrl.isBlank()) {
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setPaymentUrl(null);
+            invoice.setLastError(limit(
+                    "payment_cached_invalid_url: Сохраненная ссылка платежа "
+                            + paymentRefLabel(invoice.getTbankOrderId(), invoice.getTbankPaymentId())
+                            + " отсутствует или имеет недопустимый формат; нужна ручная сверка",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+            return new PreparedCommonPaymentInit(
+                    invoice.getId(),
+                    cleanEmail,
+                    remaining,
+                    null,
+                    null,
+                    null,
+                    "Сохраненная ссылка Т-Банка отсутствует или имеет недопустимый формат"
+            );
+        }
+
+        if (!cachedPaymentUrl.isBlank()
                 && invoice.getTbankPaymentAmountKopecks() != null
                 && invoice.getTbankPaymentAmountKopecks() == remaining
                 && invoice.getTbankPaymentCreatedAt() != null
@@ -1644,7 +1823,12 @@ public class CommonBillingService {
                     remaining,
                     null,
                     null,
-                    new PublicPaymentInitResponse(invoice.getPaymentUrl(), invoice.getTbankPaymentId(), invoice.getStatus().name())
+                    new PublicPaymentInitResponse(
+                            cachedPaymentUrl,
+                            invoice.getTbankPaymentId(),
+                            invoice.getStatus().name()
+                    ),
+                    null
             );
         }
 
@@ -1666,11 +1850,16 @@ public class CommonBillingService {
                 remaining,
                 runtimeProfile,
                 tbankOrderId,
+                null,
                 null
         );
     }
 
-    private PublicPaymentInitResponse finishPaymentInit(PreparedCommonPaymentInit prepared, TbankInitResponse response) {
+    private PublicPaymentInitResponse finishPaymentInit(
+            PreparedCommonPaymentInit prepared,
+            TbankInitResponse response,
+            String paymentUrl
+    ) {
         CommonInvoice invoice = lockedInvoice(prepared.invoiceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Общий счет не найден"));
         if (!PAYMENT_INIT_IN_PROGRESS.equals(normalize(invoice.getLastError()))) {
@@ -1709,10 +1898,29 @@ public class CommonBillingService {
         invoice.setTbankTerminalKey(prepared.runtimeProfile().terminalKey());
         invoice.setTbankPaymentAmountKopecks(prepared.remainingKopecks());
         invoice.setTbankPaymentCreatedAt(LocalDateTime.now());
-        invoice.setPaymentUrl(response.paymentUrl());
+        invoice.setPaymentUrl(paymentUrl);
         invoice.setLastError(null);
         invoiceRepository.save(invoice);
-        return new PublicPaymentInitResponse(response.paymentUrl(), response.paymentId(), invoice.getStatus().name());
+        return new PublicPaymentInitResponse(paymentUrl, response.paymentId(), invoice.getStatus().name());
+    }
+
+    private void failUnsafePaymentUrl(PreparedCommonPaymentInit prepared, TbankInitResponse response) {
+        CommonInvoice invoice = lockedInvoice(prepared.invoiceId()).orElse(null);
+        if (invoice == null) {
+            return;
+        }
+        recordInitializedPaymentRef(invoice, prepared, response, "unsafe_tbank_payment_url");
+        if (PAYMENT_INIT_IN_PROGRESS.equals(normalize(invoice.getLastError()))) {
+            invoice.setStatus(CommonInvoiceStatus.NEEDS_ATTENTION);
+            invoice.setNextReminderAt(null);
+            invoice.setLastError(limit(
+                    "payment_init_invalid_url: T-Bank создал платеж "
+                            + paymentRefLabel(prepared.tbankOrderId(), response.paymentId())
+                            + ", но вернул недопустимую ссылку; нужна ручная сверка",
+                    512
+            ));
+            invoiceRepository.save(invoice);
+        }
     }
 
     private void failPaymentInit(PreparedCommonPaymentInit prepared, String error) {
@@ -2281,6 +2489,68 @@ public class CommonBillingService {
             }
         }
         return normalized ? invoiceRepository.findBoardInvoices(BOARD_INVOICE_STATUSES) : invoices;
+    }
+
+    private void normalizeBoardInvoiceDuplicates() {
+        List<Long> duplicateAccountIds = invoiceRepository.findAccountIdsWithDuplicateCurrentInvoices(
+                ATTACHABLE_INVOICE_STATUSES
+        );
+        for (Long accountId : duplicateAccountIds) {
+            if (accountId == null) {
+                continue;
+            }
+            Optional<CommonBillingAccount> lockedAccount = accountRepository.findByIdWithRelationsForUpdate(accountId);
+            if (lockedAccount.isEmpty()) {
+                continue;
+            }
+            List<CommonInvoice> currentInvoices = invoiceRepository.findCurrentForAccountForUpdate(
+                    accountId,
+                    ATTACHABLE_INVOICE_STATUSES,
+                    PageRequest.of(0, 50)
+            );
+            if (currentInvoices.size() > 1) {
+                normalizeAttachableInvoices(lockedAccount.get(), currentInvoices);
+            }
+        }
+    }
+
+    private BoardInvoiceBatch boardInvoiceBatch(int batchNumber, String sortDirection) {
+        Sort.Direction direction = "asc".equalsIgnoreCase(sortDirection)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        List<CommonInvoice> invoices = invoiceRepository.findBoardInvoices(
+                BOARD_INVOICE_STATUSES,
+                PageRequest.of(
+                        Math.max(0, batchNumber),
+                        BOARD_BATCH_SIZE,
+                        Sort.by(direction, "updatedAt", "id")
+                )
+        );
+        boolean exhausted = invoices.size() < BOARD_BATCH_SIZE;
+        if (invoices.isEmpty()) {
+            return new BoardInvoiceBatch(List.of(), true);
+        }
+
+        List<Long> invoiceIds = invoices.stream()
+                .map(CommonInvoice::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        Map<Long, List<CommonInvoiceOrder>> itemsByInvoiceId = invoiceIds.isEmpty()
+                ? Map.of()
+                : invoiceOrderRepository.findByInvoiceIdsWithOrders(invoiceIds)
+                        .stream()
+                        .filter(item -> item != null
+                                && item.getInvoice() != null
+                                && item.getInvoice().getId() != null)
+                        .collect(Collectors.groupingBy(item -> item.getInvoice().getId()));
+        List<BoardInvoiceView> views = invoices.stream()
+                .filter(invoice -> invoice != null && invoice.getId() != null)
+                .map(invoice -> new BoardInvoiceView(
+                        invoice,
+                        itemsByInvoiceId.getOrDefault(invoice.getId(), List.of())
+                ))
+                .toList();
+        return new BoardInvoiceBatch(views, exhausted);
     }
 
     private boolean hasDuplicateAttachableInvoices(List<CommonInvoice> invoices) {
@@ -2920,6 +3190,7 @@ public class CommonBillingService {
     }
 
     private void closePaidInvoice(CommonInvoice invoice, List<CommonInvoiceOrder> items, Set<Long> alreadyClosedOrderIds) {
+        observabilityMetrics.observeTransactionCompletion(COMMON_INVOICE_CLOSE);
         if (normalize(invoice.getPaymentMethod()).isBlank()) {
             invoice.setPaymentMethod(PAYMENT_METHOD_TBANK);
         }
@@ -2942,6 +3213,7 @@ public class CommonBillingService {
                 }
                 item.setUnpaid(false);
             } catch (Exception e) {
+                observabilityMetrics.recordCaughtFailure(COMMON_INVOICE_CLOSE, CLOSE_ORDER);
                 Long orderId = item.getOrder() == null ? null : item.getOrder().getId();
                 closeFailures.add(String.valueOf(orderId));
                 log.warn("Не удалось закрыть заказ {} оплатой общего счета {}", orderId, invoice.getId(), e);
@@ -3060,6 +3332,7 @@ public class CommonBillingService {
             try {
                 nextOrderRequestService.openForPaidOrder(item.getOrder());
             } catch (RuntimeException e) {
+                observabilityMetrics.recordCaughtFailure(COMMON_INVOICE_CLOSE, OPEN_NEXT_ORDER);
                 String label = orderFailureLabel(item);
                 failures.add(label);
                 log.warn("Не удалось создать следующий заказ после полной оплаты общего счета {} для заказа {}",
@@ -3240,7 +3513,7 @@ public class CommonBillingService {
             if (allOrdersReady(items) && applyCommonInvoicePrepaymentIfReady(invoice, items)) {
                 return;
             }
-            if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING && isInvoiceReady(invoice.getId())) {
+            if (invoice.getStatus() == CommonInvoiceStatus.COLLECTING && areInvoiceItemsReady(items)) {
                 invoice.setStatus(CommonInvoiceStatus.READY);
                 invoiceRepository.save(invoice);
                 markInvoiceOrdersPublished(items);
@@ -3435,6 +3708,14 @@ public class CommonBillingService {
                     return toInvoiceSummary(invoice, items);
                 })
                 .orElse(null);
+        return toAccountResponse(account, companyLinks, current);
+    }
+
+    private CommonBillingAccountResponse toAccountResponse(
+            CommonBillingAccount account,
+            List<CommonBillingAccountCompany> companyLinks,
+            CommonInvoiceSummaryResponse current
+    ) {
         return new CommonBillingAccountResponse(
                 account.getId(),
                 account.getName(),
@@ -3447,6 +3728,76 @@ public class CommonBillingService {
                 companyLinks.stream().map(this::toCompanyResponse).toList(),
                 current
         );
+    }
+
+    private Map<Long, CommonInvoiceSummaryResponse> currentInvoiceSummaries(
+            List<CommonBillingAccount> accounts
+    ) {
+        if (accounts == null || accounts.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> accountIds = accounts.stream()
+                .map(CommonBillingAccount::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (accountIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, CommonInvoice> invoiceByAccountId = new HashMap<>();
+        for (int start = 0; start < accountIds.size(); start += BULK_QUERY_CHUNK_SIZE) {
+            List<Long> chunk = accountIds.subList(
+                    start,
+                    Math.min(start + BULK_QUERY_CHUNK_SIZE, accountIds.size())
+            );
+            for (CommonInvoice invoice : invoiceRepository.findLatestCurrentForAccounts(
+                    chunk,
+                    CURRENT_INVOICE_STATUSES
+            )) {
+                if (invoice == null
+                        || invoice.getId() == null
+                        || invoice.getAccount() == null
+                        || invoice.getAccount().getId() == null) {
+                    continue;
+                }
+                invoiceByAccountId.merge(
+                        invoice.getAccount().getId(),
+                        invoice,
+                        (left, right) -> left.getId() >= right.getId() ? left : right
+                );
+            }
+        }
+        if (invoiceByAccountId.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> invoiceIds = invoiceByAccountId.values().stream()
+                .map(CommonInvoice::getId)
+                .distinct()
+                .toList();
+        Map<Long, List<CommonInvoiceOrder>> itemsByInvoiceId = new HashMap<>();
+        for (int start = 0; start < invoiceIds.size(); start += BULK_QUERY_CHUNK_SIZE) {
+            List<Long> chunk = invoiceIds.subList(
+                    start,
+                    Math.min(start + BULK_QUERY_CHUNK_SIZE, invoiceIds.size())
+            );
+            for (CommonInvoiceOrder item : invoiceOrderRepository.findByInvoiceIdsWithOrders(chunk)) {
+                if (item == null || item.getInvoice() == null || item.getInvoice().getId() == null) {
+                    continue;
+                }
+                itemsByInvoiceId.computeIfAbsent(item.getInvoice().getId(), ignored -> new ArrayList<>())
+                        .add(item);
+            }
+        }
+
+        Map<Long, CommonInvoiceSummaryResponse> summaries = new HashMap<>();
+        invoiceByAccountId.forEach((accountId, invoice) -> {
+            List<CommonInvoiceOrder> items = itemsByInvoiceId.getOrDefault(invoice.getId(), List.of());
+            refreshInvoiceAmounts(invoice, items);
+            summaries.put(accountId, toInvoiceSummary(invoice, items));
+        });
+        return summaries;
     }
 
     private CommonInvoiceSummaryResponse toInvoiceSummary(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
@@ -3482,7 +3833,8 @@ public class CommonBillingService {
     private OrderDTOList toManagerBoardCard(CommonInvoice invoice, List<CommonInvoiceOrder> items) {
         CommonInvoiceSummaryResponse summary = toInvoiceSummary(invoice, items);
         BadReviewTaskSummary badReviewSummary = aggregateBadReviewSummary(items);
-        Company company = chatCompany(invoice);
+        Company company = chatCompany(invoice, items);
+        Manager invoiceManager = manager(invoice, items);
         LocalDate changed = invoice.getUpdatedAt() == null ? LocalDate.now() : invoice.getUpdatedAt().toLocalDate();
         return OrderDTOList.builder()
                 .id(-invoice.getId())
@@ -3502,7 +3854,7 @@ public class CommonBillingService {
                 .badReviewTasksCanceled(badReviewSummary.canceled())
                 .companyUrlChat(company == null ? "" : normalize(company.getUrlChat()))
                 .companyTelephone(company == null ? "" : normalize(company.getTelephone()))
-                .managerPayText(manager(invoice) == null ? "" : normalize(manager(invoice).getPayText()))
+                .managerPayText(invoiceManager == null ? "" : normalize(invoiceManager.getPayText()))
                 .amount(summary.totalOrders())
                 .counter(summary.readyOrders())
                 .waitingForClient(false)
@@ -4629,6 +4981,38 @@ public class CommonBillingService {
         return message.isBlank() ? e.getClass().getSimpleName() : message;
     }
 
+    public record ManagerBoardPage(
+            List<OrderDTOList> cards,
+            long totalCards,
+            int linkedOrderCount
+    ) {
+        public ManagerBoardPage {
+            cards = cards == null ? List.of() : List.copyOf(cards);
+        }
+    }
+
+    public record ManagerBoardMetrics(
+            Map<String, Integer> cardCounts,
+            Map<String, Integer> linkedOrderCounts
+    ) {
+        public ManagerBoardMetrics {
+            cardCounts = cardCounts == null ? Map.of() : Map.copyOf(cardCounts);
+            linkedOrderCounts = linkedOrderCounts == null ? Map.of() : Map.copyOf(linkedOrderCounts);
+        }
+    }
+
+    private record BoardInvoiceView(
+            CommonInvoice invoice,
+            List<CommonInvoiceOrder> items
+    ) {
+    }
+
+    private record BoardInvoiceBatch(
+            List<BoardInvoiceView> invoices,
+            boolean exhausted
+    ) {
+    }
+
     private record PreparedCommonInvoiceMessage(
             Long invoiceId,
             Company chatCompany,
@@ -4646,7 +5030,8 @@ public class CommonBillingService {
             long remainingKopecks,
             TbankPaymentProfile runtimeProfile,
             String tbankOrderId,
-            PublicPaymentInitResponse cachedResponse
+            PublicPaymentInitResponse cachedResponse,
+            String deferredFailure
     ) {
     }
 

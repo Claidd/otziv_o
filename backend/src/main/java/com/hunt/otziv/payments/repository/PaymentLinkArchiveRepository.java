@@ -2,6 +2,7 @@ package com.hunt.otziv.payments.repository;
 
 import com.hunt.otziv.payments.dto.AdminPaymentLinkResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkAdminSummary;
+import com.hunt.otziv.payments.service.PaymentUrlPolicy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.ResultSet;
@@ -118,7 +119,7 @@ public class PaymentLinkArchiveRepository {
                   COALESCE(SUM(CASE WHEN apl.status = 'CONFIRMED' AND apl.payment_success_notified_at IS NULL AND apl.payment_success_notification_error IS NOT NULL THEN 1 ELSE 0 END), 0) AS notification_errors,
                   0 AS refundable,
                   COALESCE(SUM(CASE WHEN apl.status IN ('REVERSED', 'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED', 'CANCELED') THEN 1 ELSE 0 END), 0) AS refunded,
-                  COALESCE(SUM(CASE WHEN apl.status IN ('REJECTED', 'FAILED') THEN 1 ELSE 0 END), 0) AS rejected,
+                  COALESCE(SUM(CASE WHEN apl.status IN ('REJECTED', 'FAILED', 'NEEDS_RECONCILIATION') THEN 1 ELSE 0 END), 0) AS rejected,
                   COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' THEN 1 ELSE 0 END), 0) AS receipt_pending,
                   COALESCE(SUM(CASE WHEN apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK') AND apl.status = 'CONFIRMED' AND apl.receipt_status = 'PENDING' AND apl.paid_at <= CURRENT_TIMESTAMP(6) - INTERVAL 24 HOUR THEN 1 ELSE 0 END), 0) AS receipt_overdue
                 FROM archive_payment_links apl
@@ -182,6 +183,21 @@ public class PaymentLinkArchiveRepository {
                 """, Map.of("orderId", orderId), Long.class);
     }
 
+    public boolean hasLiveReconciliationForOrder(Long orderId) {
+        if (orderId == null) {
+            return false;
+        }
+        Long present = jdbc.queryForObject("""
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM payment_links pl
+                    WHERE pl.order_id = :orderId
+                      AND pl.status = 'NEEDS_RECONCILIATION'
+                )
+                """, Map.of("orderId", orderId), Long.class);
+        return present != null && present > 0;
+    }
+
     public List<Long> findLiveIdsForPreparedOrderArchiveCandidates() {
         return jdbc.queryForList("""
                 SELECT pl.id
@@ -189,6 +205,18 @@ public class PaymentLinkArchiveRepository {
                 JOIN archive_candidate_orders co ON co.order_id = pl.order_id
                 ORDER BY pl.created_at ASC, pl.id ASC
                 """, Map.of(), Long.class);
+    }
+
+    public boolean hasPreparedOrderReconciliationCandidate() {
+        Long present = jdbc.queryForObject("""
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM payment_links pl
+                    JOIN archive_candidate_orders co ON co.order_id = pl.order_id
+                    WHERE pl.status = 'NEEDS_RECONCILIATION'
+                )
+                """, Map.of(), Long.class);
+        return present != null && present > 0;
     }
 
     public int countArchivedIds(Collection<Long> ids) {
@@ -277,7 +305,7 @@ public class PaymentLinkArchiveRepository {
                     OR (:statusFilter = 'active' AND apl.status IN ('CREATED', 'INITIATED', 'AUTHORIZED', 'WAITING_MANUAL_PAYMENT', 'MANUAL_REPORTED'))
                     OR (:statusFilter = 'paid' AND apl.status IN ('AUTHORIZED', 'TEST_CONFIRMED', 'CONFIRMED', 'AMOUNT_MISMATCH'))
                     OR (:statusFilter = 'refunded' AND apl.status IN ('REVERSED', 'PARTIAL_REVERSED', 'REFUNDED', 'PARTIAL_REFUNDED', 'CANCELED'))
-                    OR (:statusFilter = 'failed' AND apl.status IN ('REJECTED', 'FAILED', 'EXPIRED'))
+                    OR (:statusFilter = 'failed' AND apl.status IN ('REJECTED', 'FAILED', 'NEEDS_RECONCILIATION', 'EXPIRED'))
                     OR (:statusFilter = 'created' AND apl.status = 'CREATED')
                     OR (:statusFilter = 'manual' AND apl.payment_method IN ('MANUAL_MOBILE_BANK', 'MANUAL_EXTERNAL_LINK'))
                   )
@@ -329,11 +357,11 @@ public class PaymentLinkArchiveRepository {
                 value(rs, "tbank_payment_id"),
                 value(rs, "tbank_order_id"),
                 value(rs, "payer_email"),
-                value(rs, "payment_url"),
+                PaymentUrlPolicy.safe(value(rs, "payment_url"), PaymentUrlPolicy.Purpose.TBANK_PAYMENT),
                 value(rs, "manual_payment_type"),
                 value(rs, "manual_phone"),
                 value(rs, "manual_recipient_name"),
-                value(rs, "manual_payment_url"),
+                PaymentUrlPolicy.safe(value(rs, "manual_payment_url"), PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL),
                 value(rs, "manual_payment_button_label"),
                 value(rs, "manual_comment"),
                 nullableDateTime(rs, "manual_reported_at"),

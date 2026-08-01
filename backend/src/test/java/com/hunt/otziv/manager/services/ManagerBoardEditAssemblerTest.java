@@ -9,7 +9,9 @@ import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_cities.services.CityService;
 import com.hunt.otziv.c_companies.dto.CompanyDTO;
+import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.services.CompanyStatusService;
+import com.hunt.otziv.manager.dto.api.CompanyOrderCreateRequest;
 import com.hunt.otziv.manager.dto.api.OptionResponse;
 import com.hunt.otziv.manager.dto.api.OrderDetailsResponse;
 import com.hunt.otziv.manager.dto.api.OrderEditResponse;
@@ -29,6 +31,7 @@ import com.hunt.otziv.review_recovery.model.ReviewRecoveryTask;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryTaskStatus;
 import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.dto.ManagerDTO;
+import com.hunt.otziv.u_users.dto.WorkerDTO;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -44,14 +47,18 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
@@ -108,6 +115,87 @@ class ManagerBoardEditAssemblerTest {
 
     @InjectMocks
     private ManagerBoardEditAssembler assembler;
+
+    @Test
+    void companyEditOffersOnlyActiveWorkersButKeepsInactiveCurrentAssignment() {
+        WorkerDTO activeWorker = worker(11L, "Active worker", true);
+        WorkerDTO inactiveWorker = worker(12L, "Former worker", false);
+        CompanyDTO company = CompanyDTO.builder()
+                .id(3L)
+                .manager(ManagerDTO.builder().managerId(9L).build())
+                .workers(new LinkedHashSet<>(List.of(inactiveWorker)))
+                .build();
+        when(workerService.getAllWorkersByManagerId(9L))
+                .thenReturn(new LinkedHashSet<>(List.of(activeWorker, inactiveWorker)));
+
+        var response = assembler.buildCompanyEditResponse(
+                company,
+                () -> "admin",
+                authentication("ROLE_ADMIN")
+        );
+
+        assertEquals(List.of(11L), response.workers().stream().map(OptionResponse::id).toList());
+        assertEquals(List.of(12L), response.currentWorkers().stream().map(OptionResponse::id).toList());
+    }
+
+    @Test
+    void newOrderOptionsAndAllowedIdsExcludeInactiveHistoricalWorker() {
+        WorkerDTO activeWorker = worker(11L, "Active worker", true);
+        WorkerDTO inactiveWorker = worker(12L, "Former worker", false);
+        CompanyDTO company = CompanyDTO.builder()
+                .id(3L)
+                .title("Company")
+                .manager(ManagerDTO.builder().managerId(9L).build())
+                .workers(new LinkedHashSet<>(List.of(activeWorker, inactiveWorker)))
+                .filials(Set.of(FilialDTO.builder().id(21L).title("Main").build()))
+                .build();
+        Product product = Product.builder().id(7L).title("Product").build();
+        when(productService.findById(7L)).thenReturn(product);
+
+        var response = assembler.buildCompanyOrderCreateResponse(company);
+        ResponseStatusException error = assertThrows(
+                ResponseStatusException.class,
+                () -> assembler.validateCompanyOrderCreateRequest(
+                        company,
+                        new CompanyOrderCreateRequest(7L, 1, 12L, 21L)
+                )
+        );
+
+        assertEquals(List.of(11L), response.workers().stream().map(OptionResponse::id).toList());
+        assertEquals(11L, response.defaultWorkerId());
+        assertEquals(400, error.getStatusCode().value());
+        assertEquals("Специалист не назначен на компанию", error.getReason());
+    }
+
+    @Test
+    void orderEditKeepsInactiveCurrentWorkerButExcludesOtherInactiveCandidates() {
+        WorkerDTO activeWorker = worker(11L, "Active worker", true);
+        WorkerDTO currentInactiveWorker = worker(12L, "Former current worker", false);
+        WorkerDTO otherInactiveWorker = worker(13L, "Former other worker", false);
+        CompanyDTO company = CompanyDTO.builder()
+                .id(3L)
+                .manager(ManagerDTO.builder().managerId(9L).build())
+                .build();
+        OrderDTO order = OrderDTO.builder()
+                .id(22L)
+                .company(company)
+                .worker(currentInactiveWorker)
+                .build();
+        when(workerService.getAllWorkersByManagerId(9L))
+                .thenReturn(new LinkedHashSet<>(List.of(activeWorker, otherInactiveWorker)));
+
+        OrderEditResponse response = assembler.buildOrderEditResponse(
+                order,
+                () -> "admin",
+                authentication("ROLE_ADMIN")
+        );
+
+        assertEquals(12L, response.worker().id());
+        assertEquals(
+                Set.of(11L, 12L),
+                response.workers().stream().map(OptionResponse::id).collect(java.util.stream.Collectors.toSet())
+        );
+    }
 
     @Test
     void buildOrderEditResponseKeepsWorkerManagerListRestricted() {
@@ -345,5 +433,17 @@ class ManagerBoardEditAssemblerTest {
                 "password",
                 List.of(new SimpleGrantedAuthority(authority))
         );
+    }
+
+    private WorkerDTO worker(Long id, String fio, boolean active) {
+        return WorkerDTO.builder()
+                .workerId(id)
+                .user(User.builder()
+                        .id(1000L + id)
+                        .username("worker-" + id)
+                        .fio(fio)
+                        .active(active)
+                        .build())
+                .build();
     }
 }

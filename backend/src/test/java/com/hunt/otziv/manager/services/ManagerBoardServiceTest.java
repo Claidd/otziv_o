@@ -42,6 +42,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -110,6 +111,12 @@ class ManagerBoardServiceTest {
         lenient().when(commonBillingService.countManagerBoardCards(nullable(Set.class))).thenReturn(Map.of());
         lenient().when(commonBillingService.managerBoardCards(any(), any(), nullable(Long.class), nullable(Set.class), any()))
                 .thenReturn(List.of());
+        lenient().when(commonBillingService.managerBoardPage(
+                        any(), any(), nullable(Long.class), nullable(Set.class), any(), anyInt(), anyInt()
+                ))
+                .thenReturn(new CommonBillingService.ManagerBoardPage(List.of(), 0L, 0));
+        lenient().when(commonBillingService.managerBoardMetrics(nullable(Set.class)))
+                .thenReturn(new CommonBillingService.ManagerBoardMetrics(Map.of(), Map.of()));
         lenient().when(commonBillingService.linkedBoardOrderIds(any())).thenReturn(Set.of());
         lenient().when(commonBillingService.countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class)))
                 .thenReturn(0);
@@ -133,8 +140,11 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of("Новая", 2, "В работе", 3));
         when(orderService.countOrdersByStatus())
                 .thenReturn(Map.of("Новый", 4, "Оплачено", 1));
-        when(commonBillingService.countManagerBoardCards(null))
-                .thenReturn(Map.of("Требует внимания", 1));
+        when(commonBillingService.managerBoardMetrics(null))
+                .thenReturn(new CommonBillingService.ManagerBoardMetrics(
+                        Map.of("Требует внимания", 1),
+                        Map.of()
+                ));
         when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
                 .thenReturn(Map.of());
         when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
@@ -180,6 +190,9 @@ class ManagerBoardServiceTest {
         verify(clientMessageOrderStatusService).enrichOrderList(List.of(order));
         verify(staffDailyProgressService).aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class));
         verify(staffDailyProgressService, never()).aggregateWorkerProgress(any(), any(LocalDate.class));
+        verify(commonBillingService).managerBoardMetrics(null);
+        verify(commonBillingService, never()).countLinkedManagerBoardOrders(nullable(Set.class));
+        verify(commonBillingService, never()).countManagerBoardCards(nullable(Set.class));
     }
 
     @Test
@@ -228,8 +241,12 @@ class ManagerBoardServiceTest {
 
         when(orderService.getAllOrderDTOAndKeyword("needle", 0, 2, "desc"))
                 .thenReturn(new PageImpl<>(List.of(ordinary), PageRequest.of(0, 2), 2));
-        when(commonBillingService.managerBoardCards("Все", "needle", null, null, "desc"))
-                .thenReturn(List.of(firstCommon, secondCommon, thirdCommon));
+        when(commonBillingService.managerBoardPage("Все", "needle", null, null, "desc", 0, 2))
+                .thenReturn(new CommonBillingService.ManagerBoardPage(
+                        List.of(firstCommon, secondCommon),
+                        3L,
+                        0
+                ));
         when(companyService.countCompaniesByStatus())
                 .thenReturn(Map.of());
         when(orderService.countOrdersByStatus())
@@ -256,6 +273,9 @@ class ManagerBoardServiceTest {
         assertEquals(5, response.orders().totalElements());
         verify(badReviewTaskService).enrichOrderList(List.of(firstCommon, secondCommon));
         verify(clientMessageOrderStatusService).enrichOrderList(List.of(firstCommon, secondCommon));
+        verify(commonBillingService).managerBoardPage("Все", "needle", null, null, "desc", 0, 2);
+        verify(commonBillingService, never())
+                .countLinkedBoardOrdersMatching(any(), any(), nullable(Long.class), nullable(Set.class));
     }
 
     @Test

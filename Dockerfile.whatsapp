@@ -1,4 +1,6 @@
-FROM node:18-slim
+FROM node:22-bookworm-slim
+
+ENV NODE_ENV=production
 
 # Установка зависимостей Chromium, curl и сертификатов
 RUN apt-get update && apt-get install -y \
@@ -38,10 +40,14 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
-COPY whatsapp/package.json ./
-RUN npm install
+COPY whatsapp/package.json whatsapp/package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY whatsapp/ ./
+
+# Deliberately remains root during the compatibility rollout: existing /auth
+# bind mounts may be owned by different host UIDs. See the R7 rollout guide
+# before switching to a fixed non-root UID.
 
 CMD ["node", "index.js"]
 

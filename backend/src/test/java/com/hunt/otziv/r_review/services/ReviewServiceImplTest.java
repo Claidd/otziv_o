@@ -123,6 +123,33 @@ class ReviewServiceImplTest {
     private ReviewServiceImpl reviewService;
 
     @Test
+    void updateOrderDetailAndReviewRejectsReviewFromAnotherOrderBeforeAnyWrite() {
+        UUID requestedDetailsId = UUID.randomUUID();
+        OrderDetails requestedDetails = new OrderDetails();
+        requestedDetails.setId(requestedDetailsId);
+        OrderDetails foreignDetails = new OrderDetails();
+        foreignDetails.setId(UUID.randomUUID());
+        Review review = new Review();
+        review.setId(77L);
+        review.setOrderDetails(foreignDetails);
+        when(reviewRepository.findById(77L)).thenReturn(Optional.of(review));
+        when(orderDetailsService.getOrderDetailById(requestedDetailsId)).thenReturn(requestedDetails);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> reviewService.updateOrderDetailAndReview(
+                        OrderDetailsDTO.builder().id(requestedDetailsId).comment("tampered").build(),
+                        ReviewDTO.builder().id(77L).text("tampered").build(),
+                        77L
+                )
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+        verify(reviewRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(orderDetailsService, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void updateReviewPhotoSavesUrlWithoutDuplicateTextCheck() {
         Review review = new Review();
         review.setId(17L);

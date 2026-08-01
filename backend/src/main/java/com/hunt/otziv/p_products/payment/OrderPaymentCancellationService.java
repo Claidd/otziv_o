@@ -45,7 +45,8 @@ public class OrderPaymentCancellationService {
             PaymentLinkStatus.AUTHORIZED,
             PaymentLinkStatus.TEST_CONFIRMED,
             PaymentLinkStatus.CONFIRMED,
-            PaymentLinkStatus.AMOUNT_MISMATCH
+            PaymentLinkStatus.AMOUNT_MISMATCH,
+            PaymentLinkStatus.NEEDS_RECONCILIATION
     );
 
     private final OrderRepository orderRepository;
@@ -72,7 +73,8 @@ public class OrderPaymentCancellationService {
         if (paymentLinkRepository.existsByOrder_IdAndStatusIn(orderId, REAL_PAYMENT_STATUSES)) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "У заказа есть подтвержденный платеж по ссылке. Для него нужна ручная сверка или возврат, а не отмена оплаты в карточке."
+                    "У заказа есть подтвержденный или требующий сверки платеж по ссылке. "
+                            + "Для него нужна ручная сверка или возврат, а не отмена оплаты в карточке."
             );
         }
 

@@ -2,7 +2,8 @@ import { Component, HostListener, OnDestroy, OnInit, computed, signal } from '@a
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
-import { ApiService, AdminBot } from '../core/api.service';
+import { ApiService, BotBrowserMetadata } from '../core/api.service';
+import { prepareBotBrowserVncUrl } from '../core/bot-browser-vnc-url';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 
 @Component({
@@ -19,7 +20,7 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
               <span class="material-icons-sharp">arrow_back</span>
             </a>
             <div>
-              <p>Аккаунт #{{ bot()?.id || botId() || '' }}</p>
+              <p>Аккаунт #{{ bot()?.botId || botId() || '' }}</p>
               <h1>{{ bot()?.fio || 'Браузер аккаунта' }}</h1>
               <small>{{ bot()?.login || status() }}</small>
             </div>
@@ -64,9 +65,12 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
 })
 export class BotBrowserPage implements OnInit, OnDestroy {
   private closing = false;
+  private sessionId: string | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeatInFlight = false;
 
   readonly botId = signal(0);
-  readonly bot = signal<AdminBot | null>(null);
+  readonly bot = signal<BotBrowserMetadata | null>(null);
   readonly status = signal('Запуск браузера...');
   readonly error = signal<string | null>(null);
   readonly vncUrl = signal<string | null>(null);
@@ -92,7 +96,7 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     }
 
     this.botId.set(id);
-    this.loadBot();
+    this.loadMetadata();
     this.openSession();
   }
 
@@ -116,13 +120,15 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     }
 
     this.closing = true;
+    this.stopHeartbeat();
     if (!silent) {
       this.status.set('Отключение...');
     }
 
-    this.api.closeAdminBotBrowser(this.botId()).subscribe({
+    this.api.closeAdminBotBrowser(this.botId(), this.sessionId).subscribe({
       next: () => {
         this.sessionOpen.set(false);
+        this.sessionId = null;
         this.status.set('Сессия закрыта');
         this.closing = false;
       },
@@ -134,15 +140,23 @@ export class BotBrowserPage implements OnInit, OnDestroy {
   }
 
   retry(): void {
+    if (this.closing) {
+      return;
+    }
+
     this.error.set(null);
+    if (this.sessionOpen()) {
+      this.loadMetadata();
+      return;
+    }
     this.frameLoaded.set(false);
     this.vncUrl.set(null);
     this.openSession();
-    this.loadBot();
+    this.loadMetadata();
   }
 
-  private loadBot(): void {
-    this.api.getAdminBot(this.botId()).subscribe({
+  private loadMetadata(): void {
+    this.api.getBotBrowserMetadata(this.botId()).subscribe({
       next: (bot) => this.bot.set(bot),
       error: () => this.error.set('Не удалось загрузить данные аккаунта.')
     });
@@ -157,23 +171,27 @@ export class BotBrowserPage implements OnInit, OnDestroy {
     this.api.openAdminBotBrowser(this.botId()).subscribe({
       next: (response) => {
         this.sessionOpen.set(true);
+        this.sessionId = response.sessionId?.trim() || null;
+        if (this.sessionId) {
+          this.startHeartbeat(response.heartbeatIntervalSeconds);
+        }
+        const vncUrl = prepareBotBrowserVncUrl(response.vncUrl);
+        if (!vncUrl) {
+          this.status.set('Ошибка запуска');
+          this.error.set('Сервис браузера вернул небезопасный адрес подключения.');
+          this.vncUrl.set(null);
+          this.closeSession(true);
+          return;
+        }
+
         this.status.set('Подключаю VNC...');
-        this.vncUrl.set(this.withVncParams(response.vncUrl));
+        this.vncUrl.set(vncUrl);
       },
       error: (error) => {
         this.status.set('Ошибка запуска');
         this.error.set(this.errorMessage(error, 'Не удалось открыть браузер аккаунта.'));
       }
     });
-  }
-
-  private withVncParams(rawUrl: string): string {
-    const url = new URL(rawUrl, window.location.origin);
-    url.searchParams.set('autoconnect', '1');
-    url.searchParams.set('reconnect', '1');
-    url.searchParams.set('resize', 'none');
-    url.searchParams.set('clip', 'true');
-    return url.toString();
   }
 
   private errorMessage(error: unknown, fallback: string): string {
@@ -185,5 +203,49 @@ export class BotBrowserPage implements OnInit, OnDestroy {
       return body?.message || body?.error || fallback;
     }
     return error instanceof Error ? error.message : fallback;
+  }
+
+  private startHeartbeat(intervalSeconds?: number): void {
+    this.stopHeartbeat();
+    const delay = Math.max(5, Number(intervalSeconds) || 20) * 1000;
+    this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), delay);
+  }
+
+  private sendHeartbeat(): void {
+    const sessionId = this.sessionId;
+    if (!sessionId || !this.sessionOpen() || this.closing || this.heartbeatInFlight) {
+      return;
+    }
+    this.heartbeatInFlight = true;
+    this.api.heartbeatAdminBotBrowser(this.botId(), sessionId).subscribe({
+      next: () => {
+        this.heartbeatInFlight = false;
+      },
+      error: (error: unknown) => {
+        this.heartbeatInFlight = false;
+        const status = error && typeof error === 'object' && 'status' in error
+          ? Number((error as { status?: unknown }).status)
+          : 0;
+        if (status === 404 || status === 409) {
+          this.stopHeartbeat();
+          this.api.closeAdminBotBrowser(this.botId(), sessionId).subscribe({
+            error: () => undefined
+          });
+          this.sessionOpen.set(false);
+          this.sessionId = null;
+          this.vncUrl.set(null);
+          this.status.set('Сессия завершена');
+          this.error.set('Доступ к браузерной сессии завершен. Откройте ее заново.');
+        }
+      }
+    });
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer !== null) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    this.heartbeatInFlight = false;
   }
 }

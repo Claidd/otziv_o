@@ -35,7 +35,7 @@ export function loadTsModule(relativePath) {
   };
   const wrapper = vm.runInNewContext(
     `(function(exports, require, module, __filename, __dirname) { ${output}\n})`,
-    { console }
+    { console, URL }
   );
 
   wrapper(module.exports, require, module, filename, path.dirname(filename));

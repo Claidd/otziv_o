@@ -5,6 +5,9 @@ import { appEnvironment } from './app-environment';
 
 export interface CurrentUser {
   authenticated: boolean;
+  localUserId?: number | null;
+  active?: boolean | null;
+  authEpoch?: number | null;
   name: string;
   principalType: string;
   authorities: string[];

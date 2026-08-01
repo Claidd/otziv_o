@@ -3,6 +3,7 @@ package com.hunt.otziv.mobile_push.controller;
 import com.hunt.otziv.mobile_push.dto.MobilePushSendResponse;
 import com.hunt.otziv.mobile_push.dto.MobilePushTestRequest;
 import com.hunt.otziv.mobile_push.dto.MobilePushTokenRequest;
+import com.hunt.otziv.mobile_push.dto.MobilePushTokenRevokeRequest;
 import com.hunt.otziv.mobile_push.service.MobilePushTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -34,6 +35,21 @@ public class ApiMobilePushTokenController {
     ) {
         servletRequest.setAttribute("platform", request.platform());
         tokenService.register(principal, request);
+    }
+
+    @PostMapping("/revoke")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeCurrent(
+            Principal principal,
+            @Valid @RequestBody MobilePushTokenRevokeRequest request
+    ) {
+        tokenService.revokeCurrent(principal, request);
+    }
+
+    @PostMapping("/revoke-all")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void revokeAll(Principal principal) {
+        tokenService.revokeAll(principal);
     }
 
     @PostMapping("/test")

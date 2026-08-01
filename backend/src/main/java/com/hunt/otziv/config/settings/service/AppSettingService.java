@@ -5,6 +5,7 @@ import com.hunt.otziv.config.settings.repository.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -178,6 +179,8 @@ public class AppSettingService {
             "manager.summary.ai-analysis-enabled";
     public static final String MANAGER_SUMMARY_AI_ANALYSIS_TIMEOUT_SECONDS =
             "manager.summary.ai-analysis-timeout-seconds";
+    public static final String REPUTATION_AI_ENABLED = "reputation.ai.enabled";
+    public static final String EXTERNAL_REVIEW_CHECK_ENABLED = "external.review.check.enabled";
     public static final String PAYMENTS_TBANK_RUNTIME_MODE = "payments.tbank.runtime-mode";
     public static final String PAYMENTS_TBANK_ENABLED = "payments.tbank.enabled";
     public static final String PAYMENTS_TBANK_PAYMENT_LINKS_ENABLED = "payments.tbank.payment-links-enabled";
@@ -198,7 +201,7 @@ public class AppSettingService {
     private final Map<String, CachedSetting> cache = new ConcurrentHashMap<>();
 
     @Value("${otziv.cache.app-settings.ttl:PT5M}")
-    private Duration cacheTtl;
+    private Duration cacheTtl = Duration.ofMinutes(5);
 
     @Transactional(readOnly = true)
     public int getInt(String key, int fallback) {
@@ -220,6 +223,28 @@ public class AppSettingService {
     public boolean getBoolean(String key, boolean fallback) {
         String value = getCachedValue(key);
         return value == null ? fallback : parseBoolean(value, fallback);
+    }
+
+    /**
+     * Reads a safety-critical boolean directly from the database so a change made on
+     * another application node is observed without waiting for the local cache TTL.
+     */
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean getBooleanFresh(String key, boolean fallback) {
+        String value = repository.findFreshValueByKey(key).orElse(null);
+        cache.put(key, CachedSetting.fresh(value, cacheTtl));
+        return value == null ? fallback : parseBoolean(value, fallback);
+    }
+
+    /**
+     * Fresh safety-switch read: a missing row keeps the rollout default, while
+     * an existing but malformed value fails closed.
+     */
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    public boolean getBooleanFreshFailClosed(String key, boolean fallbackWhenMissing) {
+        String value = repository.findFreshValueByKey(key).orElse(null);
+        cache.put(key, CachedSetting.fresh(value, cacheTtl));
+        return value == null ? fallbackWhenMissing : parseBoolean(value.trim(), false);
     }
 
     @Transactional

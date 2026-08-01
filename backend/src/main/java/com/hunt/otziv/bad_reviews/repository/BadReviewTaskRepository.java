@@ -4,9 +4,11 @@ import com.hunt.otziv.bad_reviews.model.BadReviewTask;
 import com.hunt.otziv.bad_reviews.model.BadReviewTaskStatus;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Worker;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -21,6 +23,7 @@ import java.util.Set;
 @Repository
 public interface BadReviewTaskRepository extends CrudRepository<BadReviewTask, Long> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT t
         FROM BadReviewTask t

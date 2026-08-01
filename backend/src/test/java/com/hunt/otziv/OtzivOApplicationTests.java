@@ -161,6 +161,62 @@ class OtzivOApplicationTests {
 	}
 
 	@Test
+	void externalReviewCandidateIndexMatchesOldestFirstScanOrder() {
+		var indexedColumns = jdbcTemplate.queryForList("""
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.STATISTICS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'reviews'
+			  AND INDEX_NAME = 'idx_reviews_external_auto_candidates'
+			ORDER BY SEQ_IN_INDEX
+			""", String.class);
+
+		assertThat(indexedColumns).containsExactly(
+				"review_publish",
+				"review_published_marked_at",
+				"review_id",
+				"review_external_confirm_status"
+		);
+	}
+
+	@Test
+	void workerRiskSlaDeliveryClaimSchemaIsComplete() {
+		var columns = jdbcTemplate.queryForList("""
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'worker_risk_incidents'
+			  AND COLUMN_NAME IN (
+			      'row_version',
+			      'sla_delivery_claim_token',
+			      'sla_delivery_claimed_at',
+			      'sla_delivery_claim_kind'
+			  )
+			ORDER BY COLUMN_NAME
+			""", String.class);
+		var indexedColumns = jdbcTemplate.queryForList("""
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.STATISTICS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'worker_risk_incidents'
+			  AND INDEX_NAME = 'idx_worker_risk_sla_cursor'
+			ORDER BY SEQ_IN_INDEX
+			""", String.class);
+
+		assertThat(columns).containsExactlyInAnyOrder(
+				"row_version",
+				"sla_delivery_claimed_at",
+				"sla_delivery_claim_kind",
+				"sla_delivery_claim_token"
+		);
+		assertThat(indexedColumns).containsExactly(
+				"status",
+				"response_due_at",
+				"incident_id"
+		);
+	}
+
+	@Test
 	void workerNetworkViolationRepositoryExecutesEpisodeLifecycleOnMySql() {
 		String username = "network_violation_" + UUID.randomUUID();
 		LocalDateTime mainFirstSeen = LocalDateTime.of(

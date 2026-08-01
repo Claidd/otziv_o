@@ -37,10 +37,9 @@ class WorkerRiskAccessPolicyTest {
                 true
         )).thenReturn(true);
         when(userService.findByUserName("worker")).thenReturn(Optional.of(worker));
-        when(repository.findByWorkerUserIdAndStatusAndResponseDueAtLessThanEqualAndExplanationAcceptedAtIsNullOrderByResponseDueAtAsc(
+        when(repository.findByWorkerUserIdAndStatusAndSectionRestrictedAtIsNotNullAndSectionRestrictionReleasedAtIsNullAndExplanationAcceptedAtIsNullOrderBySectionRestrictedAtAsc(
                 any(),
-                any(WorkerRiskIncidentStatus.class),
-                any(LocalDateTime.class)
+                any(WorkerRiskIncidentStatus.class)
         )).thenReturn(List.of(incident));
 
         assertTrue(policy.status("worker").restricted());

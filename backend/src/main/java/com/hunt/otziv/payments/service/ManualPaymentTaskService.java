@@ -144,7 +144,9 @@ public class ManualPaymentTaskService {
                         PaymentLinkStatus.CONFIRMED,
                         from,
                         to
-                );
+                ).stream()
+                        .map(this::safeRecipientSummaryItem)
+                        .toList();
         long totalPayments = items.stream()
                 .mapToLong(ManualPaymentRecipientMonthlySummaryItem::paymentCount)
                 .sum();
@@ -160,6 +162,24 @@ public class ManualPaymentTaskService {
                 totalAmountKopecks,
                 amountRubles(totalAmountKopecks),
                 items
+        );
+    }
+
+    private ManualPaymentRecipientMonthlySummaryItem safeRecipientSummaryItem(
+            ManualPaymentRecipientMonthlySummaryItem item
+    ) {
+        return new ManualPaymentRecipientMonthlySummaryItem(
+                item.manualRecipientName(),
+                item.manualPhone(),
+                PaymentUrlPolicy.safe(item.manualPaymentUrl(), PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL),
+                item.manualPaymentButtonLabel(),
+                item.paymentProfileName(),
+                item.manualSource(),
+                item.manualPaymentType(),
+                item.paymentCount(),
+                item.amountKopecks(),
+                item.firstConfirmedAt(),
+                item.lastConfirmedAt()
         );
     }
 
@@ -243,9 +263,9 @@ public class ManualPaymentTaskService {
         task.setManualPaymentType(type);
         task.setManualPhone(limit(request == null ? null : request.manualPhone(), 32));
         task.setManualRecipientName(recipientOrDefault(request == null ? null : request.manualRecipientName()));
-        task.setManualPaymentUrl(paymentUrlOrDefault(request == null ? null : request.manualPaymentUrl()));
+        boolean quarantinedPaymentUrlPreserved = applyManualPaymentUrlUpdate(task, request);
         task.setManualPaymentButtonLabel(buttonLabelOrDefault(request == null ? null : request.manualPaymentButtonLabel()));
-        validatePaymentTarget(task);
+        validatePaymentTarget(task, quarantinedPaymentUrlPreserved);
         task.setTargetAmountKopecks(targetAmountKopecks);
         task.setComment(limit(request == null ? null : request.comment(), 255));
         task.setUpdatedBy(limit(actor, 160));
@@ -254,6 +274,9 @@ public class ManualPaymentTaskService {
 
     private ManualPaymentTaskResponse updateStatus(ManualPaymentTask task, String status, String actor) {
         ManualPaymentTaskStatus newStatus = parseStatus(status);
+        if (newStatus == ManualPaymentTaskStatus.ACTIVE) {
+            validatePaymentTarget(task);
+        }
         task.setStatus(newStatus);
         task.setUpdatedBy(limit(actor, 160));
         if (newStatus == ManualPaymentTaskStatus.COMPLETED) {
@@ -332,7 +355,7 @@ public class ManualPaymentTaskService {
                 manualPaymentType(task).name(),
                 normalize(task.getManualPhone()),
                 recipientOrDefault(task.getManualRecipientName()),
-                paymentUrlOrDefault(task.getManualPaymentUrl()),
+                paymentUrlForRead(task.getManualPaymentUrl()),
                 buttonLabelOrDefault(task.getManualPaymentButtonLabel()),
                 task.getTargetAmountKopecks(),
                 reserved,
@@ -381,10 +404,14 @@ public class ManualPaymentTaskService {
             return !normalize(task.getManualPhone()).isBlank()
                     && !normalize(task.getManualRecipientName()).isBlank();
         }
-        return !normalize(task.getManualPaymentUrl()).isBlank();
+        return !paymentUrlForRead(task.getManualPaymentUrl()).isBlank();
     }
 
     private void validatePaymentTarget(ManualPaymentTask task) {
+        validatePaymentTarget(task, false);
+    }
+
+    private void validatePaymentTarget(ManualPaymentTask task, boolean allowPersistedQuarantine) {
         if (manualPaymentType(task) == ManualPaymentType.MOBILE_BANK) {
             if (normalize(task.getManualPhone()).isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите телефон");
@@ -394,9 +421,38 @@ public class ManualPaymentTaskService {
             }
             return;
         }
-        if (normalize(task.getManualPaymentUrl()).isBlank()) {
+        if (paymentUrlForRead(task.getManualPaymentUrl()).isBlank() && !allowPersistedQuarantine) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите ссылку Альфа-Банка");
         }
+    }
+
+    private boolean applyManualPaymentUrlUpdate(
+            ManualPaymentTask task,
+            UpdateManualPaymentTaskRequest request
+    ) {
+        String persisted = task.getManualPaymentUrl();
+        boolean quarantined = PaymentUrlPolicy.isUnsafeConfigured(
+                persisted,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+        );
+        boolean replacementConfirmed = request != null
+                && Boolean.TRUE.equals(request.manualPaymentUrlReplacementConfirmed());
+        if (quarantined && !replacementConfirmed) {
+            // Old clients submit whatever fallback they displayed. Keeping the
+            // raw value quarantined prevents a silent recipient replacement.
+            return true;
+        }
+        if (replacementConfirmed) {
+            task.setManualPaymentUrl(PaymentUrlPolicy.require(
+                    request.manualPaymentUrl(),
+                    PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL,
+                    HttpStatus.BAD_REQUEST,
+                    "Укажите безопасную ссылку ручной оплаты для замены"
+            ));
+            return false;
+        }
+        task.setManualPaymentUrl(paymentUrlOrDefault(request == null ? null : request.manualPaymentUrl()));
+        return false;
     }
 
     private ManualPaymentTaskStatus parseStatus(String value) {
@@ -451,8 +507,21 @@ public class ManualPaymentTaskService {
     }
 
     private String paymentUrlOrDefault(String value) {
-        String clean = limit(value, 512);
-        return clean.isBlank() ? ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL : clean;
+        return PaymentUrlPolicy.requireOrDefault(
+                value,
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL,
+                HttpStatus.BAD_REQUEST,
+                "Ссылка ручной оплаты должна использовать http или https"
+        );
+    }
+
+    private String paymentUrlForRead(String value) {
+        return PaymentUrlPolicy.safeOrDefault(
+                value,
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+        );
     }
 
     private String buttonLabelOrDefault(String value) {

@@ -53,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
@@ -449,6 +450,52 @@ class ReviewRecoveryTaskServiceImplTest {
         verify(botService).save(oldBot);
         verify(reviewRepository).save(review);
         verify(botService, never()).claimReserveBotForCity(any(), anyCollection());
+    }
+
+    @Test
+    void blockTaskBotRejectsBotThatIsNotAttachedBeforeSideEffects() {
+        Bot currentBot = activeWalkedBot(20L, 4);
+        Review review = review(100L, "текст", order(10L), currentBot);
+        ReviewRecoveryTask task = recoveryTask(40L, review, currentBot);
+
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deactivateAndChangeTaskBot(40L, 99L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие",
+                exception.getReason()
+        );
+        assertTrue(currentBot.isActive());
+        assertSame(currentBot, task.getBot());
+        verify(botExclusionService, never()).reject(any(), any(), any());
+        verify(botService, never()).save(any());
+        verify(taskRepository, never()).save(any());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void blockTaskBotRejectsNegativeBotIdBeforeSideEffects() {
+        Bot currentBot = activeWalkedBot(20L, 4);
+        Review review = review(100L, "текст", order(10L), currentBot);
+        ReviewRecoveryTask task = recoveryTask(40L, review, currentBot);
+        when(taskRepository.findByIdForMutation(40L)).thenReturn(Optional.of(task));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deactivateAndChangeTaskBot(40L, -1L)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertTrue(currentBot.isActive());
+        assertSame(currentBot, task.getBot());
+        verify(botExclusionService, never()).reject(any(), any(), any());
+        verify(botService, never()).save(any());
+        verify(taskRepository, never()).save(any());
     }
 
     @Test

@@ -32,6 +32,7 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
     );
 
     private final WebhookRateLimiter rateLimiter;
+    private final WebhookClientIpResolver clientIpResolver;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -41,7 +42,7 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        String clientIp = clientIp(request);
+        String clientIp = clientIpResolver.resolve(request);
         if (!rateLimiter.tryAcquire(clientIp)) {
             log.warn("Webhook rate limit exceeded: ip={}, path={}", clientIp, request.getRequestURI());
             response.setStatus(429);
@@ -60,21 +61,6 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
         String normalizedPath = path;
         return RATE_LIMITED_PATHS.stream()
                 .anyMatch(prefix -> normalizedPath.equals(prefix) || normalizedPath.startsWith(prefix + "/"));
-    }
-
-    private static String clientIp(HttpServletRequest request) {
-        String forwardedFor = request.getHeader("X-Forwarded-For");
-        if (hasText(forwardedFor)) {
-            int comma = forwardedFor.indexOf(',');
-            return (comma >= 0 ? forwardedFor.substring(0, comma) : forwardedFor).trim();
-        }
-
-        String realIp = request.getHeader("X-Real-IP");
-        if (hasText(realIp)) {
-            return realIp.trim();
-        }
-
-        return request.getRemoteAddr();
     }
 
     private static boolean hasText(String value) {

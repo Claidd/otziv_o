@@ -3,6 +3,7 @@ package com.hunt.otziv.reputationai.infrastructure.ai.openai.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
 import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
@@ -78,13 +79,16 @@ class OpenAiResponsesClientYandexResponsesTest {
         DeepSeekProvider deepSeekProvider = new DeepSeekProvider(properties, objectMapper);
         ReputationAiProviderSelectionService providerSelectionService = mock(ReputationAiProviderSelectionService.class);
         when(providerSelectionService.activeProvider()).thenReturn("yandexgpt");
+        ReputationAiRuntimeSwitch runtimeSwitch = mock(ReputationAiRuntimeSwitch.class);
+        when(runtimeSwitch.isEnabled()).thenReturn(true);
         return new OpenAiResponsesClient(
                 properties,
                 providerSelectionService,
                 objectMapper,
                 yandexGptProvider,
                 deepSeekProvider,
-                mock(DeepSeekAnthropicProvider.class)
+                mock(DeepSeekAnthropicProvider.class),
+                runtimeSwitch
         );
     }
 

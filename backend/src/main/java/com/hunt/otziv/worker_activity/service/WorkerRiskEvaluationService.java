@@ -743,6 +743,34 @@ public class WorkerRiskEvaluationService {
         )) {
             return;
         }
+        if (workerUser == null || workerUser.getTelegramChatId() == null) {
+            Long groupChatId = workerUser == null ? null : workerUser.getWorkerTelegramGroupChatId();
+            if (groupChatId != null) {
+                telegramService.sendMessage(
+                        groupChatId,
+                        "⚠️ ПОЯСНЕНИЕ НЕ ЗАПРОШЕНО"
+                                + "\nЛичный Telegram специалиста не привязан к профилю."
+                                + "\nТрёхчасовой срок и ограничение раздела не запущены."
+                                + "\nОбратитесь к администратору для безопасной привязки."
+                                + "\nНе отправляйте логин в общий чат."
+                                + "\nКод риска: risk-" + incident.getId()
+                );
+            }
+            riskEventService.record(
+                    incident,
+                    WorkerRiskEventType.EXPLANATION_REQUEST_FAILED,
+                    incident.getWorkerUserId(),
+                    "WORKER",
+                    "telegram",
+                    groupChatId == null
+                            ? Map.of("reason", "Личный Telegram специалиста не привязан")
+                            : Map.of(
+                                    "reason", "Личный Telegram специалиста не привязан",
+                                    "chatId", groupChatId
+                            )
+            );
+            return;
+        }
         Long chatId = workerUser == null
                 ? null
                 : workerUser.getWorkerTelegramGroupChatId() != null

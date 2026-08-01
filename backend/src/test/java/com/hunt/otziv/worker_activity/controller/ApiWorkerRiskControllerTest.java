@@ -2,6 +2,7 @@ package com.hunt.otziv.worker_activity.controller;
 
 import com.hunt.otziv.gamification.model.GamificationScoreLedger;
 import com.hunt.otziv.gamification.repository.GamificationScoreLedgerRepository;
+import com.hunt.otziv.manager_control.model.ManagerDailyControlConcreteItem;
 import com.hunt.otziv.manager_control.repository.ManagerDailyControlConcreteItemRepository;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
 import com.hunt.otziv.t_telegrambot.service.TelegramService;
@@ -21,6 +22,8 @@ import com.hunt.otziv.worker_activity.service.WorkerRiskRollbackService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskEventService;
 import com.hunt.otziv.worker_activity.service.WorkerRiskDecisionPolicy;
 import com.hunt.otziv.worker_activity.service.WorkerRiskTelegramCallbackService;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,8 +36,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
@@ -93,10 +99,10 @@ class ApiWorkerRiskControllerTest {
     @Test
     void requestExplanationKeepsIncidentOpen() {
         WorkerRiskIncident incident = incident();
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(user(2L, "worker", 101L)));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(user(2L, "worker", 101L));
         when(personalReminderService.hasOpenSystemReminder(any(), eq("WORKER_RISK_MANAGER_WARNING"), eq(77L)))
                 .thenReturn(false);
         when(telegramService.sendMessageWithInlineKeyboard(eq(101L), any(), eq(null), any()))
@@ -124,12 +130,51 @@ class ApiWorkerRiskControllerTest {
     }
 
     @Test
-    void violationCreatesPenaltyLedgerEntry() {
+    void requestExplanationWithoutPersonalTelegramDoesNotStartSla() {
         WorkerRiskIncident incident = incident();
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        User worker = user(2L, "worker", null);
+        worker.setWorkerTelegramGroupChatId(-100123L);
+        ManagerDailyControlConcreteItem controlItem = new ManagerDailyControlConcreteItem();
+        controlItem.setWorkerNotificationAttemptedAt(LocalDateTime.now().minusHours(4));
+        controlItem.setWorkerNotificationSentAt(LocalDateTime.now().minusHours(4));
+        controlItem.setWorkerReminderSentAt(LocalDateTime.now().minusHours(1));
+        controlItem.setWorkerReminderCount(2);
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
-        when(userService.findByUserName("worker")).thenReturn(Optional.of(user(2L, "worker", 101L)));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(worker);
+        when(managerControlConcreteItemRepository.findByEntityTypeAndEntityId("RISK", 77L))
+                .thenReturn(List.of(controlItem));
+        when(personalReminderService.hasOpenSystemReminder(any(), eq("WORKER_RISK_MANAGER_WARNING"), eq(77L)))
+                .thenReturn(false);
+
+        WorkerRiskIncidentResponse response = controller.resolution(
+                77L,
+                new WorkerRiskResolutionRequest("EXPLANATION_REQUESTED", null, null),
+                adminAuth()
+        );
+
+        assertEquals(WorkerRiskIncidentStatus.OPEN, response.status());
+        assertEquals(null, response.responseDueAt());
+        ArgumentCaptor<String> bindingWarning = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-100123L), bindingWarning.capture());
+        assertEquals(true, bindingWarning.getValue().contains("Трёхчасовой срок и ограничение раздела не запущены"));
+        assertFalse(bindingWarning.getValue().contains(worker.getUsername()));
+        assertFalse(bindingWarning.getValue().contains("отправьте логин"));
+        assertNull(controlItem.getWorkerNotificationAttemptedAt());
+        assertNull(controlItem.getWorkerNotificationSentAt());
+        assertNull(controlItem.getWorkerReminderSentAt());
+        assertEquals(0, controlItem.getWorkerReminderCount());
+        verify(telegramService, never()).sendMessageWithInlineKeyboard(any(Long.class), any(), any(), any());
+    }
+
+    @Test
+    void violationCreatesPenaltyLedgerEntry() {
+        WorkerRiskIncident incident = incident();
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
+        when(userService.findByIdToUserInfo(2L)).thenReturn(user(2L, "worker", 101L));
         when(scoreLedgerRepository.existsByUniqueScoreKey("worker-risk-penalty:77")).thenReturn(false);
         when(personalReminderService.hasOpenSystemReminder(any(), eq("WORKER_RISK_MANAGER_VIOLATION"), eq(77L)))
                 .thenReturn(false);
@@ -168,7 +213,7 @@ class ApiWorkerRiskControllerTest {
     void verifiedDeletesOpenRiskReminder() {
         WorkerRiskIncident incident = incident();
         incident.setExplanationQuality(WorkerRiskExplanationQuality.LOGICAL);
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
 
@@ -188,7 +233,7 @@ class ApiWorkerRiskControllerTest {
     @Test
     void adminVerificationClosesRiskWithoutExplanationOrAudit() {
         WorkerRiskIncident incident = incident();
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
 
@@ -208,7 +253,7 @@ class ApiWorkerRiskControllerTest {
     @Test
     void ownerVerificationClosesRiskWithoutExplanationOrAudit() {
         WorkerRiskIncident incident = incident();
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("owner")).thenReturn(Optional.of(user(3L, "owner", null)));
         when(userService.findManagersByUserName("owner")).thenReturn(java.util.Set.of());
@@ -243,7 +288,7 @@ class ApiWorkerRiskControllerTest {
         incident.setResponseDueAt(java.time.LocalDateTime.now().minusHours(1));
         incident.setSectionRestrictedAt(java.time.LocalDateTime.now().minusMinutes(30));
 
-        when(incidentRepository.findById(77L)).thenReturn(Optional.of(incident));
+        when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
         when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userService.findByUserName("admin")).thenReturn(Optional.of(user(1L, "admin", null)));
 

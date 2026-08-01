@@ -206,6 +206,7 @@ export interface DeepCompanyResearchJob {
 export type ReputationAiProvider = 'deepseek' | 'yandexgpt' | 'openai';
 
 export interface ReputationAiStatus {
+  enabled: boolean;
   aiProvider: ReputationAiProvider;
   aiAvailable: boolean;
   searchProvider: string;
@@ -408,6 +409,10 @@ export class ReputationAiApi {
 
   selectProvider(provider: ReputationAiProvider): Observable<ReputationAiStatus> {
     return this.http.put<ReputationAiStatus>(`${this.baseUrl}/status/provider`, { provider });
+  }
+
+  setEnabled(enabled: boolean): Observable<ReputationAiStatus> {
+    return this.http.put<ReputationAiStatus>(`${this.baseUrl}/status/enabled`, { enabled });
   }
 
   checkOpenAiRoute(): Observable<OpenAiProviderDiagnostics> {

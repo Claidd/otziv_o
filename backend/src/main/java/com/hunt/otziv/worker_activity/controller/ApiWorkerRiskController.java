@@ -30,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -168,6 +170,7 @@ public class ApiWorkerRiskController {
 
     @PostMapping("/incidents/{incidentId}/audit")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public WorkerRiskIncidentResponse reviewAudit(
             @PathVariable Long incidentId,
             @RequestBody WorkerRiskAuditRequest request,
@@ -219,6 +222,7 @@ public class ApiWorkerRiskController {
             }
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Неизвестный результат аудита");
         }
+        clearSlaDeliveryClaim(incident);
         User reviewer = currentUser(authentication);
         WorkerRiskIncident saved = incidentRepository.save(incident);
         riskEventService.record(
@@ -234,6 +238,7 @@ public class ApiWorkerRiskController {
 
     @PostMapping("/incidents/{incidentId}/resolve")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @Transactional
     public WorkerRiskIncidentResponse resolve(
             @PathVariable Long incidentId,
             Authentication authentication
@@ -243,6 +248,7 @@ public class ApiWorkerRiskController {
 
     @PostMapping("/incidents/{incidentId}/ignore")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @Transactional
     public WorkerRiskIncidentResponse ignore(
             @PathVariable Long incidentId,
             Authentication authentication
@@ -252,6 +258,7 @@ public class ApiWorkerRiskController {
 
     @PostMapping("/incidents/{incidentId}/resolution")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @Transactional
     public WorkerRiskIncidentResponse resolution(
             @PathVariable Long incidentId,
             @RequestBody WorkerRiskResolutionRequest request,
@@ -264,6 +271,7 @@ public class ApiWorkerRiskController {
 
     @PostMapping("/incidents/{incidentId}/rollback")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
+    @Transactional
     public WorkerRiskIncidentResponse rollback(
             @PathVariable Long incidentId,
             Authentication authentication
@@ -321,6 +329,9 @@ public class ApiWorkerRiskController {
                 && incident.getSectionRestrictionReleasedAt() == null;
         if (restrictionReleased) {
             incident.setSectionRestrictionReleasedAt(LocalDateTime.now());
+        }
+        if (decisionPolicy.isFinalAction(action)) {
+            clearSlaDeliveryClaim(incident);
         }
 
         if (action == WorkerRiskResolutionAction.EXPLANATION_REQUESTED || action == WorkerRiskResolutionAction.WORKER_WARNED) {
@@ -429,7 +440,7 @@ public class ApiWorkerRiskController {
     }
 
     private void requestWorkerExplanation(WorkerRiskIncident incident) {
-        User worker = userService.findByUserName(incident.getWorkerUsername()).orElse(null);
+        User worker = workerFor(incident);
         if (worker == null || !worker.isActive()) {
             return;
         }
@@ -450,6 +461,18 @@ public class ApiWorkerRiskController {
         boolean telegramAttempted = false;
         boolean telegramSent = false;
         String failureReason = null;
+        boolean personalTelegramMissing = worker.getTelegramChatId() == null;
+        boolean responseRestrictionReleased = personalTelegramMissing
+                && incident.getSectionRestrictedAt() != null
+                && incident.getSectionRestrictionReleasedAt() == null;
+        if (personalTelegramMissing) {
+            incident.setResponseDueAt(null);
+            incident.setExplanationReminderAt(null);
+            clearSlaDeliveryClaim(incident);
+            if (responseRestrictionReleased) {
+                incident.setSectionRestrictionReleasedAt(now);
+            }
+        }
         try {
             if (!personalReminderService.hasOpenSystemReminder(worker, SOURCE_MANAGER_WARNING, incident.getId())) {
                 personalReminderService.createSystemReminderDueNow(
@@ -461,7 +484,29 @@ public class ApiWorkerRiskController {
                         incident.getOrderId()
                 );
             }
-            if (incident.getResponseDueAt() == null) {
+            if (personalTelegramMissing) {
+                failureReason = "Личный Telegram специалиста не привязан";
+                if (worker.getWorkerTelegramGroupChatId() != null) {
+                    telegramService.sendMessage(
+                            worker.getWorkerTelegramGroupChatId(),
+                            "⚠️ Пояснение пока нельзя принять: личный Telegram специалиста не привязан."
+                                    + "\nТрёхчасовой срок и ограничение раздела не запущены."
+                                    + "\nОбратитесь к администратору для безопасной привязки."
+                                    + "\nНе отправляйте логин в общий чат."
+                                    + "\nКод риска: risk-" + incident.getId()
+                    );
+                }
+                if (responseRestrictionReleased) {
+                    riskEventService.record(
+                            incident,
+                            WorkerRiskEventType.SPECIALIST_SECTION_RELEASED,
+                            worker.getId(),
+                            "WORKER",
+                            "telegram",
+                            Map.of("reason", "response-channel-unavailable")
+                    );
+                }
+            } else if (incident.getResponseDueAt() == null) {
                 Long telegramChatId = worker.getWorkerTelegramGroupChatId() != null
                         ? worker.getWorkerTelegramGroupChatId()
                         : worker.getTelegramChatId();
@@ -477,6 +522,12 @@ public class ApiWorkerRiskController {
                     );
                     if (telegramSent) {
                         incident.setExplanationPromptedAt(now);
+                        incident.setExplanationReminderAt(null);
+                        clearSlaDeliveryClaim(incident);
+                        if (incident.getSectionRestrictionReleasedAt() != null) {
+                            incident.setSectionRestrictedAt(null);
+                            incident.setSectionRestrictionReleasedAt(null);
+                        }
                         int deadlineMinutes = Math.max(1, appSettingService.getInt(
                                 AppSettingService.WORKER_RISK_EXPLANATION_DEADLINE_MINUTES,
                                 180
@@ -533,17 +584,18 @@ public class ApiWorkerRiskController {
                 continue;
             }
             item.setWorkerNotificationUserId(worker.getId());
-            if (telegramAttempted) {
-                item.setWorkerNotificationAttemptedAt(requestedAt);
-                item.setWorkerNotificationSentAt(telegramSent ? requestedAt : null);
-                item.setWorkerNotificationFailureReason(telegramSent ? null : failureReason);
-            } else if (failureReason != null) {
-                item.setWorkerNotificationFailureReason(failureReason);
-            }
+            item.setWorkerNotificationAttemptedAt(telegramAttempted ? requestedAt : null);
+            item.setWorkerNotificationSentAt(telegramSent ? requestedAt : null);
+            item.setWorkerNotificationAcceptedAt(null);
+            item.setWorkerNotificationAcceptedByUserId(null);
+            item.setWorkerNotificationFailureReason(telegramSent ? null : failureReason);
             item.setWorkerExplanationRequestedAt(requestedAt);
+            item.setWorkerExplanationPromptedAt(null);
             item.setWorkerExplanation(null);
             item.setWorkerExplanationAt(null);
             item.setWorkerExplanationByUserId(null);
+            item.setWorkerReminderSentAt(null);
+            item.setWorkerReminderCount(0);
             item.setLastManualTouchAt(requestedAt);
             boolean deliveryFailed = failureReason != null && !telegramSent;
             if (deliveryFailed) {
@@ -560,7 +612,7 @@ public class ApiWorkerRiskController {
     }
 
     private void notifyWorkerViolation(WorkerRiskIncident incident) {
-        User worker = userService.findByUserName(incident.getWorkerUsername()).orElse(null);
+        User worker = workerFor(incident);
         if (worker == null || !worker.isActive()) {
             return;
         }
@@ -640,7 +692,7 @@ public class ApiWorkerRiskController {
     }
 
     private WorkerRiskIncident findIncidentForCurrentUser(Long incidentId, Authentication authentication) {
-        WorkerRiskIncident incident = incidentRepository.findById(incidentId)
+        WorkerRiskIncident incident = incidentRepository.findByIdForUpdate(incidentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Инцидент не найден"));
         List<Long> currentManagerIds = visibleManagerIds(authentication);
         if (!hasRole(authentication, "ADMIN")
@@ -679,6 +731,18 @@ public class ApiWorkerRiskController {
         );
     }
 
+    private User workerFor(WorkerRiskIncident incident) {
+        if (incident == null || incident.getWorkerUserId() == null) {
+            return null;
+        }
+        try {
+            User worker = userService.findByIdToUserInfo(incident.getWorkerUserId());
+            return worker != null && Objects.equals(worker.getId(), incident.getWorkerUserId()) ? worker : null;
+        } catch (java.util.NoSuchElementException exception) {
+            return null;
+        }
+    }
+
     private User currentUser(Authentication authentication) {
         if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Пользователь не найден");
@@ -710,5 +774,11 @@ public class ApiWorkerRiskController {
             return first;
         }
         return second == null ? "" : second;
+    }
+
+    private void clearSlaDeliveryClaim(WorkerRiskIncident incident) {
+        incident.setSlaDeliveryClaimToken(null);
+        incident.setSlaDeliveryClaimedAt(null);
+        incident.setSlaDeliveryClaimKind(null);
     }
 }

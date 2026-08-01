@@ -16,12 +16,20 @@ const {
   normalizeInviteCode,
 } = require("./group-invite");
 const { selectGroupsCache } = require("./groups-cache");
+const {
+  boundedBodyBytes,
+  createConcurrencyMiddleware,
+  createInternalAuthMiddleware,
+} = require("./internal-auth");
 
 const CLIENT_ID = process.env.CLIENT_ID || "whatsapp_default";
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
 const SERVER_URL = trimTrailingSlash(process.env.SERVER_URL || "http://app:8080");
 const AUTH_PATH = process.env.AUTH_PATH || "/auth";
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
+const GATEWAY_SHARED_SECRET = process.env.WHATSAPP_GATEWAY_SHARED_SECRET || "";
+const GATEWAY_AUTH_REQUIRED = parseBoolean(process.env.WHATSAPP_GATEWAY_AUTH_REQUIRED);
+const WHATSAPP_QR_LOG_ENABLED = parseBoolean(process.env.WHATSAPP_QR_LOG_ENABLED);
 const CHROMIUM_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium";
 const WHATSAPP_PROXY_ENABLED = parseBoolean(process.env.WHATSAPP_PROXY_ENABLED);
 const WHATSAPP_PROXY_HOST = String(process.env.WHATSAPP_PROXY_HOST || "").trim();
@@ -41,6 +49,12 @@ const WHATSAPP_WEBHOOK_TIMEOUT_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOO
 const WHATSAPP_WEBHOOK_RETRY_DELAY_MS = parsePositiveInt(process.env.WHATSAPP_WEBHOOK_RETRY_DELAY_MS, 500);
 const WHATSAPP_MESSAGE_DEDUP_TTL_MS = parsePositiveInt(process.env.WHATSAPP_MESSAGE_DEDUP_TTL_MS, 86400000);
 const WHATSAPP_OUTBOUND_MARK_TTL_MS = parsePositiveInt(process.env.WHATSAPP_OUTBOUND_MARK_TTL_MS, 600000);
+const WHATSAPP_HTTP_BODY_LIMIT = boundedBodyBytes(process.env.WHATSAPP_HTTP_BODY_LIMIT);
+const WHATSAPP_HTTP_MAX_CONCURRENCY = parsePositiveInt(process.env.WHATSAPP_HTTP_MAX_CONCURRENCY, 16);
+const WHATSAPP_MAX_MESSAGE_CHARS = Math.min(
+  parsePositiveInt(process.env.WHATSAPP_MAX_MESSAGE_CHARS, 20000),
+  50000
+);
 
 let client = null;
 let ready = false;
@@ -65,7 +79,6 @@ const outboundRegistry = new RecentOutboundRegistry(WHATSAPP_OUTBOUND_MARK_TTL_M
 const deliveredMessageCache = new DeliveredMessageCache(WHATSAPP_MESSAGE_DEDUP_TTL_MS);
 
 const app = express();
-app.use(express.json({ limit: "1mb" }));
 
 function log(level, message, extra = {}) {
   const entry = {
@@ -265,6 +278,16 @@ function statusPayload() {
   };
 }
 
+function minimalStatusPayload() {
+  return {
+    status: ready && authenticated ? "ok" : "not_ready",
+    ready,
+    authenticated,
+    state: lastState,
+    hasQr: Boolean(currentQr),
+  };
+}
+
 function requireReady(res) {
   if (ready && client) {
     return true;
@@ -330,8 +353,10 @@ function wireClientEvents(instance) {
       lastError = error.message;
       log("warn", "QR data URL generation failed", { error: error.message });
     }
-    log("info", "QR received; scan it from logs or GET /qr");
-    qrcodeTerminal.generate(qr, { small: true });
+    log("info", "QR received; retrieve it through authenticated GET /qr");
+    if (WHATSAPP_QR_LOG_ENABLED) {
+      qrcodeTerminal.generate(qr, { small: true });
+    }
   });
 
   instance.on("authenticated", () => {
@@ -773,16 +798,23 @@ function startGroupsRefresh() {
 }
 
 app.get("/health", (req, res) => {
-  res.json(statusPayload());
+  res.json(minimalStatusPayload());
 });
 
 app.get("/ready", (req, res) => {
   if (!ready || !authenticated) {
-    res.status(503).json(statusPayload());
+    res.status(503).json(minimalStatusPayload());
     return;
   }
-  res.json(statusPayload());
+  res.json(minimalStatusPayload());
 });
+
+app.use(createInternalAuthMiddleware({
+  secret: GATEWAY_SHARED_SECRET,
+  required: GATEWAY_AUTH_REQUIRED,
+}));
+app.use(express.json({ limit: WHATSAPP_HTTP_BODY_LIMIT, strict: true }));
+app.use(createConcurrencyMiddleware(WHATSAPP_HTTP_MAX_CONCURRENCY));
 
 app.get("/qr", asyncRoute(async (req, res) => {
   if (!currentQr) {
@@ -812,7 +844,7 @@ app.post("/send", asyncRoute(async (req, res) => {
 
   const phone = normalizePhone(req.body.phone || req.body.to || req.body.number);
   const message = String(req.body.message || "").trim();
-  if (!phone || !message) {
+  if (!phone || !message || message.length > WHATSAPP_MAX_MESSAGE_CHARS) {
     res.status(400).json({ status: "error", code: "invalid_request" });
     return;
   }
@@ -833,7 +865,7 @@ app.post("/send-group", asyncRoute(async (req, res) => {
 
   const groupId = normalizeGroupId(req.body.groupId || req.body.chatId || req.body.to);
   const message = String(req.body.message || "").trim();
-  if (!groupId || !message) {
+  if (!groupId || !message || message.length > WHATSAPP_MAX_MESSAGE_CHARS) {
     res.status(400).json({ status: "error", code: "invalid_request" });
     return;
   }
@@ -1047,10 +1079,18 @@ app.use((error, req, res, next) => {
     next(error);
     return;
   }
+  if (error && error.type === "entity.too.large") {
+    res.status(413).json({ status: "error", code: "payload_too_large" });
+    return;
+  }
+  if (error instanceof SyntaxError) {
+    res.status(400).json({ status: "error", code: "invalid_json" });
+    return;
+  }
   res.status(500).json({
     status: "error",
     code: "internal_error",
-    message: lastError,
+    message: "Internal gateway error",
   });
 });
 

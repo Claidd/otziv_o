@@ -251,11 +251,16 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
           AND link.tbankPaymentId IS NOT NULL
           AND TRIM(link.tbankPaymentId) <> ''
           AND link.updatedAt <= :updatedBefore
-        ORDER BY link.updatedAt ASC, link.id ASC
+          AND (
+              link.bankReconciliationAttemptedAt IS NULL
+              OR link.bankReconciliationAttemptedAt <= :attemptBefore
+          )
+        ORDER BY link.bankReconciliationAttemptedAt ASC, link.updatedAt ASC, link.id ASC
     """)
     List<Long> findBankReconciliationCandidateIds(
             @Param("statuses") Collection<PaymentLinkStatus> statuses,
             @Param("updatedBefore") LocalDateTime updatedBefore,
+            @Param("attemptBefore") LocalDateTime attemptBefore,
             Pageable pageable
     );
 

@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { PaymentsApi, PublicCommonInvoice } from '../../core/payments.api';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
+import { navigateToPaymentTarget } from '../../shared/payment-navigation';
 
 @Component({
   selector: 'app-pay-group-page',
@@ -85,7 +86,11 @@ export class PayGroupPageComponent {
     ).subscribe({
       next: (response) => {
         if (response.paymentUrl) {
-          window.location.assign(response.paymentUrl);
+          if (navigateToPaymentTarget(response.paymentUrl, 'payment', (target) => window.location.assign(target))) {
+            return;
+          }
+          this.error.set('Банк вернул недопустимую ссылку оплаты. Переход отменен.');
+          this.submitting.set(false);
           return;
         }
         this.message.set('Банк не вернул ссылку на оплату. Попробуйте еще раз позже.');

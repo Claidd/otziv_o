@@ -19,6 +19,7 @@ public record PaymentProfileResponse(
         String manualPhone,
         String manualRecipientName,
         String manualPaymentUrl,
+        boolean manualPaymentUrlConfigured,
         String manualPaymentButtonLabel,
         String manualComment,
         Long manualMonthlySoftLimitKopecks,

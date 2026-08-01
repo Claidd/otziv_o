@@ -277,16 +277,18 @@
               <td class="payment-cell" data-label="Платёж">
                 @if (isManualPayment(link)) {
                   @if (isExternalManualPayment(link)) {
-                    <a
-                      class="copy-line"
-                      [href]="link.manualPaymentUrl || '#'"
-                      target="_blank"
-                      rel="noopener"
-                      title="Открыть ссылку оплаты"
-                    >
-                      <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
-                      <strong>{{ link.manualPaymentButtonLabel || 'Ссылка Альфа-Банк' }}</strong>
-                    </a>
+                    @if (safePaymentHref(link.manualPaymentUrl, 'manual'); as manualPaymentHref) {
+                      <a
+                        class="copy-line"
+                        [href]="manualPaymentHref"
+                        target="_blank"
+                        rel="noopener"
+                        title="Открыть ссылку оплаты"
+                      >
+                        <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                        <strong>{{ link.manualPaymentButtonLabel || 'Ссылка Альфа-Банк' }}</strong>
+                      </a>
+                    }
                     <small>{{ link.manualPaymentUrl || 'Ссылка не указана' }}</small>
                   } @else {
                     <button
@@ -370,11 +372,13 @@
                       Архив
                     </span>
                   } @else {
-                    <a [href]="link.publicUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть ссылку оплаты">
-                      <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
-                    </a>
-                    @if (link.paymentUrl) {
-                      <a [href]="link.paymentUrl" target="_blank" rel="noopener" class="icon-action" title="Открыть форму банка">
+                    @if (safePaymentHref(link.publicUrl); as publicPaymentHref) {
+                      <a [href]="publicPaymentHref" target="_blank" rel="noopener" class="icon-action" title="Открыть ссылку оплаты">
+                        <span class="material-icons-sharp" aria-hidden="true">open_in_new</span>
+                      </a>
+                    }
+                    @if (safePaymentHref(link.paymentUrl); as bankPaymentHref) {
+                      <a [href]="bankPaymentHref" target="_blank" rel="noopener" class="icon-action" title="Открыть форму банка">
                         <span class="material-icons-sharp" aria-hidden="true">credit_card</span>
                       </a>
                     }

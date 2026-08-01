@@ -39,7 +39,8 @@ describe('routes', () => {
       'admin/user-info/:userId',
       'admin/dictionaries/phones',
       'admin/dictionaries',
-      'review/editReviews/:orderDetailId'
+      'review/editReviews/:orderDetailId',
+      'review/c'
     ].forEach((path) => {
       expect(typeof route(path)?.loadComponent).toBe('function');
       expect(route(path)?.component).toBeUndefined();
@@ -48,10 +49,13 @@ describe('routes', () => {
 
   it('keeps review edit route public', () => {
     const reviewRoute = route('review/editReviews/:orderDetailId');
+    const secureReviewRoute = route('review/c');
     const shortReviewRoute = routes.find((candidate) => candidate.matcher === reviewShortLinkMatcher);
 
     expect(reviewRoute?.canActivate).toBeUndefined();
     expect(reviewRoute?.data).toBeUndefined();
+    expect(secureReviewRoute?.canActivate).toBeUndefined();
+    expect(secureReviewRoute?.data).toBeUndefined();
     expect(typeof shortReviewRoute?.loadComponent).toBe('function');
     expect(shortReviewRoute?.canActivate).toBeUndefined();
     expect(shortReviewRoute?.data).toBeUndefined();

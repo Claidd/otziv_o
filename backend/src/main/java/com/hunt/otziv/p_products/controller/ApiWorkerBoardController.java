@@ -858,6 +858,8 @@ public class ApiWorkerBoardController {
                     SECTION_RECOVERY,
                     "botId=" + valueOrDash(botId) + ";"
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт восстановления не заблокирован", exception);
         }
@@ -906,6 +908,8 @@ public class ApiWorkerBoardController {
                     SECTION_BAD,
                     "botId=" + valueOrDash(botId) + ";"
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заблокирован", exception);
         }

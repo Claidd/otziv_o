@@ -403,6 +403,16 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
     """)
     Optional<Review> findByIdForDto(@Param("reviewId") Long reviewId);
 
+    /**
+     * Narrow base-row lock for external-check creation and aggregate updates.
+     * Fetch graphs must be loaded separately so the database never applies a
+     * pessimistic lock across their joins.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Review r WHERE r.id = :reviewId")
+    Optional<Review> findBaseByIdForExternalCheckUpdate(@Param("reviewId") Long reviewId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT DISTINCT r
         FROM Review r

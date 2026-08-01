@@ -42,12 +42,20 @@ public class ReviewRecoveryNoticeScheduler {
         Order order = batch.getOrder();
         String targetKey = targetKey(batch.getId());
         LocalDateTime nextAttemptAt = nextAttemptAtHours(retryDelayHours());
-        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
                 ClientMessageScenario.REVIEW_RECOVERY_NOTICE,
                 targetKey
         );
         if (existing.isPresent()) {
             ScheduledClientMessageState state = existing.get();
+            if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+                log.warn(
+                        "Review recovery notice rearm blocked pending manual review stateId={} code={}",
+                        state.getId(),
+                        state.getLastErrorCode()
+                );
+                return false;
+            }
             state.setTargetType(ClientMessageTargetType.ORDER);
             state.setCompanyId(order.getCompany().getId());
             state.setOrderId(order.getId());

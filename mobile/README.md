@@ -46,6 +46,28 @@ C:\Users\Hunt\.jdks\temurin-21\jdk-21.0.11+10
 
 APK появится в `android\app\build\outputs\apk\debug\app-debug.apk`.
 
+### Signed Android release
+
+Release APK собирается fail-closed: при отсутствующем или неполном
+`android\keystore.properties` Gradle не создаёт unsigned release. Debug, lint и
+unit-test задачи продолжают работать без production-ключа.
+
+Из каталога `mobile`:
+
+```powershell
+.\scripts\build-android-release.ps1 -VersionCode 62 -VersionName 1.0.62
+```
+
+Скрипт проверяет APK через `apksigner` и `aapt`/`aapt2`, включая production
+сертификат, package name и внутреннюю версию, и только затем помещает его в
+`builds`. Для проверки готового APK без доступа к ключу:
+
+```powershell
+.\scripts\test-android-release-contracts.ps1
+```
+
+Runbook: `docs/ANDROID_RELEASE_SIGNING.md`.
+
 Для проверки локальной APK на эмуляторе или телефоне через USB пробросьте prod-like nginx:
 
 ```powershell

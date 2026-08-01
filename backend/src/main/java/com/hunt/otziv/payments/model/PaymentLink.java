@@ -31,7 +31,11 @@ import lombok.Setter;
         },
         indexes = {
                 @Index(name = "idx_payment_links_order", columnList = "order_id"),
-                @Index(name = "idx_payment_links_tbank_payment_id", columnList = "tbank_payment_id")
+                @Index(name = "idx_payment_links_tbank_payment_id", columnList = "tbank_payment_id"),
+                @Index(
+                        name = "idx_payment_links_bank_reconciliation_due",
+                        columnList = "status, bank_reconciliation_attempted_at, updated_at, id"
+                )
         }
 )
 public class PaymentLink {
@@ -161,6 +165,9 @@ public class PaymentLink {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "bank_reconciliation_attempted_at")
+    private LocalDateTime bankReconciliationAttemptedAt;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;

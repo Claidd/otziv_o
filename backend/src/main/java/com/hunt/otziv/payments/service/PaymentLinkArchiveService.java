@@ -13,9 +13,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -102,6 +104,12 @@ public class PaymentLinkArchiveService {
 
     @Transactional
     public int archiveForDeletedOrder(Long orderId) {
+        if (repository.hasLiveReconciliationForOrder(orderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ нельзя удалить: банковский платеж требует сверки"
+            );
+        }
         List<Long> ids = repository.findLiveIdsByOrderId(orderId);
         if (ids.isEmpty()) {
             return 0;
@@ -118,6 +126,11 @@ public class PaymentLinkArchiveService {
      */
     @Transactional
     public int archiveForPreparedOrderArchiveCandidates(Long archiveBatchId) {
+        if (repository.hasPreparedOrderReconciliationCandidate()) {
+            throw new IllegalStateException(
+                    "Order archive blocked: a bank payment still needs reconciliation"
+            );
+        }
         List<Long> ids = repository.findLiveIdsForPreparedOrderArchiveCandidates();
         if (ids.isEmpty()) {
             return 0;

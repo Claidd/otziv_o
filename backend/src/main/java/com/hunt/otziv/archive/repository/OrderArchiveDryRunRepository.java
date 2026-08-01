@@ -56,6 +56,12 @@ public class OrderArchiveDryRunRepository {
               )
               AND NOT EXISTS (
                     SELECT 1
+                    FROM payment_links pl
+                    WHERE pl.order_id = o.order_id
+                      AND pl.status = 'NEEDS_RECONCILIATION'
+              )
+              AND NOT EXISTS (
+                    SELECT 1
                     FROM common_invoice_orders cio
                     WHERE cio.order_id = o.order_id
               )
@@ -96,6 +102,13 @@ public class OrderArchiveDryRunRepository {
                     JOIN next_order_requests nor ON nor.source_order_id = cio.order_id
                     WHERE cio.invoice_id = ci.invoice_id
                       AND nor.request_status IN ('PENDING', 'FAILED')
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders cio
+                    JOIN payment_links pl ON pl.order_id = cio.order_id
+                    WHERE cio.invoice_id = ci.invoice_id
+                      AND pl.status = 'NEEDS_RECONCILIATION'
               )
               AND NOT EXISTS (
                     SELECT 1

@@ -17,6 +17,8 @@ import java.util.Locale;
 
 @Configuration
 public class RestTemplateConfig {
+    static final String INTERNAL_AUTH_HEADER = "X-Otziv-Internal-Token";
+
     @Bean
     @Primary
     public RestTemplate restTemplate(
@@ -36,7 +38,8 @@ public class RestTemplateConfig {
             @Value("${app.http-client.read-timeout:30s}") Duration readTimeout,
             @Value("${whatsapp.proxy.enabled:false}") boolean proxyEnabled,
             @Value("${whatsapp.proxy.host:}") String proxyHost,
-            @Value("${whatsapp.proxy.port:8888}") int proxyPort
+            @Value("${whatsapp.proxy.port:8888}") int proxyPort,
+            WhatsAppProperties whatsAppProperties
     ) {
         SimpleClientHttpRequestFactory requestFactory;
         if (proxyEnabled && proxyHost != null && !proxyHost.isBlank()) {
@@ -47,7 +50,15 @@ public class RestTemplateConfig {
         requestFactory.setConnectTimeout(connectTimeout);
         requestFactory.setReadTimeout(readTimeout);
 
-        return new RestTemplate(requestFactory);
+        RestTemplate restTemplate = new RestTemplate(requestFactory);
+        restTemplate.getInterceptors().add((request, body, execution) -> {
+            String secret = whatsAppProperties.getGatewaySharedSecret();
+            if (secret != null && !secret.isBlank()) {
+                request.getHeaders().set(INTERNAL_AUTH_HEADER, secret);
+            }
+            return execution.execute(request, body);
+        });
+        return restTemplate;
     }
 
     @Bean(name = "maxBotRestTemplate")
@@ -123,4 +134,3 @@ public class RestTemplateConfig {
         }
     }
 }
-

@@ -197,6 +197,7 @@ export interface PaymentProfileResponse {
   manualPhone?: string | null;
   manualRecipientName?: string | null;
   manualPaymentUrl?: string | null;
+  manualPaymentUrlConfigured?: boolean;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;
   manualMonthlySoftLimitKopecks?: number | null;
@@ -305,6 +306,7 @@ export interface UpdateManualPaymentTaskRequest {
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
   comment?: string | null;
+  manualPaymentUrlReplacementConfirmed?: boolean;
 }
 
 export interface UpdateManualPaymentTaskStatusRequest {
@@ -355,6 +357,7 @@ export interface PaymentProfilePolicyRequest {
   manualComment?: string | null;
   manualMonthlySoftLimitKopecks?: number | null;
   manualMonthlyHardLimitKopecks?: number | null;
+  manualPaymentUrlReplacementConfirmed?: boolean;
 }
 
 export interface TbankPaymentStatus {

@@ -76,6 +76,9 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
     private static final EnumSet<ReviewRecoveryBatchStatus> VISIBLE_BATCH_STATUSES =
             EnumSet.of(ReviewRecoveryBatchStatus.OPEN, ReviewRecoveryBatchStatus.COMPLETED);
     private static final int PREFERRED_CROSS_CITY_COUNTER_MAX = 5;
+    private static final String BOT_BINDING_CONFLICT =
+            "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие";
+    private static final String INVALID_BOT_ID = "Идентификатор аккаунта не может быть отрицательным";
     private final SecureRandom random = new SecureRandom();
 
     private final ReviewRecoveryBatchRepository batchRepository;
@@ -375,12 +378,8 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         Bot currentBot = task.getBot();
-        Long currentBotId = currentBot != null && currentBot.getId() != null
-                ? currentBot.getId()
-                : botId != null && botId > 0 ? botId : null;
-        if (currentBot == null && currentBotId != null) {
-            currentBot = botService.findBotById(currentBotId);
-        }
+        Long currentBotId = currentBot != null ? currentBot.getId() : null;
+        assertRequestedBotIsCurrent(botId, currentBotId);
 
         botExclusionService.reject(task.getId(), currentBot, "BLOCK");
 
@@ -398,6 +397,15 @@ public class ReviewRecoveryTaskServiceImpl implements ReviewRecoveryTaskService 
         }
 
         return assignTaskBot(task, currentBot, nextBot, "review recovery blocked bot replaced");
+    }
+
+    private void assertRequestedBotIsCurrent(Long requestedBotId, Long currentBotId) {
+        if (requestedBotId != null && requestedBotId < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_BOT_ID);
+        }
+        if (requestedBotId != null && requestedBotId > 0 && !Objects.equals(requestedBotId, currentBotId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, BOT_BINDING_CONFLICT);
+        }
     }
 
     @Override

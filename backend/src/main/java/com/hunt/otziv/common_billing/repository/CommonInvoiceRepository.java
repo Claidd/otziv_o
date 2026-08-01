@@ -93,6 +93,30 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             Pageable pageable
     );
 
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
+        LEFT JOIN FETCH invoiceManager.user
+        WHERE account.id IN :accountIds
+          AND invoice.status IN :statuses
+          AND invoice.id = (
+              SELECT MAX(candidate.id)
+              FROM CommonInvoice candidate
+              WHERE candidate.account.id = account.id
+                AND candidate.status IN :statuses
+          )
+        ORDER BY account.id ASC
+    """)
+    List<CommonInvoice> findLatestCurrentForAccounts(
+            @Param("accountIds") Collection<Long> accountIds,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT invoice
@@ -166,6 +190,34 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         ORDER BY invoice.updatedAt ASC, invoice.id ASC
     """)
     List<CommonInvoice> findBoardInvoices(@Param("statuses") Collection<CommonInvoiceStatus> statuses);
+
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
+        LEFT JOIN FETCH invoiceManager.user
+        WHERE invoice.status IN :statuses
+    """)
+    List<CommonInvoice> findBoardInvoices(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT invoice.account.id
+        FROM CommonInvoice invoice
+        WHERE invoice.status IN :statuses
+        GROUP BY invoice.account.id
+        HAVING COUNT(invoice.id) > 1
+        ORDER BY invoice.account.id ASC
+    """)
+    List<Long> findAccountIdsWithDuplicateCurrentInvoices(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
 
     @Query("""
         SELECT COUNT(invoice.id)

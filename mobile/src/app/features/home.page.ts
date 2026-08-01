@@ -2762,7 +2762,7 @@ export class HomePage implements OnInit, OnDestroy {
     return this.manualPaymentType() !== this.normalizeManualPaymentType(settings.manualPaymentType)
       || this.manualPaymentPhone().trim() !== (settings.manualPhone ?? '')
       || this.manualPaymentRecipient().trim() !== this.manualRecipientOrDefault(settings.manualRecipientName)
-      || this.manualPaymentUrl().trim() !== this.manualPaymentUrlOrDefault(settings.manualPaymentUrl)
+      || this.manualPaymentUrl().trim() !== this.manualPaymentUrlFromResponse(settings.manualPaymentUrl)
       || this.manualPaymentButtonLabel().trim() !== this.manualPaymentButtonLabelOrDefault(settings.manualPaymentButtonLabel);
   }
 
@@ -2777,9 +2777,6 @@ export class HomePage implements OnInit, OnDestroy {
 
   setManualPaymentType(value: ManualPaymentType): void {
     this.manualPaymentType.set(value);
-    if (value === 'EXTERNAL_LINK' && !this.manualPaymentUrl().trim()) {
-      this.manualPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
-    }
     if (!this.manualPaymentRecipient().trim()) {
       this.manualPaymentRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
     }
@@ -2814,7 +2811,7 @@ export class HomePage implements OnInit, OnDestroy {
     const manualPaymentType = this.manualPaymentType();
     const manualPhone = this.manualPaymentPhone().trim();
     const manualRecipientName = this.manualPaymentRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME;
-    const manualPaymentUrl = this.manualPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL;
+    const manualPaymentUrl = this.manualPaymentUrl().trim();
     const manualPaymentButtonLabel = this.manualPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL;
     if (manualPaymentType === 'MOBILE_BANK' && (!manualPhone || !manualRecipientName)) {
       this.manualPaymentMessage.set('Заполните телефон и получателя.');
@@ -2848,9 +2845,6 @@ export class HomePage implements OnInit, OnDestroy {
 
   setManualTaskPaymentType(value: ManualPaymentType): void {
     this.manualTaskPaymentType.set(value);
-    if (value === 'EXTERNAL_LINK' && !this.manualTaskPaymentUrl().trim()) {
-      this.manualTaskPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
-    }
     if (!this.manualTaskRecipient().trim()) {
       this.manualTaskRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
     }
@@ -2888,9 +2882,6 @@ export class HomePage implements OnInit, OnDestroy {
 
   setManualTaskEditPaymentType(value: ManualPaymentType): void {
     this.manualTaskEditPaymentType.set(value);
-    if (value === 'EXTERNAL_LINK' && !this.manualTaskEditPaymentUrl().trim()) {
-      this.manualTaskEditPaymentUrl.set(DEFAULT_MANUAL_PAYMENT_URL);
-    }
     if (!this.manualTaskEditRecipient().trim()) {
       this.manualTaskEditRecipient.set(DEFAULT_MANUAL_RECIPIENT_NAME);
     }
@@ -2934,7 +2925,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskEditPaymentType.set(this.normalizeManualPaymentType(task.manualPaymentType));
     this.manualTaskEditPhone.set(task.manualPhone ?? '');
     this.manualTaskEditRecipient.set(this.manualRecipientOrDefault(task.manualRecipientName));
-    this.manualTaskEditPaymentUrl.set(this.manualPaymentUrlOrDefault(task.manualPaymentUrl));
+    this.manualTaskEditPaymentUrl.set(this.manualPaymentUrlFromResponse(task.manualPaymentUrl));
     this.manualTaskEditPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(task.manualPaymentButtonLabel));
     this.manualTaskEditAmountRubles.set(String((task.targetAmountKopecks ?? 0) / 100));
     this.manualTaskEditComment.set(task.comment ?? '');
@@ -2970,7 +2961,7 @@ export class HomePage implements OnInit, OnDestroy {
         manualPaymentType: this.manualTaskPaymentType(),
         manualPhone: this.manualTaskPhone().trim(),
         manualRecipientName: this.manualTaskRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
-        manualPaymentUrl: this.manualTaskPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentUrl: this.manualTaskPaymentUrl().trim(),
         manualPaymentButtonLabel: this.manualTaskPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
         targetAmountKopecks: this.manualTaskTargetKopecks(),
         comment: this.manualTaskComment().trim() || null
@@ -3022,10 +3013,13 @@ export class HomePage implements OnInit, OnDestroy {
         manualPaymentType: this.manualTaskEditPaymentType(),
         manualPhone: this.manualTaskEditPhone().trim(),
         manualRecipientName: this.manualTaskEditRecipient().trim() || DEFAULT_MANUAL_RECIPIENT_NAME,
-        manualPaymentUrl: this.manualTaskEditPaymentUrl().trim() || DEFAULT_MANUAL_PAYMENT_URL,
+        manualPaymentUrl: this.manualTaskEditPaymentUrl().trim(),
         manualPaymentButtonLabel: this.manualTaskEditPaymentButtonLabel().trim() || DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL,
         targetAmountKopecks: this.manualTaskEditTargetKopecks(),
-        comment: this.manualTaskEditComment().trim() || null
+        comment: this.manualTaskEditComment().trim() || null,
+        manualPaymentUrlReplacementConfirmed: this.manualTaskEditPaymentType() === 'EXTERNAL_LINK'
+          && !Boolean(task.manualPaymentUrl?.trim())
+          && Boolean(this.manualTaskEditPaymentUrl().trim())
       }));
       this.manualPaymentTasks.update((tasks) => tasks.map((item) => item.id === updated.id ? updated : item));
       this.manualTaskEditingId.set(null);
@@ -3068,7 +3062,7 @@ export class HomePage implements OnInit, OnDestroy {
   manualTaskSubtitle(task: ManualPaymentTaskResponse): string {
     const profile = task.paymentProfileName || 'профиль оплаты';
     if (this.normalizeManualPaymentType(task.manualPaymentType) === 'EXTERNAL_LINK') {
-      return `${this.manualPaymentUrlOrDefault(task.manualPaymentUrl)} · ${profile}`;
+      return `${this.manualPaymentUrlFromResponse(task.manualPaymentUrl) || 'ссылка не настроена'} · ${profile}`;
     }
     return `${task.manualPhone || 'телефон не указан'} · ${profile}`;
   }
@@ -3527,7 +3521,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualPaymentType.set(this.normalizeManualPaymentType(settings.manualPaymentType));
     this.manualPaymentPhone.set(settings.manualPhone ?? '');
     this.manualPaymentRecipient.set(this.manualRecipientOrDefault(settings.manualRecipientName));
-    this.manualPaymentUrl.set(this.manualPaymentUrlOrDefault(settings.manualPaymentUrl));
+    this.manualPaymentUrl.set(this.manualPaymentUrlFromResponse(settings.manualPaymentUrl));
     this.manualPaymentButtonLabel.set(this.manualPaymentButtonLabelOrDefault(settings.manualPaymentButtonLabel));
   }
 
@@ -3573,9 +3567,8 @@ export class HomePage implements OnInit, OnDestroy {
     return value === 'EXTERNAL_LINK' ? 'EXTERNAL_LINK' : DEFAULT_MANUAL_PAYMENT_TYPE;
   }
 
-  private manualPaymentUrlOrDefault(value?: string | null): string {
-    const clean = (value ?? '').trim();
-    return clean || DEFAULT_MANUAL_PAYMENT_URL;
+  private manualPaymentUrlFromResponse(value?: string | null): string {
+    return (value ?? '').trim();
   }
 
   private manualPaymentButtonLabelOrDefault(value?: string | null): string {

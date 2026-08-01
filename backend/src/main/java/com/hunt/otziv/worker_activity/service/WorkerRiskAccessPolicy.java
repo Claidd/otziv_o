@@ -33,10 +33,9 @@ public class WorkerRiskAccessPolicy {
             return Status.allowed();
         }
         List<WorkerRiskIncident> overdue = incidentRepository
-                .findByWorkerUserIdAndStatusAndResponseDueAtLessThanEqualAndExplanationAcceptedAtIsNullOrderByResponseDueAtAsc(
+                .findByWorkerUserIdAndStatusAndSectionRestrictedAtIsNotNullAndSectionRestrictionReleasedAtIsNullAndExplanationAcceptedAtIsNullOrderBySectionRestrictedAtAsc(
                         user.getId(),
-                        WorkerRiskIncidentStatus.OPEN,
-                        LocalDateTime.now()
+                        WorkerRiskIncidentStatus.OPEN
                 );
         if (overdue.isEmpty()) {
             return Status.allowed();

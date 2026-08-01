@@ -476,7 +476,7 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/ai/reputation/companies/{companyId}/reply/negative", "создание ответа на негативный отзыв через AI-помощник для компании {companyId}");
 
         put(actions, "POST", "/api/auth/register", "регистрация клиента \"{username}\"");
-        put(actions, "POST", "/api/auth/legacy-migration", "миграция пользователя \"{username}\"");
+        put(actions, "POST", "/api/auth/legacy-migration", "миграция legacy-пользователя");
         put(actions, "GET", "/api/me", "загрузка текущего пользователя");
         put(actions, "GET", "/api/dispatch-settings/cron", "загрузка cron-настройки рассылки");
         put(actions, "GET", "/categories/getSubcategories", "подгрузка подкатегорий для категории {categoryId}");

@@ -117,15 +117,29 @@ public class PaymentLinkService {
     private static final Set<PaymentLinkStatus> FAILED_STATUSES = Set.of(
             PaymentLinkStatus.REJECTED,
             PaymentLinkStatus.FAILED,
+            PaymentLinkStatus.NEEDS_RECONCILIATION,
             PaymentLinkStatus.EXPIRED
     );
     private static final Set<PaymentLinkStatus> REJECTED_STATUSES = Set.of(
             PaymentLinkStatus.REJECTED,
-            PaymentLinkStatus.FAILED
+            PaymentLinkStatus.FAILED,
+            PaymentLinkStatus.NEEDS_RECONCILIATION
     );
     private static final Set<PaymentLinkStatus> SYNCABLE_BANK_STATUSES = Set.of(
             PaymentLinkStatus.INITIATED,
-            PaymentLinkStatus.AUTHORIZED
+            PaymentLinkStatus.AUTHORIZED,
+            PaymentLinkStatus.NEEDS_RECONCILIATION
+    );
+    private static final Set<PaymentLinkStatus> ORDER_RECONCILIATION_CANDIDATE_STATUSES = Set.of(
+            PaymentLinkStatus.CREATED,
+            PaymentLinkStatus.INITIATED,
+            PaymentLinkStatus.AUTHORIZED,
+            PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
+            PaymentLinkStatus.MANUAL_REPORTED,
+            PaymentLinkStatus.NEEDS_RECONCILIATION
+    );
+    private static final Set<PaymentLinkStatus> RECONCILIATION_BLOCKING_STATUSES = Set.of(
+            PaymentLinkStatus.NEEDS_RECONCILIATION
     );
     private static final Set<PaymentLinkStatus> MANUAL_USAGE_STATUSES = Set.of(
             PaymentLinkStatus.WAITING_MANUAL_PAYMENT,
@@ -194,6 +208,12 @@ public class PaymentLinkService {
                 .or(() -> orderRepository.findByIdForMutation(orderId))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Заказ не найден"));
         orderPaymentIntegrityService.assertPaymentCycleAllowed(order);
+        if (paymentLinkRepository.existsByOrder_IdAndStatusIn(orderId, RECONCILIATION_BLOCKING_STATUSES)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Предыдущий платеж уже создан в банке и требует сверки. Новый счет заблокирован."
+            );
+        }
 
         long amountKopecks = amountKopecks(payableSum(order));
         if (amountKopecks <= 0) {
@@ -260,7 +280,7 @@ public class PaymentLinkService {
         Optional<PaymentLink> candidate = paymentLinkRepository
                 .findFirstByOrder_IdAndStatusInAndExpiresAtAfterOrderByCreatedAtDesc(
                         orderId,
-                        REUSABLE_STATUSES,
+                        ORDER_RECONCILIATION_CANDIDATE_STATUSES,
                         now
                 );
         if (candidate.isEmpty()) {
@@ -672,6 +692,7 @@ public class PaymentLinkService {
         PaymentLink link = findPublicLink(token);
         validatePayable(link);
         ensureManualPayment(link);
+        validateManualPaymentTargetAvailable(link);
         if (link.getStatus() == PaymentLinkStatus.WAITING_MANUAL_PAYMENT) {
             LocalDateTime now = LocalDateTime.now();
             link.setStatus(PaymentLinkStatus.MANUAL_REPORTED);
@@ -709,12 +730,41 @@ public class PaymentLinkService {
 
         PaymentProfile profile = ensurePaymentProfile(link);
         TbankPaymentProfile runtimeProfile = paymentProfileService.toRuntime(profile);
+        boolean unsafeCachedPaymentUrl = PaymentUrlPolicy.isUnsafeConfigured(
+                link.getPaymentUrl(),
+                PaymentUrlPolicy.Purpose.TBANK_PAYMENT
+        );
+        boolean missingCachedPaymentUrl = link.getStatus() == PaymentLinkStatus.INITIATED
+                && !normalize(link.getTbankPaymentId()).isBlank()
+                && PaymentUrlPolicy.safe(
+                        link.getPaymentUrl(),
+                        PaymentUrlPolicy.Purpose.TBANK_PAYMENT
+                ).isBlank();
+        if (unsafeCachedPaymentUrl || missingCachedPaymentUrl) {
+            ResponseStatusException exception = new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Сохраненная ссылка Т-Банка отсутствует или имеет недопустимый формат"
+            );
+            quarantineUnsafeProviderTarget(
+                    link,
+                    PaymentMethod.BANK_FORM,
+                    "unsafe_cached_tbank_payment_url",
+                    exception.getReason()
+            );
+            throw exception;
+        }
         if (link.getPaymentUrl() != null && !link.getPaymentUrl().isBlank()
                 && link.getStatus() == PaymentLinkStatus.INITIATED) {
+            String paymentUrl = PaymentUrlPolicy.require(
+                    link.getPaymentUrl(),
+                    PaymentUrlPolicy.Purpose.TBANK_PAYMENT,
+                    HttpStatus.BAD_GATEWAY,
+                    "Сохраненная ссылка Т-Банка имеет недопустимый формат"
+            );
             applyConsentTrace(link, clientIp, userAgent);
             link.setPaymentMethod(PaymentMethod.BANK_FORM);
             paymentLinkRepository.save(link);
-            return new PublicPaymentInitResponse(link.getPaymentUrl(), link.getTbankPaymentId(), link.getStatus().name());
+            return new PublicPaymentInitResponse(paymentUrl, link.getTbankPaymentId(), link.getStatus().name());
         }
 
         link.setPayerEmail(cleanEmail);
@@ -750,15 +800,33 @@ public class PaymentLinkService {
             throw e;
         }
 
+        String paymentUrl;
+        try {
+            paymentUrl = PaymentUrlPolicy.require(
+                    response.paymentUrl(),
+                    PaymentUrlPolicy.Purpose.TBANK_PAYMENT,
+                    HttpStatus.BAD_GATEWAY,
+                    "Т-Банк вернул недопустимую ссылку оплаты"
+            );
+        } catch (ResponseStatusException e) {
+            link.setStatus(statusAfterUnsafeProviderUrl(response.paymentId()));
+            link.setPaymentMethod(PaymentMethod.BANK_FORM);
+            link.setTbankPaymentId(normalize(response.paymentId()));
+            link.setPaymentUrl(null);
+            link.setInitiatedAt(LocalDateTime.now());
+            link.setLastError(limit("unsafe_tbank_payment_url: " + normalize(e.getReason()), 512));
+            paymentLinkRepository.save(link);
+            throw e;
+        }
         link.setStatus(PaymentLinkStatus.INITIATED);
         link.setPaymentMethod(PaymentMethod.BANK_FORM);
         link.setTbankPaymentId(response.paymentId());
-        link.setPaymentUrl(response.paymentUrl());
+        link.setPaymentUrl(paymentUrl);
         link.setInitiatedAt(LocalDateTime.now());
         link.setLastError(null);
         paymentLinkRepository.save(link);
 
-        return new PublicPaymentInitResponse(response.paymentUrl(), response.paymentId(), link.getStatus().name());
+        return new PublicPaymentInitResponse(paymentUrl, response.paymentId(), link.getStatus().name());
     }
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
@@ -794,8 +862,9 @@ public class PaymentLinkService {
             runtimeProfile = paymentProfileService.toRuntime(profile);
             link.setTbankOrderId(tbankOrderId(link));
             link.setTbankTerminalKey(runtimeProfile.terminalKey());
+            TbankInitResponse response;
             try {
-                TbankInitResponse response = tbankClient.init(runtimeProfile, new TbankInitCommand(
+                response = tbankClient.init(runtimeProfile, new TbankInitCommand(
                         link.getTbankOrderId(),
                         link.getAmountKopecks(),
                         link.getDescription(),
@@ -805,11 +874,6 @@ public class PaymentLinkService {
                         properties.failUrl(),
                         OffsetDateTime.now(MOSCOW_ZONE).plus(properties.getRedirectDue())
                 ));
-                link.setStatus(PaymentLinkStatus.INITIATED);
-                link.setTbankPaymentId(response.paymentId());
-                link.setPaymentUrl(response.paymentUrl());
-                link.setInitiatedAt(LocalDateTime.now());
-                link.setLastError(null);
             } catch (ResponseStatusException e) {
                 String reason = normalize(e.getReason());
                 link.setLastError(reason.isBlank() ? "T-Bank Init failed" : reason);
@@ -825,21 +889,90 @@ public class PaymentLinkService {
                 );
                 throw e;
             }
+            String paymentUrl;
+            try {
+                paymentUrl = PaymentUrlPolicy.optional(
+                        response.paymentUrl(),
+                        PaymentUrlPolicy.Purpose.TBANK_PAYMENT,
+                        HttpStatus.BAD_GATEWAY,
+                        "Т-Банк вернул недопустимую резервную ссылку оплаты"
+                );
+            } catch (ResponseStatusException e) {
+                link.setStatus(statusAfterUnsafeProviderUrl(response.paymentId()));
+                link.setPaymentMethod(PaymentMethod.SBP_QR);
+                link.setTbankPaymentId(normalize(response.paymentId()));
+                link.setPaymentUrl(null);
+                link.setInitiatedAt(LocalDateTime.now());
+                link.setLastError(limit("unsafe_tbank_payment_url: " + normalize(e.getReason()), 512));
+                paymentLinkRepository.save(link);
+                throw e;
+            }
+            link.setStatus(PaymentLinkStatus.INITIATED);
+            link.setTbankPaymentId(response.paymentId());
+            link.setPaymentUrl(paymentUrl);
+            link.setInitiatedAt(LocalDateTime.now());
+            link.setLastError(null);
         } else {
             runtimeProfile = runtimeProfileForLink(profile, link);
         }
 
+        if (PaymentUrlPolicy.isUnsafeConfigured(
+                link.getPaymentUrl(),
+                PaymentUrlPolicy.Purpose.TBANK_PAYMENT
+        )) {
+            ResponseStatusException exception = new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Сохраненная резервная ссылка Т-Банка имеет недопустимый формат"
+            );
+            quarantineUnsafeProviderTarget(
+                    link,
+                    PaymentMethod.SBP_QR,
+                    "unsafe_cached_tbank_payment_url",
+                    exception.getReason()
+            );
+            throw exception;
+        }
+        if (PaymentUrlPolicy.isUnsafeConfigured(
+                link.getSbpQrPayload(),
+                PaymentUrlPolicy.Purpose.SBP_PAYLOAD
+        )) {
+            ResponseStatusException exception = new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Сохраненная ссылка СБП имеет недопустимый формат"
+            );
+            quarantineUnsafeProviderTarget(
+                    link,
+                    PaymentMethod.SBP_QR,
+                    "unsafe_cached_tbank_sbp_payload",
+                    exception.getReason()
+            );
+            throw exception;
+        }
+
         if (link.getPaymentMethod() == PaymentMethod.SBP_QR
                 && !normalize(link.getSbpQrPayload()).isBlank()
+                && PaymentUrlPolicy.isGenericSbpPayload(link.getSbpQrPayload())
                 && cleanBankId.isBlank()
                 && link.getStatus() == PaymentLinkStatus.INITIATED) {
+            String paymentUrl = PaymentUrlPolicy.optional(
+                    link.getPaymentUrl(),
+                    PaymentUrlPolicy.Purpose.TBANK_PAYMENT,
+                    HttpStatus.BAD_GATEWAY,
+                    "Сохраненная резервная ссылка Т-Банка имеет недопустимый формат"
+            );
+            String qrPayload = PaymentUrlPolicy.require(
+                    link.getSbpQrPayload(),
+                    PaymentUrlPolicy.Purpose.SBP_PAYLOAD,
+                    HttpStatus.BAD_GATEWAY,
+                    "Сохраненная ссылка СБП имеет недопустимый формат"
+            );
             paymentLinkRepository.save(link);
             return new PublicPaymentInitResponse(
-                    link.getPaymentUrl(),
+                    paymentUrl,
                     link.getTbankPaymentId(),
                     link.getStatus().name(),
                     PaymentMethod.SBP_QR.name(),
-                    link.getSbpQrPayload(),
+                    qrPayload,
                     null
             );
         }
@@ -868,12 +1001,38 @@ public class PaymentLinkService {
             throw e;
         }
 
-        String qrPayload = normalize(qrResponse.data());
-        if (qrPayload.isBlank()) {
-            link.setLastError("T-Bank GetQr returned empty SBP payload");
-            paymentLinkRepository.save(link);
+        String qrPayload = qrResponse.data();
+        if (qrPayload == null || qrPayload.isBlank()) {
+            quarantineUnsafeProviderTarget(
+                    link,
+                    PaymentMethod.SBP_QR,
+                    "empty_tbank_sbp_payload",
+                    "T-Bank GetQr returned empty SBP payload"
+            );
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Т-Банк не вернул ссылку СБП");
         }
+        try {
+            qrPayload = PaymentUrlPolicy.require(
+                    qrPayload,
+                    PaymentUrlPolicy.Purpose.SBP_PAYLOAD,
+                    HttpStatus.BAD_GATEWAY,
+                    "Т-Банк вернул недопустимую ссылку СБП"
+            );
+        } catch (ResponseStatusException e) {
+            quarantineUnsafeProviderTarget(
+                    link,
+                    PaymentMethod.SBP_QR,
+                    "unsafe_tbank_sbp_payload",
+                    e.getReason()
+            );
+            throw e;
+        }
+        String paymentUrl = PaymentUrlPolicy.optional(
+                link.getPaymentUrl(),
+                PaymentUrlPolicy.Purpose.TBANK_PAYMENT,
+                HttpStatus.BAD_GATEWAY,
+                "Т-Банк вернул недопустимую резервную ссылку оплаты"
+        );
 
         link.setStatus(PaymentLinkStatus.INITIATED);
         link.setPaymentMethod(PaymentMethod.SBP_QR);
@@ -886,7 +1045,7 @@ public class PaymentLinkService {
         paymentLinkRepository.save(link);
 
         return new PublicPaymentInitResponse(
-                link.getPaymentUrl(),
+                paymentUrl,
                 link.getTbankPaymentId(),
                 link.getStatus().name(),
                 PaymentMethod.SBP_QR.name(),
@@ -1033,8 +1192,16 @@ public class PaymentLinkService {
             case "DEADLINE_EXPIRED" -> link.setStatus(PaymentLinkStatus.EXPIRED);
             default -> {
                 if (!success && !errorCode.isBlank() && !"0".equals(errorCode)) {
-                    link.setStatus(PaymentLinkStatus.FAILED);
-                    link.setLastError(errorCode);
+                    if (link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
+                        // An unknown/non-terminal webhook response must not release
+                        // a payment that the bank has already created from its
+                        // reconciliation quarantine. Only an explicit bank status
+                        // above is allowed to make a retry/new invoice safe.
+                        link.setLastError(limit("bank_status_reconciliation_error: " + errorCode, 512));
+                    } else {
+                        link.setStatus(PaymentLinkStatus.FAILED);
+                        link.setLastError(errorCode);
+                    }
                 }
                 log.info("T-Bank status stored without final transition: linkId={}, status={}", link.getId(), status);
             }
@@ -1108,13 +1275,28 @@ public class PaymentLinkService {
 
     @Transactional
     public boolean reconcileBankLink(Long linkId) {
+        return reconcileBankLink(linkId, LocalDateTime.now().minusMinutes(5));
+    }
+
+    @Transactional
+    public boolean reconcileBankLink(Long linkId, LocalDateTime attemptBefore) {
         if (linkId == null || linkId <= 0) {
             return false;
         }
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElse(null);
-        if (link == null || !SYNCABLE_BANK_STATUSES.contains(link.getStatus())) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime eligibleBefore = attemptBefore == null ? now.minusMinutes(5) : attemptBefore;
+        if (link == null
+                || !SYNCABLE_BANK_STATUSES.contains(link.getStatus())
+                || normalize(link.getTbankPaymentId()).isBlank()
+                || (link.getBankReconciliationAttemptedAt() != null
+                    && link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore))) {
             return false;
         }
+        // This field is changed even when the bank state is unchanged or the
+        // provider call fails. Page zero therefore rotates instead of starving
+        // newer links behind the same oldest rows.
+        link.setBankReconciliationAttemptedAt(now);
         PaymentLinkStatus before = link.getStatus();
         syncTbankStateIfNeeded(link);
         return before != link.getStatus();
@@ -1468,6 +1650,7 @@ public class PaymentLinkService {
                 || link.getStatus() == PaymentLinkStatus.TEST_CONFIRMED
                 || link.getStatus() == PaymentLinkStatus.AMOUNT_MISMATCH
                 || link.getStatus() == PaymentLinkStatus.AUTHORIZED
+                || link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION
                 || REFUNDED_STATUSES.contains(link.getStatus())) {
             return false;
         }
@@ -1496,6 +1679,18 @@ public class PaymentLinkService {
 
     private void validatePayable(PaymentLink link) {
         orderPaymentIntegrityService.assertPaymentCycleAllowed(link == null ? null : link.getOrder());
+        if (link.getStatus() == PaymentLinkStatus.NEEDS_RECONCILIATION) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платеж уже создан в банке и требует сверки. Повторная оплата заблокирована."
+            );
+        }
+        if (link.getStatus() == PaymentLinkStatus.AUTHORIZED) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Платеж уже авторизован банком. Повторная инициализация заблокирована."
+            );
+        }
         if (link.getExpiresAt().isBefore(LocalDateTime.now())) {
             link.setStatus(PaymentLinkStatus.EXPIRED);
             throw new ResponseStatusException(HttpStatus.GONE, "Срок действия платежной ссылки истек");
@@ -1520,7 +1715,8 @@ public class PaymentLinkService {
                 || link.getStatus() == PaymentLinkStatus.PARTIAL_REVERSED
                 || link.getStatus() == PaymentLinkStatus.REFUNDED
                 || link.getStatus() == PaymentLinkStatus.PARTIAL_REFUNDED
-                || link.getStatus() == PaymentLinkStatus.REJECTED) {
+                || link.getStatus() == PaymentLinkStatus.REJECTED
+                || link.getStatus() == PaymentLinkStatus.FAILED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Платежная ссылка недоступна");
         }
     }
@@ -1572,6 +1768,26 @@ public class PaymentLinkService {
     private void ensureManualPayment(PaymentLink link) {
         if (!isManualPayment(link)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это не ручной платеж");
+        }
+    }
+
+    private void validateManualPaymentTargetAvailable(PaymentLink link) {
+        boolean external = link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK
+                || link.getManualPaymentType() == ManualPaymentType.EXTERNAL_LINK;
+        boolean mobileBank = link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK
+                || link.getManualPaymentType() == ManualPaymentType.MOBILE_BANK;
+
+        if (external && manualPaymentUrlForRead(link.getManualPaymentUrl()).isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Ссылка ручной оплаты отсутствует или имеет недопустимый формат"
+            );
+        }
+        if (mobileBank && normalize(link.getManualPhone()).isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Телефон для ручной оплаты через мобильный банк не указан"
+            );
         }
     }
 
@@ -1636,7 +1852,7 @@ public class PaymentLinkService {
                 manualPaymentTypeName(link),
                 normalize(link.getManualPhone()),
                 manualRecipientName(link),
-                normalize(link.getManualPaymentUrl()),
+                isManualPayment(link) ? manualPaymentUrlForRead(link.getManualPaymentUrl()) : "",
                 manualButtonLabel(link),
                 normalize(link.getManualComment()),
                 link.getReceiptStatus() == null ? null : link.getReceiptStatus().name()
@@ -1701,11 +1917,11 @@ public class PaymentLinkService {
                 link.getTbankPaymentId(),
                 link.getTbankOrderId(),
                 link.getPayerEmail(),
-                link.getPaymentUrl(),
+                PaymentUrlPolicy.safe(link.getPaymentUrl(), PaymentUrlPolicy.Purpose.TBANK_PAYMENT),
                 manualPaymentTypeName(link),
                 normalize(link.getManualPhone()),
                 manualRecipientName(link),
-                normalize(link.getManualPaymentUrl()),
+                isManualPayment(link) ? manualPaymentUrlForRead(link.getManualPaymentUrl()) : "",
                 manualButtonLabel(link),
                 normalize(link.getManualComment()),
                 link.getManualReportedAt(),
@@ -1799,6 +2015,7 @@ public class PaymentLinkService {
 
     private boolean isPayable(PaymentLink link) {
         return !link.getExpiresAt().isBefore(LocalDateTime.now())
+                && (!isManualPayment(link) || hasEffectiveManualPaymentTarget(link))
                 && link.getStatus() != PaymentLinkStatus.CONFIRMED
                 && link.getStatus() != PaymentLinkStatus.AMOUNT_MISMATCH
                 && link.getStatus() != PaymentLinkStatus.TEST_CONFIRMED
@@ -1809,6 +2026,8 @@ public class PaymentLinkService {
                 && link.getStatus() != PaymentLinkStatus.PARTIAL_REFUNDED
                 && link.getStatus() != PaymentLinkStatus.REJECTED
                 && link.getStatus() != PaymentLinkStatus.EXPIRED
+                && link.getStatus() != PaymentLinkStatus.AUTHORIZED
+                && link.getStatus() != PaymentLinkStatus.NEEDS_RECONCILIATION
                 && link.getStatus() != PaymentLinkStatus.FAILED;
     }
 
@@ -1918,7 +2137,7 @@ public class PaymentLinkService {
             return !normalize(profile.getManualPhone()).isBlank()
                     && !normalize(profile.getManualRecipientName()).isBlank();
         }
-        return !normalize(profile.getManualPaymentUrl()).isBlank();
+        return !manualPaymentUrlForRead(profile.getManualPaymentUrl()).isBlank();
     }
 
     private ManualPaymentType manualPaymentType(PaymentProfile profile) {
@@ -1936,8 +2155,32 @@ public class PaymentLinkService {
     }
 
     private String manualPaymentUrl(String value) {
-        String clean = limit(value, 512);
-        return clean.isBlank() ? ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL : clean;
+        return PaymentUrlPolicy.requireOrDefault(
+                value,
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL,
+                HttpStatus.BAD_GATEWAY,
+                "Сохраненная ссылка ручной оплаты имеет недопустимый формат"
+        );
+    }
+
+    private String manualPaymentUrlForRead(String value) {
+        return PaymentUrlPolicy.safeOrDefault(
+                value,
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+        );
+    }
+
+    private boolean hasEffectiveManualPaymentTarget(PaymentLink link) {
+        boolean external = link.getPaymentMethod() == PaymentMethod.MANUAL_EXTERNAL_LINK
+                || link.getManualPaymentType() == ManualPaymentType.EXTERNAL_LINK;
+        if (external) {
+            return !manualPaymentUrlForRead(link.getManualPaymentUrl()).isBlank();
+        }
+        boolean mobileBank = link.getPaymentMethod() == PaymentMethod.MANUAL_MOBILE_BANK
+                || link.getManualPaymentType() == ManualPaymentType.MOBILE_BANK;
+        return !mobileBank || !normalize(link.getManualPhone()).isBlank();
     }
 
     private String manualButtonLabel(String value) {
@@ -2082,6 +2325,34 @@ public class PaymentLinkService {
         link.setLastError(null);
     }
 
+    private PaymentLinkStatus statusAfterUnsafeProviderUrl(String paymentId) {
+        return normalize(paymentId).isBlank()
+                ? PaymentLinkStatus.FAILED
+                : PaymentLinkStatus.NEEDS_RECONCILIATION;
+    }
+
+    private void quarantineUnsafeProviderTarget(
+            PaymentLink link,
+            PaymentMethod paymentMethod,
+            String errorCode,
+            String reason
+    ) {
+        link.setStatus(statusAfterUnsafeProviderUrl(link.getTbankPaymentId()));
+        link.setPaymentMethod(paymentMethod);
+        link.setPaymentUrl(null);
+        if (paymentMethod == PaymentMethod.SBP_QR) {
+            link.setSbpQrPayload(null);
+            link.setSbpQrImage(null);
+            link.setSbpQrDataType(null);
+            link.setSbpQrCreatedAt(null);
+        }
+        if (link.getInitiatedAt() == null && !normalize(link.getTbankPaymentId()).isBlank()) {
+            link.setInitiatedAt(LocalDateTime.now());
+        }
+        link.setLastError(limit(errorCode + ": " + normalize(reason), 512));
+        paymentLinkRepository.save(link);
+    }
+
     private boolean isFinalStatus(PaymentLinkStatus status) {
         return status == PaymentLinkStatus.TEST_CONFIRMED
                 || status == PaymentLinkStatus.CONFIRMED
@@ -2168,7 +2439,7 @@ public class PaymentLinkService {
         String comment = manualComment(link);
         if (manualPaymentType(link) == ManualPaymentType.EXTERNAL_LINK) {
             return manualPaymentInstruction(
-                    "Ссылка на оплату: " + manualPaymentUrl(link.getManualPaymentUrl()),
+                    "Ссылка на оплату: " + manualPaymentUrlForRead(link.getManualPaymentUrl()),
                     manualRecipientName(link),
                     comment
             );
@@ -2226,7 +2497,7 @@ public class PaymentLinkService {
             return url;
         }
         if (manualPaymentType(link) == ManualPaymentType.EXTERNAL_LINK) {
-            return manualPaymentUrl(link.getManualPaymentUrl());
+            return manualPaymentUrlForRead(link.getManualPaymentUrl());
         }
         return normalize(link.getManualPhone());
     }

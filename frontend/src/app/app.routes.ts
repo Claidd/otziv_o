@@ -440,6 +440,11 @@ export const routes: Routes = [
       .then((m) => m.ReviewCheckComponent)
   },
   {
+    path: 'review/c',
+    loadComponent: () => import('./features/review-check/review-check.component')
+      .then((m) => m.ReviewCheckComponent)
+  },
+  {
     matcher: reviewShortLinkMatcher,
     loadComponent: () => import('./features/review-check/review-check.component')
       .then((m) => m.ReviewCheckComponent)

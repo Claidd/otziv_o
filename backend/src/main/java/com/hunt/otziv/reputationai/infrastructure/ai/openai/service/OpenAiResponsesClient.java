@@ -3,6 +3,7 @@ package com.hunt.otziv.reputationai.infrastructure.ai.openai.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
 import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
 import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
@@ -13,8 +14,8 @@ import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiContentPac
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResearchReportOptions;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
 import com.hunt.otziv.reputationai.infrastructure.ai.yandex.YandexGptProvider;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.net.Authenticator;
@@ -40,7 +41,6 @@ import java.time.LocalDateTime;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class OpenAiResponsesClient {
     private static final Pattern RETRY_AFTER_MESSAGE = Pattern.compile(
             "Please try again in ([0-9]+(?:\\.[0-9]+)?)s",
@@ -63,9 +63,52 @@ public class OpenAiResponsesClient {
     private final YandexGptProvider yandexGptProvider;
     private final DeepSeekProvider deepSeekProvider;
     private final DeepSeekAnthropicProvider deepSeekAnthropicProvider;
+    private final ReputationAiRuntimeSwitch runtimeSwitch;
     private final AtomicReference<OpenAiLastCheck> lastCheck = new AtomicReference<>(
             new OpenAiLastCheck(null, null, "not_checked", "Проверка AI-провайдера ещё не запускалась.")
     );
+
+    @Autowired
+    public OpenAiResponsesClient(
+            ReputationAiProperties properties,
+            ReputationAiProviderSelectionService providerSelectionService,
+            ObjectMapper objectMapper,
+            YandexGptProvider yandexGptProvider,
+            DeepSeekProvider deepSeekProvider,
+            DeepSeekAnthropicProvider deepSeekAnthropicProvider,
+            ReputationAiRuntimeSwitch runtimeSwitch
+    ) {
+        this.properties = properties;
+        this.providerSelectionService = providerSelectionService;
+        this.objectMapper = objectMapper;
+        this.yandexGptProvider = yandexGptProvider;
+        this.deepSeekProvider = deepSeekProvider;
+        this.deepSeekAnthropicProvider = deepSeekAnthropicProvider;
+        this.runtimeSwitch = runtimeSwitch;
+    }
+
+    /**
+     * Kept for callers that constructed the client before the runtime switch was
+     * introduced. Such instances deliberately fail closed.
+     */
+    public OpenAiResponsesClient(
+            ReputationAiProperties properties,
+            ReputationAiProviderSelectionService providerSelectionService,
+            ObjectMapper objectMapper,
+            YandexGptProvider yandexGptProvider,
+            DeepSeekProvider deepSeekProvider,
+            DeepSeekAnthropicProvider deepSeekAnthropicProvider
+    ) {
+        this(
+                properties,
+                providerSelectionService,
+                objectMapper,
+                yandexGptProvider,
+                deepSeekProvider,
+                deepSeekAnthropicProvider,
+                null
+        );
+    }
 
     public record OpenAiLastCheck(
             LocalDateTime checkedAt,
@@ -80,6 +123,9 @@ public class OpenAiResponsesClient {
     }
 
     public boolean isAvailable() {
+        if (!runtimeEnabled()) {
+            return false;
+        }
         if (useDeepSeek()) {
             return deepSeekProvider.isAvailable();
         }
@@ -122,6 +168,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiLastCheck checkConnection() {
+        if (!runtimeEnabled()) {
+            return rememberCheck("disabled", null, "AI временно отключён оператором.");
+        }
         if (useDeepSeek()) {
             return checkDeepSeekConnection();
         }
@@ -199,6 +248,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createTextResponse(AiRequest request) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         if (useDeepSeek()) {
             return createDeepSeekResponse(
                     request.task(),
@@ -239,6 +291,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createContentPackResponse(AiRequest request, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
         if (useDeepSeek()) {
@@ -281,6 +336,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createReviewTemplatesResponse(AiRequest request, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
         if (useDeepSeek()) {
@@ -323,6 +381,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createSingleReviewDraftResponse(AiRequest request, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
         if (useDeepSeek()) {
@@ -371,6 +432,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createBatchReviewDraftResponse(AiRequest request, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
         if (useDeepSeek()) {
@@ -412,6 +476,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createBatchReviewWritingGuideResponse(AiRequest request, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         OpenAiContentPackOptions options = OpenAiContentPackOptions.fromProfile(openai, profileKey);
         if (useDeepSeek()) {
@@ -453,6 +520,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createDeepResearchResponse(String instructions, String input) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.DeepResearch deep = openai.getDeepResearch();
         if (useDeepSeek()) {
@@ -498,6 +568,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createResearchReportResponse(String instructions, String input, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
@@ -549,6 +622,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createSourceRefreshResponse(String instructions, String input, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
@@ -599,6 +675,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createResearchGapEnrichmentResponse(String instructions, String input, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
@@ -649,6 +728,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createResearchReportRewriteResponse(String instructions, String input, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
@@ -694,6 +776,9 @@ public class OpenAiResponsesClient {
     }
 
     public OpenAiResponseResult createResearchReportSectionRewriteResponse(String instructions, String input, String profileKey) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         ReputationAiProperties.OpenAi openai = properties.getOpenai();
         ReputationAiProperties.OpenAi.ResearchReport report = openai.getResearchReport();
         OpenAiResearchReportOptions options = OpenAiResearchReportOptions.fromProfile(report, profileKey);
@@ -780,6 +865,9 @@ public class OpenAiResponsesClient {
             String schemaName,
             Map<String, Object> schema
     ) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         String model = properties.getYandex().getModel();
         if (!yandexGptProvider.isAvailable()) {
             return new OpenAiResponseResult(
@@ -834,6 +922,9 @@ public class OpenAiResponsesClient {
             int maxTokens,
             Duration timeout
     ) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         String model = properties.getDeepseek().getModel();
         AiResponse response = deepSeekProvider.generate(new AiRequest(
                 task,
@@ -862,6 +953,9 @@ public class OpenAiResponsesClient {
             int maxTokens,
             Duration timeout
     ) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         if (!deepSeekAnthropicProvider.isAvailable()) {
             return createDeepSeekResponse(
                     task,
@@ -1128,6 +1222,9 @@ public class OpenAiResponsesClient {
         Duration effectiveTimeout = timeout == null ? yandex.getTimeout() : timeout;
         int maxAttempts = 3;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (!runtimeEnabled()) {
+                return disabledResult();
+            }
             try {
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(yandex.getResponsesBaseUrl() + "/responses"))
@@ -1150,7 +1247,9 @@ public class OpenAiResponsesClient {
                             maxAttempts,
                             limit(response.body(), 800));
                     if (attempt < maxAttempts && isRetryableStatus(response.statusCode())) {
-                        sleepBeforeRetry(response, attempt);
+                        if (!sleepBeforeRetry(response, attempt)) {
+                            return disabledResult();
+                        }
                         continue;
                     }
                     return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, httpError);
@@ -1170,7 +1269,9 @@ public class OpenAiResponsesClient {
                 log.warn("YandexGPT Responses API request failed on attempt {}/{}: {}", attempt, maxAttempts, exception.getMessage());
                 if (attempt < maxAttempts) {
                     try {
-                        sleepBeforeRetry(null, attempt);
+                        if (!sleepBeforeRetry(null, attempt)) {
+                            return disabledResult();
+                        }
                     } catch (InterruptedException interruptedException) {
                         Thread.currentThread().interrupt();
                         return new OpenAiResponseResult("", "", "yandexgpt", fallbackModel, 0, 0, "Запрос YandexGPT Responses был прерван.");
@@ -1186,6 +1287,9 @@ public class OpenAiResponsesClient {
     }
 
     private OpenAiResponseResult postResponse(Map<String, Object> body, Duration timeout) {
+        if (!runtimeEnabled()) {
+            return disabledResult();
+        }
         if (!isAvailable()) {
             return errorResult("", "", "OpenAI не настроен.");
         }
@@ -1203,6 +1307,9 @@ public class OpenAiResponsesClient {
         Duration effectiveTimeout = effectiveTimeout(body, timeout);
         int maxAttempts = 3;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (!runtimeEnabled()) {
+                return disabledResult();
+            }
             try {
                 HttpRequest httpRequest = HttpRequest.newBuilder()
                         .uri(URI.create(openai.getBaseUrl() + "/responses"))
@@ -1224,7 +1331,9 @@ public class OpenAiResponsesClient {
                             maxAttempts,
                             limit(response.body(), 800));
                     if (attempt < maxAttempts && isRetryableStatus(response.statusCode())) {
-                        sleepBeforeRetry(response, attempt);
+                        if (!sleepBeforeRetry(response, attempt)) {
+                            return disabledResult();
+                        }
                         continue;
                     }
                     return errorResult("", fallbackModel, httpError);
@@ -1234,7 +1343,9 @@ public class OpenAiResponsesClient {
                 if (Boolean.TRUE.equals(body.get("stream"))) {
                     OpenAiResponseResult result = parseStreamResponse(response.body(), fallbackModel);
                     if (!result.errorMessage().isBlank() && attempt < maxAttempts && isRetryableOpenAiError(result.errorMessage())) {
-                        sleepBeforeRetryMessage(result.errorMessage(), attempt);
+                        if (!sleepBeforeRetryMessage(result.errorMessage(), attempt)) {
+                            return disabledResult();
+                        }
                         continue;
                     }
                     return result;
@@ -1263,7 +1374,9 @@ public class OpenAiResponsesClient {
                         exception.getMessage());
                 if (attempt < maxAttempts) {
                     try {
-                        sleepBeforeRetry(null, attempt);
+                        if (!sleepBeforeRetry(null, attempt)) {
+                            return disabledResult();
+                        }
                     } catch (InterruptedException interruptedException) {
                         Thread.currentThread().interrupt();
                         return new OpenAiResponseResult("", "", fallbackModel, 0, 0);
@@ -1391,11 +1504,11 @@ public class OpenAiResponsesClient {
                 || statusCode == 504;
     }
 
-    private void sleepBeforeRetry(HttpResponse<String> response, int attempt) throws InterruptedException {
+    private boolean sleepBeforeRetry(HttpResponse<String> response, int attempt) throws InterruptedException {
         long delaySeconds = response == null
                 ? Math.min(20, 4L * attempt)
                 : retryAfterSeconds(response, attempt);
-        Thread.sleep(Duration.ofSeconds(delaySeconds).toMillis());
+        return sleepWhileRuntimeEnabled(Duration.ofSeconds(delaySeconds));
     }
 
     private long retryAfterSeconds(HttpResponse<String> response, int attempt) {
@@ -1412,8 +1525,21 @@ public class OpenAiResponsesClient {
                 .orElse(Math.min(30L, 6L * attempt));
     }
 
-    private void sleepBeforeRetryMessage(String message, int attempt) throws InterruptedException {
-        Thread.sleep(Duration.ofSeconds(retryAfterSeconds(message, attempt)).toMillis());
+    private boolean sleepBeforeRetryMessage(String message, int attempt) throws InterruptedException {
+        return sleepWhileRuntimeEnabled(Duration.ofSeconds(retryAfterSeconds(message, attempt)));
+    }
+
+    private boolean sleepWhileRuntimeEnabled(Duration delay) throws InterruptedException {
+        long remainingMillis = Math.max(0L, delay == null ? 0L : delay.toMillis());
+        while (remainingMillis > 0L) {
+            if (!runtimeEnabled()) {
+                return false;
+            }
+            long chunkMillis = Math.min(1_000L, remainingMillis);
+            Thread.sleep(chunkMillis);
+            remainingMillis -= chunkMillis;
+        }
+        return runtimeEnabled();
     }
 
     private long retryAfterSeconds(String message, int attempt) {
@@ -1443,7 +1569,13 @@ public class OpenAiResponsesClient {
         long deadline = System.nanoTime() + (timeout == null ? Duration.ofMinutes(8) : timeout).toNanos();
         while (System.nanoTime() < deadline) {
             try {
+                if (!runtimeEnabled()) {
+                    return disabledResult();
+                }
                 Thread.sleep(3000);
+                if (!runtimeEnabled()) {
+                    return disabledResult();
+                }
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(openai.getBaseUrl() + "/responses/" + responseId))
                         .version(HttpClient.Version.HTTP_1_1)
@@ -2074,6 +2206,22 @@ public class OpenAiResponsesClient {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean runtimeEnabled() {
+        return runtimeSwitch != null && runtimeSwitch.isEnabled();
+    }
+
+    private OpenAiResponseResult disabledResult() {
+        return new OpenAiResponseResult(
+                "",
+                "",
+                "",
+                "",
+                0,
+                0,
+                "AI временно отключён оператором"
+        );
     }
 
     private boolean useYandex() {

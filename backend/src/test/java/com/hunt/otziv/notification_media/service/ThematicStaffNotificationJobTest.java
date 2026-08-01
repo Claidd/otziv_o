@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
@@ -108,7 +109,7 @@ class ThematicStaffNotificationJobTest {
         Worker worker = worker(13L, 103L, -103L, date.atTime(9, 0));
         DailyWorkProgressResponse progress = progress(date, 1, 5, date.atTime(10, 0));
         prepare(worker, progress);
-        when(dispatchStore.activePublicationCounts(List.of(13L))).thenReturn(Map.of(13L, 3L));
+        when(dispatchStore.activePublicationCounts(List.of(13L), date)).thenReturn(Map.of(13L, 3L));
 
         job.dispatchAt(date.atTime(16, 0));
 
@@ -123,12 +124,52 @@ class ThematicStaffNotificationJobTest {
     }
 
     @Test
+    void doesNotSendPublicationReminderWhenCurrentProgressHasNoActiveTasks() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        Worker worker = worker(17L, 107L, -107L, date.atTime(9, 0));
+        DailyWorkProgressResponse progress = progress(date, 7, 7, date.atTime(10, 0));
+        prepare(worker, progress);
+        when(dispatchStore.activePublicationCounts(List.of(17L), date)).thenReturn(Map.of(17L, 8L));
+
+        job.dispatchAt(date.atTime(16, 0));
+
+        verify(mediaDeliveryService, never()).send(
+                eq(NotificationMediaEventCatalog.WORKER_PUBLICATION_PENDING.code()),
+                anyLong(),
+                anyLong(),
+                anyString(),
+                anyString(),
+                any()
+        );
+    }
+
+    @Test
+    void publicationReminderCannotClaimMoreTasksThanCurrentProgress() {
+        LocalDate date = LocalDate.of(2026, 8, 1);
+        Worker worker = worker(18L, 108L, -108L, date.atTime(9, 0));
+        DailyWorkProgressResponse progress = progress(date, 3, 5, date.atTime(10, 0));
+        prepare(worker, progress);
+        when(dispatchStore.activePublicationCounts(List.of(18L), date)).thenReturn(Map.of(18L, 8L));
+
+        job.dispatchAt(date.atTime(16, 0));
+
+        verify(mediaDeliveryService).send(
+                eq(NotificationMediaEventCatalog.WORKER_PUBLICATION_PENDING.code()),
+                eq(-108L),
+                eq(108L),
+                argThat(message -> message.contains("<b>2</b>")),
+                eq("HTML"),
+                eq(List.of())
+        );
+    }
+
+    @Test
     void continuesToNextThemeWhenEarlierThemeWasAlreadySent() {
         LocalDate date = LocalDate.of(2026, 7, 31);
         Worker worker = worker(16L, 106L, -106L, date.atTime(9, 0));
         DailyWorkProgressResponse progress = progress(date, 0, 5, null);
         prepare(worker, progress);
-        when(dispatchStore.activePublicationCounts(List.of(16L))).thenReturn(Map.of(16L, 2L));
+        when(dispatchStore.activePublicationCounts(List.of(16L), date)).thenReturn(Map.of(16L, 2L));
         when(dispatchStore.claim(
                 eq(NotificationMediaEventCatalog.WORKER_DAY_START.code()),
                 eq(106L),
@@ -185,7 +226,7 @@ class ThematicStaffNotificationJobTest {
         Manager manager = Manager.builder().id(21L).user(managerUser).build();
         when(managerRepository.findAllWithUserAndImage()).thenReturn(List.of(manager));
         when(managerRepository.findAllManagersWorkers(List.of(manager))).thenReturn(List.of(manager));
-        when(dispatchStore.activePublicationCounts(List.of(15L))).thenReturn(Map.of());
+        when(dispatchStore.activePublicationCounts(List.of(15L), date)).thenReturn(Map.of());
 
         job.dispatchAt(date.atTime(17, 0));
 

@@ -1,4 +1,4 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, Injector, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { App as CapacitorApp } from '@capacitor/app';
 import { AppLauncher } from '@capacitor/app-launcher';
@@ -7,12 +7,14 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { mobileEnvironment, webRedirectUri } from './mobile-environment';
 import type { AuthStatus, AuthUser, StoredTokens, TokenEndpointResponse } from './auth.models';
 import { MobileAuthStorageService } from './mobile-auth-storage.service';
+import { MobilePushService } from './mobile-push.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly isNative = Capacitor.isNativePlatform();
   private refreshTimerId: ReturnType<typeof setTimeout> | undefined;
   private refreshPromise: Promise<boolean> | null = null;
+  private sessionGeneration = 0;
   private initialized = false;
   private readonly handledNativeAuthUrls = new Set<string>();
   private lastResumeCheckAt = 0;
@@ -24,7 +26,8 @@ export class AuthService {
 
   constructor(
     private readonly router: Router,
-    private readonly storage: MobileAuthStorageService
+    private readonly storage: MobileAuthStorageService,
+    private readonly injector: Injector
   ) {}
 
   async init(): Promise<void> {
@@ -178,6 +181,14 @@ export class AuthService {
     return refreshed ? this.tokens()?.accessToken ?? null : null;
   }
 
+  getOptionalAccessToken(minValiditySeconds = 5): string | null {
+    const tokens = this.tokens();
+    if (!tokens || !this.isTokenFresh(tokens, minValiditySeconds)) {
+      return null;
+    }
+    return tokens.accessToken;
+  }
+
   async refreshTokens(): Promise<boolean> {
     const tokens = this.tokens();
     if (!tokens?.refreshToken || this.isRefreshExpired(tokens)) {
@@ -188,6 +199,7 @@ export class AuthService {
       return this.refreshPromise;
     }
 
+    const refreshGeneration = this.sessionGeneration;
     this.status.set('refreshing');
     this.refreshPromise = this.requestToken({
       grant_type: 'refresh_token',
@@ -195,10 +207,16 @@ export class AuthService {
       refresh_token: tokens.refreshToken
     })
       .then(async (response) => {
+        if (refreshGeneration !== this.sessionGeneration) {
+          return false;
+        }
         await this.acceptTokens(response, tokens.refreshToken);
         return true;
       })
       .catch(async (error: unknown) => {
+        if (refreshGeneration !== this.sessionGeneration) {
+          return false;
+        }
         await this.clearSession('anonymous');
         this.error.set(this.errorMessage(error));
         return false;
@@ -212,6 +230,12 @@ export class AuthService {
 
   async logout(): Promise<void> {
     const idToken = this.tokens()?.idToken;
+    this.sessionGeneration += 1;
+    if (this.refreshTimerId) {
+      clearTimeout(this.refreshTimerId);
+      this.refreshTimerId = undefined;
+    }
+    await this.revokeCurrentPushTokenBestEffort();
     await this.clearSession('anonymous');
     await this.storage.clearPendingLogin().catch(() => undefined);
 
@@ -229,6 +253,14 @@ export class AuthService {
     }
 
     window.location.assign(logoutUrl.toString());
+  }
+
+  private async revokeCurrentPushTokenBestEffort(): Promise<void> {
+    try {
+      await this.injector.get(MobilePushService).revokeCurrentTokenBestEffort();
+    } catch {
+      // Push revoke is additive and must not block logout on old/offline installs.
+    }
   }
 
   async handleUnauthorized(tryRefresh = true): Promise<void> {
@@ -306,6 +338,7 @@ export class AuthService {
   }
 
   private async acceptTokens(response: TokenEndpointResponse, fallbackRefreshToken?: string): Promise<void> {
+    const previousSubject = this.user()?.subject;
     const now = Date.now();
     const tokens: StoredTokens = {
       accessToken: response.access_token,
@@ -319,6 +352,9 @@ export class AuthService {
 
     this.tokens.set(tokens);
     this.syncUser(tokens.accessToken);
+    if (previousSubject !== undefined && previousSubject !== this.user()?.subject) {
+      this.resetPushRegistrationState();
+    }
     this.status.set('authenticated');
     this.error.set(null);
     await this.storage.writeTokens(tokens);
@@ -513,12 +549,22 @@ export class AuthService {
   }
 
   private clearState(status: AuthStatus): void {
+    this.resetPushRegistrationState();
     this.tokens.set(null);
     this.user.set(null);
     this.status.set(status);
   }
 
+  private resetPushRegistrationState(): void {
+    try {
+      this.injector.get(MobilePushService).resetRegistrationState();
+    } catch {
+      // Clearing local auth state must not depend on optional push support.
+    }
+  }
+
   private async clearSession(status: AuthStatus): Promise<void> {
+    this.sessionGeneration += 1;
     if (this.refreshTimerId) {
       clearTimeout(this.refreshTimerId);
       this.refreshTimerId = undefined;

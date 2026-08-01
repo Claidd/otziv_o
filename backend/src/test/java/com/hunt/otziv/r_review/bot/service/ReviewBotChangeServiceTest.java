@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -137,7 +138,7 @@ class ReviewBotChangeServiceTest {
     }
 
     @Test
-    void deActivateAndChangeBotUsesCurrentBotAndKeepsNagulAssignmentUnwalked() {
+    void deActivateAndChangeBotAcceptsLegacyZeroSentinelAndUsesCurrentBot() {
         ReviewBotChangeService service = service();
         City city = city(9L, "Иркутск");
         Filial filial = filial(3L, city);
@@ -167,6 +168,59 @@ class ReviewBotChangeServiceTest {
                 contains("Иркутск")
         );
         verify(reviewRepository).save(review);
+    }
+
+    @Test
+    void deActivateAndChangeBotRejectsBotThatIsNotAttachedToReviewBeforeSideEffects() {
+        ReviewBotChangeService service = service();
+        Bot currentBot = bot(5L, "Текущий Бот", 0);
+        currentBot.setActive(true);
+        Review review = new Review();
+        review.setId(21L);
+        review.setBot(currentBot);
+
+        when(reviewRepository.findById(21L)).thenReturn(Optional.of(review));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deActivateAndChangeBot(21L, 99L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие",
+                exception.getReason()
+        );
+        assertTrue(currentBot.isActive());
+        assertSame(currentBot, review.getBot());
+        verify(botService, never()).findBotById(anyLong());
+        verify(botService, never()).save(any());
+        verify(assignmentExclusionService, never()).rejectCurrentBot(any(), any());
+        verify(botAssignmentService, never()).assignBotForReviewChange(any(), anyCollection());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void deActivateAndChangeBotRejectsNegativeBotIdBeforeSideEffects() {
+        ReviewBotChangeService service = service();
+        Bot currentBot = bot(5L, "Текущий Бот", 0);
+        currentBot.setActive(true);
+        Review review = new Review();
+        review.setId(21L);
+        review.setBot(currentBot);
+        when(reviewRepository.findById(21L)).thenReturn(Optional.of(review));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deActivateAndChangeBot(21L, -1L)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertTrue(currentBot.isActive());
+        assertSame(currentBot, review.getBot());
+        verify(botService, never()).save(any());
+        verify(assignmentExclusionService, never()).rejectCurrentBot(any(), any());
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test
@@ -238,7 +292,7 @@ class ReviewBotChangeServiceTest {
         when(reviewRepository.findUnpublishedReviewsByBotIdForReassignment(5L, 21L))
                 .thenReturn(List.of(affectedReview));
 
-        service.deActivateAndChangeBot(21L, null);
+        service.deActivateAndChangeBot(21L, 0L);
 
         assertFalse(currentBot.isActive());
         assertSame(selectedBot, review.getBot());
