@@ -1,0 +1,329 @@
+{
+  "version": "2026-08-01-received-v3",
+  "prefix": "received-20260801-v3",
+  "mascot": "Жека",
+  "format": "jpg",
+  "expected_unique_assets": 38,
+  "duplicate_check": {
+    "production_assets_checked": 183,
+    "method": "MD5 versus public S3 ETag, plus SHA-256 within the received batch",
+    "excluded": [
+      {
+        "original_filename": "photo_2026-08-01_00-13-28 (2).jpg",
+        "sha256": "b485a57030d43f94b90e9d8f7e32fda7dbf13bf6e61a88673735df3ef91cf329",
+        "reason": "Exact content duplicate of production asset 7 (WORKER_SITE_INACTIVE)"
+      },
+      {
+        "original_filename": "codex-clipboard-e22423f4-0d62-4640-9f48-c16ad55a89b4.jpg",
+        "sha256": "059631c5b0beb464d80d1033301a360c98b98caeaa7484ae0df017e5a23cc681",
+        "reason": "Exact content duplicate of photo_2026-08-01_00-13-29.jpg in this batch"
+      }
+    ]
+  },
+  "assets": [
+    {
+      "directory": "worker_day_start",
+      "event_code": "WORKER_DAY_START",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-29 (3).jpg",
+      "sha256": "cda6d0d8977cb2142fb383c88685696e142acb989202d20967675bedeaad4c79"
+    },
+    {
+      "directory": "worker_day_start",
+      "event_code": "WORKER_DAY_START",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-30 (4).jpg",
+      "sha256": "c232eea650452c06b4312b51af431e66145a170a60cccf61e633bcc6a00d4518"
+    },
+    {
+      "directory": "worker_day_start",
+      "event_code": "WORKER_DAY_START",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_00-13-31.jpg",
+      "sha256": "099210c975ea2b0a5bc00048eee7e8f09209283efcf9c575d867499669bef855"
+    },
+    {
+      "directory": "worker_day_start",
+      "event_code": "WORKER_DAY_START",
+      "recipient_type": "WORKER",
+      "file_name": "04.jpg",
+      "original_filename": "photo_2026-08-01_00-13-32.jpg",
+      "sha256": "4e3fade2617b9979c59e76cf2b9bacda6d8796c66bea2a84a2385ed025edc7a9"
+    },
+    {
+      "directory": "worker_day_start",
+      "event_code": "WORKER_DAY_START",
+      "recipient_type": "WORKER",
+      "file_name": "05.jpg",
+      "original_filename": "photo_2026-08-01_00-13-35.jpg",
+      "sha256": "401adcece29d35b486f1da093953b5a5676846c36ebdb0cfdd44f4a20589a222"
+    },
+    {
+      "directory": "worker_day_start",
+      "event_code": "WORKER_DAY_START",
+      "recipient_type": "WORKER",
+      "file_name": "06.jpg",
+      "original_filename": "photo_2026-08-01_00-27-12.jpg",
+      "sha256": "8ab11bb67c96ab357914daa55ba5404df55bd5089a4c644aa0106e4c45759bf5"
+    },
+    {
+      "directory": "worker_site_inactive",
+      "event_code": "WORKER_SITE_INACTIVE",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-29 (2).jpg",
+      "sha256": "17717acdbe7616faedd8362a76622bcccec0f19a203504685520bd61ce9477f9"
+    },
+    {
+      "directory": "worker_site_inactive",
+      "event_code": "WORKER_SITE_INACTIVE",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-31 (4).jpg",
+      "sha256": "28631c1184b5a40ba131d4cfd7753b0f11ff5c387b7d0fd9a6a8398a7f9dec7d"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-29 (4).jpg",
+      "sha256": "a87c920ba69ee63346686bdc23de73d20a720a7199555afca68db31f16cab4b5"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-30.jpg",
+      "sha256": "8e2fe582910adb7a47aa30e478ab51a6f8ea89e0d96133eb14d721577f36eec3"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_00-13-31 (3).jpg",
+      "sha256": "52f54e7c4622e58d964ff35c658b63419f4f7a9730d7a2b4ffc68460daea3d59"
+    },
+    {
+      "directory": "worker_publication_pending",
+      "event_code": "WORKER_PUBLICATION_PENDING",
+      "recipient_type": "WORKER",
+      "file_name": "04.jpg",
+      "original_filename": "photo_2026-08-01_00-13-32 (3).jpg",
+      "sha256": "f59844582a0d332f2b5834c210177df1601464fc6b0059ef851c53a13bd5d9c2"
+    },
+    {
+      "directory": "worker_progress_slowed",
+      "event_code": "WORKER_PROGRESS_SLOWED",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-28 (3).jpg",
+      "sha256": "616ccc1d6bcf9df647e5333ab8a00418612cd2690020351ec32faa244c4f08d9"
+    },
+    {
+      "directory": "worker_progress_slowed",
+      "event_code": "WORKER_PROGRESS_SLOWED",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-32 (2).jpg",
+      "sha256": "81dab8b75a6bc1a271cf569d178e195bfc8189c8939b63bca4ae655e2f9daa70"
+    },
+    {
+      "directory": "worker_progress_slowed",
+      "event_code": "WORKER_PROGRESS_SLOWED",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_01-16-03.jpg",
+      "sha256": "d1d173e35c3f0ced86430e5b405375e909aa00bd24a4362675f4b1a762a76d2b"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_02-46-38.jpg",
+      "sha256": "9ce97f17ef1be925fdc3f6b16f3e97b8befa06b7a63dc5c96834c6ef9e211516"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-33 (2).jpg",
+      "sha256": "9411dc9cfb7f7312db440f414e467cc954c9677f48db7457398ef6dcfa868d92"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_00-13-33 (5).jpg",
+      "sha256": "f3a67b1b0d3980b4616e13b82d72aeac04ac54795ae450d081cfc9be46237d3e"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "04.jpg",
+      "original_filename": "photo_2026-08-01_00-13-33.jpg",
+      "sha256": "42748b7c051659b36aae6dc1da81bd61f2168a93bd67ed831a6c54f2241e8450"
+    },
+    {
+      "directory": "worker_progress_growing",
+      "event_code": "WORKER_PROGRESS_GROWING",
+      "recipient_type": "WORKER",
+      "file_name": "05.jpg",
+      "original_filename": "photo_2026-08-01_00-59-29.jpg",
+      "sha256": "739130aafa23485b10f6fd1e76f7324c631cc27d02c894718c586f140636b69d"
+    },
+    {
+      "directory": "worker_streak",
+      "event_code": "WORKER_STREAK",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-29.jpg",
+      "sha256": "059631c5b0beb464d80d1033301a360c98b98caeaa7484ae0df017e5a23cc681"
+    },
+    {
+      "directory": "worker_streak",
+      "event_code": "WORKER_STREAK",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-33 (3).jpg",
+      "sha256": "d9e9d0151981a8ce49bd681458ed3fde8492cb5c59126cb79e406e1cada4ffc2"
+    },
+    {
+      "directory": "worker_streak",
+      "event_code": "WORKER_STREAK",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_00-21-38.jpg",
+      "sha256": "0e22e97e34bb9f9ab576d2f62a00fbd6d66ad118018df65f572d6bdc805e1166"
+    },
+    {
+      "directory": "worker_task_first",
+      "event_code": "WORKER_TASK_FIRST",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-33 (4).jpg",
+      "sha256": "15d698f365a2625b3a68c0a95855cde2b2ccf7bc83d24efec3df819ce1bd2799"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-28.jpg",
+      "sha256": "51c10036258ca07037ddaad6824c4710d854147a00758e5c5ff0bcbebe4a8362"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-30 (3).jpg",
+      "sha256": "c9a03f272333a51b8a64884d6cc6d71a9ae4e2f52b3b7ff19486e3efe34aab19"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_00-13-30 (2).jpg",
+      "sha256": "6b8eebd62f786ed46055c5357a99555e19984611c018ed78739794b6b8a0d07f"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "04.jpg",
+      "original_filename": "photo_2026-08-01_00-13-31 (2).jpg",
+      "sha256": "62dcbf74b8f5d40ea55036b48e8b2e3122e4d383be178b091425913942e75517"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "05.jpg",
+      "original_filename": "photo_2026-08-01_00-13-34 (3).jpg",
+      "sha256": "c586ab5206af21a1a707c070c12c8e3edc39fe17bccca2fbf8722dd13e3986dc"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "06.jpg",
+      "original_filename": "photo_2026-08-01_00-17-30.jpg",
+      "sha256": "24c75b3daf9190633b5bf2664772adc2e40935c3f662d5c6afe438074f2e75c9"
+    },
+    {
+      "directory": "worker_task_repeat",
+      "event_code": "WORKER_TASK_REPEAT",
+      "recipient_type": "WORKER",
+      "file_name": "07.jpg",
+      "original_filename": "photo_2026-08-01_01-19-22.jpg",
+      "sha256": "6f6a9225ca9effedbafc607b4155360938bd7b631ef8a5f7d36f50c78ff6d72f"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "01.jpg",
+      "original_filename": "photo_2026-08-01_00-13-32 (4).jpg",
+      "sha256": "04a167c750a18d265adbf1a40caa658598290aeb95d1b8fbf6ad8dc2e0107795"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "02.jpg",
+      "original_filename": "photo_2026-08-01_00-13-34 (2).jpg",
+      "sha256": "10f1d8b2b5da0f1db38a3405c1700f217dd9bdf51771a5cb44cac57a492679eb"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "03.jpg",
+      "original_filename": "photo_2026-08-01_00-13-34 (4).jpg",
+      "sha256": "e1cdd685ee5f1c0bd064d2b5231ef0f80cd48060c3659a45c41404309e6fec18"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "04.jpg",
+      "original_filename": "photo_2026-08-01_00-13-34.jpg",
+      "sha256": "c31af28c8a6ad7502b15946901c7a88e926f8d13d64d56ba1a8c4b1398a97aef"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "05.jpg",
+      "original_filename": "photo_2026-08-01_00-40-47.jpg",
+      "sha256": "405e156a9e32864551e6b461054bcb821c2039af4d114dc156a80672c0905e5c"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "06.jpg",
+      "original_filename": "photo_2026-08-01_00-43-32.jpg",
+      "sha256": "bb49d9e8ff354d8860f554f8359cb7a1964d9878a9f772f21c6512d03154f7f6"
+    },
+    {
+      "directory": "worker_task_overdue",
+      "event_code": "WORKER_TASK_OVERDUE",
+      "recipient_type": "WORKER",
+      "file_name": "07.jpg",
+      "original_filename": "photo_2026-08-01_01-26-29.jpg",
+      "sha256": "e1674b49abc770d0b22c841232cf561b4845f75edb0646609cc8f796462364e1"
+    }
+  ]
+}

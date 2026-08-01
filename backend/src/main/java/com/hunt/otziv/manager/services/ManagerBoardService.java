@@ -1,5 +1,7 @@
 package com.hunt.otziv.manager.services;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.services.CompanyService;
 import com.hunt.otziv.client_messages.model.ClientMessageScenario;
@@ -38,6 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.security.Principal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -98,6 +101,7 @@ public class ManagerBoardService {
             CommonInvoiceStatus.UNPAID,
             CommonInvoiceStatus.BAN
     );
+    private static final Duration METRICS_CACHE_TTL = Duration.ofSeconds(15);
 
     private final CompanyService companyService;
     private final OrderService orderService;
@@ -114,6 +118,10 @@ public class ManagerBoardService {
     private final CommonBillingService commonBillingService;
     private final ClientMessageOrderStatusService clientMessageOrderStatusService;
     private final StaffDailyProgressService staffDailyProgressService;
+    private final Cache<MetricsCacheKey, List<ManagerMetricResponse>> metricsCache = Caffeine.newBuilder()
+            .maximumSize(2_000)
+            .expireAfterWrite(METRICS_CACHE_TTL)
+            .build();
 
     public ManagerBoardResponse getBoard(
             String section,
@@ -393,6 +401,43 @@ public class ManagerBoardService {
             Manager managerFilter,
             boolean managerControlOverdue
     ) {
+        MetricsCacheKey cacheKey = metricsCacheKey(
+                principal,
+                authentication,
+                managerFilter,
+                managerControlOverdue
+        );
+        List<ManagerMetricResponse> metrics = metricsCache.get(
+                cacheKey,
+                ignored -> buildMetricValues(principal, authentication, managerFilter, managerControlOverdue)
+        );
+
+        Map<String, Integer> deltas = metricSnapshotService.deltas(
+                principal,
+                UserMetricSnapshotService.PAGE_MANAGER,
+                metrics.stream()
+                        .map(metric -> new UserMetricSnapshotService.MetricValue(
+                                metric.section(),
+                                metric.status(),
+                                metric.value()
+                        ))
+                        .toList()
+        );
+
+        return metrics.stream()
+                .map(metric -> metric.withDelta(deltas.getOrDefault(
+                        UserMetricSnapshotService.key(metric.section(), metric.status()),
+                        0
+                )))
+                .toList();
+    }
+
+    private List<ManagerMetricResponse> buildMetricValues(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter,
+            boolean managerControlOverdue
+    ) {
         List<ManagerMetricResponse> metrics = new ArrayList<>();
         Map<String, Integer> companyCounts = countCompanyMetrics(principal, authentication);
         Map<String, Integer> orderCounts = managerControlOverdue && managerFilter != null
@@ -421,25 +466,30 @@ public class ManagerBoardService {
         metrics.add(orderMetric(orderCounts, "Бан", "Бан", "block", "gray"));
         metrics.add(recoveryReadyMetric(principal, authentication, managerFilter));
         metrics.add(orderMetric(orderCounts, "Все", "Все", "dashboard", "blue"));
+        return List.copyOf(metrics);
+    }
 
-        Map<String, Integer> deltas = metricSnapshotService.deltas(
-                principal,
-                UserMetricSnapshotService.PAGE_MANAGER,
-                metrics.stream()
-                        .map(metric -> new UserMetricSnapshotService.MetricValue(
-                                metric.section(),
-                                metric.status(),
-                                metric.value()
-                        ))
-                        .toList()
+    private MetricsCacheKey metricsCacheKey(
+            Principal principal,
+            Authentication authentication,
+            Manager managerFilter,
+            boolean managerControlOverdue
+    ) {
+        String principalName = principal == null || principal.getName() == null
+                ? ""
+                : principal.getName();
+        String authorities = authentication == null || authentication.getAuthorities() == null
+                ? ""
+                : authentication.getAuthorities().stream()
+                .map(authority -> authority == null ? "" : authority.getAuthority())
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(","));
+        return new MetricsCacheKey(
+                principalName,
+                authorities,
+                managerFilter == null ? null : managerFilter.getId(),
+                managerControlOverdue
         );
-
-        return metrics.stream()
-                .map(metric -> metric.withDelta(deltas.getOrDefault(
-                        UserMetricSnapshotService.key(metric.section(), metric.status()),
-                        0
-                )))
-                .toList();
     }
 
     private ManagerMetricResponse companyMetric(
@@ -685,7 +735,15 @@ public class ManagerBoardService {
             return null;
         }
 
-        return staffDailyProgressService.aggregateWorkerProgress(workers, LocalDate.now());
+        return staffDailyProgressService.aggregateWorkerProgressSnapshot(workers, LocalDate.now());
+    }
+
+    private record MetricsCacheKey(
+            String principalName,
+            String authorities,
+            Long managerId,
+            boolean managerControlOverdue
+    ) {
     }
 
     private List<Worker> managerProgressWorkers(

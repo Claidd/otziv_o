@@ -7,6 +7,7 @@ import com.hunt.otziv.c_companies.dto.FilialDTO;
 import com.hunt.otziv.c_companies.dto.CompanyListDTO;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.repository.CompanyInfoRepository;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.maxbot.service.MaxGroupLinkService;
@@ -28,6 +29,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import jakarta.persistence.Transient;
 
 import java.util.List;
 import java.util.LinkedHashSet;
@@ -46,6 +48,9 @@ class CompanyServiceImplTest {
 
     @Mock
     private CompanyRepository companyRepository;
+
+    @Mock
+    private CompanyInfoRepository companyInfoRepository;
 
     @Mock
     private LeadService leadService;
@@ -130,6 +135,7 @@ class CompanyServiceImplTest {
                 .contacts(new LinkedHashSet<>())
                 .build();
         when(companyRepository.findById(1293L)).thenReturn(Optional.of(company));
+        when(companyInfoRepository.findByCompanyId(1293L)).thenReturn(Optional.empty());
 
         CompanyDTO dto = CompanyDTO.builder()
                 .title("Барс-оценка")
@@ -152,9 +158,15 @@ class CompanyServiceImplTest {
         assertTrue(company.isAllowWorkerPublicationDateEdit());
     }
 
+    @Test
+    void companyInfoIsLoadedExplicitlyInsteadOfTriggeringInverseOneToOneChecks() throws Exception {
+        assertTrue(Company.class.getDeclaredField("info").isAnnotationPresent(Transient.class));
+    }
+
     private CompanyServiceImpl service() {
         return new CompanyServiceImpl(
                 companyRepository,
+                companyInfoRepository,
                 leadService,
                 userService,
                 managerService,

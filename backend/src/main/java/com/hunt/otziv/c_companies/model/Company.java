@@ -175,7 +175,10 @@ public class Company {
     @BatchSize(size = 20)
     private Set<CompanyContact> contacts;
 
-    @OneToOne(mappedBy = "company", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    // The inverse side of an optional one-to-one forces Hibernate to check
+    // company_info once for every loaded company, even when marked LAZY. Keep
+    // the DTO-facing field transient and load the sparse info row explicitly.
+    @Transient
     @ToString.Exclude
     private CompanyInfo info;
 

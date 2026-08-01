@@ -172,6 +172,51 @@ def public_url(base_url: str, key: str) -> str:
 
 
 def validate_manifest(root: Path, manifest: dict) -> list[dict[str, str]]:
+    explicit_assets = manifest.get("assets")
+    if isinstance(explicit_assets, list):
+        expected_count = int(manifest.get("expected_unique_assets", len(explicit_assets)))
+        if len(explicit_assets) != expected_count:
+            raise ValueError(
+                f"Manifest expected {expected_count} assets, got {len(explicit_assets)}"
+            )
+        rows: list[dict[str, str]] = []
+        hashes: set[str] = set()
+        storage_targets: set[tuple[str, str]] = set()
+        for asset in explicit_assets:
+            directory = str(asset["directory"])
+            event_code = str(asset["event_code"])
+            recipient_type = str(asset["recipient_type"])
+            file_name = str(asset["file_name"])
+            image = root / directory / file_name
+            if not image.is_file() or image.stat().st_size == 0:
+                raise FileNotFoundError(image)
+            digest = hashlib.sha256(image.read_bytes()).hexdigest()
+            expected_digest = str(asset.get("sha256", digest)).lower()
+            if digest != expected_digest:
+                raise ValueError(
+                    f"SHA-256 mismatch for {image}: expected {expected_digest}, got {digest}"
+                )
+            target = (event_code, file_name)
+            if digest in hashes:
+                raise ValueError(f"Duplicate image content in manifest: {image}")
+            if target in storage_targets:
+                raise ValueError(f"Duplicate storage target in manifest: {target}")
+            hashes.add(digest)
+            storage_targets.add(target)
+            rows.append(
+                {
+                    "directory": directory,
+                    "event_code": event_code,
+                    "recipient_type": recipient_type,
+                    "file_name": file_name,
+                    "original_filename": str(asset.get("original_filename", file_name)),
+                    "content_type": str(asset.get("content_type", "image/jpeg")),
+                    "sha256": digest,
+                    "path": str(image),
+                }
+            )
+        return rows
+
     themes = manifest.get("themes")
     file_names = manifest.get("file_names")
     if not isinstance(themes, list) or len(themes) != 15:
@@ -194,6 +239,8 @@ def validate_manifest(root: Path, manifest: dict) -> list[dict[str, str]]:
                     "event_code": event_code,
                     "recipient_type": recipient_type,
                     "file_name": str(file_name),
+                    "original_filename": str(file_name),
+                    "content_type": "image/png",
                     "path": str(image),
                 }
             )
@@ -202,10 +249,10 @@ def validate_manifest(root: Path, manifest: dict) -> list[dict[str, str]]:
     return rows
 
 
-def ensure_rules_exist(manifest: dict) -> None:
+def ensure_rules_exist(rows: list[dict[str, str]]) -> None:
     expected = {
-        (str(theme["event_code"]), str(theme["recipient_type"]))
-        for theme in manifest["themes"]
+        (row["event_code"], row["recipient_type"])
+        for row in rows
     }
     statements = ["START TRANSACTION;"]
     for event_code, recipient_type in sorted(expected):
@@ -238,12 +285,13 @@ def attach_assets(rows: list[dict[str, str]], env: dict[str, str], prefix: str) 
     for row in rows:
         key = f"notification-media/{row['event_code'].lower()}/{prefix}/{row['file_name']}"
         url = public_url(env["S3_PUBLIC_BASE_URL"], key)
-        sequence = int(Path(row["file_name"]).stem)
+        sequence_text = Path(row["file_name"]).stem.split("-", 1)[0]
+        sequence = int(sequence_text)
         prefix_like = f"notification-media/{row['event_code'].lower()}/{prefix}/%"
         statements.append(
             "INSERT INTO notification_media_assets "
             "(rule_id,storage_key,image_url,original_filename,content_type,active,sort_order,created_at,updated_at) "
-            "SELECT r.rule_id,{key},{url},{name},'image/png',b'1',"
+            "SELECT r.rule_id,{key},{url},{name},{content_type},b'1',"
             "COALESCE((SELECT MAX(existing.sort_order) FROM notification_media_assets existing "
             "WHERE existing.rule_id=r.rule_id AND existing.storage_key NOT LIKE {prefix_like}),-1)+{sequence},"
             "CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6) "
@@ -254,7 +302,8 @@ def attach_assets(rows: list[dict[str, str]], env: dict[str, str], prefix: str) 
             "content_type=VALUES(content_type),active=b'1',sort_order=VALUES(sort_order),updated_at=CURRENT_TIMESTAMP(6);".format(
                 key=sql_quote(key),
                 url=sql_quote(url),
-                name=sql_quote(row["file_name"]),
+                name=sql_quote(row["original_filename"]),
+                content_type=sql_quote(row["content_type"]),
                 prefix_like=sql_quote(prefix_like),
                 sequence=sequence,
                 event=sql_quote(row["event_code"]),
@@ -265,9 +314,12 @@ def attach_assets(rows: list[dict[str, str]], env: dict[str, str], prefix: str) 
     mysql("\n".join(statements) + "\n")
 
 
-def verify_database(manifest: dict, prefix: str) -> None:
-    for theme in manifest["themes"]:
-        event_code = str(theme["event_code"])
+def verify_database(rows: list[dict[str, str]], prefix: str) -> None:
+    expected_counts: dict[str, int] = {}
+    for row in rows:
+        event_code = row["event_code"]
+        expected_counts[event_code] = expected_counts.get(event_code, 0) + 1
+    for event_code, expected_count in sorted(expected_counts.items()):
         key_prefix = f"notification-media/{event_code.lower()}/{prefix}/%"
         count = mysql(
             "SELECT COUNT(*) FROM notification_media_assets a "
@@ -275,22 +327,24 @@ def verify_database(manifest: dict, prefix: str) -> None:
             f"WHERE r.event_code={sql_quote(event_code)} AND a.active=b'1' "
             f"AND a.storage_key LIKE {sql_quote(key_prefix)};\n"
         )
-        if count != "10":
-            raise RuntimeError(f"{event_code}: expected 10 imported assets, got {count}")
-        print(f"verified database: {event_code}=10", flush=True)
+        if count != str(expected_count):
+            raise RuntimeError(
+                f"{event_code}: expected {expected_count} imported assets, got {count}"
+            )
+        print(f"verified database: {event_code}={expected_count}", flush=True)
 
 
-def verify_public_samples(manifest: dict, env: dict[str, str], prefix: str) -> None:
-    for theme in manifest["themes"]:
-        event_code = str(theme["event_code"])
-        key = f"notification-media/{event_code.lower()}/{prefix}/01.png"
+def verify_public_assets(rows: list[dict[str, str]], env: dict[str, str], prefix: str) -> None:
+    for row in rows:
+        event_code = row["event_code"]
+        key = f"notification-media/{event_code.lower()}/{prefix}/{row['file_name']}"
         request = urllib.request.Request(
             public_url(env["S3_PUBLIC_BASE_URL"], key), method="HEAD"
         )
         with urllib.request.urlopen(request, timeout=30) as response:
             if response.status != 200:
                 raise RuntimeError(f"Public URL returned {response.status}: {key}")
-        print(f"verified public sample: {event_code}", flush=True)
+    print(f"verified public assets: {len(rows)}", flush=True)
 
 
 def print_status() -> None:
@@ -316,6 +370,7 @@ def main() -> int:
     parser.add_argument("--env-file", type=Path, default=Path("/docker/.env"))
     parser.add_argument("--prefix", default="generated-20260731-v2")
     parser.add_argument("--status-only", action="store_true")
+    parser.add_argument("--validate-only", action="store_true")
     args = parser.parse_args()
 
     if args.status_only:
@@ -326,13 +381,19 @@ def main() -> int:
 
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     rows = validate_manifest(args.root, manifest)
+    if args.validate_only:
+        rule_count = len({(row["event_code"], row["recipient_type"]) for row in rows})
+        print(f"VALIDATION_COMPLETE: {len(rows)} unique assets, {rule_count} rules")
+        return 0
     env = load_dotenv(args.env_file)
     missing_env = [key for key in REQUIRED_S3_ENV if not env.get(key)]
     if missing_env:
         raise RuntimeError(f"Missing S3 environment keys: {missing_env}")
 
-    ensure_rules_exist(manifest)
-    print("preflight passed: 15 rules, 150 images", flush=True)
+    ensure_rules_exist(rows)
+    rule_count = len({(row["event_code"], row["recipient_type"]) for row in rows})
+    total = len(rows)
+    print(f"preflight passed: {rule_count} rules, {total} images", flush=True)
 
     for index, row in enumerate(rows, start=1):
         key = (
@@ -340,14 +401,14 @@ def main() -> int:
             f"{args.prefix}/{row['file_name']}"
         )
         data = Path(row["path"]).read_bytes()
-        content_type = mimetypes.guess_type(row["file_name"])[0] or "image/png"
+        content_type = row.get("content_type") or mimetypes.guess_type(row["file_name"])[0] or "image/png"
         upload_with_retry(data, key, content_type, env)
-        print(f"uploaded {index}/150: {row['event_code']}/{row['file_name']}", flush=True)
+        print(f"uploaded {index}/{total}: {row['event_code']}/{row['file_name']}", flush=True)
 
     attach_assets(rows, env, args.prefix)
-    verify_database(manifest, args.prefix)
-    verify_public_samples(manifest, env, args.prefix)
-    print("IMPORT_COMPLETE: 150 assets attached", flush=True)
+    verify_database(rows, args.prefix)
+    verify_public_assets(rows, env, args.prefix)
+    print(f"IMPORT_COMPLETE: {total} assets attached", flush=True)
     return 0
 
 

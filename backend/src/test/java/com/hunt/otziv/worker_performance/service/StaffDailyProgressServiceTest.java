@@ -69,6 +69,44 @@ class StaffDailyProgressServiceTest {
     }
 
     @Test
+    void boardSnapshotReadUsesPreparedRowsWithoutLifecycleOrAggregateWrites() {
+        NamedParameterJdbcTemplate localJdbc = mock(NamedParameterJdbcTemplate.class);
+        AppSettingService settings = mock(AppSettingService.class);
+        WorkloadShadowProgressReadService workload = mock(WorkloadShadowProgressReadService.class);
+        LocalDate date = LocalDate.now(java.time.ZoneId.of("Asia/Irkutsk"));
+        when(settings.getBoolean(AppSettingService.WORKER_PROGRESS_ENABLED, true)).thenReturn(true);
+        when(settings.getBoolean("workload.shadow.observation-enabled", true)).thenReturn(true);
+        when(localJdbc.queryForList(anyString(), any(MapSqlParameterSource.class))).thenReturn(List.of(Map.of(
+                "worker_id", 7L,
+                "completed_count", 3L,
+                "active_count", 1L,
+                "total_count", 4L,
+                "progress_percent", 75,
+                "checked", false,
+                "activity_events", 9L
+        )));
+        when(workload.findCurrentProgressWithState(eq(List.of(7L)), eq(date)))
+                .thenReturn(new CurrentProgress(Map.of(7L, new Progress(
+                        5, 7, 0, 0, 71, false, false, null, null
+                )), false));
+        StaffDailyProgressService localService = new StaffDailyProgressService(localJdbc, settings, workload);
+        Worker worker = Worker.builder().id(7L).build();
+
+        DailyWorkProgressResponse progress = localService.aggregateWorkerProgressSnapshot(List.of(worker), date);
+
+        assertEquals(5, progress.completed());
+        assertEquals(2, progress.active());
+        assertEquals(7, progress.total());
+        assertEquals(71, progress.percent());
+        assertEquals(9, progress.activityEvents());
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(localJdbc).queryForList(sql.capture(), any(MapSqlParameterSource.class));
+        assertTrue(sql.getValue().contains("FROM worker_daily_performance"));
+        verify(localJdbc, never()).update(anyString(), any(MapSqlParameterSource.class));
+        verify(localJdbc, never()).batchUpdate(anyString(), any(SqlParameterSource[].class));
+    }
+
+    @Test
     void endOfDayCutoffUsesActualQueueAppearanceTime() {
         LocalDate date = LocalDate.of(2026, 7, 17);
         LocalDateTime cutoff = date.atTime(22, 0);

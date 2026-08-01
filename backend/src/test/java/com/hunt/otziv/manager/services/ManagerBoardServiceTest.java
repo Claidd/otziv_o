@@ -17,6 +17,8 @@ import com.hunt.otziv.review_recovery.services.ReviewRecoveryTaskService;
 import com.hunt.otziv.u_users.services.service.ManagerService;
 import com.hunt.otziv.u_users.services.service.UserService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
+import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.worker_performance.dto.DailyWorkProgressResponse;
 import com.hunt.otziv.worker_performance.service.StaffDailyProgressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -45,6 +48,8 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -119,6 +124,8 @@ class ManagerBoardServiceTest {
                 .companyId(3L)
                 .status("Новый")
                 .build();
+        Worker worker = Worker.builder().id(17L).build();
+        DailyWorkProgressResponse dailyProgress = org.mockito.Mockito.mock(DailyWorkProgressResponse.class);
 
         when(orderService.getAllOrderDTOAndKeywordAndStatus("needle", "Новый", 0, 50, "asc"))
                 .thenReturn(new PageImpl<>(List.of(order), PageRequest.of(0, 50), 1));
@@ -132,6 +139,10 @@ class ManagerBoardServiceTest {
                 .thenReturn(Map.of());
         when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_ORDERS))
                 .thenReturn(List.of("promo"));
+        when(staffDailyProgressService.progressEnabled()).thenReturn(true);
+        when(workerService.getAllWorkers()).thenReturn(List.of(worker));
+        when(staffDailyProgressService.aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class)))
+                .thenReturn(dailyProgress);
 
         ManagerBoardResponse response = service.getBoard(
                 "ORDERS",
@@ -153,6 +164,7 @@ class ManagerBoardServiceTest {
         assertEquals(List.of(order), response.orders().content());
         assertEquals(1, response.orders().totalElements());
         assertEquals(List.of("promo"), response.promoTexts());
+        assertSame(dailyProgress, response.dailyProgress());
         assertEquals(21, response.metrics().size());
         assertEquals(1, response.metrics().stream()
                 .filter(metric -> "orders".equals(metric.section()) && "Требует внимания".equals(metric.status()))
@@ -166,6 +178,31 @@ class ManagerBoardServiceTest {
                 .label());
         verify(badReviewTaskService).enrichOrderList(List.of(order));
         verify(clientMessageOrderStatusService).enrichOrderList(List.of(order));
+        verify(staffDailyProgressService).aggregateWorkerProgressSnapshot(eq(List.of(worker)), any(LocalDate.class));
+        verify(staffDailyProgressService, never()).aggregateWorkerProgress(any(), any(LocalDate.class));
+    }
+
+    @Test
+    void getBoardCachesHeavyMetricCountsButKeepsUserDeltasLive() {
+        Principal principal = () -> "admin-cache";
+        Authentication admin = authentication("ROLE_ADMIN");
+        when(companyService.getAllCompaniesDTOList("", 0, 20, "desc"))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+        when(companyService.countCompaniesByStatus()).thenReturn(Map.of("Новая", 1));
+        when(orderService.countOrdersByStatus()).thenReturn(Map.of("Новый", 2));
+        when(metricSnapshotService.deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList()))
+                .thenReturn(Map.of());
+        when(promoTextService.getPromoTextsForManager(null, PromoButtonCatalog.SECTION_MANAGER_COMPANIES))
+                .thenReturn(List.of());
+
+        service.getBoard("companies", "Все", "", 0, 20, "desc", null, principal, admin);
+        service.getBoard("companies", "Все", "", 0, 20, "desc", null, principal, admin);
+
+        verify(companyService, times(1)).countCompaniesByStatus();
+        verify(orderService, times(1)).countOrdersByStatus();
+        verify(reviewRecoveryTaskService, times(1)).countCompletedBatchesToAdmin();
+        verify(metricSnapshotService, times(2))
+                .deltas(eq(principal), eq(UserMetricSnapshotService.PAGE_MANAGER), anyList());
     }
 
     @Test

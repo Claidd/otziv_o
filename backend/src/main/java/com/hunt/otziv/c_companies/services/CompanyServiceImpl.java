@@ -19,6 +19,7 @@ import com.hunt.otziv.c_companies.model.CompanyInfo;
 import com.hunt.otziv.c_companies.model.CompanyStatus;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
+import com.hunt.otziv.c_companies.repository.CompanyInfoRepository;
 import com.hunt.otziv.client_messages.service.PublicationProgressPreferenceService;
 import com.hunt.otziv.common.BoardLiveSlice;
 import com.hunt.otziv.l_lead.dto.LeadDTO;
@@ -81,6 +82,7 @@ public class CompanyServiceImpl implements CompanyService{
     private static final String COMPANY_DATA_SOURCE_MANUAL = "MANUAL";
 
     private final CompanyRepository companyRepository;
+    private final CompanyInfoRepository companyInfoRepository;
     private final LeadService leadService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -102,7 +104,8 @@ public class CompanyServiceImpl implements CompanyService{
 
     @Transactional
     public void save(Company company){
-        companyRepository.save(company);
+        Company saved = companyRepository.save(company);
+        persistTransientCompanyInfo(saved);
     } // Сохранение компании в БД
 
     //    Метод подготовки ДТО при создании компании из Лида менеджером
@@ -158,6 +161,7 @@ public class CompanyServiceImpl implements CompanyService{
         log.info("3. Компания успешно создана");
         try {
             Company company1 = companyRepository.save(company); // сохраняем новую компанию в БД
+            persistTransientCompanyInfo(company1);
             log.info("3. Компания успешно сохранена");
             for (Filial filial : company1.getFilial()) { // проходимся по всем филиалам и устанавливаем им компанию
                 filial.setCompany(company1); // Установка компании в филиале
@@ -978,7 +982,7 @@ public class CompanyServiceImpl implements CompanyService{
             companyDTO.setSubCategory(convertToSubCategoryDto(company.getSubCategory()));
             companyDTO.setFilials(convertToFilialDtoSet(company.getFilial()));
             companyDTO.setContacts(convertToContactDtoSet(company.getContacts()));
-            companyDTO.setInfo(convertToInfoDto(company.getInfo()));
+            companyDTO.setInfo(convertToInfoDto(resolveCompanyInfo(company)));
             companyDTO.setOrders(Collections.emptySet());
             return companyDTO;
         }
@@ -1727,18 +1731,21 @@ public class CompanyServiceImpl implements CompanyService{
 
     private boolean syncCompanyInfo(Company company, CompanyInfoDTO infoDTO) {
         CompanyInfo updatedInfo = convertInfoDTOToInfo(infoDTO, company);
-        CompanyInfo currentInfo = company.getInfo();
+        CompanyInfo currentInfo = resolveCompanyInfo(company);
         if (companyInfoSame(currentInfo, updatedInfo)) {
             return false;
         }
 
         if (updatedInfo == null) {
+            if (currentInfo != null) {
+                companyInfoRepository.delete(currentInfo);
+            }
             company.setInfo(null);
             return true;
         }
 
         if (currentInfo == null) {
-            company.setInfo(updatedInfo);
+            company.setInfo(companyInfoRepository.save(updatedInfo));
             return true;
         }
 
@@ -1748,7 +1755,29 @@ public class CompanyServiceImpl implements CompanyService{
         currentInfo.setCompanyType(updatedInfo.getCompanyType());
         currentInfo.setSource(updatedInfo.getSource());
         currentInfo.setSourceLeadId(updatedInfo.getSourceLeadId());
+        companyInfoRepository.save(currentInfo);
+        company.setInfo(currentInfo);
         return true;
+    }
+
+    private CompanyInfo resolveCompanyInfo(Company company) {
+        if (company == null) {
+            return null;
+        }
+        if (company.getInfo() != null || company.getId() == null) {
+            return company.getInfo();
+        }
+        CompanyInfo info = companyInfoRepository.findByCompanyId(company.getId()).orElse(null);
+        company.setInfo(info);
+        return info;
+    }
+
+    private void persistTransientCompanyInfo(Company company) {
+        if (company == null || company.getInfo() == null) {
+            return;
+        }
+        company.getInfo().setCompany(company);
+        company.setInfo(companyInfoRepository.save(company.getInfo()));
     }
 
     private boolean companyInfoSame(CompanyInfo currentInfo, CompanyInfo updatedInfo) {

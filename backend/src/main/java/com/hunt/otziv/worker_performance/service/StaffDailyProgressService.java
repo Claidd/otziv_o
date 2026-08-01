@@ -265,6 +265,64 @@ public class StaffDailyProgressService {
                 .toList(), date);
     }
 
+    /**
+     * Reads the already prepared daily snapshot without rebuilding lifecycle or
+     * monthly aggregates. This is intended for latency-sensitive read endpoints
+     * such as the manager board.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, DailyWorkProgressResponse> workerProgressSnapshotByWorkers(
+            Collection<Worker> workers,
+            LocalDate date
+    ) {
+        if (!progressEnabled() || workers == null || workers.isEmpty()) {
+            return Map.of();
+        }
+        LocalDate safeDate = safeDate(date);
+        List<Long> workerIds = workers.stream()
+                .filter(Objects::nonNull)
+                .map(Worker::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (workerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("workerIds", workerIds)
+                .addValue("date", safeDate);
+        Map<Long, DailyWorkProgressResponse> result = new LinkedHashMap<>();
+        jdbc.queryForList("""
+                SELECT *
+                FROM worker_daily_performance
+                WHERE progress_date = :date
+                  AND worker_id IN (:workerIds)
+                """, params).forEach(row -> result.put(
+                longValue(row.get("worker_id")),
+                dailyResponse(safeDate, row)
+        ));
+
+        // A fresh workload projection is the authoritative source for today's
+        // completed/eligible totals. Keep the remaining efficiency fields from
+        // the persisted daily snapshot.
+        workerIds.forEach(workerId -> result.putIfAbsent(workerId, emptyWorkerProgress(safeDate)));
+        if (safeDate.equals(progressToday())
+                && appSettingService.getBoolean(WORKLOAD_SHADOW_OBSERVATION_ENABLED, true)) {
+            CurrentProgress current = workloadShadowProgressReadService
+                    .findCurrentProgressWithState(workerIds, safeDate);
+            if (current != null && current.updating()) {
+                return markProgressUpdating(result);
+            }
+            return applyWorkloadProgress(
+                    result,
+                    current == null ? Map.of() : current.progress(),
+                    true
+            );
+        }
+        return Map.copyOf(result);
+    }
+
     @Transactional
     public Map<Long, DailyWorkProgressResponse> workerEndOfDayProgressByWorkers(
             Collection<Worker> workers,
@@ -459,6 +517,15 @@ public class StaffDailyProgressService {
                 .distinct()
                 .toList();
         return aggregateTeamProgressResponses(progress.values(), workerIds, date, ROLE_WORKER);
+    }
+
+    @Transactional(readOnly = true)
+    public DailyWorkProgressResponse aggregateWorkerProgressSnapshot(Collection<Worker> workers, LocalDate date) {
+        Map<Long, DailyWorkProgressResponse> progress = workerProgressSnapshotByWorkers(workers, date);
+        // Do not reconstruct lifecycle history here: the board only needs the
+        // current team snapshot, and the reconstruction is one of the expensive
+        // operations deliberately kept out of the HTTP read path.
+        return aggregateProgressResponses(progress.values(), date, ROLE_WORKER, null);
     }
 
     @Transactional
@@ -718,6 +785,64 @@ public class StaffDailyProgressService {
                 checkedDays,
                 reached100Days,
                 closedPeriod
+        );
+    }
+
+    private DailyWorkProgressResponse dailyResponse(LocalDate date, Map<String, Object> row) {
+        return new DailyWorkProgressResponse(
+                true,
+                ROLE_WORKER,
+                date,
+                longValue(row.get("completed_count")),
+                longValue(row.get("active_count")),
+                longValue(row.get("total_count")),
+                intValue(row.get("progress_percent")),
+                booleanValue(row.get("checked")),
+                toLocalDateTime(row.get("first_completed_at")),
+                toLocalDateTime(row.get("last_completed_at")),
+                longValue(row.get("average_close_seconds")),
+                longValue(row.get("median_close_seconds")),
+                longValue(row.get("p90_close_seconds")),
+                toLocalDateTime(row.get("first_activity_at")),
+                toLocalDateTime(row.get("last_activity_at")),
+                longValue(row.get("active_work_seconds")),
+                longValue(row.get("work_window_seconds")),
+                longValue(row.get("activity_events")),
+                longValue(row.get("load_score")),
+                intValue(row.get("efficiency_score")),
+                longValue(row.get("opened_count")),
+                longValue(row.get("order_completed_count")),
+                longValue(row.get("nagul_completed_count")),
+                longValue(row.get("publish_completed_count")),
+                longValue(row.get("bad_completed_count")),
+                longValue(row.get("recovery_completed_count")),
+                longValue(row.get("recovery_created_count")),
+                longValue(row.get("order_overdue_count")),
+                longValue(row.get("total_overdue_count")),
+                intValue(row.get("speed_score")),
+                intValue(row.get("discipline_score")),
+                intValue(row.get("workload_score")),
+                longValue(row.get("bot_change_count")),
+                longValue(row.get("bot_block_count")),
+                booleanValue(row.get("reached_100")),
+                toLocalDateTime(row.get("first_reached_100_at")),
+                toLocalDateTime(row.get("last_reached_100_at")),
+                "DAY",
+                0,
+                0,
+                0,
+                false
+        );
+    }
+
+    private DailyWorkProgressResponse emptyWorkerProgress(LocalDate date) {
+        return responseForWorker(
+                date,
+                WorkerActiveStats.empty(),
+                WorkerCompletionStats.empty(),
+                WorkerActivityStats.empty(),
+                WorkerAuxStats.empty(),
+                Reached100State.empty()
         );
     }
 
