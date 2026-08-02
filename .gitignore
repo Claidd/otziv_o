@@ -71,6 +71,7 @@ tmp-keycloak-login-check/
 **/node_modules/
 /.codex-tmp/
 /.codex-remote-attachments/
+/.release-worktree-*/
 /mobile/www/
 /mobile/builds/
 /generated-assets/

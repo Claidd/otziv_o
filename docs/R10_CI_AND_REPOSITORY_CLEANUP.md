@@ -23,7 +23,7 @@ Do not combine the following cleanup with application behavior, dependency upgra
 1. Preserve a repository bundle and verify it can be cloned. Record the default-branch commit and active release tags.
 2. Move Android APK/AAB delivery to a signed CI artifact or release asset. Update and verify every `mobile/builds` lookup in the production deployment scripts before untracking any APK.
 3. Move generated media that must be retained to explicitly owned object/release storage. Confirm no application, deployment script or operator process reads it from the checkout.
-4. In a cleanup-only pull request, use `git rm --cached` for confirmed generated files. Do not delete local working copies and do not touch `.release-worktree-*` directories. The new ignore rules prevent accidental re-addition.
+4. In a cleanup-only pull request, use `git rm --cached` for confirmed generated files. Before removing any future `.release-worktree-*`, verify that its HEAD and dirty/untracked contents are preserved, then remove it with `git worktree remove`; never commit a worktree path as a gitlink. The root ignore rules prevent accidental re-addition.
 5. Handle ambiguous root files only after an owner approves each path. Use repository search plus a production/deploy smoke test before removing it from the index.
 6. Run the quality workflow and `./infrastructure/scripts/local/prod-like-smoke.ps1` before merging the cleanup pull request.
 7. Treat history rewriting as a separate, explicitly approved maintenance operation with a write freeze, backup, collaborator coordination and fresh-clone verification. Current-index cleanup alone does not shrink old Git packs.
