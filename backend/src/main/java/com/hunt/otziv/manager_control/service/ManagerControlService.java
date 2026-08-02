@@ -296,7 +296,7 @@ public class ManagerControlService {
     private final ManagerPerformanceService managerPerformanceService;
     private final GamificationEventService gamificationEventService;
     private final LeadsRepository leadsRepository;
-
+    //ok
     @Transactional(readOnly = true)
     public ManagerControlSummaryResponse today(Principal principal, Authentication authentication) {
         return today(principal, authentication, false);
