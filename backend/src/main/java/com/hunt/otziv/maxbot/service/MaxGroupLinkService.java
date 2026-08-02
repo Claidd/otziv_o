@@ -3,16 +3,13 @@ package com.hunt.otziv.maxbot.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
-import lombok.RequiredArgsConstructor;
+import com.hunt.otziv.webhook.security.OneTimeGroupLinkTokenStore;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -21,11 +18,10 @@ import java.util.regex.Pattern;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class MaxGroupLinkService {
 
     private static final String PAYLOAD_PREFIX = "c";
-    private static final int SIGNATURE_LENGTH = 12;
+    private static final String COMPANY_SCOPE = "max-company-group";
     private static final Pattern MAX_WEB_CHAT_URL = Pattern.compile(
             "(?i)^(?:https?://)?web\\.max\\.ru/(-?\\d{5,})(?:[/?#].*)?$"
     );
@@ -35,11 +31,27 @@ public class MaxGroupLinkService {
 
     private final CompanyRepository companyRepository;
     private final MaxBotClient maxBotClient;
+    private final OneTimeGroupLinkTokenStore tokenStore;
+
+    @Autowired
+    public MaxGroupLinkService(
+            CompanyRepository companyRepository,
+            MaxBotClient maxBotClient,
+            OneTimeGroupLinkTokenStore tokenStore
+    ) {
+        this.companyRepository = companyRepository;
+        this.maxBotClient = maxBotClient;
+        this.tokenStore = tokenStore;
+    }
+
+    public MaxGroupLinkService(CompanyRepository companyRepository, MaxBotClient maxBotClient) {
+        this(companyRepository, maxBotClient, new OneTimeGroupLinkTokenStore());
+    }
 
     @Value("${max.bot.username:}")
     private String botUsername;
 
-    @Value("${max.bot.link-secret:${max.bot.token:otziv-max-link}}")
+    @Value("${max.bot.link-secret:}")
     private String linkSecret;
 
     public boolean isMaxChatUrl(String url) {
@@ -78,6 +90,10 @@ public class MaxGroupLinkService {
             log.debug("MAX group invite link is unavailable: max.bot.username is empty");
             return "";
         }
+        if (!OneTimeGroupLinkTokenStore.isStrongSecret(linkSecret)) {
+            log.error("MAX group invite link is unavailable: max.bot.link-secret is missing or too short");
+            return "";
+        }
 
         return "https://max.ru/" + username + "?start=" + payloadForCompany(companyId);
     }
@@ -87,8 +103,12 @@ public class MaxGroupLinkService {
             return Optional.empty();
         }
 
-        Long companyId = parseCompanyId(payload);
-        if (companyId == null || !payload.equals(payloadForCompany(companyId))) {
+        Long companyId = tokenStore.consume(
+                payload.substring(PAYLOAD_PREFIX.length()),
+                COMPANY_SCOPE,
+                linkSecret
+        ).orElse(null);
+        if (companyId == null) {
             log.warn("MAX group link rejected: invalid payload '{}', userId={}", payload, userId);
             return Optional.of("Не удалось начать привязку MAX-группы: ссылка устарела или неверная.");
         }
@@ -121,6 +141,10 @@ public class MaxGroupLinkService {
         if (company == null && userId != null) {
             Company pendingCompany = companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(userId)
                     .orElse(null);
+            if (pendingCompany != null && !isPendingLinkFresh(pendingCompany)) {
+                log.warn("MAX pending group link expired for company id={} userId={}", pendingCompany.getId(), userId);
+                pendingCompany = null;
+            }
             if (pendingCompany != null && !pendingCompanyMatchesChat(pendingCompany, chatId, chat)) {
                 log.warn("MAX bot added to chatId={} by userId={}, but pending company id={} has another MAX chat URL",
                         chatId, userId, pendingCompany.getId());
@@ -201,44 +225,16 @@ public class MaxGroupLinkService {
                 ? Optional.empty()
                 : maxJoinToken(chat.path("link").asText(null));
         return companyJoinToken.isEmpty()
-                || actualJoinToken.isEmpty()
-                || companyJoinToken.get().equals(actualJoinToken.get());
+                || (actualJoinToken.isPresent() && companyJoinToken.get().equals(actualJoinToken.get()));
     }
 
     private String payloadForCompany(Long companyId) {
-        return PAYLOAD_PREFIX + companyId + "_" + signature(companyId);
+        return PAYLOAD_PREFIX + tokenStore.issue(COMPANY_SCOPE, companyId, linkSecret);
     }
 
-    private Long parseCompanyId(String payload) {
-        int separator = payload.indexOf('_');
-        if (separator <= PAYLOAD_PREFIX.length()) {
-            return null;
-        }
-
-        try {
-            return Long.parseLong(payload.substring(PAYLOAD_PREFIX.length(), separator));
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private String signature(Long companyId) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secretBytes(), "HmacSHA256"));
-            byte[] digest = mac.doFinal(("max-group:" + companyId).getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder()
-                    .withoutPadding()
-                    .encodeToString(digest)
-                    .substring(0, SIGNATURE_LENGTH);
-        } catch (Exception e) {
-            throw new IllegalStateException("Cannot sign MAX group link", e);
-        }
-    }
-
-    private byte[] secretBytes() {
-        String secret = hasText(linkSecret) ? linkSecret.trim() : "otziv-max-link";
-        return secret.getBytes(StandardCharsets.UTF_8);
+    private boolean isPendingLinkFresh(Company company) {
+        return company.getMaxLinkRequestedAt() != null
+                && !company.getMaxLinkRequestedAt().isBefore(LocalDateTime.now().minus(tokenStore.ttl()));
     }
 
     private String normalizedBotUsername() {

@@ -19,6 +19,7 @@ public class WebhookRateLimiter {
     private final int maxRequests;
     private final Duration window;
     private final Cache<String, Bucket> buckets;
+    private final Cache<String, Bucket> customWindowBuckets;
 
     @Autowired
     public WebhookRateLimiter(
@@ -43,30 +44,69 @@ public class WebhookRateLimiter {
                 .expireAfterAccess(expirationTtl(this.window))
                 .ticker(ticker == null ? Ticker.systemTicker() : ticker)
                 .build();
+        this.customWindowBuckets = Caffeine.newBuilder()
+                .maximumSize(Math.max(1, maxBuckets))
+                // Custom public-endpoint windows are bounded to one hour by the filter.
+                // Keep their state longer than the longest accepted window.
+                .expireAfterAccess(Duration.ofHours(2))
+                .ticker(ticker == null ? Ticker.systemTicker() : ticker)
+                .build();
     }
 
     public boolean tryAcquire(String key) {
         return tryAcquire(key, Instant.now());
     }
 
+    public boolean tryAcquire(String key, int requestLimit, Duration requestWindow) {
+        return tryAcquireCustom(
+                key,
+                Instant.now(),
+                Math.max(1, requestLimit),
+                requestWindow == null || requestWindow.isNegative() || requestWindow.isZero()
+                        ? Duration.ofMinutes(10)
+                        : requestWindow
+        );
+    }
+
     public long retryAfterSeconds() {
         return Math.max(1L, window.toSeconds());
     }
 
+    public long retryAfterSeconds(Duration requestWindow) {
+        return Math.max(1L, (requestWindow == null ? window : requestWindow).toSeconds());
+    }
+
     boolean tryAcquire(String key, Instant now) {
+        return tryAcquire(buckets, key, now, maxRequests, window);
+    }
+
+    boolean tryAcquireCustom(String key, Instant now, int requestLimit, Duration requestWindow) {
+        Duration safeWindow = requestWindow == null || requestWindow.isNegative() || requestWindow.isZero()
+                ? Duration.ofMinutes(10)
+                : requestWindow;
+        return tryAcquire(customWindowBuckets, key, now, Math.max(1, requestLimit), safeWindow);
+    }
+
+    private boolean tryAcquire(
+            Cache<String, Bucket> targetBuckets,
+            String key,
+            Instant now,
+            int requestLimit,
+            Duration requestWindow
+    ) {
         if (!enabled) {
             return true;
         }
 
         String safeKey = hasText(key) ? key : "unknown";
-        Bucket bucket = buckets.getIfPresent(safeKey);
+        Bucket bucket = targetBuckets.getIfPresent(safeKey);
         if (bucket == null) {
-            bucket = buckets.get(safeKey, ignored -> new Bucket(now));
+            bucket = targetBuckets.get(safeKey, ignored -> new Bucket(now));
             // Caffeine performs eviction incrementally. Explicit maintenance after a new key
             // keeps the configured maximum deterministic even during a high-cardinality flood.
-            buckets.cleanUp();
+            targetBuckets.cleanUp();
         }
-        return bucket.tryAcquire(now, maxRequests, window);
+        return bucket.tryAcquire(now, requestLimit, requestWindow);
     }
 
     long bucketCount() {

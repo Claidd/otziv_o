@@ -35,6 +35,7 @@ import {
   Page
 } from '../core/api.service';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
+import { millisecondsUntilNextBusinessDay } from '../shared/business-date';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileOrderCardComponent, type MobileOrderCopyKind, type MobileOrderStatusAction } from '../shared/mobile-order-card.component';
@@ -50,6 +51,7 @@ import {
   mobileSortTitle
 } from '../shared/mobile-board.helpers';
 import { displayPhone, normalizePhoneDigits, phoneHref } from '../shared/phone-format';
+import { safeExternalSchemeUrl, safeHttpsExternalUrl } from '../shared/external-navigation';
 import {
   ALL_STATUS,
   COMPANY_ACTIONS,
@@ -2108,6 +2110,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   private routeSubscription?: Subscription;
   private lastMobileNavKey = '';
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private loadEpoch = 0;
 
   readonly board = signal<ManagerBoard | null>(null);
   readonly activeSection = signal<ManagerBoardSection>('companies');
@@ -2255,6 +2258,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.loadEpoch += 1;
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
     }
@@ -2900,7 +2904,7 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   async deleteCompanyWorker(worker: ManagerOption): Promise<void> {
     const company = this.companyEdit();
-    if (!company) {
+    if (!company || this.companyEditSaving() || this.companyEditDeleteKey()) {
       return;
     }
 
@@ -2909,6 +2913,15 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.companyEditError.set(null);
 
     try {
+      const confirmed = await this.confirm.confirm({
+        title: 'Убрать специалиста',
+        message: `Убрать специалиста «${worker.label || `#${worker.id}`}» из компании?`,
+        confirmText: 'Убрать',
+        danger: true
+      });
+      if (!confirmed) {
+        return;
+      }
       const updated = await firstValueFrom(this.api.deleteManagerCompanyWorker(company.id, worker.id));
       this.applyCompanyEditPayload(updated);
       this.patchCompanyFromEdit(updated);
@@ -2921,7 +2934,7 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   async deleteCompanyFilial(filial: CompanyFilialEditItem): Promise<void> {
     const company = this.companyEdit();
-    if (!company) {
+    if (!company || this.companyEditSaving() || this.companyEditDeleteKey()) {
       return;
     }
 
@@ -2935,7 +2948,13 @@ export class ManagerPage implements OnInit, OnDestroy {
       const message = preview.willArchive
         ? `Филиал "${label}" используется в ${preview.orderCount} заказах и будет отправлен в архив. Продолжить?`
         : `У филиала "${label}" нет заказов. Удалить его окончательно?`;
-      if (!window.confirm(message)) {
+      const confirmed = await this.confirm.confirm({
+        title: preview.willArchive ? 'Архивировать филиал' : 'Удалить филиал',
+        message,
+        confirmText: preview.willArchive ? 'В архив' : 'Удалить',
+        danger: true
+      });
+      if (!confirmed) {
         return;
       }
       const updated = await firstValueFrom(this.api.deleteManagerCompanyFilial(company.id, filial.id));
@@ -3565,10 +3584,11 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   companyChatUrl(company: CompanyItem): string {
-    return (company.telegramBotInviteUrl ?? '').trim()
-      || (company.maxBotInviteUrl ?? '').trim()
-      || (company.urlChat ?? '').trim()
-      || phoneHref(company.telephone);
+    return safeHttpsExternalUrl(company.telegramBotInviteUrl)
+      ?? safeHttpsExternalUrl(company.maxBotInviteUrl)
+      ?? safeHttpsExternalUrl(company.urlChat)
+      ?? safeExternalSchemeUrl(phoneHref(company.telephone), ['tel:'])
+      ?? '';
   }
 
   companyPhone(company: CompanyItem): string {
@@ -3607,14 +3627,15 @@ export class ManagerPage implements OnInit, OnDestroy {
 
   orderChatUrl(order: OrderItem): string {
     if (order.commonInvoice) {
-      return order.commonInvoicePublicUrl || '';
+      return safeHttpsExternalUrl(order.commonInvoicePublicUrl) ?? '';
     }
 
     const digits = normalizePhoneDigits(order.companyTelephone);
-    return (order.telegramBotInviteUrl ?? '').trim()
-      || (order.maxBotInviteUrl ?? '').trim()
-      || (order.companyUrlChat ?? '').trim()
-      || (digits ? `tel:+${digits}` : '');
+    return safeHttpsExternalUrl(order.telegramBotInviteUrl)
+      ?? safeHttpsExternalUrl(order.maxBotInviteUrl)
+      ?? safeHttpsExternalUrl(order.companyUrlChat)
+      ?? safeExternalSchemeUrl(digits ? `tel:+${digits}` : '', ['tel:'])
+      ?? '';
   }
 
   orderReviewUrl(order: OrderItem): string {
@@ -3639,7 +3660,7 @@ export class ManagerPage implements OnInit, OnDestroy {
       return `/tabs/common-billing/${invoiceId}`;
     }
 
-    return (order.filialUrl ?? '').trim();
+    return safeHttpsExternalUrl(order.filialUrl) ?? '';
   }
 
   orderCity(order: OrderItem): string {
@@ -3830,8 +3851,7 @@ export class ManagerPage implements OnInit, OnDestroy {
     this.clearMidnightRefresh();
     const previousDay = this.localDateKey();
     const now = new Date();
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
-    const delay = Math.max(1000, Math.min(2_147_483_647, nextMidnight.getTime() - now.getTime()));
+    const delay = Math.min(2_147_483_647, millisecondsUntilNextBusinessDay(now) + 2000);
 
     this.midnightRefreshTimer = setTimeout(() => {
       if (this.localDateKey() !== previousDay) {
@@ -3849,6 +3869,7 @@ export class ManagerPage implements OnInit, OnDestroy {
   }
 
   private async load(): Promise<void> {
+    const requestId = ++this.loadEpoch;
     this.storeListState();
     this.loading.set(true);
 
@@ -3862,15 +3883,23 @@ export class ManagerPage implements OnInit, OnDestroy {
         pageSize: this.pageSize(),
         sortDirection: this.sortDirection()
       }));
+      if (requestId !== this.loadEpoch) {
+        return;
+      }
       this.board.set(board);
       this.mergeCompanyNoteDrafts(board);
       this.mergeOrderNoteDrafts(board);
       this.storeListState();
       this.error.set(null);
     } catch (error) {
+      if (requestId !== this.loadEpoch) {
+        return;
+      }
       this.error.set(this.apiErrorMessage(error, 'Не удалось загрузить раздел.'));
     } finally {
-      this.loading.set(false);
+      if (requestId === this.loadEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 

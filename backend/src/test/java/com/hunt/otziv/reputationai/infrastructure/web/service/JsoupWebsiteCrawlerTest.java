@@ -13,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -153,6 +154,53 @@ class JsoupWebsiteCrawlerTest {
         assertThat(crawler.isKnownPlatformServiceUrl("https://yandex.ru/support/business-priority/ru/manage/sticker")).isTrue();
         assertThat(crawler.isKnownPlatformServiceUrl("https://yandex.ru/project/maps/goodplace/2026")).isTrue();
         assertThat(crawler.isKnownPlatformServiceUrl("https://yandex.ru/maps/org/ay_kvest/17092564278/reviews/")).isFalse();
+    }
+
+    @Test
+    void rejectsResponseThatExceedsConfiguredBodyLimit() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> send(
+                exchange,
+                "<html><body>" + "x".repeat(20_000) + "</body></html>",
+                "text/html",
+                200
+        ));
+        server.start();
+
+        ReputationAiProperties properties = new ReputationAiProperties();
+        properties.setMaxWebsiteResponseBytes(16_384);
+        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(
+                properties,
+                OutboundUrlGuard.allowLocalAddressesForTests()
+        );
+
+        assertThat(crawler.crawl(List.of(baseUrl() + "/"), Set.of("not-localhost"))).isEmpty();
+    }
+
+    @Test
+    void countsSitemapRedirectsAndFailuresAgainstOverallRequestBudget() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            requests.incrementAndGet();
+            send(exchange, "<html><body><a href='/next'>next</a></body></html>", "text/html", 200);
+        });
+        server.createContext("/sitemap.xml", exchange -> {
+            requests.incrementAndGet();
+            send(exchange, "<urlset></urlset>", "text/xml", 200);
+        });
+        server.start();
+
+        ReputationAiProperties properties = new ReputationAiProperties();
+        properties.setMaxWebsiteRequests(2);
+        JsoupWebsiteCrawler crawler = new JsoupWebsiteCrawler(
+                properties,
+                OutboundUrlGuard.allowLocalAddressesForTests()
+        );
+
+        crawler.crawl(List.of(baseUrl() + "/"));
+
+        assertThat(requests).hasValue(2);
     }
 
     private String baseUrl() {

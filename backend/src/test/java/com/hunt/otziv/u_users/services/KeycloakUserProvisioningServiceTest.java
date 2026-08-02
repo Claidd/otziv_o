@@ -93,6 +93,38 @@ class KeycloakUserProvisioningServiceTest {
     @InjectMocks
     private KeycloakUserProvisioningService service;
 
+    @Test
+    void adminListUsesBulkManagersAndShadowImageIdWithoutPerUserLookups() {
+        User managerUser = User.builder()
+                .id(11L)
+                .username("manager")
+                .roles(new HashSet<>(Set.of(role("ROLE_MANAGER"))))
+                .imageId(99L)
+                .active(true)
+                .build();
+        User workerUser = User.builder()
+                .id(12L)
+                .username("worker")
+                .roles(new HashSet<>(Set.of(role("ROLE_WORKER"))))
+                .active(true)
+                .build();
+        Manager manager = Manager.builder()
+                .id(7L)
+                .user(managerUser)
+                .auditTelegramGroupUrl("https://t.me/audit_group")
+                .build();
+        when(userRepository.findAllForAdminList()).thenReturn(List.of(managerUser, workerUser));
+        when(managerService.getManagersByUserIdsForAdminList(Set.of(11L))).thenReturn(List.of(manager));
+
+        var response = service.getUsers();
+
+        assertEquals(2, response.size());
+        assertEquals(99L, response.getFirst().imageId());
+        assertEquals("https://t.me/audit_group", response.getFirst().managerAuditChatUrl());
+        verify(managerService).getManagersByUserIdsForAdminList(Set.of(11L));
+        verify(managerService, never()).getManagerByUserId(any());
+    }
+
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();

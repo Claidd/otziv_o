@@ -29,6 +29,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByKeycloakId(String keycloakId);
 
+    @Query("""
+        SELECT DISTINCT u
+        FROM User u
+        LEFT JOIN FETCH u.roles
+        ORDER BY u.id
+    """)
+    List<User> findAllForAdminList();
+
     @Query("SELECT u.id FROM User u WHERE u.username = :username")
     Optional<Long> findIdByUsername(@Param("username") String username);
 

@@ -29,6 +29,7 @@ import {
 } from '../core/api.service';
 import { MobileSearchBarComponent } from './mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from './mobile-status-slider.component';
+import { MobileConfirmService } from './mobile-confirm.service';
 
 type DictionaryTabKey = 'categories' | 'cities' | 'products' | 'phones' | 'accounts' | 'promo' | 'managerTexts' | 'settings' | 'autoresponder' | 'autoresponderMonitor';
 type EditorKind = Exclude<DictionaryTabKey, 'settings' | 'autoresponder' | 'autoresponderMonitor'> | 'subcategory';
@@ -226,7 +227,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                       <span class="material-icons-sharp">add</span>
                       подкатегория
                     </button>
-                    <button type="button" class="danger-link" (click)="removeCategory(category)">удалить</button>
+                    <button type="button" class="danger-link" (click)="removeCategory(category)" [disabled]="destructiveAction() !== null || saving()">удалить</button>
                   </footer>
                 </article>
               } @empty {
@@ -297,7 +298,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   @if (phone.deviceTokens?.length) {
                     <div class="chip-list compact">
                       @for (token of phone.deviceTokens; track token.token) {
-                        <button type="button" (click)="removeDeviceToken(phone, token.token)">
+                        <button type="button" (click)="removeDeviceToken(phone, token.token)" [disabled]="destructiveAction() !== null || saving()">
                           {{ token.active ? 'активное' : 'старое' }} устройство
                         </button>
                       }
@@ -305,7 +306,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   }
                   <footer>
                     <button type="button" class="ghost" (click)="openEdit('phones', phone)">изменить</button>
-                    <button type="button" class="danger-link" (click)="removePhone(phone)">удалить</button>
+                    <button type="button" class="danger-link" (click)="removePhone(phone)" [disabled]="destructiveAction() !== null || saving()">удалить</button>
                   </footer>
                 </article>
               } @empty {
@@ -364,12 +365,25 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                       {{ botBrowserBusyId() === bot.id ? 'открываем' : 'браузер' }}
                     </button>
                     <button type="button" class="ghost" (click)="closeBotBrowser(bot)" [disabled]="botBrowserBusyId() === bot.id">закрыть</button>
-                    <button type="button" class="ghost" (click)="openEdit('accounts', bot)">изменить</button>
-                    <button type="button" class="danger-link" (click)="removeBot(bot)">удалить</button>
+                    <button type="button" class="ghost" (click)="openEdit('accounts', bot)" [disabled]="botDetailLoadingId() === bot.id || destructiveAction() !== null">
+                      {{ botDetailLoadingId() === bot.id ? 'загрузка' : 'изменить' }}
+                    </button>
+                    <button type="button" class="danger-link" (click)="removeBot(bot)" [disabled]="destructiveAction() !== null || saving()">удалить</button>
                   </footer>
                 </article>
               } @empty {
                 <div class="empty-state">Аккаунты не найдены.</div>
+              }
+              @if (botsTotal() > 0) {
+                <nav class="dictionary-pagination" aria-label="Страницы аккаунтов">
+                  <button type="button" (click)="goToBotPage(botPage() - 1)" [disabled]="loading() || botPage() <= 0" aria-label="Предыдущая страница">
+                    <span class="material-icons-sharp">chevron_left</span>
+                  </button>
+                  <span>{{ botPageStart() }}-{{ botPageEnd() }} из {{ botsTotal() }}</span>
+                  <button type="button" (click)="goToBotPage(botPage() + 1)" [disabled]="loading() || botPage() >= botTotalPages() - 1" aria-label="Следующая страница">
+                    <span class="material-icons-sharp">chevron_right</span>
+                  </button>
+                </nav>
               }
             }
 
@@ -1039,16 +1053,16 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
                   <label><span>Блок, минут</span><input name="blockTime" type="number" [ngModel]="draftValue('blockTime')" (ngModelChange)="patchDraft('blockTime', $event)"></label>
                   <label><span>Оператор</span><select name="operatorId" [ngModel]="draftValue('operatorId')" (ngModelChange)="patchDraft('operatorId', $event)"><option [ngValue]="null">не назначен</option>@for (operator of phoneOperators(); track operator.id) { <option [ngValue]="operator.id">{{ operator.title }}</option> }</select></label>
                   <label><span>Google логин</span><input name="googleLogin" [ngModel]="draftValue('googleLogin')" (ngModelChange)="patchDraft('googleLogin', $event)"></label>
-                  <label><span>Google пароль</span><input name="googlePassword" [ngModel]="draftValue('googlePassword')" (ngModelChange)="patchDraft('googlePassword', $event)"></label>
-                  <label><span>Avito пароль</span><input name="avitoPassword" [ngModel]="draftValue('avitoPassword')" (ngModelChange)="patchDraft('avitoPassword', $event)"></label>
+                  <label><span>Google пароль</span><input name="googlePassword" type="password" autocomplete="off" [ngModel]="draftValue('googlePassword')" (ngModelChange)="patchDraft('googlePassword', $event)"></label>
+                  <label><span>Avito пароль</span><input name="avitoPassword" type="password" autocomplete="off" [ngModel]="draftValue('avitoPassword')" (ngModelChange)="patchDraft('avitoPassword', $event)"></label>
                   <label><span>Почта</span><input name="mailLogin" [ngModel]="draftValue('mailLogin')" (ngModelChange)="patchDraft('mailLogin', $event)"></label>
-                  <label><span>Пароль почты</span><input name="mailPassword" [ngModel]="draftValue('mailPassword')" (ngModelChange)="patchDraft('mailPassword', $event)"></label>
+                  <label><span>Пароль почты</span><input name="mailPassword" type="password" autocomplete="off" [ngModel]="draftValue('mailPassword')" (ngModelChange)="patchDraft('mailPassword', $event)"></label>
                   <label><span>Фото Instagram</span><input name="fotoInstagram" [ngModel]="draftValue('fotoInstagram')" (ngModelChange)="patchDraft('fotoInstagram', $event)"></label>
                   <label class="toggle-row"><input name="active" type="checkbox" [ngModel]="draftValue('active')" (ngModelChange)="patchDraft('active', $event)"><span>Активен</span></label>
                 }
                 @case ('accounts') {
                   <label><span>Логин</span><input name="login" [ngModel]="draftValue('login')" (ngModelChange)="patchDraft('login', $event)" required></label>
-                  <label><span>Пароль</span><input name="password" [ngModel]="draftValue('password')" (ngModelChange)="patchDraft('password', $event)" required></label>
+                  <label><span>Пароль</span><input name="password" type="password" autocomplete="off" [ngModel]="draftValue('password')" (ngModelChange)="patchDraft('password', $event)" required></label>
                   <label><span>ФИО</span><input name="fio" [ngModel]="draftValue('fio')" (ngModelChange)="patchDraft('fio', $event)" required></label>
                   <label><span>Работник</span><select name="workerId" [ngModel]="draftValue('workerId')" (ngModelChange)="patchDraft('workerId', $event)" required>@for (worker of botWorkers(); track worker.id) { <option [ngValue]="worker.id">{{ worker.title }}</option> }</select></label>
                   <label><span>Статус</span><select name="statusId" [ngModel]="draftValue('statusId')" (ngModelChange)="patchDraft('statusId', $event)" required>@for (status of botStatuses(); track status.id) { <option [ngValue]="status.id">{{ status.title }}</option> }</select></label>
@@ -1070,7 +1084,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
 
               <div class="editor-actions">
                 @if (canDeleteEditor()) {
-                  <button type="button" class="danger" (click)="deleteEditor()" [disabled]="saving()">Удалить</button>
+                  <button type="button" class="danger" (click)="deleteEditor()" [disabled]="saving() || destructiveAction() !== null">Удалить</button>
                 }
                 <button type="button" (click)="closeEditor()">Отмена</button>
                 <button type="submit" class="primary" [disabled]="saving()">{{ saving() ? 'Сохраняем...' : 'Сохранить' }}</button>
@@ -1089,6 +1103,7 @@ const CLIENT_MESSAGE_DEFAULTS: AdminClientMessageSettings = {
     .dictionary-tabs button{grid-template-columns:2rem minmax(0,1fr);grid-template-rows:1fr 1fr;column-gap:.48rem;align-items:center}.dictionary-tabs .material-icons-sharp{align-self:center;justify-self:center}.dictionary-tabs strong{align-self:end;line-height:.95}.dictionary-tabs small{align-self:start;line-height:1.05}
     .dictionary-tabs button{min-width:0;overflow:hidden}.dictionary-tabs strong,.dictionary-tabs small{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monitor-head-card{gap:.58rem}.monitor-head-card header{align-items:center}.monitor-control-row{display:grid;grid-template-columns:minmax(0,1fr)auto;align-items:center;gap:.52rem}.monitor-switch,.monitor-refresh{min-width:0;min-height:2.34rem;border:1px solid rgba(68,158,133,.35);border-radius:.82rem;background:#fff;color:#3c8374;font-size:.67rem;font-weight:900;box-shadow:0 .35rem .85rem rgba(31,44,71,.04)}.monitor-switch{display:flex;align-items:center;gap:.52rem;padding:0 .7rem;text-align:left}.monitor-switch:disabled,.monitor-refresh:disabled{opacity:.58}.switch-track{position:relative;display:inline-block;flex:0 0 3.12rem;width:3.12rem;height:1.52rem;border-radius:999px;background:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(31,44,71,.08);transition:background .16s ease}.switch-thumb{position:absolute;top:.17rem;left:.17rem;width:1.18rem;height:1.18rem;border-radius:50%;background:#fff;box-shadow:0 .14rem .28rem rgba(31,44,71,.2);transition:transform .16s ease}.monitor-switch.on .switch-track{background:#4aa08a}.monitor-switch.on .switch-thumb{transform:translateX(1.58rem)}.monitor-switch>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.monitor-refresh{display:inline-flex;align-items:center;justify-content:center;gap:.34rem;padding:0 .76rem}.monitor-refresh .material-icons-sharp{font-size:1.12rem}.monitor-note{color:var(--otziv-info)!important;font-size:.66rem!important;line-height:1.32!important}@media(max-width:360px){.monitor-control-row{grid-template-columns:1fr}.monitor-refresh{width:100%}.dictionary-tabs{grid-auto-columns:minmax(6.45rem,1fr)}}
     .maintenance-card .empty-state{min-height:4.2rem}.maintenance-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.42rem}.maintenance-preview-grid span,.maintenance-action-list span{display:flex;min-width:0;align-items:center;gap:.35rem;border:1px solid rgba(135,151,178,.2);border-radius:.72rem;padding:.48rem .55rem;background:rgba(255,255,255,.74);color:var(--otziv-info);font-size:.64rem;font-weight:900}.maintenance-preview-grid b,.maintenance-action-list b{color:var(--otziv-dark);font-size:.9rem}.maintenance-action-list,.maintenance-button-row,.monitor-row-actions{display:flex;flex-wrap:wrap;gap:.42rem}.maintenance-action-list span.safe{border-color:rgba(68,158,133,.22);color:#28806a}.maintenance-action-list span.warning{border-color:rgba(236,171,59,.28);color:#976000}.maintenance-action-list span.danger{border-color:rgba(239,52,95,.24);color:var(--otziv-danger)}.maintenance-button-row .ghost{flex:1 1 calc(33.33% - .42rem);min-width:5.3rem}.monitor-row-actions{margin-top:.38rem}.monitor-row-actions button{display:grid;place-items:center;width:2.05rem;height:2.05rem;min-height:2.05rem;padding:0}.monitor-row-actions .material-icons-sharp{font-size:1rem}.monitor-preview-card{margin-top:-.3rem;border-style:dashed}.monitor-preview-card p{overflow-wrap:anywhere}
+    .dictionary-pagination{display:grid;grid-template-columns:2.35rem minmax(0,1fr) 2.35rem;align-items:center;gap:.45rem;border:1px solid rgba(103,116,131,.14);border-radius:.82rem;padding:.38rem;background:var(--otziv-white);color:var(--otziv-info);font-size:.7rem;font-weight:1000;text-align:center}.dictionary-pagination button{display:grid;min-height:2.1rem;place-items:center;border:0;border-radius:.62rem;background:var(--otziv-light);color:var(--otziv-primary)}.dictionary-pagination button:disabled{opacity:.45}
     :host-context(.dark) .monitor-switch,:host-context(.dark) .monitor-refresh{background:#151b1d;border-color:rgba(74,160,138,.42);color:#9fd8ca}:host-context(.dark) .monitor-switch:not(.on) .switch-track{background:#2c363a}
   `]
 })
@@ -1130,6 +1145,14 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   readonly phones = signal<OperatorPhone[]>([]);
   readonly phoneOperators = signal<DictionaryOption[]>([]);
   readonly bots = signal<AdminBot[]>([]);
+  readonly botsTotal = signal(0);
+  readonly botPage = signal(0);
+  readonly botPageSize = signal(50);
+  readonly botTotalPages = signal(1);
+  readonly botDetailLoadingId = signal<number | null>(null);
+  readonly destructiveAction = signal<string | null>(null);
+  readonly botPageStart = signal(0);
+  readonly botPageEnd = signal(0);
   readonly botWorkers = signal<DictionaryOption[]>([]);
   readonly botStatuses = signal<DictionaryOption[]>([]);
   readonly botCities = signal<DictionaryOption[]>([]);
@@ -1147,10 +1170,13 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private monitorTimer: ReturnType<typeof setInterval> | null = null;
+  private loadEpoch = 0;
+  private botDetailEpoch = 0;
 
   constructor(
     private readonly api: ApiService,
-    private readonly router: Router
+    private readonly router: Router,
+    private readonly confirm: MobileConfirmService
   ) {}
 
   ngOnInit(): void {
@@ -1158,6 +1184,8 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.loadEpoch += 1;
+    this.botDetailEpoch += 1;
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
     }
@@ -1201,7 +1229,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       tab = 'categories';
     }
     this.activeTab.set(tab);
+    this.closeEditor();
     this.search.set('');
+    if (tab === 'accounts') {
+      this.botPage.set(0);
+    }
     this.notice.set(null);
     this.syncClientMessageMonitorPolling();
     void this.loadActive(true);
@@ -1209,6 +1241,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
   setSearch(value: string): void {
     this.search.set(value);
+    if (this.activeTab() === 'accounts') {
+      this.botPage.set(0);
+      this.botDetailEpoch += 1;
+      this.botDetailLoadingId.set(null);
+    }
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
     }
@@ -1221,41 +1258,60 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   async loadActive(force = false): Promise<void> {
-    if (this.loading() && !force) {
-      return;
-    }
+    void force;
+    const requestId = ++this.loadEpoch;
+    const tab = this.activeTab();
     this.loading.set(true);
     this.error.set(null);
     try {
       const keyword = this.search();
-      switch (this.activeTab()) {
+      switch (tab) {
         case 'categories': {
           const [categories, subCategories] = await firstValueFrom(forkJoin([
             this.api.getAdminCategories(keyword),
             this.api.getAdminSubCategories(keyword)
           ]));
+          if (requestId !== this.loadEpoch) return;
           this.categories.set(categories);
           this.subCategories.set(subCategories);
           break;
         }
-        case 'cities':
-          this.cities.set(await firstValueFrom(this.api.getAdminCities(keyword)));
+        case 'cities': {
+          const cities = await firstValueFrom(this.api.getAdminCities(keyword));
+          if (requestId !== this.loadEpoch) return;
+          this.cities.set(cities);
           break;
+        }
         case 'products': {
           const response = await firstValueFrom(this.api.getAdminProducts(keyword));
+          if (requestId !== this.loadEpoch) return;
           this.products.set(response.products);
           this.productCategories.set(response.categories);
           break;
         }
         case 'phones': {
           const response = await firstValueFrom(this.api.getOperatorPhones(keyword));
+          if (requestId !== this.loadEpoch) return;
           this.phones.set(response.phones);
           this.phoneOperators.set(response.operators);
           break;
         }
         case 'accounts': {
-          const response = await firstValueFrom(this.api.getAdminBots(keyword));
+          const response = await firstValueFrom(this.api.getAdminBots(keyword, this.botPage(), this.botPageSize()));
+          if (requestId !== this.loadEpoch) return;
+          const totalPages = Math.max(1, response.totalPages ?? Math.ceil((response.total ?? response.bots.length) / this.botPageSize()));
+          if ((response.total ?? 0) > 0 && this.botPage() >= totalPages) {
+            this.botPage.set(totalPages - 1);
+            void this.loadActive();
+            return;
+          }
           this.bots.set(response.bots);
+          this.botsTotal.set(response.total ?? response.bots.length);
+          this.botPage.set(response.page ?? this.botPage());
+          this.botPageSize.set(response.size ?? this.botPageSize());
+          this.botTotalPages.set(totalPages);
+          this.botPageStart.set((response.total ?? response.bots.length) === 0 ? 0 : this.botPage() * this.botPageSize() + 1);
+          this.botPageEnd.set(Math.min(this.botsTotal(), (this.botPage() + 1) * this.botPageSize()));
           this.botWorkers.set(response.workers);
           this.botStatuses.set(response.statuses);
           this.botCities.set(response.cities);
@@ -1263,6 +1319,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
         }
         case 'promo': {
           const response = await firstValueFrom(this.api.getAdminPromoTextManagement(keyword));
+          if (requestId !== this.loadEpoch) return;
           this.promoTexts.set(response.texts);
           this.promoManagers.set(response.managers);
           this.promoAssignments.set(response.assignments);
@@ -1272,26 +1329,36 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
           }
           break;
         }
-        case 'managerTexts':
-          this.managerTexts.set(await firstValueFrom(this.api.getAdminManagerTexts(keyword)));
+        case 'managerTexts': {
+          const managerTexts = await firstValueFrom(this.api.getAdminManagerTexts(keyword));
+          if (requestId !== this.loadEpoch) return;
+          this.managerTexts.set(managerTexts);
           break;
+        }
         case 'settings':
-          await this.loadSettings();
+          await this.loadSettings(requestId, tab);
           break;
         case 'autoresponder':
-          await this.loadAutoresponderSettings();
+          await this.loadAutoresponderSettings(requestId, tab);
           break;
         case 'autoresponderMonitor':
-          await this.loadAutoresponderSettings();
-          await this.loadClientMessageMonitor(true);
-          await this.loadClientMessageMaintenancePreview(true);
+          await this.loadAutoresponderSettings(requestId, tab);
+          if (requestId !== this.loadEpoch) return;
+          await this.loadClientMessageMonitor(true, requestId, tab);
+          if (requestId !== this.loadEpoch) return;
+          await this.loadClientMessageMaintenancePreview(true, requestId, tab);
           break;
       }
-      this.markLoaded(this.activeTab());
+      if (requestId !== this.loadEpoch || this.activeTab() !== tab) return;
+      this.markLoaded(tab);
     } catch (error) {
-      this.error.set(this.errorMessage(error));
+      if (requestId === this.loadEpoch) {
+        this.error.set(this.errorMessage(error));
+      }
     } finally {
-      this.loading.set(false);
+      if (requestId === this.loadEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -1306,11 +1373,49 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     this.editorOpen.set(true);
   }
 
+  goToBotPage(page: number): void {
+    const nextPage = Math.max(0, Math.min(page, this.botTotalPages() - 1));
+    if (nextPage === this.botPage() || this.loading()) {
+      return;
+    }
+    this.closeEditor();
+    this.botPage.set(nextPage);
+    void this.loadActive(true);
+  }
+
   openEdit(kind: EditorKind, item: AdminCategory | AdminCity | AdminProduct | OperatorPhone | AdminBot | AdminPromoText | AdminManagerText): void {
+    if (kind === 'accounts') {
+      void this.openBotEditor(item as AdminBot);
+      return;
+    }
     this.editorKind.set(kind);
     this.selectedId.set(this.itemId(kind, item));
     this.draft.set(this.itemDraft(kind, item));
     this.editorOpen.set(true);
+  }
+
+  private async openBotEditor(bot: AdminBot): Promise<void> {
+    const requestId = ++this.botDetailEpoch;
+    this.botDetailLoadingId.set(bot.id);
+    this.error.set(null);
+    try {
+      const details = await firstValueFrom(this.api.getAdminBot(bot.id));
+      if (requestId !== this.botDetailEpoch) {
+        return;
+      }
+      this.editorKind.set('accounts');
+      this.selectedId.set(details.id);
+      this.draft.set(this.itemDraft('accounts', details));
+      this.editorOpen.set(true);
+    } catch (error) {
+      if (requestId === this.botDetailEpoch) {
+        this.error.set(this.errorMessage(error));
+      }
+    } finally {
+      if (requestId === this.botDetailEpoch) {
+        this.botDetailLoadingId.set(null);
+      }
+    }
   }
 
   openSubcategoryCreate(category: AdminCategory): void {
@@ -1328,12 +1433,17 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   closeEditor(): void {
+    this.botDetailEpoch += 1;
+    this.botDetailLoadingId.set(null);
     this.editorOpen.set(false);
     this.selectedId.set(null);
     this.draft.set({});
   }
 
   async saveEditor(): Promise<void> {
+    if (this.saving() || this.destructiveAction() !== null) {
+      return;
+    }
     this.saving.set(true);
     this.error.set(null);
     try {
@@ -1432,9 +1542,38 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     if (id == null || !this.canDeleteEditor()) {
       return;
     }
-    this.saving.set(true);
+    const draft = this.draft();
+    const label = this.text(draft['title'])
+      || this.text(draft['number'])
+      || this.text(draft['login'])
+      || `#${id}`;
+    await this.deleteEntry(this.editorKind(), id, label);
+  }
+
+  private async deleteEntry(kind: EditorKind, id: number, label: string): Promise<void> {
+    if (this.saving() || this.destructiveAction() !== null) {
+      return;
+    }
+
+    const actionKey = `${kind}-${id}`;
+    if (kind === 'accounts') {
+      this.botDetailEpoch += 1;
+      this.botDetailLoadingId.set(null);
+    }
+    this.destructiveAction.set(actionKey);
     try {
-      switch (this.editorKind()) {
+      const confirmed = await this.confirm.confirm({
+        title: 'Удалить запись',
+        message: `Удалить «${label || `#${id}`}»? Это действие нельзя отменить.`,
+        confirmText: 'Удалить',
+        danger: true
+      });
+      if (!confirmed) {
+        return;
+      }
+
+      this.saving.set(true);
+      switch (kind) {
         case 'categories':
           await firstValueFrom(this.api.deleteAdminCategory(id));
           break;
@@ -1453,30 +1592,35 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
         case 'accounts':
           await firstValueFrom(this.api.deleteAdminBot(id));
           break;
+        default:
+          return;
       }
+
       this.notice.set('Удалено.');
-      this.closeEditor();
+      if (this.editorOpen() && this.editorKind() === kind && this.selectedId() === id) {
+        this.closeEditor();
+      }
       await this.loadActive(true);
     } catch (error) {
       this.error.set(this.errorMessage(error));
     } finally {
       this.saving.set(false);
+      if (this.destructiveAction() === actionKey) {
+        this.destructiveAction.set(null);
+      }
     }
   }
 
   async removeCategory(category: AdminCategory): Promise<void> {
-    this.openEdit('categories', category);
-    await this.deleteEditor();
+    await this.deleteEntry('categories', category.id, category.title);
   }
 
   async removePhone(phone: OperatorPhone): Promise<void> {
-    this.openEdit('phones', phone);
-    await this.deleteEditor();
+    await this.deleteEntry('phones', phone.id, phone.number);
   }
 
   async removeBot(bot: AdminBot): Promise<void> {
-    this.openEdit('accounts', bot);
-    await this.deleteEditor();
+    await this.deleteEntry('accounts', bot.id, bot.login);
   }
 
   async uploadBotImport(event: Event): Promise<void> {
@@ -1535,8 +1679,24 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   async removeDeviceToken(phone: OperatorPhone, token: string): Promise<void> {
-    this.saving.set(true);
+    if (this.saving() || this.destructiveAction() !== null) {
+      return;
+    }
+
+    const actionKey = `device-token-${phone.id}-${token}`;
+    this.destructiveAction.set(actionKey);
     try {
+      const confirmed = await this.confirm.confirm({
+        title: 'Удалить устройство',
+        message: `Удалить привязку устройства у номера ${phone.number}? Повторная авторизация устройства потребуется заново.`,
+        confirmText: 'Удалить',
+        danger: true
+      });
+      if (!confirmed) {
+        return;
+      }
+
+      this.saving.set(true);
       await firstValueFrom(this.api.deleteOperatorPhoneDeviceToken(phone.id, token));
       this.notice.set('Устройство удалено.');
       await this.loadActive(true);
@@ -1544,6 +1704,9 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       this.error.set(this.errorMessage(error));
     } finally {
       this.saving.set(false);
+      if (this.destructiveAction() === actionKey) {
+        this.destructiveAction.set(null);
+      }
     }
   }
 
@@ -1592,33 +1755,51 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
   }
 
   async saveSettings(): Promise<void> {
+    if (this.saving() || this.destructiveAction() !== null) {
+      return;
+    }
     this.saving.set(true);
+    this.error.set(null);
+    let completed = 0;
+    let total = 0;
     try {
       const s = this.settings();
-      await firstValueFrom(forkJoin({
-        nagul: this.api.updateAdminNagulSettings({
+      const operations: Array<() => Promise<unknown>> = [
+        () => firstValueFrom(this.api.updateAdminNagulSettings({
           cooldownMinutes: Number(s.nagulCooldownMinutes) || 0,
           lookaheadDays: Number(s.nagulLookaheadDays) || 0
-        }),
-        telegram: this.api.updateAdminTelegramReportSettings({
+        })),
+        () => firstValueFrom(this.api.updateAdminTelegramReportSettings({
           morningEnabled: Boolean(s.morningReportEnabled),
           morningTime: String(s.morningReportTime || '09:00'),
           eveningEnabled: Boolean(s.eveningReportEnabled),
           eveningTime: String(s.eveningReportTime || '18:00'),
           zone: String(s.telegramReportZone || 'Asia/Irkutsk')
-        }),
-        whatsApp: this.api.updateAdminWhatsAppGroupSyncSettings({
+        })),
+        () => firstValueFrom(this.api.updateAdminWhatsAppGroupSyncSettings({
           enabled: Boolean(s.whatsAppGroupSyncEnabled),
           intervalMinutes: Number(s.whatsAppGroupSyncIntervalMinutes) || 0
-        }),
-        clientReports: this.api.updateAdminClientPublicationProgressReportSettings({
+        })),
+        () => firstValueFrom(this.api.updateAdminClientPublicationProgressReportSettings({
           enabled: Boolean(s.clientPublicationProgressReportsEnabled)
-        })
-      }));
+        }))
+      ];
+      total = operations.length;
+      for (const operation of operations) {
+        await operation();
+        completed += 1;
+      }
       this.notice.set('Настройки сохранены.');
       await this.loadSettings();
     } catch (error) {
-      this.error.set(this.errorMessage(error));
+      this.error.set(completed > 0
+        ? `Часть настроек сохранена (${completed} из ${total}). Остальные изменения не применены: ${this.errorMessage(error)}`
+        : this.errorMessage(error));
+      try {
+        await this.loadSettings();
+      } catch {
+        // Keep the actionable partial-save error when the authoritative reload also fails.
+      }
     } finally {
       this.saving.set(false);
     }
@@ -1729,7 +1910,16 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     }
   }
 
-  async loadClientMessageMonitor(silent = false): Promise<void> {
+  async loadClientMessageMonitor(
+    silent = false,
+    requestId?: number,
+    expectedTab?: DictionaryTabKey
+  ): Promise<void> {
+    const isCurrent = () => requestId === undefined
+      || (requestId === this.loadEpoch && this.activeTab() === expectedTab);
+    if (!isCurrent()) {
+      return;
+    }
     if (!this.autoresponder().monitorEnabled) {
       this.clientMessageMonitor.set(null);
       this.stopClientMessageMonitorPolling();
@@ -1743,30 +1933,54 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
 
     try {
       const monitor = await firstValueFrom(this.api.getAdminClientMessageMonitor());
+      if (!isCurrent()) {
+        return;
+      }
       this.clientMessageMonitor.set(monitor);
       this.patchAutoresponder('monitorEnabled', monitor.enabled);
       if (monitor.enabled && this.activeTab() === 'autoresponderMonitor') {
         this.startClientMessageMonitorPolling();
       }
     } catch (error) {
-      this.clientMessageMonitorError.set(this.errorMessage(error));
+      if (isCurrent()) {
+        this.clientMessageMonitorError.set(this.errorMessage(error));
+      }
     } finally {
-      this.clientMessageMonitorLoading.set(false);
+      if (isCurrent()) {
+        this.clientMessageMonitorLoading.set(false);
+      }
     }
   }
 
-  async loadClientMessageMaintenancePreview(silent = false): Promise<void> {
+  async loadClientMessageMaintenancePreview(
+    silent = false,
+    requestId?: number,
+    expectedTab?: DictionaryTabKey
+  ): Promise<void> {
+    const isCurrent = () => requestId === undefined
+      || (requestId === this.loadEpoch && this.activeTab() === expectedTab);
+    if (!isCurrent()) {
+      return;
+    }
     if (!silent) {
       this.clientMessageMaintenancePreviewLoading.set(true);
     }
     this.clientMessageMaintenancePreviewError.set(null);
 
     try {
-      this.clientMessageMaintenancePreview.set(await firstValueFrom(this.api.getAdminClientMessageMaintenancePreview()));
+      const preview = await firstValueFrom(this.api.getAdminClientMessageMaintenancePreview());
+      if (!isCurrent()) {
+        return;
+      }
+      this.clientMessageMaintenancePreview.set(preview);
     } catch (error) {
-      this.clientMessageMaintenancePreviewError.set(this.errorMessage(error));
+      if (isCurrent()) {
+        this.clientMessageMaintenancePreviewError.set(this.errorMessage(error));
+      }
     } finally {
-      this.clientMessageMaintenancePreviewLoading.set(false);
+      if (isCurrent()) {
+        this.clientMessageMaintenancePreviewLoading.set(false);
+      }
     }
   }
 
@@ -1909,7 +2123,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
       cities: this.cities().length,
       products: this.products().length,
       phones: this.phones().length,
-      accounts: this.bots().length,
+      accounts: this.botsTotal(),
       promo: this.promoTexts().length,
       managerTexts: this.managerTexts().length,
       settings: this.settingsTotal(),
@@ -2013,13 +2227,16 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     ];
   }
 
-  private async loadSettings(): Promise<void> {
+  private async loadSettings(requestId = this.loadEpoch, tab: DictionaryTabKey = this.activeTab()): Promise<void> {
     const response = await firstValueFrom(forkJoin({
       nagul: this.api.getAdminNagulSettings(),
       telegram: this.api.getAdminTelegramReportSettings(),
       whatsApp: this.api.getAdminWhatsAppGroupSyncSettings(),
       clientReports: this.api.getAdminClientPublicationProgressReportSettings()
     }));
+    if (requestId !== this.loadEpoch || this.activeTab() !== tab) {
+      return;
+    }
     this.settings.set({
       nagulCooldownMinutes: response.nagul.cooldownMinutes,
       nagulLookaheadDays: response.nagul.lookaheadDays,
@@ -2038,8 +2255,11 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
     });
   }
 
-  private async loadAutoresponderSettings(): Promise<void> {
+  private async loadAutoresponderSettings(requestId = this.loadEpoch, tab: DictionaryTabKey = this.activeTab()): Promise<void> {
     const settings = await firstValueFrom(this.api.getAdminClientMessageSettings());
+    if (requestId !== this.loadEpoch || this.activeTab() !== tab) {
+      return;
+    }
     this.autoresponder.set({ ...CLIENT_MESSAGE_DEFAULTS, ...settings });
     this.syncClientMessageMonitorPolling();
   }
@@ -2434,7 +2654,7 @@ export class MobileDictionariesComponent implements OnInit, OnDestroy {
         const bot = item as AdminBot;
         return {
           login: bot.login,
-          password: bot.password,
+          password: bot.password ?? '',
           fio: bot.fio,
           workerId: bot.worker?.id ?? null,
           cityId: bot.city?.id ?? null,

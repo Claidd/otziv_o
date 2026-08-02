@@ -1,7 +1,7 @@
 param(
     [string]$VpsHost = "",
     [string]$VpsUser = "hunt",
-    [int]$VpsPort = 22022,
+    [ValidateRange(1, 65535)][int]$VpsPort = 22022,
     [string]$SshKey = "",
     [string]$EnvFile = ".env.prod-local",
     [string]$ComposeFile = "compose.prod-local.yaml",
@@ -10,6 +10,8 @@ param(
     [switch]$SkipDownload,
     [switch]$KeepRemoteDump,
     [switch]$RunSmoke,
+    [ValidateRange(1, 100)][int]$LocalDumpRetentionCount = 5,
+    [switch]$PruneExpiredLocalDumps,
     [switch]$Help
 )
 
@@ -41,7 +43,125 @@ function Invoke-External {
 
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $FilePath $($Arguments -join ' ')"
+        throw "Command failed: $(Format-RedactedCommand -FilePath $FilePath -Arguments $Arguments)"
+    }
+}
+
+function Format-RedactedCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $redacted = [System.Collections.Generic.List[string]]::new()
+    $redactNext = $false
+    foreach ($argument in $Arguments) {
+        if ($redactNext) {
+            $redacted.Add("[REDACTED]")
+            $redactNext = $false
+            continue
+        }
+
+        if ($argument -match '(?i)^(--password|--client-secret|--secret|--token|-p)$') {
+            $redacted.Add($argument)
+            $redactNext = $true
+        } elseif ($argument -match '(?i)^([^=]*(?:password|passwd|pwd|secret|token|api[_-]?key)[^=]*)=(.*)$') {
+            $redacted.Add("$($Matches[1])=[REDACTED]")
+        } elseif ($argument -match '(?i)^-p.+$') {
+            $redacted.Add('-p[REDACTED]')
+        } else {
+            $redacted.Add($argument)
+        }
+    }
+
+    return ((@($FilePath) + @($redacted)) -join ' ')
+}
+
+function Invoke-ExternalCapture {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $output = @(& $FilePath @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        $details = ($output | ForEach-Object { "$_" }) -join [Environment]::NewLine
+        throw "Command failed: $(Format-RedactedCommand -FilePath $FilePath -Arguments $Arguments)`n$details"
+    }
+    return $output
+}
+
+function Protect-SensitiveLocalPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $grant = if (Test-Path -LiteralPath $Path -PathType Container) { "*${sid}:(OI)(CI)F" } else { "*${sid}:F" }
+        & icacls.exe $Path '/inheritance:r' '/grant:r' $grant '/grant:r' '*S-1-5-18:F' | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to restrict ACL on sensitive path: $Path"
+        }
+        return
+    }
+
+    $mode = if (Test-Path -LiteralPath $Path -PathType Container) { '700' } else { '600' }
+    & chmod $mode -- $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to restrict permissions on sensitive path: $Path"
+    }
+}
+
+function Test-GzipArchive {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $inputStream = [System.IO.File]::OpenRead($Path)
+    try {
+        $gzipStream = [System.IO.Compression.GZipStream]::new(
+            $inputStream,
+            [System.IO.Compression.CompressionMode]::Decompress
+        )
+        try {
+            $buffer = [byte[]]::new(1MB)
+            [long]$uncompressedBytes = 0
+            while (($read = $gzipStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $uncompressedBytes += $read
+            }
+            if ($uncompressedBytes -le 0) {
+                throw "Gzip archive is empty: $Path"
+            }
+        } finally {
+            $gzipStream.Dispose()
+        }
+    } catch {
+        throw "Invalid or truncated gzip archive '$Path': $($_.Exception.Message)"
+    } finally {
+        $inputStream.Dispose()
+    }
+}
+
+function Invoke-LocalDumpRetention {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][int]$KeepCount,
+        [switch]$Prune
+    )
+
+    $dumps = @(Get-ChildItem -LiteralPath $Directory -File -Filter 'prod-*.sql.gz' |
+        Sort-Object LastWriteTimeUtc -Descending)
+    if ($dumps.Count -le $KeepCount) {
+        return
+    }
+
+    $expired = @($dumps | Select-Object -Skip $KeepCount)
+    if (-not $Prune) {
+        $expiredNames = ($expired.Name -join ', ')
+        Write-Warning "Dump retention limit is $KeepCount; $($expired.Count) older dump(s) remain. Review and rerun with -PruneExpiredLocalDumps to remove only these files: $expiredNames"
+        return
+    }
+
+    foreach ($dump in $expired) {
+        Remove-Item -LiteralPath $dump.FullName -Force
+        Write-Host "Removed expired local dump: $($dump.Name)"
     }
 }
 
@@ -268,11 +388,26 @@ if ($Help) {
     exit 0
 }
 
+$restoreMutex = [System.Threading.Mutex]::new($false, 'OtzivProdLikeDatabaseOperation')
+$restoreLockHeld = $false
+try {
+try {
+    $restoreLockHeld = $restoreMutex.WaitOne(0)
+} catch [System.Threading.AbandonedMutexException] {
+    $restoreLockHeld = $true
+}
+if (-not $restoreLockHeld) {
+    throw 'Another prod-like smoke or production database restore is already running.'
+}
+
 if ($SkipDownload -and [string]::IsNullOrWhiteSpace($DumpPath)) {
     throw "Pass -DumpPath when using -SkipDownload."
 }
 if (-not $SkipDownload -and [string]::IsNullOrWhiteSpace($VpsHost)) {
     throw "Pass -VpsHost, or use -SkipDownload with -DumpPath."
+}
+if (-not $SkipDownload -and ($VpsHost -notmatch '^[A-Za-z0-9.-]+$' -or $VpsUser -notmatch '^[A-Za-z0-9._-]+$')) {
+    throw 'VpsHost/VpsUser contain unsupported characters.'
 }
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -296,6 +431,7 @@ if (-not (Test-Path -LiteralPath $migrationDir)) {
 }
 
 New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+Protect-SensitiveLocalPath -Path $backupDir
 
 if ([string]::IsNullOrWhiteSpace($DumpPath)) {
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -316,17 +452,80 @@ if (-not $SkipDownload) {
     $sshArgs += @("-p", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
     $scpArgs += @("-P", "$VpsPort", "-o", "StrictHostKeyChecking=accept-new")
 
-    $remoteStamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $remoteDump = "/tmp/otziv-prod-$remoteStamp.sql.gz"
-    $remoteDumpQuoted = ConvertTo-BashSingleQuoted -Value $remoteDump
-    $remoteCommand = "set -Eeuo pipefail; docker exec my-mysql sh -lc 'MYSQL_PWD=`"`$MYSQL_PASSWORD`" mysqldump --single-transaction --quick --routines --triggers --no-tablespaces -u`"`$MYSQL_USER`" `"`$MYSQL_DATABASE`"' | gzip -1 > $remoteDumpQuoted; ls -lh $remoteDumpQuoted"
+    $remoteCommand = @'
+set -Eeuo pipefail
+umask 077
+remote_dump="$(mktemp /tmp/otziv-prod.XXXXXXXX.sql.gz)"
+cleanup_failed_dump() {
+  status=$?
+  trap - EXIT INT TERM
+  rm -f -- "$remote_dump"
+  exit "$status"
+}
+trap cleanup_failed_dump EXIT INT TERM
+docker exec my-mysql sh -lc 'MYSQL_PWD="$MYSQL_PASSWORD" mysqldump --single-transaction --quick --routines --triggers --no-tablespaces -u"$MYSQL_USER" "$MYSQL_DATABASE"' | gzip -1 > "$remote_dump"
+gzip -t "$remote_dump"
+remote_sha="$(sha256sum "$remote_dump" | awk '{print $1}')"
+remote_size="$(wc -c < "$remote_dump" | tr -d ' ')"
+printf 'OTZIV_REMOTE_DUMP=%s\n' "$remote_dump"
+printf 'OTZIV_REMOTE_SHA256=%s\n' "$remote_sha"
+printf 'OTZIV_REMOTE_SIZE=%s\n' "$remote_size"
+trap - EXIT INT TERM
+'@
 
-    Write-Host "Creating production dump on VPS..."
-    Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $remoteCommand))
-    Write-Host "Downloading dump to $dumpFullPath..."
-    Invoke-External -FilePath "scp" -Arguments ($scpArgs + @("${remote}:$remoteDump", $dumpFullPath))
-    if (-not $KeepRemoteDump) {
-        Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, "rm -f $remoteDumpQuoted"))
+    Write-Host "Creating and validating production dump on VPS..."
+    $remoteOutput = @(Invoke-ExternalCapture -FilePath "ssh" -Arguments ($sshArgs + @($remote, $remoteCommand)))
+    $remoteDump = $null
+    $remoteSha256 = $null
+    [long]$remoteSize = 0
+    foreach ($outputLine in $remoteOutput) {
+        $line = "$outputLine"
+        if ($line -match '^OTZIV_REMOTE_DUMP=(/tmp/otziv-prod\.[A-Za-z0-9]+\.sql\.gz)$') {
+            $remoteDump = $Matches[1]
+        } elseif ($line -match '^OTZIV_REMOTE_SHA256=([a-fA-F0-9]{64})$') {
+            $remoteSha256 = $Matches[1].ToLowerInvariant()
+        } elseif ($line -match '^OTZIV_REMOTE_SIZE=([0-9]+)$') {
+            $remoteSize = [long]$Matches[1]
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($remoteDump) -or [string]::IsNullOrWhiteSpace($remoteSha256) -or $remoteSize -le 0) {
+        throw 'The VPS did not return valid dump integrity metadata.'
+    }
+
+    $remoteDumpQuoted = ConvertTo-BashSingleQuoted -Value $remoteDump
+    $dumpParent = Split-Path -Parent $dumpFullPath
+    New-Item -ItemType Directory -Path $dumpParent -Force | Out-Null
+    $partialDumpPath = "$dumpFullPath.partial-$PID-$([Guid]::NewGuid().ToString('N'))"
+    try {
+        Write-Host "Downloading production dump to a temporary local file..."
+        Invoke-External -FilePath "scp" -Arguments ($scpArgs + @("${remote}:$remoteDump", $partialDumpPath))
+        Protect-SensitiveLocalPath -Path $partialDumpPath
+
+        $downloadedFile = Get-Item -LiteralPath $partialDumpPath
+        if ($downloadedFile.Length -ne $remoteSize) {
+            throw "Downloaded dump size mismatch: expected $remoteSize bytes, got $($downloadedFile.Length)."
+        }
+        $downloadedSha256 = (Get-FileHash -LiteralPath $partialDumpPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($downloadedSha256 -ne $remoteSha256) {
+            throw "Downloaded dump SHA-256 mismatch: expected $remoteSha256, got $downloadedSha256."
+        }
+        Test-GzipArchive -Path $partialDumpPath
+        Move-Item -LiteralPath $partialDumpPath -Destination $dumpFullPath -Force
+        Protect-SensitiveLocalPath -Path $dumpFullPath
+        Write-Host "Production dump verified (SHA-256 $downloadedSha256, $remoteSize bytes): $dumpFullPath"
+    } finally {
+        if (Test-Path -LiteralPath $partialDumpPath) {
+            Remove-Item -LiteralPath $partialDumpPath -Force
+        }
+        if (-not $KeepRemoteDump -and -not [string]::IsNullOrWhiteSpace($remoteDump)) {
+            try {
+                Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, "rm -f -- $remoteDumpQuoted"))
+            } catch {
+                Write-Warning "Failed to remove temporary VPS dump $remoteDump. Remove it manually; permissions are restricted by umask 077. $($_.Exception.Message)"
+            }
+        } elseif ($KeepRemoteDump) {
+            Write-Warning "Keeping the restricted temporary VPS dump by explicit request: $remoteDump"
+        }
     }
 } elseif (-not (Test-Path -LiteralPath $dumpFullPath)) {
     throw "Dump file not found: $dumpFullPath"
@@ -335,11 +534,29 @@ if (-not $SkipDownload) {
 if (-not (Test-Path -LiteralPath $dumpFullPath)) {
     throw "Dump file not found after download: $dumpFullPath"
 }
+Protect-SensitiveLocalPath -Path $dumpFullPath
+Test-GzipArchive -Path $dumpFullPath
 $resolvedDumpPath = (Resolve-Path -LiteralPath $dumpFullPath).Path
 $resolvedMountedDumpPath = if (Test-Path -LiteralPath $mountedDumpPath) { (Resolve-Path -LiteralPath $mountedDumpPath).Path } else { $null }
 if ($resolvedDumpPath -ne $resolvedMountedDumpPath) {
-    Copy-Item -LiteralPath $dumpFullPath -Destination $mountedDumpPath -Force
+    $mountedPartialPath = "$mountedDumpPath.partial-$PID-$([Guid]::NewGuid().ToString('N'))"
+    try {
+        Copy-Item -LiteralPath $dumpFullPath -Destination $mountedPartialPath -Force
+        Protect-SensitiveLocalPath -Path $mountedPartialPath
+        Test-GzipArchive -Path $mountedPartialPath
+        Move-Item -LiteralPath $mountedPartialPath -Destination $mountedDumpPath -Force
+        Protect-SensitiveLocalPath -Path $mountedDumpPath
+    } finally {
+        if (Test-Path -LiteralPath $mountedPartialPath) {
+            Remove-Item -LiteralPath $mountedPartialPath -Force
+        }
+    }
 }
+
+Invoke-LocalDumpRetention `
+    -Directory $backupDir `
+    -KeepCount $LocalDumpRetentionCount `
+    -Prune:$PruneExpiredLocalDumps
 
 $envValues = Read-EnvFile -Path $envPath
 $previousVolumeEnv = $env:LOCAL_MYSQL_VOLUME
@@ -369,7 +586,7 @@ try {
     Write-Host "Restoring dump into local MySQL..."
     Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
         "exec", "-T", "mysql",
-        "sh", "-lc", "gzip -dc /backup/$dumpFileName | MYSQL_PWD=`"`$MYSQL_PASSWORD`" mysql -u`"`$MYSQL_USER`" `"`$MYSQL_DATABASE`""
+        "bash", "-o", "pipefail", "-c", "gzip -t /backup/$dumpFileName && gzip -dc /backup/$dumpFileName | MYSQL_PWD=`"`$MYSQL_PASSWORD`" mysql -u`"`$MYSQL_USER`" `"`$MYSQL_DATABASE`""
     ))
 
     Disable-RestoredDbExternalMessaging -ComposeArguments $composeArgs -EnvValues $envValues
@@ -377,8 +594,8 @@ try {
 
     if ($RunSmoke) {
         $smokeScript = Join-Path $scriptRoot "prod-like-smoke.ps1"
-        & $smokeScript -EnvFile $envPath -ComposeFile $composePath -NoBuild
-        if ($LASTEXITCODE -ne 0) {
+        & $smokeScript -EnvFile $envPath -ComposeFile $composePath -NoBuild -SkipProdDbRestore
+        if (-not $?) {
             throw "Local prod-like smoke failed."
         }
     } else {
@@ -387,4 +604,10 @@ try {
     }
 } finally {
     $env:LOCAL_MYSQL_VOLUME = $previousVolumeEnv
+}
+} finally {
+    if ($restoreLockHeld) {
+        $restoreMutex.ReleaseMutex()
+    }
+    $restoreMutex.Dispose()
 }

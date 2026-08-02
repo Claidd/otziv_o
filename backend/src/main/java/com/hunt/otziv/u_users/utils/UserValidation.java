@@ -5,6 +5,8 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
+
+import java.util.Objects;
 // КЛАСС ДЛЯ ВАЛИДАЦИИ ДАННЫХ ФОРМЫ РЕГИСТРАЦИИ
 @Component
 public class UserValidation implements Validator {
@@ -25,20 +27,24 @@ public class UserValidation implements Validator {
 
         /*Проверяем на имеющийся username в базе*/
         RegistrationUserDTO userDto = (RegistrationUserDTO) target;
-        if (userRepository.findByUsername(userDto.getUsername()).isPresent()){
+        if (hasText(userDto.getUsername()) && userRepository.findByUsername(userDto.getUsername()).isPresent()){
             errors.rejectValue("username", "", "Такой username уже занят другим пользователем");
         }
 
 
         /*Проверяем на имеющийся мейл в базе*/
-        if (userRepository.findByEmail(userDto.getEmail()) != null){
+        if (hasText(userDto.getEmail()) && userRepository.findByEmail(userDto.getEmail()) != null){
             errors.rejectValue("email", "", "Такой email уже занят другим пользователем");
         }
 
 
         /*Проверяем на совпадение паролей*/
-        if (!userDto.getPassword().equals(userDto.getMatchingPassword())){
+        if (!Objects.equals(userDto.getPassword(), userDto.getMatchingPassword())){
             errors.rejectValue("password", "", "Пароли не совпадают");
         }
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

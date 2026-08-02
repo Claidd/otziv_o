@@ -48,7 +48,7 @@ export type PerformerTargetPlatform = 'YANDEX' | 'GOOGLE' | 'GIS' | 'OTHER';
 export interface AdminBot {
   id: number;
   login: string;
-  password: string;
+  password?: string;
   fio: string;
   active: boolean;
   counter: number;
@@ -60,6 +60,10 @@ export interface AdminBot {
 export interface BotCityUnblockedCountResponse {
   cityId: number;
   unblockedAccounts: number;
+}
+
+export interface BotCountResponse {
+  count: number;
 }
 
 export interface AdminPromoText {
@@ -862,6 +866,10 @@ export class AdminDictionariesApi {
 
   getBot(id: number): Observable<AdminBot> {
     return this.http.get<AdminBot>(`${this.baseUrl}/bots/${id}`);
+  }
+
+  getBotCount(): Observable<BotCountResponse> {
+    return this.http.get<BotCountResponse>(`${this.baseUrl}/bots/count`);
   }
 
   getBotCityUnblockedCount(cityId: number): Observable<BotCityUnblockedCountResponse> {

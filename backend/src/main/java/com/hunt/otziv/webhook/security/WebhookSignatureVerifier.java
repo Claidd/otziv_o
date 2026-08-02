@@ -6,6 +6,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
 
@@ -36,6 +37,9 @@ public class WebhookSignatureVerifier {
 
         String expected = hmacSha256Hex(body == null ? "" : body, secret.trim());
         String provided = normalizeSignature(providedSignature);
+        if (!provided.matches("[0-9a-f]{64}")) {
+            return false;
+        }
         return constantTimeEquals(expected, provided);
     }
 
@@ -46,6 +50,17 @@ public class WebhookSignatureVerifier {
             return HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException("Unable to calculate webhook HMAC-SHA256", e);
+        }
+    }
+
+    public String sha256Hex(String body) {
+        try {
+            return HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                            .digest((body == null ? "" : body).getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("Unable to calculate SHA-256", exception);
         }
     }
 

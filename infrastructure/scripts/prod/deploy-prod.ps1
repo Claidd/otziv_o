@@ -6,7 +6,7 @@ param(
     [string]$Tag = (Get-Date -Format "yyyyMMdd-HHmmss"),
     [string]$VpsHost = "",
     [string]$VpsUser = "hunt",
-    [int]$VpsPort = 22022,
+    [ValidateRange(1, 65535)][int]$VpsPort = 22022,
     [string]$VpsPath = "/opt/otziv",
     [string]$SshKey = "",
     [string]$EnvFile = ".env.prod",
@@ -17,6 +17,7 @@ param(
     [string]$MobileApkPath = "",
     [switch]$SkipMobileApkUpload,
     [switch]$NoBuildCache,
+    [switch]$AllowDirtyWorktree,
     [switch]$Help
 )
 
@@ -42,7 +43,56 @@ Useful options:
   -MobileApkPath <path>          Publish this signed release APK. By default uses the highest code from mobile/builds.
   -SkipMobileApkUpload           Do not include a mobile APK in this deployment.
   -NoBuildCache                  Build images without Docker cache.
+  -AllowDirtyWorktree            Deploy from modified inputs (unsafe emergency override).
 '@ | Write-Host
+}
+
+function Format-RedactedCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $redacted = [System.Collections.Generic.List[string]]::new()
+    $redactNext = $false
+    foreach ($argument in $Arguments) {
+        if ($redactNext) {
+            $redacted.Add('[REDACTED]')
+            $redactNext = $false
+            continue
+        }
+        if ($argument -match '(?i)^(--password|--client-secret|--secret|--token|-p)$') {
+            $redacted.Add($argument)
+            $redactNext = $true
+        } elseif ($argument -match '(?i)^([^=]*(?:password|passwd|pwd|secret|token|api[_-]?key)[^=]*)=(.*)$') {
+            $redacted.Add("$($Matches[1])=[REDACTED]")
+        } elseif ($argument -match '(?i)^-p.+$') {
+            $redacted.Add('-p[REDACTED]')
+        } else {
+            $redacted.Add($argument)
+        }
+    }
+    return ((@($FilePath) + @($redacted)) -join ' ')
+}
+
+function Protect-SensitiveLocalPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $grant = if (Test-Path -LiteralPath $Path -PathType Container) { "*${sid}:(OI)(CI)F" } else { "*${sid}:F" }
+        & icacls.exe $Path '/inheritance:r' '/grant:r' $grant '/grant:r' '*S-1-5-18:F' | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to restrict ACL on sensitive path: $Path"
+        }
+        return
+    }
+
+    $mode = if (Test-Path -LiteralPath $Path -PathType Container) { '700' } else { '600' }
+    & chmod $mode -- $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to restrict permissions on sensitive path: $Path"
+    }
 }
 
 function Invoke-External {
@@ -53,7 +103,7 @@ function Invoke-External {
 
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $FilePath $($Arguments -join ' ')"
+        throw "Command failed: $(Format-RedactedCommand -FilePath $FilePath -Arguments $Arguments)"
     }
 }
 
@@ -273,10 +323,6 @@ if ([string]::IsNullOrWhiteSpace($VpsHost)) {
     throw "Pass -VpsHost with your VPS IP address or hostname."
 }
 
-if ($Tag -notmatch "^[A-Za-z0-9_.-]+$") {
-    throw "Docker tag may contain only letters, digits, underscore, dot, and dash."
-}
-
 if ([string]::IsNullOrWhiteSpace($DockerLoginUsername)) {
     $DockerLoginUsername = $DockerHubNamespace
 }
@@ -284,9 +330,37 @@ if ([string]::IsNullOrWhiteSpace($DockerLoginUsername)) {
 if ([string]::IsNullOrWhiteSpace($RemoteEnvFile) -or $RemoteEnvFile.Contains("/") -or $RemoteEnvFile.Contains("\")) {
     throw "RemoteEnvFile must be a file name in the VPS deploy directory, for example .env or .env.prod."
 }
+if ($VpsHost -notmatch '^[A-Za-z0-9.-]+$' -or $VpsUser -notmatch '^[A-Za-z0-9._-]+$') {
+    throw 'VpsHost/VpsUser contain unsupported characters.'
+}
+if ($VpsPath -eq '/' -or $VpsPath -notmatch '^/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+/?$' -or $VpsPath -match '(^|/)\.\.(/|$)') {
+    throw 'VpsPath must be a specific absolute directory (never /) without traversal segments.'
+}
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+
+if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$') {
+    throw 'Tag must be a valid, bounded Docker tag (letters, digits, dot, underscore and dash only).'
+}
+
+if (-not $AllowDirtyWorktree) {
+    $deployInputPaths = @(
+        'backend', 'frontend', 'whatsapp', 'infrastructure',
+        'docker-compose.yaml', 'docker-compose.build.yaml',
+        'Dockerfile.whatsapp', '.dockerignore'
+    )
+    $dirtyDeployInputs = @(& git -C $repoRoot status --porcelain --untracked-files=all -- @deployInputPaths)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to verify that deployment inputs are clean. Use -AllowDirtyWorktree only for an audited emergency deployment.'
+    }
+    if ($dirtyDeployInputs.Count -gt 0) {
+        throw "Deployment inputs contain uncommitted changes. Commit/review them first, or use -AllowDirtyWorktree for an audited emergency deployment:`n$($dirtyDeployInputs -join [Environment]::NewLine)"
+    }
+} else {
+    Write-Warning 'Deploying from a dirty worktree by explicit override. The resulting images may not be reproducible from Git.'
+}
+
 $envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
 if (-not (Test-Path -LiteralPath $envResolverPath)) {
     throw "Env resolver script not found: $envResolverPath"
@@ -320,9 +394,9 @@ $deployBundlePaths = @(
     "infrastructure\scripts\prod\register-max-webhook.ps1"
 )
 $remote = "${VpsUser}@${VpsHost}"
-$remoteBundle = "/tmp/otziv-deploy-${Tag}.tar.gz"
+$remoteBundle = "/tmp/otziv-deploy-$([System.Guid]::NewGuid().ToString('N')).tar.gz"
 $stageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-" + [System.Guid]::NewGuid().ToString("N"))
-$bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-${Tag}.tar.gz")
+$bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ("otziv-deploy-" + [System.Guid]::NewGuid().ToString("N") + ".tar.gz")
 $mobileRelease = if ($SkipMobileApkUpload) { $null } else { Get-MobileReleaseArtifact -RepoRoot $repoRoot -RequestedPath $MobileApkPath }
 $sshArgs = @()
 $scpArgs = @()
@@ -425,6 +499,7 @@ fi
 }
 
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
+Protect-SensitiveLocalPath -Path $stageRoot
 try {
     Write-Host "Preparing deployment bundle..."
     foreach ($deployBundlePath in $deployBundlePaths) {
@@ -488,8 +563,9 @@ try {
         Remove-Item -LiteralPath $bundlePath -Force
     }
     Invoke-External -FilePath "tar" -Arguments @("-czf", $bundlePath, "-C", $stageRoot, ".")
+    Protect-SensitiveLocalPath -Path $bundlePath
 
-    $mkdirScript = "mkdir -p $(ConvertTo-BashSingleQuoted $VpsPath)"
+    $mkdirScript = "umask 077; mkdir -p $(ConvertTo-BashSingleQuoted $VpsPath)"
     Write-Host "Uploading deployment bundle to VPS..."
     Invoke-External -FilePath "ssh" -Arguments ($sshArgs + @($remote, $mkdirScript))
     Copy-DeployBundle -ScpArgs $scpArgs -BundlePath $bundlePath -Remote $remote -RemoteBundle $remoteBundle
@@ -507,6 +583,7 @@ try {
 
     $remoteScript = @"
 set -Eeuo pipefail
+umask 077
 
 remote_path=$remotePathQuoted
 bundle_path=$remoteBundleQuoted
@@ -522,6 +599,7 @@ uploaded_mobile_release=$uploadedMobileRelease
 self_heal_timer="otziv-prod-up.timer"
 self_heal_service="otziv-prod-up.service"
 self_heal_was_active="0"
+active_env_temp=""
 
 resume_self_heal() {
   if [ "`$self_heal_was_active" = "1" ]; then
@@ -533,7 +611,35 @@ resume_self_heal() {
   fi
 }
 
-trap resume_self_heal EXIT
+deploy_cleanup() {
+  status="`$?"
+  trap - EXIT INT TERM
+  rm -f -- "`$bundle_path" || true
+  if [ -n "`$active_env_temp" ]; then
+    rm -f -- "`$active_env_temp" || true
+  fi
+  rm -rf -- "`$remote_path/.deploy-mobile-update" || true
+  resume_self_heal || true
+  if [ "`$status" -ne 0 ]; then
+    echo "Deployment failed. Previous compose/env files remain under `$remote_path/.deploy-backups/`$deploy_tag." >&2
+    echo "No database rollback was attempted. Review service state and the backup before a manual rollback." >&2
+  fi
+  exit "`$status"
+}
+
+trap deploy_cleanup EXIT INT TERM
+
+mkdir -p "`$remote_path"
+cd "`$remote_path"
+if ! command -v flock >/dev/null 2>&1; then
+  echo "flock is required for mutually exclusive production deploys." >&2
+  exit 1
+fi
+exec 9>".deploy.lock"
+if ! flock -n 9; then
+  echo "Another production deployment is already running in `$remote_path." >&2
+  exit 75
+fi
 
 if command -v systemctl >/dev/null 2>&1 \
     && sudo -n systemctl is-active --quiet "`$self_heal_timer"; then
@@ -574,7 +680,8 @@ set_env() {
   key="`$1"
   value="`$2"
   file="`$env_file"
-  tmp_file="`$(mktemp)"
+  tmp_file="`$(mktemp "`$file.tmp.XXXXXXXX")"
+  active_env_temp="`$tmp_file"
 
   if grep -q "^`$key=" "`$file"; then
     awk -v key="`$key" -v value="`$value" '
@@ -587,7 +694,9 @@ set_env() {
     printf "\n%s=%s\n" "`$key" "`$value" >> "`$tmp_file"
   fi
 
+  chmod 600 "`$tmp_file" || true
   mv "`$tmp_file" "`$file"
+  active_env_temp=""
 }
 
 get_env() {
@@ -611,6 +720,95 @@ get_env() {
     printf '%s' "`$default_value"
   else
     printf '%s' "`$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+  fi
+}
+
+require_env() {
+  key="`$1"
+  value="`$(get_env "`$key" "")"
+  if [ -z "`$value" ]; then
+    echo "Required production setting `$key is empty." >&2
+    exit 1
+  fi
+}
+
+ensure_generated_link_secret() {
+  key="`$1"
+  existing="`$(get_env "`$key" "")"
+  if [ -n "`$existing" ]; then
+    return 0
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "`$key is missing and openssl is unavailable for secure first-deploy generation." >&2
+    exit 1
+  fi
+  generated="`$(openssl rand -hex 32)"
+  if [ "`$(printf '%s' "`$generated" | wc -c | tr -d ' ')" -ne 64 ]; then
+    echo "Secure generation of `$key returned an unexpected length." >&2
+    exit 1
+  fi
+  set_env "`$key" "`$generated"
+  echo "Generated and persisted missing `$key (existing non-empty values are never overwritten)."
+}
+
+validate_security_prerequisites() {
+  if [ "`$(get_env WHATSAPP_GATEWAY_AUTH_REQUIRED true)" = "true" ]; then
+    require_env WHATSAPP_GATEWAY_SHARED_SECRET
+  fi
+  if [ "`$(get_env EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED true)" = "true" ]; then
+    require_env EXTERNAL_REVIEW_WORKER_SHARED_SECRET
+  fi
+
+  telegram_link_value="`$(get_env TELEGRAM_BOT_LINK_SECRET "")"
+  max_link_value="`$(get_env MAX_BOT_LINK_SECRET "")"
+  telegram_link_bytes="`$(printf '%s' "`$telegram_link_value" | wc -c | tr -d ' ')"
+  max_link_bytes="`$(printf '%s' "`$max_link_value" | wc -c | tr -d ' ')"
+  if [ "`$telegram_link_bytes" -lt 32 ]; then
+    echo "TELEGRAM_BOT_LINK_SECRET must contain at least 32 bytes." >&2
+    exit 1
+  fi
+  if [ "`$max_link_bytes" -lt 32 ]; then
+    echo "MAX_BOT_LINK_SECRET must contain at least 32 bytes." >&2
+    exit 1
+  fi
+  if [ "`$telegram_link_value" = "`$max_link_value" ]; then
+    echo "TELEGRAM_BOT_LINK_SECRET and MAX_BOT_LINK_SECRET must be different." >&2
+    exit 1
+  fi
+
+  if [ "`$(get_env BACKUP_ENABLED false)" = "true" ]; then
+    require_env S3_ENDPOINT
+    require_env S3_BUCKET
+    require_env S3_ACCESS_KEY
+    require_env S3_SECRET_KEY
+    if [ "`$(get_env BACKUP_DESTINATION_PRIVATE_CONFIRMED false)" != "true" ]; then
+      echo "BACKUP_ENABLED=true requires BACKUP_DESTINATION_PRIVATE_CONFIRMED=true." >&2
+      exit 1
+    fi
+    if [ "`$(get_env BACKUP_ENCRYPTION_AT_REST_CONFIRMED false)" != "true" ]; then
+      echo "BACKUP_ENABLED=true requires BACKUP_ENCRYPTION_AT_REST_CONFIRMED=true." >&2
+      exit 1
+    fi
+    if [ -n "`$(get_env BACKUP_MAIL_TO "")" ] \
+        && [ "`$(get_env BACKUP_EMAIL_DELIVERY_CONFIRMED false)" != "true" ]; then
+      echo "BACKUP_MAIL_TO requires BACKUP_EMAIL_DELIVERY_CONFIRMED=true." >&2
+      exit 1
+    fi
+    require_env BACKUP_RESTORE_DRILL_DATE
+    drill_date="`$(get_env BACKUP_RESTORE_DRILL_DATE "")"
+    if ! drill_epoch="`$(date -d "`$drill_date" +%s 2>/dev/null)"; then
+      echo "BACKUP_RESTORE_DRILL_DATE must be a valid date." >&2
+      exit 1
+    fi
+    now_epoch="`$(date +%s)"
+    if [ "`$drill_epoch" -gt "`$((now_epoch + 86400))" ]; then
+      echo "BACKUP_RESTORE_DRILL_DATE cannot be in the future." >&2
+      exit 1
+    fi
+    if [ "`$((now_epoch - drill_epoch))" -gt 7776000 ]; then
+      echo "The last recorded backup restore drill is older than 90 days." >&2
+      exit 1
+    fi
   fi
 }
 
@@ -700,21 +898,6 @@ publish_bundled_mobile_release() {
   echo "Published mobile APK code `$incoming_code and removed older APK files."
 }
 
-remove_repo_images() {
-  repo="`$1"
-  images="`$(docker image ls "`$repo" --format '{{.Repository}}:{{.Tag}}' | sort -u || true)"
-  if [ -z "`$images" ]; then
-    echo "No old images for `$repo"
-    return 0
-  fi
-
-  echo "`$images" | while IFS= read -r image; do
-    if [ -n "`$image" ] && [ "`$image" != "<none>:<none>" ]; then
-      docker image rm "`$image" || true
-    fi
-  done
-}
-
 wait_service_healthy() {
   service_name="`$1"
   timeout_seconds="`$2"
@@ -791,9 +974,9 @@ recreate_service_with_retry() {
       cat "`$output_file"
       rm -f "`$output_file"
       return 0
+    else
+      status="`$?"
     fi
-
-    status="`$?"
     cat "`$output_file" >&2
 
     if grep -qi 'removal .* already in progress\|already in progress\|No such container\|already in use' "`$output_file"; then
@@ -830,9 +1013,6 @@ ensure_nginx_certs() {
   fi
 }
 
-mkdir -p "`$remote_path"
-cd "`$remote_path"
-
 backup_dir=".deploy-backups/`$deploy_tag"
 mkdir -p "`$backup_dir"
 chmod 700 .deploy-backups "`$backup_dir" || true
@@ -843,6 +1023,13 @@ if [ -f "`$env_file" ]; then
   cp "`$env_file" "`$backup_dir/`$env_file"
   chmod 600 "`$backup_dir/`$env_file" || true
 fi
+printf '%s\n' \
+  "Rollback scaffold only (review before use):" \
+  "  cp `$backup_dir/docker-compose.yaml docker-compose.yaml" \
+  "  cp `$backup_dir/`$env_file `$env_file" \
+  "  compose pull app nginx && compose up -d --no-deps app nginx" \
+  "Database state is not rolled back by these commands." > "`$backup_dir/ROLLBACK.txt"
+chmod 600 "`$backup_dir/ROLLBACK.txt" || true
 
 rm -rf .deploy-mobile-update
 tar --warning=no-timestamp -xzf "`$bundle_path" -C "`$remote_path"
@@ -870,8 +1057,11 @@ set_env OTZIV_WORKER_CELLULAR_ALLOWED_CIDRS "178.177.216.0/22,178.177.220.0/22,9
 set_env MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED "true"
 set_env MAX_BOT_WEBHOOK_UPDATE_TYPES "bot_started,bot_added,message_created"
 set_env MAX_BOT_LONG_POLLING_ENABLED "false"
+set_env MAX_BOT_API_BASE_URL "https://platform-api2.max.ru"
 set_env WHATSAPP_HEALTH_MONITOR_ENABLED "true"
 set_env WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED "false"
+set_env WHATSAPP_GATEWAY_AUTH_REQUIRED "true"
+set_env EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED "true"
 set_env KEYCLOAK_PUBLIC_URL "https://o-ogo.ru/keycloak"
 set_env KEYCLOAK_ISSUER_URI "https://o-ogo.ru/keycloak/realms/otziv"
 set_env KEYCLOAK_JWK_SET_URI "http://keycloak:8080/keycloak/realms/otziv/protocol/openid-connect/certs"
@@ -887,14 +1077,16 @@ set_env TELEGRAM_PROXY_PORT "`$outbound_proxy_port"
 set_env MAX_PROXY_ENABLED "false"
 set_env MAX_PROXY_HOST ""
 
+ensure_generated_link_secret TELEGRAM_BOT_LINK_SECRET
+ensure_generated_link_secret MAX_BOT_LINK_SECRET
+validate_security_prerequisites
+
 ensure_nginx_certs
 find infrastructure/scripts/prod -type f -name '*.sh' -exec sed -i 's/\r$//' {} +
 chmod +x infrastructure/scripts/prod/apply-keycloak-prod-settings.sh || true
 chmod +x infrastructure/scripts/prod/validate-flyway-migrations.sh || true
 require_compose_service whatsapp_lika
 require_compose_service whatsapp_vika
-remove_repo_images "`$app_repo"
-remove_repo_images "`$web_repo"
 compose pull app nginx
 publish_bundled_mobile_release
 if docker ps --format '{{.Names}}' | grep -Fxq my-mysql; then
@@ -908,7 +1100,6 @@ wait_service_healthy mysql 600
 wait_service_healthy keycloak-postgres 600
 compose up -d --no-deps keycloak
 wait_service_healthy keycloak 900
-remove_service_containers app
 recreate_service_with_retry app
 wait_service_healthy app 1200
 compose up -d --no-deps prometheus
@@ -917,15 +1108,18 @@ wait_service_healthy tempo 600
 wait_service_healthy prometheus 600
 compose up -d --no-deps grafana
 wait_service_healthy grafana 600
-remove_service_containers whatsapp_lika
 recreate_service_with_retry whatsapp_lika
-remove_service_containers whatsapp_vika
 recreate_service_with_retry whatsapp_vika
-compose up -d --remove-orphans --no-deps phpmyadmin dozzle alloy
+compose up -d --remove-orphans --no-deps dozzle alloy
+if [ "`$(get_env PHPMYADMIN_ENABLED false)" = "true" ]; then
+  echo "Starting loopback-only phpMyAdmin by explicit production opt-in."
+  compose --profile db-admin up -d --no-deps phpmyadmin
+else
+  compose --profile db-admin stop phpmyadmin >/dev/null 2>&1 || true
+fi
 wait_service_healthy app 300
 wait_service_healthy keycloak 300
 wait_service_healthy grafana 300
-remove_service_containers nginx
 recreate_service_with_retry nginx
 wait_service_healthy nginx 300
 wait_service_healthy whatsapp_lika 300
@@ -955,13 +1149,14 @@ if ! wait_service_healthy whatsapp_vika 720; then
   wait_service_healthy whatsapp_vika 300
 fi
 resume_self_heal
-trap - EXIT
 wait_service_healthy app 1200
 wait_service_healthy keycloak 900
 wait_service_healthy nginx 300
 wait_service_healthy whatsapp_lika 300
 wait_service_healthy whatsapp_vika 300
 compose ps
+trap - EXIT INT TERM
+rm -f -- "`$bundle_path" || true
 "@
     $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"
 

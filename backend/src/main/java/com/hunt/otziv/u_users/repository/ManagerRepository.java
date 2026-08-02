@@ -61,6 +61,14 @@ public interface ManagerRepository extends CrudRepository<Manager, Long> {
     Optional<Manager> findByUserIdWithPaymentProfile(@Param("userId") Long userId);
 
     @Query("""
+        SELECT m
+        FROM Manager m
+        JOIN FETCH m.user u
+        WHERE u.id IN :userIds
+    """)
+    List<Manager> findAllByUserIdsForAdminList(@Param("userIds") Set<Long> userIds);
+
+    @Query("""
     SELECT DISTINCT m
     FROM Manager m
     JOIN FETCH m.user u

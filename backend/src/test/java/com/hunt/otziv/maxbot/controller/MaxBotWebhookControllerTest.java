@@ -15,7 +15,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -84,5 +88,22 @@ class MaxBotWebhookControllerTest {
 
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         verify(maxBotUpdateService, never()).handleUpdate(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void releasesReplayReservationWhenBusinessHandlingFails() {
+        doThrow(new IllegalStateException("temporary failure"))
+                .when(maxBotUpdateService).handleUpdate(org.mockito.ArgumentMatchers.any());
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> controller.handleWebhook(SECRET, null, BODY)
+        );
+
+        doNothing().when(maxBotUpdateService).handleUpdate(org.mockito.ArgumentMatchers.any());
+        ResponseEntity<Void> retry = controller.handleWebhook(SECRET, null, BODY);
+
+        assertEquals(HttpStatus.OK, retry.getStatusCode());
+        verify(maxBotUpdateService, times(2)).handleUpdate(org.mockito.ArgumentMatchers.any());
     }
 }

@@ -15,6 +15,7 @@ import com.hunt.otziv.u_users.repository.MarketologRepository;
 import com.hunt.otziv.u_users.repository.OperatorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -71,7 +72,7 @@ public class LeadSyncController {
      *  Токен + checksum валидирует JwtAuthFilter.
      */
     @PostMapping(value = "/sync", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<String> syncLead(@RequestBody LeadDtoTransfer dto) {
+    public ResponseEntity<String> syncLead(@Valid @RequestBody LeadDtoTransfer dto) {
         log.info("\n==================== [SYNC LEAD] ====================");
         log.info("Lead transfer received: telephone={}, email={}, cityPresent={}, operatorId={}, managerId={}, marketologId={}, telephoneId={}",
                 maskPhone(dto.getTelephoneLead()), maskEmail(dto.getEmails()), hasText(dto.getCityLead()),
@@ -99,7 +100,7 @@ public class LeadSyncController {
      *  JWT (subject=lead-sync) проверяет JwtAuthFilter.
      */
     @PostMapping(value = "/update", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Map<String, String>> updateLead(@RequestBody LeadUpdateDto dto) {
+    public ResponseEntity<Map<String, String>> updateLead(@Valid @RequestBody LeadUpdateDto dto) {
         log.info("\n==================== [SYNC UPDATE] ====================");
         log.info("[SYNC] Lead update received: leadId={}, telephone={}, email={}, cityPresent={}, operatorId={}, managerId={}, marketologId={}, telephoneId={}",
                 dto.getLeadId(), maskPhone(dto.getTelephoneLead()), maskEmail(dto.getEmails()), hasText(dto.getCityLead()),

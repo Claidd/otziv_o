@@ -35,6 +35,13 @@ public class ManagerServiceImpl implements ManagerService {
     public Manager getManagerByUserId(Long userId) { // Взять менеджера по Id юзера
         return managerRepository.findByUserId(userId).orElse(null);
     } // Взять менеджера по Id юзера
+
+    @Override
+    public List<Manager> getManagersByUserIdsForAdminList(Set<Long> userIds) {
+        return userIds == null || userIds.isEmpty()
+                ? List.of()
+                : managerRepository.findAllByUserIdsForAdminList(userIds);
+    }
     
     @Override
     public List<Manager> getAllManagers() {

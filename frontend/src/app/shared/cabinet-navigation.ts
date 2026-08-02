@@ -46,15 +46,6 @@ export const CABINET_SECTION_LINKS: CabinetNavigationLink[] = [
     roles: ['MANAGER']
   },
   {
-    label: 'Мои достижения',
-    description: 'Цели, серии и личный прогресс',
-    icon: 'emoji_events',
-    active: 'gamification-progress',
-    routerLink: '/gamification/progress',
-    adminOnly: true,
-    roles: ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERATOR', 'MARKETOLOG']
-  },
-  {
     label: 'Аналитика',
     description: 'Оборот, ЗП и графики',
     icon: 'analytics',

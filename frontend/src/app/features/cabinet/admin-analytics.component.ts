@@ -4,6 +4,7 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { AnalyticsResponse, CabinetApi, StatDto } from '../../core/cabinet.api';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { businessDateIso } from '../../shared/business-date';
 import { CabinetBarChartComponent } from './cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
@@ -259,6 +260,6 @@ export class AdminAnalyticsComponent {
   }
 
   private todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+    return businessDateIso();
   }
 }

@@ -425,7 +425,7 @@ public class ApiAdminDictionaryController {
                 PageRequest.of(pageIndex, pageSize)
         );
         List<BotResponse> bots = botPage.getContent().stream()
-                .map(this::toBotResponse)
+                .map(this::toBotListResponse)
                 .toList();
 
         return new BotsResponse(
@@ -438,6 +438,13 @@ public class ApiAdminDictionaryController {
                 botPage.getSize(),
                 botPage.getTotalPages()
         );
+    }
+
+    @GetMapping("/bots/count")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    public BotCountResponse getBotCount(Authentication authentication) {
+        botCrudAccessService.requireGlobalAccess(authentication);
+        return new BotCountResponse(botsRepository.count());
     }
 
     @GetMapping("/bots/unblocked-count")
@@ -1128,11 +1135,11 @@ public class ApiAdminDictionaryController {
         );
     }
 
-    private BotResponse toBotResponse(BotsRepository.AdminBotRow bot) {
+    private BotResponse toBotListResponse(BotsRepository.AdminBotRow bot) {
         return new BotResponse(
                 bot.getId(),
                 safe(bot.getLogin()),
-                safe(bot.getPassword()),
+                "",
                 safe(bot.getFio()),
                 Boolean.TRUE.equals(bot.getActive()),
                 bot.getCounter() == null ? 0 : bot.getCounter(),
@@ -1728,16 +1735,6 @@ public class ApiAdminDictionaryController {
         return line.contains(";") ? ";" : ",";
     }
 
-    private boolean matchesBot(String keyword, BotsRepository.AdminBotRow bot) {
-        return matches(keyword, String.valueOf(bot.getId()))
-                || matches(keyword, bot.getLogin())
-                || matches(keyword, bot.getPassword())
-                || matches(keyword, bot.getFio())
-                || matches(keyword, workerTitle(bot.getWorkerId(), bot.getWorkerFio(), bot.getWorkerUsername()))
-                || matches(keyword, bot.getStatusTitle())
-                || matches(keyword, bot.getCityTitle());
-    }
-
     private String normalizedKeyword(String keyword) {
         String result = safe(keyword).trim();
         return result.isBlank() ? null : result;
@@ -1988,6 +1985,9 @@ public class ApiAdminDictionaryController {
             Long cityId,
             long unblockedAccounts
     ) {
+    }
+
+    public record BotCountResponse(long count) {
     }
 
     public record PromoTextRequest(String text) {

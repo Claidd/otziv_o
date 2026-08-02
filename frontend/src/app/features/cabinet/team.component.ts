@@ -16,6 +16,7 @@ import { DailyWorkProgress } from '../../core/daily-progress';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
+import { businessDateIso, millisecondsUntilNextBusinessDay } from '../../shared/business-date';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import {
   WORKER_SORT_OPTIONS,
@@ -865,11 +866,7 @@ export class TeamComponent implements OnDestroy {
   }
 
   private todayIso(): string {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return businessDateIso();
   }
 
   private currentMonthIso(): string {
@@ -887,8 +884,7 @@ export class TeamComponent implements OnDestroy {
     const now = new Date();
     const scheduledToday = this.todayIso();
     const scheduledMonth = scheduledToday.slice(0, 7);
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
-    const delay = Math.max(1_000, nextMidnight.getTime() - now.getTime());
+    const delay = millisecondsUntilNextBusinessDay(now) + 2000;
 
     this.midnightRefreshTimer = setTimeout(() => {
       const newToday = this.todayIso();

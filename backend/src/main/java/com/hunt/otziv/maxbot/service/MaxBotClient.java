@@ -36,7 +36,7 @@ public class MaxBotClient {
             @Qualifier("maxBotRestTemplate") RestTemplate restTemplate,
             ObjectMapper objectMapper,
             @Value("${max.bot.token:}") String token,
-            @Value("${max.bot.api-base-url:https://platform-api.max.ru}") String baseUrl
+            @Value("${max.bot.api-base-url:https://platform-api2.max.ru}") String baseUrl
     ) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
@@ -269,7 +269,7 @@ public class MaxBotClient {
 
     private static String trimTrailingSlash(String value) {
         if (!hasText(value)) {
-            return "https://platform-api.max.ru";
+            return "https://platform-api2.max.ru";
         }
         return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }

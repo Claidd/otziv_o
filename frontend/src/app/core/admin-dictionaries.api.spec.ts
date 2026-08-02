@@ -53,4 +53,22 @@ describe('AdminDictionariesApi bot browser endpoints', () => {
       {}
     );
   });
+
+  it('paginates bot lists, loads the global count, and fetches secrets only from detail', () => {
+    api.getBots('irkutsk', 2, 100);
+    api.getBotCount();
+    api.getBot(37);
+
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      `${appEnvironment.apiBaseUrl}/api/admin/bots`,
+      expect.objectContaining({ params: expect.anything() })
+    );
+    const params = get.mock.calls[0][1].params;
+    expect(params.get('keyword')).toBe('irkutsk');
+    expect(params.get('page')).toBe('2');
+    expect(params.get('size')).toBe('100');
+    expect(get).toHaveBeenNthCalledWith(2, `${appEnvironment.apiBaseUrl}/api/admin/bots/count`);
+    expect(get).toHaveBeenNthCalledWith(3, `${appEnvironment.apiBaseUrl}/api/admin/bots/37`);
+  });
 });

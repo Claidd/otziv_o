@@ -27,6 +27,7 @@ import {
   WorkerReviewItem
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { millisecondsUntilNextBusinessDay } from '../shared/business-date';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
@@ -1597,6 +1598,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private progressRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private progressRefreshAttempts = 0;
+  private loadEpoch = 0;
   private readonly publishCredentialPreparationStorageKeys: Record<CredentialWaitSection, string> = {
     publish: 'otziv-mobile-worker-publish-prep:v1',
     nagul: 'otziv-mobile-worker-nagul-prep:v1'
@@ -1714,6 +1716,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.loadEpoch += 1;
     this.routeSubscription?.unsubscribe();
     this.clearSearchTimer();
     this.clearNoticeTimer();
@@ -3084,6 +3087,7 @@ export class WorkerPage implements OnInit, OnDestroy {
   }
 
   private async load(section: WorkerBoardSectionQuery = this.activeSection()): Promise<void> {
+    const requestId = ++this.loadEpoch;
     this.storeListState();
     this.loading.set(true);
     this.error.set(null);
@@ -3096,6 +3100,9 @@ export class WorkerPage implements OnInit, OnDestroy {
         sortDirection: this.sortDirection(),
         workerId: this.selectedWorkerId()
       }));
+      if (requestId !== this.loadEpoch) {
+        return;
+      }
       this.board.set(board);
       this.scheduleProgressRefresh(board.dailyProgress?.updating === true);
       this.selectedWorkerId.set(board.selectedWorkerId ?? null);
@@ -3110,9 +3117,14 @@ export class WorkerPage implements OnInit, OnDestroy {
       this.applyServerCredentialPreparation(board.credentialPreparation);
       this.refreshPublishCredentialWaitTimer();
     } catch (error) {
+      if (requestId !== this.loadEpoch) {
+        return;
+      }
       this.error.set(this.apiErrorMessage(error, 'Не удалось загрузить раздел специалиста.'));
     } finally {
-      this.loading.set(false);
+      if (requestId === this.loadEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -3622,8 +3634,7 @@ export class WorkerPage implements OnInit, OnDestroy {
     this.clearMidnightRefresh();
     const previousDay = this.localDateKey();
     const now = new Date();
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
-    const delay = Math.max(1000, Math.min(2_147_483_647, nextMidnight.getTime() - now.getTime()));
+    const delay = Math.min(2_147_483_647, millisecondsUntilNextBusinessDay(now) + 2000);
 
     this.midnightRefreshTimer = setTimeout(() => {
       if (this.localDateKey() !== previousDay) {

@@ -95,7 +95,7 @@ if (-not (Test-Path -LiteralPath $envFilePath)) {
 $token = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_TOKEN"
 $secret = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_WEBHOOK_SECRET"
 $appBaseUrl = Get-EnvFileValue -Path $envFilePath -Name "OTZIV_APP_BASE_URL"
-$configuredApiBaseUrl = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_API_BASE_URL" -DefaultValue "https://platform-api.max.ru"
+$configuredApiBaseUrl = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_API_BASE_URL" -DefaultValue "https://platform-api2.max.ru"
 $longPollingEnabled = Get-EnvFileValue -Path $envFilePath -Name "MAX_BOT_LONG_POLLING_ENABLED" -DefaultValue "false"
 
 if ([string]::IsNullOrWhiteSpace($token)) {

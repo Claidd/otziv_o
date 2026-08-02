@@ -12,15 +12,46 @@ param(
     [string]$RemoteEnvFile = ".env.prod",
     [switch]$SkipEnvUpload,
     [switch]$NoBuildCache,
+    [switch]$AllowLegacyDeploy,
     [switch]$Help
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Format-RedactedCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $safeArguments = [System.Collections.Generic.List[string]]::new()
+    $redactNext = $false
+    foreach ($argument in $Arguments) {
+        if ($redactNext) {
+            $safeArguments.Add('[REDACTED]')
+            $redactNext = $false
+        } elseif ($argument -match '(?i)^(--password|--client-secret|--secret|--token|-p)$') {
+            $safeArguments.Add($argument)
+            $redactNext = $true
+        } elseif ($argument -match '(?i)^([^=]*(?:password|passwd|pwd|secret|token|api[_-]?key)[^=]*)=(.*)$') {
+            $safeArguments.Add("$($Matches[1])=[REDACTED]")
+        } elseif ($argument -match '(?i)^-p.+$') {
+            $safeArguments.Add('-p[REDACTED]')
+        } else {
+            $safeArguments.Add($argument)
+        }
+    }
+    return ((@($FilePath) + @($safeArguments)) -join ' ')
+}
+
 function Show-Help {
     @'
-Deploy Otziv production stack without Docker Hub.
+QUARANTINED legacy deployment without Docker Hub.
+
+Prefer deploy-prod.ps1. This script lacks the current locking, rollback metadata,
+clean-build enforcement and production security preflight. Running it requires
+the explicit -AllowLegacyDeploy emergency override.
 
 The script builds backend/frontend images locally, saves them to a Docker tar,
 copies the tar directly to the VPS over SSH, loads images there, updates the
@@ -39,7 +70,7 @@ function Invoke-External {
 
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $FilePath $($Arguments -join ' ')"
+        throw "Command failed: $(Format-RedactedCommand -FilePath $FilePath -Arguments $Arguments)"
     }
 }
 
@@ -98,6 +129,10 @@ function Set-EnvFileValue {
 if ($Help) {
     Show-Help
     exit 0
+}
+
+if (-not $AllowLegacyDeploy) {
+    throw 'This legacy deploy path is quarantined. Use deploy-prod.ps1, or pass -AllowLegacyDeploy only for a reviewed emergency.'
 }
 
 if ([string]::IsNullOrWhiteSpace($VpsHost)) {

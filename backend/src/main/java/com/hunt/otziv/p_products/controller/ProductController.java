@@ -3,9 +3,7 @@ package com.hunt.otziv.p_products.controller;
 import com.hunt.otziv.config.legacy.LegacyMvc;
 
 import com.hunt.otziv.c_categories.services.ProductCategoryService;
-import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.ProductDTO;
-import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -25,16 +23,12 @@ public class ProductController {
     @GetMapping
     private String products(Model model){
         model.addAttribute("products", productService.findAll());
-        for (Product product : productService.findAll()) {
-        }
         return "products/products_list.html";
     }
 
     @GetMapping("/products")
     private String getProducts(Model model){
         model.addAttribute("products", productService.findAll());
-        for (Product product : productService.findAll()) {
-        }
         return "products/products.html";
     }
 

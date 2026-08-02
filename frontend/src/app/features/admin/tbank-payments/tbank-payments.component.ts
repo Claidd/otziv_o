@@ -2,7 +2,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { forkJoin, switchMap } from 'rxjs';
+import { forkJoin, switchMap, tap } from 'rxjs';
 import { PaymentsApi } from '../../../core/payments.api';
 import type {
   AdminPaymentLinkResponse,
@@ -757,7 +757,11 @@ export class TbankPaymentsComponent implements OnDestroy {
 
     this.savingProfilePolicies.set(true);
     this.savingProfiles.set(true);
+    let policiesSaved = false;
     this.paymentsApi.updateAdminPaymentProfilePolicies(policyRequest).pipe(
+      tap(() => {
+        policiesSaved = true;
+      }),
       switchMap(() => this.paymentsApi.updateAdminTbankPaymentProfileAssignments(assignments))
     ).subscribe({
       next: (state) => {
@@ -770,6 +774,14 @@ export class TbankPaymentsComponent implements OnDestroy {
         const message = apiErrorDetail(err, 'Не удалось сохранить маршрутизацию оплат');
         this.savingProfilePolicies.set(false);
         this.savingProfiles.set(false);
+        if (policiesSaved) {
+          this.toastService.error(
+            'Маршрутизация сохранена частично',
+            `Политики профилей применены, но назначения менеджеров не сохранены. Состояние перечитано с сервера. ${message}`
+          );
+          this.loadProfilesOnly(true);
+          return;
+        }
         this.toastService.error('Маршрутизация не сохранена', message);
       }
     });
@@ -1505,10 +1517,17 @@ export class TbankPaymentsComponent implements OnDestroy {
     ));
   }
 
-  private loadProfilesOnly(): void {
+  private loadProfilesOnly(showError = false): void {
     this.paymentsApi.getAdminTbankPaymentProfiles().subscribe({
       next: (profiles) => this.applyProfilesState(profiles.profiles, profiles.managers),
-      error: () => {}
+      error: (err) => {
+        if (showError) {
+          this.toastService.error(
+            'Состояние профилей не обновлено',
+            apiErrorDetail(err, 'Обновите страницу перед следующей операцией')
+          );
+        }
+      }
     });
   }
 

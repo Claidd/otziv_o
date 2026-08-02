@@ -8,9 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WebhookSecretStartupValidatorTest {
 
+    private static final String WA_SECRET = "whatsapp-webhook-secret-at-least-32-bytes";
+    private static final String MAX_SECRET = "max-webhook-secret-at-least-32-bytes-long";
+
     @Test
     void failsWhenProductionWebhookSecretsAreMissing() {
-        WebhookSecretStartupValidator validator = new WebhookSecretStartupValidator("", true, "max-secret");
+        WebhookSecretStartupValidator validator = new WebhookSecretStartupValidator("", true, MAX_SECRET);
 
         IllegalStateException error = assertThrows(
                 IllegalStateException.class,
@@ -22,14 +25,14 @@ class WebhookSecretStartupValidatorTest {
 
     @Test
     void acceptsConfiguredProductionWebhookSecrets() {
-        WebhookSecretStartupValidator validator = new WebhookSecretStartupValidator("wa-secret", true, "max-secret");
+        WebhookSecretStartupValidator validator = new WebhookSecretStartupValidator(WA_SECRET, true, MAX_SECRET);
 
         assertDoesNotThrow(validator::afterSingletonsInstantiated);
     }
 
     @Test
     void failsWhenProductionWebhookHmacIsDisabled() {
-        WebhookSecretStartupValidator validator = new WebhookSecretStartupValidator("wa-secret", false, "max-secret");
+        WebhookSecretStartupValidator validator = new WebhookSecretStartupValidator(WA_SECRET, false, MAX_SECRET);
 
         IllegalStateException error = assertThrows(
                 IllegalStateException.class,

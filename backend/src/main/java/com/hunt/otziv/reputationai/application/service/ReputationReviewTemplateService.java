@@ -29,7 +29,6 @@ public class ReputationReviewTemplateService {
     private final AiReviewTemplateFactory aiReviewTemplateFactory;
     private final ObjectMapper objectMapper;
 
-    @Transactional(readOnly = true)
     public ReputationReviewTemplatesResult generate(Long companyId, ReputationReviewTemplatesRequest request) {
         ReputationReviewTemplatesRequest safeRequest = request == null
                 ? new ReputationReviewTemplatesRequest(null, null, null, null, null, null, null)

@@ -12,6 +12,7 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { ToastService } from '../../shared/toast.service';
+import { businessDateIso, businessDateTimeInput } from '../../shared/business-date';
 
 type PhoneMetric = {
   label: string;
@@ -136,7 +137,7 @@ export class OperatorPhonesComponent {
       amountAllowed: 1,
       amountSent: 0,
       blockTime: 3,
-      timer: this.toDateTimeInput(new Date().toISOString()),
+      timer: businessDateTimeInput(),
       googleLogin: '',
       googlePassword: '',
       avitoPassword: '',
@@ -144,7 +145,7 @@ export class OperatorPhonesComponent {
       mailPassword: '',
       fotoInstagram: '',
       active: true,
-      createDate: this.toDateInput(new Date().toISOString()),
+      createDate: businessDateIso(),
       operatorId: null
     });
   }

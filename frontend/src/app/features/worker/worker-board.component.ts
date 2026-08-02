@@ -178,6 +178,7 @@ export class WorkerBoardComponent implements OnDestroy {
   private publishCredentialWaitTimer: number | null = null;
   private progressRefreshTimer: number | null = null;
   private progressRefreshAttempts = 0;
+  private boardLoadEpoch = 0;
 
   readonly currentOrders = computed(() => this.board()?.orders.content ?? []);
   readonly currentReviews = computed(() => this.board()?.reviews.content ?? []);
@@ -369,6 +370,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.boardLoadEpoch += 1;
     this.clearSearchTimer();
     this.clearBoardNoticeTimer();
     this.clearPublishCredentialWaitTimer();
@@ -382,6 +384,7 @@ export class WorkerBoardComponent implements OnDestroy {
   }
 
   loadBoard(section: WorkerBoardSectionQuery = this.boardSectionForLoad()): void {
+    const requestId = ++this.boardLoadEpoch;
     this.storeBoardState();
     this.loading.set(true);
     this.error.set(null);
@@ -396,6 +399,9 @@ export class WorkerBoardComponent implements OnDestroy {
       workerId: this.selectedWorkerId()
     }).subscribe({
       next: (board) => {
+        if (requestId !== this.boardLoadEpoch) {
+          return;
+        }
         this.board.set(board);
         this.scheduleProgressRefresh(board.dailyProgress?.updating === true);
         this.selectedWorkerId.set(board.selectedWorkerId ?? null);
@@ -427,6 +433,9 @@ export class WorkerBoardComponent implements OnDestroy {
         }
       },
       error: (err) => {
+        if (requestId !== this.boardLoadEpoch) {
+          return;
+        }
         const message = this.errorMessage(err, 'Не удалось загрузить раздел специалиста');
         this.error.set(message);
         this.loading.set(false);

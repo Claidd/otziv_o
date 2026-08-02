@@ -113,7 +113,9 @@ public class ReviewCityServiceImpl implements ReviewCityService {
             return 0L;
         }
 
-        long total = getTotalUnpublishedCount();
+        long total = cities.stream()
+                .mapToLong(CityWithUnpublishedReviewsDTO::getUnpublishedCount)
+                .sum();
         return total / cities.size();
     }
 
@@ -133,8 +135,10 @@ public class ReviewCityServiceImpl implements ReviewCityService {
      */
     public Map<String, Object> getDashboardStats() {
         List<CityWithUnpublishedReviewsDTO> cities = getCitiesWithUnpublishedReviews();
-        long total = getTotalUnpublishedCount();
-        long average = getAverageUnpublishedPerCity();
+        long total = cities.stream()
+                .mapToLong(CityWithUnpublishedReviewsDTO::getUnpublishedCount)
+                .sum();
+        long average = cities.isEmpty() ? 0L : total / cities.size();
 
         return Map.of(
                 "totalCities", cities.size(),

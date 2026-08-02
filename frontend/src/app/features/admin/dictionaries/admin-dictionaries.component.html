@@ -1078,7 +1078,7 @@
                 </thead>
                 <tbody>
                   @for (bot of bots(); track trackBot($index, bot)) {
-                    <tr [class.selected]="selectedId() === bot.id" (click)="selectBot(bot)">
+                    <tr [class.selected]="selectedId() === bot.id" [class.loading]="botDetailLoadingId() === bot.id" (click)="selectBot(bot)">
                       <td>
                         <strong>{{ bot.fio }}</strong>
                         <span>{{ bot.login }} · ID {{ bot.id }}</span>
@@ -1874,12 +1874,12 @@
 
                 <label appTooltip="Пароль Google-аккаунта. Заполняйте только если он нужен для рабочего процесса.">
                   <span>Google пароль</span>
-                  <input type="text" formControlName="googlePassword" autocomplete="off">
+                  <input type="password" formControlName="googlePassword" autocomplete="off">
                 </label>
 
                 <label appTooltip="Пароль Avito, если номер используется в сценариях с Avito.">
                   <span>Avito пароль</span>
-                  <input type="text" formControlName="avitoPassword" autocomplete="off">
+                  <input type="password" formControlName="avitoPassword" autocomplete="off">
                 </label>
 
                 <label appTooltip="Логин почты, привязанной к этому телефону или аккаунту.">
@@ -1889,7 +1889,7 @@
 
                 <label appTooltip="Пароль почты. Заполняйте только для рабочих аккаунтов, где он действительно нужен.">
                   <span>Mail пароль</span>
-                  <input type="text" formControlName="mailPassword" autocomplete="off">
+                  <input type="password" formControlName="mailPassword" autocomplete="off">
                 </label>
 
                 <label appTooltip="Дата добавления или создания профиля. Помогает понимать возраст номера.">
@@ -1971,7 +1971,7 @@
 
               <label appTooltip="Пароль аккаунта. Храните актуальное значение, чтобы не терять доступ.">
                 <span>Пароль</span>
-                <input type="text" formControlName="password">
+                <input type="password" formControlName="password" autocomplete="off">
               </label>
 
               <label appTooltip="Имя профиля или ФИО, по которому аккаунт легко отличить от других.">

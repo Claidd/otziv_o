@@ -11,20 +11,24 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptRoot "..\..\..")
 $configPath = Join-Path $repoRoot ".gitleaks.toml"
 
-function Assert-NoStagedEnvFiles {
+function Assert-NoStagedSensitiveFiles {
     $staged = git -C $repoRoot diff --cached --name-only --diff-filter=ACMRT
     $blocked = @(
         $staged | Where-Object {
-            ($_ -match '(^|/)\.env($|\.)') -and
-            ($_ -notmatch '\.example$') -and
-            ($_ -ne 'backend/.env.local.example')
+            (
+                ($_ -match '(^|/)\.env($|\.)') -and
+                ($_ -notmatch '\.example$') -and
+                ($_ -ne 'backend/.env.local.example')
+            ) -or
+            ($_ -match '(?i)(^|/)keystore\.properties$') -or
+            ($_ -match '(?i)\.(jks|keystore)$')
         }
     )
 
     if ($blocked.Count -gt 0) {
-        Write-Host "Blocked: real env files must not be committed:" -ForegroundColor Red
+        Write-Host "Blocked: real env/signing credential files must not be committed:" -ForegroundColor Red
         $blocked | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-        Write-Host "Keep real env files in `$env:USERPROFILE\.otziv\env and commit only .env*.example." -ForegroundColor Yellow
+        Write-Host "Commit only .env*.example and public signing metadata; keep real env/keystore files outside Git." -ForegroundColor Yellow
         exit 1
     }
 }
@@ -90,7 +94,7 @@ try {
     if ($Mode -eq "git") {
         $exitCode = Invoke-GitleaksNative -Arguments (@("git") + $commonArgs + @("."))
     } elseif ($Mode -eq "staged") {
-        Assert-NoStagedEnvFiles
+        Assert-NoStagedSensitiveFiles
         $stagedFiles = @(git -C $repoRoot diff --cached --name-only --diff-filter=ACMRT)
         if ($stagedFiles.Count -eq 0) {
             Write-Host "No staged files to scan." -ForegroundColor Green

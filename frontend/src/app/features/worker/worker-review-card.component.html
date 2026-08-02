@@ -13,7 +13,7 @@
     @if (!usesInteractiveTitle() && isReviewTitleLinkEnabled()) {
       <a
         class="review-title"
-        [href]="review.filialUrl || reviewEditUrl()"
+        [href]="reviewFilialUrl()"
         target="_blank"
         rel="noopener"
         [title]="reviewTitle()"

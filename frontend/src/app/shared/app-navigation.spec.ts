@@ -60,5 +60,7 @@ describe('app navigation registry', () => {
     ]));
     expect(appNavigationLinksForGroup('home', ['OWNER']).map((link) => link.id)).not.toContain('manager-control-self');
     expect(adminSections.indexOf('manager-control')).toBeLessThan(adminSections.indexOf('team'));
+    expect(adminSections).not.toContain('achievements');
+    expect(adminSections).not.toContain('gamification-rewards');
   });
 });

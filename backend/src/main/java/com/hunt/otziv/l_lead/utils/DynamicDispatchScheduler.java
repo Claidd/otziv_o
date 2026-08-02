@@ -6,6 +6,7 @@ import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.model.time.ExecutionTime;
 import com.cronutils.parser.CronParser;
 import com.hunt.otziv.config.jwt.service.JwtService;
+import com.hunt.otziv.config.jwt.service.LeadIntegrationHeaders;
 import com.hunt.otziv.l_lead.model.DispatchSettings;
 import com.hunt.otziv.l_lead.repository.DispatchSettingsRepository;
 import com.hunt.otziv.whatsapp.service.LeadSenderServiceImpl;
@@ -145,7 +146,11 @@ public class DynamicDispatchScheduler {
         try {
             log.info("🔄 [SYNC] Проверка cron с VPS...");
             HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(jwtService.generateSyncToken());
+            headers.set(
+                    LeadIntegrationHeaders.TOKEN,
+                    jwtService.generateSyncToken("GET:/api/dispatch-settings/cron")
+            );
+            headers.setBearerAuth(headers.getFirst(LeadIntegrationHeaders.TOKEN));
             HttpEntity<Void> entity = new HttpEntity<>(headers);
 
 

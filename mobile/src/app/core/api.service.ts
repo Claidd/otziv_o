@@ -2118,7 +2118,7 @@ export interface AdminProduct {
 export interface AdminBot {
   id: number;
   login: string;
-  password: string;
+  password?: string;
   fio: string;
   active: boolean;
   counter: number;
@@ -2589,6 +2589,14 @@ export interface BotsResponse {
   workers: DictionaryOption[];
   statuses: DictionaryOption[];
   cities: DictionaryOption[];
+  total: number;
+  page: number;
+  size: number;
+  totalPages: number;
+}
+
+export interface BotCountResponse {
+  count: number;
 }
 
 export interface BotImportResponse {
@@ -3118,7 +3126,7 @@ export class ApiService {
       cities: this.http.get<unknown[]>(this.apiUrl('/api/admin/cities')),
       products: this.http.get<{ products?: unknown[] }>(this.apiUrl('/api/admin/products')),
       phones: this.http.get<{ phones?: unknown[] }>(this.apiUrl('/api/admin/phones')),
-      accounts: this.http.get<{ bots?: unknown[] }>(this.apiUrl('/api/admin/bots')),
+      accounts: this.http.get<BotCountResponse>(this.apiUrl('/api/admin/bots/count')),
       promo: this.http.get<unknown[]>(this.apiUrl('/api/admin/promo-texts')),
       managerTexts: this.http.get<unknown[]>(this.apiUrl('/api/admin/manager-texts'))
     }).pipe(
@@ -3128,7 +3136,7 @@ export class ApiService {
           { key: 'cities', title: 'Города', icon: 'location_city', count: response.cities.length, description: 'города филиалов и заказов' },
           { key: 'products', title: 'Продукты', icon: 'inventory_2', count: response.products.products?.length ?? 0, description: 'услуги и цены заказов' },
           { key: 'phones', title: 'Телефоны', icon: 'phone_iphone', count: response.phones.phones?.length ?? 0, description: 'телефоны операторов' },
-          { key: 'accounts', title: 'Аккаунты', icon: 'manage_accounts', count: response.accounts.bots?.length ?? 0, description: 'боты и рабочие аккаунты' },
+          { key: 'accounts', title: 'Аккаунты', icon: 'manage_accounts', count: response.accounts.count ?? 0, description: 'боты и рабочие аккаунты' },
           { key: 'promo', title: 'Промо', icon: 'smart_button', count: response.promo.length, description: 'шаблоны сообщений' },
           { key: 'managerTexts', title: 'Тексты менеджеров', icon: 'article', count: response.managerTexts.length, description: 'персональные тексты' }
         ]
@@ -3210,9 +3218,9 @@ export class ApiService {
     return this.http.delete<void>(this.apiUrl(`/api/admin/products/${id}`));
   }
 
-  getAdminBots(keyword = ''): Observable<BotsResponse> {
+  getAdminBots(keyword = '', page = 0, size = 50): Observable<BotsResponse> {
     return this.http.get<BotsResponse>(this.apiUrl('/api/admin/bots'), {
-      params: this.keywordParams(keyword)
+      params: this.keywordParams(keyword).set('page', String(page)).set('size', String(size))
     });
   }
 

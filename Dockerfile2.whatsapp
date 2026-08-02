@@ -1,4 +1,9 @@
+# QUARANTINED LEGACY IMAGE. Active Compose uses Dockerfile.whatsapp.
+# This old Node 18 build is retained only for forensic/history purposes and
+# intentionally refuses accidental builds unless the caller explicitly opts in.
 FROM node:18-slim
+ARG OTZIV_ALLOW_QUARANTINED_DOCKERFILE=false
+RUN test "$OTZIV_ALLOW_QUARANTINED_DOCKERFILE" = "true"
 
 # Установка зависимостей Chromium, curl и сертификатов
 RUN apt-get update && apt-get install -y \

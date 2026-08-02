@@ -1,0 +1,131 @@
+server:
+  port: 8080
+  servlet:
+    session:
+      timeout: 28800
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+
+spring:
+  docker:
+    compose:
+      enabled: ${SPRING_DOCKER_COMPOSE_ENABLED:false}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/otziv}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/otziv/protocol/openid-connect/certs}
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 105MB
+
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+
+  flyway:
+    baseline-on-migrate: true
+
+telegram:
+  bot:
+    token: ${TELEGRAM_BOT_TOKEN}
+    username: ${TELEGRAM_BOT_USERNAME}
+
+s3:
+  access-key: ${S3_ACCESS_KEY}
+  secret-key: ${S3_SECRET_KEY}
+  endpoint: ${S3_ENDPOINT}
+  region: ${S3_REGION}
+  bucket: ${S3_BUCKET}
+  projectId: ${S3_PROJECT}
+
+backup:
+  mysql:
+    container: my-mysql
+    db: otziv
+    user: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  work-dir: /docker/backup
+  part-size-mb: 35
+  mail:
+    to: 2.12nps@mail.ru
+    from: o_company@o-ogo.ru
+    subject: "Ежедневная копия БД"
+    body: "Часть резервной копии базы данных"
+
+#openai:
+#  api-key: ${OPENAI_API_KEY}
+#  proxy:
+#    host: vpn-proxy
+#    port: 8888
+
+lead:
+  sync:
+    outbound:
+      enabled: false
+
+  transfer:
+    url: https://o-ogo.ru/api/leads/import
+
+  synchrony:
+    url: https://o-ogo.ru/api/leads/modified
+
+  update:
+    url: https://o-ogo.ru/api/leads/update
+
+  vps:
+    url: https://o-ogo.ru/api/leads/sync
+
+app:
+  nagul:
+    cooldown: 3
+    forbidden-words: "впиши имя фамилию,впишите имя фамилию,имя фамилия, имя фамилию, фамилия имя,шаблон,template, 1, 2, 12, 3"
+
+jwt:
+  secret: ${JWT_SECRET}
+
+keycloak:
+  admin:
+    server-url: ${KEYCLOAK_ADMIN_SERVER_URL:http://localhost:8180}
+    realm: ${KEYCLOAK_ADMIN_REALM:otziv}
+    client-id: ${KEYCLOAK_ADMIN_CLIENT_ID:otziv-backend}
+    client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:change-me-local-secret}
+
+whatsapp:
+  ban-protection:
+    maxFailures: 5
+    dailyLimit: 50
+    minDelay: 5
+    maxDelay: 30
+  lastseen:
+    minDelay: 10
+    maxDelay: 180
+  clients:

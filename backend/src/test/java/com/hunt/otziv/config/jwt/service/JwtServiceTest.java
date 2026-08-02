@@ -14,6 +14,8 @@ import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 class JwtServiceTest {
@@ -28,13 +30,12 @@ class JwtServiceTest {
     }
 
     @Test
-    void generateChecksumUsesStableLeadIdentityFields() {
+    void generateChecksumCoversTheCompleteCanonicalPayload() {
         LeadDtoTransfer dto = leadTransfer();
+        String original = jwtService.generateChecksum(dto);
+        dto.setCompanyName("Changed company");
 
-        assertEquals(
-                "237f99715bfb94a6a95cb2e61edec7279a3024211b1a4929ec2e3aa5d4294774",
-                jwtService.generateChecksum(dto)
-        );
+        assertNotEquals(original, jwtService.generateChecksum(dto));
     }
 
     @Test
@@ -44,15 +45,21 @@ class JwtServiceTest {
         Claims claims = parse(jwtService.generateToken(dto));
 
         assertEquals("lead-transfer", claims.getSubject());
+        assertEquals(JwtService.ISSUER, claims.getIssuer());
+        assertEquals(JwtService.IMPORT_SCOPE, claims.get("scope", String.class));
+        assertNotNull(claims.getId());
+        assertNotNull(claims.getExpiration());
+        assertNotNull(claims.get("aud"));
         assertEquals(jwtService.generateChecksum(dto), claims.get("checksum", String.class));
         assertFalse(claims.getExpiration().before(claims.getIssuedAt()));
     }
 
     @Test
     void generateSyncTokenUsesSyncSubjectWithoutLeadChecksum() {
-        Claims claims = parse(jwtService.generateSyncToken());
+        Claims claims = parse(jwtService.generateSyncToken("GET:/api/leads/modified"));
 
         assertEquals("lead-sync", claims.getSubject());
+        assertEquals("GET:/api/leads/modified", claims.get("scope", String.class));
         assertNull(claims.get("checksum", String.class));
         assertFalse(claims.getExpiration().before(claims.getIssuedAt()));
     }

@@ -25,6 +25,7 @@ import {
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { MOBILE_ACTIONS, MOBILE_SECTIONS, canUseAction } from '../core/mobile-permissions';
+import { businessDateIso, businessDateTimeInput } from '../shared/business-date';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
@@ -1606,7 +1607,7 @@ export class OperatorPage implements OnInit, OnDestroy {
       amountAllowed: 1,
       amountSent: 0,
       blockTime: 3,
-      timer: this.toDateTimeInput(new Date().toISOString()),
+      timer: businessDateTimeInput(),
       googleLogin: null,
       googlePassword: null,
       avitoPassword: null,
@@ -1614,7 +1615,7 @@ export class OperatorPage implements OnInit, OnDestroy {
       mailPassword: null,
       fotoInstagram: null,
       active: true,
-      createDate: this.toDateInput(new Date().toISOString()),
+      createDate: businessDateIso(),
       operatorId: null
     });
   }

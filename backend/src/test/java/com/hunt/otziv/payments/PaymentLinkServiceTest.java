@@ -1780,6 +1780,40 @@ class PaymentLinkServiceTest {
     }
 
     @Test
+    void publicLinkDebouncesRepeatedProviderStateFailures() {
+        TbankPaymentProperties properties = properties();
+        properties.setEnabled(true);
+        PaymentLinkService service = service(properties);
+        Order order = order(23011L, "ООО Debounce", BigDecimal.valueOf(250));
+        PaymentLink link = new PaymentLink();
+        link.setId(23011L);
+        link.setOrder(order);
+        link.setToken("public-bank-debounce");
+        link.setAmountKopecks(25000L);
+        link.setDescription("Оплата услуг");
+        link.setStatus(PaymentLinkStatus.INITIATED);
+        link.setTbankPaymentId("payment-23011");
+        link.setTbankTerminalKey("terminal");
+        link.setExpiresAt(LocalDateTime.now().plusDays(1));
+
+        when(paymentLinkRepository.findByTokenWithOrder("public-bank-debounce"))
+                .thenReturn(Optional.of(link));
+        when(paymentLinkRepository.findByTokenForUpdate("public-bank-debounce"))
+                .thenReturn(Optional.of(link));
+        when(orderRepository.findByIdForCounterUpdate(23011L)).thenReturn(Optional.of(order));
+        when(tbankClient.getState(any(TbankPaymentProfile.class), eq("payment-23011")))
+                .thenThrow(new ResponseStatusException(HttpStatus.BAD_GATEWAY, "provider timeout"));
+
+        var first = service.publicLink("public-bank-debounce");
+        var second = service.publicLink("public-bank-debounce");
+
+        assertEquals("INITIATED", first.status());
+        assertEquals("INITIATED", second.status());
+        org.junit.jupiter.api.Assertions.assertNotNull(link.getBankReconciliationAttemptedAt());
+        verify(tbankClient).getState(any(TbankPaymentProfile.class), eq("payment-23011"));
+    }
+
+    @Test
     void publicLinkExpirationRechecksLockedStatusAndKeepsConfirmedTerminal() {
         PaymentLinkService service = service(properties());
         Order order = order(2302L, "ООО Гонка срока", BigDecimal.valueOf(250));

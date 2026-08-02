@@ -12,6 +12,7 @@ import {
   WorkerReviewItem
 } from '../../core/api.service';
 import { MobileConfirmService } from '../../shared/mobile-confirm.service';
+import { safeHttpsOrInternalUrl } from '../../shared/external-navigation';
 
 @Component({
   selector: 'app-mobile-worker-review-edit-sheet',
@@ -99,8 +100,8 @@ import { MobileConfirmService } from '../../shared/mobile-confirm.service';
 
               @if (productNeedsPhoto(form.productId) || form.url.trim()) {
                 <div class="photo-actions wide">
-                  @if (form.url.trim()) {
-                    <a [href]="form.url" target="_blank" rel="noopener">
+                  @if (safeMediaUrl(form.url); as photoUrl) {
+                    <a [href]="photoUrl" target="_blank" rel="noopener">
                       <span class="material-icons-sharp">photo_camera</span>Открыть фото
                     </a>
                   }
@@ -186,6 +187,9 @@ import { MobileConfirmService } from '../../shared/mobile-confirm.service';
   `]
 })
 export class MobileWorkerReviewEditSheetComponent {
+  safeMediaUrl(value: unknown): string {
+    return safeHttpsOrInternalUrl(value) ?? '';
+  }
   private readonly api = inject(ApiService);
   private readonly confirm = inject(MobileConfirmService);
   private loadVersion = 0;

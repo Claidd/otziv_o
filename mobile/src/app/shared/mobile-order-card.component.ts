@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ClientMessageStatus, OrderItem } from '../core/api.service';
 import { MobileNoteEditorComponent } from './mobile-note-editor.component';
+import { safeExternalSchemeUrl, safeHttpsExternalUrl, safeHttpsOrInternalUrl } from './external-navigation';
 
 export type MobileOrderStatusAction = {
   label: string;
@@ -100,7 +101,7 @@ export type MobileOrderCopyKind = 'review' | 'payment';
         </div>
       } @else if (canSeePhoneAndPayment) {
         <div class="lead-phone-row order-phone-row phone-row">
-          <a [href]="phoneHref || '#'" target="_blank" rel="noopener" (click)="guardLink($event, phoneHref)">
+          <a [href]="safePhoneHref || '#'" target="_blank" rel="noopener" (click)="guardLink($event, safePhoneHref)">
             {{ phoneLabel }}
           </a>
           <button type="button" (click)="copyPhone.emit()" aria-label="Скопировать телефон">
@@ -118,21 +119,21 @@ export type MobileOrderCopyKind = 'review' | 'payment';
             </button>
           }
           <a
-            [href]="reviewHref || '#'"
+            [href]="safeReviewHref || '#'"
             target="_blank"
             rel="noopener"
-            [class.disabled]="!reviewHref"
-            (click)="guardLink($event, reviewHref)"
+            [class.disabled]="!safeReviewHref"
+            (click)="guardLink($event, safeReviewHref)"
           >{{ isCommonInvoice ? 'ссылка' : 'url' }}</a>
           <button type="button" (click)="copyText.emit('payment')">
             {{ copiedKey === paymentCopyKey ? '✓' : 'счет' }}
           </button>
           <a
-            [href]="filialHref || '#'"
+            [href]="safeFilialHref || '#'"
             target="_blank"
             rel="noopener"
-            [class.disabled]="!filialHref"
-            (click)="guardLink($event, filialHref)"
+            [class.disabled]="!safeFilialHref"
+            (click)="guardLink($event, safeFilialHref)"
           >ссылка</a>
         </div>
 
@@ -867,6 +868,20 @@ export class MobileOrderCardComponent {
   @Input() canManageClientWaiting = false;
   @Input() companyMode = false;
   @Input() showWaitingBadge = true;
+
+  get safePhoneHref(): string {
+    return safeHttpsExternalUrl(this.phoneHref)
+      ?? safeExternalSchemeUrl(this.phoneHref, ['tel:'])
+      ?? '';
+  }
+
+  get safeReviewHref(): string {
+    return safeHttpsOrInternalUrl(this.reviewHref) ?? '';
+  }
+
+  get safeFilialHref(): string {
+    return safeHttpsOrInternalUrl(this.filialHref) ?? '';
+  }
   @Input() showNoteEditor = true;
   @Input() noteEditorId = '';
   @Input() noteValue = '';
@@ -1208,7 +1223,8 @@ export class MobileOrderCardComponent {
   }
 
   private openFilialFromTitle(): void {
-    const url = (this.filialHref || this.titleHref || '').trim();
+    const url = safeHttpsOrInternalUrl(this.filialHref)
+      ?? safeHttpsOrInternalUrl(this.titleHref);
     if (!url) {
       return;
     }

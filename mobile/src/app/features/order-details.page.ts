@@ -37,6 +37,7 @@ import {
   dispatchMobileRecoveryClientNotified
 } from '../shared/mobile-reminders.component';
 import { MobileReviewCardShellComponent } from '../shared/mobile-review-card-shell.component';
+import { safeHttpsExternalUrl, safeHttpsOrInternalUrl } from '../shared/external-navigation';
 
 type ReviewCopyKind = 'filialUrl' | 'botLogin' | 'botPassword' | 'text' | 'answer';
 type BadReviewTaskCopyKind = 'botLogin' | 'botPassword';
@@ -860,8 +861,8 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
                     @if (productNeedsPhoto(draft.productId) || draft.url.trim()) {
                       <div class="sheet-photo-field">
                         <span>Фото отзыва</span>
-                        @if (draft.url.trim()) {
-                          <a [href]="draft.url" target="_blank" rel="noopener">
+                        @if (safeMediaUrl(draft.url); as reviewPhotoUrl) {
+                          <a [href]="reviewPhotoUrl" target="_blank" rel="noopener">
                             <span class="material-icons-sharp">photo_camera</span>
                             Открыть фото
                           </a>
@@ -2161,6 +2162,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   readonly companyReportWarnings = computed(() => this.cleanStringList(this.companyReport()?.warnings));
   readonly companyReportSources = computed(() => (this.companyReport()?.sources ?? [])
     .filter((source): source is CompanyReportSource => !!source && Boolean(this.cleanText(source.title) || this.cleanText(source.url) || this.cleanText(source.note)))
+    .map((source) => ({ ...source, url: safeHttpsExternalUrl(source.url) ?? '' }))
     .slice(0, 10));
   readonly companyReportConfirmedFacts = computed(() => (this.companyReport()?.factSnapshot?.confirmedFacts ?? [])
     .filter((fact): fact is CompanyReportFact => !!fact && Boolean(this.cleanText(fact.label) || this.cleanText(fact.value) || this.cleanText(fact.evidence)))
@@ -3269,6 +3271,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
   reviewPhotoUrl(review: OrderReviewItem): string {
     return (review.urlPhoto || review.url || '').trim();
+  }
+
+  safeMediaUrl(value: unknown): string {
+    return safeHttpsOrInternalUrl(value) ?? '';
   }
 
   productNeedsPhoto(productId: number | null): boolean {

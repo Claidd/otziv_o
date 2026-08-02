@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import type { ClientMessageStatus, OrderCardItem } from '../../core/manager.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
+import { safeHttpsExternalUrl } from '../../shared/external-navigation';
 import {
   ManagerChatBotInviteKind,
   SelectedCompany,
@@ -388,7 +389,7 @@ export class ManagerOrderCardComponent implements OnDestroy {
       return this.orderDetailsUrl();
     }
 
-    return this.cleanUrl(this.order.filialUrl) || this.orderDetailsUrl();
+    return safeHttpsExternalUrl(this.order.filialUrl) || this.orderDetailsUrl();
   }
 
   orderReviewUrl(): string {

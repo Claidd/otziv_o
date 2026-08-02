@@ -26,6 +26,7 @@ import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileSearchBarComponent } from '../shared/mobile-search-bar.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
+import { safeExternalSchemeUrl, safeHttpsExternalUrl } from '../shared/external-navigation';
 import {
   mobilePageIndex,
   mobilePageIsFirst,
@@ -1296,12 +1297,15 @@ export class ManagerArchivePage implements OnInit, OnDestroy {
   }
 
   archiveOrderFilialUrl(order: ArchiveOrderListItem): string {
-    return (order.filialUrl ?? '').trim();
+    return safeHttpsExternalUrl(order.filialUrl) ?? '';
   }
 
   archiveOrderChatUrl(order: ArchiveOrderListItem): string {
     const digits = normalizePhoneDigits(order.companyTelephone);
-    return (order.companyUrlChat ?? '').trim() || (digits ? `tel:+${digits}` : '');
+    const phone = digits ? `tel:+${digits}` : '';
+    return safeHttpsExternalUrl(order.companyUrlChat)
+      ?? safeExternalSchemeUrl(phone, ['tel:'])
+      ?? '';
   }
 
   orderPhone(order: ArchiveOrderListItem): string {

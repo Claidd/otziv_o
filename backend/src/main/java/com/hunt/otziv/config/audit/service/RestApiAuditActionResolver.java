@@ -294,6 +294,7 @@ public class RestApiAuditActionResolver {
         put(actions, "POST", "/api/admin/users/{id}/photo", "обновление фото пользователя {id}");
         put(actions, "PUT", "/api/admin/users/{id}/password", "смена пароля пользователя {id}");
         put(actions, "GET", "/api/admin/bots", "загрузка аккаунтов");
+        put(actions, "GET", "/api/admin/bots/count", "загрузка количества аккаунтов");
         put(actions, "GET", "/api/admin/bots/{id}", "загрузка аккаунта {id}");
         put(actions, "POST", "/api/admin/bots/import", "импорт аккаунтов из файла");
         put(actions, "POST", "/api/admin/bots", "создание аккаунта \"{login}\"");

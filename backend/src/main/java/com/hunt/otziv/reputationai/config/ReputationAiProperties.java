@@ -14,6 +14,12 @@ public class ReputationAiProperties {
     private int maxDeepWebsitePages = 12;
     private int maxWebsiteChars = 20_000;
     private Duration websiteTimeout = Duration.ofSeconds(8);
+    private int maxWebsiteRequests = 48;
+    private int maxWebsiteResponseBytes = 1_500_000;
+    private int maxWebsiteTotalBytes = 8_000_000;
+    private int maxWebsiteUrlLength = 2_048;
+    private int maxWebsiteInputUrls = 40;
+    private Duration websiteCrawlDeadline = Duration.ofSeconds(45);
     private String userAgent = "OtzivReputationAI/1.0";
     private Search search = new Search();
     private YandexGpt yandex = new YandexGpt();
@@ -33,7 +39,7 @@ public class ReputationAiProperties {
     }
 
     public void setMaxWebsitePages(int maxWebsitePages) {
-        this.maxWebsitePages = Math.max(1, maxWebsitePages);
+        this.maxWebsitePages = Math.max(1, Math.min(64, maxWebsitePages));
     }
 
     public int getMaxDeepWebsitePages() {
@@ -49,7 +55,7 @@ public class ReputationAiProperties {
     }
 
     public void setMaxWebsiteChars(int maxWebsiteChars) {
-        this.maxWebsiteChars = Math.max(1000, maxWebsiteChars);
+        this.maxWebsiteChars = Math.max(1000, Math.min(100_000, maxWebsiteChars));
     }
 
     public Duration getWebsiteTimeout() {
@@ -57,7 +63,60 @@ public class ReputationAiProperties {
     }
 
     public void setWebsiteTimeout(Duration websiteTimeout) {
-        this.websiteTimeout = websiteTimeout == null ? Duration.ofSeconds(8) : websiteTimeout;
+        this.websiteTimeout = boundedDuration(websiteTimeout, Duration.ofSeconds(8), Duration.ofMillis(250), Duration.ofSeconds(30));
+    }
+
+    public int getMaxWebsiteRequests() {
+        return maxWebsiteRequests;
+    }
+
+    public void setMaxWebsiteRequests(int maxWebsiteRequests) {
+        this.maxWebsiteRequests = Math.max(1, Math.min(128, maxWebsiteRequests));
+    }
+
+    public int getMaxWebsiteResponseBytes() {
+        return maxWebsiteResponseBytes;
+    }
+
+    public void setMaxWebsiteResponseBytes(int maxWebsiteResponseBytes) {
+        this.maxWebsiteResponseBytes = Math.max(16_384, Math.min(5_000_000, maxWebsiteResponseBytes));
+    }
+
+    public int getMaxWebsiteTotalBytes() {
+        return maxWebsiteTotalBytes;
+    }
+
+    public void setMaxWebsiteTotalBytes(int maxWebsiteTotalBytes) {
+        this.maxWebsiteTotalBytes = Math.max(65_536, Math.min(25_000_000, maxWebsiteTotalBytes));
+    }
+
+    public int getMaxWebsiteUrlLength() {
+        return maxWebsiteUrlLength;
+    }
+
+    public void setMaxWebsiteUrlLength(int maxWebsiteUrlLength) {
+        this.maxWebsiteUrlLength = Math.max(256, Math.min(8_192, maxWebsiteUrlLength));
+    }
+
+    public int getMaxWebsiteInputUrls() {
+        return maxWebsiteInputUrls;
+    }
+
+    public void setMaxWebsiteInputUrls(int maxWebsiteInputUrls) {
+        this.maxWebsiteInputUrls = Math.max(1, Math.min(100, maxWebsiteInputUrls));
+    }
+
+    public Duration getWebsiteCrawlDeadline() {
+        return websiteCrawlDeadline;
+    }
+
+    public void setWebsiteCrawlDeadline(Duration websiteCrawlDeadline) {
+        this.websiteCrawlDeadline = boundedDuration(
+                websiteCrawlDeadline,
+                Duration.ofSeconds(45),
+                Duration.ofSeconds(1),
+                Duration.ofMinutes(2)
+        );
     }
 
     public String getUserAgent() {
@@ -65,7 +124,15 @@ public class ReputationAiProperties {
     }
 
     public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
+        this.userAgent = userAgent == null || userAgent.isBlank() ? "OtzivReputationAI/1.0" : userAgent.trim();
+    }
+
+    private static Duration boundedDuration(Duration value, Duration fallback, Duration minimum, Duration maximum) {
+        Duration safe = value == null || value.isNegative() || value.isZero() ? fallback : value;
+        if (safe.compareTo(minimum) < 0) {
+            return minimum;
+        }
+        return safe.compareTo(maximum) > 0 ? maximum : safe;
     }
 
     public Search getSearch() {

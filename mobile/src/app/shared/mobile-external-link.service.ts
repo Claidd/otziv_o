@@ -2,18 +2,19 @@ import { Injectable } from '@angular/core';
 import { Browser } from '@capacitor/browser';
 import { Capacitor } from '@capacitor/core';
 import { safePaymentNavigationTarget, type PaymentNavigationPurpose } from './payment-navigation';
+import { safeExternalSchemeUrl, safeHttpsExternalUrl } from './external-navigation';
 
 @Injectable({ providedIn: 'root' })
 export class MobileExternalLinkService {
   private readonly isNative = Capacitor.isNativePlatform();
 
   async open(url?: string | null): Promise<void> {
-    const target = url?.trim();
+    const target = safeHttpsExternalUrl(url);
     if (!target) {
       return;
     }
 
-    if (this.isNative && /^https?:\/\//i.test(target)) {
+    if (this.isNative) {
       await Browser.open({ url: target, presentationStyle: 'popover' });
       return;
     }
@@ -40,7 +41,7 @@ export class MobileExternalLinkService {
   }
 
   openScheme(url?: string | null): void {
-    const target = url?.trim();
+    const target = safeExternalSchemeUrl(url, ['tg:']);
     if (!target) {
       return;
     }

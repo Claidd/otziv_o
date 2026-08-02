@@ -444,7 +444,7 @@
             <div class="password-row">
               <label>
                 <span>Новый пароль</span>
-                <input type="text" formControlName="password" autocomplete="new-password">
+                <input type="password" formControlName="password" autocomplete="new-password">
               </label>
 
               <button type="button" (click)="changePassword()" [disabled]="passwordSaving() || !selectedUser()?.keycloakLinked">

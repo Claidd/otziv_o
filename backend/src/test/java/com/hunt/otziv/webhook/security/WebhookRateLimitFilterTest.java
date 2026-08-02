@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import jakarta.servlet.FilterChain;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
+import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -52,17 +53,25 @@ class WebhookRateLimitFilterTest {
     @Test
     void registrationPostsUseDedicatedBucketWithContextAndMatrixParamsWithoutRateLimitingFormsOrLogin()
             throws Exception {
-        when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+        when(rateLimiter.tryAcquire(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.any(Duration.class)
+        )).thenReturn(true);
 
         invoke("POST", "/api/auth/register");
+        invoke("POST", "/api/auth/register-performer");
         invokeWithContext("POST", "/app/api/auth/register;source=public", "/app");
         invoke("POST", "/register");
         invokeWithContext("POST", "/app/register;source=legacy", "/app");
         invoke("GET", "/register");
         invoke("POST", "/api/auth/login");
 
-        verify(rateLimiter, org.mockito.Mockito.times(4))
-                .tryAcquire("registration-public|203.0.113.7");
+        verify(rateLimiter, org.mockito.Mockito.times(5)).tryAcquire(
+                org.mockito.ArgumentMatchers.eq("registration-public|203.0.113.7"),
+                org.mockito.ArgumentMatchers.eq(10),
+                org.mockito.ArgumentMatchers.eq(Duration.ofMinutes(10))
+        );
         verifyNoMoreInteractions(rateLimiter);
     }
 
@@ -95,6 +104,7 @@ class WebhookRateLimitFilterTest {
                 List.of("GET", "/api/review-checkevil/order-id"),
                 List.of("POST", "/api/auth/registerevil"),
                 List.of("POST", "/api/auth/register/extra"),
+                List.of("POST", "/api/auth/register-performerevil"),
                 List.of("POST", "/registerevil"),
                 List.of("POST", "/register/extra"),
                 List.of("OPTIONS", "/api/review-check/order-id")

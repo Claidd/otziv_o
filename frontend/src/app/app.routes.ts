@@ -303,15 +303,6 @@ export const routes: Routes = [
     }
   },
   {
-    path: 'gamification/progress',
-    loadComponent: () => import('./features/gamification/gamification-progress.component')
-      .then((m) => m.GamificationProgressComponent),
-    canActivate: [roleGuard],
-    data: {
-      roles: ['ADMIN', 'OWNER']
-    }
-  },
-  {
     path: 'cabinet/whatsapp',
     loadComponent: () => import('./features/cabinet/whatsapp-bind.component')
       .then((m) => m.WhatsAppBindComponent),
@@ -365,13 +356,6 @@ export const routes: Routes = [
     data: {
       roles: ['ADMIN', 'OWNER']
     }
-  },
-  {
-    path: 'admin/gamification/rewards',
-    loadComponent: () => import('./features/admin/gamification-rewards/gamification-rewards.component')
-      .then((m) => m.GamificationRewardsComponent),
-    canActivate: [roleGuard],
-    data: { roles: ['ADMIN', 'OWNER'] }
   },
   {
     path: 'admin/notification-media',
@@ -521,5 +505,10 @@ export const routes: Routes = [
     data: {
       roles: ['ADMIN', 'OWNER']
     }
+  },
+  {
+    path: '**',
+    loadComponent: () => import('./features/public/not-found.component')
+      .then((m) => m.NotFoundComponent)
   }
 ];

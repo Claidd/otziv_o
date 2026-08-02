@@ -21,7 +21,7 @@
     [switch]$SkipProdDbRestore,
     [string]$VpsHost = "95.213.248.152",
     [string]$VpsUser = "hunt",
-    [int]$VpsPort = 22022,
+    [ValidateRange(1, 65535)][int]$VpsPort = 22022,
     [string]$SshKey = "C:\Users\Hunt\.ssh\otziv_vps_ed25519",
     [switch]$AllowLocalMessengerSending,
     [string]$LocalLoginUsername = "hunt",
@@ -32,6 +32,54 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Format-RedactedCommand {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $redacted = [System.Collections.Generic.List[string]]::new()
+    $redactNext = $false
+    foreach ($argument in $Arguments) {
+        if ($redactNext) {
+            $redacted.Add('[REDACTED]')
+            $redactNext = $false
+            continue
+        }
+
+        if ($argument -match '(?i)^(--password|--client-secret|--secret|--token|-p)$') {
+            $redacted.Add($argument)
+            $redactNext = $true
+        } elseif ($argument -match '(?i)^([^=]*(?:password|passwd|pwd|secret|token|api[_-]?key)[^=]*)=(.*)$') {
+            $redacted.Add("$($Matches[1])=[REDACTED]")
+        } elseif ($argument -match '(?i)^-p.+$') {
+            $redacted.Add('-p[REDACTED]')
+        } else {
+            $redacted.Add($argument)
+        }
+    }
+
+    return ((@($FilePath) + @($redacted)) -join ' ')
+}
+
+function Redact-SensitiveCommandOutput {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string[]]$Arguments
+    )
+
+    $result = $Text
+    for ($index = 0; $index -lt $Arguments.Count - 1; $index++) {
+        if ($Arguments[$index] -match '(?i)^(--password|--client-secret|--secret|--token|-p)$') {
+            $secret = $Arguments[$index + 1]
+            if (-not [string]::IsNullOrEmpty($secret)) {
+                $result = $result.Replace($secret, '[REDACTED]')
+            }
+        }
+    }
+    return $result
+}
+
 function Invoke-External {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -40,7 +88,7 @@ function Invoke-External {
 
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed: $FilePath $($Arguments -join ' ')"
+        throw "Command failed: $(Format-RedactedCommand -FilePath $FilePath -Arguments $Arguments)"
     }
 }
 
@@ -597,6 +645,70 @@ function Disable-LocalMessengerEnv {
     Write-Host "Local messenger tokens and bot registration are disabled for this prod-like stack."
 }
 
+function New-LocalRandomSecret {
+    param([ValidateRange(32, 128)][int]$ByteCount = 32)
+
+    $randomBytes = New-Object byte[] $ByteCount
+    $randomSource = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $randomSource.GetBytes($randomBytes)
+    } finally {
+        $randomSource.Dispose()
+    }
+
+    return [System.BitConverter]::ToString($randomBytes).Replace('-', '').ToLowerInvariant()
+}
+
+function Initialize-LocalBotLinkSecrets {
+    param([Parameter(Mandatory = $true)][string]$EnvPath)
+
+    $telegramLinkValue = if (-not [string]::IsNullOrWhiteSpace($env:TELEGRAM_BOT_LINK_SECRET)) {
+        $env:TELEGRAM_BOT_LINK_SECRET
+    } else {
+        Get-EnvValue -Path $EnvPath -Name 'TELEGRAM_BOT_LINK_SECRET'
+    }
+    $maxLinkValue = if (-not [string]::IsNullOrWhiteSpace($env:MAX_BOT_LINK_SECRET)) {
+        $env:MAX_BOT_LINK_SECRET
+    } else {
+        Get-EnvValue -Path $EnvPath -Name 'MAX_BOT_LINK_SECRET'
+    }
+    $maxWebhookValue = if (-not [string]::IsNullOrWhiteSpace($env:MAX_BOT_WEBHOOK_SECRET)) {
+        $env:MAX_BOT_WEBHOOK_SECRET
+    } else {
+        Get-EnvValue -Path $EnvPath -Name 'MAX_BOT_WEBHOOK_SECRET'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($telegramLinkValue)) {
+        $telegramLinkValue = New-LocalRandomSecret
+        $env:TELEGRAM_BOT_LINK_SECRET = $telegramLinkValue
+    }
+    if ([string]::IsNullOrWhiteSpace($maxLinkValue)) {
+        $maxLinkValue = New-LocalRandomSecret
+        $env:MAX_BOT_LINK_SECRET = $maxLinkValue
+    }
+    if ([string]::IsNullOrWhiteSpace($maxWebhookValue) -or
+            [System.Text.Encoding]::UTF8.GetByteCount($maxWebhookValue) -lt 32) {
+        # The prod profile validates webhook credentials even though local smoke
+        # deliberately disables MAX registration and outbound messaging. Never
+        # pass a weak local placeholder through to that fail-closed validator.
+        $maxWebhookValue = New-LocalRandomSecret
+        $env:MAX_BOT_WEBHOOK_SECRET = $maxWebhookValue
+    }
+
+    if ([System.Text.Encoding]::UTF8.GetByteCount($telegramLinkValue) -lt 32) {
+        throw 'TELEGRAM_BOT_LINK_SECRET must contain at least 32 UTF-8 bytes.'
+    }
+    if ([System.Text.Encoding]::UTF8.GetByteCount($maxLinkValue) -lt 32) {
+        throw 'MAX_BOT_LINK_SECRET must contain at least 32 UTF-8 bytes.'
+    }
+    if ([System.Text.Encoding]::UTF8.GetByteCount($maxWebhookValue) -lt 32) {
+        throw 'MAX_BOT_WEBHOOK_SECRET must contain at least 32 UTF-8 bytes.'
+    }
+    if ($telegramLinkValue -ceq $maxLinkValue) {
+        throw 'TELEGRAM_BOT_LINK_SECRET and MAX_BOT_LINK_SECRET must be different secrets.'
+    }
+}
+
 function Get-KeycloakServiceAccountToken {
     param(
         [Parameter(Mandatory = $true)][string]$RootUrl,
@@ -685,7 +797,8 @@ function Invoke-KeycloakAdminCli {
 
     if ($exitCode -ne 0) {
         $text = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-        throw "kcadm command failed: $($Arguments -join ' '): $text"
+        $redactedText = Redact-SensitiveCommandOutput -Text $text -Arguments $Arguments
+        throw "kcadm command failed: $(Format-RedactedCommand -FilePath 'kcadm.sh' -Arguments $Arguments): $redactedText"
     }
 
     return @($output | ForEach-Object { $_.ToString() })
@@ -1859,8 +1972,29 @@ function Invoke-OfflineAppBuild {
     }
 }
 
+$operationMutex = [System.Threading.Mutex]::new($false, 'OtzivProdLikeDatabaseOperation')
+$operationLockHeld = $false
+try {
+try {
+    $operationLockHeld = $operationMutex.WaitOne(0)
+} catch [System.Threading.AbandonedMutexException] {
+    $operationLockHeld = $true
+}
+if (-not $operationLockHeld) {
+    throw 'Another prod-like smoke or production database restore is already running.'
+}
+if ($RestoreProdDb -and $SkipProdDbRestore) {
+    throw '-RestoreProdDb and -SkipProdDbRestore are mutually exclusive.'
+}
+if ($RestoreProdDb) {
+    Write-Host '-RestoreProdDb explicitly confirms the default fresh production DB restore.'
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
+if (-not $SkipProdDbRestore -and ($VpsHost -notmatch '^[A-Za-z0-9.-]+$' -or $VpsUser -notmatch '^[A-Za-z0-9._-]+$')) {
+    throw 'VpsHost/VpsUser contain unsupported characters.'
+}
 $envResolverPath = Join-Path $repoRoot "infrastructure\scripts\Resolve-OtzivEnvFile.ps1"
 if (-not (Test-Path -LiteralPath $envResolverPath)) {
     throw "Env resolver script not found: $envResolverPath"
@@ -1874,6 +2008,7 @@ if (-not (Test-Path -LiteralPath $composePath)) {
 }
 
 Write-Host "Using env file: $envPath"
+Initialize-LocalBotLinkSecrets -EnvPath $envPath
 
 if (-not $SkipProdDbRestore) {
     $restoreScript = Join-Path $scriptRoot "restore-prod-db-local.ps1"
@@ -1961,7 +2096,7 @@ if (-not $NoDbAdmin) {
     if ([string]::IsNullOrWhiteSpace($phpMyAdminPort)) {
         $phpMyAdminPort = "6572"
     }
-    Write-Host "Local phpMyAdmin is enabled: http://localhost:$phpMyAdminPort"
+    Write-Warning "Local phpMyAdmin compatibility mode is enabled: http://localhost:$phpMyAdminPort. Prefer -NoDbAdmin when database administration is not needed."
 } elseif ($WithDbAdmin) {
     Write-Host "Local phpMyAdmin is disabled by -NoDbAdmin; ignoring -WithDbAdmin."
 } else {
@@ -2086,4 +2221,10 @@ try {
     }
 
     throw
+}
+} finally {
+    if ($operationLockHeld) {
+        $operationMutex.ReleaseMutex()
+    }
+    $operationMutex.Dispose()
 }

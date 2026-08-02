@@ -1,6 +1,8 @@
 package com.hunt.otziv.r_review.repository;
 
 import com.hunt.otziv.b_bots.model.Bot;
+import com.hunt.otziv.c_categories.model.Category;
+import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.l_lead.model.Lead;
 import com.hunt.otziv.r_review.model.Review;
@@ -653,6 +655,32 @@ public interface ReviewRepository extends CrudRepository<Review, Long> {
 
     @Query("SELECT r FROM Review r WHERE r.filial IN :filials")
     List<Review> findAllByFilials(@Param("filials") Set<Filial> filials);
+
+    @Query("""
+        SELECT DISTINCT r.text
+        FROM Review r
+        WHERE r.filial IN :filials
+          AND r.text IS NOT NULL
+          AND TRIM(r.text) <> ''
+          AND r.text <> :placeholder
+    """)
+    List<String> findDistinctNonPlaceholderTextsByFilials(
+            @Param("filials") Set<Filial> filials,
+            @Param("placeholder") String placeholder
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE Review r
+        SET r.category = :category,
+            r.subCategory = :subCategory
+        WHERE r.filial IN :filials
+    """)
+    int updateClassificationByFilials(
+            @Param("filials") Set<Filial> filials,
+            @Param("category") Category category,
+            @Param("subCategory") SubCategory subCategory
+    );
 
     @Query("""
         SELECT DISTINCT r

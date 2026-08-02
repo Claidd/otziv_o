@@ -7,14 +7,29 @@ import com.hunt.otziv.reputationai.infrastructure.web.dto.CrawledPage;
 import com.hunt.otziv.security.OutboundUrlGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jsoup.Connection;
+import org.apache.hc.client5.http.DnsResolver;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.util.Timeout;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -69,22 +84,29 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
         List<CrawledPage> pages = new ArrayList<>();
         Set<String> visited = new LinkedHashSet<>();
         Set<String> normalizedDeepCrawlHosts = normalizeHosts(deepCrawlHosts);
+        CrawlBudget budget = new CrawlBudget(properties);
 
-        for (String url : urls) {
-            if (pages.size() >= properties.getMaxWebsitePages()) {
+        for (String url : urls.stream().limit(properties.getMaxWebsiteInputUrls()).toList()) {
+            if (pages.size() >= properties.getMaxWebsitePages() || budget.exhausted()) {
                 break;
             }
 
             String normalized = normalizeUrl(url);
-            if (!normalized.isBlank() && urlGuard.isAllowed(normalized)) {
-                crawlRoot(normalized, pages, visited, normalizedDeepCrawlHosts);
+            if (isAcceptableUrl(normalized) && urlGuard.isAllowed(normalized)) {
+                crawlRoot(normalized, pages, visited, normalizedDeepCrawlHosts, budget);
             }
         }
 
         return pages;
     }
 
-    private void crawlRoot(String rootUrl, List<CrawledPage> pages, Set<String> visited, Set<String> deepCrawlHosts) {
+    private void crawlRoot(
+            String rootUrl,
+            List<CrawledPage> pages,
+            Set<String> visited,
+            Set<String> deepCrawlHosts,
+            CrawlBudget budget
+    ) {
         if (rootUrl.isBlank() || !isHttpUrl(rootUrl)) {
             return;
         }
@@ -101,20 +123,23 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
         int rootPageStart = pages.size();
         int rootPageBudget = followInternalLinks ? properties.getMaxDeepWebsitePages() : 1;
         enqueue(rootUrl, rootHost, queue, queued, visited);
-        if (followInternalLinks) {
-            discoverSitemapUrls(rootUrl, rootHost).forEach(url -> enqueue(url, rootHost, queue, queued, visited));
+        if (followInternalLinks && !budget.exhausted()) {
+            discoverSitemapUrls(rootUrl, rootHost, budget)
+                    .forEach(url -> enqueue(url, rootHost, queue, queued, visited));
         }
 
         while (!queue.isEmpty()
                 && pages.size() < properties.getMaxWebsitePages()
-                && pages.size() - rootPageStart < rootPageBudget) {
+                && pages.size() - rootPageStart < rootPageBudget
+                && !budget.exhausted()) {
             String currentUrl = queue.poll();
             if (!visited.add(currentUrl)) {
                 continue;
             }
 
             try {
-                Document document = fetch(currentUrl, false).parse();
+                FetchResponse response = fetch(currentUrl, false, budget);
+                Document document = Jsoup.parse(new ByteArrayInputStream(response.body()), null, response.url());
                 String text = limit(buildPageText(document, currentUrl));
                 if (!text.isBlank() && !isBlockedOrServicePage(document.title(), text, currentUrl)) {
                     pages.add(new CrawledPage(currentUrl, document.title(), text));
@@ -138,36 +163,120 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
         }
     }
 
-    private Connection connect(String url) {
-        return Jsoup.connect(url)
-                .userAgent(properties.getUserAgent())
-                .referrer("https://yandex.ru/")
-                .timeout((int) properties.getWebsiteTimeout().toMillis())
-                .followRedirects(false)
-                .ignoreHttpErrors(true);
-    }
-
-    private Connection.Response fetch(String url, boolean ignoreContentType) throws IOException {
+    private FetchResponse fetch(String url, boolean allowXml, CrawlBudget budget) throws IOException {
         String currentUrl = url;
-        urlGuard.assertAllowed(currentUrl);
         for (int redirects = 0; redirects <= urlGuard.maxRedirects(); redirects++) {
-            Connection.Response response = connect(currentUrl)
-                    .ignoreContentType(ignoreContentType)
-                    .execute();
+            budget.beforeRequest();
+            OutboundUrlGuard.ResolvedTarget target = urlGuard.resolve(currentUrl);
+            FetchResponse response = executePinned(target, currentUrl, allowXml, budget);
             int status = response.statusCode();
             if (status < 300 || status >= 400) {
+                if (status < 200 || status >= 300) {
+                    throw new IOException("Unexpected HTTP status " + status);
+                }
                 return response;
             }
 
-            currentUrl = urlGuard.resolveRedirect(currentUrl, response.header("Location"));
+            currentUrl = urlGuard.resolveRedirect(currentUrl, response.location());
+            if (!isAcceptableUrl(currentUrl)) {
+                throw new IOException("Redirect URL is too long");
+            }
         }
 
         throw new IOException("Too many redirects");
     }
 
+    private FetchResponse executePinned(
+            OutboundUrlGuard.ResolvedTarget target,
+            String requestUrl,
+            boolean allowXml,
+            CrawlBudget budget
+    ) throws IOException {
+        Duration timeout = budget.requestTimeout(properties.getWebsiteTimeout());
+        Timeout apacheTimeout = Timeout.ofMilliseconds(timeout.toMillis());
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(apacheTimeout)
+                .setConnectionRequestTimeout(apacheTimeout)
+                .setResponseTimeout(apacheTimeout)
+                .build();
+        DnsResolver pinnedResolver = new PinnedDnsResolver(target.uri().getHost(), target.addresses());
+        var connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
+                .setDnsResolver(pinnedResolver)
+                .build();
+
+        try (CloseableHttpClient client = HttpClients.custom()
+                .setConnectionManager(connectionManager)
+                .disableRedirectHandling()
+                .disableAutomaticRetries()
+                .build()) {
+            HttpGet request = new HttpGet(target.uri());
+            request.setConfig(requestConfig);
+            request.setHeader("User-Agent", properties.getUserAgent());
+            request.setHeader("Referer", "https://yandex.ru/");
+            request.setHeader("Accept", allowXml
+                    ? "application/xml,text/xml,text/plain;q=0.9,*/*;q=0.1"
+                    : "text/html,application/xhtml+xml;q=0.9");
+
+            return client.execute(request, response -> {
+                int status = response.getCode();
+                String location = response.getFirstHeader("Location") == null
+                        ? ""
+                        : response.getFirstHeader("Location").getValue();
+                HttpEntity entity = response.getEntity();
+                long declaredLength = entity == null ? 0 : entity.getContentLength();
+                budget.validateDeclaredLength(declaredLength);
+                if (status >= 300 && status < 400) {
+                    if (entity != null) {
+                        readBounded(entity.getContent(), budget);
+                    }
+                    return new FetchResponse(requestUrl, status, location, "", new byte[0]);
+                }
+
+                String contentType = response.getFirstHeader("Content-Type") == null
+                        ? ""
+                        : response.getFirstHeader("Content-Type").getValue();
+                if (!isAllowedContentType(contentType, allowXml)) {
+                    throw new IOException("Unsupported response content type");
+                }
+                byte[] body = entity == null ? new byte[0] : readBounded(entity.getContent(), budget);
+                return new FetchResponse(requestUrl, status, location, contentType, body);
+            });
+        }
+    }
+
+    private byte[] readBounded(InputStream input, CrawlBudget budget) throws IOException {
+        int responseLimit = properties.getMaxWebsiteResponseBytes();
+        ByteArrayOutputStream output = new ByteArrayOutputStream(Math.min(responseLimit, 32_768));
+        byte[] buffer = new byte[8_192];
+        int read;
+        int responseBytes = 0;
+        while ((read = input.read(buffer)) != -1) {
+            responseBytes += read;
+            if (responseBytes > responseLimit) {
+                throw new IOException("Website response exceeds byte limit");
+            }
+            budget.consumeBytes(read);
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
+    }
+
+    private boolean isAllowedContentType(String contentType, boolean allowXml) {
+        if (contentType == null || contentType.isBlank()) {
+            return true;
+        }
+        String normalized = contentType.toLowerCase(Locale.ROOT);
+        return normalized.startsWith("text/html")
+                || normalized.startsWith("application/xhtml+xml")
+                || (allowXml && (normalized.startsWith("application/xml")
+                || normalized.startsWith("text/xml")
+                || normalized.startsWith("text/plain")));
+    }
+
     private void enqueue(String url, String rootHost, Queue<String> queue, Set<String> queued, Set<String> visited) {
         String normalized = normalizeUrl(url);
         if (normalized.isBlank()
+                || !isAcceptableUrl(normalized)
                 || visited.contains(normalized)
                 || queued.contains(normalized)
                 || !rootHost.equals(host(normalized))
@@ -181,7 +290,7 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
         queued.add(normalized);
     }
 
-    private List<String> discoverSitemapUrls(String rootUrl, String rootHost) {
+    private List<String> discoverSitemapUrls(String rootUrl, String rootHost, CrawlBudget budget) {
         try {
             URI uri = URI.create(rootUrl);
             String scheme = uri.getScheme() == null || uri.getScheme().isBlank() ? "https" : uri.getScheme();
@@ -189,13 +298,17 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
                     ? uri.getHost()
                     : uri.getRawAuthority();
             String sitemapUrl = scheme + "://" + authority + "/sitemap.xml";
-            String sitemap = fetch(sitemapUrl, true).body();
+            FetchResponse response = fetch(sitemapUrl, true, budget);
+            String sitemap = new String(response.body(), response.charset());
 
             LinkedHashSet<String> urls = new LinkedHashSet<>();
             Matcher matcher = SITEMAP_LOC_PATTERN.matcher(sitemap == null ? "" : sitemap);
             while (matcher.find() && urls.size() < properties.getMaxWebsitePages() * MAX_QUEUED_URLS_MULTIPLIER) {
                 String url = normalizeUrl(matcher.group(1));
-                if (rootHost.equals(host(url)) && urlGuard.isAllowed(url) && !isLikelyAssetUrl(url)) {
+                if (rootHost.equals(host(url))
+                        && isAcceptableUrl(url)
+                        && urlGuard.isAllowed(url)
+                        && !isLikelyAssetUrl(url)) {
                     urls.add(url);
                 }
             }
@@ -492,6 +605,13 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
         return normalized;
     }
 
+    private boolean isAcceptableUrl(String url) {
+        return url != null
+                && !url.isBlank()
+                && url.length() <= properties.getMaxWebsiteUrlLength()
+                && isHttpUrl(url);
+    }
+
     private boolean isLikelyAssetUrl(String url) {
         String lower = url.toLowerCase(Locale.ROOT);
         return lower.matches(".*\\.(jpg|jpeg|png|gif|webp|svg|css|js|woff|woff2|ttf|eot|ico|mp4|ogg|webm|pdf)(\\?.*)?$");
@@ -649,6 +769,110 @@ public class JsoupWebsiteCrawler implements WebsiteCrawler {
             return path == null ? "" : path;
         } catch (Exception exception) {
             return "";
+        }
+    }
+
+    private static final class PinnedDnsResolver implements DnsResolver {
+        private final String host;
+        private final InetAddress[] addresses;
+
+        private PinnedDnsResolver(String host, InetAddress[] addresses) {
+            this.host = host;
+            this.addresses = addresses.clone();
+        }
+
+        @Override
+        public InetAddress[] resolve(String requestedHost) throws UnknownHostException {
+            if (!host.equalsIgnoreCase(requestedHost)) {
+                throw new UnknownHostException("Unexpected host in pinned HTTP request");
+            }
+            return addresses.clone();
+        }
+
+        @Override
+        public String resolveCanonicalHostname(String requestedHost) throws UnknownHostException {
+            if (!host.equalsIgnoreCase(requestedHost)) {
+                throw new UnknownHostException("Unexpected host in pinned HTTP request");
+            }
+            return host;
+        }
+    }
+
+    private static final class CrawlBudget {
+        private final int maxRequests;
+        private final int maxTotalBytes;
+        private final int maxResponseBytes;
+        private final long deadlineNanos;
+        private int requests;
+        private long totalBytes;
+
+        private CrawlBudget(ReputationAiProperties properties) {
+            this.maxRequests = properties.getMaxWebsiteRequests();
+            this.maxTotalBytes = properties.getMaxWebsiteTotalBytes();
+            this.maxResponseBytes = properties.getMaxWebsiteResponseBytes();
+            this.deadlineNanos = System.nanoTime() + properties.getWebsiteCrawlDeadline().toNanos();
+        }
+
+        private boolean exhausted() {
+            return requests >= maxRequests
+                    || totalBytes >= maxTotalBytes
+                    || System.nanoTime() >= deadlineNanos;
+        }
+
+        private void beforeRequest() throws IOException {
+            if (exhausted()) {
+                throw new IOException("Website crawl budget is exhausted");
+            }
+            requests++;
+        }
+
+        private Duration requestTimeout(Duration configuredTimeout) throws IOException {
+            long remainingNanos = deadlineNanos - System.nanoTime();
+            if (remainingNanos <= 0) {
+                throw new IOException("Website crawl deadline exceeded");
+            }
+            Duration remaining = Duration.ofNanos(remainingNanos);
+            Duration configured = configuredTimeout == null ? Duration.ofSeconds(8) : configuredTimeout;
+            Duration result = configured.compareTo(remaining) <= 0 ? configured : remaining;
+            return result.compareTo(Duration.ofMillis(1)) < 0 ? Duration.ofMillis(1) : result;
+        }
+
+        private void validateDeclaredLength(long declaredLength) throws IOException {
+            if (declaredLength > maxResponseBytes || declaredLength > maxTotalBytes - totalBytes) {
+                throw new IOException("Website response exceeds byte budget");
+            }
+        }
+
+        private void consumeBytes(int count) throws IOException {
+            if (System.nanoTime() >= deadlineNanos) {
+                throw new IOException("Website crawl deadline exceeded");
+            }
+            totalBytes += count;
+            if (totalBytes > maxTotalBytes) {
+                throw new IOException("Website crawl byte budget is exhausted");
+            }
+        }
+    }
+
+    private record FetchResponse(
+            String url,
+            int statusCode,
+            String location,
+            String contentType,
+            byte[] body
+    ) {
+        private Charset charset() {
+            if (contentType != null) {
+                Matcher matcher = Pattern.compile("(?i)charset\\s*=\\s*[\\\"']?([^;\\s\\\"']+)").matcher(contentType);
+                if (matcher.find()) {
+                    try {
+                        return Charset.forName(matcher.group(1));
+                    } catch (Exception ignored) {
+                        // UTF-8 is the sitemap default below.
+                    }
+                }
+            }
+            return StandardCharsets.UTF_8;
         }
     }
 

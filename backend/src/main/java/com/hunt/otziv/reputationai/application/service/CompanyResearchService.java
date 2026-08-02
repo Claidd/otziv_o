@@ -20,9 +20,11 @@ import com.hunt.otziv.reputationai.infrastructure.web.service.WebsiteCrawler;
 import com.hunt.otziv.security.OutboundUrlGuard;
 import com.hunt.otziv.reputationai.persistence.model.ReputationResearchSnapshotEntity;
 import com.hunt.otziv.reputationai.persistence.repository.ReputationResearchSnapshotRepository;
-import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -37,7 +39,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
-@RequiredArgsConstructor
 public class CompanyResearchService {
 
     private static final Pattern QUOTED_NAME_PATTERN = Pattern.compile("[«\"]([^»\"]{2,60})[»\"]");
@@ -61,13 +62,47 @@ public class CompanyResearchService {
     private final ReputationResearchSnapshotRepository snapshotRepository;
     private final ObjectMapper objectMapper;
     private final PageRoleClassifier pageRoleClassifier;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    @Autowired
+    public CompanyResearchService(
+            CompanyService companyService,
+            WebsiteCrawler websiteCrawler,
+            SearchProviderRouter searchProviderRouter,
+            ReputationAiProperties properties,
+            ReputationResearchSnapshotRepository snapshotRepository,
+            ObjectMapper objectMapper,
+            PageRoleClassifier pageRoleClassifier,
+            TransactionTemplate transactionTemplate
+    ) {
+        this.companyService = companyService;
+        this.websiteCrawler = websiteCrawler;
+        this.searchProviderRouter = searchProviderRouter;
+        this.properties = properties;
+        this.snapshotRepository = snapshotRepository;
+        this.objectMapper = objectMapper;
+        this.pageRoleClassifier = pageRoleClassifier;
+        this.transactionTemplate = transactionTemplate;
+    }
+
+    CompanyResearchService(
+            CompanyService companyService,
+            WebsiteCrawler websiteCrawler,
+            SearchProviderRouter searchProviderRouter,
+            ReputationAiProperties properties,
+            ReputationResearchSnapshotRepository snapshotRepository,
+            ObjectMapper objectMapper,
+            PageRoleClassifier pageRoleClassifier
+    ) {
+        this(companyService, websiteCrawler, searchProviderRouter, properties, snapshotRepository, objectMapper,
+                pageRoleClassifier, null);
+    }
+
     public ResearchSnapshot createSnapshot(Long companyId, ReputationResearchRequest request) {
         ReputationResearchRequest safeRequest = request == null
                 ? new ReputationResearchRequest(null, null, List.of(), List.of(), true, null, null, null, null, null, null)
                 : request;
-        Company company = companyService.getCompaniesById(companyId);
+        Company company = loadCompanyForResearch(companyId);
 
         List<CompanySource> sources = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
@@ -208,7 +243,7 @@ public class CompanyResearchService {
                 LocalDateTime.now()
         );
 
-        save(snapshot);
+        saveInShortTransaction(snapshot);
         return snapshot;
     }
 
@@ -232,6 +267,34 @@ public class CompanyResearchService {
         }
 
         snapshotRepository.save(entity);
+    }
+
+    private Company loadCompanyForResearch(Long companyId) {
+        if (transactionTemplate == null) {
+            return companyService.getCompaniesById(companyId);
+        }
+        Company company = transactionTemplate.execute(status -> {
+            Company loaded = companyService.getCompaniesById(companyId);
+            Hibernate.initialize(loaded.getCategoryCompany());
+            Hibernate.initialize(loaded.getSubCategory());
+            Hibernate.initialize(loaded.getFilial());
+            if (loaded.getFilial() != null) {
+                loaded.getFilial().forEach(filial -> Hibernate.initialize(filial.getCity()));
+            }
+            return loaded;
+        });
+        if (company == null) {
+            throw new IllegalStateException("Компания не найдена");
+        }
+        return company;
+    }
+
+    private void saveInShortTransaction(ResearchSnapshot snapshot) {
+        if (transactionTemplate == null) {
+            save(snapshot);
+            return;
+        }
+        transactionTemplate.executeWithoutResult(status -> save(snapshot));
     }
 
     private SearchRun searchPublicSources(

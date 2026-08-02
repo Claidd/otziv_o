@@ -10,7 +10,7 @@
   [class.card-tone--bad]="isBadTone()"
 >
   <header>
-    <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">
+    <a [href]="orderFilialUrl()" target="_blank" rel="noopener">
       {{ order.companyTitle || 'Без компании' }} - {{ order.filialTitle || 'Без филиала' }}
     </a>
     <div class="review-id-line">
@@ -56,7 +56,7 @@
       <button type="button" (click)="copyTextRequested.emit('check')">текст</button>
       <a [href]="order.orderDetailsId ? '/' + order.orderDetailsId : orderDetailsUrl()" target="_blank" rel="noopener">url</a>
       <button type="button" (click)="copyTextRequested.emit('payment')">счет</button>
-      <a [href]="order.filialUrl || orderDetailsUrl()" target="_blank" rel="noopener">ссылка</a>
+      <a [href]="orderFilialUrl()" target="_blank" rel="noopener">ссылка</a>
     </div>
   }
 

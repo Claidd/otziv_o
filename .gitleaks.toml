@@ -104,6 +104,10 @@ paths = [
   '''(^|/)\.codex-remote-attachments/''',
   '''(^|/)generated-assets/''',
   '''(^|/)mobile/android/app/google-services\.json$''',
+  # Local Android signing credentials are intentionally ignored and never
+  # tracked. Staging/CI gates separately fail closed on this exact path and on
+  # *.jks/*.keystore, while the dir scan avoids reading the local values.
+  '''(^|/)mobile/android/keystore\.properties$''',
 ]
 regexes = [
   '''keycloak-postgres:5432/keycloak''',

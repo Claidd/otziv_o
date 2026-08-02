@@ -4,8 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.maxbot.service.MaxBotUpdateService;
 import com.hunt.otziv.webhook.security.WebhookSignatureVerifier;
-import lombok.RequiredArgsConstructor;
+import com.hunt.otziv.webhook.security.WebhookReplayGuard;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,13 +18,34 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/webhook/max")
-@RequiredArgsConstructor
 @Slf4j
 public class MaxBotWebhookController {
 
     private final MaxBotUpdateService maxBotUpdateService;
     private final ObjectMapper objectMapper;
     private final WebhookSignatureVerifier signatureVerifier;
+    private final WebhookReplayGuard replayGuard;
+
+    @Autowired
+    public MaxBotWebhookController(
+            MaxBotUpdateService maxBotUpdateService,
+            ObjectMapper objectMapper,
+            WebhookSignatureVerifier signatureVerifier,
+            WebhookReplayGuard replayGuard
+    ) {
+        this.maxBotUpdateService = maxBotUpdateService;
+        this.objectMapper = objectMapper;
+        this.signatureVerifier = signatureVerifier;
+        this.replayGuard = replayGuard;
+    }
+
+    public MaxBotWebhookController(
+            MaxBotUpdateService maxBotUpdateService,
+            ObjectMapper objectMapper,
+            WebhookSignatureVerifier signatureVerifier
+    ) {
+        this(maxBotUpdateService, objectMapper, signatureVerifier, new WebhookReplayGuard());
+    }
 
     @Value("${max.bot.webhook-secret:}")
     private String webhookSecret;
@@ -49,14 +71,24 @@ public class MaxBotWebhookController {
             log.warn("MAX webhook rejected: invalid HMAC signature");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-
         JsonNode update = parseUpdate(requestBody);
         if (update == null) {
             return ResponseEntity.badRequest().build();
         }
 
+        String replayKey = hasText(signature) ? signature : signatureVerifier.sha256Hex(requestBody);
+        if (!replayGuard.consume(replayKey)) {
+            log.info("MAX webhook duplicate ignored");
+            return ResponseEntity.ok().build();
+        }
+
         log.info("MAX webhook accepted");
-        maxBotUpdateService.handleUpdate(update);
+        try {
+            maxBotUpdateService.handleUpdate(update);
+        } catch (RuntimeException | Error exception) {
+            replayGuard.release(replayKey);
+            throw exception;
+        }
         return ResponseEntity.ok().build();
     }
 

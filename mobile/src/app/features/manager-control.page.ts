@@ -27,6 +27,7 @@ import {
   WorkerRiskResolutionAction
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { businessDateIso } from '../shared/business-date';
 import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import {
@@ -1275,7 +1276,7 @@ export class ManagerControlPage implements OnInit, OnDestroy {
   }
 
   todayLabel(): string {
-    return new Date().toISOString().slice(0, 10);
+    return businessDateIso();
   }
 
   shortName(value?: string | null): string {

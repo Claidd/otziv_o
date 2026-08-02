@@ -1,5 +1,11 @@
 name: otziv-prod-local
 
+x-default-logging: &default-logging
+  driver: local
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 networks:
   internal_net:
     driver: bridge
@@ -25,6 +31,7 @@ services:
     # Keep prod-like checks on the exact MySQL 9.0.0 image used in production.
     image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
     restart: unless-stopped
+    logging: *default-logging
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -52,9 +59,10 @@ services:
       - internal_net
 
   phpmyadmin:
-    image: phpmyadmin:latest
+    image: phpmyadmin@sha256:b68f318c5fd85541795ed8eb4ced28ea6908a89910871783b3e479cc6c6d1e1b
     profiles: ["db-admin"]
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:${LOCAL_PHPMYADMIN_PORT:-6572}:80"
     environment:
@@ -74,8 +82,9 @@ services:
       - internal_net
 
   keycloak-postgres:
-    image: postgres:17
+    image: postgres@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${KEYCLOAK_DB}
       POSTGRES_USER: ${KEYCLOAK_DB_USER}
@@ -92,8 +101,9 @@ services:
       - internal_net
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.2
+    image: quay.io/keycloak/keycloak@sha256:4883630ef9db14031cde3e60700c9a9a8eaf1b5c24db1589d6a2d43de38ba2a9
     restart: unless-stopped
+    logging: *default-logging
     mem_limit: 1g
     command: start --import-realm
     environment:
@@ -137,6 +147,7 @@ services:
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     restart: unless-stopped
+    logging: *default-logging
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-local}
@@ -158,6 +169,7 @@ services:
   minio-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
     restart: "no"
+    logging: *default-logging
     entrypoint:
       - /bin/sh
       - -c
@@ -182,6 +194,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     environment:
       SPRING_PROFILES_ACTIVE: prod
       WEBHOOK_RATE_LIMIT_ENABLED: ${WEBHOOK_RATE_LIMIT_ENABLED:-true}
@@ -291,6 +304,7 @@ services:
       MAIL_STARTTLS_ENABLE: ${MAIL_STARTTLS_ENABLE:-true}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN_LOCAL_DOCKER}
       TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME_LOCAL_DOCKER}
+      TELEGRAM_BOT_LINK_SECRET: ${TELEGRAM_BOT_LINK_SECRET:-}
       TELEGRAM_BOT_REGISTRATION_ENABLED: ${TELEGRAM_BOT_REGISTRATION_ENABLED:-false}
       TELEGRAM_BOT_SENDING_ENABLED: ${TELEGRAM_BOT_SENDING_ENABLED:-false}
       TELEGRAM_PROXY_ENABLED: ${TELEGRAM_PROXY_ENABLED:-false}
@@ -308,12 +322,13 @@ services:
       WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED: ${WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED:-false}
       MAX_BOT_TOKEN: ${MAX_BOT_TOKEN:-}
       MAX_BOT_USERNAME: ${MAX_BOT_USERNAME:-}
+      MAX_BOT_LINK_SECRET: ${MAX_BOT_LINK_SECRET:-}
       MAX_BOT_WEBHOOK_SECRET: ${MAX_BOT_WEBHOOK_SECRET:-}
       MAX_BOT_WEBHOOK_HMAC_REQUIRED: ${MAX_BOT_WEBHOOK_HMAC_REQUIRED:-false}
       MAX_BOT_WEBHOOK_URL: ${MAX_BOT_WEBHOOK_URL:-}
       MAX_BOT_WEBHOOK_UPDATE_TYPES: ${MAX_BOT_WEBHOOK_UPDATE_TYPES:-bot_started,bot_added,message_created}
       MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED: ${MAX_BOT_WEBHOOK_AUTO_REGISTER_ENABLED:-false}
-      MAX_BOT_API_BASE_URL: ${MAX_BOT_API_BASE_URL:-https://platform-api.max.ru}
+      MAX_BOT_API_BASE_URL: ${MAX_BOT_API_BASE_URL:-https://platform-api2.max.ru}
       MAX_BOT_LONG_POLLING_ENABLED: ${MAX_BOT_LONG_POLLING_ENABLED:-false}
       MAX_BOT_LONG_POLLING_FIXED_DELAY_MS: ${MAX_BOT_LONG_POLLING_FIXED_DELAY_MS:-30000}
       MAX_BOT_LONG_POLLING_TIMEOUT_SECONDS: ${MAX_BOT_LONG_POLLING_TIMEOUT_SECONDS:-25}
@@ -456,6 +471,7 @@ services:
       context: ./backend/external-review-worker
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     init: true
     read_only: true
     security_opt:
@@ -504,6 +520,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:8088:80"
     volumes:
@@ -527,6 +544,7 @@ services:
     image: amir20/dozzle
     profiles: ["observability"]
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:8089:8080"
     volumes:
@@ -546,6 +564,7 @@ services:
     image: prom/prometheus:v2.55.1
     profiles: ["observability"]
     restart: unless-stopped
+    logging: *default-logging
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -571,6 +590,7 @@ services:
     image: grafana/loki:2.9.8
     profiles: ["observability"]
     restart: unless-stopped
+    logging: *default-logging
     command: -config.file=/etc/loki/loki-config.yaml
     volumes:
       - ./infrastructure/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
@@ -588,6 +608,7 @@ services:
     image: grafana/tempo:2.6.1
     profiles: ["observability"]
     restart: unless-stopped
+    logging: *default-logging
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
       - ./infrastructure/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
@@ -605,6 +626,7 @@ services:
     image: grafana/alloy:v1.16.0
     profiles: ["observability"]
     restart: unless-stopped
+    logging: *default-logging
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
@@ -631,6 +653,7 @@ services:
     image: grafana/grafana:10.3.1
     profiles: ["observability"]
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:${LOCAL_GRAFANA_PORT:-3001}:3000"
     environment:

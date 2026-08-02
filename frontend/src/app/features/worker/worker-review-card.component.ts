@@ -2,6 +2,7 @@ import { Component, DestroyRef, EventEmitter, inject, Input, Output } from '@ang
 import { FormsModule } from '@angular/forms';
 import type { WorkerReviewItem, WorkerSection } from '../../core/worker.api';
 import { mobileKeyboardActionBottom } from '../../shared/mobile-keyboard-action-bottom';
+import { safeHttpsExternalUrl } from '../../shared/external-navigation';
 import {
   ReviewCopyKind,
   ReviewEditableField,
@@ -207,6 +208,10 @@ export class WorkerReviewCardComponent {
 
   reviewEditUrl(): string {
     return workerReviewDetailsPath(this.review);
+  }
+
+  reviewFilialUrl(): string {
+    return safeHttpsExternalUrl(this.review.filialUrl) || this.reviewEditUrl();
   }
 
   isReviewTitleLinkEnabled(): boolean {

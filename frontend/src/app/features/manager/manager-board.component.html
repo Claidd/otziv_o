@@ -288,7 +288,6 @@
       }
     </section>
 
-    <app-gamification-me-card class="mobile-personal-gamification" />
 
     <app-personal-reminders class="mobile-personal-reminders" mode="full" />
   </section>
@@ -306,7 +305,6 @@
   <section admin-right-content class="lead-stats manager-stats">
     <app-personal-reminders mode="alert" />
 
-    <app-gamification-me-card />
 
     @for (metric of metrics(); track trackMetric($index, metric)) {
       <button type="button" class="stat-card" [class]="metric.tone" (click)="openMetric(metric)">

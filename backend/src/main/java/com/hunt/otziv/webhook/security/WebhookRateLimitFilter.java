@@ -8,11 +8,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,12 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
     private final WebhookRateLimiter rateLimiter;
     private final WebhookClientIpResolver clientIpResolver;
     private final MeterRegistry meterRegistry;
+
+    @Value("${registration.rate-limit.max-requests:10}")
+    private int registrationMaxRequests = 10;
+
+    @Value("${registration.rate-limit.window:PT10M}")
+    private Duration registrationWindow = Duration.ofMinutes(10);
 
     public WebhookRateLimitFilter(
             WebhookRateLimiter rateLimiter,
@@ -49,11 +57,19 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
         }
 
         String clientIp = clientIpResolver.resolve(request);
-        if (!rateLimiter.tryAcquire(group + "|" + clientIp)) {
+        Duration effectiveRegistrationWindow = boundedRegistrationWindow(registrationWindow);
+        int effectiveRegistrationLimit = Math.max(1, Math.min(registrationMaxRequests, 1_000));
+        boolean accepted = REGISTRATION_PUBLIC_GROUP.equals(group)
+                ? rateLimiter.tryAcquire(group + "|" + clientIp, effectiveRegistrationLimit, effectiveRegistrationWindow)
+                : rateLimiter.tryAcquire(group + "|" + clientIp);
+        if (!accepted) {
             meterRegistry.counter("otziv.http.rate_limit.rejected", "group", group).increment();
             log.debug("Request rate limit exceeded: group={}, ip={}", group, clientIp);
             response.setStatus(429);
-            response.setHeader("Retry-After", Long.toString(rateLimiter.retryAfterSeconds()));
+            long retryAfter = REGISTRATION_PUBLIC_GROUP.equals(group)
+                    ? rateLimiter.retryAfterSeconds(effectiveRegistrationWindow)
+                    : rateLimiter.retryAfterSeconds();
+            response.setHeader("Retry-After", Long.toString(retryAfter));
             response.setHeader("Cache-Control", "no-store");
             response.setHeader("Pragma", "no-cache");
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
@@ -109,11 +125,25 @@ public class WebhookRateLimitFilter extends OncePerRequestFilter {
                 "/review/editReviewses"
         ));
         paths.put("payment-public", List.of("/api/payments/public"));
-        paths.put(REGISTRATION_PUBLIC_GROUP, List.of("/api/auth/register", "/register"));
+        paths.put(REGISTRATION_PUBLIC_GROUP, List.of(
+                "/api/auth/register",
+                "/api/auth/register-performer",
+                "/register"
+        ));
         return Map.copyOf(paths);
     }
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    private static Duration boundedRegistrationWindow(Duration value) {
+        if (value == null || value.isNegative() || value.isZero()) {
+            return Duration.ofMinutes(10);
+        }
+        if (value.compareTo(Duration.ofMinutes(1)) < 0) {
+            return Duration.ofMinutes(1);
+        }
+        return value.compareTo(Duration.ofHours(1)) > 0 ? Duration.ofHours(1) : value;
     }
 }

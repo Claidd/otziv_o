@@ -18,6 +18,7 @@ import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { SystemHealth, SystemHealthApi } from '../../core/system-health.api';
 import { appEnvironment } from '../../core/app-environment';
 import { ToastService } from '../../shared/toast.service';
+import { businessDateIso } from '../../shared/business-date';
 import { normalizeRole, roleLabel } from '../../shared/role-labels';
 import { CabinetBarChartComponent } from '../cabinet/cabinet-bar-chart.component';
 import {
@@ -93,6 +94,7 @@ const DEFAULT_MANUAL_PAYMENT_BUTTON_LABEL = 'Оплатить через Аль�
 })
 export class HomeComponent {
   private reportReviewToastShown = false;
+  private cabinetLoadEpoch = 0;
   readonly roleLabel = roleLabel;
   readonly me = signal<CurrentUser | null>(null);
   readonly health = signal<SystemHealth | null>(null);
@@ -452,6 +454,7 @@ export class HomeComponent {
   }
 
   loadCabinet(forceRefresh = false): void {
+    const requestId = ++this.cabinetLoadEpoch;
     if (this.isClientUser()) {
       this.clearCabinetForClient();
       return;
@@ -462,6 +465,9 @@ export class HomeComponent {
 
     this.cabinetApi.getProfile(this.cabinetDate(), { forceRefresh }).subscribe({
       next: (profile) => {
+        if (requestId !== this.cabinetLoadEpoch) {
+          return;
+        }
         this.cabinet.set(profile);
         if (this.showTransferPreference()
           && this.transferPreference() == null
@@ -471,6 +477,9 @@ export class HomeComponent {
         this.cabinetLoading.set(false);
       },
       error: (err) => {
+        if (requestId !== this.cabinetLoadEpoch) {
+          return;
+        }
         this.cabinetError.set(this.requestWarning(
           'Личный кабинет не загрузился',
           'Зарплата, графики и профиль временно недоступны для выбранной даты.',
@@ -1065,7 +1074,7 @@ export class HomeComponent {
   }
 
   private todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+    return businessDateIso();
   }
 
   private requestWarning(title: string, message: string, err: unknown, icon: string): DashboardWarning {

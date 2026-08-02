@@ -17,6 +17,7 @@ import {
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileMediaService } from '../shared/mobile-media.service';
+import { safeHttpsExternalUrl } from '../shared/external-navigation';
 
 type AssignmentGroup = keyof Pick<UpdateUserAssignmentsRequest, 'managerIds' | 'workerIds' | 'operatorIds' | 'marketologIds'>;
 
@@ -169,7 +170,7 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
                   @if (!draft.id) {
                     <label class="sheet-field">
                       <span>Пароль</span>
-                      <input name="password" type="text" required [ngModel]="draft.password" (ngModelChange)="setDraft('password', $event)">
+                      <input name="password" type="password" autocomplete="new-password" required [ngModel]="draft.password" (ngModelChange)="setDraft('password', $event)">
                     </label>
                   }
 
@@ -197,10 +198,10 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
                         >
                       </label>
                       <small>{{ managerAuditStatus(draft) }}</small>
-                      @if (draft.managerAuditTelegramBotInviteUrl) {
+                      @if (safeExternalUrl(draft.managerAuditTelegramBotInviteUrl); as telegramInviteUrl) {
                         <a
                           class="telegram-audit-link"
-                          [href]="draft.managerAuditTelegramBotInviteUrl"
+                          [href]="telegramInviteUrl"
                           target="_blank"
                           rel="noopener"
                         >
@@ -271,7 +272,7 @@ const ROLE_OPTIONS = ['ADMIN', 'OWNER', 'MANAGER', 'WORKER', 'PERFORMER', 'OPERA
                   }
                   <label class="sheet-field">
                     <span>Новый пароль</span>
-                    <input name="newPassword" type="text" required [ngModel]="passwordDraft().password" (ngModelChange)="setPasswordField('password', $event)">
+                    <input name="newPassword" type="password" autocomplete="new-password" required [ngModel]="passwordDraft().password" (ngModelChange)="setPasswordField('password', $event)">
                   </label>
                   <label class="sheet-field sheet-field--inline">
                     <span>Временный</span>
@@ -557,6 +558,10 @@ export class AdminUsersPage implements OnInit {
     return draft.managerAuditTelegramGroupChatId
       ? 'Telegram-группа привязана.'
       : 'Telegram-группа пока не привязана.';
+  }
+
+  safeExternalUrl(value: unknown): string {
+    return safeHttpsExternalUrl(value) ?? '';
   }
 
   async changeEmploymentStatus(active: boolean): Promise<void> {

@@ -5,6 +5,7 @@ import { CabinetApi, CabinetUserInfo, UserStat } from '../../core/cabinet.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { businessDateIso } from '../../shared/business-date';
 import { CabinetBarChartComponent } from './cabinet-bar-chart.component';
 import {
   cabinetDailyBarChartFrom,
@@ -143,6 +144,6 @@ export class UserInfoComponent {
   }
 
   private todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+    return businessDateIso();
   }
 }

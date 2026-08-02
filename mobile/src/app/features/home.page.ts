@@ -39,6 +39,7 @@ import {
   type MobileRoleSet
 } from '../core/mobile-permissions';
 import { MobileDictionariesComponent } from '../shared/mobile-dictionaries.component';
+import { businessDateIso, millisecondsUntilNextBusinessDay } from '../shared/business-date';
 import { MobileActionSheetComponent } from '../shared/mobile-action-sheet.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileStatusSliderComponent, type MobileStatusItem } from '../shared/mobile-status-slider.component';
@@ -2374,6 +2375,7 @@ export class HomePage implements OnInit, OnDestroy {
   private routerEventsSubscription?: Subscription;
   private lastMobileNavKey = '';
   private midnightRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private reloadEpoch = 0;
 
   readonly activeSection = signal<HomeSectionKey>('profile');
   readonly selectedDate = signal(this.todayIso());
@@ -2463,6 +2465,7 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.reloadEpoch += 1;
     this.closeSectionSheet();
     this.routeSubscription?.unsubscribe();
     this.querySubscription?.unsubscribe();
@@ -2604,46 +2607,82 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   async reload(forceRefresh = false): Promise<void> {
+    const requestId = ++this.reloadEpoch;
     if (!this.auth.isAuthenticated()) {
       await this.auth.login('/tabs/home');
       return;
     }
 
+    const section = this.activeSection();
+    const selectedDate = this.selectedDate();
     this.loading.set(true);
     this.error.set(null);
 
     try {
-      switch (this.activeSection()) {
-        case 'profile':
-          this.profile.set(await firstValueFrom(this.api.getCabinetProfile(this.selectedDate(), { forceRefresh })));
+      switch (section) {
+        case 'profile': {
+          const profile = await firstValueFrom(this.api.getCabinetProfile(selectedDate, { forceRefresh }));
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
+          this.profile.set(profile);
           if (!this.workLocked()) {
-            await this.loadManualPaymentSettings(forceRefresh);
-            await this.loadManualPaymentTasks(forceRefresh);
+            await this.loadManualPaymentSettings(forceRefresh, requestId);
+            if (requestId !== this.reloadEpoch) {
+              return;
+            }
+            await this.loadManualPaymentTasks(forceRefresh, requestId);
           } else {
             this.manualPaymentSettings.set(null);
             this.manualPaymentTasks.set([]);
           }
           break;
-        case 'team':
-          this.team.set(await firstValueFrom(this.api.getCabinetTeam(this.selectedDate(), {
+        }
+        case 'team': {
+          const team = await firstValueFrom(this.api.getCabinetTeam(selectedDate, {
             forceRefresh,
             month: this.teamMonthParam()
-          })));
+          }));
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
+          this.team.set(team);
           break;
-        case 'score':
-          this.score.set(await firstValueFrom(this.api.getCabinetScore(this.selectedDate(), { forceRefresh })));
+        }
+        case 'score': {
+          const score = await firstValueFrom(this.api.getCabinetScore(selectedDate, { forceRefresh }));
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
+          this.score.set(score);
           break;
-        case 'analytics':
-          this.analytics.set(await firstValueFrom(this.api.getCabinetAnalytics(this.selectedDate(), this.analyticsOptions(forceRefresh))));
+        }
+        case 'analytics': {
+          const analytics = await firstValueFrom(this.api.getCabinetAnalytics(selectedDate, this.analyticsOptions(forceRefresh)));
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
+          this.analytics.set(analytics);
           break;
-        case 'dictionaries':
-          this.dictionarySummary.set(await firstValueFrom(this.api.getDictionarySummary(this.canManageAllDictionaries())));
+        }
+        case 'dictionaries': {
+          const summary = await firstValueFrom(this.api.getDictionarySummary(this.canManageAllDictionaries()));
+          if (requestId !== this.reloadEpoch) {
+            return;
+          }
+          this.dictionarySummary.set(summary);
           break;
+        }
       }
     } catch (error) {
+      if (requestId !== this.reloadEpoch) {
+        return;
+      }
       this.error.set(this.errorMessage(error));
     } finally {
-      this.loading.set(false);
+      if (requestId === this.reloadEpoch) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -3476,7 +3515,7 @@ export class HomePage implements OnInit, OnDestroy {
     void this.auth.logout();
   }
 
-  private async loadManualPaymentSettings(forceRefresh = false): Promise<void> {
+  private async loadManualPaymentSettings(forceRefresh = false, requestId = this.reloadEpoch): Promise<void> {
     if (!this.canManageManualPaymentSettings()) {
       this.clearManualPaymentSettings();
       return;
@@ -3486,17 +3525,25 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualPaymentMessage.set(null);
     try {
       const settings = await firstValueFrom(this.api.getManagerManualPaymentSettings({ forceRefresh }));
+      if (requestId !== this.reloadEpoch) {
+        return;
+      }
       this.applyManualPaymentSettings(settings);
     } catch (error) {
+      if (requestId !== this.reloadEpoch) {
+        return;
+      }
       const message = this.errorMessage(error);
       this.clearManualPaymentSettings();
       this.error.set(message);
     } finally {
-      this.manualPaymentLoading.set(false);
+      if (requestId === this.reloadEpoch) {
+        this.manualPaymentLoading.set(false);
+      }
     }
   }
 
-  private async loadManualPaymentTasks(forceRefresh = false): Promise<void> {
+  private async loadManualPaymentTasks(forceRefresh = false, requestId = this.reloadEpoch): Promise<void> {
     if (!this.isManagerUser()) {
       this.clearManualPaymentTasks();
       return;
@@ -3506,13 +3553,21 @@ export class HomePage implements OnInit, OnDestroy {
     this.manualTaskMessage.set(null);
     try {
       const tasks = await firstValueFrom(this.api.getManagerManualPaymentTasks({ forceRefresh }));
+      if (requestId !== this.reloadEpoch) {
+        return;
+      }
       this.manualPaymentTasks.set(tasks ?? []);
     } catch (error) {
+      if (requestId !== this.reloadEpoch) {
+        return;
+      }
       const message = this.errorMessage(error);
       this.manualPaymentTasks.set([]);
       this.manualTaskMessage.set(message);
     } finally {
-      this.manualTaskLoading.set(false);
+      if (requestId === this.reloadEpoch) {
+        this.manualTaskLoading.set(false);
+      }
     }
   }
 
@@ -3777,7 +3832,7 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   private todayIso(): string {
-    return this.localDateIso(new Date());
+    return businessDateIso();
   }
 
   private currentMonthIso(): string {
@@ -3789,25 +3844,12 @@ export class HomePage implements OnInit, OnDestroy {
     return /^\d{4}-\d{2}$/.test(value) ? `${value}-01` : value;
   }
 
-  private localDateIso(date: Date): string {
-    return [
-      date.getFullYear(),
-      this.pad2(date.getMonth() + 1),
-      this.pad2(date.getDate())
-    ].join('-');
-  }
-
-  private pad2(value: number): string {
-    return String(value).padStart(2, '0');
-  }
-
   private scheduleMidnightRefresh(): void {
     this.clearMidnightRefresh();
     const previousToday = this.todayIso();
     const previousMonth = this.currentMonthIso();
     const now = new Date();
-    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2, 0);
-    const delay = Math.max(1000, Math.min(2_147_483_647, nextMidnight.getTime() - now.getTime()));
+    const delay = Math.min(2_147_483_647, millisecondsUntilNextBusinessDay(now) + 2000);
 
     this.midnightRefreshTimer = setTimeout(() => {
       let shouldReload = false;

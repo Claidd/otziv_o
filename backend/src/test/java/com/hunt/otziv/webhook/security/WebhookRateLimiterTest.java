@@ -71,4 +71,27 @@ class WebhookRateLimiterTest {
         tickerNanos.addAndGet(Duration.ofMinutes(3).toNanos());
         assertEquals(0, limiter.bucketCount());
     }
+
+    @Test
+    void customRegistrationWindowIsNotEvictedByShortDefaultWindow() {
+        AtomicLong tickerNanos = new AtomicLong();
+        Ticker ticker = tickerNanos::get;
+        WebhookRateLimiter limiter = new WebhookRateLimiter(
+                true,
+                120,
+                Duration.ofMinutes(1),
+                128,
+                ticker
+        );
+        Instant now = Instant.parse("2026-06-06T00:00:00Z");
+
+        assertTrue(limiter.tryAcquireCustom("registration|10.0.0.1", now, 1, Duration.ofMinutes(10)));
+        tickerNanos.addAndGet(Duration.ofMinutes(3).toNanos());
+        assertFalse(limiter.tryAcquireCustom(
+                "registration|10.0.0.1",
+                now.plus(Duration.ofMinutes(3)),
+                1,
+                Duration.ofMinutes(10)
+        ));
+    }
 }

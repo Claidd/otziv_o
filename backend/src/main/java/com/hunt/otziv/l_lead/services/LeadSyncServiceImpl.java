@@ -1,6 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
 import com.hunt.otziv.config.jwt.service.JwtService;
+import com.hunt.otziv.config.jwt.service.LeadIntegrationHeaders;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
 import com.hunt.otziv.l_lead.model.Lead;
@@ -61,9 +62,10 @@ public class LeadSyncServiceImpl implements LeadSyncService {
         log.info("🔄 [SYNC] Запуск синхронизации лидов: {}", url);
 
         try {
-            String token = jwtService.generateSyncToken();
+            String token = jwtService.generateSyncToken("GET:/api/leads/modified");
 
             HttpHeaders headers = new HttpHeaders();
+            headers.set(LeadIntegrationHeaders.TOKEN, token);
             headers.setBearerAuth(token);
 
             HttpEntity<Void> entity = new HttpEntity<>(headers);

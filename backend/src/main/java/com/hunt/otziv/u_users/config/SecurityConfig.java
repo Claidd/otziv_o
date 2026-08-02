@@ -55,6 +55,13 @@ public class SecurityConfig {
     @Value("${otziv.legacy.enabled:false}")
     private boolean legacyEnabled;
 
+    @Value("${otziv.security.keycloak.backend-client-id:${keycloak.admin.client-id:otziv-backend}}")
+    private String keycloakBackendClientId;
+
+    private static final Set<String> APPLICATION_ROLES = Set.of(
+            "ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR", "MARKETOLOG", "PERFORMER", "CLIENT"
+    );
+
 //    private final JwtRequestFilter jwtRequestFilter;
 
     @Bean
@@ -301,9 +308,22 @@ public class SecurityConfig {
     }
 
     private boolean isBearerOptionalPublicPath(String path) {
-        return path != null && (path.startsWith("/api/payments/public")
-                || path.equals("/api/review-capability")
-                || path.startsWith("/api/review-capability/"));
+        if (path == null) {
+            return false;
+        }
+        int matrixSeparator = path.indexOf(';');
+        String normalized = matrixSeparator >= 0 ? path.substring(0, matrixSeparator) : path;
+        return matchesPathOrDescendant(normalized, "/api/payments/public")
+                || matchesPathOrDescendant(normalized, "/api/review-capability")
+                || normalized.equals("/api/leads/import")
+                || normalized.equals("/api/leads/modified")
+                || normalized.equals("/api/leads/sync")
+                || normalized.equals("/api/leads/update")
+                || normalized.equals("/api/dispatch-settings/cron");
+    }
+
+    private boolean matchesPathOrDescendant(String path, String prefix) {
+        return path.equals(prefix) || path.startsWith(prefix + "/");
     }
 
 
@@ -350,32 +370,41 @@ public class SecurityConfig {
 
         Collection<String> flatRoles = jwt.getClaimAsStringList("roles");
         if (flatRoles != null) {
-            roles.addAll(flatRoles);
+            flatRoles.stream().filter(this::isApplicationRole).forEach(roles::add);
         }
 
         Map<String, Object> realmAccess = jwt.getClaim("realm_access");
         if (realmAccess != null) {
-            addRolesFromObject(roles, realmAccess.get("roles"));
+            addApplicationRolesFromObject(roles, realmAccess.get("roles"));
         }
 
         Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
         if (resourceAccess != null) {
-            resourceAccess.values().stream()
-                    .filter(Map.class::isInstance)
-                    .map(clientAccess -> ((Map<?, ?>) clientAccess).get("roles"))
-                    .forEach(clientRoles -> addRolesFromObject(roles, clientRoles));
+            Object backendAccess = resourceAccess.get(keycloakBackendClientId);
+            if (backendAccess instanceof Map<?, ?> clientAccess) {
+                addApplicationRolesFromObject(roles, clientAccess.get("roles"));
+            }
         }
 
         return roles;
     }
 
-    private void addRolesFromObject(Set<String> roles, Object rolesObject) {
+    private void addApplicationRolesFromObject(Set<String> roles, Object rolesObject) {
         if (rolesObject instanceof Collection<?> values) {
             values.stream()
                     .filter(String.class::isInstance)
                     .map(String.class::cast)
+                    .filter(this::isApplicationRole)
                     .forEach(roles::add);
         }
+    }
+
+    private boolean isApplicationRole(String role) {
+        if (role == null || role.isBlank()) {
+            return false;
+        }
+        String normalized = role.toUpperCase(Locale.ROOT).replaceFirst("^ROLE_", "");
+        return APPLICATION_ROLES.contains(normalized);
     }
 
     private GrantedAuthority toRoleAuthority(String role) {

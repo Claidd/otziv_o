@@ -194,19 +194,14 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<RegistrationUserDTO> getAllUsers() {
-        return userRepository.findAll().stream()
-                .map(this::toDto)
+        return userRepository.findAllForAdminList().stream()
+                .map(user -> toDto(user, false))
                 .collect(Collectors.toList());
     }
 
-    private RegistrationUserDTO toDto(User user) {
+    private RegistrationUserDTO toDto(User user, boolean includeImage) {
         Collection<Role> roles = user.getRoles() == null ? List.of() : user.getRoles();
         roles.forEach(Role::getName);
-
-        Image image = user.getImage();
-        if (image != null) {
-            image.getId();
-        }
 
         Set<Operator> operators = initializedOperators(user.getOperators());
         Set<Manager> managers = initializedManagers(user.getManagers());
@@ -216,7 +211,7 @@ public class UserServiceImpl implements UserService {
         return RegistrationUserDTO.builder()
                 .id(user.getId())
                 .username(user.getUsername())
-                .password(user.getPassword())
+                .password("")
                 .fio(user.getFio())
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
@@ -229,7 +224,7 @@ public class UserServiceImpl implements UserService {
                 .marketologs(marketologs)
                 .manager(new Manager())
                 .coefficient(user.getCoefficient())
-                .image(image)
+                .image(includeImage ? user.getImage() : null)
                 .build();
     }
 
@@ -277,9 +272,7 @@ public class UserServiceImpl implements UserService {
         user.getId();
         user.getUsername();
         user.getFio();
-        if (user.getImage() != null) {
-            user.getImage().getId();
-        }
+        user.getImageId();
     }
 
     @Override
@@ -329,7 +322,7 @@ public class UserServiceImpl implements UserService {
         log.info("Начинается поиск пользователя по id - начало");
         User user = userRepository.findByIdWithAssignments(id).orElseThrow();
         log.info("Начинается поиск пользователя по id - конец");
-        return toDto(user);
+        return toDto(user, true);
     }
 
     @Override

@@ -2,207 +2,213 @@ package com.hunt.otziv.config.jwt.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
+import com.hunt.otziv.l_lead.dto.LeadUpdateDto;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import jakarta.annotation.PostConstruct;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
-import org.springframework.util.DigestUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import javax.crypto.SecretKey;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
+import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 
-import static org.apache.commons.codec.digest.DigestUtils.sha256Hex;
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
 
-    @Value("${jwt.secret}")
-    private String secret;
+    private static final int MAX_INTEGRATION_BODY_BYTES = 1_048_576;
+    private static final Map<String, IntegrationRule> RULES = Map.of(
+            "/api/leads/import", new IntegrationRule("POST", JwtService.LEAD_TRANSFER_SUBJECT,
+                    JwtService.IMPORT_SCOPE, LeadDtoTransfer.class),
+            "/api/leads/modified", new IntegrationRule("GET", JwtService.LEAD_SYNC_SUBJECT,
+                    "GET:/api/leads/modified", null),
+            "/api/leads/sync", new IntegrationRule("POST", JwtService.LEAD_SYNC_SUBJECT,
+                    "POST:/api/leads/sync", LeadDtoTransfer.class),
+            "/api/leads/update", new IntegrationRule("POST", JwtService.LEAD_SYNC_SUBJECT,
+                    "POST:/api/leads/update", LeadUpdateDto.class),
+            "/api/dispatch-settings/cron", new IntegrationRule("GET", JwtService.LEAD_SYNC_SUBJECT,
+                    "GET:/api/dispatch-settings/cron", null)
+    );
 
     private final ObjectMapper objectMapper;
     private final JwtService jwtService;
+    private final LeadTokenReplayGuard replayGuard;
 
-    private final Map<String, BiConsumer<HttpServletRequestContext, HttpServletResponse>> pathChecks = new HashMap<>();
+    @Value("${lead.integration.legacy-bearer-enabled:true}")
+    private boolean legacyBearerEnabled = true;
 
-    @PostConstruct
-    public void init() {
-        pathChecks.put("/api/leads/import", this::checkImportAuth);
-        pathChecks.put("/api/leads/modified", this::checkSyncAuth);
-        pathChecks.put("/api/leads/sync", this::checkSyncAuth);
-        pathChecks.put("/api/leads/update", this::checkSyncAuth);
-        pathChecks.put("/api/dispatch-settings/cron", this::checkSyncAuth);
+    @Value("${lead.integration.legacy-bearer-accept-until:2026-08-17T00:00:00Z}")
+    private String legacyBearerAcceptUntil = "2026-08-17T00:00:00Z";
+
+    @Autowired
+    public JwtAuthFilter(ObjectMapper objectMapper, JwtService jwtService, LeadTokenReplayGuard replayGuard) {
+        this.objectMapper = objectMapper;
+        this.jwtService = jwtService;
+        this.replayGuard = replayGuard;
+    }
+
+    /** Compatibility constructor for focused security contract tests. */
+    public JwtAuthFilter(ObjectMapper objectMapper, JwtService jwtService) {
+        this(objectMapper, jwtService, new LeadTokenReplayGuard());
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
-            throws ServletException, IOException {
-
-        String uri = request.getRequestURI();
-
-        // 🔓 Пропускаем вебхуки и health без JWT и авторизации
-        if (uri.startsWith("/webhook") || uri.equals("/health")) {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+        String applicationPath = applicationPath(request);
+        IntegrationRule rule = RULES.get(applicationPath);
+        if (rule == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        if (pathChecks.containsKey(uri)) {
-            HttpServletRequestContext context = new HttpServletRequestContext(request);
-            try {
-                pathChecks.get(uri).accept(context, response);
-            } catch (AuthException e) {
-                log.warn("🔒 Ошибка авторизации: {} ({}): {}", e.status, uri, e.getMessage());
-                response.sendError(e.status, e.getMessage());
-                return;
-            }
-
-            if (uri.equals("/api/leads/import")) {
-                filterChain.doFilter(context.getWrappedRequest(), response);
-                return;
-            }
+        if (!rule.method().equalsIgnoreCase(request.getMethod())) {
+            response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED, "Method is not allowed");
+            return;
         }
 
-        filterChain.doFilter(request, response);
-    }
-
-
-//    @Override
-//    protected void doFilterInternal(HttpServletRequest request,
-//                                    HttpServletResponse response,
-//                                    FilterChain filterChain)
-//            throws ServletException, IOException {
-//
-//        String uri = request.getRequestURI();
-//
-//        if (pathChecks.containsKey(uri)) {
-//            HttpServletRequestContext context = new HttpServletRequestContext(request);
-//            try {
-//                pathChecks.get(uri).accept(context, response);
-//            } catch (AuthException e) {
-//                log.warn("🔒 Ошибка авторизации: {} ({}): {}", e.status, uri, e.getMessage());
-//                response.sendError(e.status, e.getMessage());
-//                return;
-//            }
-//
-//            if (uri.equals("/api/leads/import")) {
-//                filterChain.doFilter(context.getWrappedRequest(), response);
-//                return;
-//            }
-//        }
-//
-//        filterChain.doFilter(request, response);
-//    }
-
-    private void checkImportAuth(HttpServletRequestContext context, HttpServletResponse response) {
-        String token = extractTokenOrThrow(context.request);
-        Claims claims = parseTokenOrThrow(token);
-
-        String expectedChecksum = claims.get("checksum", String.class);
-
+        HttpServletRequest effectiveRequest = request;
+        String replayId;
+        Claims claims;
         try {
-            CachedBodyHttpServletRequest wrapped = new CachedBodyHttpServletRequest(context.request);
-            context.setWrappedRequest(wrapped);
-            LeadDtoTransfer dto = objectMapper.readValue(wrapped.getInputStream(), LeadDtoTransfer.class);
-            String actualChecksum = jwtService.generateChecksum(dto);
-            if (!expectedChecksum.equals(actualChecksum)) {
-                throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Checksum mismatch");
+            SelectedToken selectedToken = extractToken(request);
+            claims = selectedToken.modern()
+                    ? jwtService.parseAndValidate(selectedToken.value(), rule.subject(), rule.scope())
+                    : jwtService.parseLegacyAndValidate(selectedToken.value(), rule.subject());
+            if (rule.payloadType() != null) {
+                CachedBodyHttpServletRequest wrapped = new CachedBodyHttpServletRequest(
+                        request,
+                        MAX_INTEGRATION_BODY_BYTES
+                );
+                effectiveRequest = wrapped;
+                Object payload = objectMapper.readValue(wrapped.getCachedBody(), rule.payloadType());
+                if (selectedToken.modern() || JwtService.LEAD_TRANSFER_SUBJECT.equals(rule.subject())) {
+                    String expected = claims.get("checksum", String.class);
+                    String actual = selectedToken.modern()
+                            ? jwtService.generateChecksum(payload)
+                            : legacyChecksum(payload);
+                    if (expected == null || !constantTimeEquals(expected, actual)) {
+                        throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Payload signature mismatch");
+                    }
+                }
             }
-        } catch (IOException e) {
-            throw new AuthException(HttpServletResponse.SC_BAD_REQUEST, "Invalid request body");
+            replayId = selectedToken.modern()
+                    ? claims.getId()
+                    : "legacy:" + jwtService.tokenFingerprint(selectedToken.value());
+            if (!replayGuard.consume(replayId)) {
+                throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Integration token was already used");
+            }
+        } catch (BodyTooLargeException exception) {
+            response.sendError(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, exception.getMessage());
+            return;
+        } catch (AuthException exception) {
+            log.warn("Integration authorization rejected for {}: {}", request.getRequestURI(), exception.getMessage());
+            response.sendError(exception.status(), exception.getMessage());
+            return;
+        } catch (JwtException | IllegalArgumentException exception) {
+            log.warn("Invalid integration token for {}", request.getRequestURI());
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid integration token");
+            return;
+        } catch (IOException exception) {
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid integration request body");
+            return;
         }
-    }
 
-    private void checkSyncAuth(HttpServletRequestContext context, HttpServletResponse response) {
-        String token = extractTokenOrThrow(context.request);
-        Claims claims = parseTokenOrThrow(token);
-
-        if (!"lead-sync".equals(claims.getSubject())) {
-            throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Wrong token subject");
-        }
-
-        // ✅ Устанавливаем Authentication в SecurityContext
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                claims.getSubject(), null, List.of() // Можно добавить роли, если нужно
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(claims.getSubject(), null, List.of())
         );
-        SecurityContextHolder.getContext().setAuthentication(authentication);
-
-        log.info("🛡 JWT авторизация прошла: subject = {}", claims.getSubject());
-    }
-
-    private String extractTokenOrThrow(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new AuthException(HttpServletResponse.SC_UNAUTHORIZED, "Missing token");
-        }
-        return authHeader.substring(7);
-    }
-
-    private Claims parseTokenOrThrow(String token) {
         try {
-            return Jwts.parser()
-                    .verifyWith(signingKey())
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
-        } catch (JwtException e) {
-            throw new AuthException(HttpServletResponse.SC_FORBIDDEN, "Invalid token");
+            filterChain.doFilter(effectiveRequest, response);
+        } catch (RuntimeException | Error | ServletException | IOException exception) {
+            replayGuard.release(replayId);
+            throw exception;
+        }
+        if (response.getStatus() >= HttpServletResponse.SC_INTERNAL_SERVER_ERROR) {
+            replayGuard.release(replayId);
         }
     }
 
-    private SecretKey signingKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    private String applicationPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (contextPath != null && !contextPath.isBlank() && path.startsWith(contextPath)) {
+            path = path.substring(contextPath.length());
+        }
+        int matrixSeparator = path.indexOf(';');
+        return matrixSeparator >= 0 ? path.substring(0, matrixSeparator) : path;
     }
 
-    @RequiredArgsConstructor
-    public static class AuthException extends RuntimeException {
+    private SelectedToken extractToken(HttpServletRequest request) {
+        String token = request.getHeader(LeadIntegrationHeaders.TOKEN);
+        if (token != null && !token.isBlank()) {
+            return new SelectedToken(token.trim(), true);
+        }
+        String authorization = request.getHeader("Authorization");
+        if (legacyBearerEnabled
+                && legacyBearerWindowIsOpen()
+                && authorization != null
+                && authorization.startsWith("Bearer ")
+                && !authorization.substring(7).isBlank()) {
+            return new SelectedToken(authorization.substring(7).trim(), false);
+        }
+        throw new AuthException(HttpServletResponse.SC_UNAUTHORIZED, "Missing integration token");
+    }
+
+    private boolean legacyBearerWindowIsOpen() {
+        try {
+            return Instant.now().isBefore(Instant.parse(legacyBearerAcceptUntil));
+        } catch (Exception exception) {
+            log.error("Legacy integration bearer deadline is invalid; fallback is disabled");
+            return false;
+        }
+    }
+
+    private String legacyChecksum(Object payload) {
+        if (payload instanceof LeadDtoTransfer lead) {
+            return jwtService.generateLegacyChecksum(lead);
+        }
+        // Legacy sync tokens never bound request bodies; the one-time token fingerprint still prevents replay.
+        return "";
+    }
+
+    private boolean constantTimeEquals(String expected, String actual) {
+        return MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.US_ASCII),
+                actual.getBytes(StandardCharsets.US_ASCII)
+        );
+    }
+
+    private record IntegrationRule(String method, String subject, String scope, Class<?> payloadType) {
+    }
+
+    private record SelectedToken(String value, boolean modern) {
+    }
+
+    private static final class AuthException extends RuntimeException {
         private final int status;
-        private final String message;
 
-        @Override
-        public String getMessage() {
-            return message;
-        }
-    }
-
-    @Getter
-    private static class HttpServletRequestContext {
-        private final HttpServletRequest request;
-        private HttpServletRequest wrappedRequest;
-
-        public HttpServletRequestContext(HttpServletRequest request) {
-            this.request = request;
-            this.wrappedRequest = request;
+        private AuthException(int status, String message) {
+            super(message);
+            this.status = status;
         }
 
-        public void setWrappedRequest(HttpServletRequest wrappedRequest) {
-            this.wrappedRequest = wrappedRequest;
+        private int status() {
+            return status;
         }
     }
 }
-
-
-
-
-

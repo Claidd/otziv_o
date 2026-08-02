@@ -23,16 +23,16 @@
 
       <label>
         <span>Пароль</span>
-        <input type="password" formControlName="password" autocomplete="new-password">
+        <input type="password" formControlName="password" autocomplete="new-password" minlength="12" maxlength="128">
       </label>
 
       <label>
         <span>Повтор пароля</span>
-        <input type="password" formControlName="matchingPassword" autocomplete="new-password">
+        <input type="password" formControlName="matchingPassword" autocomplete="new-password" minlength="12" maxlength="128">
       </label>
 
       @if (form.invalid && form.touched) {
-        <p class="error">Проверь логин, email и пароль.</p>
+        <p class="error">Проверь логин и email. Пароль: 12–128 символов, заглавная и строчная буквы, цифра и специальный символ.</p>
       }
 
       @if (error()) {

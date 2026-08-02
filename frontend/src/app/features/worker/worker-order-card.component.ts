@@ -5,6 +5,7 @@ import type { OrderCardItem } from '../../core/manager.api';
 import type { WorkerPermissions, WorkerSection } from '../../core/worker.api';
 import { CompanyNoteTriggerComponent } from '../../shared/company-note-trigger.component';
 import { formatPhoneForDisplay, phoneDigits } from '../../shared/phone-format';
+import { safeHttpsExternalUrl } from '../../shared/external-navigation';
 import {
   DEFAULT_WORKER_PERMISSIONS,
   StatusAction,
@@ -113,6 +114,10 @@ export class WorkerOrderCardComponent {
 
   orderDetailsUrl(): string {
     return workerOrderDetailsPath(this.order);
+  }
+
+  orderFilialUrl(): string {
+    return safeHttpsExternalUrl(this.order.filialUrl) || this.orderDetailsUrl();
   }
 
   orderEditUrl(): string {

@@ -9,8 +9,11 @@ import {
   RegisterPerformerResponse
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { safeHttpsExternalUrl } from '../shared/external-navigation';
 
 type RegisterMode = 'client' | 'performer' | 'legacy';
+
+const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L}\p{N}\s])[^\r\n]{12,128}$/u;
 
 @Component({
   selector: 'app-public-register-page',
@@ -40,7 +43,9 @@ type RegisterMode = 'client' | 'performer' | 'legacy';
               <span class="material-icons-sharp">task_alt</span>
               <strong>Исполнитель {{ performer.username }} создан.</strong>
               <small>Временный пароль: {{ performer.temporaryPassword }}</small>
-              <a [href]="performer.telegramLinkUrl" target="_blank" rel="noopener">Привязать Telegram</a>
+              @if (safeExternalUrl(performer.telegramLinkUrl); as telegramLinkUrl) {
+                <a [href]="telegramLinkUrl" target="_blank" rel="noopener">Привязать Telegram</a>
+              }
             </section>
           }
 
@@ -50,8 +55,8 @@ type RegisterMode = 'client' | 'performer' | 'legacy';
               <label><span>Email</span><input name="email" type="email" required [ngModel]="client.email" (ngModelChange)="client.email = $event"></label>
               <label><span>ФИО</span><input name="fio" [ngModel]="client.fio" (ngModelChange)="client.fio = $event"></label>
               <label><span>Телефон</span><input name="phone" type="tel" [ngModel]="client.phoneNumber" (ngModelChange)="client.phoneNumber = $event"></label>
-              <label><span>Пароль</span><input name="password" type="password" required [ngModel]="client.password" (ngModelChange)="client.password = $event"></label>
-              <label><span>Повтор пароля</span><input name="matchingPassword" type="password" required [ngModel]="client.matchingPassword" (ngModelChange)="client.matchingPassword = $event"></label>
+              <label><span>Пароль</span><input name="password" type="password" required minlength="12" maxlength="128" [ngModel]="client.password" (ngModelChange)="client.password = $event"></label>
+              <label><span>Повтор пароля</span><input name="matchingPassword" type="password" required minlength="12" maxlength="128" [ngModel]="client.matchingPassword" (ngModelChange)="client.matchingPassword = $event"></label>
               <button class="primary" type="submit" [disabled]="saving()">{{ saving() ? 'Создаем...' : 'Зарегистрироваться' }}</button>
             </form>
           } @else if (mode() === 'performer') {
@@ -104,6 +109,10 @@ export class PublicRegisterPage implements OnInit {
   })[this.mode()]);
   readonly kicker = computed(() => this.mode() === 'legacy' ? 'Миграция' : 'Публичная форма');
 
+  safeExternalUrl(value: unknown): string {
+    return safeHttpsExternalUrl(value) ?? '';
+  }
+
   constructor(
     private readonly api: ApiService,
     private readonly auth: AuthService,
@@ -129,8 +138,16 @@ export class PublicRegisterPage implements OnInit {
   submitClient(): void {
     this.error.set(null);
     this.createdUser.set(null);
-    if (!this.client.username.trim() || !this.client.email.includes('@') || !this.client.password || this.client.password !== this.client.matchingPassword) {
-      this.error.set('Заполните логин, e-mail и одинаковые пароли.');
+    if (!this.client.username.trim() || !this.client.email.includes('@')) {
+      this.error.set('Заполните логин и корректный e-mail.');
+      return;
+    }
+    if (!STRONG_PASSWORD_PATTERN.test(this.client.password)) {
+      this.error.set('Пароль: 12–128 символов, заглавная и строчная буквы, цифра и специальный символ.');
+      return;
+    }
+    if (this.client.password !== this.client.matchingPassword) {
+      this.error.set('Пароли не совпадают.');
       return;
     }
     this.saving.set(true);

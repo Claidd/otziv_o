@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -19,22 +21,27 @@ import static org.mockito.Mockito.when;
 
 class MaxGroupLinkServiceTest {
 
+    private static final String LINK_SECRET = "max-link-secret-for-tests-at-least-32-bytes";
+
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final MaxBotClient maxBotClient = mock(MaxBotClient.class);
     private final MaxGroupLinkService service = new MaxGroupLinkService(companyRepository, maxBotClient);
 
+    @BeforeEach
+    void configureLinkSecret() {
+        ReflectionTestUtils.setField(service, "linkSecret", LINK_SECRET);
+    }
+
     @Test
     void usesBotStartUrlByDefaultEvenWhenMaxWebGroupUrlIsPresent() {
         ReflectionTestUtils.setField(service, "botUsername", "id380124742639_bot");
-        ReflectionTestUtils.setField(service, "linkSecret", "test-secret");
-
         String inviteUrl = service.buildInviteUrl(
                 1160L,
                 "https://web.max.ru/-72727178175095?utm=test",
                 null
         );
 
-        assertTrue(inviteUrl.startsWith("https://max.ru/id380124742639_bot?start=c1160_"));
+        assertTrue(inviteUrl.startsWith("https://max.ru/id380124742639_bot?start=c"));
     }
 
     @Test
@@ -127,6 +134,7 @@ class MaxGroupLinkServiceTest {
         company.setId(1160L);
         company.setTitle("Метролог Групп");
         company.setUrlChat("https://max.ru/join/expectedJoinToken123");
+        company.setMaxLinkRequestedAt(LocalDateTime.now());
 
         JsonNode chat = new ObjectMapper().readTree("""
                 {
@@ -138,6 +146,24 @@ class MaxGroupLinkServiceTest {
         when(maxBotClient.getChat(-74924486091383L)).thenReturn(chat);
         when(companyRepository.findTop3ByMaxGroupChatIdIsNullAndUrlChatContaining("actualJoinToken456"))
                 .thenReturn(List.of());
+        when(companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(203090551L))
+                .thenReturn(Optional.of(company));
+
+        Optional<String> response = service.handleBotAdded(-74924486091383L, 203090551L);
+
+        assertTrue(response.orElse("").contains("не совпадает"));
+        verify(companyRepository, never()).save(company);
+    }
+
+    @Test
+    void refusesPendingJoinLinkWhenChatApiDoesNotConfirmItsLink() {
+        Company company = new Company();
+        company.setId(1160L);
+        company.setTitle("Метролог Групп");
+        company.setUrlChat("https://max.ru/join/expectedJoinToken123");
+        company.setMaxLinkRequestedAt(LocalDateTime.now());
+
+        when(maxBotClient.getChat(-74924486091383L)).thenReturn(null);
         when(companyRepository.findFirstByMaxLinkUserIdOrderByMaxLinkRequestedAtDesc(203090551L))
                 .thenReturn(Optional.of(company));
 

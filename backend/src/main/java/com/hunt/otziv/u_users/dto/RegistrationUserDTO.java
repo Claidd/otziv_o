@@ -18,15 +18,27 @@ import java.util.*;
 public class RegistrationUserDTO {
     private Long id;
     @NotEmpty(message = "Имя не может быть пустым")
+    @Size(max = 100)
+    @Pattern(regexp = "^[^\\p{Cc}\\p{Zl}\\p{Zp}]*$")
     private String username;
     @NotEmpty (message = "Пароль не может быть пустым")
+    @Size(min = 12, max = 128, message = "Пароль должен содержать от 12 до 128 символов")
+    @Pattern(
+            regexp = "^(?=.*\\p{Ll})(?=.*\\p{Lu})(?=.*\\p{N})(?=.*[^\\p{L}\\p{N}\\s])[^\\r\\n]{12,128}$",
+            message = "Пароль должен содержать строчную и заглавную буквы, цифру и специальный символ"
+    )
     private String password;
     @NotEmpty (message = "Повторный пароль может быть пустым")
+    @Size(min = 12, max = 128)
     private String matchingPassword;
     @NotEmpty (message = "ФИО не может быть пустым")
+    @Size(max = 255)
+    @Pattern(regexp = "^[^\\p{Cc}\\p{Zl}\\p{Zp}]*$")
     private String fio;
     @NotEmpty (message = "email не может быть пустым")
     @Email (message = "Некорректный email")
+    @Size(max = 255)
+    @Pattern(regexp = "^[^\\p{Cc}\\p{Zl}\\p{Zp}]*$")
     private String email;
     @NotEmpty (message = "Номер телефона не может быть пустым")
     @Pattern(regexp = "^(\\+7|7|8)?[\\s\\-]?\\(?[489][0-9]{2}\\)?[\\s\\-]?[0-9]{3}[\\s\\-]?[0-9]{2}[\\s\\-]?[0-9]{2}$", message = "Неверное количество цифр: Укажите номер правильно")

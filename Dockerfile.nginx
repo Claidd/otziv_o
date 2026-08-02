@@ -1,4 +1,9 @@
+# QUARANTINED LEGACY IMAGE. Active builds use frontend/Dockerfile.
+# Retained for history only; it includes diagnostic tooling unsuitable for the
+# production web image and refuses accidental builds unless explicitly opted in.
 FROM nginx:latest
+ARG OTZIV_ALLOW_QUARANTINED_DOCKERFILE=false
+RUN test "$OTZIV_ALLOW_QUARANTINED_DOCKERFILE" = "true"
 
 RUN apt-get update \
     && apt-get install -y telnet \

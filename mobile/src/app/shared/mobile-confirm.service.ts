@@ -17,6 +17,9 @@ export class MobileConfirmService {
   readonly active = signal<ActiveConfirm | null>(null);
 
   confirm(request: MobileConfirmRequest): Promise<boolean> {
+    if (this.active()) {
+      return Promise.resolve(false);
+    }
     return new Promise<boolean>((resolve) => {
       this.active.set({
         title: request.title || 'Подтверждение',

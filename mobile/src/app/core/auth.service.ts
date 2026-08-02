@@ -48,8 +48,14 @@ export class AuthService {
       return;
     }
 
-    this.tokens.set(stored);
-    this.syncUser(stored.accessToken);
+    try {
+      this.tokens.set(stored);
+      this.syncUser(stored.accessToken);
+    } catch {
+      await this.clearSession('anonymous').catch(() => this.clearState('anonymous'));
+      this.error.set('Сессия была повреждена и очищена. Войдите заново.');
+      return;
+    }
 
     if (this.isTokenFresh(stored, 45)) {
       this.status.set('authenticated');
@@ -444,7 +450,10 @@ export class AuthService {
 
   private syncUser(accessToken: string): void {
     const claims = this.parseJwt(accessToken);
-    const subject = this.stringClaim(claims, 'sub') || '';
+    const subject = this.stringClaim(claims, 'sub');
+    if (!subject) {
+      throw new Error('Access token has no subject claim');
+    }
     const preferredUsername = this.stringClaim(claims, 'preferred_username') || subject;
 
     this.user.set({

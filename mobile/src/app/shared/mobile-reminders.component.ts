@@ -10,6 +10,7 @@ import {
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { MobileConfirmService } from './mobile-confirm.service';
+import { safeExternalSchemeUrl, safeHttpsExternalUrl } from './external-navigation';
 
 type PersonalReminderDraft = {
   title: string;
@@ -29,7 +30,7 @@ export type MobileRecoveryClientNotifiedDetail = {
   batchId: number;
 };
 
-const CHAT_LINE_PATTERN = /(^|\n)\s*Чат:\s*(https?:\/\/\S+|tel:\S+)/i;
+const CHAT_LINE_PATTERN = /(^|\n)\s*Чат:\s*(https:\/\/\S+|tel:\S+)/i;
 const ORDER_ID_PATTERN = /#(\d+)/;
 
 export function dispatchMobileRecoveryClientNotified(detail: MobileRecoveryClientNotifiedDetail): void {
@@ -553,7 +554,8 @@ export class MobileRemindersComponent implements OnInit, OnDestroy {
 
   reminderChatUrl(reminder: PersonalReminder): string | null {
     const match = (reminder.text || '').match(CHAT_LINE_PATTERN);
-    return match?.[2]?.trim() || null;
+    const value = match?.[2];
+    return safeHttpsExternalUrl(value) ?? safeExternalSchemeUrl(value, ['tel:']);
   }
 
   isRecoveryCompletionReminder(reminder: PersonalReminder): boolean {

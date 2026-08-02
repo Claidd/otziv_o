@@ -19,6 +19,13 @@ generated-assets
 *.log
 .env
 .env.*
+**/keystore.properties
+**/*.jks
+**/*.keystore
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
 .m2
 !backend/.env.local.example
 !frontend/package.json

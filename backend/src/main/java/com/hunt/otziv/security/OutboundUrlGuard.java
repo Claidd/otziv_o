@@ -6,6 +6,8 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.Locale;
 
 @Component
@@ -33,25 +35,7 @@ public class OutboundUrlGuard {
 
     public boolean isAllowed(String value) {
         try {
-            URI uri = parseHttpUri(value);
-            String host = uri.getHost();
-            if (!hasText(host) || hasUserInfo(uri)) {
-                return false;
-            }
-
-            if (allowLocalAddresses) {
-                return true;
-            }
-
-            if (isLocalhostName(host)) {
-                return false;
-            }
-
-            for (InetAddress address : InetAddress.getAllByName(host)) {
-                if (!isPublicAddress(address)) {
-                    return false;
-                }
-            }
+            resolve(value);
             return true;
         } catch (Exception exception) {
             return false;
@@ -59,9 +43,36 @@ public class OutboundUrlGuard {
     }
 
     public void assertAllowed(String value) {
-        if (!isAllowed(value)) {
+        resolve(value);
+    }
+
+    /**
+     * Resolves and validates a URL once. Callers must use {@link ResolvedTarget#addresses()}
+     * for the subsequent socket connection instead of resolving the host again.
+     */
+    public ResolvedTarget resolve(String value) {
+        URI uri = parseHttpUri(value);
+        String host = uri.getHost();
+        if (!hasText(host) || hasUserInfo(uri)) {
             throw new IllegalArgumentException("Outbound URL is not allowed");
         }
+        if (!allowLocalAddresses && isLocalhostName(host)) {
+            throw new IllegalArgumentException("Outbound URL is not allowed");
+        }
+
+        InetAddress[] addresses;
+        try {
+            addresses = InetAddress.getAllByName(host);
+        } catch (UnknownHostException exception) {
+            throw new IllegalArgumentException("Outbound URL host cannot be resolved", exception);
+        }
+        if (addresses.length == 0) {
+            throw new IllegalArgumentException("Outbound URL host cannot be resolved");
+        }
+        if (!allowLocalAddresses && Arrays.stream(addresses).anyMatch(address -> !isPublicAddress(address))) {
+            throw new IllegalArgumentException("Outbound URL is not allowed");
+        }
+        return new ResolvedTarget(uri, addresses);
     }
 
     public int maxRedirects() {
@@ -151,5 +162,16 @@ public class OutboundUrlGuard {
 
     private static boolean hasText(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    public record ResolvedTarget(URI uri, InetAddress[] addresses) {
+        public ResolvedTarget {
+            addresses = addresses == null ? new InetAddress[0] : addresses.clone();
+        }
+
+        @Override
+        public InetAddress[] addresses() {
+            return addresses.clone();
+        }
     }
 }

@@ -6,15 +6,12 @@ import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
+import com.hunt.otziv.webhook.security.OneTimeGroupLinkTokenStore;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -23,13 +20,14 @@ import java.util.regex.Pattern;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class TelegramGroupLinkService {
 
     private static final String PAYLOAD_PREFIX = "c";
     private static final String WORKER_PAYLOAD_PREFIX = "u";
     private static final String MANAGER_AUDIT_PAYLOAD_PREFIX = "m";
-    private static final int SIGNATURE_LENGTH = 12;
+    private static final String COMPANY_SCOPE = "telegram-company-group";
+    private static final String WORKER_SCOPE = "telegram-worker-group";
+    private static final String MANAGER_AUDIT_SCOPE = "telegram-manager-audit-group";
     private static final Pattern TELEGRAM_PUBLIC_CHAT_URL = Pattern.compile(
             "(?i)^(?:https?://)?(?:t\\.me|telegram\\.me|telegram\\.dog)/@?([A-Za-z0-9_]{5,32})(?:[/?#].*)?$"
     );
@@ -40,11 +38,33 @@ public class TelegramGroupLinkService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final ManagerRepository managerRepository;
+    private final OneTimeGroupLinkTokenStore tokenStore;
+
+    @Autowired
+    public TelegramGroupLinkService(
+            CompanyRepository companyRepository,
+            UserRepository userRepository,
+            ManagerRepository managerRepository,
+            OneTimeGroupLinkTokenStore tokenStore
+    ) {
+        this.companyRepository = companyRepository;
+        this.userRepository = userRepository;
+        this.managerRepository = managerRepository;
+        this.tokenStore = tokenStore;
+    }
+
+    public TelegramGroupLinkService(
+            CompanyRepository companyRepository,
+            UserRepository userRepository,
+            ManagerRepository managerRepository
+    ) {
+        this(companyRepository, userRepository, managerRepository, new OneTimeGroupLinkTokenStore());
+    }
 
     @Value("${telegram.bot.username:}")
     private String botUsername;
 
-    @Value("${telegram.bot.link-secret:${telegram.bot.token:otziv-telegram-link}}")
+    @Value("${telegram.bot.link-secret:}")
     private String linkSecret;
 
     public boolean isTelegramChatUrl(String url) {
@@ -89,6 +109,10 @@ public class TelegramGroupLinkService {
             log.warn("Telegram group invite link is unavailable: telegram.bot.username is empty");
             return "";
         }
+        if (!OneTimeGroupLinkTokenStore.isStrongSecret(linkSecret)) {
+            log.error("Telegram group invite link is unavailable: telegram.bot.link-secret is missing or too short");
+            return "";
+        }
 
         return "https://t.me/" + username + "?startgroup=" + payloadForCompany(companyId);
     }
@@ -101,6 +125,10 @@ public class TelegramGroupLinkService {
         String username = normalizedBotUsername();
         if (!hasText(username)) {
             log.warn("Telegram worker group invite link is unavailable: telegram.bot.username is empty");
+            return "";
+        }
+        if (!OneTimeGroupLinkTokenStore.isStrongSecret(linkSecret)) {
+            log.error("Telegram worker invite link is unavailable: telegram.bot.link-secret is missing or too short");
             return "";
         }
 
@@ -117,6 +145,10 @@ public class TelegramGroupLinkService {
         String username = normalizedBotUsername();
         if (!hasText(username)) {
             log.warn("Telegram manager audit group invite link is unavailable: telegram.bot.username is empty");
+            return "";
+        }
+        if (!OneTimeGroupLinkTokenStore.isStrongSecret(linkSecret)) {
+            log.error("Telegram manager audit invite is unavailable: telegram.bot.link-secret is missing or too short");
             return "";
         }
         return "https://t.me/" + username + "?startgroup=" + payloadForManagerAudit(manager.getId());
@@ -177,8 +209,8 @@ public class TelegramGroupLinkService {
             return handleManagerAuditGroupStartCommand(chatId, payload);
         }
 
-        Long companyId = parsePayloadId(payload, PAYLOAD_PREFIX);
-        if (companyId == null || !payload.equals(payloadForCompany(companyId))) {
+        Long companyId = consumePayload(payload, PAYLOAD_PREFIX, COMPANY_SCOPE).orElse(null);
+        if (companyId == null) {
             log.warn("Telegram group link rejected: invalid payload '{}', chatId={}", payload, chatId);
             return Optional.of("Не удалось привязать группу: ссылка устарела или неверная.");
         }
@@ -197,8 +229,8 @@ public class TelegramGroupLinkService {
     }
 
     private Optional<String> handleWorkerGroupStartCommand(long chatId, String payload) {
-        Long userId = parsePayloadId(payload, WORKER_PAYLOAD_PREFIX);
-        if (userId == null || !payload.equals(payloadForWorker(userId))) {
+        Long userId = consumePayload(payload, WORKER_PAYLOAD_PREFIX, WORKER_SCOPE).orElse(null);
+        if (userId == null) {
             log.warn("Telegram worker group link rejected: invalid payload '{}', chatId={}", payload, chatId);
             return Optional.of("Не удалось привязать группу специалиста: ссылка устарела или неверная.");
         }
@@ -217,8 +249,8 @@ public class TelegramGroupLinkService {
     }
 
     private Optional<String> handleManagerAuditGroupStartCommand(long chatId, String payload) {
-        Long managerId = parsePayloadId(payload, MANAGER_AUDIT_PAYLOAD_PREFIX);
-        if (managerId == null || !payload.equals(payloadForManagerAudit(managerId))) {
+        Long managerId = consumePayload(payload, MANAGER_AUDIT_PAYLOAD_PREFIX, MANAGER_AUDIT_SCOPE).orElse(null);
+        if (managerId == null) {
             log.warn("Telegram manager audit group link rejected: invalid payload '{}', chatId={}", payload, chatId);
             return Optional.of("Не удалось привязать группу аудита менеджера: ссылка устарела или неверная.");
         }
@@ -269,31 +301,22 @@ public class TelegramGroupLinkService {
     }
 
     private String payloadForCompany(Long companyId) {
-        return PAYLOAD_PREFIX + companyId + "_" + signature(companyId);
+        return PAYLOAD_PREFIX + tokenStore.issue(COMPANY_SCOPE, companyId, linkSecret);
     }
 
     private String payloadForWorker(Long userId) {
-        return WORKER_PAYLOAD_PREFIX + userId + "_" + signature("telegram-worker-group:", userId);
+        return WORKER_PAYLOAD_PREFIX + tokenStore.issue(WORKER_SCOPE, userId, linkSecret);
     }
 
     private String payloadForManagerAudit(Long managerId) {
-        return MANAGER_AUDIT_PAYLOAD_PREFIX
-                + managerId
-                + "_"
-                + signature("telegram-manager-audit-group:", managerId);
+        return MANAGER_AUDIT_PAYLOAD_PREFIX + tokenStore.issue(MANAGER_AUDIT_SCOPE, managerId, linkSecret);
     }
 
-    private Long parsePayloadId(String payload, String prefix) {
-        int separator = payload.indexOf('_');
-        if (separator <= prefix.length()) {
-            return null;
+    private Optional<Long> consumePayload(String payload, String prefix, String scope) {
+        if (!hasText(payload) || !payload.startsWith(prefix) || payload.length() <= prefix.length()) {
+            return Optional.empty();
         }
-
-        try {
-            return Long.parseLong(payload.substring(prefix.length(), separator));
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return tokenStore.consume(payload.substring(prefix.length()), scope, linkSecret);
     }
 
     private String extractStartPayload(String messageText) {
@@ -307,29 +330,6 @@ public class TelegramGroupLinkService {
         }
 
         return parts[1].trim();
-    }
-
-    private String signature(Long companyId) {
-        return signature("telegram-group:", companyId);
-    }
-
-    private String signature(String scope, Long id) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secretBytes(), "HmacSHA256"));
-            byte[] digest = mac.doFinal((scope + id).getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder()
-                    .withoutPadding()
-                    .encodeToString(digest)
-                    .substring(0, SIGNATURE_LENGTH);
-        } catch (Exception e) {
-            throw new IllegalStateException("Cannot sign Telegram group link", e);
-        }
-    }
-
-    private byte[] secretBytes() {
-        String secret = hasText(linkSecret) ? linkSecret.trim() : "otziv-telegram-link";
-        return secret.getBytes(StandardCharsets.UTF_8);
     }
 
     private String normalizedBotUsername() {

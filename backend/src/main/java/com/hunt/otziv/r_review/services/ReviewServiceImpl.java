@@ -3,6 +3,8 @@ package com.hunt.otziv.r_review.services;
 import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.services.BotService;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
+import com.hunt.otziv.c_categories.model.Category;
+import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.c_categories.services.CategoryService;
 import com.hunt.otziv.c_categories.services.SubCategoryService;
 import com.hunt.otziv.c_companies.model.Filial;
@@ -65,6 +67,9 @@ import static com.hunt.otziv.r_review.utils.ReviewTextPolicy.isBlankOrPlaceholde
 @Slf4j
 @RequiredArgsConstructor
 public class ReviewServiceImpl implements ReviewService {
+
+    private static final String REVIEW_TEXT_PLACEHOLDER = "Текст отзыва";
+    private static final int ARCHIVE_TEXT_UPDATE_BATCH_SIZE = 500;
 
     private final ReviewRepository reviewRepository;
     private final ReviewArchiveRepository reviewArchiveRepository;
@@ -1118,24 +1123,27 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional
     public void updateReviewByFilials(Set<Filial> filials, Long categoryId, Long subCategoryId) {
-        List<Review> reviews = reviewRepository.findAllByFilials(filials);
-        Iterable<ReviewArchive> reviewArchives = reviewArchiveRepository.findAll();
-
-        for (Review review : reviews) {
-            review.setCategory(categoryService.getCategoryByIdCategory(categoryId));
-            review.setSubCategory(subCategoryService.getSubCategoryById(subCategoryId));
-            reviewRepository.save(review);
+        if (filials == null || filials.isEmpty()) {
+            return;
         }
 
-        for (ReviewArchive reviewArchive : reviewArchives) {
-            for (Review review : reviews) {
-                if (Objects.equals(review.getText(), reviewArchive.getText()) && !"Текст отзыва".equals(reviewArchive.getText())) {
-                    reviewArchive.setCategory(categoryService.getCategoryByIdCategory(categoryId));
-                    reviewArchive.setSubCategory(subCategoryService.getSubCategoryById(subCategoryId));
-                    reviewArchiveRepository.save(reviewArchive);
-                }
-            }
+        Category category = categoryService.getCategoryByIdCategory(categoryId);
+        SubCategory subCategory = subCategoryService.getSubCategoryById(subCategoryId);
+        List<String> reviewTexts = reviewRepository.findDistinctNonPlaceholderTextsByFilials(
+                filials,
+                REVIEW_TEXT_PLACEHOLDER
+        );
+
+        reviewRepository.updateClassificationByFilials(filials, category, subCategory);
+        for (int start = 0; start < reviewTexts.size(); start += ARCHIVE_TEXT_UPDATE_BATCH_SIZE) {
+            int end = Math.min(start + ARCHIVE_TEXT_UPDATE_BATCH_SIZE, reviewTexts.size());
+            reviewArchiveRepository.updateClassificationByTexts(
+                    reviewTexts.subList(start, end),
+                    category,
+                    subCategory
+            );
         }
     }
 

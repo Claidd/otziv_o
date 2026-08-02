@@ -1,6 +1,7 @@
 package com.hunt.otziv.l_lead.services;
 
 import com.hunt.otziv.config.jwt.service.JwtService;
+import com.hunt.otziv.config.jwt.service.LeadIntegrationHeaders;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.dto.LeadUpdateDto;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
@@ -38,10 +39,12 @@ public class LeadTransferServiceImpl implements LeadTransferService {
     public void sendLeadToServer(Long leadId) {
         LeadDtoTransfer dto = leadService.findByIdToTransfer(leadId);
         String token = jwtService.generateToken(dto);
+        String legacyToken = jwtService.generateLegacyTransferToken(dto);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(token);
+        headers.set(LeadIntegrationHeaders.TOKEN, token);
+        headers.setBearerAuth(legacyToken);
 
         HttpEntity<LeadDtoTransfer> request = new HttpEntity<>(dto, headers);
         restTemplate.postForEntity(remoteUrl, request, String.class);
@@ -51,15 +54,6 @@ public class LeadTransferServiceImpl implements LeadTransferService {
 
     public void sendLeadUpdate(Lead lead) {
         LeadUpdateDto dto = leadMapper.toUpdateDto(lead);
-        String token = jwtService.generateSyncToken();
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setAccept(List.of(MediaType.APPLICATION_JSON)); // 🔧 Явно ожидаем JSON
-        headers.setBearerAuth(token);
-
-        HttpEntity<LeadUpdateDto> entity = new HttpEntity<>(dto, headers);
-
         log.info("📤 Отправка обновлённого лида на сервер...");
 //        log.info("🔎 Lead ID: {}", lead.getId());
 //        log.info("📞 Телефон: {}", lead.getTelephoneLead());
@@ -70,6 +64,13 @@ public class LeadTransferServiceImpl implements LeadTransferService {
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
                 log.info("🚀 Попытка {}: отправка POST-запроса на {}", attempt, remoteUpdateUrl);
+                String token = jwtService.generateSyncToken("POST:/api/leads/update", dto);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+                headers.set(LeadIntegrationHeaders.TOKEN, token);
+                headers.setBearerAuth(token);
+                HttpEntity<LeadUpdateDto> entity = new HttpEntity<>(dto, headers);
 
                 ResponseEntity<Map<String, String>> response = restTemplate.exchange(
                         remoteUpdateUrl,

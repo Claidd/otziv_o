@@ -46,7 +46,6 @@ public class ReputationSingleReviewDraftService {
     private final ReviewSafetyService reviewSafetyService;
     private final ObjectMapper objectMapper;
 
-    @Transactional(readOnly = true)
     public ReputationSingleReviewDraftResult generate(Long companyId, ReputationSingleReviewDraftRequest request) {
         ReputationSingleReviewDraftRequest safeRequest = request == null
                 ? new ReputationSingleReviewDraftRequest(null, null, null, null, null, null, null)
@@ -91,7 +90,6 @@ public class ReputationSingleReviewDraftService {
         return sanitizeCompanyName(result, reportEnvelope, packEnvelope);
     }
 
-    @Transactional(readOnly = true)
     public ReputationBatchReviewDraftResult generateBatch(Long companyId, ReputationBatchReviewDraftRequest request) {
         ReputationBatchReviewDraftRequest safeRequest = request == null
                 ? new ReputationBatchReviewDraftRequest(null, null, null, null, null, null, null, null, List.of())

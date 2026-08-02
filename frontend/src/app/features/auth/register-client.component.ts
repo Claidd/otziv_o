@@ -7,6 +7,8 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 
+const STRONG_PASSWORD_PATTERN = /^(?=.*\p{Ll})(?=.*\p{Lu})(?=.*\p{N})(?=.*[^\p{L}\p{N}\s])[^\r\n]{12,128}$/u;
+
 @Component({
   selector: 'app-register-client',
   imports: [AdminLayoutComponent, LoadErrorCardComponent, ReactiveFormsModule, RouterLink],
@@ -27,8 +29,8 @@ export class RegisterClientComponent {
     email: ['', [Validators.required, Validators.email]],
     fio: [''],
     phoneNumber: [''],
-    password: ['', [Validators.required, Validators.minLength(6)]],
-    matchingPassword: ['', [Validators.required, Validators.minLength(6)]]
+    password: ['', [Validators.required, Validators.pattern(STRONG_PASSWORD_PATTERN)]],
+    matchingPassword: ['', [Validators.required, Validators.pattern(STRONG_PASSWORD_PATTERN)]]
   });
 
   submit(): void {

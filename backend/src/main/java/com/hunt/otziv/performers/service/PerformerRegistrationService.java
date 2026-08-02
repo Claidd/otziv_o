@@ -55,7 +55,7 @@ public class PerformerRegistrationService {
         }
 
         String phone = normalizePhone(request.getPhoneNumber());
-        if (phone.length() < 10) {
+        if (phone.length() < 10 || phone.length() > 15) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите корректный телефон");
         }
 
@@ -117,11 +117,10 @@ public class PerformerRegistrationService {
     }
 
     private String generateTemporaryPassword() {
-        StringBuilder result = new StringBuilder("T");
-        for (int i = 0; i < 11; i++) {
+        StringBuilder result = new StringBuilder("Ta7!");
+        for (int i = 0; i < 12; i++) {
             result.append(GENERATED_CREDENTIAL_CHARS[secureRandom.nextInt(GENERATED_CREDENTIAL_CHARS.length)]);
         }
-        result.append("7!");
         return result.toString();
     }
 

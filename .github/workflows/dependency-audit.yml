@@ -52,7 +52,7 @@ jobs:
           - whatsapp
           - backend/external-review-worker
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@v4
         with:
           node-version: "22.18.0"
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -85,7 +85,7 @@ jobs:
         working-directory: backend
       - name: Upload dependency-check reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: maven-dependency-check
           path: |

@@ -5,6 +5,7 @@ import { CabinetApi, ManagerPerformanceScore, ScoreResponse, ScoreUser } from '.
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorDetail } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
+import { businessDateIso } from '../../shared/business-date';
 
 type ScoreGroupKey = 'managers' | 'workers' | 'operators' | 'marketologs';
 
@@ -282,6 +283,6 @@ export class ScoreComponent {
   }
 
   private todayIso(): string {
-    return new Date().toISOString().slice(0, 10);
+    return businessDateIso();
   }
 }

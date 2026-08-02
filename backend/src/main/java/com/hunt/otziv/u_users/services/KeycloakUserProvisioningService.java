@@ -51,8 +51,10 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.springframework.http.HttpStatus.BAD_GATEWAY;
@@ -142,8 +144,21 @@ public class KeycloakUserProvisioningService {
 
     @Transactional(readOnly = true)
     public List<AdminUserResponse> getUsers() {
-        return userRepository.findAll().stream()
-                .map(this::toAdminResponse)
+        List<User> users = userRepository.findAllForAdminList();
+        Set<Long> managerUserIds = users.stream()
+                .filter(user -> toKeycloakRoles(user.getRoles()).contains("MANAGER"))
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        Map<Long, Manager> managersByUserId = managerService.getManagersByUserIdsForAdminList(managerUserIds)
+                .stream()
+                .filter(manager -> manager.getUser() != null && manager.getUser().getId() != null)
+                .collect(Collectors.toMap(
+                        manager -> manager.getUser().getId(),
+                        Function.identity(),
+                        (first, ignored) -> first
+                ));
+        return users.stream()
+                .map(user -> toAdminResponse(user, managersByUserId.get(user.getId())))
                 .toList();
     }
 
@@ -790,7 +805,11 @@ public class KeycloakUserProvisioningService {
         Manager manager = roles.contains("MANAGER")
                 ? managerService.getManagerByUserId(user.getId())
                 : null;
+        return toAdminResponse(user, manager);
+    }
 
+    private AdminUserResponse toAdminResponse(User user, Manager manager) {
+        Set<String> roles = toKeycloakRoles(user.getRoles());
         return AdminUserResponse.builder()
                 .id(user.getId())
                 .keycloakId(user.getKeycloakId())
@@ -812,7 +831,7 @@ public class KeycloakUserProvisioningService {
                 .managerAuditTelegramBotInviteUrl(
                         telegramGroupLinkService.buildManagerAuditInviteUrl(manager)
                 )
-                .imageId(user.getImage() == null ? null : user.getImage().getId())
+                .imageId(user.getImageId())
                 .active(user.isActive())
                 .createTime(user.getCreateTime())
                 .lastLoginAt(user.getLastLoginAt())

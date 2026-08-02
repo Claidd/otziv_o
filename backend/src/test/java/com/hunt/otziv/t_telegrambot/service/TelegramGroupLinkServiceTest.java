@@ -7,6 +7,7 @@ import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
 import com.hunt.otziv.u_users.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,11 +22,18 @@ import static org.mockito.Mockito.when;
 
 class TelegramGroupLinkServiceTest {
 
+    private static final String LINK_SECRET = "telegram-link-secret-for-tests-32-bytes";
+
     private final CompanyRepository companyRepository = mock(CompanyRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final ManagerRepository managerRepository = mock(ManagerRepository.class);
     private final TelegramGroupLinkService service =
             new TelegramGroupLinkService(companyRepository, userRepository, managerRepository);
+
+    @BeforeEach
+    void configureLinkSecret() {
+        setField(service, "linkSecret", LINK_SECRET);
+    }
 
     @Test
     void linksBotAddedEventByPublicTelegramUsername() {
@@ -90,6 +98,9 @@ class TelegramGroupLinkServiceTest {
         assertTrue(response.orElse("").contains("Специалист"));
         assertEquals(-1001234567891L, worker.getWorkerTelegramGroupChatId());
         verify(userRepository).save(worker);
+
+        Optional<String> replay = service.handleGroupStartCommand(-1001234567892L, "/start " + payload);
+        assertTrue(replay.orElse("").contains("устарела"));
     }
 
     @Test

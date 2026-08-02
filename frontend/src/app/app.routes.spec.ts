@@ -102,4 +102,13 @@ describe('routes', () => {
       expect(route(path as string)?.data?.['roles']).toEqual(roles);
     });
   });
+
+  it('keeps gamification UI routes disabled and provides a public not-found route', () => {
+    expect(route('gamification/progress')).toBeUndefined();
+    expect(route('admin/gamification/rewards')).toBeUndefined();
+
+    const notFound = route('**');
+    expect(typeof notFound?.loadComponent).toBe('function');
+    expect(notFound?.canActivate).toBeUndefined();
+  });
 });

@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { SecureStorage, type DataType } from '@aparajita/capacitor-secure-storage';
 import type { PendingLogin, StoredTokens } from './auth.models';
+import { isPendingLogin, isStoredTokens } from './auth-storage-validation';
 
 const TOKENS_KEY = 'otziv.mobile.tokens';
 const PENDING_LOGIN_KEY = 'otziv.mobile.pendingLogin';
@@ -12,7 +13,15 @@ export class MobileAuthStorageService {
   private readonly secureStorageAvailable = Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('SecureStorage');
 
   async readTokens(): Promise<StoredTokens | null> {
-    return this.readJson<StoredTokens>(TOKENS_KEY);
+    const value = await this.readJson<Record<string, unknown>>(TOKENS_KEY);
+    if (!value) {
+      return null;
+    }
+    if (isStoredTokens(value)) {
+      return value;
+    }
+    await this.clearTokens();
+    return null;
   }
 
   async writeTokens(tokens: StoredTokens): Promise<void> {
@@ -28,7 +37,15 @@ export class MobileAuthStorageService {
   }
 
   async readPendingLogin(): Promise<PendingLogin | null> {
-    return this.readJson<PendingLogin>(PENDING_LOGIN_KEY);
+    const value = await this.readJson<Record<string, unknown>>(PENDING_LOGIN_KEY);
+    if (!value) {
+      return null;
+    }
+    if (isPendingLogin(value)) {
+      return value;
+    }
+    await this.clearPendingLogin();
+    return null;
   }
 
   async clearPendingLogin(): Promise<void> {

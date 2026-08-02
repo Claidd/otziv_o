@@ -155,26 +155,6 @@ const SECONDARY_LINKS: AppNavigationLink[] = [
     roles: ['MANAGER']
   },
   {
-    id: 'achievements',
-    label: 'Мои достижения',
-    description: 'Цели, серии и личный прогресс',
-    icon: 'emoji_events',
-    active: 'gamification-progress',
-    group: 'home',
-    routerLink: '/gamification/progress',
-    roles: ['ADMIN', 'OWNER']
-  },
-  {
-    id: 'gamification-rewards',
-    label: 'Награды',
-    description: 'Каталог и заявки сотрудников',
-    icon: 'redeem',
-    active: 'gamification-rewards',
-    group: 'home',
-    routerLink: '/admin/gamification/rewards',
-    roles: ['ADMIN', 'OWNER']
-  },
-  {
     id: 'notification-media',
     label: 'Уведомления',
     description: 'Картинки Telegram-отправок',

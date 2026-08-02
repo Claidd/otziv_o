@@ -60,6 +60,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.hunt.otziv.logs.LogMasking.maskPaymentId;
 import lombok.extern.slf4j.Slf4j;
@@ -196,6 +199,7 @@ public class PaymentLinkService {
     private static final String BANK_INIT_AMBIGUOUS_PREFIX = "bank_init_ambiguous:";
     private static final Duration BANK_CANCEL_LEASE = Duration.ofMinutes(5);
     private static final Duration BANK_CANCEL_WATCH = Duration.ofHours(24);
+    private static final Duration PUBLIC_BANK_STATE_MIN_INTERVAL = Duration.ofSeconds(10);
     private static final String BANK_CANCEL_IN_PROGRESS_PREFIX = "bank_cancel_in_progress:";
     private static final String BANK_CANCEL_AMBIGUOUS_PREFIX = "bank_cancel_ambiguous:";
 
@@ -218,6 +222,7 @@ public class PaymentLinkService {
     private final ManagerAccessService managerAccessService;
     private final PaymentLinkTransactionExecutor transactionExecutor;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final ConcurrentMap<String, LocalDateTime> publicBankStateClaims = new ConcurrentHashMap<>();
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public ManagerPaymentLinkResponse createForOrder(Long orderId) {
@@ -523,11 +528,11 @@ public class PaymentLinkService {
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PublicPaymentLinkResponse publicLink(String token) {
         PaymentLink snapshot = findPublicLink(token);
-        BankStateObservation observation = observeTbankState(snapshot);
+        PublicBankStateProbe probe = observePublicTbankState(snapshot);
         Long snapshotOrderId = snapshot.getOrder() == null ? null : snapshot.getOrder().getId();
 
         PublicLinkRefresh refreshed = transactionExecutor.required(() ->
-                refreshPublicLink(token, observation, snapshotOrderId)
+                refreshPublicLink(token, probe, snapshotOrderId)
         );
         if (!refreshed.replacementRequired() || refreshed.orderId() == null) {
             return refreshed.response();
@@ -546,22 +551,24 @@ public class PaymentLinkService {
         if (replacementSnapshot == null) {
             return refreshed.response();
         }
-        BankStateObservation replacementObservation = observeTbankState(replacementSnapshot);
+        PublicBankStateProbe replacementProbe = observePublicTbankState(replacementSnapshot);
         PublicPaymentLinkResponse currentReplacement = transactionExecutor.required(() ->
-                refreshPublicReplacement(replacementId, replacementObservation)
+                refreshPublicReplacement(replacementId, replacementProbe)
         );
         return currentReplacement == null ? refreshed.response() : currentReplacement;
     }
 
     private PublicLinkRefresh refreshPublicLink(
             String token,
-            BankStateObservation observation,
+            PublicBankStateProbe probe,
             Long snapshotOrderId
     ) {
+        BankStateObservation observation = probe.observation();
         Long lockedOrderId = snapshotOrderId == null
                 ? lockObservedOrderFirst(observation)
                 : orderRepository.findByIdForCounterUpdate(snapshotOrderId).map(Order::getId).orElse(null);
         PaymentLink link = findPublicLinkForUpdateStrict(token);
+        markPublicBankStateAttempt(link, probe);
         if (hasOrderBinding(link, lockedOrderId)) {
             recoverExpiredBankInitReservationLocked(link, LocalDateTime.now(), "public_get");
         }
@@ -608,13 +615,15 @@ public class PaymentLinkService {
 
     private PublicPaymentLinkResponse refreshPublicReplacement(
             Long linkId,
-            BankStateObservation observation
+            PublicBankStateProbe probe
     ) {
+        BankStateObservation observation = probe.observation();
         Long lockedOrderId = lockObservedOrderFirst(observation);
         PaymentLink link = paymentLinkRepository.findByIdForUpdate(linkId).orElse(null);
         if (link == null) {
             return null;
         }
+        markPublicBankStateAttempt(link, probe);
         applyObservedTbankStateIfCurrent(link, observation, lockedOrderId);
         expireIfPastDue(link);
         expireIfAmountChanged(link);
@@ -664,6 +673,51 @@ public class PaymentLinkService {
             );
         }
         return null;
+    }
+
+    /**
+     * A public payment page may be reloaded several times at once (focus,
+     * pageshow and a manual refresh). Keep those reads public, but do not turn
+     * every reload into another provider request. The durable timestamp also
+     * coordinates the public path with scheduled reconciliation; the local
+     * atomic claim closes the gap before that timestamp is committed.
+     */
+    private PublicBankStateProbe observePublicTbankState(PaymentLink link) {
+        if (!shouldObserveTbankState(link)) {
+            return PublicBankStateProbe.skipped();
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime eligibleBefore = now.minus(PUBLIC_BANK_STATE_MIN_INTERVAL);
+        if (link.getBankReconciliationAttemptedAt() != null
+                && link.getBankReconciliationAttemptedAt().isAfter(eligibleBefore)) {
+            return PublicBankStateProbe.skipped();
+        }
+
+        String claimKey = link.getId() == null
+                ? "token:" + normalize(link.getToken())
+                : "id:" + link.getId();
+        AtomicBoolean claimed = new AtomicBoolean(false);
+        publicBankStateClaims.compute(claimKey, (ignored, previous) -> {
+            if (previous != null && previous.isAfter(eligibleBefore)) {
+                return previous;
+            }
+            claimed.set(true);
+            return now;
+        });
+        if (!claimed.get()) {
+            return PublicBankStateProbe.skipped();
+        }
+        if (publicBankStateClaims.size() > 10_000) {
+            publicBankStateClaims.entrySet().removeIf(entry -> !entry.getValue().isAfter(eligibleBefore));
+        }
+        return new PublicBankStateProbe(true, now, observeTbankState(link));
+    }
+
+    private void markPublicBankStateAttempt(PaymentLink link, PublicBankStateProbe probe) {
+        if (link != null && probe.attempted() && probe.attemptedAt() != null) {
+            link.setBankReconciliationAttemptedAt(probe.attemptedAt());
+        }
     }
 
     private boolean shouldObserveTbankState(PaymentLink link) {
@@ -4062,6 +4116,16 @@ public class PaymentLinkService {
             PaymentLinkStatus status,
             TbankGetStateResponse state
     ) {
+    }
+
+    private record PublicBankStateProbe(
+            boolean attempted,
+            LocalDateTime attemptedAt,
+            BankStateObservation observation
+    ) {
+        private static PublicBankStateProbe skipped() {
+            return new PublicBankStateProbe(false, null, null);
+        }
     }
 
     private record CancelReservation(

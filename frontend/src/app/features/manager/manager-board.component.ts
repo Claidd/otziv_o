@@ -28,7 +28,6 @@ import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { copyTextToClipboard } from '../../shared/clipboard-copy';
 import { CompanyCreateModalComponent } from '../../shared/company-create-modal.component';
 import { DailyProgressStripComponent } from '../../shared/daily-progress-strip.component';
-import { GamificationMeCardComponent } from '../../shared/gamification-me-card.component';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
 import { MobileBottomPagerComponent } from '../../shared/mobile/mobile-bottom-pager.component';
 import { MobileNavIntentService } from '../../shared/mobile/mobile-nav-intent.service';
@@ -113,7 +112,6 @@ type ChatBotLinkPoll = {
     CompanyCreateModalComponent,
     DailyProgressStripComponent,
     FormsModule,
-    GamificationMeCardComponent,
     LoadErrorCardComponent,
     MobileBottomPagerComponent,
     MobileStatusSheetComponent,
@@ -153,6 +151,7 @@ export class ManagerBoardComponent implements OnDestroy {
   private chatBotLinkRefreshInFlight = false;
   private searchTimer: number | null = null;
   private lastMobileNavIntentStamp = 0;
+  private boardLoadEpoch = 0;
 
   readonly sections = MANAGER_SECTIONS;
   readonly companyActions = MANAGER_COMPANY_ACTIONS;
@@ -306,6 +305,7 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.boardLoadEpoch += 1;
     this.clearSearchTimer();
     for (const timer of this.chatBotLinkPollTimers.values()) {
       window.clearTimeout(timer);
@@ -334,6 +334,7 @@ export class ManagerBoardComponent implements OnDestroy {
   }
 
   loadBoard(): void {
+    const requestId = ++this.boardLoadEpoch;
     this.loading.set(true);
     this.error.set(null);
 
@@ -349,10 +350,16 @@ export class ManagerBoardComponent implements OnDestroy {
       sortDirection: this.sortDirection()
     }).subscribe({
       next: (board) => {
+        if (requestId !== this.boardLoadEpoch) {
+          return;
+        }
         this.board.set(board);
         this.loading.set(false);
       },
       error: (err) => {
+        if (requestId !== this.boardLoadEpoch) {
+          return;
+        }
         const message = this.errorMessage(err, 'Не удалось загрузить раздел менеджера');
         this.error.set(message);
         this.loading.set(false);

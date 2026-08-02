@@ -2,6 +2,7 @@ package com.hunt.otziv.l_lead.services.serv;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hunt.otziv.config.jwt.service.JwtService;
+import com.hunt.otziv.config.jwt.service.LeadIntegrationHeaders;
 import com.hunt.otziv.l_lead.dto.LeadDtoTransfer;
 import com.hunt.otziv.l_lead.dto.LeadUpdateDto;
 import com.hunt.otziv.l_lead.mapper.LeadMapper;
@@ -90,8 +91,9 @@ public class VpsSyncService {
     }
 
     private void sendDtoToVps(LeadDtoTransfer dto) {
-        String token = jwtService.generateSyncToken(); // subject = "lead-sync"
+        String token = jwtService.generateSyncToken("POST:/api/leads/sync", dto);
         HttpHeaders headers = new HttpHeaders();
+        headers.set(LeadIntegrationHeaders.TOKEN, token);
         headers.setBearerAuth(token);
         headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -264,6 +266,4 @@ public class VpsSyncService {
 //        }
 //    }
 //}
-
-
 

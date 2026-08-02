@@ -2727,12 +2727,23 @@ export class TbankPage implements OnInit {
     this.savingProfilePolicies.set(true);
     this.savingProfiles.set(true);
     this.error.set(null);
+    let policiesCommitted = false;
     try {
       await firstValueFrom(this.api.updateAdminPaymentProfilePolicies(this.profilePolicyRequest()));
+      policiesCommitted = true;
       const state = await firstValueFrom(this.api.updateAdminTbankPaymentProfileAssignments(assignments));
       this.applyProfilesState(state.profiles, state.managers);
     } catch (error) {
-      this.error.set(this.errorMessage(error, 'Не удалось сохранить маршрутизацию оплат.'));
+      if (policiesCommitted) {
+        const message = `Политики оплаты сохранены, но назначения менеджеров не применены: ${this.errorMessage(error, 'ошибка назначения профилей')}`;
+        this.error.set(message);
+        const reloaded = await this.loadProfilesOnly();
+        if (!reloaded) {
+          this.error.set(`${message}. Не удалось перечитать актуальное состояние; обновите страницу.`);
+        }
+      } else {
+        this.error.set(this.errorMessage(error, 'Не удалось сохранить маршрутизацию оплат.'));
+      }
     } finally {
       this.savingProfilePolicies.set(false);
       this.savingProfiles.set(false);
@@ -3229,12 +3240,14 @@ export class TbankPage implements OnInit {
     }
   }
 
-  private async loadProfilesOnly(): Promise<void> {
+  private async loadProfilesOnly(): Promise<boolean> {
     try {
       const profiles = await firstValueFrom(this.api.getAdminTbankPaymentProfiles());
       this.applyProfilesState(profiles.profiles, profiles.managers);
+      return true;
     } catch {
       // Основная операция уже выполнена, не перебиваем ее результат ошибкой фонового обновления.
+      return false;
     }
   }
 

@@ -31,7 +31,6 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     interface AdminBotRow {
         Long getId();
         String getLogin();
-        String getPassword();
         String getFio();
         Boolean getActive();
         Integer getCounter();
@@ -95,7 +94,6 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     @Query("""
         SELECT b.id AS id,
                b.login AS login,
-               b.password AS password,
                b.fio AS fio,
                b.active AS active,
                b.counter AS counter,
@@ -118,7 +116,6 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
             value = """
                 SELECT b.id AS id,
                        b.login AS login,
-                       b.password AS password,
                        b.fio AS fio,
                        b.active AS active,
                        b.counter AS counter,
@@ -138,7 +135,6 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
                    OR :keyword = ''
                    OR LOWER(STR(b.id)) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(b.login, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
-                   OR LOWER(COALESCE(b.password, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(b.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(u.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(u.username, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
@@ -157,7 +153,6 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
                    OR :keyword = ''
                    OR LOWER(STR(b.id)) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(b.login, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
-                   OR LOWER(COALESCE(b.password, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(b.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(u.fio, '')) LIKE CONCAT('%', LOWER(:keyword), '%')
                    OR LOWER(COALESCE(u.username, '')) LIKE CONCAT('%', LOWER(:keyword), '%')

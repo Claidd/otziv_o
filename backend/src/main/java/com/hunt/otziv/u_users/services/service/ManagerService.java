@@ -22,6 +22,8 @@ public interface ManagerService {
     // взять менеджера по id го юзера
     Manager getManagerByUserId(Long id);
 
+    List<Manager> getManagersByUserIdsForAdminList(Set<Long> userIds);
+
     // сохранить нового менеджера
     void saveNewManager(User user);
 

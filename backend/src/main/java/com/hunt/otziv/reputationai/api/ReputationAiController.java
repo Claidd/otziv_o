@@ -53,6 +53,7 @@ import com.hunt.otziv.reputationai.infrastructure.ai.service.AiProviderRouter;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.service.OpenAiResponsesClient;
 import com.hunt.otziv.reputationai.infrastructure.search.service.SearchProviderRouter;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -313,7 +314,7 @@ public class ReputationAiController {
     @PostMapping("/companies/{companyId}/research")
     public ResearchSnapshot research(
             @PathVariable Long companyId,
-            @RequestBody(required = false) ReputationResearchRequest request
+            @Valid @RequestBody(required = false) ReputationResearchRequest request
     ) {
         return researchService.createSnapshot(companyId, request);
     }
@@ -321,7 +322,7 @@ public class ReputationAiController {
     @PostMapping("/companies/{companyId}/deep-research")
     public DeepCompanyResearchReport deepResearch(
             @PathVariable Long companyId,
-            @RequestBody(required = false) ReputationResearchRequest request
+            @Valid @RequestBody(required = false) ReputationResearchRequest request
     ) {
         try {
             return deepCompanyResearchService.createReport(companyId, request);
@@ -333,7 +334,7 @@ public class ReputationAiController {
     @PostMapping("/companies/{companyId}/deep-research/jobs")
     public DeepCompanyResearchJobStatus startDeepResearchJob(
             @PathVariable Long companyId,
-            @RequestBody(required = false) ReputationResearchRequest request
+            @Valid @RequestBody(required = false) ReputationResearchRequest request
     ) {
         try {
             return deepCompanyResearchJobService.start(companyId, request);
@@ -345,7 +346,7 @@ public class ReputationAiController {
     @PostMapping("/companies/{companyId}/deep-research/jobs/refresh-sources")
     public DeepCompanyResearchJobStatus refreshDeepResearchSources(
             @PathVariable Long companyId,
-            @RequestBody(required = false) ReputationResearchRequest request
+            @Valid @RequestBody(required = false) ReputationResearchRequest request
     ) {
         try {
             return deepCompanyResearchJobService.refreshSources(companyId, request);
@@ -357,7 +358,7 @@ public class ReputationAiController {
     @PostMapping("/companies/{companyId}/deep-research/jobs/rebuild-text")
     public DeepCompanyResearchJobStatus rebuildDeepResearchText(
             @PathVariable Long companyId,
-            @RequestBody(required = false) ReputationResearchRequest request
+            @Valid @RequestBody(required = false) ReputationResearchRequest request
     ) {
         try {
             return deepCompanyResearchJobService.rebuildText(companyId, request);
@@ -369,7 +370,7 @@ public class ReputationAiController {
     @PostMapping("/companies/{companyId}/deep-research/jobs/rebuild-section")
     public DeepCompanyResearchJobStatus rebuildDeepResearchSection(
             @PathVariable Long companyId,
-            @RequestBody(required = false) ReputationResearchRequest request
+            @Valid @RequestBody(required = false) ReputationResearchRequest request
     ) {
         try {
             return deepCompanyResearchJobService.rebuildSection(companyId, request);

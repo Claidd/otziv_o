@@ -55,8 +55,8 @@ class RegisterClientRequestValidationTest {
         request.setEmail("client@example.test");
         request.setFio("Иван Петров-Сидоров");
         request.setPhoneNumber("+7 (900) 000-00-00");
-        request.setPassword("valid password");
-        request.setMatchingPassword("valid password");
+        request.setPassword("ValidPassword7!");
+        request.setMatchingPassword("ValidPassword7!");
         return request;
     }
 

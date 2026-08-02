@@ -1,6 +1,9 @@
 package com.hunt.otziv.r_review.repository;
 
+import com.hunt.otziv.c_categories.model.Category;
+import com.hunt.otziv.c_categories.model.SubCategory;
 import com.hunt.otziv.r_review.model.ReviewArchive;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
@@ -68,6 +71,19 @@ public interface ReviewArchiveRepository extends CrudRepository<ReviewArchive, L
         LIMIT 1
     """, nativeQuery = true)
     Optional<ReviewArchive> findFirstByText(@Param("text") String text);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        UPDATE ReviewArchive r
+        SET r.category = :category,
+            r.subCategory = :subCategory
+        WHERE r.text IN :texts
+    """)
+    int updateClassificationByTexts(
+            @Param("texts") List<String> texts,
+            @Param("category") Category category,
+            @Param("subCategory") SubCategory subCategory
+    );
 
     @Override
     @Query("""

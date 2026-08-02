@@ -1,5 +1,6 @@
 import { NgClass } from '@angular/common';
 import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core';
+import { safeHttpsOrInternalUrl } from './external-navigation';
 
 export type MobileReviewCardLayout = 'worker' | 'details';
 export type MobileReviewPhotoMode = 'none' | 'link' | 'button' | 'file';
@@ -19,8 +20,8 @@ export type MobileReviewPhotoMode = 'none' | 'link' | 'button' | 'file';
       [attr.data-review-id]="reviewId"
     >
       <header>
-        @if (titleHref) {
-          <a [href]="titleHref" target="_blank" rel="noopener" [attr.aria-label]="title" (click)="guardLink($event, titleHref)">
+        @if (safeTitleHref) {
+          <a [href]="safeTitleHref" target="_blank" rel="noopener" [attr.aria-label]="title" (click)="guardLink($event, safeTitleHref)">
             {{ title }}
           </a>
         } @else {
@@ -30,7 +31,7 @@ export type MobileReviewPhotoMode = 'none' | 'link' | 'button' | 'file';
         <div class="card-id-line">
           @switch (photoMode) {
             @case ('link') {
-              <a class="review-card-badge photo" [href]="photoUrl || '#'" target="_blank" rel="noopener" aria-label="Открыть фото отзыва" (click)="guardLink($event, photoUrl)">
+              <a class="review-card-badge photo" [href]="safePhotoUrl || '#'" target="_blank" rel="noopener" aria-label="Открыть фото отзыва" (click)="guardLink($event, safePhotoUrl)">
                 <span class="material-icons-sharp">photo_camera</span>
               </a>
             }
@@ -394,6 +395,14 @@ export class MobileReviewCardShellComponent {
   @Output() photoFileChange = new EventEmitter<Event>();
   @Output() noteClick = new EventEmitter<void>();
   @Output() footerRightClick = new EventEmitter<void>();
+
+  get safeTitleHref(): string {
+    return safeHttpsOrInternalUrl(this.titleHref) ?? '';
+  }
+
+  get safePhotoUrl(): string {
+    return safeHttpsOrInternalUrl(this.photoUrl) ?? '';
+  }
 
   @HostBinding('class.layout-details')
   get isDetailsLayout(): boolean {

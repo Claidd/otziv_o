@@ -27,6 +27,7 @@ import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.compon
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
 import { MobileRemindersComponent } from '../shared/mobile-reminders.component';
 import { MobileReviewFieldEditorComponent } from '../shared/mobile-review-field-editor.component';
+import { safeHttpsOrInternalUrl } from '../shared/external-navigation';
 
 type ReviewEditableField = 'text' | 'answer';
 type ReviewCheckAction = 'load' | 'save' | 'approve' | 'correction' | 'send-check' | 'pay-ok';
@@ -1416,7 +1417,7 @@ export class ReviewCheckPage implements OnInit, OnDestroy {
   }
 
   reviewPhotoUrl(review: ReviewCheckReview): string {
-    return (review.url ?? '').trim();
+    return safeHttpsOrInternalUrl(review.url) ?? '';
   }
 
   botOrProductLabel(details: ReviewCheckPayload, review: ReviewCheckReview): string {

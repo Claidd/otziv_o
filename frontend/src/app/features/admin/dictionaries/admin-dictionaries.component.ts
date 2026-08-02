@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { forkJoin, Observable, of } from 'rxjs';
+import { concat, forkJoin, Observable, of, tap } from 'rxjs';
 import {
   AdminBot,
   AdminCategory,
@@ -72,6 +72,7 @@ import { apiErrorMessage } from '../../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../../shared/load-error-card.component';
 import { ToastService } from '../../../shared/toast.service';
 import { UiTooltipDirective } from '../../../shared/ui-tooltip.directive';
+import { businessDateIso, businessDateTimeInput } from '../../../shared/business-date';
 import { SpecialistTransferComponent } from '../specialist-transfer/specialist-transfer.component';
 import {
   DeviceToken,
@@ -228,6 +229,9 @@ export class AdminDictionariesComponent implements OnDestroy {
   private readonly toastService = inject(ToastService);
   private readonly requestedPhoneId = Number(this.route.snapshot.queryParamMap.get('phoneId'));
   private monitorTimerId: ReturnType<typeof window.setInterval> | null = null;
+  private dictionaryLoadEpoch = 0;
+  private aiProviderLoadEpoch = 0;
+  private botDetailLoadEpoch = 0;
 
   private readonly allTabs: DictionaryTab[] = [
     { key: 'categories', label: 'Категории', icon: 'category' },
@@ -239,7 +243,6 @@ export class AdminDictionariesComponent implements OnDestroy {
     { key: 'managerTexts', label: 'Тексты менеджеров', icon: 'article' },
     { key: 'messageDictionary', label: 'Фразы без ответа', icon: 'menu_book' },
     { key: 'specialistTransfer', label: 'Передача', icon: 'sync_alt' },
-    { key: 'gamification', label: 'Геймификация', icon: 'emoji_events' },
     { key: 'settings', label: 'Настройки', icon: 'tune' },
     { key: 'audit', label: 'Аудит', icon: 'fact_check' },
     { key: 'aiProvider', label: 'AI-провайдер', icon: 'psychology' },
@@ -282,6 +285,7 @@ export class AdminDictionariesComponent implements OnDestroy {
   readonly phoneOperators = signal<PhoneOperatorOption[]>([]);
   readonly selectedPhone = signal<OperatorPhone | null>(null);
   readonly bots = signal<AdminBot[]>([]);
+  readonly botDetailLoadingId = signal<number | null>(null);
   readonly promoTexts = signal<AdminPromoText[]>([]);
   readonly managerTexts = signal<AdminManagerText[]>([]);
   readonly promoManagers = signal<DictionaryOption[]>([]);
@@ -642,36 +646,46 @@ export class AdminDictionariesComponent implements OnDestroy {
     }
   });
   readonly metrics = computed<DictionaryMetric[]>(() => {
-    const categoryMetrics: DictionaryMetric[] = [
-      { label: 'Категории', value: this.categories().length, icon: 'category', tone: 'blue' },
-      { label: 'Подкатегории', value: this.subCategories().length, icon: 'account_tree', tone: 'teal' }
-    ];
-
-    if (!this.canManageAllDictionaries()) {
-      return categoryMetrics;
+    switch (this.activeTab()) {
+      case 'categories':
+        return [{ label: 'Категории', value: this.categories().length, icon: 'category', tone: 'blue' }];
+      case 'subcategories':
+        return [{ label: 'Подкатегории', value: this.subCategories().length, icon: 'account_tree', tone: 'teal' }];
+      case 'cities':
+        return [{ label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' }];
+      case 'products':
+        return [{ label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' }];
+      case 'phones':
+        return [
+          { label: 'Телефоны', value: this.phones().length, icon: 'phone_iphone', tone: 'teal' },
+          { label: 'Токены', value: this.phoneDeviceTokenTotal(), icon: 'devices', tone: 'yellow' }
+        ];
+      case 'accounts':
+        return [{ label: 'Аккаунты', value: this.botsTotal(), icon: 'manage_accounts', tone: 'pink' }];
+      case 'promo':
+        return [{ label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' }];
+      case 'managerTexts':
+        return [{ label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' }];
+      case 'messageDictionary':
+        return [{ label: 'Фраз без ответа', value: this.autoIgnorePhrases().length, icon: 'menu_book', tone: 'blue' }];
+      case 'settings':
+        return [
+          { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
+          { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
+          { label: 'Порог аккаунта', value: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3, icon: 'verified_user', tone: 'green' },
+          { label: 'Сдвиг дат', value: this.nagulSettings()?.accountWalkDelayDays ?? 2, icon: 'date_range', tone: 'yellow' },
+          { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
+          { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' },
+          { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' }
+        ];
+      case 'autoresponder':
+        return [
+          { label: 'Автоответчик', value: this.clientMessageSettings()?.workerEnabled ? 1 : 0, icon: 'mark_chat_unread', tone: 'green' },
+          { label: 'Лимит сообщений', value: this.clientMessageSettings()?.dailyLimit ?? 0, icon: 'speed', tone: 'yellow' }
+        ];
+      default:
+        return [];
     }
-
-    return [
-      ...categoryMetrics,
-      { label: 'Города', value: this.cities().length, icon: 'location_city', tone: 'green' },
-      { label: 'Продукты', value: this.products().length, icon: 'inventory_2', tone: 'yellow' },
-      { label: 'Телефоны', value: this.phones().length, icon: 'phone_iphone', tone: 'teal' },
-      { label: 'Токены', value: this.phoneDeviceTokenTotal(), icon: 'devices', tone: 'yellow' },
-      { label: 'Аккаунты', value: this.botsTotal(), icon: 'manage_accounts', tone: 'pink' },
-      { label: 'Промо', value: this.promoTexts().length, icon: 'smart_button', tone: 'blue' },
-      { label: 'Тексты менеджеров', value: this.managerTexts().length, icon: 'article', tone: 'green' },
-      { label: 'Фраз без ответа', value: this.autoIgnorePhrases().length, icon: 'menu_book', tone: 'blue' },
-      { label: 'Пауза выгула', value: this.nagulSettings()?.cooldownMinutes ?? 0, icon: 'timer', tone: 'teal' },
-      { label: 'Дней в выдаче', value: this.nagulSettings()?.lookaheadDays ?? 60, icon: 'event_upcoming', tone: 'blue' },
-      { label: 'Порог аккаунта', value: this.nagulSettings()?.accountWalkedCounterThreshold ?? 3, icon: 'verified_user', tone: 'green' },
-      { label: 'Сдвиг дат', value: this.nagulSettings()?.accountWalkDelayDays ?? 2, icon: 'date_range', tone: 'yellow' },
-      { label: 'Геймификация', value: this.gamificationSettings()?.enabled ? 1 : 0, icon: 'emoji_events', tone: this.gamificationSettings()?.enabled ? 'green' : 'pink' },
-      { label: 'Telegram', value: this.telegramReportSettings()?.morningEnabled || this.telegramReportSettings()?.eveningEnabled ? 1 : 0, icon: 'send', tone: 'green' },
-      { label: 'WhatsApp sync', value: this.whatsAppGroupSyncSettings()?.enabled ? 1 : 0, icon: 'sync', tone: 'teal' },
-      { label: 'Отчеты клиентам', value: this.clientPublicationProgressReportSettings()?.enabled ? 1 : 0, icon: 'reviews', tone: 'blue' },
-      { label: 'Автоответчик', value: this.clientMessageSettings()?.workerEnabled ? 1 : 0, icon: 'mark_chat_unread', tone: 'green' },
-      { label: 'Лимит сообщений', value: this.clientMessageSettings()?.dailyLimit ?? 0, icon: 'speed', tone: 'yellow' }
-    ];
   });
 
   readonly monitorMetrics = computed<DictionaryMetric[]>(() => {
@@ -761,13 +775,13 @@ export class AdminDictionariesComponent implements OnDestroy {
       this.activeTab.set('categories');
     }
 
-    if (this.canManageAllDictionaries()) {
-      this.loadTrackedCityUnblockedAccountsSnapshot();
-    }
-    this.loadAll();
+    this.loadActive();
   }
 
   ngOnDestroy(): void {
+    this.dictionaryLoadEpoch += 1;
+    this.aiProviderLoadEpoch += 1;
+    this.botDetailLoadEpoch += 1;
     this.stopClientMessageMonitorPolling();
   }
 
@@ -785,142 +799,25 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.search.set('');
     this.clearSelection();
     this.syncClientMessageMonitorPolling();
+    if (tab === 'accounts' && this.trackedCityUnblockedAccounts() == null) {
+      this.loadTrackedCityUnblockedAccountsSnapshot();
+    }
     if (tab === 'aiProvider') {
       this.loadAiProviderStatus();
+      return;
     }
+    this.loadActive();
   }
 
   loadAll(): void {
-    if (this.activeTab() === 'aiProvider') {
-      this.loadAiProviderStatus();
-      return;
-    }
-    this.loading.set(true);
-    this.error.set(null);
-
-    if (this.canManageAllDictionaries()) {
-      forkJoin({
-        categories: this.dictionariesApi.getCategories(),
-        subCategories: this.dictionariesApi.getSubCategories(),
-        cities: this.dictionariesApi.getCities(),
-        products: this.dictionariesApi.getProducts(),
-        phones: this.phonesApi.getPhones(),
-        bots: this.dictionariesApi.getBots(),
-        promoTexts: this.dictionariesApi.getPromoTextManagement(),
-        managerTexts: this.dictionariesApi.getManagerTexts(),
-        nagulSettings: this.dictionariesApi.getNagulSettings(),
-        telegramReportSettings: this.dictionariesApi.getTelegramReportSettings(),
-        whatsAppGroupSyncSettings: this.dictionariesApi.getWhatsAppGroupSyncSettings(),
-        clientPublicationProgressReportSettings: this.dictionariesApi.getClientPublicationProgressReportSettings(),
-        gamificationSettings: this.dictionariesApi.getGamificationSettings(),
-        rewardSettings: this.rewardsApi.settings(),
-        gamificationRules: this.dictionariesApi.getGamificationRules(),
-        gamificationProgress: this.dictionariesApi.getGamificationProgress(this.gamificationProgressDays()),
-        gamificationScorePreview: this.dictionariesApi.getGamificationScorePreview(this.gamificationProgressDays()),
-        gamificationScoreLedger: this.dictionariesApi.getGamificationScoreLedger(this.gamificationProgressDays()),
-        gamificationBalances: this.dictionariesApi.getGamificationBalances(this.gamificationProgressDays()),
-        gamificationEvents: this.dictionariesApi.getGamificationEvents(),
-        clientMessageSettings: this.dictionariesApi.getClientMessageSettings()
-      }).subscribe({
-        next: ({
-          categories,
-          subCategories,
-          cities,
-          products,
-          phones,
-          bots,
-          promoTexts,
-          managerTexts,
-          nagulSettings,
-          telegramReportSettings,
-          whatsAppGroupSyncSettings,
-          clientPublicationProgressReportSettings,
-          gamificationSettings,
-          rewardSettings,
-          gamificationRules,
-          gamificationProgress,
-          gamificationScorePreview,
-          gamificationScoreLedger,
-          gamificationBalances,
-          gamificationEvents,
-          clientMessageSettings
-        }) => {
-          this.categories.set(categories);
-          this.subCategories.set(subCategories);
-          this.cities.set(cities);
-          this.products.set(products.products);
-          this.productCategories.set(products.categories);
-          this.applyPhonesResponse(phones);
-          this.applyBotsResponse(bots);
-          this.applyPromoManagement(promoTexts);
-          this.managerTexts.set(managerTexts);
-          this.applyNagulSettings(nagulSettings);
-          this.applyTelegramReportSettings(telegramReportSettings);
-          this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
-          this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
-          this.applyGamificationSettings(gamificationSettings);
-          this.applyRewardSettings(rewardSettings);
-          this.applyGamificationRules(gamificationRules);
-          this.gamificationProgress.set(gamificationProgress);
-          this.gamificationScorePreview.set(gamificationScorePreview);
-          this.gamificationScoreLedger.set(gamificationScoreLedger);
-          this.gamificationBalances.set(gamificationBalances);
-          this.gamificationEvents.set(gamificationEvents);
-          this.applyClientMessageSettings(clientMessageSettings);
-          this.loading.set(false);
-          this.ensureDefaults();
-        },
-        error: (err) => this.handleLoadAllError(err)
-      });
-      return;
-    }
-
-    forkJoin({
-        categories: this.dictionariesApi.getCategories(),
-        subCategories: this.dictionariesApi.getSubCategories()
-    }).subscribe({
-      next: ({ categories, subCategories }) => {
-        this.categories.set(categories);
-        this.subCategories.set(subCategories);
-        this.cities.set([]);
-        this.products.set([]);
-        this.productCategories.set([]);
-        this.phones.set([]);
-        this.phoneOperators.set([]);
-        this.selectedPhone.set(null);
-        this.bots.set([]);
-        this.botsTotal.set(0);
-        this.botPage.set(0);
-        this.promoTexts.set([]);
-        this.managerTexts.set([]);
-        this.promoManagers.set([]);
-        this.promoAssignments.set([]);
-        this.promoButtons.set([]);
-        this.selectedPromoManagerId.set(null);
-        this.nagulSettings.set(null);
-        this.telegramReportSettings.set(null);
-        this.whatsAppGroupSyncSettings.set(null);
-        this.clientPublicationProgressReportSettings.set(null);
-        this.gamificationSettings.set(null);
-        this.rewardSettings.set(null);
-        this.gamificationRules.set([]);
-        this.gamificationProgress.set(null);
-        this.gamificationScorePreview.set(null);
-        this.gamificationScoreLedger.set(null);
-        this.gamificationBalances.set(null);
-        this.gamificationEvents.set([]);
-        this.clientMessageSettings.set(null);
-        this.loading.set(false);
-        this.ensureDefaults();
-      },
-      error: (err) => this.handleLoadAllError(err)
-    });
+    this.loadActive();
   }
 
   searchActive(): void {
     if (this.activeTab() === 'accounts') {
       this.botPage.set(0);
     }
+    this.clearSelection();
     this.loadActive();
   }
 
@@ -929,18 +826,26 @@ export class AdminDictionariesComponent implements OnDestroy {
     if (this.activeTab() === 'accounts') {
       this.botPage.set(0);
     }
+    this.clearSelection();
     this.loadActive();
   }
 
   loadAiProviderStatus(): void {
+    const requestId = ++this.aiProviderLoadEpoch;
     this.loading.set(true);
     this.aiProviderError.set(null);
     this.reputationAiApi.status().subscribe({
       next: (status) => {
+        if (requestId !== this.aiProviderLoadEpoch || this.activeTab() !== 'aiProvider') {
+          return;
+        }
         this.aiProviderStatus.set(status);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if (requestId !== this.aiProviderLoadEpoch || this.activeTab() !== 'aiProvider') {
+          return;
+        }
         const message = this.errorMessage(err, 'Не удалось загрузить настройки AI-провайдера');
         this.aiProviderError.set(message);
         this.loading.set(false);
@@ -1152,7 +1057,7 @@ export class AdminDictionariesComponent implements OnDestroy {
       amountAllowed: 1,
       amountSent: 0,
       blockTime: 3,
-      timer: this.toDateTimeInput(new Date().toISOString()),
+      timer: businessDateTimeInput(),
       googleLogin: '',
       googlePassword: '',
       avitoPassword: '',
@@ -1160,24 +1065,43 @@ export class AdminDictionariesComponent implements OnDestroy {
       mailPassword: '',
       fotoInstagram: '',
       active: true,
-      createDate: this.toDateInput(new Date().toISOString()),
+      createDate: businessDateIso(),
       operatorId: null
     });
   }
 
   selectBot(bot: AdminBot): void {
-    this.selectedId.set(bot.id);
-    this.botForm.setValue({
-      login: bot.login,
-      password: bot.password,
-      fio: bot.fio,
-      workerId: bot.worker?.id ?? this.defaultBotWorkerId(),
-      cityId: bot.city?.id ?? this.defaultBotCityId(),
-      statusId: bot.status?.id ?? this.defaultBotStatusId(),
-      counter: String(bot.counter ?? 0),
-      active: bot.active
-    });
+    const requestId = ++this.botDetailLoadEpoch;
+    this.botDetailLoadingId.set(bot.id);
     this.error.set(null);
+    this.dictionariesApi.getBot(bot.id).subscribe({
+      next: (details) => {
+        if (requestId !== this.botDetailLoadEpoch) {
+          return;
+        }
+        this.selectedId.set(details.id);
+        this.botForm.setValue({
+          login: details.login,
+          password: details.password ?? '',
+          fio: details.fio,
+          workerId: details.worker?.id ?? this.defaultBotWorkerId(),
+          cityId: details.city?.id ?? this.defaultBotCityId(),
+          statusId: details.status?.id ?? this.defaultBotStatusId(),
+          counter: String(details.counter ?? 0),
+          active: details.active
+        });
+        this.botDetailLoadingId.set(null);
+      },
+      error: (err) => {
+        if (requestId !== this.botDetailLoadEpoch) {
+          return;
+        }
+        const message = this.errorMessage(err, 'Не удалось загрузить данные аккаунта');
+        this.botDetailLoadingId.set(null);
+        this.error.set(message);
+        this.toastService.error('Аккаунт не загрузился', message);
+      }
+    });
   }
 
   selectPromoText(promoText: AdminPromoText): void {
@@ -1199,6 +1123,8 @@ export class AdminDictionariesComponent implements OnDestroy {
   }
 
   clearSelection(): void {
+    this.botDetailLoadEpoch += 1;
+    this.botDetailLoadingId.set(null);
     this.selectedId.set(null);
     this.editingCategoryId.set(null);
     this.editingSubCategoryId.set(null);
@@ -1387,10 +1313,6 @@ export class AdminDictionariesComponent implements OnDestroy {
         return;
       case 'managerTexts':
         this.saveManagerText();
-        return;
-      case 'specialistTransfer':
-        return;
-      case 'audit':
         return;
       case 'gamification':
         this.saveGamificationSettings();
@@ -2595,6 +2517,7 @@ export class AdminDictionariesComponent implements OnDestroy {
     }
 
     this.botPage.set(nextPage);
+    this.clearSelection();
     this.loadActive();
   }
 
@@ -2606,11 +2529,17 @@ export class AdminDictionariesComponent implements OnDestroy {
 
     this.botPageSize.set(value);
     this.botPage.set(0);
+    this.clearSelection();
     this.loadActive();
   }
 
   private loadActive(): void {
-    if (this.activeTab() === 'specialistTransfer' || this.activeTab() === 'audit') {
+    const requestId = ++this.dictionaryLoadEpoch;
+    const tab = this.activeTab();
+    this.aiProviderLoadEpoch += 1;
+    if (tab === 'specialistTransfer' || tab === 'audit') {
+      this.loading.set(false);
+      this.error.set(null);
       return;
     }
 
@@ -2620,7 +2549,7 @@ export class AdminDictionariesComponent implements OnDestroy {
 
     const keyword = this.search();
     let request: Observable<AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | GamificationDictionaryResponse | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor>;
-    switch (this.activeTab()) {
+    switch (tab) {
       case 'categories':
         request = this.dictionariesApi.getCategories(keyword);
         break;
@@ -2648,10 +2577,6 @@ export class AdminDictionariesComponent implements OnDestroy {
       case 'managerTexts':
         request = this.dictionariesApi.getManagerTexts(keyword);
         break;
-      case 'specialistTransfer':
-        return;
-      case 'audit':
-        return;
       case 'gamification':
         request = forkJoin({
           settings: this.dictionariesApi.getGamificationSettings(),
@@ -2687,7 +2612,10 @@ export class AdminDictionariesComponent implements OnDestroy {
 
     request.subscribe({
       next: (response: AdminCategory[] | AdminSubCategory[] | AdminCity[] | ProductsResponse | OperatorPhonesResponse | BotsResponse | PromoTextManagementResponse | AdminManagerText[] | GamificationDictionaryResponse | AdminNagulSettings | DictionarySettingsResponse | AdminClientMessageSettings | AdminClientMessageMonitor) => {
-        switch (this.activeTab()) {
+        if (requestId !== this.dictionaryLoadEpoch || this.activeTab() !== tab) {
+          return;
+        }
+        switch (tab) {
           case 'categories':
             this.categories.set(response as AdminCategory[]);
             this.ensureDefaults();
@@ -2707,10 +2635,18 @@ export class AdminDictionariesComponent implements OnDestroy {
           case 'phones':
             this.applyPhonesResponse(response as OperatorPhonesResponse);
             break;
-          case 'accounts':
-            this.applyBotsResponse(response as BotsResponse);
+          case 'accounts': {
+            const payload = response as BotsResponse;
+            const totalPages = Math.max(1, payload.totalPages);
+            if (payload.total > 0 && payload.page >= totalPages) {
+              this.botPage.set(totalPages - 1);
+              this.loadActive();
+              return;
+            }
+            this.applyBotsResponse(payload);
             this.ensureDefaults();
             break;
+          }
           case 'promo':
             this.applyPromoManagement(response as PromoTextManagementResponse);
             break;
@@ -2748,6 +2684,9 @@ export class AdminDictionariesComponent implements OnDestroy {
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if (requestId !== this.dictionaryLoadEpoch || this.activeTab() !== tab) {
+          return;
+        }
         const message = this.errorMessage(err, 'Не удалось загрузить справочник');
         this.error.set(message);
         this.loading.set(false);
@@ -3189,44 +3128,38 @@ export class AdminDictionariesComponent implements OnDestroy {
     this.saving.set(true);
     this.error.set(null);
 
-    forkJoin({
-      nagulSettings: this.dictionariesApi.updateNagulSettings(nagulRequest),
-      telegramReportSettings: this.dictionariesApi.updateTelegramReportSettings(telegramRequest),
-      whatsAppGroupSyncSettings: this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest),
-      clientPublicationProgressReportSettings: this.dictionariesApi.updateClientPublicationProgressReportSettings(
-        clientPublicationProgressReportRequest
-      ),
-      workerCellularAccessSettings: this.canApplyMaintenance()
-        ? this.dictionariesApi.updateWorkerCellularAccessSettings(workerCellularAccessRequest)
-        : of(null)
-    }).subscribe({
-      next: ({
-        nagulSettings,
-        telegramReportSettings,
-        whatsAppGroupSyncSettings,
-        clientPublicationProgressReportSettings,
-        workerCellularAccessSettings
-      }) => {
+    const requests: Observable<unknown>[] = [
+      this.dictionariesApi.updateNagulSettings(nagulRequest),
+      this.dictionariesApi.updateTelegramReportSettings(telegramRequest),
+      this.dictionariesApi.updateWhatsAppGroupSyncSettings(whatsAppRequest),
+      this.dictionariesApi.updateClientPublicationProgressReportSettings(clientPublicationProgressReportRequest)
+    ];
+    if (this.canApplyMaintenance()) {
+      requests.push(this.dictionariesApi.updateWorkerCellularAccessSettings(workerCellularAccessRequest));
+    }
+
+    let completed = 0;
+    concat(...requests).pipe(
+      tap(() => {
+        completed += 1;
+      })
+    ).subscribe({
+      complete: () => {
         this.saving.set(false);
-        this.applyNagulSettings(nagulSettings);
-        this.applyTelegramReportSettings(telegramReportSettings);
-        this.applyWhatsAppGroupSyncSettings(whatsAppGroupSyncSettings);
-        this.applyClientPublicationProgressReportSettings(clientPublicationProgressReportSettings);
-        if (workerCellularAccessSettings) {
-          this.applyWorkerCellularAccessSettings(workerCellularAccessSettings);
-        }
-        this.toastService.success(
-          'Настройки сохранены',
-          workerCellularAccessSettings
-            ? `Контроль доступа: ${this.workerCellularAccessModeLabel(workerCellularAccessSettings.mode)}`
-            : `${telegramReportSettings.morningTime} / ${telegramReportSettings.eveningTime}, WhatsApp ${whatsAppGroupSyncSettings.intervalMinutes} мин.`
-        );
+        this.loadActive();
+        this.toastService.success('Настройки сохранены', 'Все разделы применены; состояние перечитано с сервера.');
       },
       error: (err) => {
         const message = this.errorMessage(err, 'Не удалось сохранить настройки');
         this.error.set(message);
         this.saving.set(false);
-        this.toastService.error('Настройки не сохранены', message);
+        this.loadActive();
+        this.toastService.error(
+          completed > 0 ? 'Настройки сохранены частично' : 'Настройки не сохранены',
+          completed > 0
+            ? `Применено разделов: ${completed} из ${requests.length}. Состояние перечитано с сервера. ${message}`
+            : message
+        );
       }
     });
   }
@@ -3952,7 +3885,6 @@ export class AdminDictionariesComponent implements OnDestroy {
       'managerTexts',
       'messageDictionary',
       'specialistTransfer',
-      'gamification',
       'settings',
       'audit',
       'aiProvider',
