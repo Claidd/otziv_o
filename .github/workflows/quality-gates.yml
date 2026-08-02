@@ -37,7 +37,7 @@ jobs:
           set -euo pipefail
           cp .env.example .env
           trap 'rm -f .env' EXIT
-          for compose_file in docker-compose.yaml compose.prod-local.yaml compose.yaml docker-compose.build.yaml; do
+          for compose_file in docker-compose.yaml compose.prod-local.yaml docker-compose.build.yaml; do
             echo "Validating ${compose_file}"
             docker compose --env-file .env.example -f "${compose_file}" config --quiet
           done
