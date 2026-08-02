@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,7 +27,7 @@ public class MobilePushSenderService {
 
     @Transactional
     public MobilePushSendResponse sendToUser(User user, String title, String body, String route) {
-        List<MobilePushToken> tokens = tokenRepository.findByUserIdAndActiveTrue(user.getId());
+        List<MobilePushToken> tokens = tokenRepository.findDeliverableByUserId(user.getId());
         if (firebaseMessaging.isEmpty()) {
             return new MobilePushSendResponse(false, tokens.size(), 0, 0);
         }
@@ -67,6 +68,9 @@ public class MobilePushSenderService {
 
     private void deactivate(MobilePushToken token) {
         token.setActive(false);
+        token.setRevokedAt(Instant.now());
+        token.setRevokedReason("FCM_TOKEN_INVALID");
+        token.setRevokedByUserId(null);
         tokenRepository.save(token);
     }
 

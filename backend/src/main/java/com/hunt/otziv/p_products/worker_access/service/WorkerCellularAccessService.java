@@ -1,5 +1,6 @@
 package com.hunt.otziv.p_products.worker_access.service;
 
+import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -36,18 +37,21 @@ public class WorkerCellularAccessService {
     private final WorkerIpIntelligenceClient ipIntelligenceClient;
     private final WorkerNetworkViolationService networkViolationService;
     private final WorkerCellularAccessRuntimeSettingsService runtimeSettingsService;
+    private final R0ObservabilityMetrics observabilityMetrics;
 
     @Autowired
     public WorkerCellularAccessService(
             WorkerCellularAccessProperties properties,
             WorkerIpIntelligenceClient ipIntelligenceClient,
             WorkerNetworkViolationService networkViolationService,
-            WorkerCellularAccessRuntimeSettingsService runtimeSettingsService
+            WorkerCellularAccessRuntimeSettingsService runtimeSettingsService,
+            R0ObservabilityMetrics observabilityMetrics
     ) {
         this.properties = properties;
         this.ipIntelligenceClient = ipIntelligenceClient;
         this.networkViolationService = networkViolationService;
         this.runtimeSettingsService = runtimeSettingsService;
+        this.observabilityMetrics = observabilityMetrics;
         this.cidrMatcher = new IpCidrMatcher(properties.getAllowedCidrs());
         if (properties.getMode() != WorkerCellularAccessProperties.Mode.OFF
                 && cidrMatcher.isEmpty()
@@ -85,9 +89,18 @@ public class WorkerCellularAccessService {
         boolean serverCellularNetwork = !intelligence.risky() && (cidrMatch || intelligence.mobile());
         String reason = accessReason(mobileDevice, serverCellularNetwork, telemetry, intelligence);
         boolean allowed = REASON_ALLOWED.equals(reason);
-        boolean blocked = !allowed
-                && mode == WorkerCellularAccessProperties.Mode.ENFORCE
-                && shouldEnforce(reason, telemetry, policy);
+        boolean wouldDeny = !allowed && shouldEnforce(reason, telemetry, policy);
+        boolean blocked = wouldDeny && mode == WorkerCellularAccessProperties.Mode.ENFORCE;
+        if (observabilityMetrics != null) {
+            observabilityMetrics.recordWorkerAccessDecision(
+                    mode.name(),
+                    allowed,
+                    wouldDeny,
+                    blocked,
+                    reason,
+                    normalizeScope(scope)
+            );
+        }
 
         log.info(
                 "Worker cellular access: user={}, scope={}, mode={}, result={}, reason={}, mobileDevice={}, cidrMatch={}, "
@@ -123,6 +136,15 @@ public class WorkerCellularAccessService {
         if (blocked) {
             throw new ResponseStatusException(FORBIDDEN, deniedMessage(reason));
         }
+    }
+
+    WorkerCellularAccessService(
+            WorkerCellularAccessProperties properties,
+            WorkerIpIntelligenceClient ipIntelligenceClient,
+            WorkerNetworkViolationService networkViolationService,
+            WorkerCellularAccessRuntimeSettingsService runtimeSettingsService
+    ) {
+        this(properties, ipIntelligenceClient, networkViolationService, runtimeSettingsService, null);
     }
 
     WorkerCellularAccessService(

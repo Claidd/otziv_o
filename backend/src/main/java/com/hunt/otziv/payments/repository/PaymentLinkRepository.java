@@ -41,6 +41,10 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
 
     boolean existsByOrder_IdAndStatusIn(Long orderId, Collection<PaymentLinkStatus> statuses);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT link FROM PaymentLink link WHERE link.order.id = :orderId ORDER BY link.id")
+    List<PaymentLink> findByOrderIdForUpdate(@Param("orderId") Long orderId);
+
     @Query(
             value = """
                 SELECT link
@@ -247,15 +251,32 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     @Query("""
         SELECT link.id
         FROM PaymentLink link
-        WHERE link.status IN :statuses
+        WHERE (link.status IN :statuses OR link.bankCancelOriginStatus IS NOT NULL)
           AND link.tbankPaymentId IS NOT NULL
           AND TRIM(link.tbankPaymentId) <> ''
           AND link.updatedAt <= :updatedBefore
-        ORDER BY link.updatedAt ASC, link.id ASC
+          AND (
+              link.bankReconciliationAttemptedAt IS NULL
+              OR link.bankReconciliationAttemptedAt <= :attemptBefore
+          )
+        ORDER BY link.bankReconciliationAttemptedAt ASC, link.updatedAt ASC, link.id ASC
     """)
     List<Long> findBankReconciliationCandidateIds(
             @Param("statuses") Collection<PaymentLinkStatus> statuses,
             @Param("updatedBefore") LocalDateTime updatedBefore,
+            @Param("attemptBefore") LocalDateTime attemptBefore,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT link.id
+        FROM PaymentLink link
+        WHERE link.bankInitNonce IS NOT NULL
+          AND (link.bankInitLeaseUntil IS NULL OR link.bankInitLeaseUntil <= :expiredBefore)
+        ORDER BY link.bankInitLeaseUntil ASC, link.id ASC
+    """)
+    List<Long> findExpiredBankInitReservationIds(
+            @Param("expiredBefore") LocalDateTime expiredBefore,
             Pageable pageable
     );
 
@@ -441,7 +462,8 @@ public interface PaymentLinkRepository extends JpaRepository<PaymentLink, Long> 
     @Query("""
         UPDATE PaymentLink link
         SET link.status = :expiredStatus,
-            link.lastError = :reason
+            link.lastError = :reason,
+            link.rowVersion = link.rowVersion + 1
         WHERE link.paymentMethod IN :paymentMethods
           AND link.status IN :statuses
           AND link.expiresAt <= :now

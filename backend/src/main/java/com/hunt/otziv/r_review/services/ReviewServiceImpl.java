@@ -12,21 +12,23 @@ import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderStatusCheckerService;
 import com.hunt.otziv.p_products.services.service.ProductService;
-import com.hunt.otziv.r_review.board.ReviewBoardMode;
-import com.hunt.otziv.r_review.board.ReviewBoardQueryService;
-import com.hunt.otziv.r_review.board.ReviewBoardScope;
+import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
+import com.hunt.otziv.r_review.board.model.ReviewBoardMode;
+import com.hunt.otziv.r_review.board.service.ReviewBoardQueryService;
+import com.hunt.otziv.r_review.board.model.ReviewBoardScope;
 import com.hunt.otziv.r_review.bot.service.ReviewBotChangeService;
 import com.hunt.otziv.r_review.bot.service.ReviewAccountWalkScheduleService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.dto.ReviewDTOOne;
-import com.hunt.otziv.r_review.edit.ReviewEditService;
+import com.hunt.otziv.r_review.edit.service.ReviewEditService;
 import com.hunt.otziv.r_review.mapper.ReviewDtoMapper;
 import com.hunt.otziv.r_review.model.Review;
 import com.hunt.otziv.r_review.model.ReviewArchive;
-import com.hunt.otziv.r_review.nagul.ReviewNagulService;
+import com.hunt.otziv.r_review.nagul.service.ReviewNagulService;
 import com.hunt.otziv.r_review.repository.ReviewArchiveRepository;
 import com.hunt.otziv.r_review.repository.ReviewRepository;
 import com.hunt.otziv.u_users.model.Manager;
@@ -51,6 +53,7 @@ import org.springframework.data.util.Pair;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import static com.hunt.otziv.r_review.utils.ReviewBoardSearch.hasText;
@@ -83,6 +86,8 @@ public class ReviewServiceImpl implements ReviewService {
     private final OrderStatusCheckerService orderStatusCheckerService;
     private final BusinessAuditService businessAuditService;
     private final GamificationEventService gamificationEventService;
+    private final OrderAggregateMutationLockService orderAggregateMutationLockService;
+    private final WorkerAssignmentMutationGuardService assignmentMutationGuardService;
 
     @Override
     public Map<Long, Integer> countOrdersByWorkerIdsAndStatusPublish(List<Long> workerIds, LocalDate localDate) {
@@ -671,9 +676,14 @@ public class ReviewServiceImpl implements ReviewService {
         return (List<Review>) reviewRepository.saveAll(reviews);
     }
 
+    @Transactional
     public Review save(Review review) {
         if (review == null) {
             return null;
+        }
+        if (review.getId() != null) {
+            orderAggregateMutationLockService.lockForReview(review.getId());
+            assignmentMutationGuardService.assertReview(review.getId());
         }
 
         if (!reviewRepository.existsByText(review.getText())) {
@@ -691,6 +701,8 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public Review updateReviewPhoto(Long reviewId, String url) {
+        orderAggregateMutationLockService.lockForReview(reviewId);
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
 
@@ -699,9 +711,27 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewRepository.save(review);
     }
 
+    @Transactional
     public boolean deleteReview(Long reviewId) {
+        orderAggregateMutationLockService.lockForReview(reviewId);
+        assignmentMutationGuardService.assertReview(reviewId);
         Review review = reviewRepository.findById(reviewId).orElse(null);
         if (review == null) {
+            return false;
+        }
+        reviewRepository.delete(review);
+        return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean deleteReviewFromLockedOrder(Long orderId, Long reviewId) {
+        if (orderId == null || reviewId == null) {
+            return false;
+        }
+        Review review = reviewRepository.findById(reviewId).orElse(null);
+        Order actualOrder = extractOrder(review);
+        if (review == null || actualOrder == null || !Objects.equals(orderId, actualOrder.getId())) {
             return false;
         }
         reviewRepository.delete(review);
@@ -740,6 +770,8 @@ public class ReviewServiceImpl implements ReviewService {
     @Transactional
     public void updateReview(String userRole, ReviewDTO reviewDTO, Long reviewId) {
         log.info("2. Вошли в обновление данных Отзыв");
+        orderAggregateMutationLockService.lockForReview(reviewId);
+        assignmentMutationGuardService.assertReview(reviewId);
         Review saveReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Отзыв '%d' не найден", reviewId)));
 
@@ -1111,9 +1143,25 @@ public class ReviewServiceImpl implements ReviewService {
     @Transactional
     public void updateOrderDetailAndReview(OrderDetailsDTO orderDetailsDTO, ReviewDTO reviewDTO, Long reviewId) {
         log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа");
+        if (orderDetailsDTO == null || orderDetailsDTO.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Детали заказа не указаны");
+        }
+        orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
         Review saveReview = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewId)));
         OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+
+        UUID reviewOrderDetailsId = saveReview.getOrderDetails() == null
+                ? null
+                : saveReview.getOrderDetails().getId();
+        if (saveOrderDetails == null
+                || saveOrderDetails.getId() == null
+                || !Objects.equals(saveOrderDetails.getId(), reviewOrderDetailsId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Отзыв не относится к указанным деталям заказа"
+            );
+        }
 
         boolean isChanged = false;
         boolean oldPublish = saveReview.isPublish();
@@ -1153,61 +1201,238 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional
+    public void updateOrderDetailAndReviews(OrderDetailsDTO orderDetailsDTO) {
+        if (orderDetailsDTO == null || orderDetailsDTO.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Детали заказа не указаны");
+        }
+        if (orderDetailsDTO.getReviews() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Отзывы не переданы");
+        }
+
+        orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
+        OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+        Map<Long, Review> reviewsById = safeReviews(saveOrderDetails).stream()
+                .filter(Objects::nonNull)
+                .filter(review -> review.getId() != null)
+                .collect(Collectors.toMap(Review::getId, review -> review));
+        Set<Long> submittedIds = new HashSet<>();
+        List<Review> changedReviews = new ArrayList<>();
+        List<Review> newlyPublishedReviews = new ArrayList<>();
+
+        for (ReviewDTO reviewDTO : orderDetailsDTO.getReviews()) {
+            Long reviewId = reviewDTO == null ? null : reviewDTO.getId();
+            Review saveReview = reviewId == null || !submittedIds.add(reviewId)
+                    ? null
+                    : reviewsById.get(reviewId);
+            if (saveReview == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Отзыв не относится к указанным деталям заказа"
+                );
+            }
+
+            boolean changed = false;
+            boolean oldPublish = saveReview.isPublish();
+            if (!Objects.equals(reviewDTO.getText(), saveReview.getText())) {
+                saveReview.setText(reviewDTO.getText());
+                changed = true;
+            }
+            if (!Objects.equals(reviewDTO.getAnswer(), saveReview.getAnswer())) {
+                saveReview.setAnswer(reviewDTO.getAnswer());
+                changed = true;
+            }
+            if (!Objects.equals(reviewDTO.isPublish(), saveReview.isPublish())) {
+                saveReview.setPublish(reviewDTO.isPublish());
+                syncExternalConfirmationState(saveReview, oldPublish);
+                changed = true;
+            }
+            if (!Objects.equals(reviewDTO.getPublishedDate(), saveReview.getPublishedDate())) {
+                requirePublicationDateIntegrity(saveReview, reviewDTO.getPublishedDate());
+                validateManualPublicationDate(saveReview, reviewDTO.getPublishedDate());
+                saveReview.setPublishedDate(reviewDTO.getPublishedDate());
+                changed = true;
+            }
+            if (changed) {
+                changedReviews.add(saveReview);
+                if (!oldPublish && saveReview.isPublish()) {
+                    newlyPublishedReviews.add(saveReview);
+                }
+            }
+        }
+
+        if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
+            saveOrderDetails.setComment(orderDetailsDTO.getComment());
+            orderDetailsService.save(saveOrderDetails);
+        }
+        if (!changedReviews.isEmpty()) {
+            reviewRepository.saveAll(changedReviews);
+            newlyPublishedReviews.forEach(gamificationEventService::recordReviewPublished);
+        }
+    }
+
+    @Override
+    @Transactional
     public boolean updateOrderDetailAndReviewAndPublishDate(OrderDetailsDTO orderDetailsDTO) {
-        log.info("2. Вошли в обновление данных Отзыва и Деталей Заказа + Назначение случайных дат публикации без суббот и дублей");
-
-        try {
-            OrderDetails saveOrderDetails = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
-
-            List<Review> reviews = safeReviews(saveOrderDetails);
-            if (reviews.isEmpty()) {
-                log.error("Ошибка: список отзывов пуст");
-                return false;
-            }
-
-            if (orderDetailsDTO.getReviews() == null || orderDetailsDTO.getReviews().isEmpty()) {
-                log.error("Ошибка: список отзывов в DTO пуст");
-                return false;
-            }
-
-            if (orderDetailsDTO.getReviews().stream().anyMatch(this::hasInvalidPublicationText)) {
-                log.warn("Даты публикации не назначены: пустые или шаблонные тексты у отзывов");
-                return false;
-            }
-
-            List<ReviewDTO> reviewDtos = orderDetailsDTO.getReviews().stream()
-                    .sorted(Comparator.comparing(ReviewDTO::getId, Comparator.nullsLast(Long::compareTo)))
-                    .toList();
-
-            Bot firstBot = reviews.get(0).getBot();
-            int botCounter = safeBotCounter(firstBot);
-            LocalDate startDate = getLocalDate(botCounter);
-
-            int totalReviews = reviewDtos.size();
-            int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
-            LocalDate endDate = startDate.plusDays(monthsNeeded * 28L - 1);
-
-            ThreadLocalRandom random = ThreadLocalRandom.current();
-            List<LocalDate> publishDates = randomPublicationDates(startDate, endDate, totalReviews, random);
-
-            for (int i = 0; i < totalReviews; i++) {
-                ReviewDTO reviewDTO = reviewDtos.get(i);
-                LocalDate publishDate = publishDates.get(i);
-                checkUpdateReview(reviewDTO, publishDate);
-                log.info("Обновили дату публикации отзыва №{}: {}", i + 1, publishDate);
-            }
-
-            if (!Objects.equals(orderDetailsDTO.getComment(), saveOrderDetails.getComment())) {
-                saveOrderDetails.setComment(orderDetailsDTO.getComment());
-                orderDetailsService.save(saveOrderDetails);
-            }
-
-            return true;
-
-        } catch (Exception e) {
-            log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", e);
+        if (orderDetailsDTO == null || orderDetailsDTO.getId() == null) {
             return false;
         }
+        try {
+            orderAggregateMutationLockService.lockForOrderDetail(orderDetailsDTO.getId());
+            OrderDetails liveDetail = orderDetailsService.getOrderDetailById(orderDetailsDTO.getId());
+            return applyPublicationDates(List.of(liveDetail), List.of(orderDetailsDTO), false);
+        } catch (Exception exception) {
+            return publicationDateFailure(exception);
+        }
+    }
+
+    @Override
+    @Transactional
+    public boolean updateOrderDetailsAndReviewsAndPublishDates(
+            Long orderId,
+            List<OrderDetailsDTO> orderDetails
+    ) {
+        if (orderId == null || orderDetails == null || orderDetails.isEmpty()) {
+            return false;
+        }
+        try {
+            orderAggregateMutationLockService.lock(orderId);
+            List<OrderDetails> liveDetails = orderDetailsService
+                    .getOrderDetailsForReviewCheckByOrderId(orderId);
+            return applyPublicationDates(liveDetails, orderDetails, true);
+        } catch (Exception exception) {
+            return publicationDateFailure(exception);
+        }
+    }
+
+    private boolean applyPublicationDates(
+            List<OrderDetails> liveDetails,
+            List<OrderDetailsDTO> submittedDetails,
+            boolean requireCompleteAggregate
+    ) {
+        if (liveDetails == null || liveDetails.isEmpty()) {
+            return false;
+        }
+
+        Map<UUID, OrderDetails> liveById = liveDetails.stream()
+                .filter(Objects::nonNull)
+                .filter(detail -> detail.getId() != null)
+                .collect(Collectors.toMap(OrderDetails::getId, detail -> detail));
+        Map<UUID, OrderDetailsDTO> submittedById = new LinkedHashMap<>();
+        for (OrderDetailsDTO detail : submittedDetails) {
+            if (detail == null
+                    || detail.getId() == null
+                    || submittedById.putIfAbsent(detail.getId(), detail) != null
+                    || !liveById.containsKey(detail.getId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Карточка не относится к указанному заказу"
+                );
+            }
+        }
+        if (requireCompleteAggregate && !submittedById.keySet().equals(liveById.keySet())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состав заказа изменился. Обновите страницу и повторите одобрение."
+            );
+        }
+
+        List<Review> changedReviews = new ArrayList<>();
+        for (Map.Entry<UUID, OrderDetailsDTO> entry : submittedById.entrySet()) {
+            if (!applyPublicationDates(
+                    liveById.get(entry.getKey()),
+                    entry.getValue(),
+                    changedReviews,
+                    requireCompleteAggregate
+            )) {
+                return false;
+            }
+        }
+
+        if (!changedReviews.isEmpty()) {
+            reviewRepository.saveAll(changedReviews);
+        }
+        return true;
+    }
+
+    private boolean applyPublicationDates(
+            OrderDetails liveDetail,
+            OrderDetailsDTO submittedDetail,
+            List<Review> changedReviews,
+            boolean requireCompleteReviewSet
+    ) {
+        List<Review> reviews = safeReviews(liveDetail);
+        if (reviews.isEmpty()
+                || submittedDetail.getReviews() == null
+                || submittedDetail.getReviews().isEmpty()) {
+            return false;
+        }
+        if (submittedDetail.getReviews().stream().anyMatch(this::hasInvalidPublicationText)) {
+            return false;
+        }
+
+        List<ReviewDTO> reviewDtos = submittedDetail.getReviews().stream()
+                .sorted(Comparator.comparing(ReviewDTO::getId, Comparator.nullsLast(Long::compareTo)))
+                .toList();
+        Map<Long, Review> reviewsById = reviews.stream()
+                .filter(review -> review.getId() != null)
+                .collect(Collectors.toMap(Review::getId, review -> review));
+        Set<Long> submittedIds = new HashSet<>();
+        for (ReviewDTO reviewDTO : reviewDtos) {
+            if (reviewDTO == null
+                    || reviewDTO.getId() == null
+                    || !submittedIds.add(reviewDTO.getId())
+                    || !reviewsById.containsKey(reviewDTO.getId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Отзыв не относится к указанным деталям заказа"
+                );
+            }
+        }
+        if (requireCompleteReviewSet && !submittedIds.equals(reviewsById.keySet())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Состав отзывов изменился. Обновите страницу и повторите одобрение."
+            );
+        }
+
+        Bot firstBot = reviews.getFirst().getBot();
+        LocalDate startDate = getLocalDate(safeBotCounter(firstBot));
+        int totalReviews = reviewDtos.size();
+        int monthsNeeded = (int) Math.ceil(totalReviews / 28.0);
+        LocalDate endDate = startDate.plusDays(monthsNeeded * 28L - 1);
+        List<LocalDate> publishDates = randomPublicationDates(
+                startDate,
+                endDate,
+                totalReviews,
+                ThreadLocalRandom.current()
+        );
+
+        for (int index = 0; index < totalReviews; index++) {
+            ReviewDTO reviewDTO = reviewDtos.get(index);
+            Review liveReview = reviewsById.get(reviewDTO.getId());
+            if (applyPublicationUpdate(liveReview, reviewDTO, publishDates.get(index))) {
+                changedReviews.add(liveReview);
+            }
+        }
+
+        if (!Objects.equals(submittedDetail.getComment(), liveDetail.getComment())) {
+            // The aggregate query returns managed entities inside this write
+            // transaction, so dirty checking persists all detail comments
+            // without an N-per-detail save loop.
+            liveDetail.setComment(submittedDetail.getComment());
+        }
+        return true;
+    }
+
+    private boolean publicationDateFailure(Exception exception) {
+        log.error("Ошибка обновления данных, даты публикаций НЕ установлены: ", exception);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager
+                .isActualTransactionActive()) {
+            org.springframework.transaction.interceptor.TransactionAspectSupport
+                    .currentTransactionStatus()
+                    .setRollbackOnly();
+        }
+        return false;
     }
 
     private boolean hasInvalidPublicationText(ReviewDTO reviewDTO) {
@@ -1312,10 +1537,7 @@ public class ReviewServiceImpl implements ReviewService {
         return botCounter < 2 ? LocalDate.now().plusDays(2) : LocalDate.now();
     }
 
-    private void checkUpdateReview(ReviewDTO reviewDTO, LocalDate localDate) {
-        Review saveReview = reviewRepository.findById(reviewDTO.getId())
-                .orElseThrow(() -> new UsernameNotFoundException(String.format("Компания '%d' не найден", reviewDTO.getId())));
-
+    private boolean applyPublicationUpdate(Review saveReview, ReviewDTO reviewDTO, LocalDate localDate) {
         boolean isChanged = false;
         boolean oldPublish = saveReview.isPublish();
 
@@ -1343,9 +1565,7 @@ public class ReviewServiceImpl implements ReviewService {
             isChanged = true;
         }
 
-        if (isChanged) {
-            reviewRepository.save(saveReview);
-        }
+        return isChanged;
     }
 
     @Override

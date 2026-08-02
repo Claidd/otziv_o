@@ -2,12 +2,13 @@ package com.hunt.otziv.reputationai.infrastructure.ai.openai.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.service.DeepSeekProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.service.DeepSeekAnthropicProvider;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
-import com.hunt.otziv.reputationai.infrastructure.ai.yandex.YandexGptProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.yandex.service.YandexGptProvider;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
@@ -78,13 +79,16 @@ class OpenAiResponsesClientYandexResponsesTest {
         DeepSeekProvider deepSeekProvider = new DeepSeekProvider(properties, objectMapper);
         ReputationAiProviderSelectionService providerSelectionService = mock(ReputationAiProviderSelectionService.class);
         when(providerSelectionService.activeProvider()).thenReturn("yandexgpt");
+        ReputationAiRuntimeSwitch runtimeSwitch = mock(ReputationAiRuntimeSwitch.class);
+        when(runtimeSwitch.isEnabled()).thenReturn(true);
         return new OpenAiResponsesClient(
                 properties,
                 providerSelectionService,
                 objectMapper,
                 yandexGptProvider,
                 deepSeekProvider,
-                mock(DeepSeekAnthropicProvider.class)
+                mock(DeepSeekAnthropicProvider.class),
+                runtimeSwitch
         );
     }
 

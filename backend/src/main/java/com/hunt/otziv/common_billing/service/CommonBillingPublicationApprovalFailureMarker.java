@@ -3,7 +3,7 @@ package com.hunt.otziv.common_billing.service;
 import com.hunt.otziv.common_billing.model.CommonInvoice;
 import com.hunt.otziv.common_billing.model.CommonInvoiceStatus;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceRepository;
-import com.hunt.otziv.p_products.review.PublicationApprovalException;
+import com.hunt.otziv.p_products.review.exception.PublicationApprovalException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

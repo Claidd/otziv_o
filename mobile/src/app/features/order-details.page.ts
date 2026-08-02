@@ -10,7 +10,7 @@ import {
   RefresherCustomEvent,
   ToastController
 } from '@ionic/angular/standalone';
-import { Observable, Subscription, firstValueFrom } from 'rxjs';
+import { Observable, Subscription, finalize, firstValueFrom } from 'rxjs';
 import {
   ApiService,
   BadReviewTaskItem,
@@ -26,6 +26,7 @@ import {
   ReviewUpdateRequest
 } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
+import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
 import { MobileConfirmService } from '../shared/mobile-confirm.service';
 import { MobileBottomPagerComponent } from '../shared/mobile-bottom-pager.component';
 import { MobileHeaderComponent } from '../shared/mobile-header.component';
@@ -2099,6 +2100,11 @@ const PLACEHOLDER_REVIEW_TEXT = 'текст отзыва';
 })
 export class OrderDetailsPage implements OnInit, OnDestroy {
   private routeSubscription?: Subscription;
+  private detailsLoadSubscription?: Subscription;
+  private companyReportLoadSubscription?: Subscription;
+  private detailsLoadGeneration = 0;
+  private companyReportLoadGeneration = 0;
+  private readonly orderRouteGuard = new RouteEpochGuard();
   private reviewStripCleanup?: () => void;
   private publishCredentialWaitTimer: ReturnType<typeof setInterval> | null = null;
   private readonly reviewPublishCredentialStorageKey = 'otziv-mobile-order-details-worker-all-publish-prep:v1';
@@ -2236,19 +2242,27 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.loadTbankStatus();
     this.routeSubscription = new Subscription();
+    if (this.auth.hasAnyRealmRole(['ADMIN', 'OWNER'])) {
+      this.loadTbankStatus();
+    }
     this.routeSubscription.add(this.route.paramMap.subscribe((params) => {
-      const companyId = Number(params.get('companyId'));
-      const orderId = Number(params.get('orderId'));
-      this.companyId.set(Number.isFinite(companyId) && companyId > 0 ? companyId : null);
+      const rawCompanyId = params.get('companyId');
+      const rawOrderId = params.get('orderId');
+      const companyId = Number(rawCompanyId);
+      const orderId = Number(rawOrderId);
+      const normalizedCompanyId = Number.isFinite(companyId) && companyId > 0 ? companyId : null;
       if (!Number.isFinite(orderId) || orderId <= 0) {
+        this.activateOrderRoute(
+          `invalid:${rawCompanyId ?? ''}:${rawOrderId ?? ''}`,
+          normalizedCompanyId,
+          null
+        );
         this.error.set('Заказ не найден');
         return;
       }
 
-      this.orderId.set(orderId);
-      this.loadDetails();
+      this.activateOrderRoute(`order:${normalizedCompanyId ?? ''}:${orderId}`, normalizedCompanyId, orderId);
     }));
     this.routeSubscription.add(this.route.queryParamMap.subscribe((params) => {
       const openedFromWorkerAll = params.get('from') === 'worker-all';
@@ -2264,6 +2278,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.orderRouteGuard.destroy();
+    this.cancelOrderRouteReads();
     this.routeSubscription?.unsubscribe();
     this.reviewStripCleanup?.();
     this.reviewStripCleanup = undefined;
@@ -2282,10 +2298,30 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      done?.();
+      return;
+    }
+
+    const loadGeneration = ++this.detailsLoadGeneration;
+    this.detailsLoadSubscription?.unsubscribe();
+    this.detailsLoadSubscription = undefined;
     this.loading.set(true);
     this.error.set(null);
-    this.api.getManagerOrderDetails(orderId).subscribe({
+    const subscription = this.api.getManagerOrderDetails(orderId).pipe(
+      finalize(() => {
+        if (loadGeneration === this.detailsLoadGeneration && this.isActiveOrderRoute(routeTicket)) {
+          this.detailsLoadSubscription = undefined;
+          this.loading.set(false);
+        }
+        done?.();
+      })
+    ).subscribe({
       next: (details) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.details.set(details);
         this.selectRequestedReview(details);
         this.reviewFieldDrafts.set({});
@@ -2297,15 +2333,100 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.recoveryTaskDrafts.set({});
         this.editingFieldKey.set(null);
         this.noteOpenId.set(null);
-        this.loading.set(false);
-        done?.();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось загрузить детали заказа'));
-        this.loading.set(false);
-        done?.();
       }
     });
+    if (!subscription.closed
+        && loadGeneration === this.detailsLoadGeneration
+        && this.isActiveOrderRoute(routeTicket)) {
+      this.detailsLoadSubscription = subscription;
+    }
+  }
+
+  private activateOrderRoute(routeKey: string, companyId: number | null, orderId: number | null): void {
+    if (!this.orderRouteGuard.change(routeKey)) {
+      return;
+    }
+
+    this.cancelOrderRouteReads();
+    this.clearOrderRouteState();
+    this.companyId.set(companyId);
+    this.orderId.set(orderId);
+    if (orderId) {
+      this.loadDetails();
+    }
+  }
+
+  private clearOrderRouteState(): void {
+    this.orderId.set(null);
+    this.companyId.set(null);
+    this.details.set(null);
+    this.loading.set(false);
+    this.error.set(null);
+    this.mutationKey.set(null);
+    this.copiedKey.set(null);
+    this.activeReviewIndex.set(0);
+    this.editingFieldKey.set(null);
+    this.reviewFieldDrafts.set({});
+    this.expandedReviewIds.set({});
+    this.noteOpenId.set(null);
+    this.reviewNoteDrafts.set({});
+    this.reviewSideNoteDrafts.set({});
+    this.copiedReviewCredentials.set({});
+    this.companyReportVisible.set(false);
+    this.companyReportLoading.set(false);
+    this.companyReportError.set(null);
+    this.companyReportState.set(null);
+    this.paymentLink.set(null);
+    this.reviewsExpanded.set(false);
+    this.reviewEdit.set(null);
+    this.reviewEditInitialField.set(null);
+    this.reviewEditDraft.set(null);
+    this.reviewEditSaving.set(false);
+    this.reviewEditDeleting.set(false);
+    this.reviewEditUploading.set(false);
+    this.reviewEditError.set(null);
+    this.reviewTextEdit.set(null);
+    this.reviewTextEditValue.set('');
+    this.reviewTextEditSaving.set(false);
+    this.reviewTextEditError.set(null);
+    this.badReviewTaskDrafts.set({});
+    this.savedBadReviewTaskId.set(null);
+    this.recoveryTaskDrafts.set({});
+    this.savedRecoveryTaskId.set(null);
+    this.reviewDrag = null;
+    this.suppressReviewClickUntil = 0;
+    this.clearReviewPublishWaitTimer();
+    this.clearErrorHideTimer();
+    if (this.openedFromWorkerAll()) {
+      this.restoreReviewPublishCredentialPreparation();
+    }
+  }
+
+  private cancelOrderRouteReads(): void {
+    this.detailsLoadGeneration += 1;
+    this.companyReportLoadGeneration += 1;
+    const detailsSubscription = this.detailsLoadSubscription;
+    const companyReportSubscription = this.companyReportLoadSubscription;
+    this.detailsLoadSubscription = undefined;
+    this.companyReportLoadSubscription = undefined;
+    detailsSubscription?.unsubscribe();
+    companyReportSubscription?.unsubscribe();
+    this.loading.set(false);
+    this.companyReportLoading.set(false);
+  }
+
+  private captureOrderRoute(): RouteEpochTicket | null {
+    return this.orderRouteGuard.capture();
+  }
+
+  private isActiveOrderRoute(ticket: RouteEpochTicket): boolean {
+    return this.orderRouteGuard.accepts(ticket);
   }
 
   backToOrders(): void {
@@ -2336,7 +2457,15 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
-    window.setTimeout(() => this.goToReviewIndex(index), 60);
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+    window.setTimeout(() => {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.goToReviewIndex(index);
+      }
+    }, 60);
   }
 
   goToReviewIndex(index: number): void {
@@ -2634,6 +2763,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const value = this.reviewFieldValue(review, field);
     const key = this.saveFieldMutationKey(review, field);
     this.mutationKey.set(key);
@@ -2643,12 +2777,18 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     request.subscribe({
       next: (updatedReview) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.applyUpdatedReview(updatedReview);
         this.mutationKey.set(null);
         this.cancelReviewFieldEdit(updatedReview, field);
         this.blurActiveControl();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось сохранить отзыв'));
         this.mutationKey.set(null);
       }
@@ -2763,6 +2903,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     this.reviewTextEditSaving.set(true);
     this.reviewTextEditError.set(null);
     const request = state.field === 'text'
@@ -2771,12 +2916,18 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
 
     request.subscribe({
       next: (updatedReview) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.applyUpdatedReview(updatedReview);
         this.clearReviewDrafts(updatedReview.id);
         this.reviewTextEditSaving.set(false);
         this.closeReviewTextEdit();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.reviewTextEditError.set(this.errorMessage(err, 'Не удалось сохранить отзыв.'));
         this.reviewTextEditSaving.set(false);
       }
@@ -2855,33 +3006,54 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const updateReviewNote = this.isReviewNoteChanged(review);
+    const updateOrderNote = this.isReviewSideNoteChanged(review, 'order');
+    const updateCompanyNote = this.isReviewSideNoteChanged(review, 'company');
+    const reviewComment = this.reviewNoteValue(review);
+    const orderComments = this.reviewSideNoteValue(review, 'order');
+    const companyComments = this.reviewSideNoteValue(review, 'company');
+
     this.mutationKey.set(key);
     try {
-      if (this.isReviewNoteChanged(review)) {
+      if (updateReviewNote) {
         const updatedReview = await firstValueFrom(
-          this.api.updateManagerOrderReviewNote(review.orderId, review.id, this.reviewNoteValue(review))
+          this.api.updateManagerOrderReviewNote(review.orderId, review.id, reviewComment)
         );
-        this.applyUpdatedReview(updatedReview);
+        if (this.isActiveOrderRoute(routeTicket)) {
+          this.applyUpdatedReview(updatedReview);
+        }
       }
 
-      if (this.isReviewSideNoteChanged(review, 'order')) {
-        const orderComments = this.reviewSideNoteValue(review, 'order');
+      if (updateOrderNote) {
         await firstValueFrom(this.api.updateManagerOrderNote(review.orderId, orderComments));
-        this.patchOrderNote(review.orderId, orderComments);
+        if (this.isActiveOrderRoute(routeTicket)) {
+          this.patchOrderNote(review.orderId, orderComments);
+        }
       }
 
-      if (this.isReviewSideNoteChanged(review, 'company')) {
-        const companyComments = this.reviewSideNoteValue(review, 'company');
+      if (updateCompanyNote) {
         await firstValueFrom(this.api.updateManagerOrderCompanyNote(review.orderId, companyComments));
-        this.patchCompanyNote(review.companyId, companyComments);
+        if (this.isActiveOrderRoute(routeTicket)) {
+          this.patchCompanyNote(review.companyId, companyComments);
+        }
       }
 
-      this.clearReviewNoteDrafts(review.id);
-      this.noteOpenId.set(null);
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.clearReviewNoteDrafts(review.id);
+        this.noteOpenId.set(null);
+      }
     } catch (err) {
-      this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки'));
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set(this.errorMessage(err, 'Не удалось сохранить заметки'));
+      }
     } finally {
-      this.mutationKey.set(null);
+      if (this.isActiveOrderRoute(routeTicket) && this.mutationKey() === key) {
+        this.mutationKey.set(null);
+      }
     }
   }
 
@@ -2940,16 +3112,27 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     this.reviewEditSaving.set(true);
     this.reviewEditError.set(null);
     this.api.updateManagerOrderReview(review.orderId, review.id, this.normalizedReviewEditDraft(draft)).subscribe({
       next: (updatedReview) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.applyUpdatedReview(updatedReview);
         this.clearReviewDrafts(updatedReview.id);
         this.reviewEditSaving.set(false);
         this.closeReviewEdit();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.reviewEditError.set(this.errorMessage(err, 'Отзыв не сохранен.'));
         this.reviewEditSaving.set(false);
       }
@@ -2962,13 +3145,18 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Удалить отзыв',
       message: 'Удалить отзыв?',
       confirmText: 'Удалить',
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
@@ -2976,6 +3164,9 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.reviewEditError.set(null);
     this.api.deleteManagerOrderReview(review.orderId, review.id).subscribe({
       next: (details) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.details.set(details);
         this.activeReviewIndex.set(Math.min(this.activeReviewIndex(), Math.max(0, details.reviews.length - 1)));
         this.clearReviewDrafts(review.id);
@@ -2983,6 +3174,9 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         this.closeReviewEdit();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.reviewEditError.set(this.errorMessage(err, 'Отзыв не удален.'));
         this.reviewEditDeleting.set(false);
       }
@@ -3012,18 +3206,35 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const file = await this.media.pickImageFile(`review-${review.id}`);
     if (file) {
-      await this.uploadReviewPhotoFile(review, file);
+      await this.uploadReviewPhotoFile(review, file, null, routeTicket);
     }
   }
 
-  private async uploadReviewPhotoFile(review: OrderReviewItem, file: File, input?: HTMLInputElement | null): Promise<void> {
+  private async uploadReviewPhotoFile(
+    review: OrderReviewItem,
+    file: File,
+    input?: HTMLInputElement | null,
+    existingRouteTicket?: RouteEpochTicket
+  ): Promise<void> {
+    const routeTicket = existingRouteTicket ?? this.captureOrderRoute();
+    if (!routeTicket || !this.isActiveOrderRoute(routeTicket)) {
+      return;
+    }
     this.reviewEditUploading.set(true);
     this.reviewEditError.set(null);
     try {
       const preparedFile = await this.media.prepareImageFile(file, `review-${review.id}`);
       const updatedReview = await firstValueFrom(this.api.uploadManagerOrderReviewPhoto(review.orderId, review.id, preparedFile));
+      if (!this.isActiveOrderRoute(routeTicket)) {
+        return;
+      }
       this.applyUpdatedReview(updatedReview);
       this.reviewEdit.set(updatedReview);
       this.reviewEditDraft.update((draft) => draft ? {
@@ -3031,10 +3242,14 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         url: updatedReview.url || updatedReview.urlPhoto || ''
       } : this.reviewEditDraftFromReview(updatedReview));
     } catch (err) {
-      this.reviewEditError.set(this.errorMessage(err, 'Фото отзыва не загрузилось.'));
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.reviewEditError.set(this.errorMessage(err, 'Фото отзыва не загрузилось.'));
+      }
     } finally {
-      this.reviewEditUploading.set(false);
-      if (input) {
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.reviewEditUploading.set(false);
+      }
+      if (input && this.isActiveOrderRoute(routeTicket)) {
         input.value = '';
       }
     }
@@ -3064,6 +3279,10 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   async copyReviewField(review: OrderReviewItem, kind: ReviewCopyKind): Promise<void> {
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
     const values: Record<ReviewCopyKind, string> = {
       filialUrl: review.filialUrl,
       botLogin: review.botLogin,
@@ -3077,15 +3296,17 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
-    if (!(await this.copyText(values[kind] ?? '', `${review.id}-${kind}`))) {
+    if (!(await this.copyText(values[kind] ?? '', `${review.id}-${kind}`, routeTicket))) {
       return;
     }
 
     if (kind === 'botLogin' || kind === 'botPassword') {
-      if (!(await this.logReviewCredentialCopyClick(review, kind))) {
+      if (!(await this.logReviewCredentialCopyClick(review, kind, routeTicket))) {
         return;
       }
-      this.markReviewCredentialCopied(review, kind);
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.markReviewCredentialCopied(review, kind);
+      }
     }
   }
 
@@ -3142,20 +3363,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Заменить аккаунт',
       message: `Заблокировать аккаунт "${this.botLabel(review)}" и заменить его?`,
       confirmText: 'Заменить',
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
     this.runReviewMutation(
       `block-${review.id}`,
       () => this.api.deactivateManagerOrderReviewBot(review.orderId, review.id, review.botId!, this.orderDetailsActivitySource()),
-      'Не удалось заблокировать аккаунт'
+      'Не удалось заблокировать аккаунт',
+      routeTicket
     );
   }
 
@@ -3276,7 +3503,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     return this.reviewHasTemplateBot(review) ? 'НУЖЕН ВЫГУЛ' : 'СМЕНИТЕ АККАУНТ';
   }
 
-  private async logReviewCredentialCopyClick(review: OrderReviewItem, kind: ReviewCopyKind): Promise<boolean> {
+  private async logReviewCredentialCopyClick(
+    review: OrderReviewItem,
+    kind: ReviewCopyKind,
+    routeTicket: RouteEpochTicket
+  ): Promise<boolean> {
     if (kind !== 'botLogin' && kind !== 'botPassword') {
       return true;
     }
@@ -3284,9 +3515,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     const field = kind === 'botLogin' ? 'login' : 'password';
     try {
       await firstValueFrom(this.api.logWorkerReviewCopyClick(review.id, field, this.orderDetailsActivitySource()));
-      return true;
+      return this.isActiveOrderRoute(routeTicket);
     } catch {
-      this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set('Данные скопированы, но сервер не подтвердил действие. Нажмите кнопку еще раз.');
+      }
       return false;
     }
   }
@@ -3511,11 +3744,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         scheduledDate: draft.scheduledDate
       }),
       'Не удалось сохранить плохую задачу',
-      () => {
+      (_details, routeTicket) => {
         this.clearBadReviewTaskDraft(task.id);
         this.savedBadReviewTaskId.set(task.id);
         window.setTimeout(() => {
-          if (this.savedBadReviewTaskId() === task.id) {
+          if (this.isActiveOrderRoute(routeTicket) && this.savedBadReviewTaskId() === task.id) {
             this.savedBadReviewTaskId.set(null);
           }
         }, 1400);
@@ -3528,8 +3761,12 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   async copyBadReviewTaskField(task: BadReviewTaskItem, kind: BadReviewTaskCopyKind): Promise<void> {
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
     const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
-    await this.copyText(value ?? '', this.badReviewTaskCopyKey(task, kind));
+    await this.copyText(value ?? '', this.badReviewTaskCopyKey(task, kind), routeTicket);
   }
 
   changeBadReviewTaskBot(task: BadReviewTaskItem): void {
@@ -3550,8 +3787,12 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   async copyRecoveryTaskField(task: ReviewRecoveryTaskItem, kind: RecoveryTaskCopyKind): Promise<void> {
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
     const value = kind === 'botLogin' ? task.botLogin : task.botPassword;
-    await this.copyText(value ?? '', this.recoveryTaskCopyKey(task, kind));
+    await this.copyText(value ?? '', this.recoveryTaskCopyKey(task, kind), routeTicket);
   }
 
   recoveryTaskBotBrowserUrl(task: ReviewRecoveryTaskItem): string {
@@ -3575,20 +3816,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Заменить аккаунт',
       message: `Заблокировать аккаунт "${task.botFio || task.botId}" и заменить в восстановлении?`,
       confirmText: 'Заменить',
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
     this.runRecoveryBotMutation(
       `recovery-block-bot-${task.id}`,
       () => this.api.deactivateWorkerRecoveryTaskBot(task.id, task.botId!),
-      'Не удалось заблокировать аккаунт восстановления'
+      'Не удалось заблокировать аккаунт восстановления',
+      routeTicket
     );
   }
 
@@ -3598,19 +3845,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Отметить выполненной',
       message: `Плохая задача #${task.id} будет отмечена как "Сменил". После этого доплата попадет в сумму заказа, а менеджер получит уведомление для счета клиенту.`,
       confirmText: 'Сменил'
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
     this.runDetailsMutation(
       `bad-task-complete-${task.id}`,
       () => this.api.completeManagerBadReviewTask(orderId, task.id),
-      'Не удалось отметить плохую задачу'
+      'Не удалось отметить плохую задачу',
+      undefined,
+      routeTicket
     );
   }
 
@@ -3620,20 +3874,27 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Убрать из доплаты',
       message: `Убрать плохую задачу #${task.id} из доплаты?`,
       confirmText: 'Убрать',
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
     this.runDetailsMutation(
       `bad-task-cancel-${task.id}`,
       () => this.api.cancelManagerBadReviewTask(orderId, task.id),
-      'Не удалось убрать плохую задачу из счета'
+      'Не удалось убрать плохую задачу из счета',
+      undefined,
+      routeTicket
     );
   }
 
@@ -3705,11 +3966,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         scheduledDate: draft.scheduledDate
       }),
       'Не удалось сохранить восстановление',
-      () => {
+      (_details, routeTicket) => {
         this.clearRecoveryTaskDraft(task.id);
         this.savedRecoveryTaskId.set(task.id);
         window.setTimeout(() => {
-          if (this.savedRecoveryTaskId() === task.id) {
+          if (this.isActiveOrderRoute(routeTicket) && this.savedRecoveryTaskId() === task.id) {
             this.savedRecoveryTaskId.set(null);
           }
         }, 1400);
@@ -3723,19 +3984,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Отметить выполненным',
       message: `Восстановление #${task.id} будет отмечено выполненным. Если это последняя задача в пачке, менеджеру уйдет уведомление связаться с клиентом.`,
       confirmText: 'Готово'
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
     this.runDetailsMutation(
       `recovery-complete-${task.id}`,
       () => this.api.completeManagerReviewRecoveryTask(orderId, task.id),
-      'Не удалось отметить восстановление'
+      'Не удалось отметить восстановление',
+      undefined,
+      routeTicket
     );
   }
 
@@ -3745,13 +4013,18 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     const confirmed = await this.confirm.confirm({
       title: 'Удалить восстановление',
       message: `Удалить задачу восстановления #${task.id}?`,
       confirmText: 'Удалить',
       danger: true
     });
-    if (!confirmed) {
+    if (!confirmed || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
@@ -3759,7 +4032,8 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       `recovery-delete-${task.id}`,
       () => this.api.deleteManagerReviewRecoveryTask(orderId, task.id),
       'Не удалось удалить восстановление',
-      () => this.clearRecoveryTaskDraft(task.id)
+      () => this.clearRecoveryTaskDraft(task.id),
+      routeTicket
     );
   }
 
@@ -3818,21 +4092,32 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     this.mutationKey.set('send-check');
     this.api.updateManagerOrderStatus(orderId, 'В проверку').subscribe({
       next: () => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.mutationKey.set(null);
-        void this.presentSendToCheckSuccessToast();
+        void this.presentSendToCheckSuccessToast(routeTicket);
         this.loadDetails();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось отправить заказ на проверку'));
         this.mutationKey.set(null);
       }
     });
   }
 
-  private async presentSendToCheckSuccessToast(): Promise<void> {
+  private async presentSendToCheckSuccessToast(routeTicket: RouteEpochTicket): Promise<void> {
     const toast = await this.toastController.create({
       message: 'Заказ отправлен в проверку и клиенту',
       duration: 3500,
@@ -3846,6 +4131,9 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         htmlAttributes: { 'aria-label': 'Закрыть уведомление' }
       }]
     });
+    if (!this.isActiveOrderRoute(routeTicket)) {
+      return;
+    }
     await toast.present();
   }
 
@@ -3865,11 +4153,29 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
+    const loadGeneration = ++this.companyReportLoadGeneration;
+    this.companyReportLoadSubscription?.unsubscribe();
+    this.companyReportLoadSubscription = undefined;
+
     this.companyReportVisible.set(true);
     this.companyReportLoading.set(true);
     this.companyReportError.set(null);
-    this.api.getManagerOrderCompanyReport(orderId).subscribe({
+    const subscription = this.api.getManagerOrderCompanyReport(orderId).pipe(
+      finalize(() => {
+        if (loadGeneration === this.companyReportLoadGeneration && this.isActiveOrderRoute(routeTicket)) {
+          this.companyReportLoadSubscription = undefined;
+        }
+      })
+    ).subscribe({
       next: (state) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.companyReportState.set(state);
         this.companyReportLoading.set(false);
         if (!state.latestJob?.report && !state.activeJob && state.canStart) {
@@ -3877,10 +4183,18 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
         }
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.companyReportError.set(this.errorMessage(err, 'Не удалось проверить отчет о компании'));
         this.companyReportLoading.set(false);
       }
     });
+    if (!subscription.closed
+        && loadGeneration === this.companyReportLoadGeneration
+        && this.isActiveOrderRoute(routeTicket)) {
+      this.companyReportLoadSubscription = subscription;
+    }
   }
 
   closeCompanyReport(): void {
@@ -3898,7 +4212,7 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       && !!status.enabled
       && !!status.paymentLinksEnabled
       && !!status.applyConfirmedPayments
-      && this.auth.hasRealmRole('ADMIN');
+      && this.auth.hasAnyRealmRole(['ADMIN', 'OWNER']);
   }
 
   paymentLinkModeLabel(): string {
@@ -3918,15 +4232,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     this.mutationKey.set('payment-link');
     this.error.set(null);
     this.api.createManagerOrderPaymentLink(orderId).subscribe({
       next: (response) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.paymentLink.set(response);
         this.mutationKey.set(null);
-        void this.copyText(response.copyText || response.url, 'payment-link');
+        void this.copyText(response.copyText || response.url, 'payment-link', routeTicket);
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось создать ссылку на оплату'));
         this.mutationKey.set(null);
       }
@@ -3934,10 +4259,11 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   }
 
   private loadTbankStatus(): void {
-    this.api.getTbankStatus().subscribe({
+    const subscription = this.api.getTbankStatus().subscribe({
       next: (status) => this.tbankStatus.set(status),
       error: () => this.tbankStatus.set(null)
     });
+    this.routeSubscription?.add(subscription);
   }
 
   refreshCompanyReport(): void {
@@ -3952,15 +4278,26 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     this.companyReportVisible.set(true);
     this.companyReportLoading.set(true);
     this.companyReportError.set(null);
     this.api.refreshManagerOrderCompanyReport(orderId).subscribe({
       next: (state) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.companyReportState.set(state);
         this.companyReportLoading.set(false);
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.companyReportError.set(this.errorMessage(err, 'Не удалось обновить отчет о компании'));
         this.companyReportLoading.set(false);
       }
@@ -4303,13 +4640,24 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
       return;
     }
 
+    const routeTicket = this.captureOrderRoute();
+    if (!routeTicket) {
+      return;
+    }
+
     this.companyReportLoading.set(true);
     this.api.startManagerOrderCompanyReport(orderId).subscribe({
       next: (state) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.companyReportState.set(state);
         this.companyReportLoading.set(false);
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.companyReportError.set(this.errorMessage(err, 'Не удалось запустить отчет о компании'));
         this.companyReportLoading.set(false);
       }
@@ -4616,9 +4964,15 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     key: string,
     request: () => ReturnType<ApiService['addManagerOrderReview']>,
     fallback: string,
-    afterSuccess?: (details: OrderDetailsPayload) => void
+    afterSuccess?: (details: OrderDetailsPayload, routeTicket: RouteEpochTicket) => void,
+    existingRouteTicket?: RouteEpochTicket
   ): void {
     if (this.isMutating(key)) {
+      return;
+    }
+
+    const routeTicket = existingRouteTicket ?? this.captureOrderRoute();
+    if (!routeTicket || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
@@ -4626,27 +4980,48 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.error.set(null);
     request().subscribe({
       next: (details) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.details.set(details);
         this.clampActiveCardIndex();
-        afterSuccess?.(details);
+        afterSuccess?.(details, routeTicket);
         this.mutationKey.set(null);
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, fallback));
         this.mutationKey.set(null);
       }
     });
   }
 
-  private runReviewMutation(key: string, request: () => ReturnType<ApiService['changeManagerOrderReviewBot']>, fallback: string): void {
+  private runReviewMutation(
+    key: string,
+    request: () => ReturnType<ApiService['changeManagerOrderReviewBot']>,
+    fallback: string,
+    existingRouteTicket?: RouteEpochTicket
+  ): void {
+    const routeTicket = existingRouteTicket ?? this.captureOrderRoute();
+    if (!routeTicket || !this.isActiveOrderRoute(routeTicket)) {
+      return;
+    }
     this.mutationKey.set(key);
     this.error.set(null);
     request().subscribe({
       next: (review) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.applyUpdatedReview(review);
         this.mutationKey.set(null);
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, fallback));
         this.mutationKey.set(null);
       }
@@ -4656,9 +5031,15 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
   private runRecoveryBotMutation(
     key: string,
     request: () => Observable<unknown>,
-    fallback: string
+    fallback: string,
+    existingRouteTicket?: RouteEpochTicket
   ): void {
     if (this.isMutating(key)) {
+      return;
+    }
+
+    const routeTicket = existingRouteTicket ?? this.captureOrderRoute();
+    if (!routeTicket || !this.isActiveOrderRoute(routeTicket)) {
       return;
     }
 
@@ -4666,10 +5047,16 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     this.error.set(null);
     request().subscribe({
       next: () => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.mutationKey.set(null);
         this.loadDetails();
       },
       error: (err) => {
+        if (!this.isActiveOrderRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(err, fallback));
         this.mutationKey.set(null);
       }
@@ -4949,24 +5336,31 @@ export class OrderDetailsPage implements OnInit, OnDestroy {
     }
   }
 
-  private async copyText(value: string, key: string): Promise<boolean> {
+  private async copyText(value: string, key: string, routeTicket: RouteEpochTicket): Promise<boolean> {
     const text = (value ?? '').trim();
     if (!text) {
-      this.error.set('Нечего копировать.');
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set('Нечего копировать.');
+      }
       return false;
     }
 
     try {
       await navigator.clipboard.writeText(text);
+      if (!this.isActiveOrderRoute(routeTicket)) {
+        return false;
+      }
       this.copiedKey.set(key);
       window.setTimeout(() => {
-        if (this.copiedKey() === key) {
+        if (this.isActiveOrderRoute(routeTicket) && this.copiedKey() === key) {
           this.copiedKey.set(null);
         }
       }, 1200);
       return true;
     } catch {
-      this.error.set('Не удалось скопировать текст.');
+      if (this.isActiveOrderRoute(routeTicket)) {
+        this.error.set('Не удалось скопировать текст.');
+      }
       return false;
     }
   }

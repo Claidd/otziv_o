@@ -14,7 +14,7 @@ import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository.ExecutionContextProjection;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferExecutionRepository.WorkerManagerAssignmentProjection;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferGraphQueryService;
+import com.hunt.otziv.workload_shadow.transfer.service.WorkloadTransferGraphQueryService;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;

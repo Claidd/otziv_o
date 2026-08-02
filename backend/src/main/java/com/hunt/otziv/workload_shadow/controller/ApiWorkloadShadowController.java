@@ -27,9 +27,9 @@ import com.hunt.otziv.workload_shadow.service.WorkloadTransferLiveMonitorService
 import com.hunt.otziv.workload_shadow.service.WorkloadEmergencyRollbackService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowMonitorService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowSettingsService;
-import com.hunt.otziv.workload_shadow.health.WorkloadShadowHealthService;
-import com.hunt.otziv.workload_shadow.health.WorkloadShadowHealthSnapshot;
-import com.hunt.otziv.workload_shadow.maintenance.WorkloadShadowMaintenanceService;
+import com.hunt.otziv.workload_shadow.health.service.WorkloadShadowHealthService;
+import com.hunt.otziv.workload_shadow.health.dto.WorkloadShadowHealthSnapshot;
+import com.hunt.otziv.workload_shadow.maintenance.service.WorkloadShadowMaintenanceService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

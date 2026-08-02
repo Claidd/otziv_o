@@ -33,9 +33,11 @@ import org.springframework.transaction.support.AbstractPlatformTransactionManage
 import org.springframework.transaction.support.DefaultTransactionStatus;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -322,6 +324,55 @@ class WorkerRiskEvaluationServiceTest {
         assertEquals("NAGUL_TOO_FAST_AFTER_CREDENTIAL_COPY", captor.getValue().getRuleCode());
         assertEquals(true, captor.getValue().getDetails().contains("10 сек"));
         assertEquals(true, captor.getValue().getDetails().contains("Минимум: 180 сек"));
+    }
+
+    @Test
+    void groupWithoutPersonalTelegramDoesNotStartExplanationSla() {
+        WorkerRiskEvaluationService service = service();
+        WorkerActivityEvent event = event(WorkerActivityAction.REVIEW_PUBLISH);
+        User worker = user(1L, "worker", "Иван Работник", null);
+        worker.setWorkerTelegramGroupChatId(-100123L);
+
+        when(incidentRepository.existsByWorkerUserIdAndRuleCodeAndStatusAndReviewIdAndCreatedAtGreaterThanEqual(
+                eq(1L),
+                eq("PUBLISH_WITHOUT_CREDENTIAL_COPY"),
+                eq(WorkerRiskIncidentStatus.OPEN),
+                eq(501L),
+                any(LocalDateTime.class)
+        )).thenReturn(false);
+        when(incidentRepository.save(any(WorkerRiskIncident.class))).thenAnswer(invocation -> {
+            WorkerRiskIncident incident = invocation.getArgument(0);
+            incident.setId(79L);
+            return incident;
+        });
+        when(userService.getAllOwners("ROLE_OWNER")).thenReturn(List.of());
+        when(userService.getAllOwners("ROLE_ADMIN")).thenReturn(List.of());
+
+        service.evaluateSafely(event, worker);
+
+        ArgumentCaptor<WorkerRiskIncident> incident = ArgumentCaptor.forClass(WorkerRiskIncident.class);
+        verify(incidentRepository).save(incident.capture());
+        assertEquals(null, incident.getValue().getResponseDueAt());
+        assertEquals(null, incident.getValue().getExplanationRequestedAt());
+        ArgumentCaptor<String> bindingWarning = ArgumentCaptor.forClass(String.class);
+        verify(telegramService).sendMessage(eq(-100123L), bindingWarning.capture());
+        assertEquals(true, bindingWarning.getValue().contains("Трёхчасовой срок и ограничение раздела не запущены"));
+        assertFalse(bindingWarning.getValue().contains(worker.getUsername()));
+        assertFalse(bindingWarning.getValue().contains("отправьте логин"));
+        verify(telegramService, never()).sendMessageWithInlineKeyboardMessageId(
+                anyLong(),
+                anyString(),
+                anyString(),
+                any()
+        );
+        verify(riskEventService).record(
+                eq(incident.getValue()),
+                eq(com.hunt.otziv.worker_activity.model.WorkerRiskEventType.EXPLANATION_REQUEST_FAILED),
+                eq(1L),
+                eq("WORKER"),
+                eq("telegram"),
+                any()
+        );
     }
 
     @Test

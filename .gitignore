@@ -65,6 +65,14 @@ sent-hashes/
 tmp-keycloak-login-check/
 .gitleaks-staged-index-*/
 
+### Generated/repository-local artifacts (R10) ###
+**/node_modules/
+/.codex-tmp/
+/.codex-remote-attachments/
+/mobile/www/
+/mobile/builds/
+/generated-assets/
+
 # managed
 **.data.json
 **.node-persist**

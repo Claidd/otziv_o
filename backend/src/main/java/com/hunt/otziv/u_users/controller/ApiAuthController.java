@@ -3,7 +3,9 @@ package com.hunt.otziv.u_users.controller;
 import com.hunt.otziv.u_users.dto.CreatedKeycloakUserResponse;
 import com.hunt.otziv.u_users.dto.LegacyUserMigrationRequest;
 import com.hunt.otziv.u_users.dto.RegisterClientRequest;
+import com.hunt.otziv.u_users.security.LegacyMigrationRequestGuard;
 import com.hunt.otziv.u_users.services.KeycloakUserProvisioningService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ApiAuthController {
 
     private final KeycloakUserProvisioningService userProvisioningService;
+    private final LegacyMigrationRequestGuard legacyMigrationRequestGuard;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -27,7 +30,11 @@ public class ApiAuthController {
     }
 
     @PostMapping("/legacy-migration")
-    public CreatedKeycloakUserResponse migrateLegacyUser(@Valid @RequestBody LegacyUserMigrationRequest request) {
+    public CreatedKeycloakUserResponse migrateLegacyUser(
+            @Valid @RequestBody LegacyUserMigrationRequest request,
+            HttpServletRequest servletRequest
+    ) {
+        legacyMigrationRequestGuard.enforce(servletRequest, request.getUsername());
         return userProvisioningService.migrateLegacyUser(request);
     }
 }

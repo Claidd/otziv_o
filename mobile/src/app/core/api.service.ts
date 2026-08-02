@@ -1,10 +1,20 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { forkJoin, map, Observable } from 'rxjs';
+import {
+  botBrowserApiPaths,
+  botBrowserSessionClosePath,
+  botBrowserSessionHeartbeatPath
+} from './bot-browser-api-paths';
 import { mobileEnvironment } from './mobile-environment';
+
+const OPAQUE_REVIEW_CAPABILITY = /^rc1_[A-Za-z0-9_-]{43}$/;
 
 export interface CurrentUser {
   authenticated: boolean;
+  localUserId?: number | null;
+  active?: boolean | null;
+  authEpoch?: number | null;
   name: string;
   authorities: string[];
   preferredUsername?: string;
@@ -123,6 +133,7 @@ export interface PaymentProfileResponse {
   manualPhone?: string | null;
   manualRecipientName?: string | null;
   manualPaymentUrl?: string | null;
+  manualPaymentUrlConfigured?: boolean;
   manualPaymentButtonLabel?: string | null;
   manualComment?: string | null;
   manualMonthlySoftLimitKopecks?: number | null;
@@ -162,6 +173,7 @@ export interface PaymentProfilePolicyRequest {
   manualComment?: string | null;
   manualMonthlySoftLimitKopecks?: number | null;
   manualMonthlyHardLimitKopecks?: number | null;
+  manualPaymentUrlReplacementConfirmed?: boolean;
 }
 
 export interface ManualPaymentTaskResponse {
@@ -234,6 +246,7 @@ export interface UpdateManualPaymentTaskRequest {
   manualPaymentButtonLabel?: string | null;
   targetAmountKopecks: number;
   comment?: string | null;
+  manualPaymentUrlReplacementConfirmed?: boolean;
 }
 
 export interface ManagerPaymentLinkResponse {
@@ -2587,10 +2600,20 @@ export interface BotImportResponse {
 }
 
 export interface BotBrowserOpenResponse {
-  botId: number;
+  sessionId?: string;
   vncUrl: string;
+  heartbeatIntervalSeconds?: number;
+  expiresAt?: string;
+  botId?: number;
   userAgent?: string;
   platform?: string;
+  screenResolution?: string;
+}
+
+export interface BotBrowserMetadata {
+  botId: number;
+  login: string;
+  fio: string;
 }
 
 export interface TitleRequest {
@@ -3216,11 +3239,25 @@ export class ApiService {
   }
 
   openAdminBotBrowser(botId: number): Observable<BotBrowserOpenResponse> {
-    return this.http.post<BotBrowserOpenResponse>(this.apiUrl(`/api/bots/${botId}/browser/open`), {});
+    return this.http.post<BotBrowserOpenResponse>(
+      this.apiUrl(botBrowserApiPaths(botId).open),
+      { heartbeatSupported: true }
+    );
   }
 
-  closeAdminBotBrowser(botId: number): Observable<void> {
-    return this.http.post<void>(this.apiUrl(`/api/bots/${botId}/browser/close`), {});
+  getBotBrowserMetadata(botId: number): Observable<BotBrowserMetadata> {
+    return this.http.get<BotBrowserMetadata>(this.apiUrl(botBrowserApiPaths(botId).metadata));
+  }
+
+  heartbeatAdminBotBrowser(botId: number, sessionId: string): Observable<void> {
+    return this.http.post<void>(this.apiUrl(botBrowserSessionHeartbeatPath(botId, sessionId)), {});
+  }
+
+  closeAdminBotBrowser(botId: number, sessionId?: string | null): Observable<void> {
+    const path = sessionId
+      ? botBrowserSessionClosePath(botId, sessionId)
+      : botBrowserApiPaths(botId).close;
+    return this.http.post<void>(this.apiUrl(path), {});
   }
 
   getAdminUsers(): Observable<AdminUser[]> {
@@ -3954,34 +3991,51 @@ export class ApiService {
     );
   }
 
-  getReviewCheck(orderDetailId: string): Observable<ReviewCheckPayload> {
-    return this.http.get<ReviewCheckPayload>(this.apiUrl(`/api/review-check/${orderDetailId}`));
-  }
-
-  saveReviewCheck(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
-    return this.http.put<ReviewCheckPayload>(this.apiUrl(`/api/review-check/${orderDetailId}`), request);
-  }
-
-  updateReviewCheckText(orderDetailId: string, reviewId: number, text: string): Observable<ReviewCheckReview> {
-    return this.http.put<ReviewCheckReview>(
-      this.apiUrl(`/api/review-check/${orderDetailId}/reviews/${reviewId}/text`),
-      { text }
+  getReviewCheck(orderDetailId: string, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
+    return this.http.get<ReviewCheckPayload>(
+      this.reviewCheckUrl(orderDetailId, capabilityToken),
+      this.reviewCapabilityOptions(capabilityToken)
     );
   }
 
-  updateReviewCheckAnswer(orderDetailId: string, reviewId: number, answer: string): Observable<ReviewCheckReview> {
-    return this.http.put<ReviewCheckReview>(
-      this.apiUrl(`/api/review-check/${orderDetailId}/reviews/${reviewId}/answer`),
-      { answer }
+  saveReviewCheck(orderDetailId: string, request: ReviewCheckUpdateRequest, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
+    return this.http.put<ReviewCheckPayload>(
+      this.reviewCheckUrl(orderDetailId, capabilityToken),
+      request,
+      this.reviewCapabilityOptions(capabilityToken)
     );
   }
 
-  approveReviewCheck(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
-    return this.http.post<ReviewCheckPayload>(this.apiUrl(`/api/review-check/${orderDetailId}/approve`), request);
+  updateReviewCheckText(orderDetailId: string, reviewId: number, text: string, capabilityToken?: string | null): Observable<ReviewCheckReview> {
+    return this.http.put<ReviewCheckReview>(
+      this.reviewCheckUrl(orderDetailId, capabilityToken, `/reviews/${reviewId}/text`),
+      { text },
+      this.reviewCapabilityOptions(capabilityToken)
+    );
   }
 
-  sendReviewCheckToCorrection(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
-    return this.http.post<ReviewCheckPayload>(this.apiUrl(`/api/review-check/${orderDetailId}/correction`), request);
+  updateReviewCheckAnswer(orderDetailId: string, reviewId: number, answer: string, capabilityToken?: string | null): Observable<ReviewCheckReview> {
+    return this.http.put<ReviewCheckReview>(
+      this.reviewCheckUrl(orderDetailId, capabilityToken, `/reviews/${reviewId}/answer`),
+      { answer },
+      this.reviewCapabilityOptions(capabilityToken)
+    );
+  }
+
+  approveReviewCheck(orderDetailId: string, request: ReviewCheckUpdateRequest, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
+    return this.http.post<ReviewCheckPayload>(
+      this.reviewCheckUrl(orderDetailId, capabilityToken, '/approve'),
+      request,
+      this.reviewCapabilityOptions(capabilityToken)
+    );
+  }
+
+  sendReviewCheckToCorrection(orderDetailId: string, request: ReviewCheckUpdateRequest, capabilityToken?: string | null): Observable<ReviewCheckPayload> {
+    return this.http.post<ReviewCheckPayload>(
+      this.reviewCheckUrl(orderDetailId, capabilityToken, '/correction'),
+      request,
+      this.reviewCapabilityOptions(capabilityToken)
+    );
   }
 
   sendReviewCheckToCheck(orderDetailId: string, request: ReviewCheckUpdateRequest): Observable<ReviewCheckPayload> {
@@ -4005,6 +4059,18 @@ export class ApiService {
 
   updateReviewCheckCompanyNote(orderDetailId: string, companyComments: string): Observable<ReviewCheckNotes> {
     return this.http.put<ReviewCheckNotes>(this.apiUrl(`/api/review-check/${orderDetailId}/company-note`), { companyComments });
+  }
+
+  private reviewCheckUrl(orderDetailId: string, capabilityToken?: string | null, suffix = ''): string {
+    return capabilityToken
+      ? this.apiUrl(`/api/review-capability${suffix}`)
+      : this.apiUrl(`/api/review-check/${orderDetailId}${suffix}`);
+  }
+
+  private reviewCapabilityOptions(capabilityToken?: string | null): { headers?: HttpHeaders } {
+    return capabilityToken && OPAQUE_REVIEW_CAPABILITY.test(capabilityToken)
+      ? { headers: new HttpHeaders({ 'X-Review-Capability': capabilityToken }) }
+      : {};
   }
 
   getManagerCompanyEdit(companyId: number): Observable<CompanyEditPayload> {
@@ -4354,7 +4420,7 @@ export class ApiService {
   }
 
   getTbankStatus(): Observable<TbankPaymentStatus> {
-    return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/payments/public/tbank-status'));
+    return this.http.get<TbankPaymentStatus>(this.apiUrl('/api/admin/payments/tbank-status'));
   }
 
   getPublicPaymentLink(token: string): Observable<PublicPaymentLink> {

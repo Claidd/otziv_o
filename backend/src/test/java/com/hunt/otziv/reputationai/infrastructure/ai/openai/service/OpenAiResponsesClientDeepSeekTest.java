@@ -2,13 +2,14 @@ package com.hunt.otziv.reputationai.infrastructure.ai.openai.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.reputationai.application.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiProviderSelectionService;
+import com.hunt.otziv.reputationai.application.service.ReputationAiRuntimeSwitch;
 import com.hunt.otziv.reputationai.config.ReputationAiProperties;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicResult;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekProvider;
-import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.DeepSeekAnthropicProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.dto.DeepSeekAnthropicResult;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.service.DeepSeekProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.deepseek.service.DeepSeekAnthropicProvider;
 import com.hunt.otziv.reputationai.infrastructure.ai.openai.dto.OpenAiResponseResult;
-import com.hunt.otziv.reputationai.infrastructure.ai.yandex.YandexGptProvider;
+import com.hunt.otziv.reputationai.infrastructure.ai.yandex.service.YandexGptProvider;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
@@ -63,13 +64,16 @@ class OpenAiResponsesClientDeepSeekTest {
             DeepSeekProvider deepSeekProvider = new DeepSeekProvider(properties, objectMapper);
             ReputationAiProviderSelectionService providerSelectionService = mock(ReputationAiProviderSelectionService.class);
             when(providerSelectionService.activeProvider()).thenReturn("deepseek");
+            ReputationAiRuntimeSwitch runtimeSwitch = mock(ReputationAiRuntimeSwitch.class);
+            when(runtimeSwitch.isEnabled()).thenReturn(true);
             OpenAiResponsesClient client = new OpenAiResponsesClient(
                     properties,
                     providerSelectionService,
                     objectMapper,
                     new YandexGptProvider(properties, objectMapper),
                     deepSeekProvider,
-                    mock(DeepSeekAnthropicProvider.class)
+                    mock(DeepSeekAnthropicProvider.class),
+                    runtimeSwitch
             );
 
             OpenAiResponseResult result = client.createResearchReportResponse(
@@ -120,13 +124,16 @@ class OpenAiResponsesClientDeepSeekTest {
                         ""
                 ));
 
+        ReputationAiRuntimeSwitch runtimeSwitch = mock(ReputationAiRuntimeSwitch.class);
+        when(runtimeSwitch.isEnabled()).thenReturn(true);
         OpenAiResponsesClient client = new OpenAiResponsesClient(
                 properties,
                 providerSelectionService,
                 objectMapper,
                 new YandexGptProvider(properties, objectMapper),
                 mock(DeepSeekProvider.class),
-                anthropicProvider
+                anthropicProvider,
+                runtimeSwitch
         );
 
         OpenAiResponseResult result = client.createResearchReportResponse(

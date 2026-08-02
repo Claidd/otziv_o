@@ -31,7 +31,7 @@ import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftRequest;
 import com.hunt.otziv.reputationai.api.dto.ReputationBatchReviewDraftTarget;
 import com.hunt.otziv.reputationai.api.dto.ReputationSingleReviewDraftRequest;
-import com.hunt.otziv.reputationai.application.ReputationSingleReviewDraftService;
+import com.hunt.otziv.reputationai.application.service.ReputationSingleReviewDraftService;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftItem;
 import com.hunt.otziv.reputationai.domain.ReputationBatchReviewDraftResult;
 import com.hunt.otziv.reputationai.domain.ReputationSingleReviewDraftResult;
@@ -201,8 +201,10 @@ public class ApiManagerReviewController {
         }
 
         ReviewDTO current = requireReviewForOrder(orderId, reviewId);
-        String newUrl = s3UploadService.uploadFile(file, "reviews", current.getUrl(), reviewId);
+        String oldUrl = current.getUrl();
+        String newUrl = s3UploadService.uploadFile(file, "reviews", oldUrl, reviewId);
         reviewService.updateReviewPhoto(reviewId, newUrl);
+        s3UploadService.deleteFileAfterCommit(oldUrl, "reviews", reviewId);
 
         return managerBoardEditAssembler.buildReviewDetailsResponse(orderId, reviewId);
     }

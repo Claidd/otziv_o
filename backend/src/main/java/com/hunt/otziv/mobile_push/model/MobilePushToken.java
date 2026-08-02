@@ -53,6 +53,18 @@ public class MobilePushToken {
     @Column(name = "active", nullable = false)
     private boolean active = true;
 
+    @Column(name = "auth_epoch", nullable = false)
+    private long authEpoch;
+
+    @Column(name = "revoked_at")
+    private Instant revokedAt;
+
+    @Column(name = "revoked_reason", length = 160)
+    private String revokedReason;
+
+    @Column(name = "revoked_by_user_id")
+    private Long revokedByUserId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

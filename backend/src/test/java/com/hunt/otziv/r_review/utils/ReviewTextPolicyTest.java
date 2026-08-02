@@ -12,6 +12,7 @@ class ReviewTextPolicyTest {
         assertTrue(ReviewTextPolicy.isBlankOrPlaceholder("  текст отзыва Нужно подсавить текст"));
         assertTrue(ReviewTextPolicy.isBlankOrPlaceholder("Нужно подставить текст"));
         assertTrue(ReviewTextPolicy.isBlankOrPlaceholder("подсавить текст"));
+        assertTrue(ReviewTextPolicy.isBlankOrPlaceholder("нет текста"));
     }
 
     @Test

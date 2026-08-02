@@ -253,6 +253,7 @@ public class ClientMessageMonitorService {
     public ClientMessageMonitorResponse retryNow(Long stateId) {
         ScheduledClientMessageState state = activeState(stateId);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
+        rejectActiveProcessingClaim(state, nowStorage);
         state.setNextAttemptAt(nowStorage);
         state.setLockedUntil(null);
         state.setLastErrorCode(null);
@@ -266,6 +267,7 @@ public class ClientMessageMonitorService {
     public ClientMessageMonitorResponse disable(Long stateId) {
         ScheduledClientMessageState state = activeState(stateId);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
+        rejectActiveProcessingClaim(state, nowStorage);
         state.setStatus(ScheduledMessageStateStatus.DISABLED);
         state.setNextAttemptAt(null);
         state.setLockedUntil(null);
@@ -281,6 +283,7 @@ public class ClientMessageMonitorService {
     public ClientMessageMonitorResponse markDone(Long stateId) {
         ScheduledClientMessageState state = activeState(stateId);
         LocalDateTime nowStorage = LocalDateTime.now(clock).withNano(0);
+        rejectActiveProcessingClaim(state, nowStorage);
         state.setStatus(ScheduledMessageStateStatus.DONE);
         state.setNextAttemptAt(null);
         state.setLockedUntil(null);
@@ -380,12 +383,21 @@ public class ClientMessageMonitorService {
         if (stateId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не указан кандидат автоответчика");
         }
-        ScheduledClientMessageState state = stateRepository.findById(stateId)
+        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Кандидат автоответчика не найден"));
         if (state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Кандидат уже не активен");
         }
         return state;
+    }
+
+    private void rejectActiveProcessingClaim(ScheduledClientMessageState state, LocalDateTime nowStorage) {
+        if (state.getLockedUntil() != null && state.getLockedUntil().isAfter(nowStorage)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Задача уже обрабатывается. Повторите действие через несколько секунд."
+            );
+        }
     }
 
     private void recordManualAttempt(ScheduledClientMessageState state, String code, String message) {

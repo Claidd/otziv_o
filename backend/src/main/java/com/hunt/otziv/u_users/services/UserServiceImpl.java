@@ -2,6 +2,7 @@ package com.hunt.otziv.u_users.services;
 
 
 import com.hunt.otziv.u_users.dto.*;
+import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.*;
 import com.hunt.otziv.u_users.repository.ImageRepository;
 import com.hunt.otziv.u_users.repository.RoleRepository;
@@ -10,23 +11,32 @@ import com.hunt.otziv.u_users.repository.UserRepository;
 import com.hunt.otziv.u_users.services.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.springframework.http.HttpStatus.FORBIDDEN;
+
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+
+    private static final String DUMMY_LEGACY_PASSWORD_HASH =
+            "$2a$10$pAtWIeKHPxl4coXbwqB0pebfkpcgJ3QhKGXItwmaBYQiKbvSWII0y";
 
     private final UserRepository userRepository;
     private final RoleService roleService;
@@ -37,6 +47,8 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final ImageRepository imageRepository;
     private final ImageService imageService;
+    private final UserAuthEpochService authEpochService;
+    private final KeycloakAdminClient keycloakAdminClient;
 
     // ===================================== SECURITY =====================================
 
@@ -56,6 +68,14 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new UsernameNotFoundException(
                         String.format("Пользователь '%s' не найден", username)
                 ));
+    }
+
+    private User requireLockedUserWithAssignments(String username) {
+        userRepository.lockByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        String.format("Пользователь '%s' не найден", username)
+                ));
+        return requireUserWithAssignments(username);
     }
 
     @Override
@@ -79,7 +99,13 @@ public class UserServiceImpl implements UserService {
 
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
-                user.getPassword(),
+                user.getPassword() == null || user.getPassword().isBlank()
+                        ? DUMMY_LEGACY_PASSWORD_HASH
+                        : user.getPassword(),
+                user.isActive(),
+                true,
+                true,
+                true,
                 user.getRoles().stream()
                         .map(role -> new SimpleGrantedAuthority(role.getName()))
                         .collect(Collectors.toList())
@@ -344,45 +370,55 @@ public class UserServiceImpl implements UserService {
             userDTO.setMarketologs(new HashSet<>());
         }
 
-        User saveUser = requireUserWithAssignments(userDTO.getUsername());
+        User saveUser = requireLockedUserWithAssignments(userDTO.getUsername());
         log.info("Достали юзера по имени из дто");
 
+        String requestedRole = canonicalLocalRole(role);
+        requireAdminForLegacyAdminMutation(saveUser, requestedRole);
+
         boolean isChanged = false;
+        boolean securityRoleChanged = false;
+        boolean activeChanged = false;
 
-        String currentRole = saveUser.getRoles().iterator().next().getName();
+        boolean requestedRoleAlreadyAssigned = saveUser.getRoles() != null
+                && saveUser.getRoles().stream()
+                .map(Role::getName)
+                .filter(Objects::nonNull)
+                .anyMatch(requestedRole::equalsIgnoreCase);
 
-        if (!Objects.equals(currentRole, role)) {
+        if (!requestedRoleAlreadyAssigned) {
             log.info("Вошли в обновление роли");
 
             List<Role> roles = new ArrayList<>();
-            roles.add(roleService.getUserRole(role));
+            roles.add(roleService.getUserRole(requestedRole));
             saveUser.setRoles(roles);
             isChanged = true;
+            securityRoleChanged = true;
 
             log.info("Обновили роль");
 
-            if (role.equals("ROLE_OPERATOR")) {
+            if (requestedRole.equals("ROLE_OPERATOR")) {
                 managerService.deleteManager(saveUser);
                 workerService.deleteWorker(saveUser);
                 marketologService.deleteMarketolog(saveUser);
                 operatorService.saveNewOperator(saveUser);
             }
 
-            if (role.equals("ROLE_MANAGER")) {
+            if (requestedRole.equals("ROLE_MANAGER")) {
                 workerService.deleteWorker(saveUser);
                 operatorService.deleteOperator(saveUser);
                 marketologService.deleteMarketolog(saveUser);
                 managerService.saveNewManager(saveUser);
             }
 
-            if (role.equals("ROLE_WORKER")) {
+            if (requestedRole.equals("ROLE_WORKER")) {
                 managerService.deleteManager(saveUser);
                 operatorService.deleteOperator(saveUser);
                 marketologService.deleteMarketolog(saveUser);
                 workerService.saveNewWorker(saveUser);
             }
 
-            if (role.equals("ROLE_MARKETOLOG")) {
+            if (requestedRole.equals("ROLE_MARKETOLOG")) {
                 workerService.deleteWorker(saveUser);
                 managerService.deleteManager(saveUser);
                 operatorService.deleteOperator(saveUser);
@@ -411,6 +447,7 @@ public class UserServiceImpl implements UserService {
         if (!Objects.equals(userDTO.isActive(), saveUser.isActive())) {
             saveUser.setActive(userDTO.isActive());
             isChanged = true;
+            activeChanged = true;
             log.info("Обновили активность");
         }
 
@@ -496,11 +533,61 @@ public class UserServiceImpl implements UserService {
         }
 
         if (isChanged) {
+            if (activeChanged) {
+                if (saveUser.isActive()) {
+                    authEpochService.reactivated(saveUser);
+                } else {
+                    authEpochService.deactivated(saveUser);
+                }
+            } else if (securityRoleChanged) {
+                authEpochService.securityRolesChanged(saveUser);
+            }
             log.info("Начали сохранять обновленного юзера в БД");
             userRepository.save(saveUser);
             log.info("Сохранили обновленного юзера в БД");
+            if ((activeChanged || securityRoleChanged)
+                    && saveUser.getKeycloakId() != null
+                    && !saveUser.getKeycloakId().isBlank()) {
+                logoutUserSessionsBestEffort(saveUser.getKeycloakId());
+            }
         } else {
             log.info("Изменений не было, сущность в БД не изменена");
+        }
+    }
+
+    private String canonicalLocalRole(String role) {
+        String normalized = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+        return normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
+    }
+
+    private void requireAdminForLegacyAdminMutation(User target, String requestedRole) {
+        boolean existingAdmin = target.getRoles() != null && target.getRoles().stream()
+                .map(Role::getName)
+                .filter(Objects::nonNull)
+                .anyMatch("ROLE_ADMIN"::equalsIgnoreCase);
+        if (!existingAdmin && !"ROLE_ADMIN".equals(requestedRole)) {
+            return;
+        }
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean admin = authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .anyMatch(authority -> "ROLE_ADMIN".equalsIgnoreCase(authority)
+                        || "ADMIN".equalsIgnoreCase(authority));
+        if (!admin) {
+            throw new ResponseStatusException(FORBIDDEN, "Only an admin can manage admin users or roles.");
+        }
+    }
+
+    private void logoutUserSessionsBestEffort(String keycloakUserId) {
+        try {
+            keycloakAdminClient.logoutUserSessions(keycloakUserId);
+        } catch (RuntimeException ignored) {
+            log.warn("Keycloak session logout failed after a legacy security-state change; continuing without rollback");
         }
     }
 

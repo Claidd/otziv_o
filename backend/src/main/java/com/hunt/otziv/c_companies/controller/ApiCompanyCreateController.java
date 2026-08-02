@@ -25,7 +25,7 @@ import com.hunt.otziv.config.metrics.PerformanceMetrics;
 import com.hunt.otziv.l_lead.services.serv.LeadService;
 import com.hunt.otziv.l_lead.utils.LeadPhoneNormalizer;
 import com.hunt.otziv.reputationai.api.dto.ReputationResearchRequest;
-import com.hunt.otziv.reputationai.application.DeepCompanyResearchJobService;
+import com.hunt.otziv.reputationai.application.service.DeepCompanyResearchJobService;
 import com.hunt.otziv.reputationai.config.DeepResearchProfile;
 import com.hunt.otziv.reputationai.domain.DeepCompanyResearchJobStatus;
 import com.hunt.otziv.u_users.dto.ManagerDTO;

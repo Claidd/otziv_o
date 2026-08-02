@@ -1,5 +1,7 @@
 .git
 .codex-remote-attachments
+.codex-tmp
+.release-worktree-*
 .idea
 .vscode
 data
@@ -8,9 +10,12 @@ sent-hashes
 tmp-keycloak-login-check
 **/target
 **/build
-frontend/node_modules
+**/node_modules
 frontend/dist
 frontend/.angular
+mobile/www
+mobile/builds
+generated-assets
 *.log
 .env
 .env.*

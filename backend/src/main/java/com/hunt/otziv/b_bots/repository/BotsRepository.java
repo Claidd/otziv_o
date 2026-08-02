@@ -56,6 +56,18 @@ public interface BotsRepository extends CrudRepository<Bot, Long> {
     """)
     Optional<Bot> findByIdForAssignmentLock(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT b
+        FROM Bot b
+        LEFT JOIN FETCH b.status
+        LEFT JOIN FETCH b.botCity
+        LEFT JOIN FETCH b.worker w
+        LEFT JOIN FETCH w.user
+        WHERE b.id = :id
+    """)
+    Optional<Bot> findByIdForCrudMutationLock(@Param("id") Long id);
+
     @Query("SELECT b.login FROM Bot b WHERE b.login IN :logins")
     Set<String> findExistingLogins(@Param("logins") List<String> logins);
 

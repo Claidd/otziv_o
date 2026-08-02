@@ -641,10 +641,20 @@ export interface BotImportResponse {
 }
 
 export interface BotBrowserOpenResponse {
-  botId: number;
+  sessionId?: string;
   vncUrl: string;
+  heartbeatIntervalSeconds?: number;
+  expiresAt?: string;
+  botId?: number;
   userAgent?: string;
   platform?: string;
+  screenResolution?: string;
+}
+
+export interface BotBrowserMetadata {
+  botId: number;
+  login: string;
+  fio: string;
 }
 
 export interface TitleRequest {
@@ -883,13 +893,29 @@ export class AdminDictionariesApi {
   openBotBrowser(botId: number): Observable<BotBrowserOpenResponse> {
     return this.http.post<BotBrowserOpenResponse>(
       `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/open`,
+      { heartbeatSupported: true }
+    );
+  }
+
+  getBotBrowserMetadata(botId: number): Observable<BotBrowserMetadata> {
+    return this.http.get<BotBrowserMetadata>(
+      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/metadata`
+    );
+  }
+
+  heartbeatBotBrowser(botId: number, sessionId: string): Observable<void> {
+    return this.http.post<void>(
+      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/sessions/${encodeURIComponent(sessionId)}/heartbeat`,
       {}
     );
   }
 
-  closeBotBrowser(botId: number): Observable<void> {
+  closeBotBrowser(botId: number, sessionId?: string | null): Observable<void> {
+    const path = sessionId
+      ? `/api/bots/${botId}/browser/sessions/${encodeURIComponent(sessionId)}/close`
+      : `/api/bots/${botId}/browser/close`;
     return this.http.post<void>(
-      `${appEnvironment.apiBaseUrl}/api/bots/${botId}/browser/close`,
+      `${appEnvironment.apiBaseUrl}${path}`,
       {}
     );
   }

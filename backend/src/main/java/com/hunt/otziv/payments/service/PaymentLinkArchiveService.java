@@ -13,9 +13,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -77,20 +79,58 @@ public class PaymentLinkArchiveService {
                 AppSettingService.PAYMENT_LINKS_ARCHIVE_FINAL_RETENTION_DAYS,
                 DEFAULT_FINAL_RETENTION_DAYS
         ));
-        List<Long> candidateIds = repository.findArchiveCandidateIds(paidCutoff, finalCutoff, batchSize);
-        if (dryRun || candidateIds.isEmpty()) {
+        List<Long> snapshotIds = repository.findArchiveCandidateIds(paidCutoff, finalCutoff, batchSize);
+        if (dryRun || snapshotIds.isEmpty()) {
             return new PaymentLinkArchiveRunResponse(
-                    candidateIds.size(),
+                    snapshotIds.size(),
                     0,
                     0,
                     true,
-                    candidateIds.isEmpty() ? "Нет закрытых платежей для архива" : "Проверка без переноса"
+                    snapshotIds.isEmpty() ? "Нет закрытых платежей для архива" : "Проверка без переноса"
             );
         }
 
+        // Auto archive follows the same global lock order as every payment
+        // mutation: parent Orders first, then revalidated PaymentLinks.
+        List<Long> snapshotOrderIds = repository.findOrderIdsForPaymentLinkIds(snapshotIds);
+        List<Long> lockedOrderIds = repository.lockOrderIdsForArchive(snapshotOrderIds);
+        List<Long> candidateIds = repository.findArchiveCandidateIdsForUpdate(
+                snapshotIds,
+                lockedOrderIds,
+                paidCutoff,
+                finalCutoff
+        );
+        if (candidateIds.isEmpty()) {
+            return new PaymentLinkArchiveRunResponse(
+                    0,
+                    0,
+                    0,
+                    false,
+                    "Кандидаты изменились во время проверки; архивирование безопасно пропущено"
+            );
+        }
+
+        // Orders and PaymentLinks are already locked in canonical order. Only
+        // now may an expired, no-longer-retryable notification claim be removed.
+        // Final copy/delete predicates still reject every claim that remains.
+        repository.deleteExpiredIneligibleNotificationClaimsForLockedPaymentLinks(candidateIds);
+
         long batchId = System.currentTimeMillis();
-        int archived = repository.archiveIds(candidateIds, now, "AUTO_CLOSED_PAYMENT_LINK", batchId);
-        int deleted = archived > 0 ? repository.deleteLiveIds(candidateIds) : 0;
+        repository.archiveIds(candidateIds, now, "AUTO_CLOSED_PAYMENT_LINK", batchId);
+        int archived = repository.countArchivedIds(candidateIds);
+        if (archived != candidateIds.size()) {
+            throw new IllegalStateException(
+                    "Payment link auto-archive verification failed: selected="
+                            + candidateIds.size() + ", archived=" + archived
+            );
+        }
+        int deleted = repository.deleteLiveIds(candidateIds);
+        if (deleted != candidateIds.size()) {
+            throw new IllegalStateException(
+                    "Payment link auto-delete verification failed: selected="
+                            + candidateIds.size() + ", deleted=" + deleted
+            );
+        }
         return new PaymentLinkArchiveRunResponse(
                 candidateIds.size(),
                 archived,
@@ -102,13 +142,34 @@ public class PaymentLinkArchiveService {
 
     @Transactional
     public int archiveForDeletedOrder(Long orderId) {
-        List<Long> ids = repository.findLiveIdsByOrderId(orderId);
+        List<Long> ids = repository.findLiveIdsByOrderIdForUpdate(orderId);
         if (ids.isEmpty()) {
             return 0;
         }
+        repository.deleteExpiredIneligibleNotificationClaimsForLockedPaymentLinks(ids);
+        if (repository.hasLiveArchiveBlockerForOrder(orderId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Заказ нельзя удалить: платежная операция или уведомление еще не завершены"
+            );
+        }
         LocalDateTime now = LocalDateTime.now();
         repository.archiveIds(ids, now, "ORDER_DELETED", System.currentTimeMillis());
-        return repository.deleteLiveIds(ids);
+        int archived = repository.countArchivedIds(ids);
+        if (archived != ids.size()) {
+            throw new IllegalStateException(
+                    "Deleted order payment archive verification failed: selected="
+                            + ids.size() + ", archived=" + archived
+            );
+        }
+        int deleted = repository.deleteLiveIds(ids);
+        if (deleted != ids.size()) {
+            throw new IllegalStateException(
+                    "Deleted order payment delete verification failed: selected="
+                            + ids.size() + ", deleted=" + deleted
+            );
+        }
+        return deleted;
     }
 
     /**
@@ -118,9 +179,15 @@ public class PaymentLinkArchiveService {
      */
     @Transactional
     public int archiveForPreparedOrderArchiveCandidates(Long archiveBatchId) {
-        List<Long> ids = repository.findLiveIdsForPreparedOrderArchiveCandidates();
+        List<Long> ids = repository.findLiveIdsForPreparedOrderArchiveCandidatesForUpdate();
         if (ids.isEmpty()) {
             return 0;
+        }
+        repository.deleteExpiredIneligibleNotificationClaimsForLockedPaymentLinks(ids);
+        if (repository.hasPreparedOrderArchiveBlocker()) {
+            throw new IllegalStateException(
+                    "Order archive blocked: a payment operation or notification is still pending"
+            );
         }
 
         LocalDateTime now = LocalDateTime.now();

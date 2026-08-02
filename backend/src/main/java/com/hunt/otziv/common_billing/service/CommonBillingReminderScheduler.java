@@ -35,4 +35,15 @@ public class CommonBillingReminderScheduler {
             log.info("Common billing archived payment cancel attempts: {}", canceled);
         }
     }
+
+    @Scheduled(
+            fixedDelayString = "${common-billing.company-reconcile.fixed-delay:PT1M}",
+            initialDelayString = "${common-billing.company-reconcile.initial-delay:PT30S}"
+    )
+    public void reconcilePendingCompanyLinks() {
+        int reconciled = commonBillingService.reconcilePendingCompanyLinks(20);
+        if (reconciled > 0) {
+            log.info("Common billing company links reconciled: {}", reconciled);
+        }
+    }
 }

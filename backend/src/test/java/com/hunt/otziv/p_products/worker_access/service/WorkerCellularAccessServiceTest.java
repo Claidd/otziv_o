@@ -1,6 +1,8 @@
 package com.hunt.otziv.p_products.worker_access.service;
 
+import com.hunt.otziv.config.metrics.R0ObservabilityMetrics;
 import com.hunt.otziv.p_products.worker_access.config.WorkerCellularAccessProperties;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -59,11 +61,25 @@ class WorkerCellularAccessServiceTest {
 
     @Test
     void auditModeRecordsButDoesNotBlock() {
-        WorkerCellularAccessService service = service(WorkerCellularAccessProperties.Mode.AUDIT);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        WorkerCellularAccessService service = service(
+                WorkerCellularAccessProperties.Mode.AUDIT,
+                new R0ObservabilityMetrics(registry)
+        );
         authenticate("ROLE_WORKER");
-        request("192.168.1.20", DESKTOP_USER_AGENT);
+        MockHttpServletRequest auditRequest = request("100.64.10.20", MOBILE_USER_AGENT);
+        nativeTelemetry(auditRequest, "wifi", "false");
 
         assertDoesNotThrow(() -> service.enforceSection("recovery"));
+        assertEquals(1.0, registry.get("otziv.worker.cellular.access.decision")
+                .tags(
+                        "mode", "audit",
+                        "decision", "would_deny",
+                        "reason", "non_cellular_network",
+                        "scope", "recovery"
+                )
+                .counter()
+                .count());
     }
 
     @Test
@@ -350,6 +366,21 @@ class WorkerCellularAccessServiceTest {
                 properties,
                 unavailableIntelligenceClient(),
                 mock(WorkerNetworkViolationService.class)
+        );
+    }
+
+    private WorkerCellularAccessService service(
+            WorkerCellularAccessProperties.Mode mode,
+            R0ObservabilityMetrics observabilityMetrics
+    ) {
+        WorkerCellularAccessProperties properties = properties(mode);
+        properties.setAllowedCidrs(List.of("100.64.0.0/10", "2a00:1fa0::/32"));
+        return new WorkerCellularAccessService(
+                properties,
+                unavailableIntelligenceClient(),
+                mock(WorkerNetworkViolationService.class),
+                null,
+                observabilityMetrics
         );
     }
 

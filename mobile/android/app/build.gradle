@@ -1,9 +1,66 @@
 apply plugin: 'com.android.application'
 
-def keystorePropertiesFile = rootProject.file('keystore.properties')
+def releaseVersionCodeText = providers.gradleProperty('otzivVersionCode').getOrElse('61').trim()
+def releaseVersionName = providers.gradleProperty('otzivVersionName').getOrElse('1.0.61').trim()
+if (!(releaseVersionCodeText ==~ /[1-9][0-9]*/)) {
+    throw new GradleException('otzivVersionCode must be a positive integer.')
+}
+def releaseVersionCode = releaseVersionCodeText.toLong()
+if (releaseVersionCode > 2100000000L) {
+    throw new GradleException('otzivVersionCode exceeds the Android limit.')
+}
+if (!(releaseVersionName ==~ /[0-9A-Za-z._-]{1,40}/)) {
+    throw new GradleException('otzivVersionName has an invalid format.')
+}
+
+def keystorePropertiesSetting = providers.gradleProperty('otzivKeystorePropertiesFile')
+        .getOrElse('keystore.properties')
+        .trim()
+def keystorePropertiesFile = rootProject.file(keystorePropertiesSetting)
 def keystoreProperties = new Properties()
+def releaseSigningProblems = []
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    try {
+        keystorePropertiesFile.withInputStream { input ->
+            keystoreProperties.load(input)
+        }
+    } catch (Exception ignored) {
+        releaseSigningProblems.add('keystore properties cannot be read')
+    }
+} else {
+    releaseSigningProblems.add('keystore properties file is missing')
+}
+
+def requiredReleaseSigningProperties = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+requiredReleaseSigningProperties.each { propertyName ->
+    def value = keystoreProperties.getProperty(propertyName)
+    if (value == null || value.trim().isEmpty()) {
+        releaseSigningProblems.add("missing property: ${propertyName}")
+    }
+}
+
+def releaseKeystoreFile = null
+if (releaseSigningProblems.isEmpty()) {
+    releaseKeystoreFile = file(keystoreProperties.getProperty('storeFile'))
+    if (!releaseKeystoreFile.isFile()) {
+        releaseSigningProblems.add('configured storeFile is missing or is not a file')
+    }
+}
+def releaseSigningReady = releaseSigningProblems.isEmpty()
+def releaseArtifactTaskPattern = ~/(?i)(assemble|bundle|package|install|publish|sign|zipalign).*Release.*/
+def releaseSigningFailureMessage = {
+    'Android release signing is not configured: ' +
+            releaseSigningProblems.join('; ') +
+            '. Debug and verification-only tasks do not require the release keystore.'
+}
+
+// Reject direct release requests during configuration, before dependency
+// resolution can obscure the missing-signing-material error.
+def releaseArtifactRequestedDirectly = gradle.startParameter.taskNames.any { requestedTask ->
+    requestedTask.tokenize(':').last() ==~ releaseArtifactTaskPattern
+}
+if (releaseArtifactRequestedDirectly && !releaseSigningReady) {
+    throw new GradleException(releaseSigningFailureMessage())
 }
 
 android {
@@ -13,8 +70,8 @@ android {
         applicationId "com.hunt.otziv"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 61
-        versionName "1.0.61"
+        versionCode releaseVersionCode.intValue()
+        versionName releaseVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -23,12 +80,12 @@ android {
         }
     }
     signingConfigs {
-        if (keystorePropertiesFile.exists()) {
+        if (releaseSigningReady) {
             release {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+                storeFile releaseKeystoreFile
+                storePassword keystoreProperties.getProperty('storePassword')
+                keyAlias keystoreProperties.getProperty('keyAlias')
+                keyPassword keystoreProperties.getProperty('keyPassword')
             }
         }
     }
@@ -36,10 +93,23 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (keystorePropertiesFile.exists()) {
+            if (releaseSigningReady) {
                 signingConfig signingConfigs.release
             }
         }
+    }
+}
+
+// Keep debug, lint and unit-test tasks usable without production signing
+// material, but reject every task graph capable of producing a release APK/AAB
+// before Gradle can silently emit an unsigned artifact.
+gradle.taskGraph.whenReady { graph ->
+    def releaseArtifactRequested = graph.allTasks.any { task ->
+        task.project.path == project.path &&
+                task.name ==~ releaseArtifactTaskPattern
+    }
+    if (releaseArtifactRequested && !releaseSigningReady) {
+        throw new GradleException(releaseSigningFailureMessage())
     }
 }
 

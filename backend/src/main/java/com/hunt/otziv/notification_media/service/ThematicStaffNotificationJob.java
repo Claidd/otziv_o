@@ -72,7 +72,8 @@ public class ThematicStaffNotificationJob {
                 staffDailyProgressService.workerProgressByWorkers(workers, date);
         Map<Long, Long> publicationCounts = hour >= settingHour(PUBLICATION_HOUR, 16)
                 ? dispatchStore.activePublicationCounts(
-                        workers.stream().map(Worker::getId).toList()
+                        workers.stream().map(Worker::getId).toList(),
+                        date
                 )
                 : Map.of();
 
@@ -148,8 +149,12 @@ public class ThematicStaffNotificationJob {
             }
         }
 
+        long verifiedPublicationCount = Math.min(
+                Math.max(0, activePublicationCount),
+                Math.max(0, progress.active())
+        );
         if (now.getHour() >= settingHour(PUBLICATION_HOUR, 16)
-                && activePublicationCount > 0) {
+                && verifiedPublicationCount > 0) {
             if (send(
                     NotificationMediaEventCatalog.WORKER_PUBLICATION_PENDING.code(),
                     user,
@@ -158,7 +163,7 @@ public class ThematicStaffNotificationJob {
                     maxPerDay,
                     "📝 <b>Публикация ждёт завершения</b>\n\n"
                             + "В разделе публикации осталось активных задач: <b>"
-                            + activePublicationCount + "</b>.\n"
+                            + verifiedPublicationCount + "</b>.\n"
                             + "Жека напоминает: публикация сама себя не сделает."
             )) {
                 return true;

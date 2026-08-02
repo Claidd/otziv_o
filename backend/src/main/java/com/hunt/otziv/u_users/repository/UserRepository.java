@@ -21,7 +21,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.id = :userId")
     Optional<User> lockById(@Param("userId") Long userId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.username = :username")
+    Optional<User> lockByUsername(@Param("username") String username);
+
     User findByEmail(String name);
+
+    Optional<User> findByKeycloakId(String keycloakId);
+
+    @Query("SELECT u.id FROM User u WHERE u.username = :username")
+    Optional<Long> findIdByUsername(@Param("username") String username);
 
     @Query("""
     select m.id

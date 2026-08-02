@@ -6,7 +6,7 @@ import com.hunt.otziv.client_messages.dto.ClientMessageMaintenancePreviewRespons
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.ResultSet;

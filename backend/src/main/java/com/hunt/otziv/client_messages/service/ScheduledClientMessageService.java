@@ -18,10 +18,10 @@ import com.hunt.otziv.common_billing.service.CommonBillingService;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
-import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
-import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
-import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder;
+import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
+import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.payments.service.PaymentLinkService;
@@ -161,6 +161,7 @@ public class ScheduledClientMessageService {
     private final ReviewRecoveryBatchRepository reviewRecoveryBatchRepository;
     private final ObjectProvider<CommonBillingService> commonBillingServiceProvider;
     private final OrderPaymentIntegrityService orderPaymentIntegrityService;
+    private final ClientMessageTransactionRunner transactionRunner;
     private final Clock clock = Clock.systemDefaultZone();
     @Value("${client.messages.reconcile-interval:PT5M}")
     private Duration reconcileInterval;
@@ -172,7 +173,7 @@ public class ScheduledClientMessageService {
             fixedDelayString = "${client.messages.tick-delay-ms:30000}",
             initialDelayString = "${client.messages.initial-delay-ms:90000}"
     )
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void tick() {
         LocalDateTime nowStorage = LocalDateTime.now(clock);
         LocalDateTime nowIrkutsk = nowIrkutsk();
@@ -191,13 +192,30 @@ public class ScheduledClientMessageService {
             }
         }
 
+        boolean reconcileDue = shouldReconcileCandidates(nowStorage);
+        boolean cleanupDue = shouldCleanupOldAttempts(nowStorage);
         ClientMessageReconcileSummary reconcileSummary = ClientMessageReconcileSummary.empty();
-        if (shouldReconcileCandidates(nowStorage)) {
-            reconcileSummary = reconcileCandidates(nowStorage);
-            lastReconcileAt = nowStorage;
+        if (reconcileDue) {
+            try {
+                reconcileSummary = transactionRunner.callInNewTransaction(() -> reconcileCandidates(nowStorage));
+                lastReconcileAt = nowStorage;
+            } catch (RuntimeException e) {
+                log.error("Scheduled client message reconciliation transaction failed", e);
+            }
         }
-        cleanupOldAttempts(nowStorage);
-        releaseDryRunMessagesIfLiveEnabled(nowStorage);
+        if (cleanupDue) {
+            try {
+                transactionRunner.runInNewTransaction(() -> cleanupOldAttempts(nowStorage));
+                lastCleanupAt = nowStorage;
+            } catch (RuntimeException e) {
+                log.error("Scheduled client message cleanup transaction failed", e);
+            }
+        }
+        try {
+            transactionRunner.runInNewTransaction(() -> releaseDryRunMessagesIfLiveEnabled(nowStorage));
+        } catch (RuntimeException e) {
+            log.error("Scheduled client message dry-run release transaction failed", e);
+        }
 
         String windowsSpec = businessWindows();
         if (!slotPlanner.isAllowedNow(nowIrkutsk, windowsSpec)) {
@@ -206,21 +224,44 @@ public class ScheduledClientMessageService {
         }
 
         int batchSize = intSetting(AppSettingService.CLIENT_MESSAGES_TICK_BATCH_SIZE, DEFAULT_TICK_BATCH_SIZE, 1, 100);
-        List<ScheduledClientMessageState> dueStates = stateRepository.findDue(
+        List<Long> dueStateIds = stateRepository.findDueIds(
                 ScheduledMessageStateStatus.ACTIVE,
                 nowStorage,
                 PageRequest.of(0, batchSize)
         );
 
         int processed = 0;
-        for (ScheduledClientMessageState state : dueStates) {
-            if (!lockState(state, nowStorage)) {
+        for (Long stateId : dueStateIds) {
+            LocalDateTime claimNow = databaseTimestamp(LocalDateTime.now(clock));
+            LocalDateTime claimedUntil = claimNow.plus(Duration.ofMinutes(DEFAULT_LOCK_MINUTES));
+            boolean claimed;
+            try {
+                claimed = transactionRunner.callInNewTransaction(
+                        () -> lockDueState(stateId, claimNow, claimedUntil)
+                );
+            } catch (RuntimeException e) {
+                log.error("Scheduled client message claim transaction failed stateId={}", stateId, e);
                 continue;
             }
-            processState(state.getId(), nowStorage);
-            processed++;
+            if (!claimed) {
+                continue;
+            }
+            try {
+                transactionRunner.runInNewTransaction(
+                        () -> processClaimedState(stateId, claimNow, claimedUntil)
+                );
+                processed++;
+            } catch (RuntimeException e) {
+                log.error("Scheduled client message state transaction rolled back stateId={}", stateId, e);
+                quarantineRolledBackState(
+                        stateId,
+                        claimedUntil,
+                        databaseTimestamp(LocalDateTime.now(clock)),
+                        e
+                );
+            }
         }
-        logTickSummary(nowStorage, nowIrkutsk, windowsSpec, true, reconcileSummary, dueStates.size(), processed);
+        logTickSummary(nowStorage, nowIrkutsk, windowsSpec, true, reconcileSummary, dueStateIds.size(), processed);
     }
 
     @Transactional
@@ -231,7 +272,7 @@ public class ScheduledClientMessageService {
         return stateRepository.releaseReviewRecoveryHolds(orderId, LocalDateTime.now(clock));
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ManualRetryResult retryNow(Long stateId) {
         if (stateId == null || stateId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректная задача автоматизации");
@@ -250,7 +291,10 @@ public class ScheduledClientMessageService {
                     "Автоматизация сообщений выключена в настройках"
             );
         }
-        LocalDateTime nowStorage = LocalDateTime.now(clock);
+        boolean reconcilePaymentBeforeRetry = "payment_instruction_failed".equalsIgnoreCase(
+                state.getLastErrorCode() == null ? "" : state.getLastErrorCode().trim()
+        ) && state.getOrderId() != null;
+        LocalDateTime nowStorage = databaseTimestamp(LocalDateTime.now(clock));
         LocalDateTime pausedUntil = clientMessagesPausedUntil();
         if (pausedUntil != null && pausedUntil.isAfter(nowStorage)) {
             throw new ResponseStatusException(
@@ -258,20 +302,33 @@ public class ScheduledClientMessageService {
                     "Автоматизация сообщений приостановлена до " + pausedUntil
             );
         }
-        if (!lockState(state, nowStorage)) {
+        LocalDateTime claimedUntil = nowStorage.plus(Duration.ofMinutes(DEFAULT_LOCK_MINUTES));
+        boolean claimed = transactionRunner.callInNewTransaction(
+                () -> lockActiveState(state.getId(), nowStorage, claimedUntil)
+        );
+        if (!claimed) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Задача уже обрабатывается. Повторите через несколько секунд."
             );
         }
 
-        if ("payment_instruction_failed".equalsIgnoreCase(
-                state.getLastErrorCode() == null ? "" : state.getLastErrorCode().trim()
-        )
-                && state.getOrderId() != null) {
-            paymentLinkService.reconcileActiveLinkForOrder(state.getOrderId());
+        try {
+            transactionRunner.runInNewTransaction(() -> processClaimedState(
+                    state.getId(),
+                    nowStorage,
+                    claimedUntil,
+                    reconcilePaymentBeforeRetry
+            ));
+        } catch (RuntimeException e) {
+            log.error("Manual client message retry transaction rolled back stateId={}", state.getId(), e);
+            quarantineRolledBackState(
+                    state.getId(),
+                    claimedUntil,
+                    databaseTimestamp(LocalDateTime.now(clock)),
+                    e
+            );
         }
-        processState(state.getId(), nowStorage);
         ScheduledClientMessageState refreshed = stateRepository.findById(state.getId()).orElse(state);
         return manualRetryResult(refreshed, true);
     }
@@ -297,12 +354,20 @@ public class ScheduledClientMessageService {
         LocalDateTime waitingChangedAt = clientTextWaitingChangedAt(order);
         String targetKey = clientTextWaitingTargetKey(order.getId(), waitingChangedAt);
         LocalDateTime nextAttemptAt = scheduleAtStorage(LocalDateTime.now(clock));
-        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
                 ClientMessageScenario.CLIENT_TEXT_REMINDER,
                 targetKey
         );
         if (existing.isPresent()) {
             ScheduledClientMessageState state = existing.get();
+            if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+                log.warn(
+                        "Automatic client-text state rearm blocked pending manual review stateId={} code={}",
+                        state.getId(),
+                        state.getLastErrorCode()
+                );
+                return false;
+            }
             state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             state.setTargetType(ClientMessageTargetType.ORDER);
             state.setCompanyId(order.getCompany() == null ? null : order.getCompany().getId());
@@ -481,6 +546,9 @@ public class ScheduledClientMessageService {
     }
 
     private void recordAutoRecoveredState(ScheduledClientMessageState state) {
+        if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+            return;
+        }
         recordAttempt(
                 state,
                 ScheduledMessageAttemptStatus.SKIPPED,
@@ -621,9 +689,20 @@ public class ScheduledClientMessageService {
         LocalDateTime nowStorage = LocalDateTime.now(clock);
         String targetKey = orderTargetKey(order.getId(), orderStatusChangedAt(order));
         LocalDateTime nextAttemptAt = scheduleAtStorage(nowStorage);
-        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(scenario, targetKey);
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
+                scenario,
+                targetKey
+        );
         if (existing.isPresent()) {
             ScheduledClientMessageState state = existing.get();
+            if (ClientMessageStateSafety.blocksAutomaticRearm(state)) {
+                log.warn(
+                        "Automatic order state rearm blocked pending manual review stateId={} code={}",
+                        state.getId(),
+                        state.getLastErrorCode()
+                );
+                return;
+            }
             state.setStatus(ScheduledMessageStateStatus.ACTIVE);
             state.setTargetType(ClientMessageTargetType.ORDER);
             state.setCompanyId(order.getCompany() == null ? null : order.getCompany().getId());
@@ -840,10 +919,15 @@ public class ScheduledClientMessageService {
             Long archiveOrderId,
             LocalDateTime nextAttemptAt
     ) {
-        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKey(scenario, targetKey);
+        Optional<ScheduledClientMessageState> existing = stateRepository.findByScenarioAndTargetKeyForUpdate(
+                scenario,
+                targetKey
+        );
         if (existing.isPresent()) {
             ScheduledClientMessageState state = existing.get();
-            if (state.getStatus() == ScheduledMessageStateStatus.ACTIVE && state.getNextAttemptAt() == null) {
+            if (state.getStatus() == ScheduledMessageStateStatus.ACTIVE
+                    && state.getNextAttemptAt() == null
+                    && !ClientMessageStateSafety.blocksAutomaticRearm(state)) {
                 state.setNextAttemptAt(nextAttemptAt);
             }
             if (archiveOrderId != null && state.getArchiveOrderId() == null) {
@@ -865,12 +949,125 @@ public class ScheduledClientMessageService {
         return true;
     }
 
-    private boolean lockState(ScheduledClientMessageState state, LocalDateTime nowStorage) {
+    private boolean lockDueState(
+            Long stateId,
+            LocalDateTime nowStorage,
+            LocalDateTime claimedUntil
+    ) {
         return stateRepository.lockDueState(
-                state.getId(),
+                stateId,
                 nowStorage,
-                nowStorage.plus(Duration.ofMinutes(DEFAULT_LOCK_MINUTES))
+                claimedUntil,
+                ClientMessageStateSafety.TRANSACTION_IN_PROGRESS,
+                "Задача захвачена воркером; автоматический повтор при незавершенной транзакции запрещен"
         ) > 0;
+    }
+
+    private boolean lockActiveState(
+            Long stateId,
+            LocalDateTime nowStorage,
+            LocalDateTime claimedUntil
+    ) {
+        return stateRepository.lockActiveState(
+                stateId,
+                nowStorage,
+                claimedUntil,
+                ClientMessageStateSafety.TRANSACTION_IN_PROGRESS,
+                "Задача захвачена для ручной попытки; повтор до завершения транзакции запрещен"
+        ) > 0;
+    }
+
+    private void processClaimedState(
+            Long stateId,
+            LocalDateTime nowStorage,
+            LocalDateTime expectedLockedUntil
+    ) {
+        processClaimedState(stateId, nowStorage, expectedLockedUntil, false);
+    }
+
+    private void processClaimedState(
+            Long stateId,
+            LocalDateTime nowStorage,
+            LocalDateTime expectedLockedUntil,
+            boolean reconcilePaymentBeforeRetry
+    ) {
+        ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
+        if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+            return;
+        }
+        LocalDateTime currentLockedUntil = databaseTimestamp(state.getLockedUntil());
+        LocalDateTime currentTime = databaseTimestamp(LocalDateTime.now(clock));
+        if (!ClientMessageStateSafety.isTransactionInProgress(state)
+                || !expectedLockedUntil.equals(currentLockedUntil)) {
+            log.warn(
+                    "Scheduled client message claim ownership changed before processing stateId={} expected={} actual={}",
+                    stateId,
+                    expectedLockedUntil,
+                    currentLockedUntil
+            );
+            return;
+        }
+        if (!currentLockedUntil.isAfter(currentTime)) {
+            log.warn("Scheduled client message claim expired before processing stateId={}", stateId);
+            return;
+        }
+        if (reconcilePaymentBeforeRetry && state.getOrderId() != null) {
+            paymentLinkService.reconcileActiveLinkForOrder(state.getOrderId());
+        }
+        processState(stateId, nowStorage);
+    }
+
+    private void quarantineRolledBackState(
+            Long stateId,
+            LocalDateTime expectedLockedUntil,
+            LocalDateTime nowStorage,
+            RuntimeException failure
+    ) {
+        try {
+            transactionRunner.runInNewTransaction(() -> {
+                ScheduledClientMessageState state = stateRepository.findByIdForUpdate(stateId).orElse(null);
+                if (state == null || state.getStatus() != ScheduledMessageStateStatus.ACTIVE) {
+                    return;
+                }
+                if (!ClientMessageStateSafety.isTransactionInProgress(state)
+                        || !expectedLockedUntil.equals(databaseTimestamp(state.getLockedUntil()))) {
+                    log.warn(
+                            "Scheduled client message rollback quarantine skipped: claim ownership changed "
+                                    + "stateId={} expected={} actual={}",
+                            stateId,
+                            expectedLockedUntil,
+                            state.getLockedUntil()
+                    );
+                    return;
+                }
+                String message = "Транзакция обработки откатилась. Результат внешней отправки не определен; "
+                        + "автоматический повтор остановлен до ручной проверки. Причина: "
+                        + readableException(failure);
+                recordAttempt(
+                        state,
+                        ScheduledMessageAttemptStatus.FAILED,
+                        null,
+                        ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN,
+                        message,
+                        message,
+                        0
+                );
+                state.setLastAttemptAt(nowStorage);
+                state.setLastErrorCode(ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN);
+                state.setLastErrorMessage(limit(message, 1000));
+                state.setConsecutiveFailures(state.getConsecutiveFailures() + 1);
+                state.setNextAttemptAt(null);
+                state.setLockedUntil(null);
+                stateRepository.save(state);
+            });
+        } catch (RuntimeException recoveryFailure) {
+            log.error(
+                    "Scheduled client message rollback quarantine failed stateId={} originalFailure={}",
+                    stateId,
+                    readableException(failure),
+                    recoveryFailure
+            );
+        }
     }
 
     private void processState(Long stateId, LocalDateTime nowStorage) {
@@ -1196,6 +1393,20 @@ public class ScheduledClientMessageService {
         }
         if (!isCurrentOrderCycle(state, order)) {
             markDone(state, nowStorage, "order_status_changed", "Заказ уже перешел в новый цикл статуса");
+            return;
+        }
+        if (isManagedByActiveCommonInvoice(order)) {
+            String holdMessage = "Отдельный автоархив отложен: заказ входит в активный общий счет";
+            recordAttempt(
+                    state,
+                    ScheduledMessageAttemptStatus.SKIPPED,
+                    "system",
+                    "common_billing_linked",
+                    holdMessage,
+                    holdMessage,
+                    0
+            );
+            postpone(state, nextNoSendAttemptAt(nowStorage), null, null);
             return;
         }
 
@@ -2219,6 +2430,13 @@ public class ScheduledClientMessageService {
                 .toLocalDateTime();
     }
 
+    private LocalDateTime databaseTimestamp(LocalDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        return value.withNano((value.getNano() / 1_000) * 1_000);
+    }
+
     private LocalDateTime nowIrkutsk() {
         return ZonedDateTime.now(clock)
                 .withZoneSameInstant(ClientMessageSlotPlanner.IRKUTSK_ZONE)
@@ -2581,11 +2799,11 @@ public class ScheduledClientMessageService {
         return true;
     }
 
+    private boolean shouldCleanupOldAttempts(LocalDateTime nowStorage) {
+        return lastCleanupAt == null || !lastCleanupAt.plusHours(1).isAfter(nowStorage);
+    }
+
     private void cleanupOldAttempts(LocalDateTime nowStorage) {
-        if (lastCleanupAt != null && lastCleanupAt.plusHours(1).isAfter(nowStorage)) {
-            return;
-        }
-        lastCleanupAt = nowStorage;
         int retentionDays = intSetting(AppSettingService.CLIENT_MESSAGES_RETENTION_DAYS, DEFAULT_RETENTION_DAYS, 1, 3650);
         int deleted = attemptRepository.deleteOlderThan(nowStorage.minusDays(retentionDays));
         if (deleted > 0) {

@@ -93,7 +93,6 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
             Pageable pageable
     );
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT invoice
         FROM CommonInvoice invoice
@@ -103,14 +102,19 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         LEFT JOIN FETCH account.invoiceCompany invoiceCompany
         LEFT JOIN FETCH invoiceCompany.manager invoiceManager
         LEFT JOIN FETCH invoiceManager.user
-        WHERE invoice.account.id = :accountId
+        WHERE account.id IN :accountIds
           AND invoice.status IN :statuses
-        ORDER BY invoice.id DESC
+          AND invoice.id = (
+              SELECT MAX(candidate.id)
+              FROM CommonInvoice candidate
+              WHERE candidate.account.id = account.id
+                AND candidate.status IN :statuses
+          )
+        ORDER BY account.id ASC
     """)
-    List<CommonInvoice> findCurrentForAccountForUpdate(
-            @Param("accountId") Long accountId,
-            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
-            Pageable pageable
+    List<CommonInvoice> findLatestCurrentForAccounts(
+            @Param("accountIds") Collection<Long> accountIds,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
     );
 
     @Query("""
@@ -166,6 +170,34 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
         ORDER BY invoice.updatedAt ASC, invoice.id ASC
     """)
     List<CommonInvoice> findBoardInvoices(@Param("statuses") Collection<CommonInvoiceStatus> statuses);
+
+    @Query("""
+        SELECT invoice
+        FROM CommonInvoice invoice
+        JOIN FETCH invoice.account account
+        LEFT JOIN FETCH account.manager manager
+        LEFT JOIN FETCH manager.user
+        LEFT JOIN FETCH account.invoiceCompany invoiceCompany
+        LEFT JOIN FETCH invoiceCompany.manager invoiceManager
+        LEFT JOIN FETCH invoiceManager.user
+        WHERE invoice.status IN :statuses
+    """)
+    List<CommonInvoice> findBoardInvoices(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses,
+            Pageable pageable
+    );
+
+    @Query("""
+        SELECT invoice.account.id
+        FROM CommonInvoice invoice
+        WHERE invoice.status IN :statuses
+        GROUP BY invoice.account.id
+        HAVING COUNT(invoice.id) > 1
+        ORDER BY invoice.account.id ASC
+    """)
+    List<Long> findAccountIdsWithDuplicateCurrentInvoices(
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
 
     @Query("""
         SELECT COUNT(invoice.id)
@@ -302,4 +334,20 @@ public interface CommonInvoiceRepository extends CrudRepository<CommonInvoice, L
     Optional<CommonInvoice> findByTbankOrderId(String tbankOrderId);
 
     Optional<CommonInvoice> findByTbankPaymentId(String tbankPaymentId);
+
+    @Query("""
+        SELECT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.tbankOrderId = :tbankOrderId
+        ORDER BY invoice.id ASC
+    """)
+    List<Long> findIdsByTbankOrderId(@Param("tbankOrderId") String tbankOrderId);
+
+    @Query("""
+        SELECT invoice.id
+        FROM CommonInvoice invoice
+        WHERE invoice.tbankPaymentId = :tbankPaymentId
+        ORDER BY invoice.id ASC
+    """)
+    List<Long> findIdsByTbankPaymentId(@Param("tbankPaymentId") String tbankPaymentId);
 }

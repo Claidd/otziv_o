@@ -17,7 +17,7 @@ import com.hunt.otziv.l_lead.services.serv.PromoTextService;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueOrdersResponse;
 import com.hunt.otziv.manager.dto.api.ManagerOverdueStatusResponse;
 import com.hunt.otziv.metric_snapshots.service.UserMetricSnapshotService;
-import com.hunt.otziv.p_products.board.OrderBoardQueryService;
+import com.hunt.otziv.p_products.board.service.OrderBoardQueryService;
 import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.repository.OrderRepository;
@@ -124,6 +124,7 @@ public class ApiWorkerBoardController {
             SECTION_BAD
     );
     private static final int MAX_PAGE_SIZE = 50;
+    private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
 
     private final OrderService orderService;
     private final OrderBoardQueryService orderBoardQueryService;
@@ -323,6 +324,7 @@ public class ApiWorkerBoardController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Состояние ожидания клиента не указано");
         }
 
+        assignmentMutationGuardService.assertOrder(orderId);
         Order order = orderService.getOrder(orderId);
         boolean waitingForClient = request.waitingForClient();
         if (waitingForClient && !isClientWaitingStatus(orderStatusTitle(order))) {
@@ -715,6 +717,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         try {
+            assignmentMutationGuardService.assertBadTask(taskId);
             BadReviewTask task = badReviewTaskService.getTask(taskId);
             enforceTaskAssignmentAccess(task == null ? null : task.getOrder(), null, principal, authentication);
             Worker worker = assignmentWorker(request, principal, authentication);
@@ -773,6 +776,7 @@ public class ApiWorkerBoardController {
             Authentication authentication
     ) {
         try {
+            assignmentMutationGuardService.assertRecoveryTask(taskId);
             ReviewRecoveryTask task = reviewRecoveryTaskService.getTask(taskId);
             enforceTaskAssignmentAccess(
                     task == null ? null : task.getOrder(),
@@ -858,6 +862,8 @@ public class ApiWorkerBoardController {
                     SECTION_RECOVERY,
                     "botId=" + valueOrDash(botId) + ";"
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт восстановления не заблокирован", exception);
         }
@@ -906,6 +912,8 @@ public class ApiWorkerBoardController {
                     SECTION_BAD,
                     "botId=" + valueOrDash(botId) + ";"
             );
+        } catch (ResponseStatusException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Аккаунт плохой задачи не заблокирован", exception);
         }
@@ -1075,8 +1083,8 @@ public class ApiWorkerBoardController {
     @DeleteMapping("/bots/{botId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public void deleteBot(@PathVariable Long botId) {
-        botService.deleteBot(botId);
+    public void deleteBot(@PathVariable Long botId, Authentication authentication) {
+        botService.deleteBot(botId, authentication);
     }
 
     private Page<OrderDTOList> loadOrders(
@@ -1368,9 +1376,9 @@ public class ApiWorkerBoardController {
     private List<BotResponse> loadBots(Principal principal, Authentication authentication) {
         List<BotDTO> bots;
         if (hasRole(authentication, "ADMIN") || hasRole(authentication, "OWNER")) {
-            bots = botService.getAllBots();
+            bots = botService.getAllBots(authentication);
         } else if (hasRole(authentication, "WORKER")) {
-            bots = botService.getAllBotsByWorkerActiveIsTrue(principal);
+            bots = botService.getAllBotsByWorkerActiveIsTrue(authentication);
         } else {
             bots = List.of();
         }
@@ -2166,15 +2174,15 @@ public class ApiWorkerBoardController {
             return;
         }
 
-        Manager orderManager = order == null ? null : order.getManager();
+        Manager authoritativeManager = order == null ? recoveryManager : order.getManager();
         if (hasRole(authentication, "MANAGER")) {
             Manager currentManager = resolveManager(principal);
-            if (sameManager(currentManager, orderManager) || sameManager(currentManager, recoveryManager)) {
+            if (sameManager(currentManager, authoritativeManager)) {
                 return;
             }
         } else if (hasRole(authentication, "OWNER")) {
             boolean allowed = resolveOwnerManagers(principal).stream().anyMatch(manager ->
-                    sameManager(manager, orderManager) || sameManager(manager, recoveryManager)
+                    sameManager(manager, authoritativeManager)
             );
             if (allowed) {
                 return;
@@ -2388,6 +2396,17 @@ public class ApiWorkerBoardController {
     }
 
     private Set<Manager> resolveOwnerManagers(Principal principal) {
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            return Set.of();
+        }
+        User owner = userService.findByUserName(principal.getName()).orElse(null);
+        if (owner != null
+                && OWNER_CONTROL_ALL_MANAGERS.equalsIgnoreCase(safe(owner.getOwnerControlViewMode()).trim())) {
+            List<Manager> managers = managerService.getAllManagers();
+            return managers == null || managers.isEmpty()
+                    ? Set.of()
+                    : new java.util.LinkedHashSet<>(managers);
+        }
         return userService.findManagersByUserName(principal.getName());
     }
 

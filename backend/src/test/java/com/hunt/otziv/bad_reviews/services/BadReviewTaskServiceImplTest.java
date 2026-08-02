@@ -18,7 +18,7 @@ import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.personal_reminders.service.PersonalReminderService;
@@ -43,8 +43,14 @@ import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -272,6 +278,96 @@ class BadReviewTaskServiceImplTest {
         assertEquals("Новый П.", updated.getBotFioSnapshot());
         verify(accountWalkScheduleService).synchronizeAfterAccountChange(review);
         verify(reviewRepository).save(review);
+        verify(badReviewTaskRepository).save(task);
+    }
+
+    @Test
+    void deactivateAndChangeTaskBotRejectsBotThatIsNotAttachedBeforeSideEffects() {
+        Bot currentBot = Bot.builder().id(7L).active(true).build();
+        Review review = Review.builder().id(88L).bot(currentBot).build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(currentBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deactivateAndChangeTaskBot(42L, 99L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertEquals(
+                "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие",
+                exception.getReason()
+        );
+        assertSame(currentBot, task.getBot());
+        assertEquals(true, currentBot.isActive());
+        verify(botService, never()).findBotById(any());
+        verify(botService, never()).save(any());
+        verify(badReviewTaskRepository, never()).save(any());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivateAndChangeTaskBotRejectsNegativeBotIdBeforeSideEffects() {
+        Bot currentBot = Bot.builder().id(7L).active(true).build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .bot(currentBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.deactivateAndChangeTaskBot(42L, -1L)
+        );
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertTrue(currentBot.isActive());
+        assertSame(currentBot, task.getBot());
+        verify(botService, never()).save(any());
+        verify(badReviewTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void deactivateAndChangeTaskBotDeactivatesAndReplacesMatchingAttachedBot() {
+        City city = City.builder().id(3L).title("Иркутск").build();
+        Filial filial = Filial.builder().id(4L).city(city).build();
+        Bot currentBot = Bot.builder()
+                .id(7L)
+                .active(true)
+                .login("old-login")
+                .build();
+        Bot nextBot = Bot.builder()
+                .id(8L)
+                .active(true)
+                .counter(5)
+                .login("next-login")
+                .build();
+        Review review = Review.builder().id(88L).bot(currentBot).filial(filial).build();
+        BadReviewTask task = BadReviewTask.builder()
+                .id(42L)
+                .sourceReview(review)
+                .bot(currentBot)
+                .status(BadReviewTaskStatus.NEW)
+                .build();
+
+        when(badReviewTaskRepository.findByIdForMutation(42L)).thenReturn(Optional.of(task));
+        when(botService.findBotById(7L)).thenReturn(currentBot);
+        when(botService.getFindAllByFilialCityId(3L)).thenReturn(List.of(currentBot, nextBot));
+        when(badReviewTaskRepository.save(task)).thenReturn(task);
+
+        BadReviewTask updated = service.deactivateAndChangeTaskBot(42L, 7L);
+
+        assertFalse(currentBot.isActive());
+        assertSame(nextBot, updated.getBot());
+        assertSame(nextBot, review.getBot());
+        verify(botService).save(currentBot);
         verify(badReviewTaskRepository).save(task);
     }
 

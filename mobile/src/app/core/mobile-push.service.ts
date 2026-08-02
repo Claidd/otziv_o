@@ -3,7 +3,7 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { Router } from '@angular/router';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, type Token } from '@capacitor/push-notifications';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import { mobileEnvironment } from './mobile-environment';
 import { MobilePushApiService } from './mobile-push-api.service';
 
@@ -36,6 +36,29 @@ export class MobilePushService {
       this.registrationPromise = null;
     });
     return this.registrationPromise;
+  }
+
+  async revokeCurrentTokenBestEffort(): Promise<void> {
+    const currentToken = this.token() ?? this.backendToken;
+    try {
+      if (currentToken) {
+        await firstValueFrom(
+          this.api.revokeToken({ token: currentToken }).pipe(timeout({ first: 2_500 }))
+        );
+      }
+    } catch {
+      // Logout must remain available with no network or an older backend.
+    } finally {
+      // A subsequent login must re-register even when FCM returns the same token.
+      this.resetRegistrationState();
+    }
+  }
+
+  resetRegistrationState(): void {
+    this.backendToken = null;
+    this.token.set(null);
+    this.error.set(null);
+    this.status.set(this.supported ? 'idle' : 'unsupported');
   }
 
   private async registerInternal(): Promise<string | null> {

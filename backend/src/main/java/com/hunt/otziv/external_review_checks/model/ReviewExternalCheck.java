@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 @Entity
 @Data
@@ -73,6 +74,26 @@ public class ReviewExternalCheck {
 
     @Column(name = "worker_trace_id", length = 128)
     private String workerTraceId;
+
+    /**
+     * Nullable for rows created before the R3 dual-write rollout. New rows get
+     * a SHA-256 value; automatic checks use a deterministic review-scoped key.
+     */
+    @Column(name = "deduplication_key_hash", length = 32, columnDefinition = "BINARY(32)")
+    private byte[] deduplicationKeyHash;
+
+    @Column(name = "processing_token", length = 36, columnDefinition = "CHAR(36)")
+    @ToString.Exclude
+    private String processingToken;
+
+    @Column(name = "processing_owner", length = 128)
+    private String processingOwner;
+
+    @Column(name = "processing_started_at")
+    private LocalDateTime processingStartedAt;
+
+    @Column(name = "processing_lease_until")
+    private LocalDateTime processingLeaseUntil;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

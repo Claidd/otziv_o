@@ -1,0 +1,3 @@
+ALTER TABLE order_details
+    ADD COLUMN row_version BIGINT NOT NULL DEFAULT 0,
+    ALGORITHM=INSTANT;

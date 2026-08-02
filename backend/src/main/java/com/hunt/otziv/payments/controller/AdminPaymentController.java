@@ -6,6 +6,7 @@ import com.hunt.otziv.payments.dto.CreateManualPaymentTaskRequest;
 import com.hunt.otziv.payments.dto.ManualPaymentRecipientMonthlySummaryResponse;
 import com.hunt.otziv.payments.dto.ManualPaymentTaskResponse;
 import com.hunt.otziv.payments.dto.PaymentLinkArchiveRunResponse;
+import com.hunt.otziv.payments.dto.ResolveAmbiguousBankInitRequest;
 import com.hunt.otziv.payments.dto.TbankClientPaymentModeResponse;
 import com.hunt.otziv.payments.dto.TbankPaymentProfilesResponse;
 import com.hunt.otziv.payments.dto.TbankRuntimeSettingsResponse;
@@ -69,6 +70,21 @@ public class AdminPaymentController {
     @PostMapping("/api/admin/payments/tbank-links/{linkId}/cancel")
     public AdminPaymentLinkResponse cancelTbankPayment(@PathVariable Long linkId) {
         return paymentLinkService.cancel(linkId);
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @PostMapping("/api/admin/payments/tbank-links/{linkId}/resolve-ambiguous-init")
+    public AdminPaymentLinkResponse resolveAmbiguousTbankInit(
+            @PathVariable Long linkId,
+            @RequestBody ResolveAmbiguousBankInitRequest request,
+            Authentication authentication
+    ) {
+        return paymentLinkService.releaseAmbiguousBankInit(
+                linkId,
+                request != null && Boolean.TRUE.equals(request.bankPaymentAbsent()),
+                request == null ? null : request.note(),
+                actor(authentication)
+        );
     }
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")

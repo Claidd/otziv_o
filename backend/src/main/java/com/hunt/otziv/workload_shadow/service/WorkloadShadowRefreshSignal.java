@@ -1,6 +1,6 @@
 package com.hunt.otziv.workload_shadow.service;
 
-import com.hunt.otziv.p_products.status.OrderStatusChangedEvent;
+import com.hunt.otziv.p_products.status.event.OrderStatusChangedEvent;
 import com.hunt.otziv.p_products.services.OrderCreatedEvent;
 import com.hunt.otziv.review_recovery.event.ReviewRecoveryReleasedEvent;
 import org.springframework.stereotype.Component;

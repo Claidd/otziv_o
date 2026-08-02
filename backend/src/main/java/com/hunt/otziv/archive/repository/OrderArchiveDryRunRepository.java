@@ -30,6 +30,38 @@ public class OrderArchiveDryRunRepository {
             "archive_batch_id"
     );
 
+    private static final String PAYMENT_LINK_ARCHIVE_BLOCKER_SQL = """
+            (
+                pl.status = 'NEEDS_RECONCILIATION'
+                OR COALESCE(pl.status, '') NOT IN (
+                    'CREATED',
+                    'TEST_CONFIRMED',
+                    'CONFIRMED',
+                    'REJECTED',
+                    'CANCELED',
+                    'REVERSED',
+                    'REFUNDED',
+                    'EXPIRED',
+                    'FAILED'
+                )
+                OR pl.bank_init_nonce IS NOT NULL
+                OR pl.bank_cancel_nonce IS NOT NULL
+                OR pl.bank_cancel_origin_status IS NOT NULL
+                OR COALESCE(pl.receipt_status, 'DONE') = 'PENDING'
+                OR (
+                    pl.status = 'CONFIRMED'
+                    AND pl.payment_success_notified_at IS NULL
+                    AND COALESCE(pl.payment_success_notification_retry_eligible, 0) = 1
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM payment_success_notification_retry_claims notification_claim
+                    WHERE notification_claim.payment_link_id = pl.id
+                      AND notification_claim.processing_lease_until > CURRENT_TIMESTAMP(6)
+                )
+            )
+            """;
+
     private static final String ELIGIBLE_ORDER_WHERE = """
             FROM orders o
             JOIN order_statuses s ON s.order_status_id = o.order_status
@@ -53,6 +85,12 @@ public class OrderArchiveDryRunRepository {
                     FROM next_order_requests nor
                     WHERE nor.source_order_id = o.order_id
                       AND nor.request_status IN ('PENDING', 'FAILED')
+              )
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM payment_links pl
+                    WHERE pl.order_id = o.order_id
+                      AND """ + PAYMENT_LINK_ARCHIVE_BLOCKER_SQL + """
               )
               AND NOT EXISTS (
                     SELECT 1
@@ -99,16 +137,24 @@ public class OrderArchiveDryRunRepository {
               )
               AND NOT EXISTS (
                     SELECT 1
+                    FROM common_invoice_orders cio
+                    JOIN payment_links pl ON pl.order_id = cio.order_id
+                    WHERE cio.invoice_id = ci.invoice_id
+                      AND """ + PAYMENT_LINK_ARCHIVE_BLOCKER_SQL + """
+              )
+              AND NOT EXISTS (
+                    SELECT 1
                     FROM common_invoice_payment_refs ref
                     WHERE ref.invoice_id = ci.invoice_id
-                      AND ref.status IN (
-                            'CONFIRMED',
-                            'PREPAID',
-                            'APPLYING',
-                            'CANCEL_PENDING',
-                            'CANCELING',
-                            'CANCEL_FAILED',
-                            'INIT_CONFLICT'
+                      AND UPPER(TRIM(COALESCE(ref.status, ''))) NOT IN (
+                            'APPLIED',
+                            'ARCHIVED',
+                            'CANCELED',
+                            'REJECTED',
+                            'REFUNDED',
+                            'PARTIAL_REFUNDED',
+                            'REVERSED',
+                            'PARTIAL_REVERSED'
                       )
               )
             """;
@@ -194,6 +240,102 @@ public class OrderArchiveDryRunRepository {
                     o.order_id
                 LIMIT :batchLimit
                 """, candidateParams(cutoffDate, batchLimit));
+    }
+
+    /**
+     * Freezes the selected order aggregates before any live archive copy.
+     * Payment mutations use the same ascending parent-order lock prelude.
+     */
+    public int lockPreparedCandidateOrders() {
+        return jdbc.queryForList("""
+                SELECT o.order_id
+                FROM orders o
+                JOIN archive_candidate_orders candidate
+                  ON candidate.order_id = o.order_id
+                ORDER BY o.order_id
+                FOR UPDATE
+                """, Map.of(), Long.class).size();
+    }
+
+    public int countPreparedCandidateCommonInvoices() {
+        return Math.toIntExact(count("SELECT COUNT(*) FROM archive_candidate_common_invoices"));
+    }
+
+    /** Locks invoice parents only after all candidate Orders are locked. */
+    public int lockPreparedCandidateCommonInvoices() {
+        return jdbc.queryForList("""
+                SELECT invoice.invoice_id
+                FROM common_invoices invoice
+                JOIN archive_candidate_common_invoices candidate
+                  ON candidate.invoice_id = invoice.invoice_id
+                ORDER BY invoice.invoice_id
+                FOR UPDATE
+                """, Map.of(), Long.class).size();
+    }
+
+    /**
+     * Re-checks the complete candidate predicate after parent locks were
+     * acquired. The live archive transaction uses READ_COMMITTED so this sees
+     * the state that won any lock wait, rather than the original temp snapshot.
+     */
+    public boolean hasPreparedCandidateEligibilityDrift(LocalDate cutoffDate) {
+        Map<String, Object> params = Map.of("cutoffDate", cutoffDate);
+        Long ineligibleOrder = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM archive_candidate_orders candidate
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM (
+                            SELECT o.order_id
+                            """ + ELIGIBLE_ORDER_WHERE + """
+                            UNION DISTINCT
+                            SELECT item.order_id
+                            FROM common_invoice_orders item
+                            JOIN (
+                                SELECT ci.invoice_id
+                                """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
+                            ) eligible_invoice
+                              ON eligible_invoice.invoice_id = item.invoice_id
+                        ) current_eligible
+                        WHERE current_eligible.order_id = candidate.order_id
+                    )
+                )
+                """, params, Long.class);
+        if (ineligibleOrder != null && ineligibleOrder > 0) {
+            return true;
+        }
+
+        Long ineligibleInvoice = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM archive_candidate_common_invoices candidate
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM (
+                            SELECT ci.invoice_id
+                            """ + ELIGIBLE_COMMON_INVOICE_WHERE + """
+                        ) current_eligible
+                        WHERE current_eligible.invoice_id = candidate.invoice_id
+                    )
+                )
+                """, params, Long.class);
+        if (ineligibleInvoice != null && ineligibleInvoice > 0) {
+            return true;
+        }
+
+        Long newInvoiceMember = jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM common_invoice_orders item
+                    JOIN archive_candidate_common_invoices candidate_invoice
+                      ON candidate_invoice.invoice_id = item.invoice_id
+                    LEFT JOIN archive_candidate_orders candidate_order
+                      ON candidate_order.order_id = item.order_id
+                    WHERE candidate_order.order_id IS NULL
+                )
+                """, Map.of(), Long.class);
+        return newInvoiceMember != null && newInvoiceMember > 0;
     }
 
     public ArchiveCandidateCounts countSelected(LocalDate cutoffDate, int batchLimit) {

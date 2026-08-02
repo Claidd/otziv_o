@@ -13,6 +13,8 @@ public class WhatsAppProperties {
 
     private List<ClientConfig> clients = new ArrayList<>(); // <--- по умолчанию пустой список
     private HealthMonitor healthMonitor = new HealthMonitor();
+    /** Optional dual-rollout secret attached to backend -> gateway requests. */
+    private String gatewaySharedSecret = "";
 
     @Data
     public static class ClientConfig {

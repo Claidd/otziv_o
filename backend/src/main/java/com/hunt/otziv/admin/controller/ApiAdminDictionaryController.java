@@ -6,6 +6,8 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.b_bots.model.StatusBot;
 import com.hunt.otziv.b_bots.repository.BotsRepository;
 import com.hunt.otziv.b_bots.repository.StatusBotRepository;
+import com.hunt.otziv.b_bots.services.BotBrowserAccessService;
+import com.hunt.otziv.b_bots.services.BotCrudAccessService;
 import com.hunt.otziv.c_categories.model.Category;
 import com.hunt.otziv.c_categories.model.ProductCategory;
 import com.hunt.otziv.c_categories.model.SubCategory;
@@ -65,6 +67,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -107,6 +110,8 @@ public class ApiAdminDictionaryController {
     private final ReviewRepository reviewRepository;
     private final CityDistanceService cityDistanceService;
     private final FileUploadGuard fileUploadGuard;
+    private final BotBrowserAccessService botBrowserAccessService;
+    private final BotCrudAccessService botCrudAccessService;
 
     @Value("${app.nagul.cooldown:60}")
     private int defaultNagulCooldownMinutes;
@@ -405,11 +410,14 @@ public class ApiAdminDictionaryController {
 
     @GetMapping("/bots")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public BotsResponse getBots(
             String keyword,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size
+            @RequestParam(defaultValue = "50") int size,
+            Authentication authentication
     ) {
+        botCrudAccessService.requireGlobalAccess(authentication);
         int pageIndex = Math.max(page, 0);
         int pageSize = Math.max(10, Math.min(size, 200));
         Page<BotsRepository.AdminBotRow> botPage = botsRepository.findAdminRows(
@@ -434,7 +442,12 @@ public class ApiAdminDictionaryController {
 
     @GetMapping("/bots/unblocked-count")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public BotCityUnblockedCountResponse getBotCityUnblockedCount(@RequestParam Long cityId) {
+    @Transactional
+    public BotCityUnblockedCountResponse getBotCityUnblockedCount(
+            @RequestParam Long cityId,
+            Authentication authentication
+    ) {
+        botCrudAccessService.requireGlobalAccess(authentication);
         return new BotCityUnblockedCountResponse(
                 cityId,
                 botsRepository.countActiveByCityId(cityId)
@@ -443,18 +456,41 @@ public class ApiAdminDictionaryController {
 
     @GetMapping("/bots/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER', 'WORKER')")
-    public BotResponse getBot(@PathVariable Long id) {
-        return botsRepository.findByIdWithAdminDetails(id)
-                .map(this::toBotResponse)
-                .orElseThrow(() -> notFound("Аккаунт не найден"));
+    @Transactional
+    public BotResponse getBot(@PathVariable Long id, Authentication authentication) {
+        boolean globalRole = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals("ROLE_ADMIN")
+                        || authority.getAuthority().equals("ROLE_OWNER"));
+        if (globalRole) {
+            BotCrudAccessService.LockedCrudBot lockedBot =
+                    botCrudAccessService.requireLockedGlobalAccess(id, authentication);
+            return toBotResponse(lockedBot.bot());
+        }
+
+        BotBrowserAccessService.AuthorizedBot authorizedBot =
+                botBrowserAccessService.requireAccess(id, authentication);
+        return new BotResponse(
+                authorizedBot.id(),
+                safe(authorizedBot.login()),
+                "",
+                safe(authorizedBot.fio()),
+                false,
+                0,
+                null,
+                null,
+                null
+        );
     }
 
     @PostMapping("/bots/import")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @Transactional
     public BotImportResult importBots(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "cityId", required = false) Long cityId
+            @RequestParam(value = "cityId", required = false) Long cityId,
+            Authentication authentication
     ) {
+        botCrudAccessService.requireGlobalAccess(authentication);
         return botImportService.importBots(file, cityId);
     }
 
@@ -462,7 +498,8 @@ public class ApiAdminDictionaryController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Transactional
-    public BotResponse createBot(@RequestBody BotRequest request) {
+    public BotResponse createBot(@RequestBody BotRequest request, Authentication authentication) {
+        botCrudAccessService.requireGlobalAccess(authentication);
         String login = requiredText(request.login(), "Логин обязателен");
         assertLoginAvailable(login, null);
 
@@ -483,9 +520,12 @@ public class ApiAdminDictionaryController {
     @PutMapping("/bots/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
     @Transactional
-    public BotResponse updateBot(@PathVariable Long id, @RequestBody BotRequest request) {
-        Bot bot = botsRepository.findByIdWithAdminDetails(id)
-                .orElseThrow(() -> notFound("Аккаунт не найден"));
+    public BotResponse updateBot(
+            @PathVariable Long id,
+            @RequestBody BotRequest request,
+            Authentication authentication
+    ) {
+        Bot bot = botCrudAccessService.requireLockedGlobalAccess(id, authentication).bot();
         String login = requiredText(request.login(), "Логин обязателен");
         assertLoginAvailable(login, id);
 
@@ -506,11 +546,10 @@ public class ApiAdminDictionaryController {
     @DeleteMapping("/bots/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
-    public void deleteBot(@PathVariable Long id) {
-        if (!botsRepository.existsById(id)) {
-            throw notFound("Аккаунт не найден");
-        }
-        botsRepository.deleteById(id);
+    @Transactional
+    public void deleteBot(@PathVariable Long id, Authentication authentication) {
+        Bot bot = botCrudAccessService.requireLockedGlobalAccess(id, authentication).bot();
+        botsRepository.delete(bot);
     }
 
     @GetMapping("/promo-texts")

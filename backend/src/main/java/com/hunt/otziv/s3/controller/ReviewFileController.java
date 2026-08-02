@@ -30,9 +30,11 @@ public class ReviewFileController {
         Review review = reviewRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
-        String newUrl = s3UploadService.uploadFile(file, "reviews", review.getUrl(), review.getId());
+        String oldUrl = review.getUrl();
+        String newUrl = s3UploadService.uploadFile(file, "reviews", oldUrl, review.getId());
         review.setUrl(newUrl);
         reviewRepository.save(review);
+        s3UploadService.deleteFileAfterCommit(oldUrl, "reviews", review.getId());
 
         redirectAttributes.addFlashAttribute("saveSuccess", true);
 

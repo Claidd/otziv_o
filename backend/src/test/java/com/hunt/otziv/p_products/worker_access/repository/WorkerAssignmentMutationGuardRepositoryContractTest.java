@@ -23,6 +23,44 @@ class WorkerAssignmentMutationGuardRepositoryContractTest {
         assertRecoveryOwnershipQuery("lockOwnedRecoveryTask");
     }
 
+    @Test
+    void managerialScopeAlwaysComesFromCanonicalEntityRelations() throws Exception {
+        assertCanonicalQuery(
+                "findOrderIdByReviewId",
+                "review.review_id = :reviewid",
+                "orders.order_id = detail.order_detail_order"
+        );
+        assertCanonicalQuery(
+                "findOrderIdByBadTaskId",
+                "task.bad_review_task_id = :taskid",
+                "select task.bad_review_task_order"
+        );
+        assertCanonicalQuery(
+                "findOrderIdByRecoveryTaskId",
+                "task.review_recovery_task_id = :taskid",
+                "select orders.order_id",
+                "orders.order_id = task.review_recovery_task_order"
+        );
+        assertCanonicalQuery(
+                "findManagerIdByRecoveryTaskId",
+                "task.review_recovery_task_id = :taskid",
+                "select task.review_recovery_task_manager"
+        );
+    }
+
+    private void assertCanonicalQuery(String methodName, String... expectedFragments) throws Exception {
+        Method method = WorkerAssignmentMutationGuardRepository.class.getDeclaredMethod(methodName, long.class);
+        Query query = method.getAnnotation(Query.class);
+
+        assertThat(query).isNotNull();
+        assertThat(query.nativeQuery()).isTrue();
+        String sql = query.value()
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+        assertThat(sql).contains(expectedFragments);
+    }
+
     private void assertRecoveryOwnershipQuery(String methodName) throws Exception {
         Method method = WorkerAssignmentMutationGuardRepository.class.getDeclaredMethod(
                 methodName,

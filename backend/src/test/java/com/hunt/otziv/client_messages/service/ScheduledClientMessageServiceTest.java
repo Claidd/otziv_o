@@ -20,10 +20,10 @@ import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderStatus;
 import com.hunt.otziv.p_products.repository.OrderRepository;
-import com.hunt.otziv.p_products.status.OrderPaymentMessageBuilder;
-import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
-import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
-import com.hunt.otziv.p_products.status.OrderStatusTransitionService;
+import com.hunt.otziv.p_products.status.service.OrderPaymentMessageBuilder;
+import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
+import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderStatusTransitionService;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.OrderPaymentIntegrityService;
 import com.hunt.otziv.review_recovery.model.ReviewRecoveryBatch;
@@ -106,6 +106,8 @@ class ScheduledClientMessageServiceTest {
     private CommonBillingService commonBillingService;
     @Mock
     private OrderPaymentIntegrityService orderPaymentIntegrityService;
+    @Mock
+    private ClientMessageTransactionRunner transactionRunner;
 
     @InjectMocks
     private ScheduledClientMessageService service;
@@ -612,7 +614,7 @@ class ScheduledClientMessageServiceTest {
         order.setWaitingForClientChangedAt(waitingChangedAt);
 
         when(stateRepository.findByOrderIdIn(List.of(25_442L))).thenReturn(List.of(staleState));
-        when(stateRepository.findByScenarioAndTargetKey(
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
                 ClientMessageScenario.CLIENT_TEXT_REMINDER,
                 "client-text:25442:2026-07-24T20:37:52"
         )).thenReturn(java.util.Optional.empty());
@@ -1110,8 +1112,26 @@ class ScheduledClientMessageServiceTest {
                 .build();
 
         when(stateRepository.findById(501L)).thenReturn(Optional.of(state));
-        when(stateRepository.lockDueState(eq(501L), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(1);
+        when(transactionRunner.callInNewTransaction(
+                org.mockito.ArgumentMatchers.<java.util.function.Supplier<Boolean>>any()
+        )).thenAnswer(invocation -> invocation.<java.util.function.Supplier<Boolean>>getArgument(0).get());
+        org.mockito.Mockito.doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(transactionRunner).runInNewTransaction(any(Runnable.class));
+        when(stateRepository.lockActiveState(
+                eq(501L),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                eq("state_transaction_in_progress"),
+                anyString()
+        )).thenAnswer(invocation -> {
+            state.setLockedUntil(invocation.getArgument(2));
+            state.setNextAttemptAt(null);
+            state.setLastErrorCode(invocation.getArgument(3));
+            return 1;
+        });
+        when(stateRepository.findByIdForUpdate(501L)).thenReturn(Optional.of(state));
         when(appSettingService.getBoolean(AppSettingService.CLIENT_MESSAGES_WORKER_ENABLED, true))
                 .thenReturn(true);
         when(appSettingService.getString(AppSettingService.CLIENT_MESSAGES_PAUSED_UNTIL, null))
@@ -1124,6 +1144,231 @@ class ScheduledClientMessageServiceTest {
         assertEquals(ScheduledMessageStateStatus.DISABLED, result.status());
         assertEquals("company_missing", result.errorCode());
         verify(paymentLinkService).reconcileActiveLinkForOrder(77L);
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void rolledBackStateIsQuarantinedUntilManualReview() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 1, 16, 30);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5819L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24753:2026-08-01T14:00")
+                .companyId(100L)
+                .orderId(24753L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("state_transaction_in_progress")
+                .nextAttemptAt(now.minusMinutes(1))
+                .lockedUntil(now.plusMinutes(5))
+                .build();
+
+        when(stateRepository.findByIdForUpdate(5819L)).thenReturn(Optional.of(state));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(transactionRunner).runInNewTransaction(any(Runnable.class));
+
+        ReflectionTestUtils.invokeMethod(
+                service,
+                "quarantineRolledBackState",
+                5819L,
+                state.getLockedUntil(),
+                now,
+                new RuntimeException("transaction marked rollback-only")
+        );
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertEquals("state_transaction_outcome_uncertain", state.getLastErrorCode());
+        assertTrue(state.getLastErrorMessage().contains("автоматический повтор остановлен"));
+        assertEquals(1, state.getConsecutiveFailures());
+        assertNull(state.getNextAttemptAt());
+        assertNull(state.getLockedUntil());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.FAILED, attemptCaptor.getValue().getStatus());
+        assertEquals("state_transaction_outcome_uncertain", attemptCaptor.getValue().getErrorCode());
+        verify(stateRepository).save(state);
+    }
+
+    @Test
+    void reconciliationDoesNotRearmStateWithUncertainTransactionOutcome() {
+        LocalDateTime nextAttempt = LocalDateTime.of(2026, 8, 2, 10, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5819L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24753:2026-08-01T14:00")
+                .companyId(100L)
+                .orderId(24753L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("state_transaction_outcome_uncertain")
+                .nextAttemptAt(null)
+                .build();
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_REMINDER,
+                state.getTargetKey()
+        )).thenReturn(Optional.of(state));
+
+        Boolean created = ReflectionTestUtils.invokeMethod(
+                service,
+                "ensureState",
+                ClientMessageScenario.PAYMENT_REMINDER,
+                ClientMessageTargetType.ORDER,
+                state.getTargetKey(),
+                state.getCompanyId(),
+                state.getOrderId(),
+                null,
+                nextAttempt
+        );
+
+        assertEquals(Boolean.FALSE, created);
+        assertNull(state.getNextAttemptAt());
+    }
+
+    @Test
+    void reconciliationDoesNotRearmStateWhoseTransactionIsStillMarkedInProgress() {
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5820L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24754:2026-08-01T14:00")
+                .companyId(100L)
+                .orderId(24754L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("state_transaction_in_progress")
+                .nextAttemptAt(null)
+                .build();
+        when(stateRepository.findByScenarioAndTargetKeyForUpdate(
+                ClientMessageScenario.PAYMENT_REMINDER,
+                state.getTargetKey()
+        )).thenReturn(Optional.of(state));
+
+        Boolean created = ReflectionTestUtils.invokeMethod(
+                service,
+                "ensureState",
+                ClientMessageScenario.PAYMENT_REMINDER,
+                ClientMessageTargetType.ORDER,
+                state.getTargetKey(),
+                state.getCompanyId(),
+                state.getOrderId(),
+                null,
+                LocalDateTime.of(2026, 8, 2, 10, 0)
+        );
+
+        assertEquals(Boolean.FALSE, created);
+        assertNull(state.getNextAttemptAt());
+    }
+
+    @Test
+    void workerDoesNotProcessStateOwnedByAnotherClaim() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expectedLockedUntil = now.plusMinutes(5).withNano(123_456_000);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5821L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24755:2026-08-01T14:00")
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lockedUntil(expectedLockedUntil.plusMinutes(1))
+                .build();
+        when(stateRepository.findByIdForUpdate(5821L)).thenReturn(Optional.of(state));
+
+        ReflectionTestUtils.invokeMethod(
+                service,
+                "processClaimedState",
+                5821L,
+                now,
+                expectedLockedUntil
+        );
+
+        verify(stateRepository, never()).findById(5821L);
+        verify(stateRepository, never()).save(any(ScheduledClientMessageState.class));
+        verify(attemptRepository, never()).save(any(ScheduledClientMessageAttempt.class));
+    }
+
+    @Test
+    void rollbackQuarantineDoesNotOverwriteAnotherClaim() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 1, 16, 30);
+        LocalDateTime expectedLockedUntil = now.plusMinutes(5);
+        LocalDateTime otherLockedUntil = expectedLockedUntil.plusMinutes(1);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(5822L)
+                .scenario(ClientMessageScenario.PAYMENT_REMINDER)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:24756:2026-08-01T14:00")
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lastErrorCode("state_transaction_in_progress")
+                .nextAttemptAt(null)
+                .lockedUntil(otherLockedUntil)
+                .build();
+        when(stateRepository.findByIdForUpdate(5822L)).thenReturn(Optional.of(state));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            invocation.<Runnable>getArgument(0).run();
+            return null;
+        }).when(transactionRunner).runInNewTransaction(any(Runnable.class));
+
+        ReflectionTestUtils.invokeMethod(
+                service,
+                "quarantineRolledBackState",
+                5822L,
+                expectedLockedUntil,
+                now,
+                new RuntimeException("old worker failed")
+        );
+
+        assertEquals("state_transaction_in_progress", state.getLastErrorCode());
+        assertEquals(otherLockedUntil, state.getLockedUntil());
+        verify(stateRepository, never()).save(any(ScheduledClientMessageState.class));
+        verify(attemptRepository, never()).save(any(ScheduledClientMessageAttempt.class));
+    }
+
+    @Test
+    void autoArchiveStaleReviewCheckIsPostponedWhileCommonInvoiceIsActive() throws Exception {
+        LocalDateTime changedAt = LocalDateTime.of(2026, 4, 20, 10, 0);
+        LocalDateTime now = LocalDateTime.of(2026, 5, 25, 12, 0);
+        ScheduledClientMessageState state = ScheduledClientMessageState.builder()
+                .id(92L)
+                .scenario(ClientMessageScenario.REVIEW_CHECK_AUTO_ARCHIVE)
+                .targetType(ClientMessageTargetType.ORDER)
+                .targetKey("order:13:2026-04-20T10:00")
+                .companyId(23L)
+                .orderId(13L)
+                .status(ScheduledMessageStateStatus.ACTIVE)
+                .lockedUntil(now.plusMinutes(5))
+                .build();
+        Order order = new Order();
+        order.setId(13L);
+        order.setStatus(OrderStatus.builder().title("На проверке").build());
+        order.setStatusChangedAt(changedAt);
+
+        when(orderRepository.findByIdForMutation(13L)).thenReturn(Optional.of(order));
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_REVIEW_CHECK_STATUSES,
+                ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES
+        )).thenReturn(ScheduledClientMessageService.DEFAULT_REVIEW_CHECK_STATUSES);
+        when(commonBillingServiceProvider.getIfAvailable()).thenReturn(commonBillingService);
+        when(commonBillingService.isOrderInActiveCommonInvoice(13L)).thenReturn(true);
+        when(appSettingService.getString(
+                AppSettingService.CLIENT_MESSAGES_BUSINESS_WINDOWS,
+                ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC
+        )).thenReturn(ClientMessageSlotPlanner.DEFAULT_WINDOWS_SPEC);
+        when(slotPlanner.nextAllowedAt(any(LocalDateTime.class), anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReflectionTestUtils.invokeMethod(service, "autoArchiveStaleReviewCheck", state, now);
+
+        assertEquals(ScheduledMessageStateStatus.ACTIVE, state.getStatus());
+        assertNotNull(state.getNextAttemptAt());
+        assertNull(state.getLastErrorCode());
+        assertNull(state.getLockedUntil());
+        ArgumentCaptor<ScheduledClientMessageAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(ScheduledClientMessageAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(ScheduledMessageAttemptStatus.SKIPPED, attemptCaptor.getValue().getStatus());
+        assertEquals("common_billing_linked", attemptCaptor.getValue().getErrorCode());
+        verify(orderStatusTransitionService, never()).changeStatusForOrder(any(), anyString());
         verify(stateRepository).save(state);
     }
 

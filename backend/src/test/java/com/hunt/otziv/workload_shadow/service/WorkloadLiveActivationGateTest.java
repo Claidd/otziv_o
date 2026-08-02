@@ -10,9 +10,9 @@ import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadLiveSettingsResponse;
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse;
-import com.hunt.otziv.workload_shadow.health.WorkloadMaintenanceHealthSnapshot;
-import com.hunt.otziv.workload_shadow.health.WorkloadShadowHealthService;
-import com.hunt.otziv.workload_shadow.health.WorkloadShadowHealthSnapshot;
+import com.hunt.otziv.workload_shadow.health.dto.WorkloadMaintenanceHealthSnapshot;
+import com.hunt.otziv.workload_shadow.health.service.WorkloadShadowHealthService;
+import com.hunt.otziv.workload_shadow.health.dto.WorkloadShadowHealthSnapshot;
 import com.hunt.otziv.workload_shadow.repository.WorkloadLiveReadinessRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadLiveReadinessRepository.ManagerCapacityProjection;
 import java.time.LocalDate;

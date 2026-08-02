@@ -8,7 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -168,7 +168,9 @@ public class AdminCityController {
             return;
         }
 
-        try (Workbook workbook = new XSSFWorkbook()) {
+        SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+        workbook.setCompressTempFiles(true);
+        try (workbook) {
             Sheet sheet = workbook.createSheet("Статистика по городам");
 
             // Создаем стили
@@ -293,10 +295,7 @@ public class AdminCityController {
                     new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(new Date()));
             totalRow.getCell(10).setCellStyle(totalStyle);
 
-            // Авторазмер колонок
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
+            configureColumnWidths(sheet);
 
             // Фиксируем заголовок
             sheet.createFreezePane(0, 1);
@@ -313,8 +312,18 @@ public class AdminCityController {
             workbook.write(response.getOutputStream());
         } catch (Exception e) {
             log.error("Ошибка при экспорте в Excel", e);
-            response.setContentType("text/html; charset=UTF-8");
-            response.getWriter().write("<script>alert('Ошибка при экспорте: " + e.getMessage() + "'); history.back();</script>");
+            if (!response.isCommitted()) {
+                response.resetBuffer();
+                response.setContentType("text/html; charset=UTF-8");
+                response.getWriter().write("<script>alert('Ошибка при экспорте'); history.back();</script>");
+            }
+        }
+    }
+
+    private void configureColumnWidths(Sheet sheet) {
+        int[] widths = {6, 28, 12, 24, 28, 20, 22, 18, 20, 14, 22};
+        for (int i = 0; i < widths.length; i++) {
+            sheet.setColumnWidth(i, widths[i] * 256);
         }
     }
 

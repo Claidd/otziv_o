@@ -16,7 +16,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Observable } from 'rxjs';
+import { combineLatest, Observable } from 'rxjs';
 import {
   ReviewCheckApi,
   ReviewCheckNotes,
@@ -25,6 +25,8 @@ import {
   ReviewCheckUpdateRequest
 } from '../../core/review-check.api';
 import { AuthService } from '../../core/auth.service';
+import { LatestRouteRequest } from '../../core/latest-route-request';
+import { reviewCapabilityToken } from '../../core/review-capability-token';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
 import { apiErrorMessage } from '../../shared/api-error-message';
 import { LoadErrorCardComponent } from '../../shared/load-error-card.component';
@@ -64,6 +66,10 @@ type ActiveReviewFieldEdit = {
   field: ReviewEditableField;
   title: string;
   mutationKey: string;
+};
+type ReviewCheckRouteVisit = {
+  generation: number;
+  key: string;
 };
 
 @Directive({
@@ -152,9 +158,13 @@ export class ReviewCheckComponent {
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly reviewCheckApi = inject(ReviewCheckApi);
   private readonly toastService = inject(ToastService);
+  private readonly reviewRouteRequest = new LatestRouteRequest<ReviewCheckPayload>();
+  private activeRouteKey: string | null = null;
+  private activeRouteGeneration = 0;
   readonly auth = inject(AuthService);
 
   readonly orderDetailId = signal<string | null>(null);
+  readonly capabilityToken = signal<string | null>(null);
   readonly details = signal<ReviewCheckPayload | null>(null);
   readonly draft = signal<ReviewCheckDraft | null>(null);
   readonly loading = signal(false);
@@ -225,15 +235,45 @@ export class ReviewCheckComponent {
 
   constructor() {
     this.updateMobileReviewLayout();
-    this.route.paramMap
+    this.destroyRef.onDestroy(() => {
+      this.reviewRouteRequest.cancel();
+      this.activeRouteGeneration += 1;
+      this.activeRouteKey = null;
+    });
+    combineLatest([this.route.paramMap, this.route.fragment])
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((params) => {
+      .subscribe(([params]) => {
+        const routeSnapshot = this.route.snapshot;
+        const capabilityRoute = routeSnapshot?.routeConfig?.path === 'review/c';
+        const capabilityToken = capabilityRoute
+          ? reviewCapabilityToken()
+          : null;
+        if (capabilityToken) {
+          const routeKey = `capability:${capabilityToken}`;
+          if (routeKey === this.activeRouteKey) {
+            return;
+          }
+
+          this.activateRoute(routeKey);
+          this.capabilityToken.set(capabilityToken);
+          this.orderDetailId.set('secure-capability');
+          this.loadReviewCheck();
+          return;
+        }
+
         const id = params.get('orderDetailId');
         if (!id) {
+          this.activateRoute(null);
           this.error.set('Ссылка на проверку некорректна');
           return;
         }
 
+        const routeKey = `legacy:${id}`;
+        if (routeKey === this.activeRouteKey) {
+          return;
+        }
+
+        this.activateRoute(routeKey);
         this.orderDetailId.set(id);
         this.loadReviewCheck();
       });
@@ -253,14 +293,24 @@ export class ReviewCheckComponent {
     this.loading.set(true);
     this.error.set(null);
 
-    this.reviewCheckApi.getReviewCheck(orderDetailId).subscribe({
+    const token = this.capabilityToken();
+    const request = token
+      ? this.reviewCheckApi.getReviewCheck(orderDetailId, token)
+      : this.reviewCheckApi.getReviewCheck(orderDetailId);
+    this.reviewRouteRequest.start(request, {
       next: (details) => {
+        if (orderDetailId !== this.orderDetailId() || token !== this.capabilityToken()) {
+          return;
+        }
         this.applyDetails(details);
         this.activeReviewSlide.set(0);
         this.syncReviewJumpValue(0);
         this.loading.set(false);
       },
       error: (err) => {
+        if (orderDetailId !== this.orderDetailId() || token !== this.capabilityToken()) {
+          return;
+        }
         this.error.set(this.errorMessage(err, 'Не удалось загрузить отзывы'));
         this.loading.set(false);
       }
@@ -275,7 +325,9 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'save',
-      this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest()),
+      this.capabilityToken()
+        ? this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest(), this.capabilityToken())
+        : this.reviewCheckApi.saveReviews(orderDetailId, this.buildRequest()),
       'Отзывы сохранены',
       'Правки применены'
     );
@@ -290,7 +342,9 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'approve',
-      this.reviewCheckApi.approveReviews(orderDetailId, this.buildRequest()),
+      this.capabilityToken()
+        ? this.reviewCheckApi.approveReviews(orderDetailId, this.buildRequest(), this.capabilityToken())
+        : this.reviewCheckApi.approveReviews(orderDetailId, this.buildRequest()),
       'Публикация разрешена',
       'Заказ переведен в публикацию'
     );
@@ -305,7 +359,9 @@ export class ReviewCheckComponent {
 
     this.runAction(
       'correction',
-      this.reviewCheckApi.sendToCorrection(orderDetailId, this.buildRequest()),
+      this.capabilityToken()
+        ? this.reviewCheckApi.sendToCorrection(orderDetailId, this.buildRequest(), this.capabilityToken())
+        : this.reviewCheckApi.sendToCorrection(orderDetailId, this.buildRequest()),
       'Отправлено на коррекцию',
       'Замечания сохранены'
     );
@@ -724,15 +780,28 @@ export class ReviewCheckComponent {
 
     const key = this.saveFieldMutationKey(review, field);
     const fieldKey = this.reviewFieldKey(review, field);
+    const routeVisit = this.captureActiveRouteVisit();
+    if (!routeVisit) {
+      return;
+    }
     this.actionKey.set(key);
     this.error.set(null);
 
+    const token = this.capabilityToken();
     const request = field === 'text'
-      ? this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value)
-      : this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value);
+      ? (token
+          ? this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value, token)
+          : this.reviewCheckApi.updateReviewText(orderDetailId, review.id, value))
+      : (token
+          ? this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value, token)
+          : this.reviewCheckApi.updateReviewAnswer(orderDetailId, review.id, value));
 
     request.subscribe({
       next: (updatedReview) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         this.applyUpdatedReview(updatedReview);
         this.actionKey.set(null);
         this.savedReviewFieldKey.set(fieldKey);
@@ -743,6 +812,10 @@ export class ReviewCheckComponent {
         );
 
         window.setTimeout(() => {
+          if (!this.isActiveRouteVisit(routeVisit)) {
+            return;
+          }
+
           if (this.savedReviewFieldKey() === fieldKey) {
             this.savedReviewFieldKey.set(null);
           }
@@ -753,6 +826,10 @@ export class ReviewCheckComponent {
         }, 1000);
       },
       error: (err) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         const message = this.errorMessage(err, field === 'text'
           ? 'Не удалось сохранить текст отзыва'
           : 'Не удалось сохранить замечание'
@@ -851,17 +928,29 @@ export class ReviewCheckComponent {
 
     const value = this.reviewNoteValue(review);
     const key = `save-note-${review.id}`;
+    const routeVisit = this.captureActiveRouteVisit();
+    if (!routeVisit) {
+      return;
+    }
     this.actionKey.set(key);
     this.error.set(null);
 
     this.reviewCheckApi.updateReviewNote(orderDetailId, review.id, value).subscribe({
       next: (updatedReview) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         this.applyUpdatedReviewNote(updatedReview);
         this.actionKey.set(null);
         this.savedReviewNoteId.set(review.id);
         this.toastService.success('Заметка сохранена', `Отзыв #${review.id} обновлен`);
 
         window.setTimeout(() => {
+          if (!this.isActiveRouteVisit(routeVisit)) {
+            return;
+          }
+
           if (this.savedReviewNoteId() === review.id) {
             this.savedReviewNoteId.set(null);
           }
@@ -874,6 +963,10 @@ export class ReviewCheckComponent {
         }, 1000);
       },
       error: (err) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         const message = this.errorMessage(err, 'Не удалось сохранить заметку отзыва');
         this.actionKey.set(null);
         this.error.set(message);
@@ -967,6 +1060,10 @@ export class ReviewCheckComponent {
 
     const value = this.sideNoteValue(details, field);
     const key = `save-side-${field}`;
+    const routeVisit = this.captureActiveRouteVisit();
+    if (!routeVisit) {
+      return;
+    }
     this.actionKey.set(key);
     this.error.set(null);
 
@@ -976,12 +1073,20 @@ export class ReviewCheckComponent {
 
     request.subscribe({
       next: (notes) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         this.applyReviewCheckNotes(notes);
         this.actionKey.set(null);
         this.savedSideNoteField.set(field);
         this.toastService.success(field === 'order' ? 'Заметка заказа сохранена' : 'Заметка компании сохранена');
 
         window.setTimeout(() => {
+          if (!this.isActiveRouteVisit(routeVisit)) {
+            return;
+          }
+
           if (this.savedSideNoteField() === field) {
             this.savedSideNoteField.set(null);
           }
@@ -994,6 +1099,10 @@ export class ReviewCheckComponent {
         }, 1000);
       },
       error: (err) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         const message = this.errorMessage(err, 'Не удалось сохранить заметку');
         this.actionKey.set(null);
         this.error.set(message);
@@ -1187,11 +1296,19 @@ export class ReviewCheckComponent {
       return;
     }
 
+    const routeVisit = this.captureActiveRouteVisit();
+    if (!routeVisit) {
+      return;
+    }
     this.actionKey.set(action);
     this.error.set(null);
 
     request.subscribe({
       next: (details) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         const activeReviewId = this.currentActiveReviewId();
         if (action === 'save' || action === 'approve' || action === 'correction') {
           this.clearReviewCheckMainSessionDraft();
@@ -1202,6 +1319,10 @@ export class ReviewCheckComponent {
         this.toastService.success(toastTitle, toastMessage);
       },
       error: (err) => {
+        if (!this.isActiveRouteVisit(routeVisit)) {
+          return;
+        }
+
         const message = this.errorMessage(err, toastMessage);
         this.error.set(message);
         this.actionKey.set(null);
@@ -1429,7 +1550,47 @@ export class ReviewCheckComponent {
   }
 
   private reviewCheckSessionDraftKey(orderDetailId = this.orderDetailId()): string | null {
+    if (this.capabilityToken()) {
+      return null;
+    }
     return orderDetailId ? `review-check:${orderDetailId}` : null;
+  }
+
+  private activateRoute(routeKey: string | null): void {
+    this.reviewRouteRequest.cancel();
+    this.activeRouteGeneration += 1;
+    this.activeRouteKey = routeKey;
+    this.orderDetailId.set(null);
+    this.capabilityToken.set(null);
+    this.details.set(null);
+    this.draft.set(null);
+    this.loading.set(false);
+    this.error.set(null);
+    this.actionKey.set(null);
+    this.editingReviewFieldKey.set(null);
+    this.savedReviewFieldKey.set(null);
+    this.editingReviewNoteId.set(null);
+    this.reviewNoteDrafts.set({});
+    this.savedReviewNoteId.set(null);
+    this.editingSideNoteField.set(null);
+    this.sideNoteDrafts.set({});
+    this.savedSideNoteField.set(null);
+    this.expandedReviewId.set(null);
+    this.mobilePreviewReviewTextId.set(null);
+    this.activeReviewSlide.set(0);
+    this.reviewJumpValue.set('1');
+    this.reviewQuickFilter.set('all');
+    this.reviewTextOverflowById.set({});
+  }
+
+  private captureActiveRouteVisit(): ReviewCheckRouteVisit | null {
+    return this.activeRouteKey === null
+      ? null
+      : { generation: this.activeRouteGeneration, key: this.activeRouteKey };
+  }
+
+  private isActiveRouteVisit(visit: ReviewCheckRouteVisit): boolean {
+    return visit.generation === this.activeRouteGeneration && visit.key === this.activeRouteKey;
   }
 
   private readReviewCheckSessionDraft(orderDetailId = this.orderDetailId()): ReviewCheckSessionDraft | null {

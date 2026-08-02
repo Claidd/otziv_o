@@ -6,7 +6,7 @@ import com.hunt.otziv.client_messages.dto.ClientMessagePreview;
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.config.settings.service.AppSettingService;
 import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.p_products.status.OrderReviewCheckMessageBuilder;
+import com.hunt.otziv.p_products.status.service.OrderReviewCheckMessageBuilder;
 import com.hunt.otziv.payments.model.PaymentLink;
 import com.hunt.otziv.u_users.model.Manager;
 import java.math.BigDecimal;

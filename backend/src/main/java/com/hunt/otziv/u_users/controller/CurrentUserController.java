@@ -1,5 +1,8 @@
 package com.hunt.otziv.u_users.controller;
 
+import com.hunt.otziv.u_users.model.User;
+import com.hunt.otziv.u_users.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -12,10 +15,14 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class CurrentUserController {
+
+    private final UserRepository userRepository;
 
     @GetMapping("/me")
     public Map<String, Object> me(Authentication authentication) {
@@ -34,6 +41,11 @@ public class CurrentUserController {
                 .sorted()
                 .toList());
 
+        Optional<User> localUser = resolveLocalUser(authentication);
+        response.put("localUserId", localUser.map(User::getId).orElse(null));
+        response.put("active", localUser.map(User::isActive).orElse(null));
+        response.put("authEpoch", localUser.map(User::getAuthEpoch).orElse(null));
+
         if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
             addJwtDetails(response, jwtAuthentication.getToken());
         } else if (authentication.getPrincipal() instanceof Jwt jwt) {
@@ -41,6 +53,28 @@ public class CurrentUserController {
         }
 
         return response;
+    }
+
+    private Optional<User> resolveLocalUser(Authentication authentication) {
+        Jwt jwt = null;
+        if (authentication instanceof JwtAuthenticationToken jwtAuthentication) {
+            jwt = jwtAuthentication.getToken();
+        } else if (authentication.getPrincipal() instanceof Jwt principalJwt) {
+            jwt = principalJwt;
+        }
+
+        if (jwt != null && jwt.getSubject() != null && !jwt.getSubject().isBlank()) {
+            Optional<User> byKeycloakId = userRepository.findByKeycloakId(jwt.getSubject());
+            if (byKeycloakId.isPresent()) {
+                return byKeycloakId;
+            }
+        }
+
+        String username = authentication.getName();
+        if (username == null || username.isBlank()) {
+            return Optional.empty();
+        }
+        return userRepository.findByUsername(username);
     }
 
     private void addJwtDetails(Map<String, Object> response, Jwt jwt) {

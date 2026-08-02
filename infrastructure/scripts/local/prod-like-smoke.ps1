@@ -181,6 +181,204 @@ function Invoke-PublicFrontendSmoke {
     }
 }
 
+function Get-SmokeResponseHeader {
+    param(
+        [AllowNull()][object]$Response,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    if ($null -eq $Response -or $null -eq $Response.Headers) {
+        return $null
+    }
+
+    try {
+        $values = $Response.Headers.GetValues($Name)
+        if ($null -ne $values) {
+            return (@($values) -join ", ")
+        }
+    } catch {
+        # Windows PowerShell exposes WebHeaderCollection through an indexer.
+    }
+
+    try {
+        return [string]$Response.Headers[$Name]
+    } catch {
+        return $null
+    }
+}
+
+function Invoke-SmokeHttpRequest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [ValidateSet("GET", "PUT", "POST")][string]$Method = "GET",
+        [AllowNull()][string]$Body,
+        [AllowNull()][hashtable]$Headers
+    )
+
+    $request = @{
+        Uri = $Url
+        Method = $Method
+        UseBasicParsing = $true
+        TimeoutSec = 30
+    }
+    if ($null -ne $Body) {
+        $request.Body = $Body
+        $request.ContentType = "application/json; charset=utf-8"
+    }
+    if ($null -ne $Headers) {
+        $request.Headers = $Headers
+    }
+
+    try {
+        $response = Invoke-WebRequest @request
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            WwwAuthenticate = Get-SmokeResponseHeader -Response $response -Name "WWW-Authenticate"
+            CacheControl = Get-SmokeResponseHeader -Response $response -Name "Cache-Control"
+        }
+    } catch {
+        $response = $_.Exception.Response
+        if ($null -eq $response) {
+            throw
+        }
+
+        return [pscustomobject]@{
+            StatusCode = [int]$response.StatusCode
+            WwwAuthenticate = Get-SmokeResponseHeader -Response $response -Name "WWW-Authenticate"
+            CacheControl = Get-SmokeResponseHeader -Response $response -Name "Cache-Control"
+        }
+    }
+}
+
+function Assert-AnonymousMissingCapability {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [ValidateSet("GET", "PUT", "POST")][string]$Method = "GET",
+        [AllowNull()][string]$Body,
+        [AllowNull()][hashtable]$Headers
+    )
+
+    $response = Invoke-SmokeHttpRequest -Url $Url -Method $Method -Body $Body -Headers $Headers
+    if ($response.StatusCode -ne 404) {
+        throw "Anonymous capability contract failed for ${Name}: expected HTTP 404 for a missing resource, got $($response.StatusCode)."
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$response.WwwAuthenticate)) {
+        throw "Anonymous capability contract failed for ${Name}: response unexpectedly contains WWW-Authenticate."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$response.CacheControl) -or
+            [string]$response.CacheControl -notmatch "(^|,)\s*no-store(\s*(,|$))") {
+        throw "Anonymous capability contract failed for ${Name}: response does not contain Cache-Control: no-store."
+    }
+
+    Write-Host "Anonymous capability route OK: $Name (404, no auth challenge, no-store)."
+}
+
+function Invoke-PublicCapabilityAuthorizationSmoke {
+    param([Parameter(Mandatory = $true)][string]$BaseUrl)
+
+    Write-Host "Running anonymous review/payment capability smoke..."
+    $root = $BaseUrl.TrimEnd("/")
+    $missingReviewId = [guid]::NewGuid().ToString()
+    $missingPaymentToken = "smoke-missing-$([guid]::NewGuid().ToString('N'))"
+    $capabilitySeed = [guid]::NewGuid().ToString("N")
+    $missingCapabilityToken = "rc1_$capabilitySeed$($capabilitySeed.Substring(0, 11))"
+    $reviewBody = '{"reviews":[]}'
+    $reviewTextBody = '{"text":"prod-like smoke"}'
+    $reviewAnswerBody = '{"answer":"prod-like smoke"}'
+    $paymentInitBody = '{"email":"client@example.com","offerConsent":true,"privacyConsent":true,"receiptConsent":true}'
+
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId" -Name "review read"
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId" -Name "review save" -Method "PUT" -Body $reviewBody
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId/reviews/1/text" -Name "review text edit" -Method "PUT" -Body $reviewTextBody
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId/reviews/1/answer" -Name "review answer edit" -Method "PUT" -Body $reviewAnswerBody
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId/approve" -Name "review approve" -Method "POST" -Body $reviewBody
+    Assert-AnonymousMissingCapability -Url "$root/api/review-check/$missingReviewId/correction" -Name "review correction" -Method "POST" -Body $reviewBody
+    Assert-AnonymousMissingCapability `
+        -Url "$root/api/review-capability" `
+        -Name "opaque review capability" `
+        -Headers @{ "X-Review-Capability" = $missingCapabilityToken }
+    Assert-AnonymousMissingCapability -Url "$root/api/payments/public/$missingPaymentToken" -Name "single payment link"
+    Assert-AnonymousMissingCapability -Url "$root/api/payments/public/$missingPaymentToken/init" -Name "payment init" -Method "POST" -Body $paymentInitBody
+    Assert-AnonymousMissingCapability -Url "$root/api/payments/public/group/$missingPaymentToken" -Name "group payment link"
+}
+
+function Assert-LegacyReviewCapabilityNotLogged {
+    param(
+        [Parameter(Mandatory = $true)][string]$BaseUrl,
+        [Parameter(Mandatory = $true)][string[]]$ComposeArguments
+    )
+
+    Write-Host "Checking that legacy review UUID capabilities never enter Nginx access logs..."
+    $root = $BaseUrl.TrimEnd("/")
+    $reviewId = [guid]::NewGuid().ToString()
+    $encodedReviewId = $reviewId.Replace("-", "%2D")
+    $observableMarker = "legacy-observable-$([guid]::NewGuid().ToString('N'))"
+    $paths = @(
+        "/legacy/review/editReviews/$reviewId",
+        "/legacy%2Freview%2FeditReviews%2F$encodedReviewId",
+        "/legacy/review;smoke=1/editReviews/$reviewId;smoke=1"
+    )
+
+    foreach ($path in $paths) {
+        Invoke-SmokeHttpRequest -Url "$root$path" -Method "GET" | Out-Null
+    }
+
+    $baseUri = [Uri]$BaseUrl
+    if ($baseUri.Host -in @("localhost", "127.0.0.1")) {
+        $redirectBuilder = [UriBuilder]$baseUri
+        $redirectBuilder.Host = "127.0.0.1"
+        $redirectRoot = $redirectBuilder.Uri.AbsoluteUri.TrimEnd("/")
+        Invoke-SmokeHttpRequest -Url "$redirectRoot/legacy/review/editReviews/$reviewId" -Method "GET" | Out-Null
+    }
+    Invoke-SmokeHttpRequest -Url "$root/legacy/$observableMarker" -Method "GET" | Out-Null
+
+    Start-Sleep -Milliseconds 250
+    $nginxContainerIds = @(& docker @($ComposeArguments + @("ps", "-q", "nginx")))
+    $dockerExitCode = $LASTEXITCODE
+    $nginxContainerId = $nginxContainerIds |
+        Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+        Select-Object -First 1
+    if ($dockerExitCode -ne 0 -or [string]::IsNullOrWhiteSpace([string]$nginxContainerId)) {
+        throw "Could not resolve the Nginx container for the legacy capability log assertion."
+    }
+    $nginxContainerId = ([string]$nginxContainerId).Trim()
+
+    foreach ($needle in @($reviewId, $encodedReviewId)) {
+        $matches = & docker @(
+            "exec",
+            $nginxContainerId,
+            "grep",
+            "-Fi",
+            "--",
+            $needle,
+            "/var/log/nginx/access.log"
+        ) 2>$null
+        $grepExitCode = $LASTEXITCODE
+        if ($grepExitCode -eq 0) {
+            throw "Legacy review capability leaked into Nginx access.log: $($matches -join [Environment]::NewLine)"
+        }
+        if ($grepExitCode -ne 1) {
+            throw "Could not inspect Nginx access.log for legacy review capability leakage (grep exit $grepExitCode)."
+        }
+    }
+
+    $observableMatches = & docker @(
+        "exec",
+        $nginxContainerId,
+        "grep",
+        "-F",
+        "--",
+        $observableMarker,
+        "/var/log/nginx/access.log"
+    ) 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Legacy observability contract failed: an unrelated /legacy route was not written to access.log."
+    }
+
+    Write-Host "Legacy review capability log contract OK: raw, encoded, matrix and redirect paths are absent; unrelated /legacy traffic remains observable."
+}
+
 function Convert-EnvBool {
     param(
         [AllowNull()][string]$Value,
@@ -201,42 +399,83 @@ function Invoke-TbankPaymentConfigSmoke {
     )
 
     Write-Host "Running T-Bank payment config smoke..."
-    $url = "$($BaseUrl.TrimEnd('/'))/api/payments/public/tbank-status"
-    $status = Invoke-RestMethod -Uri $url -TimeoutSec 20
-
-    $expectedEnabled = $false
-    $expectedPaymentLinks = $false
-    $expectedManagerUi = $false
-    $expectedApplyConfirmed = $false
-    $expectedBaseUrl = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_BASE_URL"
-    $expectedRuntimeMode = "TEST"
-
-    if ($status.enabled -ne $expectedEnabled) {
-        throw "T-Bank enabled flag mismatch: expected $expectedEnabled, got $($status.enabled)."
+    $apiRoot = $BaseUrl.TrimEnd("/")
+    $retiredPublicStatus = Invoke-SmokeWebRequest `
+        -Uri "$apiRoot/api/payments/public/tbank-status" `
+        -Method "Get" `
+        -Headers @{}
+    if ($retiredPublicStatus.StatusCode -ne 404) {
+        throw "Retired public T-Bank status must return HTTP 404, got $($retiredPublicStatus.StatusCode)."
     }
-    if ($status.paymentLinksEnabled -ne $expectedPaymentLinks) {
-        throw "T-Bank payment links flag mismatch: expected $expectedPaymentLinks, got $($status.paymentLinksEnabled)."
-    }
-    if ($status.managerUiEnabled -ne $expectedManagerUi) {
-        throw "T-Bank manager UI flag mismatch: expected $expectedManagerUi, got $($status.managerUiEnabled)."
-    }
-    if ($status.applyConfirmedPayments -ne $expectedApplyConfirmed) {
-        throw "T-Bank apply-confirmed flag mismatch: expected $expectedApplyConfirmed, got $($status.applyConfirmedPayments)."
-    }
-    if ($status.runtimeMode -notin @("TEST", "LIVE")) {
-        throw "T-Bank runtime mode must be TEST or LIVE, got '$($status.runtimeMode)'."
-    }
-    if (-not [string]::IsNullOrWhiteSpace($expectedRuntimeMode) -and $status.runtimeMode -ne $expectedRuntimeMode.Trim().ToUpperInvariant()) {
-        throw "T-Bank runtime mode mismatch: expected $expectedRuntimeMode, got $($status.runtimeMode)."
-    }
-    if (($status.runtimeMode -eq "TEST") -ne [bool]$status.testMode) {
-        throw "T-Bank testMode flag mismatch for runtime $($status.runtimeMode): got $($status.testMode)."
-    }
-    if (-not [string]::IsNullOrWhiteSpace($expectedBaseUrl) -and $status.baseUrl -ne $expectedBaseUrl.TrimEnd("/")) {
-        throw "T-Bank base URL mismatch: expected $expectedBaseUrl, got $($status.baseUrl)."
+    $authenticateHeader = [string]::Join(" ", @($retiredPublicStatus.Headers.WwwAuthenticate))
+    if (-not [string]::IsNullOrWhiteSpace($authenticateHeader)) {
+        throw "Retired public T-Bank status unexpectedly disclosed an authentication challenge."
     }
 
-    Write-Host "T-Bank config OK: runtime=$($status.runtimeMode), enabled=$($status.enabled), paymentLinks=$($status.paymentLinksEnabled), managerUi=$($status.managerUiEnabled), applyConfirmed=$($status.applyConfirmedPayments), baseUrl=$($status.baseUrl)."
+    $realm = Get-KeycloakRealm -EnvPath $EnvPath
+    $adminToken = Get-KeycloakAdminToken -RootUrl $BaseUrl -EnvPath $EnvPath
+    $keycloakAdminHeaders = @{ Authorization = "Bearer $adminToken" }
+    $smokeClient = $null
+    try {
+        Remove-KeycloakSmokeClientsByPrefix `
+            -RootUrl $BaseUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders
+        $smokeClient = New-KeycloakSmokeClient `
+            -RootUrl $BaseUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders `
+            -Role "ADMIN"
+        $roleToken = Get-KeycloakClientCredentialsToken `
+            -RootUrl $BaseUrl `
+            -Realm $realm `
+            -ClientId $smokeClient.ClientId `
+            -ClientSecret $smokeClient.ClientSecret
+        $status = Invoke-RestMethod `
+            -Uri "$apiRoot/api/admin/payments/tbank-status" `
+            -Headers @{ Authorization = "Bearer $roleToken" } `
+            -TimeoutSec 20
+
+        $expectedEnabled = $false
+        $expectedPaymentLinks = $false
+        $expectedManagerUi = $false
+        $expectedApplyConfirmed = $false
+        $expectedBaseUrl = Get-EnvValue -Path $EnvPath -Name "OTZIV_PAYMENTS_TBANK_BASE_URL"
+        $expectedRuntimeMode = "TEST"
+
+        if ($status.enabled -ne $expectedEnabled) {
+            throw "T-Bank enabled flag mismatch: expected $expectedEnabled, got $($status.enabled)."
+        }
+        if ($status.paymentLinksEnabled -ne $expectedPaymentLinks) {
+            throw "T-Bank payment links flag mismatch: expected $expectedPaymentLinks, got $($status.paymentLinksEnabled)."
+        }
+        if ($status.managerUiEnabled -ne $expectedManagerUi) {
+            throw "T-Bank manager UI flag mismatch: expected $expectedManagerUi, got $($status.managerUiEnabled)."
+        }
+        if ($status.applyConfirmedPayments -ne $expectedApplyConfirmed) {
+            throw "T-Bank apply-confirmed flag mismatch: expected $expectedApplyConfirmed, got $($status.applyConfirmedPayments)."
+        }
+        if ($status.runtimeMode -notin @("TEST", "LIVE")) {
+            throw "T-Bank runtime mode must be TEST or LIVE, got '$($status.runtimeMode)'."
+        }
+        if (-not [string]::IsNullOrWhiteSpace($expectedRuntimeMode) -and $status.runtimeMode -ne $expectedRuntimeMode.Trim().ToUpperInvariant()) {
+            throw "T-Bank runtime mode mismatch: expected $expectedRuntimeMode, got $($status.runtimeMode)."
+        }
+        if (($status.runtimeMode -eq "TEST") -ne [bool]$status.testMode) {
+            throw "T-Bank testMode flag mismatch for runtime $($status.runtimeMode): got $($status.testMode)."
+        }
+        if (-not [string]::IsNullOrWhiteSpace($expectedBaseUrl) -and $status.baseUrl -ne $expectedBaseUrl.TrimEnd("/")) {
+            throw "T-Bank base URL mismatch: expected $expectedBaseUrl, got $($status.baseUrl)."
+        }
+
+        Write-Host "T-Bank config OK: public status retired, runtime=$($status.runtimeMode), enabled=$($status.enabled), paymentLinks=$($status.paymentLinksEnabled), managerUi=$($status.managerUiEnabled), applyConfirmed=$($status.applyConfirmedPayments), baseUrl=$($status.baseUrl)."
+    } finally {
+        Remove-KeycloakSmokeClient `
+            -RootUrl $BaseUrl `
+            -Realm $realm `
+            -AdminHeaders $keycloakAdminHeaders `
+            -Client $smokeClient
+    }
 }
 
 function Disable-LocalExternalMessaging {
@@ -1715,6 +1954,7 @@ if (
 }
 
 $composeArgs = @("compose", "-f", $composePath, "--env-file", $envPath)
+$dbAdminComposeArgs = $composeArgs + @("--profile", "db-admin")
 if (-not $NoDbAdmin) {
     $composeArgs += @("--profile", "db-admin")
     $phpMyAdminPort = Get-EnvValue -Path $envPath -Name "LOCAL_PHPMYADMIN_PORT"
@@ -1736,6 +1976,10 @@ if ($WithObservability) {
     Write-Host "Local observability is disabled. Pass -WithObservability to start Loki, Tempo, Alloy, Prometheus, Grafana and Dozzle."
 }
 Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("config", "--quiet"))
+if ($NoDbAdmin -and -not $NoUp) {
+    Write-Host "Stopping any previously started local phpMyAdmin container."
+    Invoke-External -FilePath "docker" -Arguments ($dbAdminComposeArgs + @("stop", "phpmyadmin"))
+}
 
 $localServices = & docker @($composeArgs + @("config", "--services"))
 if ($LASTEXITCODE -ne 0) {
@@ -1780,11 +2024,28 @@ try {
         }
     }
 
+    if (-not $NoUp) {
+        Write-Host "Restarting nginx so its upstream resolves the currently running backend container."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("restart", "nginx"))
+    }
+
     Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health" -Deadline $deadline
+    if (-not $NoUp) {
+        Write-Host "Checking external-review DNS reachability and data-network isolation."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+            "exec", "-T", "app", "getent", "hosts", "external-review-worker"
+        ))
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @(
+            "exec", "-T", "external-review-worker", "node", "-e",
+            "require('node:dns').lookup('mysql', error => process.exit(error ? 0 : 1))"
+        ))
+    }
     Disable-LocalExternalMessaging -ComposeArguments $composeArgs -EnvPath $envPath
     if (-not $NoUp) {
         Write-Host "Restarting backend so local safety settings are loaded from the refreshed DB."
         Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "--force-recreate", "--no-deps", "app"))
+        Write-Host "Restarting nginx so its upstream resolves the recreated backend container."
+        Invoke-External -FilePath "docker" -Arguments ($composeArgs + @("up", "-d", "--force-recreate", "--no-deps", "nginx"))
         Wait-HttpOk -Url "$BaseUrl/actuator/health" -Name "backend health after local safety reload" -Deadline $deadline
     }
     Wait-HttpOk -Url "$BaseUrl/keycloak/realms/otziv/.well-known/openid-configuration" -Name "Keycloak realm" -Deadline $deadline
@@ -1798,6 +2059,8 @@ try {
     Update-KeycloakFrontendLoopbackRedirects -ComposeArguments $composeArgs -EnvPath $envPath -BaseUrl $BaseUrl
     Wait-HttpOk -Url "$BaseUrl/" -Name "frontend" -Deadline $deadline
     Invoke-PublicFrontendSmoke -BaseUrl $BaseUrl
+    Invoke-PublicCapabilityAuthorizationSmoke -BaseUrl $BaseUrl
+    Assert-LegacyReviewCapabilityNotLogged -BaseUrl $BaseUrl -ComposeArguments $composeArgs
     Invoke-TbankPaymentConfigSmoke -BaseUrl $BaseUrl -EnvPath $envPath
     if (-not $SkipWorkloadShadowSmoke) {
         Invoke-WorkloadShadowSmoke `

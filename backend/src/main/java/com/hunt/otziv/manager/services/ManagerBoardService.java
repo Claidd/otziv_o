@@ -288,21 +288,20 @@ public class ManagerBoardService {
             );
         }
         Set<Long> visibleManagerIds = filteredVisibleManagerIds(principal, authentication, managerFilter);
-        List<OrderDTOList> commonCards = commonBillingService.managerBoardCards(
+        CommonBillingService.ManagerBoardPage commonPage = commonBillingService.managerBoardPage(
                 status,
                 keyword,
                 companyId,
                 visibleManagerIds,
-                sortDirection
+                sortDirection,
+                pageNumber,
+                pageSize
         );
 
-        int pageStart = pageNumber * pageSize;
-        List<OrderDTOList> visibleCommonCards = commonCards.stream()
-                .skip(pageStart)
-                .limit(pageSize)
-                .toList();
+        long pageStart = (long) pageNumber * pageSize;
+        List<OrderDTOList> visibleCommonCards = commonPage.cards();
         int ordinaryLimit = Math.max(0, pageSize - visibleCommonCards.size());
-        long ordinaryOffset = Math.max(0L, (long) pageStart - commonCards.size());
+        long ordinaryOffset = Math.max(0L, pageStart - commonPage.totalCards());
         int ordinaryPageNumber = (int) (ordinaryOffset / pageSize);
         int ordinarySkip = (int) (ordinaryOffset % pageSize);
 
@@ -334,8 +333,8 @@ public class ManagerBoardService {
                 sortDirection
         ));
 
-        int linkedTotal = commonBillingService.countLinkedBoardOrdersMatching(status, keyword, companyId, visibleManagerIds);
-        long total = Math.max(0, firstOrdinaryPage.getTotalElements() - linkedTotal) + commonCards.size();
+        long total = Math.max(0, firstOrdinaryPage.getTotalElements() - commonPage.linkedOrderCount())
+                + commonPage.totalCards();
         return new PageImpl<>(content, PageRequest.of(pageNumber, pageSize), total);
     }
 
@@ -571,10 +570,13 @@ public class ManagerBoardService {
         }
 
         Set<Long> visibleManagerIds = filteredVisibleManagerIds(principal, authentication, managerFilter);
+        CommonBillingService.ManagerBoardMetrics commonMetrics = commonBillingService.managerBoardMetrics(
+                visibleManagerIds
+        );
         Map<String, Integer> merged = new java.util.HashMap<>(counts == null ? Map.of() : counts);
-        commonBillingService.countLinkedManagerBoardOrders(visibleManagerIds)
+        commonMetrics.linkedOrderCounts()
                 .forEach((status, count) -> merged.computeIfPresent(status, (_status, value) -> Math.max(0, value - count)));
-        commonBillingService.countManagerBoardCards(visibleManagerIds)
+        commonMetrics.cardCounts()
                 .forEach((status, count) -> merged.merge(status, count, Integer::sum));
         return merged;
     }

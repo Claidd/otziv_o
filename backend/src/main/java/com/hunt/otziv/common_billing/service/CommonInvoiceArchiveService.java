@@ -11,7 +11,7 @@ import com.hunt.otziv.common_billing.dto.CommonInvoiceDetailsResponse;
 import com.hunt.otziv.common_billing.repository.CommonInvoiceArchiveRepository;
 import com.hunt.otziv.manager.dto.api.PageResponse;
 import com.hunt.otziv.manager.services.ManagerPermissionService;
-import com.hunt.otziv.p_products.status.OrderManualArchivePolicy;
+import com.hunt.otziv.p_products.status.policy.OrderManualArchivePolicy;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.services.service.ManagerService;
@@ -113,6 +113,13 @@ public class CommonInvoiceArchiveService {
                     actor,
                     orderIds,
                     "Общий счет и все его заказы восстановлены в live"
+            );
+        }
+
+        if (!repository.lockAndCheckPaymentRefsRestorable(invoiceId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Архивный общий счет содержит незавершенную платежную операцию и не может быть восстановлен"
             );
         }
 

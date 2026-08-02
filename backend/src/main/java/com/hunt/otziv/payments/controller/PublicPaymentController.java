@@ -12,10 +12,13 @@ import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import com.hunt.otziv.payments.service.PaymentProfileService;
 import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
+import com.hunt.otziv.webhook.security.WebhookClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,8 +33,15 @@ public class PublicPaymentController {
     private final TbankPaymentProperties properties;
     private final TbankRuntimeSettingsService runtimeSettingsService;
     private final PaymentProfileService paymentProfileService;
+    private final WebhookClientIpResolver clientIpResolver;
 
     @GetMapping("/api/payments/public/tbank-status")
+    public ResponseEntity<Void> retiredPublicTbankStatus() {
+        return ResponseEntity.notFound().build();
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+    @GetMapping("/api/admin/payments/tbank-status")
     public TbankPaymentStatusResponse tbankStatus() {
         TbankRuntimeSettingsResponseSafe settings = settings();
         return new TbankPaymentStatusResponse(
@@ -127,15 +137,7 @@ public class PublicPaymentController {
     }
 
     private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-        return request.getRemoteAddr();
+        return clientIpResolver.resolve(request);
     }
 
     private String userAgent(HttpServletRequest request) {

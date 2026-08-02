@@ -1,34 +1,31 @@
 package com.hunt.otziv.external_review_checks.service;
 
-import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.external_review_checks.config.ExternalReviewCheckProperties;
-import com.hunt.otziv.external_review_checks.dto.ExternalReviewWorkerRequest;
 import com.hunt.otziv.external_review_checks.dto.ExternalReviewWorkerResponse;
-import com.hunt.otziv.external_review_checks.model.ExternalReviewCheckPlatform;
-import com.hunt.otziv.external_review_checks.model.ExternalReviewCheckSource;
 import com.hunt.otziv.external_review_checks.model.ExternalReviewCheckStatus;
 import com.hunt.otziv.external_review_checks.model.ReviewExternalCheck;
 import com.hunt.otziv.external_review_checks.repository.ReviewExternalCheckRepository;
-import com.hunt.otziv.p_products.model.Order;
-import com.hunt.otziv.performers.service.PerformerAssignmentService;
-import com.hunt.otziv.r_review.model.Review;
-import com.hunt.otziv.r_review.repository.ReviewRepository;
-import java.math.BigDecimal;
+import com.hunt.otziv.external_review_checks.service.ExternalReviewCheckTransactionService.ClaimedCheck;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Coordinates external-review work. Database mutations live in the separate
+ * transactional bean; worker HTTP and screenshot S3 calls therefore never run
+ * while a database transaction is open.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExternalReviewCheckService {
+
+    private static final String DEDUP_CONSTRAINT = "uk_review_external_checks_dedup_hash";
 
     private static final List<ExternalReviewCheckStatus> DUE_STATUSES = List.of(
             ExternalReviewCheckStatus.PENDING,
@@ -37,55 +34,44 @@ public class ExternalReviewCheckService {
     );
 
     private final ReviewExternalCheckRepository checkRepository;
-    private final ReviewRepository reviewRepository;
     private final ExternalReviewWorkerClient workerClient;
     private final ExternalReviewScreenshotStorage screenshotStorage;
     private final ExternalReviewCheckProperties properties;
-    private final PerformerAssignmentService performerAssignmentService;
+    private final ExternalReviewCheckRuntimeSwitch runtimeSwitch;
+    private final ExternalReviewCheckTransactionService transactions;
 
-    @Transactional
     public int enqueueDueCandidates() {
-        if (!properties.isEnabled()) {
+        if (!runtimeSwitch.isEnabled()) {
             return 0;
         }
 
-        LocalDateTime threshold = LocalDateTime.now().minusDays(properties.getConfirmationDelayDays());
+        int batchSize = batchSize();
+        LocalDateTime threshold = currentTime()
+                .minusDays(Math.max(0, properties.getConfirmationDelayDays()));
         List<Long> reviewIds = checkRepository.findCandidateReviewIds(
                 threshold,
-                PageRequest.of(0, properties.getBatchSize())
+                PageRequest.of(0, batchSize)
         );
 
         int created = 0;
         for (Long reviewId : reviewIds) {
-            Optional<Review> reviewOptional = reviewRepository.findByIdForDto(reviewId);
-            if (reviewOptional.isEmpty()) {
-                continue;
+            if (!runtimeSwitch.isEnabled()) {
+                break;
             }
-
-            Review review = reviewOptional.get();
-            Filial filial = filial(review);
-            String filialUrl = filial != null ? safe(filial.getUrl()) : "";
-            if (filialUrl.isBlank()) {
-                continue;
+            try {
+                if (transactions.createAutomaticCheck(reviewId)) {
+                    created++;
+                }
+            } catch (DataIntegrityViolationException duplicateClaim) {
+                // Two nodes may select the same NOT EXISTS candidate. The
+                // deterministic nullable hash is the final deduplication gate.
+                if (isAutomaticDedupConflict(duplicateClaim)
+                        && transactions.automaticDedupExists(reviewId)) {
+                    log.debug("External review candidate already enqueued: reviewId={}", reviewId);
+                } else {
+                    throw duplicateClaim;
+                }
             }
-
-            ReviewExternalCheck check = ReviewExternalCheck.builder()
-                    .review(review)
-                    .orderId(order(review).map(Order::getId).orElse(null))
-                    .filialId(filial.getId())
-                    .platform(platformFromUrl(filialUrl))
-                    .source(ExternalReviewCheckSource.AUTO_SCREENSHOT)
-                    .status(ExternalReviewCheckStatus.PENDING)
-                    .checkAfter(LocalDateTime.now())
-                    .filialUrl(filialUrl)
-                    .attemptCount(0)
-                    .build();
-            checkRepository.save(check);
-            if (!"CONFIRMED".equals(review.getExternalConfirmStatus())) {
-                review.setExternalConfirmStatus(ExternalReviewCheckStatus.PENDING.name());
-                reviewRepository.save(review);
-            }
-            created++;
         }
 
         if (created > 0) {
@@ -95,240 +81,211 @@ public class ExternalReviewCheckService {
     }
 
     public int processDueChecks() {
-        if (!properties.isEnabled()) {
+        if (!runtimeSwitch.isEnabled()) {
             return 0;
         }
 
-        List<ReviewExternalCheck> checks = checkRepository.findDueChecks(
-                DUE_STATUSES,
-                LocalDateTime.now(),
-                properties.getMaxAttempts(),
-                PageRequest.of(0, properties.getBatchSize())
+        LocalDateTime now = currentTime();
+        int maxAttempts = Math.max(1, properties.getMaxAttempts());
+        int batchSize = batchSize();
+
+        // Legacy CHECKING rows and crashed claims at the retry ceiling cannot
+        // win a new claim; surface them as ERROR instead of leaving them stuck.
+        List<Long> exhausted = checkRepository.findExhaustedStaleCheckingIds(
+                ExternalReviewCheckStatus.CHECKING,
+                now,
+                maxAttempts,
+                PageRequest.of(0, batchSize)
         );
+        for (Long checkId : exhausted) {
+            if (!runtimeSwitch.isEnabled()) {
+                return 0;
+            }
+            transactions.recoverExhaustedClaim(checkId);
+        }
+
+        List<Long> checkIds = new ArrayList<>(checkRepository.findStaleCheckingIds(
+                ExternalReviewCheckStatus.CHECKING,
+                now,
+                maxAttempts,
+                PageRequest.of(0, batchSize)
+        ));
+        int remaining = batchSize - checkIds.size();
+        if (remaining > 0) {
+            checkIds.addAll(checkRepository.findDueClaimableIds(
+                    DUE_STATUSES,
+                    now,
+                    maxAttempts,
+                    PageRequest.of(0, remaining)
+            ));
+        }
 
         int processed = 0;
-        for (ReviewExternalCheck check : checks) {
-            processOne(check.getId());
-            processed++;
+        for (Long checkId : checkIds) {
+            if (!runtimeSwitch.isEnabled()) {
+                break;
+            }
+            if (processOne(checkId)) {
+                processed++;
+            }
         }
         return processed;
     }
 
-    @Transactional
     public ReviewExternalCheck createManualCheck(Long orderId, Long reviewId) {
-        Review review = reviewRepository.findByIdForDto(reviewId)
-                .orElseThrow(() -> new IllegalArgumentException("Отзыв не найден"));
-        Order order = order(review)
-                .orElseThrow(() -> new IllegalArgumentException("Заказ отзыва не найден"));
-        if (!Objects.equals(order.getId(), orderId)) {
-            throw new IllegalArgumentException("Отзыв не относится к этому заказу");
-        }
-        if (!review.isPublish()) {
-            throw new IllegalStateException("Проверить можно только опубликованный отзыв");
-        }
-        if (!hasText(review.getText())) {
-            throw new IllegalStateException("У отзыва нет текста для проверки");
-        }
-
-        Filial filial = filial(review);
-        String filialUrl = filial != null ? safe(filial.getUrl()) : "";
-        if (filialUrl.isBlank()) {
-            throw new IllegalStateException("У филиала заказа не указана ссылка на карточку");
-        }
-
-        ReviewExternalCheck check = ReviewExternalCheck.builder()
-                .review(review)
-                .orderId(order.getId())
-                .filialId(filial.getId())
-                .platform(platformFromUrl(filialUrl))
-                .source(ExternalReviewCheckSource.MANUAL)
-                .status(ExternalReviewCheckStatus.PENDING)
-                .checkAfter(LocalDateTime.now())
-                .filialUrl(filialUrl)
-                .attemptCount(0)
-                .build();
-        checkRepository.save(check);
-        review.setExternalConfirmStatus(ExternalReviewCheckStatus.PENDING.name());
-        reviewRepository.save(review);
-        return check;
+        requireEnabled();
+        return transactions.createManualCheck(orderId, reviewId);
     }
 
     public ReviewExternalCheck runManualCheck(Long orderId, Long reviewId) {
         ReviewExternalCheck check = createManualCheck(orderId, reviewId);
         processOne(check.getId());
-        return checkRepository.findByIdForProcessing(check.getId()).orElse(check);
+        return transactions.findForRead(check.getId()).orElse(check);
     }
 
-    public void processOne(Long checkId) {
-        ReviewExternalCheck check = markChecking(checkId);
-        if (check == null) {
-            return;
+    /**
+     * @return true only when this node won the claim and performed a worker
+     *         attempt (including an attempt that ended in an upstream error)
+     */
+    public boolean processOne(Long checkId) {
+        if (!runtimeSwitch.isEnabled()) {
+            return false;
+        }
+        ClaimedCheck claim = transactions.claim(checkId).orElse(null);
+        if (claim == null) {
+            return false;
         }
 
+        if (!runtimeSwitch.isEnabled()) {
+            transactions.releaseUnconsumed(claim);
+            return false;
+        }
+
+        ExternalReviewWorkerResponse response;
         try {
-            check = checkRepository.findByIdForProcessing(checkId).orElseThrow();
-            Review review = check.getReview();
-            ExternalReviewWorkerResponse response = workerClient.verify(new ExternalReviewWorkerRequest(
-                    check.getId(),
-                    review.getId(),
-                    check.getPlatform().name(),
-                    check.getFilialUrl(),
-                    performerAssignmentService.textForExternalCheck(review)
-            ));
-            completeFromWorker(check.getId(), response);
-        } catch (Exception e) {
-            log.warn("Проверка внешнего отзыва завершилась ошибкой: checkId={}", checkId, e);
-            completeWithError(check.getId(), e.getMessage());
-        }
-    }
-
-    @Transactional
-    protected ReviewExternalCheck markChecking(Long checkId) {
-        Optional<ReviewExternalCheck> optional = checkRepository.findByIdForProcessing(checkId);
-        if (optional.isEmpty()) {
-            return null;
-        }
-        ReviewExternalCheck check = optional.get();
-        if (!DUE_STATUSES.contains(check.getStatus())) {
-            return null;
-        }
-        check.setStatus(ExternalReviewCheckStatus.CHECKING);
-        check.setAttemptCount(check.getAttemptCount() + 1);
-        check.setErrorMessage(null);
-        return checkRepository.save(check);
-    }
-
-    @Transactional
-    protected void completeFromWorker(Long checkId, ExternalReviewWorkerResponse response) {
-        ReviewExternalCheck check = checkRepository.findByIdForProcessing(checkId).orElseThrow();
-        ExternalReviewCheckStatus status = parseStatus(response != null ? response.status() : null);
-        check.setStatus(status);
-        check.setCheckedAt(LocalDateTime.now());
-        check.setConfidence(toConfidence(response != null ? response.confidence() : null));
-        check.setMatchedTextExcerpt(truncate(response != null ? response.matchedTextExcerpt() : null, 1000));
-        check.setErrorMessage(truncate(response != null ? response.errorMessage() : null, 1000));
-        check.setWorkerTraceId(truncate(response != null ? response.traceId() : null, 128));
-
-        if (response != null && response.screenshotBase64() != null && !response.screenshotBase64().isBlank()) {
-            ExternalReviewScreenshotStorage.StoredScreenshot screenshot = screenshotStorage.store(
-                    check.getId(),
-                    check.getReview().getId(),
-                    response.screenshotBase64(),
-                    response.screenshotContentType()
+            response = workerClient.verify(claim.request());
+        } catch (ExternalReviewWorkerDisabledException disabled) {
+            transactions.releaseUnconsumed(claim);
+            return false;
+        } catch (Exception exception) {
+            // Fresh-read before scheduling a retry. A false value leaves the
+            // retry timestamp persisted but the scheduler remains inert.
+            boolean enabledBeforeFailure = runtimeSwitch.isEnabled();
+            String failureCode = failureCode(exception);
+            log.warn(
+                    "External review check failed: checkId={}, failureType={}, runtimeEnabled={}",
+                    checkId,
+                    failureCode,
+                    enabledBeforeFailure
             );
-            if (screenshot != null) {
-                check.setScreenshotKey(screenshot.key());
-                check.setScreenshotUrl(screenshot.url());
+            if (!transactions.fail(claim, failureCode)) {
+                log.warn("Ignored stale external review failure: checkId={}", claim.checkId());
+            }
+            return true;
+        }
+
+        // A switch-off after the worker returned cannot safely discard the
+        // result (that would repeat external I/O after re-enable), but it must
+        // prevent the additional S3 side effect. Screenshot validation/upload
+        // is also best-effort: its failure must not turn a completed provider
+        // call into a retry of that provider call.
+        boolean enabledAfterWorker = runtimeSwitch.isEnabled();
+        ExternalReviewScreenshotStorage.StoredScreenshot screenshot = null;
+        if (enabledAfterWorker
+                && ExternalReviewWorkerResponsePolicy.evaluate(
+                        response,
+                        claim.checkId()
+                ).evidenceAccepted()) {
+            try {
+                screenshot = storeScreenshot(claim, response);
+            } catch (Exception screenshotFailure) {
+                log.warn(
+                        "External review screenshot skipped: checkId={}, failureType={}",
+                        claim.checkId(),
+                        safeFailureType(screenshotFailure)
+                );
             }
         }
-
-        if (status == ExternalReviewCheckStatus.NOT_FOUND && check.getAttemptCount() < properties.getMaxAttempts()) {
-            check.setCheckAfter(LocalDateTime.now().plus(properties.getNotFoundRetryDelay()));
-        } else if (status == ExternalReviewCheckStatus.ERROR && check.getAttemptCount() < properties.getMaxAttempts()) {
-            check.setCheckAfter(LocalDateTime.now().plus(properties.getErrorRetryDelay()));
-        } else {
-            check.setCheckAfter(LocalDateTime.now());
-        }
-
-        applyAggregateStatus(check);
-        checkRepository.save(check);
-    }
-
-    @Transactional
-    protected void completeWithError(Long checkId, String message) {
-        ReviewExternalCheck check = checkRepository.findByIdForProcessing(checkId).orElseThrow();
-        check.setStatus(ExternalReviewCheckStatus.ERROR);
-        check.setCheckedAt(LocalDateTime.now());
-        check.setErrorMessage(truncate(message, 1000));
-        if (check.getAttemptCount() < properties.getMaxAttempts()) {
-            check.setCheckAfter(LocalDateTime.now().plus(properties.getErrorRetryDelay()));
-        }
-        applyAggregateStatus(check);
-        checkRepository.save(check);
-    }
-
-    private void applyAggregateStatus(ReviewExternalCheck check) {
-        Review review = check.getReview();
-        if (review == null) {
-            return;
-        }
-
-        ExternalReviewCheckStatus status = check.getStatus();
-        review.setExternalConfirmStatus(status.name());
-        review.setExternalConfirmScreenshotUrl(check.getScreenshotUrl());
-        if (status == ExternalReviewCheckStatus.CONFIRMED) {
-            review.setExternalConfirmedAt(check.getCheckedAt() != null ? check.getCheckedAt() : LocalDateTime.now());
-        } else {
-            review.setExternalConfirmedAt(null);
-        }
-        reviewRepository.save(review);
-    }
-
-    private BigDecimal toConfidence(Double confidence) {
-        if (confidence == null) {
-            return null;
-        }
-        double normalized = Math.max(0.0, Math.min(1.0, confidence));
-        return BigDecimal.valueOf(normalized);
-    }
-
-    private ExternalReviewCheckStatus parseStatus(String status) {
-        if (status == null || status.isBlank()) {
-            return ExternalReviewCheckStatus.ERROR;
-        }
+        boolean completed;
         try {
-            return ExternalReviewCheckStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            return ExternalReviewCheckStatus.ERROR;
+            completed = transactions.complete(claim, response, screenshot);
+        } catch (RuntimeException completionFailure) {
+            screenshotStorage.deleteBestEffort(screenshot);
+            throw completionFailure;
         }
-    }
-
-    private ExternalReviewCheckPlatform platformFromUrl(String url) {
-        String normalized = safe(url).toLowerCase(Locale.ROOT);
-        if (normalized.contains("2gis.") || normalized.contains("2gis.ru") || normalized.contains("2gis.com")) {
-            return ExternalReviewCheckPlatform.TWO_GIS;
+        if (!completed) {
+            screenshotStorage.deleteBestEffort(screenshot);
+            log.warn("Ignored stale external review completion: checkId={}", claim.checkId());
+        } else if (claim.previousScreenshotKey() != null
+                && (screenshot == null
+                    || !claim.previousScreenshotKey().equals(screenshot.key()))) {
+            screenshotStorage.deleteBestEffort(claim.previousScreenshotKey());
         }
-        if (normalized.contains("yandex.") || normalized.contains("ya.ru")) {
-            return ExternalReviewCheckPlatform.YANDEX;
-        }
-        if (normalized.contains("google.") || normalized.contains("goo.gl") || normalized.contains("maps.app.goo.gl")) {
-            return ExternalReviewCheckPlatform.GOOGLE;
-        }
-        return ExternalReviewCheckPlatform.UNKNOWN;
+        return true;
     }
 
-    private Optional<Order> order(Review review) {
-        return Optional.ofNullable(review)
-                .map(Review::getOrderDetails)
-                .map(details -> details.getOrder());
-    }
-
-    private Filial filial(Review review) {
-        Filial orderFilial = order(review)
-                .map(Order::getFilial)
-                .orElse(null);
-        if (orderFilial != null && hasText(orderFilial.getUrl())) {
-            return orderFilial;
-        }
-        return review != null ? review.getFilial() : null;
-    }
-
-    private String safe(String value) {
-        return value != null ? value : "";
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    private String truncate(String value, int maxLength) {
-        if (value == null) {
+    private ExternalReviewScreenshotStorage.StoredScreenshot storeScreenshot(
+            ClaimedCheck claim,
+            ExternalReviewWorkerResponse response
+    ) {
+        if (response == null
+                || response.screenshotBase64() == null
+                || response.screenshotBase64().isBlank()) {
             return null;
         }
-        String trimmed = value.trim();
-        if (trimmed.length() <= maxLength) {
-            return trimmed;
+        return screenshotStorage.store(
+                claim.checkId(),
+                claim.reviewId(),
+                response.screenshotBase64(),
+                response.screenshotContentType()
+        );
+    }
+
+    private int batchSize() {
+        return Math.max(1, properties.getBatchSize());
+    }
+
+    private LocalDateTime currentTime() {
+        LocalDateTime databaseTime = transactions.currentDatabaseTime();
+        return databaseTime != null ? databaseTime : LocalDateTime.now();
+    }
+
+    private void requireEnabled() {
+        if (!runtimeSwitch.isEnabled()) {
+            throw new ExternalReviewWorkerDisabledException();
         }
-        return trimmed.substring(0, maxLength);
+    }
+
+    private String failureCode(Exception exception) {
+        return "worker_exception:" + safeFailureType(exception);
+    }
+
+    private String safeFailureType(Exception exception) {
+        String type = exception == null ? "unknown" : exception.getClass().getSimpleName();
+        String sanitized = type == null ? "unknown" : type.replaceAll("[^A-Za-z0-9_.-]", "_");
+        if (sanitized.isBlank()) {
+            sanitized = "unknown";
+        }
+        return sanitized.length() <= 96 ? sanitized : sanitized.substring(0, 96);
+    }
+
+    private boolean isAutomaticDedupConflict(DataIntegrityViolationException exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof org.hibernate.exception.ConstraintViolationException violation
+                    && DEDUP_CONSTRAINT.equalsIgnoreCase(violation.getConstraintName())) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null
+                    && message.toLowerCase(java.util.Locale.ROOT).contains(DEDUP_CONSTRAINT)) {
+                return true;
+            }
+            if (current == current.getCause()) {
+                break;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

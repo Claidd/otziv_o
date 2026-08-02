@@ -79,19 +79,24 @@ public class ThematicNotificationDispatchStore {
                 """, dispatchParams(eventCode, recipientUserId, date));
     }
 
-    public Map<Long, Long> activePublicationCounts(Collection<Long> workerIds) {
-        if (workerIds == null || workerIds.isEmpty()) {
+    public Map<Long, Long> activePublicationCounts(Collection<Long> workerIds, LocalDate progressDate) {
+        if (workerIds == null || workerIds.isEmpty() || progressDate == null) {
             return Map.of();
         }
         return jdbc.query("""
-                SELECT worker_id, COUNT(*) AS active_count
-                FROM worker_work_item_lifecycle
+                SELECT worker_id,
+                       LEAST(
+                           GREATEST(COALESCE(publish_units, 0), 0),
+                           GREATEST(COALESCE(eligible_units, 0) - COALESCE(completed_units, 0), 0)
+                       ) AS active_count
+                FROM workload_shadow_worker_current
                 WHERE worker_id IN (:workerIds)
-                  AND active = b'1'
-                  AND excluded = b'0'
-                  AND section_code = 'publish'
-                GROUP BY worker_id
-                """, new MapSqlParameterSource("workerIds", workerIds), (rs, rowNum) ->
+                  AND progress_date = :progressDate
+                  AND publish_units > 0
+                  AND eligible_units > completed_units
+                """, new MapSqlParameterSource()
+                .addValue("workerIds", workerIds)
+                .addValue("progressDate", Date.valueOf(progressDate)), (rs, rowNum) ->
                 Map.entry(rs.getLong("worker_id"), rs.getLong("active_count"))
         ).stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }

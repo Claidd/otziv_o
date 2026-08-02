@@ -34,8 +34,11 @@ function Invoke-GitleaksNative {
 
     $command = Get-Command gitleaks -ErrorAction SilentlyContinue
     if ($command) {
-        & $command.Source @Arguments
-        return $LASTEXITCODE
+        # Do not let native stdout become part of this function's return
+        # value: callers must receive exactly one integer exit code.
+        & $command.Source @Arguments | Out-Host
+        $nativeExitCode = $LASTEXITCODE
+        return [int]$nativeExitCode
     }
 
     $docker = Get-Command docker -ErrorAction SilentlyContinue
@@ -60,10 +63,11 @@ function Invoke-GitleaksNative {
             "${repoRoot}:/repo",
             "-w",
             "/repo",
-            "ghcr.io/gitleaks/gitleaks:latest"
+            "ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f"
         ) + $translatedArguments
-        & $docker.Source @dockerArgs
-        return $LASTEXITCODE
+        & $docker.Source @dockerArgs | Out-Host
+        $nativeExitCode = $LASTEXITCODE
+        return [int]$nativeExitCode
     }
 
     Write-Host "gitleaks is not installed and Docker is not available." -ForegroundColor Red
@@ -79,7 +83,9 @@ if (-not (Test-Path $configPath)) {
 
 Push-Location $repoRoot
 try {
-    $commonArgs = @("--config", $configPath, "--redact", "--no-banner")
+    # Verbose mode prints the rule and path while --redact keeps the matched
+    # value out of local/CI logs, making failures actionable without disclosure.
+    $commonArgs = @("--config", $configPath, "--redact", "--verbose", "--no-banner")
 
     if ($Mode -eq "git") {
         $exitCode = Invoke-GitleaksNative -Arguments (@("git") + $commonArgs + @("."))

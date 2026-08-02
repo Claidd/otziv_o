@@ -62,7 +62,7 @@
                             </form>
                         </td>
                         <td sec:authorize="hasAnyRole('ADMIN', 'OWNER')">
-                            <form th:method="delete" th:action="'/bots/delete/' + ${bot.id}" >
+                            <form method="post" th:action="'/bots/delete/' + ${bot.id}" >
                                 <input type="hidden" data-th-name="${_csrf.parameterName}" data-th-value="${_csrf.token}">
                                 <button type="submit" class="btn btn-outline-danger">Удалить</button>
                             </form>

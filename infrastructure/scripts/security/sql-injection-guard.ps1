@@ -56,7 +56,7 @@ $allowList = @(
         Reason = "HAVING fragments are selected from internal issue definitions; values are bound parameters."
     },
     @{
-        Path = 'backend/src/main/java/com/hunt/otziv/r_review/board/ReviewBoardQueryService.java'
+        Path = 'backend/src/main/java/com/hunt/otziv/r_review/board/service/ReviewBoardQueryService.java'
         Pattern = 'SELECT .* FROM Review r|ORDER BY r\.publishedDate'
         Reason = "JPQL clauses are built from internal predicates; user values are bound via setParameter()."
     }

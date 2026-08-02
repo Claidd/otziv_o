@@ -1,9 +1,12 @@
-FROM node:18-slim
+FROM node:22-bookworm-slim
 
 ENV NODE_ENV=production \
     PORT=3097 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+    CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
+    HOME=/tmp/worker-home \
+    XDG_CACHE_HOME=/tmp/otziv-cache \
+    TESSERACT_CACHE_PATH=/tmp/tesseract-cache
 
 RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' > /etc/apt/apt.conf.d/80-retries && \
     apt-get update && apt-get install -y --fix-missing \
@@ -18,10 +21,17 @@ RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "60";\nAcquire::https:
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm cache clean --force && \
+    mkdir -p "$HOME" "$XDG_CACHE_HOME" "$TESSERACT_CACHE_PATH" && \
+    chown -R node:node /app "$HOME" "$XDG_CACHE_HOME" "$TESSERACT_CACHE_PATH"
 
-COPY src ./src
-COPY README.md ./
+COPY --chown=node:node src ./src
+COPY --chown=node:node README.md ./
+
+USER node
+
+# Build-time contract for the paths Chromium/Tesseract need at runtime.
+RUN node -e "const fs=require('fs'); for (const p of [process.env.HOME, process.env.XDG_CACHE_HOME, process.env.TESSERACT_CACHE_PATH]) fs.accessSync(p, fs.constants.W_OK); fs.accessSync(process.env.CHROMIUM_EXECUTABLE_PATH, fs.constants.X_OK)"
 
 EXPOSE 3097
 

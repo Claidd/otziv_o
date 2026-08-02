@@ -90,19 +90,122 @@
         const closeBtn = document.getElementById('closeBtn');
         const loading  = document.getElementById('loading');
 
+        const controlCharacter = /[\u0000-\u001f\u007f-\u009f]/;
+        const encodedControl = /%(?:0[0-9a-f]|1[0-9a-f]|7f)/i;
+        const maxVncUrlLength = 4096;
+
         let closing = false;
+        let sessionOpen = false;
+        let sessionId = null;
+        let heartbeatTimer = null;
+        let heartbeatInFlight = false;
+
+        function prepareVncUrl(rawUrl) {
+            if (typeof rawUrl !== 'string'
+                || rawUrl.length === 0
+                || rawUrl.length > maxVncUrlLength
+                || controlCharacter.test(rawUrl)
+                || encodedControl.test(rawUrl)) {
+                return null;
+            }
+            try {
+                const url = new URL(rawUrl);
+                const protocol = url.protocol.toLowerCase();
+                if ((protocol !== 'http:' && protocol !== 'https:')
+                    || !url.hostname
+                    || url.username
+                    || url.password) {
+                    return null;
+                }
+                url.searchParams.set('autoconnect', '1');
+                url.searchParams.set('reconnect', '1');
+                url.searchParams.set('resize', 'none');
+                url.searchParams.set('clip', 'true');
+                return url.toString();
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function sessionUrl(action, id = sessionId) {
+            if (id) {
+                return `/api/bots/${botId}/browser/sessions/${encodeURIComponent(id)}/${action}`;
+            }
+            return `/api/bots/${botId}/browser/close`;
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatTimer !== null) {
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
+            }
+            heartbeatInFlight = false;
+        }
+
+        function startHeartbeat(intervalSeconds) {
+            stopHeartbeat();
+            const delay = Math.max(5, Number(intervalSeconds) || 20) * 1000;
+            heartbeatTimer = setInterval(sendHeartbeat, delay);
+        }
+
+        async function sendHeartbeat() {
+            const currentSessionId = sessionId;
+            if (!currentSessionId || !sessionOpen || closing || heartbeatInFlight) return;
+            heartbeatInFlight = true;
+            try {
+                const response = await fetch(sessionUrl('heartbeat', currentSessionId), {
+                    method: 'POST'
+                });
+                if (response.status === 404 || response.status === 409) {
+                    stopHeartbeat();
+                    sessionOpen = false;
+                    sessionId = null;
+                    iframe.onload = null;
+                    iframe.removeAttribute('src');
+                    iframe.style.visibility = 'hidden';
+                    fetch(sessionUrl('close', currentSessionId), {
+                        method: 'POST',
+                        keepalive: true
+                    }).catch(() => {});
+                    statusEl.textContent = 'Доступ к браузерной сессии завершен';
+                }
+            } catch (error) {
+                // A transient network failure is retried by the next interval;
+                // the server-side lease still provides the final safety bound.
+            } finally {
+                heartbeatInFlight = false;
+            }
+        }
 
         async function openSession() {
             try {
-                const resp = await fetch(`/api/bots/${botId}/browser/open`, { method: 'POST' });
+                const resp = await fetch(`/api/bots/${botId}/browser/open`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ heartbeatSupported: true })
+                });
                 if (!resp.ok) {
                     statusEl.textContent = 'Ошибка запуска браузера';
                     return;
                 }
                 const data = await resp.json();
+                sessionOpen = true;
+                sessionId = typeof data.sessionId === 'string' && data.sessionId.trim()
+                    ? data.sessionId.trim()
+                    : null;
+
+                const vncUrl = prepareVncUrl(data.vncUrl);
+                if (!vncUrl) {
+                    statusEl.textContent = 'Сервис браузера вернул небезопасный адрес';
+                    closeSessionOnce('invalid-url');
+                    return;
+                }
+                if (sessionId) {
+                    startHeartbeat(data.heartbeatIntervalSeconds);
+                }
 
                 iframe.onload = () => {
-                    iframe.style.visibility = 'visible';  // <-- показываем после загрузки
+                    iframe.style.visibility = 'visible';
                     loading.style.display = 'none';
                     statusEl.textContent = 'Браузер запущен';
                 };
@@ -110,41 +213,51 @@
                     statusEl.textContent = 'Не удалось открыть браузер';
                 };
 
-                // ВАЖНО: добавляем noVNC параметры, чтобы был скролл и не было “уменьшения”
-                // Если data.vncUrl уже содержит параметры — аккуратно допиши их на бэке (лучше там).
-                const url = new URL(data.vncUrl, window.location.origin);
-                url.searchParams.set('autoconnect', '1');
-                url.searchParams.set('reconnect', '1');
-                url.searchParams.set('resize', 'none');  // <-- без fit-скейла
-                url.searchParams.set('clip', 'true');    // <-- появятся скроллы
-                iframe.src = url.toString();
+                iframe.src = vncUrl;
 
             } catch (e) {
-                statusEl.textContent = 'Ошибка подключения: ' + e;
+                statusEl.textContent = 'Ошибка подключения к сервису браузера';
             }
         }
 
         function closeSessionOnce(reason) {
-            if (closing) return;
+            if (!sessionOpen || closing) return;
             closing = true;
+            sessionOpen = false;
+            const closingSessionId = sessionId;
+            sessionId = null;
+            stopHeartbeat();
 
-            try {
-                const url = `/api/bots/${botId}/browser/close`;
-                navigator.sendBeacon(url);
-                return;
-            } catch (e) {}
+            const url = sessionUrl('close', closingSessionId);
 
-            fetch(`/api/bots/${botId}/browser/close`, {
+            if (reason === 'pagehide') {
+                try {
+                    if (navigator.sendBeacon(url)) return;
+                } catch (error) {}
+            }
+
+            fetch(url, {
                 method: 'POST',
                 keepalive: true
-            }).catch(() => {});
+            }).then(response => {
+                if (reason === 'button') {
+                    statusEl.textContent = response.ok
+                        ? 'Сессия закрыта, вкладку можно закрыть'
+                        : 'Сессия закрывается в фоновом режиме';
+                }
+            }).catch(() => {
+                if (reason === 'button') {
+                    statusEl.textContent = 'Сессия закрывается в фоновом режиме';
+                }
+            }).finally(() => {
+                closing = false;
+            });
         }
 
         closeBtn.addEventListener('click', () => {
             closeBtn.disabled = true;
             statusEl.textContent = 'Отключение…';
             closeSessionOnce('button');
-            statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';
         });
 
         window.addEventListener('pagehide', () => closeSessionOnce('pagehide'), { once: true, capture: true });
@@ -154,136 +267,3 @@
 </script>
 </body>
 </html>
-
-
-<!--<!DOCTYPE html>-->
-<!--<html lang="ru"-->
-<!--      xmlns:th="http://www.thymeleaf.org">-->
-<!--<head>-->
-<!--    <meta charset="UTF-8">-->
-<!--    <title th:text="'Браузер бота #' + ${botId}">Браузер бота</title>-->
-<!--    <style>-->
-<!--        html, body {-->
-<!--            margin: 0;-->
-<!--            padding: 0;-->
-<!--            height: 100%;-->
-<!--            overflow: hidden;-->
-<!--            font-family: system-ui, sans-serif;-->
-<!--        }-->
-<!--        #topbar {-->
-<!--            height: 40px;-->
-<!--            background: #111827;-->
-<!--            color: #e5e7eb;-->
-<!--            display: flex;-->
-<!--            align-items: center;-->
-<!--            justify-content: space-between;-->
-<!--            padding: 0 12px;-->
-<!--            font-size: 14px;-->
-<!--        }-->
-<!--        #browser-frame {-->
-<!--            width: 100%;-->
-<!--            height: calc(100% - 40px);-->
-<!--            border: none;-->
-<!--        }-->
-<!--        #loading {-->
-<!--            padding: 10px;-->
-<!--            font-size: 14px;-->
-<!--        }-->
-<!--        button {-->
-<!--            background: #ef4444;-->
-<!--            color: white;-->
-<!--            border: none;-->
-<!--            border-radius: 4px;-->
-<!--            padding: 6px 10px;-->
-<!--            cursor: pointer;-->
-<!--        }-->
-<!--        button:hover {-->
-<!--            background: #dc2626;-->
-<!--        }-->
-<!--    </style>-->
-<!--</head>-->
-<!--<body>-->
-<!--<div id="topbar">-->
-<!--    <div>-->
-<!--        <span th:text="'Бот: ' + ${bot.fio} + ' (' + ${bot.login} + ')'"></span>-->
-<!--    </div>-->
-<!--    <div>-->
-<!--        <span id="status">Запуск браузера…</span>-->
-<!--        <button id="closeBtn">Закрыть сессию</button>-->
-<!--    </div>-->
-<!--</div>-->
-<!--<iframe id="browser-frame" style="display:none;"></iframe>-->
-
-<!--<script th:inline="javascript">-->
-<!--    (() => {-->
-<!--        const botId = /*[[${botId}]]*/ 0;-->
-
-<!--        const statusEl = document.getElementById('status');-->
-<!--        const iframe   = document.getElementById('browser-frame');-->
-<!--        const closeBtn = document.getElementById('closeBtn');-->
-
-<!--        let closing = false;-->
-
-<!--        async function openSession() {-->
-<!--            try {-->
-<!--                const resp = await fetch(`/api/bots/${botId}/browser/open`, { method: 'POST' });-->
-<!--                if (!resp.ok) {-->
-<!--                    statusEl.textContent = 'Ошибка запуска браузера';-->
-<!--                    return;-->
-<!--                }-->
-<!--                const data = await resp.json();-->
-
-<!--                iframe.onload = () => {-->
-<!--                    iframe.style.display = 'block';-->
-<!--                    statusEl.textContent = 'Браузер запущен';-->
-<!--                };-->
-<!--                iframe.onerror = () => { statusEl.textContent = 'Не удалось открыть браузер'; };-->
-
-<!--                iframe.src = data.vncUrl + (data.vncUrl.includes('?') ? '&' : '?')-->
-<!--                    + 'autoconnect=1&resize=scale&reconnect=1&shared=1';-->
-
-
-<!--            } catch (e) {-->
-<!--                statusEl.textContent = 'Ошибка подключения: ' + e;-->
-<!--            }-->
-<!--        }-->
-
-<!--        function closeSessionOnce(reason) {-->
-<!--            if (closing) return;-->
-<!--            closing = true;-->
-
-<!--            // 1) Лучше sendBeacon для закрытия вкладки (самый надёжный вариант)-->
-<!--            try {-->
-<!--                const url = `/api/bots/${botId}/browser/close`;-->
-<!--                const ok = navigator.sendBeacon(url);-->
-<!--                console.log('close beacon', reason, ok);-->
-<!--                return;-->
-<!--            } catch (e) {-->
-<!--                // fallback ниже-->
-<!--            }-->
-
-<!--            // 2) fallback fetch (может не успеть при unload)-->
-<!--            fetch(`/api/bots/${botId}/browser/close`, {-->
-<!--                method: 'POST',-->
-<!--                keepalive: true-->
-<!--            }).catch(() => {});-->
-<!--        }-->
-
-<!--        // closeBtn.addEventListener('click', () => {-->
-<!--        //     closeBtn.disabled = true;-->
-<!--        //     statusEl.textContent = 'Отключение…';-->
-<!--        //     closeSessionOnce('button');-->
-<!--        //     statusEl.textContent = 'Сессия закрыта, вкладку можно закрыть';-->
-<!--        // });-->
-
-<!--        // ОСТАВЬ ТОЛЬКО ОДНО событие:-->
-<!--        window.addEventListener('pagehide', () => closeSessionOnce('pagehide'), { once: true, capture: true });-->
-
-<!--        // beforeunload лучше убрать, иначе часто будет дубль-->
-<!--        // window.addEventListener('beforeunload', ...);-->
-
-<!--        openSession();-->
-<!--    })();-->
-<!--</script>-->
-<!--</body>-->
-<!--</html>-->

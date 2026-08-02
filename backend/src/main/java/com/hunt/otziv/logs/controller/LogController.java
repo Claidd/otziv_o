@@ -1,14 +1,14 @@
 package com.hunt.otziv.logs.controller;
 
-import com.hunt.otziv.logs.conf.LogPathResolver;
+import com.hunt.otziv.logs.util.BoundedUtf8LogReader;
+import com.hunt.otziv.logs.service.LogPathResolver;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.time.LocalDate;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.function.Predicate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +24,14 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/logs")
 public class LogController {
+
+    static final int DEFAULT_VIEW_LIMIT = 1_000;
+    static final int MAX_VIEW_LIMIT = 10_000;
+    static final int MAX_VIEW_RESPONSE_BYTES = 4 * 1_024 * 1_024;
+    static final int DEFAULT_TAIL_LIMIT = 1_000;
+    static final int MAX_TAIL_LIMIT = 5_000;
+    static final int MAX_TAIL_LINE_BYTES = 64 * 1_024;
+    static final int MAX_TAIL_RESPONSE_BYTES = 1_024 * 1_024;
 
     private final Path logPath;
     private final LogPathResolver resolver;
@@ -44,41 +52,25 @@ public class LogController {
             @RequestParam(required = false, defaultValue = "dark") String theme
     ) throws IOException {
 
-        String today = LocalDate.now().toString();
-        List<String> availableDates = Files.list(Path.of("/app/logs"))
-                .map(Path::getFileName)
-                .map(Path::toString)
-                .filter(name -> name.matches("app\\.\\d{4}-\\d{2}-\\d{2}\\.log"))
-                .map(name -> name.substring(4, 14))
-                .sorted(Comparator.reverseOrder())
-                .toList();
-
-        if ((date == null || date.isBlank()) && availableDates.contains(today)) {
-            date = today;
+        List<String> availableDates = resolver.getAvailableDates();
+        Optional<LogPathResolver.LogSelection> resolvedSelection = resolver.resolveLogSelection(date);
+        if (resolvedSelection.isEmpty()) {
+            return ResponseEntity.badRequest().body("<p>Некорректный или недоступный файл лога.</p>");
         }
-
-        Path selectedPath = resolver.getLogPathForDate(date);
-
-
+        LogPathResolver.LogSelection selection = resolvedSelection.get();
+        String selectedLog = selection.selector();
+        Path selectedPath = selection.path();
 
         if (!Files.exists(selectedPath)) {
             return ResponseEntity.ok("<p>Файл логов не найден: " + selectedPath + "</p>");
         }
 
-        List<String> lines = Files.readAllLines(selectedPath);
-
-        if (level != null) {
-            String upperLevel = level.toUpperCase();
-            lines = lines.stream().filter(line -> line.contains(upperLevel)).collect(Collectors.toList());
-        }
-
-        if (search != null && !search.isBlank()) {
-            lines = lines.stream().filter(line -> line.toLowerCase().contains(search.toLowerCase())).collect(Collectors.toList());
-        }
-
-        if (limit > 0 && lines.size() > limit) {
-            lines = lines.subList(lines.size() - limit, lines.size());
-        }
+        int safeLimit = normalizeLimit(limit, DEFAULT_VIEW_LIMIT, MAX_VIEW_LIMIT);
+        Predicate<String> filter = logFilter(level, search);
+        LogSnapshot snapshot = readLastMatchingSnapshot(selectedPath, safeLimit, filter);
+        List<String> lines = snapshot.lines();
+        long initialOffset = snapshot.offset();
+        String safeTheme = "light".equalsIgnoreCase(theme) ? "light" : "dark";
 
         StringBuilder html = new StringBuilder();
         html.append(String.format("""
@@ -114,12 +106,12 @@ public class LogController {
 </script>
 <form method='get' style='margin-bottom:10px'>
     Дата: <select name='date'><option value=''>Текущий</option>
-""", theme));
+""", safeTheme));
 
         for (String d : availableDates) {
             html.append("<option value='").append(d).append("'");
-            if (d.equals(date)) html.append(" selected");
-            html.append(">").append(d).append("</option>");
+            if (d.equals(selectedLog)) html.append(" selected");
+            html.append(">").append(archiveLabel(d)).append("</option>");
         }
 
         html.append("</select> Уровень: <select name='level'>")
@@ -127,8 +119,10 @@ public class LogController {
                 .append("<option ").append("ERROR".equalsIgnoreCase(level) ? "selected" : "").append(">ERROR</option>")
                 .append("<option ").append("INFO".equalsIgnoreCase(level) ? "selected" : "").append(">INFO</option>")
                 .append("<option ").append("DEBUG".equalsIgnoreCase(level) ? "selected" : "").append(">DEBUG</option>")
-                .append("</select> Строк: <input type='number' name='limit' value='").append(limit).append("'/> ")
-                .append("Поиск: <input type='text' name='search' value='").append(search != null ? search : "").append("'/> ")
+                .append("</select> Строк: <input type='number' min='1' max='").append(MAX_VIEW_LIMIT)
+                .append("' name='limit' value='").append(safeLimit).append("'/> ")
+                .append("Поиск: <input type='text' name='search' value='")
+                .append(search != null ? escapeHtml(search) : "").append("'/> ")
                 .append("<label><input type='checkbox' id='autoRefresh' name='autoRefresh' value='true' ")
                 .append(autoRefresh ? "checked" : "").append("> Автообновление</label> ")
                 .append("<button type='submit'>Показать</button> ")
@@ -155,7 +149,7 @@ public class LogController {
 function clearLogView() {
     const pre = document.getElementById("log");
     if (pre) pre.innerText = "";
-    localStorage.setItem("logOffset", "0");
+    localStorage.setItem(logOffsetKey, "0");
 
     // 💥 Останавливаем автообновление
     if (intervalId) {
@@ -163,6 +157,9 @@ function clearLogView() {
         intervalId = null;
     }
 }
+const logSelector = "%s";
+const logOffsetKey = "logOffset:" + (logSelector || "current");
+localStorage.setItem(logOffsetKey, "%d");
 let fetchInterval = 5000;
 let intervalId = null;
 function updateInterval() {
@@ -171,15 +168,17 @@ function updateInterval() {
     intervalId = setInterval(fetchNewLogs, fetchInterval);
 }
 async function fetchNewLogs() {
-    const offset = localStorage.getItem("logOffset") || "0";
-    const res = await fetch("/logs/tail?offset=" + offset);
+    const offset = localStorage.getItem(logOffsetKey) || "0";
+    const res = await fetch("/logs/tail?offset=" + encodeURIComponent(offset)
+        + "&date=" + encodeURIComponent(logSelector));
+    if (!res.ok) return;
     const data = await res.json();
     const pre = document.getElementById("log");
     if (data.lines.length > 0) {
         data.lines.forEach(line => pre.innerText += line + "\\n");
         pre.scrollTop = pre.scrollHeight;
     }
-    localStorage.setItem("logOffset", data.newOffset);
+    localStorage.setItem(logOffsetKey, data.newOffset);
 }
 window.onload = function() {
     if (document.getElementById("autoRefresh").checked) {
@@ -190,32 +189,132 @@ window.onload = function() {
 </script>
 </body>
 </html>
-""");
+""".formatted(selectedLog, initialOffset));
 
         return ResponseEntity.ok(html.toString());
     }
 
 
     @GetMapping("/tail")
-    public ResponseEntity<Map<String, Object>> tailLog(@RequestParam(defaultValue = "0") long offset) throws IOException {
+    public ResponseEntity<Map<String, Object>> tailLog(
+            @RequestParam(defaultValue = "0") long offset,
+            @RequestParam(defaultValue = "1000") int limit,
+            @RequestParam(required = false) String date
+    ) throws IOException {
+        Optional<LogPathResolver.LogSelection> resolvedSelection = resolver.resolveLogSelection(date);
+        if (resolvedSelection.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Invalid or unavailable log file selector"
+            ));
+        }
+        Path selectedPath = resolvedSelection.get().path();
+        if (!Files.isRegularFile(selectedPath)) {
+            return ResponseEntity.notFound().build();
+        }
+
         Map<String, Object> result = new HashMap<>();
         List<String> lines = new ArrayList<>();
 
-        try (RandomAccessFile file = new RandomAccessFile(logPath.toFile(), "r")) {
-            file.seek(offset);
-            String line;
-            while ((line = file.readLine()) != null) {
-                lines.add(line);
+        try (RandomAccessFile file = new RandomAccessFile(selectedPath.toFile(), "r")) {
+            long snapshotLength = file.length();
+            long safeOffset = offset >= 0 && offset <= snapshotLength ? offset : 0L;
+            int safeLimit = normalizeLimit(limit, DEFAULT_TAIL_LIMIT, MAX_TAIL_LIMIT);
+            file.seek(safeOffset);
+            int responseBytes = 0;
+            BoundedUtf8LogReader.Line line;
+            while (lines.size() < safeLimit
+                    && responseBytes <= MAX_TAIL_RESPONSE_BYTES - MAX_TAIL_LINE_BYTES) {
+                line = BoundedUtf8LogReader.readLine(
+                        file,
+                        MAX_TAIL_LINE_BYTES,
+                        snapshotLength
+                );
+                if (line == null) {
+                    break;
+                }
+                lines.add(line.value());
+                responseBytes += line.storedBytes();
             }
             long newOffset = file.getFilePointer();
             result.put("lines", lines);
             result.put("newOffset", newOffset);
+            result.put("hasMore", newOffset < file.length());
+            result.put("reset", safeOffset != offset);
+            result.put("date", resolvedSelection.get().selector());
         }
         return ResponseEntity.ok(result);
     }
 
-    private String escapeHtml(String line) {
-        return line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    public ResponseEntity<Map<String, Object>> tailLog(long offset, int limit) throws IOException {
+        return tailLog(offset, limit, null);
+    }
+
+    public ResponseEntity<Map<String, Object>> tailLog(long offset) throws IOException {
+        return tailLog(offset, DEFAULT_TAIL_LIMIT, null);
+    }
+
+    private static Predicate<String> logFilter(String level, String search) {
+        String upperLevel = level == null ? null : level.toUpperCase(Locale.ROOT);
+        String lowerSearch = search == null || search.isBlank()
+                ? null
+                : search.toLowerCase(Locale.ROOT);
+
+        return line -> (upperLevel == null || line.contains(upperLevel))
+                && (lowerSearch == null || line.toLowerCase(Locale.ROOT).contains(lowerSearch));
+    }
+
+    static List<String> readLastMatchingLines(Path path, int limit, Predicate<String> filter) throws IOException {
+        return readLastMatchingSnapshot(path, limit, filter).lines();
+    }
+
+    static LogSnapshot readLastMatchingSnapshot(Path path, int limit, Predicate<String> filter) throws IOException {
+        Deque<BoundedUtf8LogReader.Line> boundedLines = new ArrayDeque<>(limit);
+        int storedBytes = 0;
+        long offset;
+        try (RandomAccessFile file = new RandomAccessFile(path.toFile(), "r")) {
+            long snapshotLength = file.length();
+            BoundedUtf8LogReader.Line line;
+            while ((line = BoundedUtf8LogReader.readLine(file, MAX_TAIL_LINE_BYTES, snapshotLength)) != null) {
+                if (!filter.test(line.value())) {
+                    continue;
+                }
+
+                while (!boundedLines.isEmpty()
+                        && (boundedLines.size() == limit
+                        || storedBytes + line.storedBytes() > MAX_VIEW_RESPONSE_BYTES)) {
+                    storedBytes -= boundedLines.removeFirst().storedBytes();
+                }
+                boundedLines.addLast(line);
+                storedBytes += line.storedBytes();
+            }
+            offset = file.getFilePointer();
+        }
+        return new LogSnapshot(boundedLines.stream().map(BoundedUtf8LogReader.Line::value).toList(), offset);
+    }
+
+    static int normalizeLimit(int requested, int defaultLimit, int maxLimit) {
+        if (requested <= 0) {
+            return defaultLimit;
+        }
+        return Math.min(requested, maxLimit);
+    }
+
+    record LogSnapshot(List<String> lines, long offset) {
+    }
+
+    private static String archiveLabel(String selector) {
+        int separator = selector.lastIndexOf('.');
+        return separator < 0
+                ? selector
+                : selector.substring(0, separator) + " (часть " + selector.substring(separator + 1) + ")";
+    }
+
+    private static String escapeHtml(String line) {
+        return line.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 
     @PostMapping("/clear")

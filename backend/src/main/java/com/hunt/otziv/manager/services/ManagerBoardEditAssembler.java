@@ -34,7 +34,7 @@ import com.hunt.otziv.manager.dto.api.ReviewRecoveryBatchDetailsResponse;
 import com.hunt.otziv.manager.dto.api.ReviewRecoveryTaskDetailsResponse;
 import com.hunt.otziv.p_products.dto.OrderDTO;
 import com.hunt.otziv.p_products.dto.OrderStatusDTO;
-import com.hunt.otziv.p_products.deletion.OrderDeletionPolicy;
+import com.hunt.otziv.p_products.deletion.policy.OrderDeletionPolicy;
 import com.hunt.otziv.p_products.model.Product;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.p_products.services.service.ProductService;
@@ -65,8 +65,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -162,7 +165,7 @@ public class ManagerBoardEditAssembler {
     public CompanyOrderCreateResponse buildCompanyOrderCreateResponse(CompanyDTO company) {
         List<OrderProductResponse> products = orderProductOptions();
         List<Integer> amounts = amountOptions();
-        List<OptionResponse> workers = currentWorkerOptions(company);
+        List<OptionResponse> workers = activeCurrentWorkerOptions(company);
         List<FilialResponse> filials = activeFilialOptions(company);
 
         return new CompanyOrderCreateResponse(
@@ -214,7 +217,7 @@ public class ManagerBoardEditAssembler {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Недопустимое количество отзывов");
         }
 
-        boolean workerBelongsToCompany = currentWorkerOptions(company).stream()
+        boolean workerBelongsToCompany = activeCurrentWorkerOptions(company).stream()
                 .anyMatch(worker -> Objects.equals(worker.id(), request.workerId()));
         if (!workerBelongsToCompany) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Специалист не назначен на компанию");
@@ -588,10 +591,10 @@ public class ManagerBoardEditAssembler {
             return List.of();
         }
 
-        return workerService.getAllWorkersByManagerId(company.getManager().getManagerId()).stream()
-                .sorted(Comparator.comparing(worker -> safe(worker.getUser() != null ? worker.getUser().getFio() : "")))
-                .map(worker -> new OptionResponse(worker.getWorkerId(), safe(worker.getUser() != null ? worker.getUser().getFio() : "Специалист #" + worker.getWorkerId())))
-                .toList();
+        return assignmentWorkerOptions(
+                workerService.getAllWorkersByManagerId(company.getManager().getManagerId()),
+                null
+        );
     }
 
     private List<OptionResponse> currentWorkerOptions(CompanyDTO company) {
@@ -624,6 +627,10 @@ public class ManagerBoardEditAssembler {
                 .toList();
     }
 
+    private List<OptionResponse> activeCurrentWorkerOptions(CompanyDTO company) {
+        return assignmentWorkerOptions(company == null ? null : company.getWorkers(), null);
+    }
+
     private List<FilialResponse> activeFilialOptions(CompanyDTO company) {
         return filialOptions(company).stream()
                 .filter(filial -> !filial.archived())
@@ -647,24 +654,49 @@ public class ManagerBoardEditAssembler {
     private List<OptionResponse> workerOptions(OrderDTO order) {
         if (order.getCompany() != null && order.getCompany().getManager() != null
                 && order.getCompany().getManager().getManagerId() != null) {
-            return workerService.getAllWorkersByManagerId(order.getCompany().getManager().getManagerId()).stream()
-                    .sorted(Comparator.comparing(worker -> safe(worker.getUser() != null ? worker.getUser().getFio() : "")))
-                    .map(worker -> new OptionResponse(worker.getWorkerId(), safe(worker.getUser() != null ? worker.getUser().getFio() : "Специалист #" + worker.getWorkerId())))
-                    .toList();
+            return assignmentWorkerOptions(
+                    workerService.getAllWorkersByManagerId(order.getCompany().getManager().getManagerId()),
+                    order.getWorker()
+            );
         }
         return currentCompanyWorkerOptions(order);
     }
 
     private List<OptionResponse> currentCompanyWorkerOptions(OrderDTO order) {
         if (order.getCompany() == null || order.getCompany().getWorkers() == null) {
-            return List.of();
+            return assignmentWorkerOptions(List.of(), order.getWorker());
         }
 
-        return order.getCompany().getWorkers().stream()
+        return assignmentWorkerOptions(order.getCompany().getWorkers(), order.getWorker());
+    }
+
+    private List<OptionResponse> assignmentWorkerOptions(
+            Collection<WorkerDTO> candidates,
+            WorkerDTO currentWorker
+    ) {
+        Map<Long, WorkerDTO> workersById = new LinkedHashMap<>();
+        if (candidates != null) {
+            candidates.stream()
+                    .filter(this::isActiveWorker)
+                    .forEach(worker -> workersById.putIfAbsent(worker.getWorkerId(), worker));
+        }
+
+        if (currentWorker != null && currentWorker.getWorkerId() != null) {
+            workersById.putIfAbsent(currentWorker.getWorkerId(), currentWorker);
+        }
+
+        return workersById.values().stream()
                 .sorted(Comparator.comparing(worker -> safe(worker.getUser() != null ? worker.getUser().getFio() : "")))
                 .map(this::option)
                 .filter(Objects::nonNull)
                 .toList();
+    }
+
+    private boolean isActiveWorker(WorkerDTO worker) {
+        return worker != null
+                && worker.getWorkerId() != null
+                && worker.getUser() != null
+                && worker.getUser().isActive();
     }
 
     private List<OptionResponse> cityOptions() {

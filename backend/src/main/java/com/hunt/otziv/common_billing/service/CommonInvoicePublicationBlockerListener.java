@@ -1,6 +1,6 @@
 package com.hunt.otziv.common_billing.service;
 
-import com.hunt.otziv.p_products.status.OrderStatusChangedEvent;
+import com.hunt.otziv.p_products.status.event.OrderStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

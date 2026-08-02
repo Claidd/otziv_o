@@ -12,7 +12,7 @@ import com.hunt.otziv.u_users.dto.RegisterClientRequest;
 import com.hunt.otziv.u_users.dto.UpdateKeycloakUserRequest;
 import com.hunt.otziv.u_users.dto.UpdateUserAssignmentsRequest;
 import com.hunt.otziv.u_users.dto.UserAssignmentsResponse;
-import com.hunt.otziv.u_users.keycloak.KeycloakAdminClient;
+import com.hunt.otziv.u_users.keycloak.client.KeycloakAdminClient;
 import com.hunt.otziv.u_users.model.Image;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.Marketolog;
@@ -30,8 +30,12 @@ import com.hunt.otziv.u_users.services.service.OperatorService;
 import com.hunt.otziv.u_users.services.service.WorkerService;
 import com.hunt.otziv.t_telegrambot.service.TelegramGroupLinkService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +64,7 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class KeycloakUserProvisioningService {
 
     private static final BigDecimal DEFAULT_COEFFICIENT = new BigDecimal("0.05");
@@ -71,6 +76,8 @@ public class KeycloakUserProvisioningService {
     private static final String OWNER_ROLE = "ROLE_OWNER";
     private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
     private static final String OWNER_CONTROL_OWN_MANAGERS = "OWN_MANAGERS";
+    private static final String DUMMY_LEGACY_PASSWORD_HASH =
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
     private static final Set<String> MANAGED_KEYCLOAK_ROLES = Set.of(
             "ADMIN",
             "OWNER",
@@ -94,12 +101,13 @@ public class KeycloakUserProvisioningService {
     private final ImageService imageService;
     private final TelegramGroupLinkService telegramGroupLinkService;
     private final CacheManager cacheManager;
+    private final UserAuthEpochService authEpochService;
 
     @Transactional
     public CreatedKeycloakUserResponse createUser(CreateKeycloakUserRequest request) {
-        validateLocalUniqueness(request);
-
         Set<String> keycloakRoles = normalizeKeycloakRoles(request.getRoles());
+        requireAdminForAdminMutation(keycloakRoles.contains(ADMIN_KEYCLOAK_ROLE));
+        validateLocalUniqueness(request);
         List<Role> localRoles = findLocalRoles(keycloakRoles);
 
         String keycloakId = null;
@@ -165,10 +173,12 @@ public class KeycloakUserProvisioningService {
 
     @Transactional
     public AdminUserResponse updateUser(Long userId, UpdateKeycloakUserRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+        User user = findLockedUser(userId);
 
         Set<String> newKeycloakRoles = normalizeKeycloakRoles(request.getRoles());
+        requireAdminForAdminMutation(
+                hasLocalRole(user, ADMIN_ROLE) || newKeycloakRoles.contains(ADMIN_KEYCLOAK_ROLE)
+        );
         List<Role> newLocalRoles = findLocalRoles(newKeycloakRoles);
         String oldUsername = user.getUsername();
         String newUsername = normalizedUpdateUsername(user, request);
@@ -187,6 +197,11 @@ public class KeycloakUserProvisioningService {
         Set<String> oldLocalRoleNames = user.getRoles() == null ? Set.of() : user.getRoles().stream()
                 .map(Role::getName)
                 .collect(Collectors.toSet());
+        Set<String> newLocalRoleNames = newLocalRoles.stream()
+                .map(Role::getName)
+                .collect(Collectors.toSet());
+        boolean activeChanged = user.isActive() != request.isEnabled();
+        boolean securityRolesChanged = !oldLocalRoleNames.equals(newLocalRoleNames);
 
         String oldWorkerChatUrl = trimToNull(user.getWorkerChatUrl());
         String newWorkerChatUrl = trimToNull(request.getWorkerChatUrl());
@@ -203,6 +218,16 @@ public class KeycloakUserProvisioningService {
         user.setActive(request.isEnabled());
         replaceLocalRoles(user, newLocalRoles);
         user.setAuthProvider(hasText(user.getKeycloakId()) ? KEYCLOAK_AUTH_PROVIDER : LOCAL_AUTH_PROVIDER);
+
+        if (activeChanged) {
+            if (request.isEnabled()) {
+                authEpochService.reactivated(user);
+            } else {
+                authEpochService.deactivated(user);
+            }
+        } else if (securityRolesChanged) {
+            authEpochService.securityRolesChanged(user);
+        }
 
         updateRoleAssignments(user, oldLocalRoleNames, newLocalRoles);
         Manager manager = managerService.getManagerByUserId(user.getId());
@@ -224,6 +249,9 @@ public class KeycloakUserProvisioningService {
             }
             user.setAuthProvider(hasText(user.getKeycloakId()) ? KEYCLOAK_AUTH_PROVIDER : LOCAL_AUTH_PROVIDER);
             userRepository.flush();
+            if ((activeChanged || securityRolesChanged) && hasText(keycloakId)) {
+                logoutUserSessionsBestEffort(keycloakId);
+            }
         }
         clearCabinetCaches();
 
@@ -235,6 +263,8 @@ public class KeycloakUserProvisioningService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
 
+        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
+
         user.setTelegramChatId(null);
         userRepository.flush();
         clearCabinetCaches();
@@ -243,26 +273,42 @@ public class KeycloakUserProvisioningService {
 
     @Transactional
     public void deleteUser(Long userId) {
-        User user = findUserWithAssignments(userId);
+        User user = findLockedUserWithAssignments(userId);
 
         if (hasLocalRole(user, ADMIN_ROLE)) {
             throw new ResponseStatusException(FORBIDDEN, "Admin users cannot be deleted.");
         }
+        if (!user.isActive()) {
+            return;
+        }
 
-        String keycloakId = user.getKeycloakId();
+        user.setActive(false);
+        authEpochService.deactivated(user);
+        userRepository.flush();
 
-        deleteRoleAssignments(user);
-        userRepository.delete(user);
+        if (hasText(user.getKeycloakId())) {
+            UpdateKeycloakUserRequest request = deactivationRequest(user);
+            String keycloakId = updateKeycloakUserAndRepairIdIfNeeded(
+                    user,
+                    user.getUsername(),
+                    user.getUsername(),
+                    request
+            );
+            if (hasText(keycloakId)) {
+                logoutUserSessionsBestEffort(keycloakId);
+            }
+        }
+
         userRepository.flush();
         clearCabinetCaches();
-
-        keycloakAdminClient.deleteUserStrict(keycloakId);
     }
 
     @Transactional
     public AdminUserResponse updateUserPhoto(Long userId, MultipartFile photo) throws IOException {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+
+        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
 
         if (photo == null || photo.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Profile photo is required");
@@ -281,10 +327,11 @@ public class KeycloakUserProvisioningService {
         return toAdminResponse(user);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public void changePassword(Long userId, ChangeKeycloakPasswordRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+        User user = findLockedUser(userId);
+
+        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
 
         if (!hasText(user.getKeycloakId())) {
             throw new ResponseStatusException(
@@ -299,11 +346,15 @@ public class KeycloakUserProvisioningService {
                 request.isTemporary()
         );
         keycloakAdminClient.logoutUserSessions(user.getKeycloakId());
+        authEpochService.passwordChanged(user);
+        userRepository.flush();
     }
 
     @Transactional
     public UserAssignmentsResponse updateUserAssignments(Long userId, UpdateUserAssignmentsRequest request) {
-        User user = findUserWithAssignments(userId);
+        User user = findLockedUserWithAssignments(userId);
+
+        requireAdminForAdminMutation(hasLocalRole(user, ADMIN_ROLE));
 
         Set<Manager> managers = findManagers(request.getManagerIds());
         Set<Worker> workers = findWorkers(request.getWorkerIds());
@@ -376,40 +427,45 @@ public class KeycloakUserProvisioningService {
     @Transactional
     public CreatedKeycloakUserResponse migrateLegacyUser(LegacyUserMigrationRequest request) {
         String username = request.getUsername().trim();
-        User user = userRepository.findByUsernameWithAssignments(username)
-                .orElseThrow(this::invalidLegacyCredentials);
+        User user = userRepository.lockByUsername(username)
+                .orElse(null);
+        String legacyPasswordHash = user == null ? null : user.getPassword();
+        boolean hasLegacyPasswordHash = hasText(legacyPasswordHash);
+        boolean passwordMatches = passwordEncoder.matches(
+                request.getPassword(),
+                hasLegacyPasswordHash ? legacyPasswordHash : DUMMY_LEGACY_PASSWORD_HASH
+        );
 
-        if (!user.isActive()) {
-            throw new ResponseStatusException(FORBIDDEN, "User is inactive");
-        }
-        if (!hasText(user.getPassword()) || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        if (user == null
+                || !user.isActive()
+                || hasText(user.getKeycloakId())
+                || !hasLegacyPasswordHash
+                || !passwordMatches) {
             throw invalidLegacyCredentials();
         }
 
         Set<String> keycloakRoles = toKeycloakRoles(user.getRoles());
-        String keycloakId = user.getKeycloakId();
+        CreateKeycloakUserRequest createRequest = new CreateKeycloakUserRequest();
+        createRequest.setUsername(user.getUsername());
+        createRequest.setEmail(user.getEmail());
+        createRequest.setFio(user.getFio());
+        createRequest.setPhoneNumber(user.getPhoneNumber());
+        createRequest.setPassword(request.getPassword());
+        createRequest.setTemporaryPassword(false);
+        createRequest.setEnabled(user.isActive());
+        createRequest.setEmailVerified(false);
+        createRequest.setCoefficient(user.getCoefficient());
+        createRequest.setRoles(keycloakRoles);
 
-        if (!hasText(keycloakId)) {
-            CreateKeycloakUserRequest createRequest = new CreateKeycloakUserRequest();
-            createRequest.setUsername(user.getUsername());
-            createRequest.setEmail(user.getEmail());
-            createRequest.setFio(user.getFio());
-            createRequest.setPhoneNumber(user.getPhoneNumber());
-            createRequest.setPassword(request.getPassword());
-            createRequest.setTemporaryPassword(false);
-            createRequest.setEnabled(user.isActive());
-            createRequest.setEmailVerified(false);
-            createRequest.setCoefficient(user.getCoefficient());
-            createRequest.setRoles(keycloakRoles);
-
-            keycloakId = createOrFindKeycloakUser(createRequest);
-        }
+        String keycloakId = createLegacyKeycloakUserStrict(createRequest);
 
         keycloakAdminClient.resetPassword(keycloakId, request.getPassword(), false);
         keycloakAdminClient.assignRealmRoles(keycloakId, keycloakRoles);
         user.setKeycloakId(keycloakId);
         user.setAuthProvider(KEYCLOAK_AUTH_PROVIDER);
+        user.setPassword(null);
         user.setLastLoginAt(LocalDateTime.now());
+        authEpochService.passwordChanged(user);
         User saved = userRepository.saveAndFlush(user);
 
         return toResponse(saved, keycloakRoles);
@@ -431,11 +487,18 @@ public class KeycloakUserProvisioningService {
             throw new ResponseStatusException(BAD_REQUEST, "At least one role is required");
         }
 
-        return roles.stream()
+        Set<String> normalizedRoles = roles.stream()
+                .filter(Objects::nonNull)
                 .map(String::trim)
                 .filter(role -> !role.isBlank())
-                .map(this::removeRolePrefix)
+                .map(this::canonicalKeycloakRole)
+                .filter(role -> !role.isBlank())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (normalizedRoles.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "At least one role is required");
+        }
+        return normalizedRoles;
     }
 
     private List<Role> findLocalRoles(Set<String> keycloakRoles) {
@@ -472,13 +535,6 @@ public class KeycloakUserProvisioningService {
         createRoleAssignments(user, rolesToCreate);
     }
 
-    private void deleteRoleAssignments(User user) {
-        managerService.deleteManager(user);
-        workerService.deleteWorker(user);
-        operatorService.deleteOperator(user);
-        marketologService.deleteMarketolog(user);
-    }
-
     private void replaceLocalRoles(User user, Collection<Role> newRoles) {
         if (user.getRoles() == null) {
             user.setRoles(new ArrayList<>(newRoles));
@@ -492,6 +548,16 @@ public class KeycloakUserProvisioningService {
     private User findUserWithAssignments(Long userId) {
         return userRepository.findByIdWithAssignments(userId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+    }
+
+    private User findLockedUser(Long userId) {
+        return userRepository.lockById(userId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Local user not found"));
+    }
+
+    private User findLockedUserWithAssignments(Long userId) {
+        findLockedUser(userId);
+        return findUserWithAssignments(userId);
     }
 
     private AssignmentOptionResponse toOption(Long id, User user, String role) {
@@ -693,7 +759,8 @@ public class KeycloakUserProvisioningService {
 
         return user.getRoles().stream()
                 .map(Role::getName)
-                .anyMatch(roleName::equals);
+                .filter(Objects::nonNull)
+                .anyMatch(roleName::equalsIgnoreCase);
     }
 
     private String normalizeOwnerControlViewMode(String value) {
@@ -754,38 +821,48 @@ public class KeycloakUserProvisioningService {
     }
 
     private String removeRolePrefix(String role) {
-        return role.startsWith("ROLE_") ? role.substring("ROLE_".length()) : role;
+        return role.regionMatches(true, 0, "ROLE_", 0, "ROLE_".length())
+                ? role.substring("ROLE_".length())
+                : role;
+    }
+
+    private String canonicalKeycloakRole(String role) {
+        return removeRolePrefix(role.trim()).toUpperCase(Locale.ROOT);
     }
 
     private String toLocalRoleName(String keycloakRole) {
-        return keycloakRole.startsWith("ROLE_") ? keycloakRole : "ROLE_" + keycloakRole;
+        return "ROLE_" + canonicalKeycloakRole(keycloakRole);
     }
 
-    private String createOrFindKeycloakUser(CreateKeycloakUserRequest request) {
+    private String createLegacyKeycloakUserStrict(CreateKeycloakUserRequest request) {
         try {
             return keycloakAdminClient.createUser(request);
         } catch (ResponseStatusException e) {
             if (e.getStatusCode().value() != CONFLICT.value()) {
                 throw e;
             }
-
-            return keycloakAdminClient.findUserIdByUsername(request.getUsername())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            BAD_GATEWAY,
-                            "Keycloak reported existing user but it could not be found"
-                    ));
+            throw new ResponseStatusException(
+                    CONFLICT,
+                    "Legacy migration conflicts with an existing identity; manual repair is required."
+            );
         }
     }
 
     private void synchronizeKeycloakRealmRoles(String keycloakUserId, Set<String> newKeycloakRoles) {
         Set<String> assignedRoles = keycloakAdminClient.getAssignedRealmRoleNames(keycloakUserId);
         Set<String> rolesToRemove = assignedRoles.stream()
-                .filter(MANAGED_KEYCLOAK_ROLES::contains)
-                .filter(role -> !newKeycloakRoles.contains(role))
+                .filter(Objects::nonNull)
+                .filter(role -> MANAGED_KEYCLOAK_ROLES.contains(canonicalKeycloakRole(role)))
+                .filter(role -> !newKeycloakRoles.contains(canonicalKeycloakRole(role)))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        Set<String> canonicalAssignedRoles = assignedRoles.stream()
+                .filter(Objects::nonNull)
+                .map(this::canonicalKeycloakRole)
+                .collect(Collectors.toSet());
+
         Set<String> rolesToAdd = newKeycloakRoles.stream()
-                .filter(role -> !assignedRoles.contains(role))
+                .filter(role -> !canonicalAssignedRoles.contains(role))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         keycloakAdminClient.removeRealmRoles(keycloakUserId, rolesToRemove);
@@ -801,6 +878,37 @@ public class KeycloakUserProvisioningService {
             throw new ResponseStatusException(BAD_REQUEST, "Username is required");
         }
         return username;
+    }
+
+    private UpdateKeycloakUserRequest deactivationRequest(User user) {
+        UpdateKeycloakUserRequest request = new UpdateKeycloakUserRequest();
+        request.setUsername(user.getUsername());
+        request.setEmail(user.getEmail());
+        request.setFio(user.getFio());
+        request.setPhoneNumber(user.getPhoneNumber());
+        request.setCoefficient(user.getCoefficient());
+        request.setEnabled(false);
+        request.setRoles(toKeycloakRoles(user.getRoles()));
+        return request;
+    }
+
+    private void requireAdminForAdminMutation(boolean adminMutation) {
+        if (!adminMutation) {
+            return;
+        }
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        boolean admin = authentication != null
+                && authentication.getAuthorities() != null
+                && authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .anyMatch(authority -> ADMIN_ROLE.equalsIgnoreCase(authority)
+                        || ADMIN_KEYCLOAK_ROLE.equalsIgnoreCase(authority));
+        if (!admin) {
+            throw new ResponseStatusException(FORBIDDEN, "Only an admin can manage admin users or roles.");
+        }
     }
 
     private void ensureUsernameAvailable(User user, String username) {
@@ -832,13 +940,22 @@ public class KeycloakUserProvisioningService {
             String repairedKeycloakId = keycloakAdminClient.findUserIdByUsername(oldUsername)
                     .orElse(null);
             if (!hasText(repairedKeycloakId)) {
-                user.setKeycloakId(null);
-                user.setAuthProvider(LOCAL_AUTH_PROVIDER);
-                return null;
+                throw new ResponseStatusException(
+                        CONFLICT,
+                        "Keycloak account binding is stale; manual repair is required."
+                );
             }
             user.setKeycloakId(repairedKeycloakId);
             keycloakAdminClient.updateUser(repairedKeycloakId, username, request);
             return repairedKeycloakId;
+        }
+    }
+
+    private void logoutUserSessionsBestEffort(String keycloakUserId) {
+        try {
+            keycloakAdminClient.logoutUserSessions(keycloakUserId);
+        } catch (RuntimeException ignored) {
+            log.warn("Keycloak session logout failed after a synchronized security-state change; continuing without rollback");
         }
     }
 
@@ -854,7 +971,7 @@ public class KeycloakUserProvisioningService {
         Set<String> roles = localRoles == null ? new LinkedHashSet<>() : localRoles.stream()
                 .map(Role::getName)
                 .filter(this::hasText)
-                .map(this::removeRolePrefix)
+                .map(this::canonicalKeycloakRole)
                 .map(role -> "USER".equals(role) ? CLIENT_ROLE : role)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 

@@ -1,7 +1,14 @@
 package com.hunt.otziv.external_review_checks.service;
 
 import com.hunt.otziv.external_review_checks.config.ExternalReviewCheckProperties;
+import com.hunt.otziv.external_review_checks.config.ExternalReviewTimeoutPolicy;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Base64;
+import java.util.HexFormat;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +17,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @Slf4j
@@ -34,24 +42,79 @@ public class ExternalReviewScreenshotStorage {
             return null;
         }
 
-        String normalizedContentType = normalizeContentType(contentType);
+        String encoded = stripDataPrefix(screenshotBase64);
+        long maximumBytes = Math.max(1L, properties.getScreenshotMaxBytes());
+        long maximumEncodedCharacters = 4L * ((maximumBytes + 2L) / 3L);
+        if (encoded.length() > maximumEncodedCharacters) {
+            throw new IllegalArgumentException("Screenshot payload exceeds configured limit");
+        }
+
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(encoded);
+        } catch (IllegalArgumentException invalidBase64) {
+            throw new IllegalArgumentException("Screenshot payload is not valid Base64");
+        }
+        if (bytes.length == 0 || bytes.length > maximumBytes) {
+            throw new IllegalArgumentException("Screenshot payload exceeds configured limit");
+        }
+
+        String normalizedContentType = normalizeContentType(contentType, bytes);
         String extension = extension(normalizedContentType);
         String key = normalizeFolder(properties.getS3Folder())
                 + "/reviews/" + reviewId
                 + "/" + checkId + "-" + UUID.randomUUID() + "." + extension;
 
-        byte[] bytes = Base64.getDecoder().decode(stripDataPrefix(screenshotBase64));
+        Duration uploadTimeout = ExternalReviewTimeoutPolicy.screenshotUploadTimeout(properties);
         PutObjectRequest request = PutObjectRequest.builder()
                 .bucket(bucket)
                 .key(key)
                 .acl("public-read")
                 .contentType(normalizedContentType)
+                .overrideConfiguration(builder -> builder
+                        .apiCallTimeout(uploadTimeout)
+                        .apiCallAttemptTimeout(uploadTimeout))
                 .build();
 
         s3Client.putObject(request, RequestBody.fromBytes(bytes));
         String url = publicObjectBaseUrl() + "/" + key;
-        log.info("Скриншот проверки отзыва загружен в S3: checkId={}, reviewId={}, url={}", checkId, reviewId, url);
+        log.info(
+                "Скриншот проверки отзыва загружен в S3: checkId={}, reviewId={}, keyHash={}",
+                checkId,
+                reviewId,
+                keyFingerprint(key)
+        );
         return new StoredScreenshot(key, url);
+    }
+
+    public void deleteBestEffort(@Nullable StoredScreenshot screenshot) {
+        if (screenshot != null) {
+            deleteBestEffort(screenshot.key());
+        }
+    }
+
+    public void deleteBestEffort(@Nullable String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        try {
+            Duration timeout = ExternalReviewTimeoutPolicy.screenshotUploadTimeout(properties);
+            DeleteObjectRequest request = DeleteObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(key)
+                    .overrideConfiguration(builder -> builder
+                            .apiCallTimeout(timeout)
+                            .apiCallAttemptTimeout(timeout))
+                    .build();
+            s3Client.deleteObject(request);
+            log.info("Удалён устаревший скриншот проверки: keyHash={}", keyFingerprint(key));
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Не удалось удалить устаревший скриншот проверки: keyHash={}, failureType={}",
+                    keyFingerprint(key),
+                    exception.getClass().getSimpleName()
+            );
+        }
     }
 
     private String stripDataPrefix(String value) {
@@ -62,15 +125,30 @@ public class ExternalReviewScreenshotStorage {
         return value;
     }
 
-    private String normalizeContentType(@Nullable String contentType) {
+    private String normalizeContentType(@Nullable String contentType, byte[] bytes) {
         if (contentType == null || contentType.isBlank()) {
-            return "image/png";
+            if (isPng(bytes)) {
+                return "image/png";
+            }
+            if (isJpeg(bytes)) {
+                return "image/jpeg";
+            }
+            throw new IllegalArgumentException("Screenshot signature is not PNG or JPEG");
         }
-        String normalized = contentType.trim().toLowerCase();
+        String normalized = contentType.trim().toLowerCase(Locale.ROOT);
         if ("image/jpeg".equals(normalized) || "image/jpg".equals(normalized)) {
+            if (!isJpeg(bytes)) {
+                throw new IllegalArgumentException("Screenshot signature does not match JPEG content type");
+            }
             return "image/jpeg";
         }
-        return "image/png";
+        if ("image/png".equals(normalized)) {
+            if (!isPng(bytes)) {
+                throw new IllegalArgumentException("Screenshot signature does not match PNG content type");
+            }
+            return "image/png";
+        }
+        throw new IllegalArgumentException("Screenshot content type is not supported");
     }
 
     private String extension(String contentType) {
@@ -99,6 +177,40 @@ public class ExternalReviewScreenshotStorage {
             value = value.substring(0, value.length() - 1);
         }
         return value;
+    }
+
+    private boolean isPng(byte[] bytes) {
+        byte[] signature = new byte[] {
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+        };
+        if (bytes.length < signature.length) {
+            return false;
+        }
+        for (int index = 0; index < signature.length; index++) {
+            if (bytes[index] != signature[index]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isJpeg(byte[] bytes) {
+        return bytes.length >= 4
+                && bytes[0] == (byte) 0xFF
+                && bytes[1] == (byte) 0xD8
+                && bytes[2] == (byte) 0xFF
+                && bytes[bytes.length - 2] == (byte) 0xFF
+                && bytes[bytes.length - 1] == (byte) 0xD9;
+    }
+
+    private String keyFingerprint(String key) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(key.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest, 0, 8);
+        } catch (NoSuchAlgorithmException exception) {
+            return "unavailable";
+        }
     }
 
     public record StoredScreenshot(String key, String url) {

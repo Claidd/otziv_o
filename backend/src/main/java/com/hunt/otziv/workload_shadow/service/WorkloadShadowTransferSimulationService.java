@@ -7,11 +7,11 @@ import com.hunt.otziv.workload_shadow.repository.WorkloadShadowTransferRepositor
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowTransferRepository.RecipientProjection;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowTransferRepository.SourceWorkerProjection;
 import com.hunt.otziv.workload_shadow.service.WorkloadTransferSelectionPolicy.Tier;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferActionableWorkload;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferEmergencyCardSelector;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferGraphDiagnostics;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferGraphQueryService;
+import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferActionableWorkload;
+import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph;
+import com.hunt.otziv.workload_shadow.transfer.service.WorkloadTransferEmergencyCardSelector;
+import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferGraphDiagnostics;
+import com.hunt.otziv.workload_shadow.transfer.service.WorkloadTransferGraphQueryService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;

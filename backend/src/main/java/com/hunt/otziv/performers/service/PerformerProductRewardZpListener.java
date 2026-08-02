@@ -1,6 +1,6 @@
 package com.hunt.otziv.performers.service;
 
-import com.hunt.otziv.p_products.status.OrderStatusChangedEvent;
+import com.hunt.otziv.p_products.status.event.OrderStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;

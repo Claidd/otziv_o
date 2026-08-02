@@ -160,6 +160,7 @@ public class SecurityConfig {
 
     private void configureApiAuthorization(AuthorizeHttpRequestsConfigurer<HttpSecurity>.AuthorizationManagerRequestMatcherRegistry auth) {
         auth.requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll();
+        auth.requestMatchers("/logs", "/logs/**", "/ws/logs").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/api/auth", "/api/auth/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/mobile-update", "/api/mobile-update/**").permitAll();
         auth.requestMatchers("/api/me").authenticated();
@@ -196,6 +197,7 @@ public class SecurityConfig {
         auth.requestMatchers(HttpMethod.DELETE, "/api/leads/*").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers(HttpMethod.POST, "/api/leads/*/status/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
         auth.requestMatchers("/api/review-check/**").permitAll();
+        auth.requestMatchers("/api/review-capability", "/api/review-capability/**").permitAll();
         auth.requestMatchers(HttpMethod.GET, "/api/manager/orders/*/edit", "/api/manager/orders/*/details").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.GET, "/api/manager/orders/*/company-report").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers(HttpMethod.POST, "/api/manager/orders/*/company-report").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
@@ -261,9 +263,15 @@ public class SecurityConfig {
         auth.requestMatchers("/admin/dispatch/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/admin/**").authenticated();
         auth.requestMatchers("/allUsers/**").hasAnyRole("ADMIN", "OWNER");
-        auth.requestMatchers("/logs", "/logs/**").hasAnyRole("ADMIN", "OWNER");
+        auth.requestMatchers("/logs", "/logs/**", "/ws/logs").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/lead/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "MARKETOLOG");
-        auth.requestMatchers("/bots/**").hasAnyRole("ADMIN", "OWNER", "WORKER");
+        auth.requestMatchers(HttpMethod.GET, "/bots/*/browser")
+                .hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
+        auth.requestMatchers(HttpMethod.GET, "/bots/bot_add", "/bots/edit/*")
+                .hasAnyRole("ADMIN", "OWNER", "WORKER");
+        auth.requestMatchers(HttpMethod.POST, "/bots/bot_add", "/bots/edit/*", "/bots/delete/*")
+                .hasAnyRole("ADMIN", "OWNER", "WORKER");
+        auth.requestMatchers("/bots", "/bots/**").hasAnyRole("ADMIN", "OWNER");
         auth.requestMatchers("/categories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");
         auth.requestMatchers("/subcategories/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "OPERATOR");
         auth.requestMatchers("/operator/**", "/operators", "/operators/**").hasAnyRole("ADMIN", "OWNER", "OPERATOR", "MARKETOLOG");
@@ -274,7 +282,7 @@ public class SecurityConfig {
         auth.requestMatchers("/ordersCompany/**", "/ordersDetails/**", "/filial/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/review", "/review/editReview/**", "/review/addReviews/**", "/review/deleteReviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER");
         auth.requestMatchers("/reviews/**").hasAnyRole("ADMIN", "OWNER", "MANAGER", "WORKER", "OPERATOR");
-        auth.requestMatchers("/review/editReviews/**", "/review/editReviewses/**").permitAll();
+        auth.requestMatchers("/review/editReviews/**", "/review/editReviewses/**", "/review/c").permitAll();
         auth.requestMatchers("/zp/**", "/payment_check/**", "/orders/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
         auth.requestMatchers("/worker/**").hasAnyRole("ADMIN", "OWNER", "WORKER", "MANAGER");
         auth.requestMatchers("/cities/**").hasAnyRole("ADMIN", "OWNER", "MANAGER");
@@ -289,11 +297,13 @@ public class SecurityConfig {
 
     private BearerTokenResolver publicPaymentAwareBearerTokenResolver() {
         DefaultBearerTokenResolver delegate = new DefaultBearerTokenResolver();
-        return request -> isPublicPaymentPath(request.getServletPath()) ? null : delegate.resolve(request);
+        return request -> isBearerOptionalPublicPath(request.getServletPath()) ? null : delegate.resolve(request);
     }
 
-    private boolean isPublicPaymentPath(String path) {
-        return path != null && path.startsWith("/api/payments/public");
+    private boolean isBearerOptionalPublicPath(String path) {
+        return path != null && (path.startsWith("/api/payments/public")
+                || path.equals("/api/review-capability")
+                || path.startsWith("/api/review-capability/"));
     }
 
 

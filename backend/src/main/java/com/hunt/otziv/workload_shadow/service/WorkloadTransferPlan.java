@@ -1,7 +1,7 @@
 package com.hunt.otziv.workload_shadow.service;
 
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph;
-import com.hunt.otziv.workload_shadow.transfer.WorkloadTransferCompanyGraph.OrderNode;
+import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph;
+import com.hunt.otziv.workload_shadow.transfer.dto.WorkloadTransferCompanyGraph.OrderNode;
 import java.util.Collection;
 import java.util.List;
 import java.util.TreeSet;

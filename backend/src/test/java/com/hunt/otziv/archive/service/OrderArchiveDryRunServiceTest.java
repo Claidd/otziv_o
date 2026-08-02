@@ -190,6 +190,7 @@ class OrderArchiveDryRunServiceTest {
         when(repository.countEligibleOrders(cutoffDate)).thenReturn(9L);
         when(repository.countPreparedCandidates()).thenReturn(counts);
         when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1))).thenReturn(0L);
+        when(repository.lockPreparedCandidateOrders()).thenReturn(3);
         when(repository.insertStartedArchiveBatch(any(LocalDateTime.class), eq("small-batch"), eq(90), eq(counts), any()))
                 .thenReturn(11L);
         when(repository.countArchivedPreparedCandidates()).thenReturn(counts);
@@ -204,9 +205,65 @@ class OrderArchiveDryRunServiceTest {
         assertEquals(counts, result.deleted());
         assertEquals(9L, result.eligibleOrders());
         verify(repository).prepareCandidateOrders(cutoffDate, 50);
+        verify(repository).lockPreparedCandidateOrders();
+        verify(repository).countPreparedCandidateCommonInvoices();
+        verify(repository).lockPreparedCandidateCommonInvoices();
+        verify(repository).hasPreparedCandidateEligibilityDrift(cutoffDate);
         verify(repository).copyPreparedCandidatesToArchive(eq(11L), any(LocalDateTime.class), eq("small-batch"));
         verify(paymentLinkArchiveService).archiveForPreparedOrderArchiveCandidates(11L);
         verify(repository).completeArchiveBatch(eq(11L), any(LocalDateTime.class), eq(counts), eq(counts), contains("archive completed"));
+    }
+
+    @Test
+    void liveArchiveStopsBeforeCopyWhenSelectedOrdersCannotAllBeLocked() {
+        OrderArchiveDryRunService service = serviceWithFixedClock();
+        service.setApplyEnabled(true);
+
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
+        ArchiveCandidateCounts counts = new ArchiveCandidateCounts(2, 2, 0, 0, 0, 0, 0);
+        when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
+        when(repository.countEligibleOrders(cutoffDate)).thenReturn(2L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1)))
+                .thenReturn(0L);
+        when(repository.lockPreparedCandidateOrders()).thenReturn(1);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.runArchive(null, null, null, true)
+        );
+
+        assertEquals("Order archive lock verification failed: selected=2, locked=1", exception.getMessage());
+        verify(repository, never()).copyPreparedCandidatesToArchive(anyLong(), any(), any());
+        verifyNoInteractions(paymentLinkArchiveService);
+    }
+
+    @Test
+    void liveArchiveStopsWhenEligibilityChangesWhileWaitingForParentLocks() {
+        OrderArchiveDryRunService service = serviceWithFixedClock();
+        service.setApplyEnabled(true);
+
+        LocalDate cutoffDate = LocalDate.of(2026, 2, 9);
+        ArchiveCandidateCounts counts = new ArchiveCandidateCounts(1, 1, 0, 0, 0, 0, 0);
+        when(repository.tryAcquireArchiveLock("otziv.order-archive", 0)).thenReturn(true);
+        when(repository.countEligibleOrders(cutoffDate)).thenReturn(1L);
+        when(repository.countPreparedCandidates()).thenReturn(counts);
+        when(repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(LocalDate.of(2026, 5, 1)))
+                .thenReturn(0L);
+        when(repository.lockPreparedCandidateOrders()).thenReturn(1);
+        when(repository.hasPreparedCandidateEligibilityDrift(cutoffDate)).thenReturn(true);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> service.runArchive(null, null, null, true)
+        );
+
+        assertEquals(
+                "Order archive candidates changed while locks were acquired; retry with a fresh selection",
+                exception.getMessage()
+        );
+        verify(repository, never()).copyPreparedCandidatesToArchive(anyLong(), any(), any());
+        verifyNoInteractions(paymentLinkArchiveService);
     }
 
     @Test

@@ -24,6 +24,7 @@ public record ReputationAiStatus(
         OpenAiProviderDiagnostics openAiDiagnostics,
         List<ReputationAiModelProfile> openAiResearchReportProfiles,
         List<ReputationAiModelProfile> openAiContentPackProfiles,
-        List<String> warnings
+        List<String> warnings,
+        boolean enabled
 ) {
 }

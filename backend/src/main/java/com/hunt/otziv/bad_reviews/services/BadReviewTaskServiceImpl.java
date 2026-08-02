@@ -22,7 +22,7 @@ import com.hunt.otziv.p_products.dto.OrderDTOList;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.Product;
-import com.hunt.otziv.p_products.status.OrderStatusNotificationService;
+import com.hunt.otziv.p_products.status.service.OrderStatusNotificationService;
 import com.hunt.otziv.p_products.worker_flow.service.WorkerTaskCompletionMonitorService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
@@ -55,8 +55,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Slf4j
@@ -68,6 +70,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     private static final int SCHEDULE_STEP_DAYS = 2;
     private static final int BAD_REVIEW_PREFERRED_COUNTER = 5;
     private static final String STATUS_NOT_PAID = "Не оплачено";
+    private static final String BOT_BINDING_CONFLICT =
+            "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие";
+    private static final String INVALID_BOT_ID = "Идентификатор аккаунта не может быть отрицательным";
 
     private final BadReviewTaskRepository badReviewTaskRepository;
     private final ReviewRepository reviewRepository;
@@ -592,9 +597,9 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
     @Transactional
     public BadReviewTask deactivateAndChangeTaskBot(Long taskId, Long botId) {
         BadReviewTask task = requireTask(taskId);
-        Long currentBotId = botId != null && botId > 0
-                ? botId
-                : task.getBot() != null ? task.getBot().getId() : null;
+        Long attachedBotId = task.getBot() != null ? task.getBot().getId() : null;
+        assertRequestedBotIsCurrent(botId, attachedBotId);
+        Long currentBotId = botId != null && botId > 0 ? botId : attachedBotId;
 
         if (currentBotId != null && currentBotId > 0) {
             Bot bot = botService.findBotById(currentBotId);
@@ -607,6 +612,15 @@ public class BadReviewTaskServiceImpl implements BadReviewTaskService {
         }
 
         return changeTaskBot(taskId);
+    }
+
+    private void assertRequestedBotIsCurrent(Long requestedBotId, Long currentBotId) {
+        if (requestedBotId != null && requestedBotId < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_BOT_ID);
+        }
+        if (requestedBotId != null && requestedBotId > 0 && !Objects.equals(requestedBotId, currentBotId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, BOT_BINDING_CONFLICT);
+        }
     }
 
     @Override

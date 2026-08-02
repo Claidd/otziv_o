@@ -7,9 +7,11 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,6 +19,10 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIncident, Long> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM WorkerRiskIncident i WHERE i.id = :id")
+    Optional<WorkerRiskIncident> findByIdForUpdate(@Param("id") Long id);
 
     boolean existsByWorkerUserIdAndRuleCodeAndStatusAndCreatedAtGreaterThanEqual(
             Long workerUserId,
@@ -148,16 +154,16 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             @Param("openStatus") WorkerRiskIncidentStatus openStatus
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<WorkerRiskIncident> findFirstByWorkerUserIdAndStatusAndResolutionActionAndExplanationAcceptedAtIsNullAndExplanationPromptedAtIsNotNullOrderByExplanationPromptedAtDescCreatedAtDesc(
             Long workerUserId,
             WorkerRiskIncidentStatus status,
             WorkerRiskResolutionAction resolutionAction
     );
 
-    List<WorkerRiskIncident> findByWorkerUserIdAndStatusAndResponseDueAtLessThanEqualAndExplanationAcceptedAtIsNullOrderByResponseDueAtAsc(
+    List<WorkerRiskIncident> findByWorkerUserIdAndStatusAndSectionRestrictedAtIsNotNullAndSectionRestrictionReleasedAtIsNullAndExplanationAcceptedAtIsNullOrderBySectionRestrictedAtAsc(
             Long workerUserId,
-            WorkerRiskIncidentStatus status,
-            LocalDateTime responseDueAt
+            WorkerRiskIncidentStatus status
     );
 
     @Query("""
@@ -166,10 +172,17 @@ public interface WorkerRiskIncidentRepository extends JpaRepository<WorkerRiskIn
             WHERE i.status = :status
               AND i.responseDueAt IS NOT NULL
               AND i.explanationAcceptedAt IS NULL
-            ORDER BY i.responseDueAt ASC
+              AND (
+                    :afterDueAt IS NULL
+                    OR i.responseDueAt > :afterDueAt
+                    OR (i.responseDueAt = :afterDueAt AND i.id > :afterId)
+              )
+            ORDER BY i.responseDueAt ASC, i.id ASC
             """)
-    List<WorkerRiskIncident> findPendingResponseSla(
+    List<WorkerRiskIncident> findPendingResponseSlaAfter(
             @Param("status") WorkerRiskIncidentStatus status,
+            @Param("afterDueAt") LocalDateTime afterDueAt,
+            @Param("afterId") Long afterId,
             Pageable pageable
     );
 

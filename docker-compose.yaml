@@ -3,6 +3,10 @@ name: otziv-prod
 networks:
   internal_net:
     driver: bridge
+  external_review_net:
+    driver: bridge
+  messaging_net:
+    driver: bridge
 
 volumes:
   mysql_data:
@@ -18,7 +22,9 @@ volumes:
 
 services:
   mysql:
-    image: mysql:latest
+    # Production-verified MySQL 9.0.0; pin the registry digest to prevent an
+    # unattended major upgrade when somebody refreshes the former latest tag.
+    image: mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383
     container_name: my-mysql
     restart: unless-stopped
     command:
@@ -135,13 +141,27 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      WEBHOOK_RATE_LIMIT_ENABLED: ${WEBHOOK_RATE_LIMIT_ENABLED:-true}
+      WEBHOOK_RATE_LIMIT_MAX_REQUESTS: ${WEBHOOK_RATE_LIMIT_MAX_REQUESTS:-120}
+      WEBHOOK_RATE_LIMIT_WINDOW: ${WEBHOOK_RATE_LIMIT_WINDOW:-PT1M}
+      WEBHOOK_RATE_LIMIT_MAX_BUCKETS: ${WEBHOOK_RATE_LIMIT_MAX_BUCKETS:-10000}
+      WEBHOOK_RATE_LIMIT_TRUSTED_PROXIES: "${WEBHOOK_RATE_LIMIT_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,172.16.0.0/12}"
+      WEBHOOK_RATE_LIMIT_MAX_FORWARDED_ADDRESSES: ${WEBHOOK_RATE_LIMIT_MAX_FORWARDED_ADDRESSES:-16}
+      WEBHOOK_RATE_LIMIT_MAX_FORWARDED_HEADER_LENGTH: ${WEBHOOK_RATE_LIMIT_MAX_FORWARDED_HEADER_LENGTH:-2048}
       OTZIV_APP_BASE_URL: ${OTZIV_APP_BASE_URL:-https://o-ogo.ru}
+      OTZIV_AUTH_LEGACY_MIGRATION_ENABLED: ${OTZIV_AUTH_LEGACY_MIGRATION_ENABLED:-true}
+      OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_ENABLED: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_ENABLED:-true}
+      OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_ATTEMPTS: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_ATTEMPTS:-5}
+      OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_WINDOW:-PT15M}
+      OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS: ${OTZIV_AUTH_LEGACY_MIGRATION_RATE_LIMIT_MAX_BUCKETS:-10000}
       OTZIV_MONITORING_DISK_ENABLED: ${OTZIV_MONITORING_DISK_ENABLED:-true}
       OTZIV_MONITORING_DISK_WARNING_PERCENT: ${OTZIV_MONITORING_DISK_WARNING_PERCENT:-80}
       OTZIV_MONITORING_DISK_CRITICAL_PERCENT: ${OTZIV_MONITORING_DISK_CRITICAL_PERCENT:-90}
       OTZIV_MONITORING_DISK_EMERGENCY_PERCENT: ${OTZIV_MONITORING_DISK_EMERGENCY_PERCENT:-95}
       EXTERNAL_REVIEW_CHECK_ENABLED: ${EXTERNAL_REVIEW_CHECK_ENABLED:-false}
       EXTERNAL_REVIEW_CHECK_WORKER_BASE_URL: ${EXTERNAL_REVIEW_CHECK_WORKER_BASE_URL:-http://external-review-worker:3097}
+      EXTERNAL_REVIEW_CHECK_WORKER_SHARED_SECRET: ${EXTERNAL_REVIEW_WORKER_SHARED_SECRET:-}
+      EXTERNAL_REVIEW_CHECK_WORKER_READ_TIMEOUT: ${EXTERNAL_REVIEW_CHECK_WORKER_READ_TIMEOUT:-160s}
       TZ: ${TZ:-Asia/Irkutsk}
       JAVA_OPTS: "${JAVA_OPTS:--Xms256m -Xmx768m -XX:MaxRAMPercentage=75} -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes="
       APP_HTTP_CLIENT_CONNECT_TIMEOUT: ${APP_HTTP_CLIENT_CONNECT_TIMEOUT:-5s}
@@ -246,6 +266,7 @@ services:
       WHATSAPP_PROXY_PORT: ${WHATSAPP_PROXY_PORT:-8888}
       WHATSAPP_WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-}
       WHATSAPP_WEBHOOK_HMAC_REQUIRED: ${WHATSAPP_WEBHOOK_HMAC_REQUIRED:-true}
+      WHATSAPP_GATEWAY_SHARED_SECRET: ${WHATSAPP_GATEWAY_SHARED_SECRET:-}
       WHATSAPP_HEALTH_MONITOR_ENABLED: ${WHATSAPP_HEALTH_MONITOR_ENABLED:-false}
       WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED: ${WHATSAPP_HEALTH_MONITOR_RESTART_ENABLED:-false}
       WHATSAPP_CLIENTS_0_ID: ${WHATSAPP_CLIENTS_0_ID:-whatsapp_lika}
@@ -390,6 +411,8 @@ services:
         condition: service_healthy
     networks:
       - internal_net
+      - external_review_net
+      - messaging_net
 
   external-review-worker:
     profiles: ["external-review"]
@@ -398,6 +421,17 @@ services:
       context: ./backend/external-review-worker
       dockerfile: Dockerfile
     restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: ${EXTERNAL_REVIEW_WORKER_PIDS_LIMIT:-256}
+    mem_limit: ${EXTERNAL_REVIEW_WORKER_MEMORY_LIMIT:-1g}
+    cpus: ${EXTERNAL_REVIEW_WORKER_CPU_LIMIT:-1.0}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=512m,mode=1777
     environment:
       PORT: 3097
       TZ: ${TZ:-Asia/Irkutsk}
@@ -405,6 +439,14 @@ services:
       MAX_REVIEW_SCROLLS: ${EXTERNAL_REVIEW_MAX_SCROLLS:-6}
       MATCH_CONFIRMED_THRESHOLD: ${EXTERNAL_REVIEW_MATCH_CONFIRMED_THRESHOLD:-0.92}
       MATCH_NEEDS_REVIEW_THRESHOLD: ${EXTERNAL_REVIEW_MATCH_NEEDS_REVIEW_THRESHOLD:-0.75}
+      EXTERNAL_REVIEW_WORKER_SHARED_SECRET: ${EXTERNAL_REVIEW_WORKER_SHARED_SECRET:-}
+      EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED: ${EXTERNAL_REVIEW_WORKER_AUTH_REQUIRED:-false}
+      REQUEST_BODY_LIMIT: ${EXTERNAL_REVIEW_REQUEST_BODY_LIMIT:-256kb}
+      MAX_EXPECTED_TEXT_CHARS: ${EXTERNAL_REVIEW_MAX_EXPECTED_TEXT_CHARS:-20000}
+      MAX_MAIN_NAVIGATIONS: ${EXTERNAL_REVIEW_MAX_MAIN_NAVIGATIONS:-10}
+      MAX_CONCURRENT_CHECKS: ${EXTERNAL_REVIEW_MAX_CONCURRENT_CHECKS:-1}
+      MAX_CHECK_DURATION_MS: ${EXTERNAL_REVIEW_MAX_CHECK_DURATION_MS:-120000}
+      OCR_TIMEOUT_MS: ${EXTERNAL_REVIEW_OCR_TIMEOUT_MS:-30000}
       EXTERNAL_REVIEW_PROXY_ENABLED: ${EXTERNAL_REVIEW_PROXY_ENABLED:-false}
       EXTERNAL_REVIEW_PROXY_HOST: ${EXTERNAL_REVIEW_PROXY_HOST:-}
       EXTERNAL_REVIEW_PROXY_PORT: ${EXTERNAL_REVIEW_PROXY_PORT:-8888}
@@ -417,7 +459,7 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - internal_net
+      - external_review_net
 
   whatsapp_lika:
     image: ${WHATSAPP_IMAGE:-otziv-whatsapp:latest}
@@ -426,11 +468,23 @@ services:
       dockerfile: Dockerfile.whatsapp
     container_name: whatsapp_lika
     restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: ${WHATSAPP_PIDS_LIMIT:-512}
+    mem_limit: ${WHATSAPP_MEMORY_LIMIT:-1536m}
+    cpus: ${WHATSAPP_CPU_LIMIT:-1.0}
     environment:
       CLIENT_ID: ${WHATSAPP_LIKA_CLIENT_ID:-whatsapp_lika}
       SERVER_URL: ${WHATSAPP_BACKEND_URL:-http://app:8080}
       AUTH_PATH: /auth
       WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-}
+      WHATSAPP_GATEWAY_SHARED_SECRET: ${WHATSAPP_GATEWAY_SHARED_SECRET:-}
+      WHATSAPP_GATEWAY_AUTH_REQUIRED: ${WHATSAPP_GATEWAY_AUTH_REQUIRED:-false}
+      WHATSAPP_QR_LOG_ENABLED: ${WHATSAPP_QR_LOG_ENABLED:-false}
+      WHATSAPP_HTTP_BODY_LIMIT: ${WHATSAPP_HTTP_BODY_LIMIT:-256kb}
+      WHATSAPP_HTTP_MAX_CONCURRENCY: ${WHATSAPP_HTTP_MAX_CONCURRENCY:-16}
+      WHATSAPP_MAX_MESSAGE_CHARS: ${WHATSAPP_MAX_MESSAGE_CHARS:-20000}
       WHATSAPP_PROXY_ENABLED: ${WHATSAPP_PROXY_ENABLED:-false}
       WHATSAPP_PROXY_HOST: ${WHATSAPP_PROXY_HOST:-}
       WHATSAPP_PROXY_PORT: ${WHATSAPP_PROXY_PORT:-8888}
@@ -460,7 +514,7 @@ services:
       app:
         condition: service_healthy
     networks:
-      - internal_net
+      - messaging_net
 
   whatsapp_vika:
     image: ${WHATSAPP_IMAGE:-otziv-whatsapp:latest}
@@ -469,11 +523,23 @@ services:
       dockerfile: Dockerfile.whatsapp
     container_name: whatsapp_vika
     restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: ${WHATSAPP_PIDS_LIMIT:-512}
+    mem_limit: ${WHATSAPP_MEMORY_LIMIT:-1536m}
+    cpus: ${WHATSAPP_CPU_LIMIT:-1.0}
     environment:
       CLIENT_ID: ${WHATSAPP_VIKA_CLIENT_ID:-whatsapp_vika}
       SERVER_URL: ${WHATSAPP_BACKEND_URL:-http://app:8080}
       AUTH_PATH: /auth
       WEBHOOK_SECRET: ${WHATSAPP_WEBHOOK_SECRET:-}
+      WHATSAPP_GATEWAY_SHARED_SECRET: ${WHATSAPP_GATEWAY_SHARED_SECRET:-}
+      WHATSAPP_GATEWAY_AUTH_REQUIRED: ${WHATSAPP_GATEWAY_AUTH_REQUIRED:-false}
+      WHATSAPP_QR_LOG_ENABLED: ${WHATSAPP_QR_LOG_ENABLED:-false}
+      WHATSAPP_HTTP_BODY_LIMIT: ${WHATSAPP_HTTP_BODY_LIMIT:-256kb}
+      WHATSAPP_HTTP_MAX_CONCURRENCY: ${WHATSAPP_HTTP_MAX_CONCURRENCY:-16}
+      WHATSAPP_MAX_MESSAGE_CHARS: ${WHATSAPP_MAX_MESSAGE_CHARS:-20000}
       WHATSAPP_PROXY_ENABLED: ${WHATSAPP_PROXY_ENABLED:-false}
       WHATSAPP_PROXY_HOST: ${WHATSAPP_PROXY_HOST:-}
       WHATSAPP_PROXY_PORT: ${WHATSAPP_PROXY_PORT:-8888}
@@ -503,7 +569,7 @@ services:
       app:
         condition: service_healthy
     networks:
-      - internal_net
+      - messaging_net
 
   nginx:
     image: ${WEB_IMAGE:-claid38/otziv-web:latest}

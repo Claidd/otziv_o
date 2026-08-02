@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.hunt.otziv.manager.services.ManagerAccessService;
+import com.hunt.otziv.p_products.review.service.OrderAggregateMutationLockService;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +26,12 @@ class WorkerAssignmentMutationGuardServiceTest {
     @Mock
     private WorkerAssignmentMutationGuardRepository repository;
 
+    @Mock
+    private ManagerAccessService managerAccessService;
+
+    @Mock
+    private OrderAggregateMutationLockService orderAggregateMutationLockService;
+
     @AfterEach
     void cleanupThreadState() {
         SecurityContextHolder.clearContext();
@@ -34,13 +42,17 @@ class WorkerAssignmentMutationGuardServiceTest {
     void transactionalWorkerMutationLocksOwnershipUntilCommit() {
         authenticateWorker("worker");
         TransactionSynchronizationManager.setActualTransactionActive(true);
-        when(repository.lockOwnedReview(17L, "worker"))
-                .thenReturn(Optional.of(17L));
+        when(repository.findOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        when(repository.countOwnedReview(17L, "worker")).thenReturn(1L);
 
-        new WorkerAssignmentMutationGuardService(repository).assertReview(17L);
+        service().assertReview(17L);
 
-        verify(repository).lockOwnedReview(17L, "worker");
-        verify(repository, never()).countOwnedReview(17L, "worker");
+        var ordered = org.mockito.Mockito.inOrder(repository, orderAggregateMutationLockService);
+        ordered.verify(repository).findOrderIdByReviewId(17L);
+        ordered.verify(orderAggregateMutationLockService).lock(11L);
+        ordered.verify(repository).findOrderIdByReviewId(17L);
+        ordered.verify(repository).countOwnedReview(17L, "worker");
+        verify(repository, never()).lockOwnedReview(17L, "worker");
     }
 
     @Test
@@ -48,7 +60,7 @@ class WorkerAssignmentMutationGuardServiceTest {
         authenticateWorker("worker");
         when(repository.countOwnedOrder(11L, "worker")).thenReturn(1L);
 
-        new WorkerAssignmentMutationGuardService(repository).assertOrder(11L);
+        service().assertOrder(11L);
 
         verify(repository).countOwnedOrder(11L, "worker");
         verify(repository, never()).lockOwnedOrder(11L, "worker");
@@ -59,7 +71,7 @@ class WorkerAssignmentMutationGuardServiceTest {
         authenticateWorker("worker");
         when(repository.countOwnedRecoveryTask(597L, "worker")).thenReturn(1L);
 
-        new WorkerAssignmentMutationGuardService(repository).assertRecoveryTask(597L);
+        service().assertRecoveryTask(597L);
 
         verify(repository).countOwnedRecoveryTask(597L, "worker");
         verify(repository, never()).lockOwnedRecoveryTask(597L, "worker");
@@ -69,13 +81,17 @@ class WorkerAssignmentMutationGuardServiceTest {
     void transactionalWorkerRecoveryMutationLocksOwnershipUntilCommit() {
         authenticateWorker("worker");
         TransactionSynchronizationManager.setActualTransactionActive(true);
-        when(repository.lockOwnedRecoveryTask(597L, "worker"))
-                .thenReturn(Optional.of(597L));
+        when(repository.findOrderIdByRecoveryTaskId(597L)).thenReturn(Optional.of(11L));
+        when(repository.countOwnedRecoveryTask(597L, "worker")).thenReturn(1L);
 
-        new WorkerAssignmentMutationGuardService(repository).assertRecoveryTask(597L);
+        service().assertRecoveryTask(597L);
 
-        verify(repository).lockOwnedRecoveryTask(597L, "worker");
-        verify(repository, never()).countOwnedRecoveryTask(597L, "worker");
+        var ordered = org.mockito.Mockito.inOrder(repository, orderAggregateMutationLockService);
+        ordered.verify(repository).findOrderIdByRecoveryTaskId(597L);
+        ordered.verify(orderAggregateMutationLockService).lock(11L);
+        ordered.verify(repository).findOrderIdByRecoveryTaskId(597L);
+        ordered.verify(repository).countOwnedRecoveryTask(597L, "worker");
+        verify(repository, never()).lockOwnedRecoveryTask(597L, "worker");
     }
 
     @Test
@@ -83,7 +99,7 @@ class WorkerAssignmentMutationGuardServiceTest {
         authenticateWorker("worker");
 
         assertThatThrownBy(() ->
-                new WorkerAssignmentMutationGuardService(repository).assertReview(17L)
+                service().assertReview(17L)
         )
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("назначение или состояние объекта изменилось")
@@ -91,10 +107,10 @@ class WorkerAssignmentMutationGuardServiceTest {
     }
 
     @Test
-    void clientsManagersOwnersAndAdminsAreNotSubjectToWorkerOwnershipGuard() {
-        WorkerAssignmentMutationGuardService service = new WorkerAssignmentMutationGuardService(repository);
+    void adminAndNonStaffRolesAreNotSubjectToAssignmentScopeGuard() {
+        WorkerAssignmentMutationGuardService service = service();
 
-        for (String role : new String[]{"ROLE_CLIENT", "ROLE_MANAGER", "ROLE_OWNER", "ROLE_ADMIN"}) {
+        for (String role : new String[]{"ROLE_CLIENT", "ROLE_ADMIN"}) {
             authenticate("actor", role);
             service.assertReview(17L);
             service.assertOrder(11L);
@@ -103,11 +119,90 @@ class WorkerAssignmentMutationGuardServiceTest {
         verifyNoInteractions(repository);
     }
 
+    @Test
+    void managerReviewMutationUsesCanonicalOrderScope() {
+        var authentication = authenticate("manager", "ROLE_MANAGER");
+        when(repository.findOrderIdByReviewId(17L)).thenReturn(Optional.of(11L));
+        when(managerAccessService.canAccessOrder(11L, authentication)).thenReturn(true);
+
+        service().assertReview(17L);
+
+        verify(repository).findOrderIdByReviewId(17L);
+        verify(managerAccessService).canAccessOrder(11L, authentication);
+        verify(repository, never()).countOwnedReview(17L, "manager");
+    }
+
+    @Test
+    void ownerCannotMutateTaskOutsideCanonicalOrderScope() {
+        var authentication = authenticate("owner", "ROLE_OWNER");
+        when(repository.findOrderIdByBadTaskId(597L)).thenReturn(Optional.of(11L));
+        when(managerAccessService.canAccessOrder(11L, authentication)).thenReturn(false);
+
+        assertThatThrownBy(() -> service().assertBadTask(597L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND");
+    }
+
+    @Test
+    void archivedRecoveryTaskCanUseItsCanonicalManagerScope() {
+        var authentication = authenticate("manager", "ROLE_MANAGER");
+        when(repository.findOrderIdByRecoveryTaskId(597L)).thenReturn(Optional.empty());
+        when(repository.findManagerIdByRecoveryTaskId(597L)).thenReturn(Optional.of(9L));
+        when(managerAccessService.canAccessManager(9L, authentication)).thenReturn(true);
+
+        service().assertRecoveryTask(597L);
+
+        verify(managerAccessService).canAccessManager(9L, authentication);
+    }
+
+    @Test
+    void staleRecoveryManagerSnapshotCannotOverrideLiveOrderScope() {
+        var authentication = authenticate("old-manager", "ROLE_MANAGER");
+        when(repository.findOrderIdByRecoveryTaskId(597L)).thenReturn(Optional.of(11L));
+        when(managerAccessService.canAccessOrder(11L, authentication)).thenReturn(false);
+
+        assertThatThrownBy(() -> service().assertRecoveryTask(597L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND");
+
+        verify(repository, never()).findManagerIdByRecoveryTaskId(597L);
+    }
+
+    @Test
+    void managerialOrderMutationDelegatesToOrderScopeService() {
+        var authentication = authenticate("manager", "ROLE_MANAGER");
+
+        service().assertOrder(11L);
+
+        verify(managerAccessService).requireOrderAccess(11L, authentication);
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void transactionalManagerLocksOrderBeforeObjectScopeRecheck() {
+        var authentication = authenticate("manager", "ROLE_MANAGER");
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+
+        service().assertOrder(11L);
+
+        var ordered = org.mockito.Mockito.inOrder(orderAggregateMutationLockService, managerAccessService);
+        ordered.verify(orderAggregateMutationLockService).lock(11L);
+        ordered.verify(managerAccessService).requireOrderAccess(11L, authentication);
+    }
+
+    private WorkerAssignmentMutationGuardService service() {
+        return new WorkerAssignmentMutationGuardService(
+                repository,
+                managerAccessService,
+                orderAggregateMutationLockService
+        );
+    }
+
     private void authenticateWorker(String username) {
         authenticate(username, "ROLE_WORKER");
     }
 
-    private void authenticate(String username, String... roles) {
+    private TestingAuthenticationToken authenticate(String username, String... roles) {
         var authentication = new TestingAuthenticationToken(
                 username,
                 "n/a",
@@ -115,5 +210,6 @@ class WorkerAssignmentMutationGuardServiceTest {
         );
         authentication.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(authentication);
+        return authentication;
     }
 }

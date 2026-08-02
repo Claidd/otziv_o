@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -154,7 +155,7 @@ public class OrderArchiveDryRunService {
         return result;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ArchiveRunResult runArchive(Integer retentionDays, Integer batchLimit, String reason, boolean confirm) {
         if (!confirm) {
             throw new IllegalArgumentException("Archive run requires confirm=true");
@@ -186,6 +187,26 @@ public class OrderArchiveDryRunService {
         long missingClosedAnalyticsMonths = repository.countMissingClosedAnalyticsMonthsForPreparedCandidates(currentMonthStart);
         if (missingClosedAnalyticsMonths > 0) {
             throw new IllegalStateException("Closed analytics months are missing for selected archive candidates");
+        }
+        int lockedOrders = repository.lockPreparedCandidateOrders();
+        if (lockedOrders != selected.orders()) {
+            throw new IllegalStateException(
+                    "Order archive lock verification failed: selected="
+                            + selected.orders() + ", locked=" + lockedOrders
+            );
+        }
+        int selectedCommonInvoices = repository.countPreparedCandidateCommonInvoices();
+        int lockedCommonInvoices = repository.lockPreparedCandidateCommonInvoices();
+        if (lockedCommonInvoices != selectedCommonInvoices) {
+            throw new IllegalStateException(
+                    "Order archive invoice lock verification failed: selected="
+                            + selectedCommonInvoices + ", locked=" + lockedCommonInvoices
+            );
+        }
+        if (repository.hasPreparedCandidateEligibilityDrift(cutoffDate)) {
+            throw new IllegalStateException(
+                    "Order archive candidates changed while locks were acquired; retry with a fresh selection"
+            );
         }
 
         Long batchId = repository.insertStartedArchiveBatch(
@@ -349,7 +370,7 @@ public class OrderArchiveDryRunService {
         return settings();
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Object runScheduledConfiguredArchive() {
         RuntimeSettings settings = runtimeSettings();
         if (!settings.scheduleWorkerEnabled()) {

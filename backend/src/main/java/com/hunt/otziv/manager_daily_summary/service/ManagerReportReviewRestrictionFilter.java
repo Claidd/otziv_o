@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -40,13 +41,19 @@ public class ManagerReportReviewRestrictionFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        String path = request.getRequestURI();
-        if (!path.startsWith("/api/") || allowed(path) || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
+        String path = requestPath(request);
+        boolean publicByLink = publicByLink(path);
+        if ((!path.startsWith("/api/") && !publicByLink)
+                || "OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated() || !manager(authentication)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        if (allowed(path) && !publicByLink) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -57,6 +64,10 @@ public class ManagerReportReviewRestrictionFilter extends OncePerRequestFilter {
         }
         if (!state.restricted()) {
             filterChain.doFilter(request, response);
+            return;
+        }
+        if (publicByLink) {
+            filterAsAnonymous(request, response, filterChain);
             return;
         }
         response.setStatus(423);
@@ -84,5 +95,46 @@ public class ManagerReportReviewRestrictionFilter extends OncePerRequestFilter {
                 || path.equals("/api/personal-reminders")
                 || path.startsWith("/api/personal-reminders/")
                 || path.equals("/api/gamification/me");
+    }
+
+    private boolean publicByLink(String path) {
+        return publicPath(path, "/api/review-check")
+                || publicPath(path, "/api/review-capability")
+                || publicPath(path, "/api/payments/public")
+                || publicPath(path, "/review/editReviews")
+                || publicPath(path, "/review/editReviewses");
+    }
+
+    private boolean publicPath(String path, String basePath) {
+        return path.equals(basePath)
+                || path.startsWith(basePath + "/")
+                || path.startsWith(basePath + ";");
+    }
+
+    private String requestPath(HttpServletRequest request) {
+        String servletPath = request.getServletPath();
+        if (servletPath != null && !servletPath.isBlank()) {
+            return servletPath;
+        }
+        String uri = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (uri != null && contextPath != null && !contextPath.isBlank() && uri.startsWith(contextPath)) {
+            return uri.substring(contextPath.length());
+        }
+        return uri == null ? "" : uri;
+    }
+
+    private void filterAsAnonymous(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws IOException, ServletException {
+        SecurityContext originalContext = SecurityContextHolder.getContext();
+        try {
+            SecurityContextHolder.setContext(SecurityContextHolder.createEmptyContext());
+            filterChain.doFilter(request, response);
+        } finally {
+            SecurityContextHolder.setContext(originalContext);
+        }
     }
 }

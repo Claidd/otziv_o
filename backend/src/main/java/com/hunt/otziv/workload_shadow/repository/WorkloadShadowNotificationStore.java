@@ -2,10 +2,10 @@ package com.hunt.otziv.workload_shadow.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hunt.otziv.workload_shadow.health.WorkloadShadowHealthData;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowClaimedNotification;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowDeliveryOutcome;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowNotificationEvent;
+import com.hunt.otziv.workload_shadow.health.dto.WorkloadShadowHealthData;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowClaimedNotification;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowDeliveryOutcome;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowNotificationEvent;
 import com.hunt.otziv.workload_shadow.repository.projection.WorkloadShadowClaimedNotificationProjection;
 import com.hunt.otziv.workload_shadow.repository.projection.WorkloadShadowHealthProjection;
 import java.time.LocalDate;

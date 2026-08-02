@@ -1,6 +1,6 @@
 package com.hunt.otziv.workload_shadow.metrics;
 
-import com.hunt.otziv.workload_shadow.health.WorkloadShadowHealthSnapshot;
+import com.hunt.otziv.workload_shadow.health.dto.WorkloadShadowHealthSnapshot;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;

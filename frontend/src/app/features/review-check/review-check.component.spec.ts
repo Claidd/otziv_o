@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, of } from 'rxjs';
 import { AuthService } from '../../core/auth.service';
 import { ReviewCheckApi, ReviewCheckPayload, ReviewCheckReview } from '../../core/review-check.api';
 import { AdminLayoutComponent } from '../../shared/admin-layout.component';
@@ -73,16 +73,33 @@ function details(overrides: Partial<ReviewCheckPayload> = {}): ReviewCheckPayloa
 }
 
 describe('ReviewCheckComponent', () => {
+  let routeParams: Subject<ReturnType<typeof convertToParamMap>>;
+  let routeFragment: BehaviorSubject<string | null>;
+  let routeSnapshot: { routeConfig: { path: string } };
+  let reviewCheckApi: {
+    getReviewCheck: ReturnType<typeof vi.fn>;
+    saveReviews: ReturnType<typeof vi.fn>;
+    sendToCorrection: ReturnType<typeof vi.fn>;
+  };
+
   beforeEach(async () => {
+    routeParams = new Subject();
+    routeFragment = new BehaviorSubject<string | null>(null);
+    routeSnapshot = { routeConfig: { path: 'review/:orderDetailId' } };
+    reviewCheckApi = {
+      getReviewCheck: vi.fn(),
+      saveReviews: vi.fn(),
+      sendToCorrection: vi.fn()
+    };
     await TestBed.configureTestingModule({
       imports: [ReviewCheckComponent],
       providers: [
         provideRouter([]),
         {
           provide: ActivatedRoute,
-          useValue: { paramMap: of(convertToParamMap({})) }
+          useValue: { paramMap: routeParams, fragment: routeFragment, snapshot: routeSnapshot }
         },
-        { provide: ReviewCheckApi, useValue: {} },
+        { provide: ReviewCheckApi, useValue: reviewCheckApi },
         { provide: AuthService, useValue: { login: vi.fn(), logout: vi.fn() } },
         { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } }
       ]
@@ -95,7 +112,176 @@ describe('ReviewCheckComponent', () => {
   });
 
   afterEach(() => {
+    window.history.replaceState({}, '', '/');
+    window.sessionStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it('cancels the previous anonymous route GET and applies only the newest response', () => {
+    const first = new Subject<ReviewCheckPayload>();
+    const second = new Subject<ReviewCheckPayload>();
+    const firstTeardown = vi.fn();
+    const secondTeardown = vi.fn();
+    reviewCheckApi.getReviewCheck
+      .mockReturnValueOnce(withTeardown(first, firstTeardown))
+      .mockReturnValueOnce(withTeardown(second, secondTeardown));
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-1' }));
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-2' }));
+
+    expect(firstTeardown).toHaveBeenCalledTimes(1);
+    expect(secondTeardown).not.toHaveBeenCalled();
+    expect(reviewCheckApi.getReviewCheck.mock.calls).toEqual([
+      ['detail-1'],
+      ['detail-2']
+    ]);
+
+    first.next(details({ orderDetailId: 'detail-1', companyTitle: 'Устаревшая' }));
+    second.next(details({ orderDetailId: 'detail-2', companyTitle: 'Актуальная' }));
+
+    expect(component.details()?.orderDetailId).toBe('detail-2');
+    expect(component.details()?.companyTitle).toBe('Актуальная');
+
+    fixture.destroy();
+    expect(secondTeardown).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the opaque capability token on a cancellable route GET', () => {
+    const token = `rc1_${'A'.repeat(43)}`;
+    const response = new Subject<ReviewCheckPayload>();
+    routeSnapshot.routeConfig.path = 'review/c';
+    window.history.replaceState({}, '', `/review/c#${token}`);
+    reviewCheckApi.getReviewCheck.mockReturnValue(response);
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+
+    routeParams.next(convertToParamMap({}));
+
+    expect(reviewCheckApi.getReviewCheck).toHaveBeenCalledWith('secure-capability', token);
+    expect(fixture.componentInstance.capabilityToken()).toBe(token);
+
+    fixture.destroy();
+  });
+
+  it('clears the previous review route state before the next route response arrives', () => {
+    const nextRoute = new Subject<ReviewCheckPayload>();
+    reviewCheckApi.getReviewCheck
+      .mockReturnValueOnce(of(details({ orderDetailId: 'detail-1', companyTitle: 'Первая' })))
+      .mockReturnValueOnce(nextRoute);
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-1' }));
+    component.actionKey.set('save');
+    component.editingReviewFieldKey.set('text-17');
+    expect(component.details()?.companyTitle).toBe('Первая');
+
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-2' }));
+
+    expect(component.orderDetailId()).toBe('detail-2');
+    expect(component.details()).toBeNull();
+    expect(component.draft()).toBeNull();
+    expect(component.actionKey()).toBeNull();
+    expect(component.editingReviewFieldKey()).toBeNull();
+    expect(component.loading()).toBe(true);
+
+    nextRoute.next(details({ orderDetailId: 'detail-2', companyTitle: 'Вторая' }));
+    expect(component.details()?.companyTitle).toBe('Вторая');
+  });
+
+  it('does not cancel a mutation but ignores its late payload after the route key changes', () => {
+    const mutation = new Subject<ReviewCheckPayload>();
+    const mutationTeardown = vi.fn();
+    reviewCheckApi.getReviewCheck
+      .mockReturnValueOnce(of(details({ orderDetailId: 'detail-1', companyTitle: 'Первая' })))
+      .mockReturnValueOnce(of(details({ orderDetailId: 'detail-2', companyTitle: 'Вторая' })));
+    reviewCheckApi.saveReviews.mockReturnValue(withTeardown(mutation, mutationTeardown));
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-1' }));
+    component.saveReviews();
+    expect(component.actionKey()).toBe('save');
+
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-2' }));
+
+    expect(mutationTeardown).not.toHaveBeenCalled();
+    expect(component.actionKey()).toBeNull();
+    expect(component.details()?.orderDetailId).toBe('detail-2');
+
+    mutation.next(details({ orderDetailId: 'detail-1', companyTitle: 'Устаревшая мутация' }));
+
+    expect(component.details()?.orderDetailId).toBe('detail-2');
+    expect(component.details()?.companyTitle).toBe('Вторая');
+    expect(component.actionKey()).toBeNull();
+
+    mutation.complete();
+    expect(mutationTeardown).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an old mutation response after navigating A to B and back to A', () => {
+    const abandonedMutation = new Subject<ReviewCheckPayload>();
+    reviewCheckApi.getReviewCheck
+      .mockReturnValueOnce(of(details({ orderDetailId: 'detail-a', companyTitle: 'A, первое посещение' })))
+      .mockReturnValueOnce(of(details({ orderDetailId: 'detail-b', companyTitle: 'B' })))
+      .mockReturnValueOnce(of(details({ orderDetailId: 'detail-a', companyTitle: 'A, новое посещение' })));
+    reviewCheckApi.saveReviews.mockReturnValue(abandonedMutation);
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-a' }));
+    component.saveReviews();
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-b' }));
+    routeParams.next(convertToParamMap({ orderDetailId: 'detail-a' }));
+
+    expect(component.details()?.companyTitle).toBe('A, новое посещение');
+    expect(component.actionKey()).toBeNull();
+
+    abandonedMutation.next(details({
+      orderDetailId: 'detail-a',
+      companyTitle: 'A, устаревший ответ мутации'
+    }));
+
+    expect(component.details()?.companyTitle).toBe('A, новое посещение');
+    expect(component.actionKey()).toBeNull();
+  });
+
+  it('reloads a reused capability route when its fragment token changes', () => {
+    const firstToken = `rc1_${'A'.repeat(43)}`;
+    const secondToken = `rc1_${'B'.repeat(43)}`;
+    const first = new Subject<ReviewCheckPayload>();
+    const second = new Subject<ReviewCheckPayload>();
+    const firstTeardown = vi.fn();
+    routeSnapshot.routeConfig.path = 'review/c';
+    window.history.replaceState({}, '', `/review/c#${firstToken}`);
+    reviewCheckApi.getReviewCheck
+      .mockReturnValueOnce(withTeardown(first, firstTeardown))
+      .mockReturnValueOnce(second);
+    const fixture = TestBed.createComponent(ReviewCheckComponent);
+    const component = fixture.componentInstance;
+
+    routeParams.next(convertToParamMap({}));
+    first.next(details({ orderDetailId: 'capability-a', companyTitle: 'Первая ссылка' }));
+    expect(component.capabilityToken()).toBe(firstToken);
+    expect(component.details()?.companyTitle).toBe('Первая ссылка');
+
+    window.history.replaceState({}, '', `/review/c#${secondToken}`);
+    routeFragment.next(secondToken);
+
+    expect(firstTeardown).toHaveBeenCalledTimes(1);
+    expect(component.capabilityToken()).toBe(secondToken);
+    expect(component.details()).toBeNull();
+    expect(component.loading()).toBe(true);
+    expect(reviewCheckApi.getReviewCheck.mock.calls).toEqual([
+      ['secure-capability', firstToken],
+      ['secure-capability', secondToken]
+    ]);
+
+    first.next(details({ orderDetailId: 'capability-a', companyTitle: 'Устаревшая ссылка' }));
+    second.next(details({ orderDetailId: 'capability-b', companyTitle: 'Вторая ссылка' }));
+
+    expect(component.details()?.companyTitle).toBe('Вторая ссылка');
   });
 
   it('keeps scheduled approved reviews separate from published reviews', () => {
@@ -297,3 +483,13 @@ describe('ReviewCheckComponent', () => {
     expect(element.querySelector('.review-check-form')).not.toBeNull();
   });
 });
+
+function withTeardown<T>(source: Observable<T>, teardown: () => void): Observable<T> {
+  return new Observable<T>((subscriber) => {
+    const subscription = source.subscribe(subscriber);
+    return () => {
+      subscription.unsubscribe();
+      teardown();
+    };
+  });
+}

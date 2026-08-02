@@ -137,7 +137,7 @@ public class PaymentProfileService {
             profile.setManualPaymentType(parseManualPaymentType(update.manualPaymentType()));
             profile.setManualPhone(limit(update.manualPhone(), 32));
             profile.setManualRecipientName(recipientOrDefault(update.manualRecipientName()));
-            profile.setManualPaymentUrl(paymentUrlOrDefault(update.manualPaymentUrl()));
+            applyManualPaymentUrlUpdate(profile, update);
             profile.setManualPaymentButtonLabel(buttonLabelOrDefault(update.manualPaymentButtonLabel()));
             profile.setManualComment(limit(update.manualComment(), 255));
             profile.setManualMonthlySoftLimitKopecks(nonNegative(update.manualMonthlySoftLimitKopecks()));
@@ -256,7 +256,8 @@ public class PaymentProfileService {
                 manualPaymentType(profile).name(),
                 normalize(profile.getManualPhone()),
                 recipientOrDefault(profile.getManualRecipientName()),
-                paymentUrlOrDefault(profile.getManualPaymentUrl()),
+                paymentUrlForRead(profile.getManualPaymentUrl()),
+                manualPaymentUrlConfigured(profile.getManualPaymentUrl()),
                 buttonLabelOrDefault(profile.getManualPaymentButtonLabel()),
                 limit(profile.getManualComment(), 255),
                 manualLimitOrDefault(profile.getManualMonthlySoftLimitKopecks()),
@@ -289,7 +290,7 @@ public class PaymentProfileService {
                 manualPaymentType(profile).name(),
                 normalize(profile.getManualPhone()),
                 recipientOrDefault(profile.getManualRecipientName()),
-                paymentUrlOrDefault(profile.getManualPaymentUrl()),
+                paymentUrlForRead(profile.getManualPaymentUrl()),
                 buttonLabelOrDefault(profile.getManualPaymentButtonLabel())
         );
     }
@@ -382,7 +383,11 @@ public class PaymentProfileService {
             if (normalize(profile.getManualPhone()).isBlank() || normalize(profile.getManualRecipientName()).isBlank()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для ручной оплаты укажите телефон и получателя");
             }
-        } else if (normalize(profile.getManualPaymentUrl()).isBlank()) {
+        } else if (paymentUrlForRead(profile.getManualPaymentUrl()).isBlank()
+                && !PaymentUrlPolicy.isUnsafeConfigured(
+                        profile.getManualPaymentUrl(),
+                        PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+                )) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для ручной оплаты укажите ссылку Альфа-Банка");
         }
         long hardLimit = limitValue(profile.getManualMonthlyHardLimitKopecks(), profile.getManualMonthlySoftLimitKopecks());
@@ -427,8 +432,52 @@ public class PaymentProfileService {
     }
 
     private String paymentUrlOrDefault(String value) {
-        String clean = limit(value, 512);
-        return clean.isBlank() ? ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL : clean;
+        return PaymentUrlPolicy.requireOrDefault(
+                value,
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL,
+                HttpStatus.BAD_REQUEST,
+                "Ссылка ручной оплаты должна использовать http или https"
+        );
+    }
+
+    private void applyManualPaymentUrlUpdate(PaymentProfile profile, PaymentProfilePolicyRequest update) {
+        String persisted = profile.getManualPaymentUrl();
+        boolean quarantined = PaymentUrlPolicy.isUnsafeConfigured(
+                persisted,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+        );
+        boolean replacementConfirmed = Boolean.TRUE.equals(update.manualPaymentUrlReplacementConfirmed());
+        if (quarantined && !replacementConfirmed) {
+            // Mixed-version clients used to post the default URL shown by their
+            // UI. Preserve the quarantined raw value until a current client
+            // explicitly confirms a replacement.
+            return;
+        }
+        if (replacementConfirmed) {
+            profile.setManualPaymentUrl(PaymentUrlPolicy.require(
+                    update.manualPaymentUrl(),
+                    PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL,
+                    HttpStatus.BAD_REQUEST,
+                    "Укажите безопасную ссылку ручной оплаты для замены"
+            ));
+            return;
+        }
+        if (update.manualPaymentUrl() != null) {
+            profile.setManualPaymentUrl(paymentUrlOrDefault(update.manualPaymentUrl()));
+        }
+    }
+
+    private String paymentUrlForRead(String value) {
+        return PaymentUrlPolicy.safeOrDefault(
+                value,
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                PaymentUrlPolicy.Purpose.MANUAL_EXTERNAL
+        );
+    }
+
+    private boolean manualPaymentUrlConfigured(String value) {
+        return !paymentUrlForRead(value).isBlank();
     }
 
     private String buttonLabelOrDefault(String value) {

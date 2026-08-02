@@ -229,7 +229,39 @@ function Get-MobileReleaseArtifact {
         }
     }
 
-    return $parsed | Sort-Object VersionCode, @{ Expression = { $_.File.LastWriteTimeUtc }; Descending = $true } -Descending | Select-Object -First 1
+    $selected = $parsed |
+        Sort-Object VersionCode, @{ Expression = { $_.File.LastWriteTimeUtc }; Descending = $true } -Descending |
+        Select-Object -First 1
+    if ($null -eq $selected) {
+        return $null
+    }
+
+    $verifierPath = Join-Path $RepoRoot "mobile\scripts\verify-android-release.ps1"
+    if (-not (Test-Path -LiteralPath $verifierPath -PathType Leaf)) {
+        throw "Android release verifier not found: $verifierPath"
+    }
+    try {
+        $verified = & $verifierPath `
+            -ApkPath $selected.File.FullName `
+            -ExpectedVersionCode $selected.VersionCode `
+            -ExpectedVersionName $selected.VersionName `
+            -PassThru `
+            -Quiet
+    } catch {
+        throw "Mobile APK verification failed for $($selected.File.Name): $($_.Exception.Message)"
+    }
+    if ($null -eq $verified) {
+        throw "Mobile APK verifier returned no release metadata for $($selected.File.Name)."
+    }
+
+    return [pscustomobject]@{
+        File = $selected.File
+        VersionName = $verified.VersionName
+        VersionCode = [int]$verified.VersionCode
+        PackageName = $verified.PackageName
+        SignerSha256 = $verified.SignerSha256
+        ArtifactSha256 = $verified.ArtifactSha256
+    }
 }
 
 if ($Help) {
@@ -270,6 +302,7 @@ $deployBundlePaths = @(
     "whatsapp\package.json",
     "whatsapp\package-lock.json",
     "whatsapp\index.js",
+    "whatsapp\internal-auth.js",
     "whatsapp\message-webhook.js",
     "whatsapp\group-invite.js",
     "whatsapp\groups-cache.js",
@@ -406,6 +439,9 @@ try {
         $mobileStageApk = Join-Path $mobileStageDirectory $mobileFileName
         Copy-Item -LiteralPath $mobileRelease.File.FullName -Destination $mobileStageApk -Force
         $mobileSha256 = (Get-FileHash -LiteralPath $mobileStageApk -Algorithm SHA256).Hash.ToUpperInvariant()
+        if ($mobileSha256 -cne $mobileRelease.ArtifactSha256) {
+            throw "Mobile APK hash changed after verification and before bundle creation."
+        }
         $mobileMetadata = [ordered]@{
             versionCode = $mobileRelease.VersionCode
             versionName = $mobileRelease.VersionName

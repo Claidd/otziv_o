@@ -17,6 +17,40 @@ public interface WorkerAssignmentMutationGuardRepository
         extends Repository<Worker, Long> {
 
     @Query(value = """
+            SELECT orders.order_id
+            FROM reviews review
+            JOIN order_details detail
+              ON detail.order_detail_id = review.review_order_details
+            JOIN orders orders
+              ON orders.order_id = detail.order_detail_order
+            WHERE review.review_id = :reviewId
+            """, nativeQuery = true)
+    Optional<Long> findOrderIdByReviewId(@Param("reviewId") long reviewId);
+
+    @Query(value = """
+            SELECT task.bad_review_task_order
+            FROM bad_review_tasks task
+            WHERE task.bad_review_task_id = :taskId
+            """, nativeQuery = true)
+    Optional<Long> findOrderIdByBadTaskId(@Param("taskId") long taskId);
+
+    @Query(value = """
+            SELECT orders.order_id
+            FROM review_recovery_tasks task
+            JOIN orders orders
+              ON orders.order_id = task.review_recovery_task_order
+            WHERE task.review_recovery_task_id = :taskId
+            """, nativeQuery = true)
+    Optional<Long> findOrderIdByRecoveryTaskId(@Param("taskId") long taskId);
+
+    @Query(value = """
+            SELECT task.review_recovery_task_manager
+            FROM review_recovery_tasks task
+            WHERE task.review_recovery_task_id = :taskId
+            """, nativeQuery = true)
+    Optional<Long> findManagerIdByRecoveryTaskId(@Param("taskId") long taskId);
+
+    @Query(value = """
             SELECT COUNT(*)
             FROM orders orders
             JOIN workers worker

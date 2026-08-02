@@ -15,7 +15,7 @@
 
 ## Публикация
 
-Обычный `infrastructure/scripts/prod/deploy-prod.ps1` автоматически находит подписанный APK с максимальным `versionCode` по маске `mobile/builds/otziv-prod-release-v*-code*.apk`. Перед упаковкой deploy-бандла скрипт проверяет версию и файл на VPS:
+Обычный `infrastructure/scripts/prod/deploy-prod.ps1` автоматически находит подписанный APK с максимальным `versionCode` по маске `mobile/builds/otziv-prod-release-v*-code*.apk`. До Docker build, упаковки deploy-бандла и обращения к VPS скрипт через Android SDK проверяет подпись, package name и внутренние `versionCode`/`versionName`; имя файла не считается доверенным источником. Перед упаковкой также проверяется версия на VPS:
 
 - если такая или более новая версия уже существует, APK повторно не отправляется;
 - если файла нет, APK и `release.json` включаются в deploy-бандл;
@@ -35,6 +35,9 @@
 Сертификат SHA-256:
 
 `A1:5A:16:2A:FE:1F:80:8F:95:86:DD:3F:12:9F:9E:61:F4:BE:49:CC:FF:70:8C:A9:9C:6A:07:14:00:42:51:D5`
+
+Полная процедура безопасной сборки, проверки, backup/restore drill и правила
+ротации описаны в `docs/ANDROID_RELEASE_SIGNING.md`.
 
 ## Серверное хранилище
 

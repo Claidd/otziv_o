@@ -4,6 +4,7 @@ import com.hunt.otziv.payments.dto.ManagerPaymentLinkResponse;
 import com.hunt.otziv.payments.service.PaymentLinkService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,7 +17,10 @@ public class ManagerPaymentController {
 
     @PreAuthorize("hasAnyRole('ADMIN', 'OWNER', 'MANAGER')")
     @PostMapping("/api/manager/orders/{orderId}/payment-link")
-    public ManagerPaymentLinkResponse createPaymentLink(@PathVariable Long orderId) {
-        return paymentLinkService.createForOrder(orderId);
+    public ManagerPaymentLinkResponse createPaymentLink(
+            @PathVariable Long orderId,
+            Authentication authentication
+    ) {
+        return paymentLinkService.createForOrderAuthorized(orderId, authentication);
     }
 }

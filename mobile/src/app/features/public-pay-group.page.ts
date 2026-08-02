@@ -1,8 +1,11 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { IonContent } from '@ionic/angular/standalone';
+import { Subscription } from 'rxjs';
 import { ApiService, PublicCommonInvoice } from '../core/api.service';
+import { RouteEpochGuard, RouteEpochTicket } from '../core/route-epoch.guard';
+import { MobileExternalLinkService } from '../shared/mobile-external-link.service';
 
 @Component({
   selector: 'app-public-pay-group-page',
@@ -79,10 +82,13 @@ import { ApiService, PublicCommonInvoice } from '../core/api.service';
     button{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.55rem;border:1px solid rgba(108,155,207,.25);border-radius:.82rem;color:var(--otziv-primary);background:var(--otziv-white);font:1000 .82rem/1 var(--otziv-font-family)}button.primary{color:#fff;background:var(--otziv-primary)}button:disabled{opacity:.55}.state-card{display:grid;place-items:center;gap:.35rem;min-height:5.5rem;padding:1rem;text-align:center}.state-card.error{color:var(--otziv-danger)}.state-card.ok{color:#16735f}
   `]
 })
-export class PublicPayGroupPage {
+export class PublicPayGroupPage implements OnDestroy {
   private readonly route = inject(ActivatedRoute);
+  private readonly routeEpoch = new RouteEpochGuard();
+  private routeSubscription?: Subscription;
+  private invoiceLoadSubscription?: Subscription;
 
-  readonly token = signal(this.route.snapshot.paramMap.get('token') ?? '');
+  readonly token = signal('');
   readonly invoice = signal<PublicCommonInvoice | null>(null);
   readonly loading = signal(true);
   readonly refreshing = signal(false);
@@ -100,8 +106,19 @@ export class PublicPayGroupPage {
   readonly readyOrders = computed(() => this.invoice()?.orders.filter((order) => order.ready).length ?? 0);
   readonly canSubmit = computed(() => Boolean(this.invoice()?.payable && this.email().includes('@') && this.offerConsent() && this.privacyConsent() && this.receiptConsent() && !this.submitting()));
 
-  constructor(private readonly api: ApiService) {
-    this.loadInvoice();
+  constructor(
+    private readonly api: ApiService,
+    private readonly externalLink: MobileExternalLinkService
+  ) {
+    this.routeSubscription = this.route.paramMap.subscribe((params) => {
+      this.activateInvoiceRoute(params.get('token'));
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.routeEpoch.destroy();
+    this.cancelRouteRead();
+    this.routeSubscription?.unsubscribe();
   }
 
   @HostListener('window:pageshow') onPageShow(): void { this.refreshAfterReturn(); }
@@ -117,19 +134,38 @@ export class PublicPayGroupPage {
       this.message.set('Укажите e-mail и подтвердите согласия.');
       return;
     }
+    const routeTicket = this.captureRoute();
+    if (!routeTicket) {
+      return;
+    }
+    const token = this.token();
     this.submitting.set(true);
     this.error.set('');
     this.message.set('');
-    this.api.initPublicCommonInvoicePayment(this.token(), this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
+    this.api.initPublicCommonInvoicePayment(token, this.email().trim(), this.offerConsent(), this.privacyConsent(), this.receiptConsent()).subscribe({
       next: (response) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
+        this.submitting.set(false);
         if (response.paymentUrl) {
-          window.location.href = response.paymentUrl;
+          void this.externalLink.openPayment(response.paymentUrl, 'payment').then((opened) => {
+            if (this.isActiveRoute(routeTicket) && !opened) {
+              this.error.set('Банк вернул недопустимую ссылку оплаты. Переход отменен.');
+            }
+          }).catch(() => {
+            if (this.isActiveRoute(routeTicket)) {
+              this.error.set('Не удалось открыть ссылку оплаты.');
+            }
+          });
           return;
         }
         this.message.set('Банк не вернул ссылку на оплату.');
-        this.submitting.set(false);
       },
       error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(error, 'Не удалось перейти к оплате.'));
         this.submitting.set(false);
       }
@@ -141,22 +177,35 @@ export class PublicPayGroupPage {
   }
 
   loadInvoice(): void {
-    if (!this.token()) {
+    const token = this.token();
+    const routeTicket = this.captureRoute();
+    if (!token || !routeTicket) {
       this.loading.set(false);
       this.error.set('Общая платежная ссылка не найдена.');
       return;
     }
+    this.invoiceLoadSubscription?.unsubscribe();
+    this.invoiceLoadSubscription = undefined;
     this.loading.set(true);
-    this.api.getPublicCommonInvoice(this.token()).subscribe({
+    const subscription = this.api.getPublicCommonInvoice(token).subscribe({
       next: (invoice) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.invoice.set(invoice);
         this.loading.set(false);
       },
       error: (error) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.error.set(this.errorMessage(error, 'Не удалось открыть общий счет.'));
         this.loading.set(false);
       }
     });
+    if (!subscription.closed && this.isActiveRoute(routeTicket)) {
+      this.invoiceLoadSubscription = subscription;
+    }
   }
 
   private refreshAfterReturn(): void {
@@ -167,13 +216,78 @@ export class PublicPayGroupPage {
     }
     this.lastReturnRefreshAt = now;
     this.refreshing.set(true);
-    this.api.getPublicCommonInvoice(this.token()).subscribe({
+    const routeTicket = this.captureRoute();
+    const token = this.token();
+    if (!routeTicket || !token) {
+      this.refreshing.set(false);
+      return;
+    }
+    this.invoiceLoadSubscription?.unsubscribe();
+    this.invoiceLoadSubscription = undefined;
+    const subscription = this.api.getPublicCommonInvoice(token).subscribe({
       next: (invoice) => {
+        if (!this.isActiveRoute(routeTicket)) {
+          return;
+        }
         this.invoice.set(invoice);
         this.refreshing.set(false);
       },
-      error: () => this.refreshing.set(false)
+      error: () => {
+        if (this.isActiveRoute(routeTicket)) {
+          this.refreshing.set(false);
+        }
+      }
     });
+    if (!subscription.closed && this.isActiveRoute(routeTicket)) {
+      this.invoiceLoadSubscription = subscription;
+    }
+  }
+
+  private activateInvoiceRoute(rawToken: string | null): void {
+    const token = rawToken?.trim() ?? '';
+    const routeKey = token ? `pay-group:${token}` : 'pay-group:invalid';
+    if (!this.routeEpoch.change(routeKey)) {
+      return;
+    }
+
+    this.cancelRouteRead();
+    this.clearRouteState();
+    this.token.set(token);
+    if (!token) {
+      this.error.set('Общая платежная ссылка не найдена.');
+      return;
+    }
+    this.loadInvoice();
+  }
+
+  private clearRouteState(): void {
+    this.invoice.set(null);
+    this.loading.set(false);
+    this.refreshing.set(false);
+    this.submitting.set(false);
+    this.error.set('');
+    this.message.set('');
+    this.email.set('');
+    this.offerConsent.set(false);
+    this.privacyConsent.set(false);
+    this.receiptConsent.set(false);
+    this.lastReturnRefreshAt = 0;
+  }
+
+  private cancelRouteRead(): void {
+    const subscription = this.invoiceLoadSubscription;
+    this.invoiceLoadSubscription = undefined;
+    subscription?.unsubscribe();
+    this.loading.set(false);
+    this.refreshing.set(false);
+  }
+
+  private captureRoute(): RouteEpochTicket | null {
+    return this.routeEpoch.capture();
+  }
+
+  private isActiveRoute(routeTicket: RouteEpochTicket): boolean {
+    return this.routeEpoch.accepts(routeTicket);
   }
 
   private statusText(status?: string): string {

@@ -118,7 +118,7 @@ public class WorkerRiskTelegramCallbackService {
             return Optional.of("Telegram не привязан к пользователю");
         }
 
-        WorkerRiskIncident incident = incidentRepository.findById(command.get().incidentId()).orElse(null);
+        WorkerRiskIncident incident = incidentRepository.findByIdForUpdate(command.get().incidentId()).orElse(null);
         if (incident == null) {
             return Optional.of("Инцидент не найден");
         }
@@ -134,8 +134,7 @@ public class WorkerRiskTelegramCallbackService {
         } catch (ResponseStatusException exception) {
             return Optional.of("Сначала получите содержательный ответ или примите решение с обоснованием в разделе «Риски» на сайте");
         }
-        applyResolution(incident, command.get().action(), actor);
-        return Optional.of(answerFor(command.get().action()));
+        return Optional.of(applyResolution(incident, command.get().action(), actor));
     }
 
     @Transactional
@@ -161,7 +160,7 @@ public class WorkerRiskTelegramCallbackService {
         }
 
         Long incidentId = explanationMarkerId(replyToMessageText);
-        WorkerRiskIncident incident = incidentId == null ? null : incidentRepository.findById(incidentId).orElse(null);
+        WorkerRiskIncident incident = incidentId == null ? null : incidentRepository.findByIdForUpdate(incidentId).orElse(null);
         if (incident == null || incident.getStatus() != WorkerRiskIncidentStatus.OPEN) {
             return false;
         }
@@ -175,8 +174,13 @@ public class WorkerRiskTelegramCallbackService {
         User actor = actorTelegramId == null
                 ? null
                 : userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
-        if (actor == null || actor.getId() == null || !Objects.equals(actor.getId(), worker.getId())
-                || incident.getExplanationRequestedAt() == null || incident.getExplanationAcceptedAt() != null) {
+        if (actor == null || actor.getId() == null) {
+            telegramService.sendMessage(chatId, telegramBindingInstruction());
+            return false;
+        }
+        if (!Objects.equals(actor.getId(), worker.getId())
+                || incident.getExplanationRequestedAt() == null
+                || incident.getExplanationAcceptedAt() != null) {
             return false;
         }
         return saveWorkerExplanation(chatId, worker, actor, incident, messageText);
@@ -196,6 +200,7 @@ public class WorkerRiskTelegramCallbackService {
         incident.setWorkerExplanationAt(now);
         incident.setWorkerExplanationByUserId(actor != null && actor.getId() != null ? actor.getId() : worker.getId());
         incident.setExplanationAcceptedAt(null);
+        clearSlaDeliveryClaim(incident);
         incidentRepository.save(incident);
         riskEventService.record(
                 incident,
@@ -471,7 +476,7 @@ public class WorkerRiskTelegramCallbackService {
             return Optional.of("Инцидент не найден");
         }
 
-        WorkerRiskIncident incident = incidentRepository.findById(incidentId).orElse(null);
+        WorkerRiskIncident incident = incidentRepository.findByIdForUpdate(incidentId).orElse(null);
         if (incident == null) {
             return Optional.of("Инцидент не найден");
         }
@@ -494,17 +499,20 @@ public class WorkerRiskTelegramCallbackService {
         }
         User actor = userService.findByChatId(actorTelegramId).filter(User::isActive).orElse(null);
         if (actor == null) {
-            return Optional.of("Telegram не привязан к пользователю");
-        }
-        if (!Objects.equals(actor.getId(), worker.getId())) {
-            return Optional.of("Эта кнопка предназначена назначенному специалисту");
+            return Optional.of("Telegram не привязан. Обратитесь к администратору для безопасной привязки");
         }
 
         if (chatId != null && chatId < 0) {
             if (!Objects.equals(worker.getWorkerTelegramGroupChatId(), chatId)) {
                 return Optional.of("Эта группа не привязана к специалисту");
             }
+            if (!Objects.equals(actor.getId(), worker.getId())) {
+                return Optional.of("Эта кнопка предназначена назначенному специалисту");
+            }
         } else {
+            if (!Objects.equals(actor.getId(), worker.getId())) {
+                return Optional.of("Эта кнопка предназначена назначенному специалисту");
+            }
             chatId = chatId == null ? actor.getTelegramChatId() : chatId;
         }
 
@@ -537,14 +545,10 @@ public class WorkerRiskTelegramCallbackService {
             String prompt = text
                     + "\nОтветьте на это сообщение коротким пояснением."
                     + "\n" + GROUP_EXPLANATION_MARKER + incidentId;
-            if (worker != null && worker.getTelegramChatId() != null) {
-                telegramService.sendMessage(chatId, "Только назначенный специалист.\n" + prompt);
-            } else {
-                telegramService.sendMessage(chatId,
-                        text
-                                + "\nTelegram специалиста не привязан к профилю. Привяжите его, чтобы адресно запросить пояснение."
-                                + "\n" + GROUP_EXPLANATION_MARKER + incidentId);
-            }
+            telegramService.sendMessage(
+                    chatId,
+                    "Ответить может только назначенный специалист с привязанным Telegram.\n" + prompt
+            );
             return;
         }
         telegramService.sendForceReplyMessage(chatId, text + "\nНапишите пояснение следующим сообщением.");
@@ -572,8 +576,18 @@ public class WorkerRiskTelegramCallbackService {
         if (incident == null) {
             return Optional.empty();
         }
-        return userService.findByUserName(incident.getWorkerUsername())
-                .filter(user -> Objects.equals(user.getId(), incident.getWorkerUserId()));
+        try {
+            return Optional.ofNullable(userService.findByIdToUserInfo(incident.getWorkerUserId()))
+                    .filter(user -> Objects.equals(user.getId(), incident.getWorkerUserId()));
+        } catch (java.util.NoSuchElementException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private String telegramBindingInstruction() {
+        return "Ответ не засчитан: Telegram не привязан к пользователю."
+                + "\nОбратитесь к администратору для безопасной привязки."
+                + "\nНе отправляйте логин в общий чат.";
     }
 
     private Long parseExplanationIncidentId(String callbackData) {
@@ -617,7 +631,7 @@ public class WorkerRiskTelegramCallbackService {
                 && user.getRoles().stream().anyMatch(role -> roleName.equals(role.getName()));
     }
 
-    private void applyResolution(WorkerRiskIncident incident, WorkerRiskResolutionAction action, User actor) {
+    private String applyResolution(WorkerRiskIncident incident, WorkerRiskResolutionAction action, User actor) {
         incident.setStatus(statusFor(action));
         incident.setResolutionAction(action);
         incident.setResolvedAt(decisionPolicy.isFinalAction(action) ? LocalDateTime.now() : null);
@@ -631,9 +645,13 @@ public class WorkerRiskTelegramCallbackService {
         if (restrictionReleased) {
             incident.setSectionRestrictionReleasedAt(LocalDateTime.now());
         }
+        if (decisionPolicy.isFinalAction(action)) {
+            clearSlaDeliveryClaim(incident);
+        }
 
+        String answerOverride = null;
         if (action == WorkerRiskResolutionAction.EXPLANATION_REQUESTED) {
-            requestWorkerExplanation(incident);
+            answerOverride = requestWorkerExplanation(incident);
         } else if (action == WorkerRiskResolutionAction.VIOLATION_CONFIRMED) {
             recordPenalty(incident);
             notifyWorkerViolation(incident);
@@ -662,6 +680,7 @@ public class WorkerRiskTelegramCallbackService {
         if (decisionPolicy.isFinalAction(action)) {
             markOriginalRiskTelegramMessageResolved(savedIncident);
         }
+        return firstNonBlank(answerOverride, answerFor(action));
     }
 
     private void rememberPromptMessage(WorkerRiskIncident incident, Long chatId, Integer messageId) {
@@ -694,10 +713,10 @@ public class WorkerRiskTelegramCallbackService {
         personalReminderService.deleteSystemRemindersBySource(SOURCE_WORKER_EXPLANATION, incident.getId());
     }
 
-    private void requestWorkerExplanation(WorkerRiskIncident incident) {
-        User worker = userService.findByUserName(incident.getWorkerUsername()).orElse(null);
+    private String requestWorkerExplanation(WorkerRiskIncident incident) {
+        User worker = workerFor(incident).orElse(null);
         if (worker == null || !worker.isActive()) {
-            return;
+            return "Специалист недоступен; срок ответа не запущен";
         }
         if (incident.getExplanationRequestedAt() == null) {
             incident.setExplanationRequestedAt(LocalDateTime.now());
@@ -713,6 +732,19 @@ public class WorkerRiskTelegramCallbackService {
                 + "\n\nПожалуйста, напишите менеджеру, что произошло, и подтвердите фактическое выполнение. "
                 + "Рабочие кнопки нужно нажимать только после реального выполнения задачи.";
 
+        boolean personalTelegramMissing = worker.getTelegramChatId() == null;
+        boolean responseRestrictionReleased = personalTelegramMissing
+                && incident.getSectionRestrictedAt() != null
+                && incident.getSectionRestrictionReleasedAt() == null;
+        if (personalTelegramMissing) {
+            incident.setResponseDueAt(null);
+            incident.setExplanationReminderAt(null);
+            clearSlaDeliveryClaim(incident);
+            if (responseRestrictionReleased) {
+                incident.setSectionRestrictionReleasedAt(LocalDateTime.now());
+            }
+        }
+        String failureReason = null;
         try {
             if (!personalReminderService.hasOpenSystemReminder(worker, SOURCE_MANAGER_WARNING, incident.getId())) {
                 personalReminderService.createSystemReminderDueNow(
@@ -724,7 +756,29 @@ public class WorkerRiskTelegramCallbackService {
                         incident.getOrderId()
                 );
             }
-            if (incident.getResponseDueAt() == null) {
+            if (personalTelegramMissing) {
+                if (worker.getWorkerTelegramGroupChatId() != null) {
+                    telegramService.sendMessage(
+                            worker.getWorkerTelegramGroupChatId(),
+                            "⚠️ Пояснение пока нельзя принять: личный Telegram специалиста не привязан."
+                                    + "\nТрёхчасовой срок и ограничение раздела не запущены."
+                                    + "\nОбратитесь к администратору для безопасной привязки."
+                                    + "\nНе отправляйте логин в общий чат."
+                                    + "\nКод риска: risk-" + incident.getId()
+                    );
+                }
+                failureReason = "Личный Telegram специалиста не привязан";
+                if (responseRestrictionReleased) {
+                    riskEventService.record(
+                            incident,
+                            WorkerRiskEventType.SPECIALIST_SECTION_RELEASED,
+                            worker.getId(),
+                            "WORKER",
+                            "telegram",
+                            Map.of("reason", "response-channel-unavailable")
+                    );
+                }
+            } else if (incident.getResponseDueAt() == null) {
                 Long telegramChatId = worker.getWorkerTelegramGroupChatId() != null
                         ? worker.getWorkerTelegramGroupChatId()
                         : worker.getTelegramChatId();
@@ -748,19 +802,26 @@ public class WorkerRiskTelegramCallbackService {
                                 Map.of("chatId", telegramChatId, "responseDueAt", incident.getResponseDueAt().toString())
                         );
                     } else {
-                        recordExplanationDeliveryFailure(incident, worker, "Telegram не отправил сообщение");
+                        failureReason = "Telegram не отправил сообщение";
                     }
                 } else {
-                    recordExplanationDeliveryFailure(incident, worker, "Telegram специалиста не привязан");
+                    failureReason = "Telegram специалиста не привязан";
                 }
             }
         } catch (RuntimeException exception) {
-            recordExplanationDeliveryFailure(incident, worker, "Ошибка отправки Telegram: " + exception.getMessage());
+            failureReason = "Ошибка отправки Telegram: " + exception.getMessage();
             log.warn("Не удалось отправить запрос пояснения по риск-инциденту incidentId={}, workerUserId={}",
                     incident.getId(),
                     incident.getWorkerUserId(),
                     exception);
         }
+        if (failureReason != null) {
+            recordExplanationDeliveryFailure(incident, worker, failureReason);
+            return personalTelegramMissing
+                    ? "Личный Telegram не привязан; срок ответа не запущен"
+                    : "Пояснение не отправлено; срок ответа не запущен";
+        }
+        return null;
     }
 
     private void recordExplanationDeliveryFailure(
@@ -846,7 +907,7 @@ public class WorkerRiskTelegramCallbackService {
     }
 
     private void notifyWorkerViolation(WorkerRiskIncident incident) {
-        User worker = userService.findByUserName(incident.getWorkerUsername()).orElse(null);
+        User worker = workerFor(incident).orElse(null);
         if (worker == null || !worker.isActive()) {
             return;
         }
@@ -959,11 +1020,23 @@ public class WorkerRiskTelegramCallbackService {
         if (incident == null || incident.getResponseDueAt() != null) {
             return;
         }
+        incident.setExplanationReminderAt(null);
+        clearSlaDeliveryClaim(incident);
+        if (incident.getSectionRestrictionReleasedAt() != null) {
+            incident.setSectionRestrictedAt(null);
+            incident.setSectionRestrictionReleasedAt(null);
+        }
         int deadlineMinutes = Math.max(1, appSettingService.getInt(
                 AppSettingService.WORKER_RISK_EXPLANATION_DEADLINE_MINUTES,
                 180
         ));
         incident.setResponseDueAt(requestedAt.plusMinutes(deadlineMinutes));
+    }
+
+    private void clearSlaDeliveryClaim(WorkerRiskIncident incident) {
+        incident.setSlaDeliveryClaimToken(null);
+        incident.setSlaDeliveryClaimedAt(null);
+        incident.setSlaDeliveryClaimKind(null);
     }
 
     private record CallbackCommand(Long incidentId, WorkerRiskResolutionAction action) {

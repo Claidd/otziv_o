@@ -16,5 +16,6 @@ public enum PaymentLinkStatus {
     REFUNDED,
     PARTIAL_REFUNDED,
     EXPIRED,
+    NEEDS_RECONCILIATION,
     FAILED
 }

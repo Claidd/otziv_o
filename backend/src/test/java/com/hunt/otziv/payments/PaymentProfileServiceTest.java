@@ -1,10 +1,14 @@
 package com.hunt.otziv.payments;
 
 import com.hunt.otziv.payments.config.TbankPaymentProperties;
+import com.hunt.otziv.payments.dto.PaymentProfilePolicyRequest;
 import com.hunt.otziv.payments.dto.TbankPaymentProfile;
 import com.hunt.otziv.payments.dto.UpdateManagerManualPaymentSettingsRequest;
+import com.hunt.otziv.payments.dto.UpdatePaymentProfilePoliciesRequest;
 import com.hunt.otziv.payments.model.PaymentPolicy;
+import com.hunt.otziv.payments.model.ManualPaymentType;
 import com.hunt.otziv.payments.model.PaymentProfile;
+import com.hunt.otziv.payments.model.TbankRuntimeMode;
 import com.hunt.otziv.payments.repository.PaymentLinkRepository;
 import com.hunt.otziv.payments.repository.PaymentProfileRepository;
 import com.hunt.otziv.payments.service.PaymentProfileService;
@@ -12,6 +16,7 @@ import com.hunt.otziv.payments.service.TbankRuntimeSettingsService;
 import com.hunt.otziv.u_users.model.Manager;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.repository.ManagerRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
@@ -19,7 +24,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
 import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +72,134 @@ class PaymentProfileServiceTest {
 
         assertEquals(403, error.getStatusCode().value());
         verify(paymentProfileRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void legacyUnsafeManualUrlDoesNotBreakSettingsResponseOrChangeRecipient() {
+        PaymentProfile profile = profile();
+        profile.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        profile.setManualPaymentUrl("javascript:alert(document.cookie)");
+        Manager manager = manager(profile);
+        when(managerRepository.findByUserIdWithPaymentProfile(10L)).thenReturn(Optional.of(manager));
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+
+        var response = service.managerManualPaymentSettings(10L);
+
+        assertEquals("", response.manualPaymentUrl());
+        verify(paymentProfileRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void managementStateMarksOnlyUnsafeNonblankLegacyManualUrlAsUnconfigured() {
+        PaymentProfile safe = profile();
+        safe.setId(21L);
+        safe.setManualPaymentUrl("https://pay.example/safe");
+        PaymentProfile defaulted = profile();
+        defaulted.setId(22L);
+        defaulted.setManualPaymentUrl(null);
+        PaymentProfile unsafe = profile();
+        unsafe.setId(23L);
+        unsafe.setManualPaymentUrl("javascript:alert(document.cookie)");
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(safe, defaulted, unsafe));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.LIVE);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+
+        var profiles = service.managementState().profiles();
+
+        assertTrue(profiles.get(0).manualPaymentUrlConfigured());
+        assertEquals("https://pay.example/safe", profiles.get(0).manualPaymentUrl());
+        assertTrue(profiles.get(1).manualPaymentUrlConfigured());
+        assertEquals(ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL, profiles.get(1).manualPaymentUrl());
+        assertFalse(profiles.get(2).manualPaymentUrlConfigured());
+        assertEquals("", profiles.get(2).manualPaymentUrl());
+    }
+
+    @Test
+    void legacyPolicyUpdateCannotReplaceQuarantinedValueWithDisplayedDefault() {
+        PaymentProfile profile = profile();
+        profile.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        profile.setManualPaymentUrl("javascript:legacy-recipient()");
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(profile));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.LIVE);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+        PaymentProfilePolicyRequest update = new PaymentProfilePolicyRequest(
+                profile.getId(),
+                PaymentPolicy.T_BANK_ONLY.name(),
+                ManualPaymentType.EXTERNAL_LINK.name(),
+                "",
+                "Получатель",
+                ManualPaymentType.DEFAULT_EXTERNAL_PAYMENT_URL,
+                "Оплатить",
+                "",
+                100_000L,
+                200_000L
+        );
+
+        var response = service.updateProfilePolicies(new UpdatePaymentProfilePoliciesRequest(List.of(update)));
+
+        assertEquals("javascript:legacy-recipient()", profile.getManualPaymentUrl());
+        assertFalse(response.profiles().get(0).manualPaymentUrlConfigured());
+        assertEquals("", response.profiles().get(0).manualPaymentUrl());
+        verify(paymentProfileRepository).save(profile);
+    }
+
+    @Test
+    void currentPolicyUpdateCanExplicitlyReplaceQuarantinedValue() {
+        PaymentProfile profile = profile();
+        profile.setManualPaymentType(ManualPaymentType.EXTERNAL_LINK);
+        profile.setManualPaymentUrl("javascript:legacy-recipient()");
+        when(paymentProfileRepository.findAllByOrderByDefaultProfileDescNameAsc())
+                .thenReturn(List.of(profile));
+        when(managerRepository.findAllForPaymentProfileAssignments()).thenReturn(List.of());
+        when(runtimeSettingsService.runtimeMode()).thenReturn(TbankRuntimeMode.LIVE);
+        PaymentProfileService service = new PaymentProfileService(
+                paymentProfileRepository,
+                paymentLinkRepository,
+                managerRepository,
+                new TbankPaymentProperties(),
+                runtimeSettingsService
+        );
+        PaymentProfilePolicyRequest update = new PaymentProfilePolicyRequest(
+                profile.getId(),
+                PaymentPolicy.MANUAL_UNTIL_LIMIT_THEN_TBANK.name(),
+                ManualPaymentType.EXTERNAL_LINK.name(),
+                "",
+                "Получатель",
+                "https://pay.example/replacement",
+                "Оплатить",
+                "",
+                100_000L,
+                200_000L,
+                true
+        );
+
+        var response = service.updateProfilePolicies(new UpdatePaymentProfilePoliciesRequest(List.of(update)));
+
+        assertEquals("https://pay.example/replacement", profile.getManualPaymentUrl());
+        assertTrue(response.profiles().get(0).manualPaymentUrlConfigured());
+        assertEquals("https://pay.example/replacement", response.profiles().get(0).manualPaymentUrl());
     }
 
     private Manager manager(PaymentProfile profile) {

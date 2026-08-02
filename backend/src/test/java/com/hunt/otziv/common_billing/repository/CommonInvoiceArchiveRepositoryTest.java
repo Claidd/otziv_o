@@ -3,11 +3,15 @@ package com.hunt.otziv.common_billing.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.hunt.otziv.archive.dto.ArchiveAccessScope;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -45,5 +49,50 @@ class CommonInvoiceArchiveRepositoryTest {
                 .doesNotContain("invoice_idFROM")
                 .contains("DISTINCT ci.invoice_id\nFROM common_invoices ci")
                 .contains("DISTINCT aci.invoice_id\nFROM archive_common_invoices aci");
+    }
+
+    @Test
+    void lockedRestoreRecheckAcceptsOnlyTerminalArchivedPaymentRefs() {
+        Map<String, Long> params = Map.of("invoiceId", 40L);
+        when(jdbc.queryForList(contains("FROM archive_common_invoices"), eq(params), eq(Long.class)))
+                .thenReturn(List.of(40L));
+        when(jdbc.queryForList(
+                contains("FROM archive_common_invoice_payment_refs"),
+                eq(params),
+                eq(String.class)
+        )).thenReturn(List.of("APPLIED", " partial_refunded ", "REVERSED"));
+        CommonInvoiceArchiveRepository repository = new CommonInvoiceArchiveRepository(jdbc);
+
+        assertThat(repository.lockAndCheckPaymentRefsRestorable(40L)).isTrue();
+    }
+
+    @Test
+    void lockedRestoreRecheckRejectsCurrentAndUnknownPaymentRefs() {
+        Map<String, Long> params = Map.of("invoiceId", 40L);
+        when(jdbc.queryForList(contains("FROM archive_common_invoices"), eq(params), eq(Long.class)))
+                .thenReturn(List.of(40L));
+        when(jdbc.queryForList(
+                contains("FROM archive_common_invoice_payment_refs"),
+                eq(params),
+                eq(String.class)
+        )).thenReturn(List.of("CURRENT", "FUTURE_PROVIDER_STATE"));
+        CommonInvoiceArchiveRepository repository = new CommonInvoiceArchiveRepository(jdbc);
+
+        assertThat(repository.lockAndCheckPaymentRefsRestorable(40L)).isFalse();
+    }
+
+    @Test
+    void lockedRestoreRecheckRejectsAnAlreadyRestoredInvoiceBeforeReadingPaymentRefs() {
+        Map<String, Long> params = Map.of("invoiceId", 40L);
+        when(jdbc.queryForList(contains("FROM archive_common_invoices"), eq(params), eq(Long.class)))
+                .thenReturn(List.of());
+        CommonInvoiceArchiveRepository repository = new CommonInvoiceArchiveRepository(jdbc);
+
+        assertThat(repository.lockAndCheckPaymentRefsRestorable(40L)).isFalse();
+        verify(jdbc, never()).queryForList(
+                contains("FROM archive_common_invoice_payment_refs"),
+                eq(params),
+                eq(String.class)
+        );
     }
 }

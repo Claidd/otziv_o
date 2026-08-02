@@ -7,7 +7,7 @@ import com.hunt.otziv.c_cities.model.City;
 import com.hunt.otziv.c_companies.model.Filial;
 import com.hunt.otziv.c_companies.repository.CompanyRepository;
 import com.hunt.otziv.c_companies.services.FilialService;
-import com.hunt.otziv.config.email.EmailService;
+import com.hunt.otziv.config.email.service.EmailService;
 import com.hunt.otziv.p_products.services.service.BotAssignmentService;
 import com.hunt.otziv.p_products.worker_access.service.WorkerAssignmentMutationGuardService;
 import com.hunt.otziv.r_review.model.Review;
@@ -33,6 +33,9 @@ import java.util.stream.Collectors;
 public class ReviewBotChangeService {
 
     private static final Long STUB_BOT_ID = 1L;
+    private static final String BOT_BINDING_CONFLICT =
+            "Указанный аккаунт больше не привязан к этой карточке. Обновите данные и повторите действие";
+    private static final String INVALID_BOT_ID = "Идентификатор аккаунта не может быть отрицательным";
     private static final Set<Long> OWN_CITY_NEW_ACCOUNT_CITY_IDS = Set.of(320L, 326L);
     private static final Set<String> TEMPLATE_BOT_NAMES = Set.of(
             "Впишите Имя Фамилию",
@@ -92,6 +95,8 @@ public class ReviewBotChangeService {
             Bot currentBot = review.getBot();
             Long currentBotId = currentBot != null ? currentBot.getId() : null;
 
+            assertRequestedBotIsCurrent(botId, currentBotId);
+
             if ((botId == null || botId == 0L) && currentBotId != null && currentBotId > 0) {
                 botId = currentBotId;
                 log.info("Используем ID реального бота отзыва: {}", botId);
@@ -118,9 +123,20 @@ public class ReviewBotChangeService {
             reviewRepository.save(review);
             reassignUnpublishedReviewsForBlockedBot(botId, review.getId(), excludedBotIds);
 
+        } catch (ResponseStatusException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Что-то пошло не так и бот не деактивирован", e);
             throw new RuntimeException("Ошибка при деактивации и смене бота: " + e.getMessage(), e);
+        }
+    }
+
+    private void assertRequestedBotIsCurrent(Long requestedBotId, Long currentBotId) {
+        if (requestedBotId != null && requestedBotId < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_BOT_ID);
+        }
+        if (requestedBotId != null && requestedBotId > 0 && !Objects.equals(requestedBotId, currentBotId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, BOT_BINDING_CONFLICT);
         }
     }
 

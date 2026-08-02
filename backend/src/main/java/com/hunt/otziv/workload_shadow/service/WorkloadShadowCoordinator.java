@@ -2,8 +2,8 @@ package com.hunt.otziv.workload_shadow.service;
 
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowRunResponse;
 import com.hunt.otziv.workload_shadow.dto.WorkloadShadowSettingsResponse;
-import com.hunt.otziv.workload_shadow.lock.WorkloadShadowRecalculationLease;
-import com.hunt.otziv.workload_shadow.lock.WorkloadShadowRecalculationLockService;
+import com.hunt.otziv.workload_shadow.lock.model.WorkloadShadowRecalculationLease;
+import com.hunt.otziv.workload_shadow.lock.service.WorkloadShadowRecalculationLockService;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;

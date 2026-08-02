@@ -81,6 +81,26 @@ public class User {
     @Column(name = "active")
     private boolean active;
 
+    // Additive concurrency/authentication state from V1_10_166. rowVersion is
+    // intentionally not annotated with @Version yet: enabling optimistic
+    // locking globally would change every existing User write path at once.
+    @Builder.Default
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion = 0L;
+
+    @Builder.Default
+    @Column(name = "auth_epoch", nullable = false)
+    private long authEpoch = 0L;
+
+    @Column(name = "deactivated_at")
+    private LocalDateTime deactivatedAt;
+
+    @Column(name = "deactivated_by_user_id")
+    private Long deactivatedByUserId;
+
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
     @Column(name = "activate_code")
     private String activateCode;
 

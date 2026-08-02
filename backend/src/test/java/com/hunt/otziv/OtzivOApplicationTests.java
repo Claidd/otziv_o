@@ -9,7 +9,7 @@ import com.hunt.otziv.manager.dto.api.PageResponse;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerAssignmentMutationGuardRepository;
 import com.hunt.otziv.p_products.worker_access.repository.WorkerNetworkViolationRepository;
 import com.hunt.otziv.r_review.services.ReviewService;
-import com.hunt.otziv.workload_shadow.notification.WorkloadShadowDeliveryOutcome;
+import com.hunt.otziv.workload_shadow.notification.dto.WorkloadShadowDeliveryOutcome;
 import com.hunt.otziv.workload_shadow.repository.WorkloadLiveReadinessRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowEventRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowMonitorRepository;
@@ -17,7 +17,7 @@ import com.hunt.otziv.workload_shadow.repository.WorkloadShadowNotificationStore
 import com.hunt.otziv.workload_shadow.repository.WorkloadShadowRunRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferOfferRepository;
 import com.hunt.otziv.workload_shadow.repository.WorkloadTransferPreferenceRepository;
-import com.hunt.otziv.workload_shadow.maintenance.WorkloadShadowMaintenanceService;
+import com.hunt.otziv.workload_shadow.maintenance.service.WorkloadShadowMaintenanceService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowProjectionService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowRunService;
 import com.hunt.otziv.workload_shadow.service.WorkloadShadowTransferSimulationService;
@@ -51,10 +51,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OtzivOApplicationTests {
 
 	@Container
-	static final MySQLContainer<?> mysql = new MySQLContainer<>("mysql:8.0")
+	static final MySQLContainer<?> mysql = new MySQLContainer<>("mysql@sha256:8b879a3959bc59adcb7281a41950d39cf8c9b3fb23b87b9b62318ce884a7c383")
 			.withDatabaseName("otziv")
 			.withUsername("root")
-			.withPassword("root");
+			.withPassword("root")
+			.withCommand("--restrict-fk-on-non-standard-key=OFF");
 
 	@DynamicPropertySource
 	static void registerMysqlProperties(DynamicPropertyRegistry registry) {
@@ -158,6 +159,62 @@ class OtzivOApplicationTests {
 	@Test
 	void flywayMigrationsApplyOnMySql() {
 		assertThat(flyway.info().applied()).isNotEmpty();
+	}
+
+	@Test
+	void externalReviewCandidateIndexMatchesOldestFirstScanOrder() {
+		var indexedColumns = jdbcTemplate.queryForList("""
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.STATISTICS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'reviews'
+			  AND INDEX_NAME = 'idx_reviews_external_auto_candidates'
+			ORDER BY SEQ_IN_INDEX
+			""", String.class);
+
+		assertThat(indexedColumns).containsExactly(
+				"review_publish",
+				"review_published_marked_at",
+				"review_id",
+				"review_external_confirm_status"
+		);
+	}
+
+	@Test
+	void workerRiskSlaDeliveryClaimSchemaIsComplete() {
+		var columns = jdbcTemplate.queryForList("""
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'worker_risk_incidents'
+			  AND COLUMN_NAME IN (
+			      'row_version',
+			      'sla_delivery_claim_token',
+			      'sla_delivery_claimed_at',
+			      'sla_delivery_claim_kind'
+			  )
+			ORDER BY COLUMN_NAME
+			""", String.class);
+		var indexedColumns = jdbcTemplate.queryForList("""
+			SELECT COLUMN_NAME
+			FROM INFORMATION_SCHEMA.STATISTICS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'worker_risk_incidents'
+			  AND INDEX_NAME = 'idx_worker_risk_sla_cursor'
+			ORDER BY SEQ_IN_INDEX
+			""", String.class);
+
+		assertThat(columns).containsExactlyInAnyOrder(
+				"row_version",
+				"sla_delivery_claimed_at",
+				"sla_delivery_claim_kind",
+				"sla_delivery_claim_token"
+		);
+		assertThat(indexedColumns).containsExactly(
+				"status",
+				"response_due_at",
+				"incident_id"
+		);
 	}
 
 	@Test

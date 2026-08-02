@@ -16,7 +16,28 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoiceOrder, Long> {
 
+    interface OrderInvoiceBindingView {
+        Long getOrderId();
+
+        Long getInvoiceId();
+
+        Long getAccountId();
+    }
+
     Optional<CommonInvoiceOrder> findByOrder_Id(Long orderId);
+
+    /**
+     * Performs a current locking read of the common-invoice membership for an
+     * order. Callers must acquire the parent Order write lock first; all
+     * membership writers follow the same Order -> Invoice lock order.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT item
+        FROM CommonInvoiceOrder item
+        WHERE item.order.id = :orderId
+    """)
+    Optional<CommonInvoiceOrder> findMembershipByOrderIdForRead(@Param("orderId") Long orderId);
 
     @Query("""
         SELECT item
@@ -70,6 +91,44 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
     """)
     List<CommonInvoiceOrder> findByInvoiceIdsWithOrders(@Param("invoiceIds") Collection<Long> invoiceIds);
 
+    @Query("""
+        SELECT item.order.id
+        FROM CommonInvoiceOrder item
+        WHERE item.invoice.id = :invoiceId
+        ORDER BY item.order.id ASC
+    """)
+    List<Long> findOrderIdsByInvoiceId(@Param("invoiceId") Long invoiceId);
+
+    @Query("""
+        SELECT item.order.id
+        FROM CommonInvoiceOrder item
+        JOIN item.invoice invoice
+        WHERE invoice.token = :token
+        ORDER BY item.order.id ASC
+    """)
+    List<Long> findOrderIdsByInvoiceToken(@Param("token") String token);
+
+    @Query("""
+        SELECT item.order.id AS orderId,
+               item.invoice.id AS invoiceId,
+               item.invoice.account.id AS accountId
+        FROM CommonInvoiceOrder item
+        WHERE item.invoice.id IN :invoiceIds
+        ORDER BY item.order.id ASC, item.invoice.id ASC
+    """)
+    List<OrderInvoiceBindingView> findBindingsByInvoiceIds(
+            @Param("invoiceIds") Collection<Long> invoiceIds
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("""
+        SELECT item
+        FROM CommonInvoiceOrder item
+        WHERE item.invoice.id = :invoiceId
+        ORDER BY item.id ASC
+    """)
+    List<CommonInvoiceOrder> findMembershipByInvoiceIdForRead(@Param("invoiceId") Long invoiceId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
         SELECT item
@@ -88,6 +147,28 @@ public interface CommonInvoiceOrderRepository extends CrudRepository<CommonInvoi
         ORDER BY invoice.id ASC, item.id ASC
     """)
     List<CommonInvoiceOrder> findMovableOpenItemsForCompany(
+            @Param("companyId") Long companyId,
+            @Param("targetAccountId") Long targetAccountId,
+            @Param("statuses") Collection<CommonInvoiceStatus> statuses
+    );
+
+    @Query("""
+        SELECT item.order.id AS orderId,
+               item.invoice.id AS invoiceId,
+               item.invoice.account.id AS accountId
+        FROM CommonInvoiceOrder item
+        JOIN item.invoice invoice
+        JOIN invoice.account account
+        JOIN item.order order
+        JOIN order.company company
+        WHERE company.id = :companyId
+          AND account.id <> :targetAccountId
+          AND invoice.status IN :statuses
+          AND item.paid = FALSE
+          AND item.unpaid = FALSE
+        ORDER BY order.id ASC, invoice.id ASC
+    """)
+    List<OrderInvoiceBindingView> findMovableOpenBindingsForCompany(
             @Param("companyId") Long companyId,
             @Param("targetAccountId") Long targetAccountId,
             @Param("statuses") Collection<CommonInvoiceStatus> statuses

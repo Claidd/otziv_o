@@ -4,15 +4,18 @@ import com.hunt.otziv.b_bots.model.Bot;
 import com.hunt.otziv.business_audit.service.BusinessAuditService;
 import com.hunt.otziv.c_companies.model.Company;
 import com.hunt.otziv.c_companies.services.CompanyService;
+import com.hunt.otziv.manager.services.ManagerAccessService;
 import com.hunt.otziv.p_products.dto.OrderDetailsDTO;
 import com.hunt.otziv.p_products.model.Order;
 import com.hunt.otziv.p_products.model.OrderDetails;
 import com.hunt.otziv.p_products.model.OrderStatus;
-import com.hunt.otziv.p_products.review.OrderPublicationApprovalService;
+import com.hunt.otziv.p_products.review.service.OrderPublicationApprovalService;
 import com.hunt.otziv.p_products.services.service.OrderDetailsService;
 import com.hunt.otziv.p_products.services.service.OrderService;
 import com.hunt.otziv.r_review.dto.ReviewDTO;
 import com.hunt.otziv.r_review.model.Review;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckMutationLockService;
+import com.hunt.otziv.r_review.capability.service.ReviewCheckPublicMutationPolicy;
 import com.hunt.otziv.r_review.services.ReviewService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService;
 import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCheck;
@@ -20,6 +23,7 @@ import com.hunt.otziv.archive.service.ReviewCheckArchiveService.ArchivedReviewCh
 import com.hunt.otziv.archive.exception.ArchiveRestoreConflictException;
 import com.hunt.otziv.u_users.model.User;
 import com.hunt.otziv.u_users.model.Worker;
+import com.hunt.otziv.webhook.security.WebhookClientIpResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -44,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -70,6 +75,15 @@ class ApiReviewCheckControllerTest {
 
     @Mock
     private OrderPublicationApprovalService publicationApprovalService;
+
+    @Mock
+    private ReviewCheckMutationLockService mutationLockService;
+
+    @Mock
+    private ManagerAccessService managerAccessService;
+
+    @Mock
+    private WebhookClientIpResolver clientIpResolver;
 
     @Test
     void anonymousResponseKeepsClientActionsButHidesInternalFields() {
@@ -99,6 +113,7 @@ class ApiReviewCheckControllerTest {
         UUID orderDetailId = UUID.randomUUID();
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
                 .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(managerAccessService.canAccessOrder(eq(101L), any(Authentication.class))).thenReturn(true);
 
         ApiReviewCheckController.ReviewCheckResponse response = controller()
                 .getReviewCheck(orderDetailId, authentication("ROLE_MANAGER"));
@@ -110,6 +125,81 @@ class ApiReviewCheckControllerTest {
         assertThat(response.companyComments()).isEqualTo("internal company note");
         assertThat(response.reviews().getFirst().botName()).isEqualTo("Bot Fio");
         assertThat(response.permissions().canOpenManagerLinks()).isTrue();
+        assertThat(response.permissions().canApprovePublication()).isTrue();
+        assertThat(response.permissions().canSendCorrection()).isTrue();
+    }
+
+    @Test
+    void foreignManagerIsDowngradedToPublicLinkPermissions() {
+        UUID orderDetailId = UUID.randomUUID();
+        Authentication manager = authentication("ROLE_MANAGER");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(managerAccessService.canAccessOrder(101L, manager)).thenReturn(false);
+
+        ApiReviewCheckController.ReviewCheckResponse response = controller()
+                .getReviewCheck(orderDetailId, manager);
+
+        assertThat(response.permissions().authenticated()).isTrue();
+        assertThat(response.permissions().canSeeInternalInfo()).isFalse();
+        assertThat(response.permissions().canOpenManagerLinks()).isFalse();
+        assertThat(response.permissions().canMarkPaid()).isFalse();
+        assertThat(response.permissions().canEditNotes()).isFalse();
+        assertThat(response.permissions().canSave()).isTrue();
+        assertThat(response.permissions().canApprovePublication()).isTrue();
+        assertThat(response.permissions().canSendCorrection()).isTrue();
+        assertThat(response.orderId()).isNull();
+        assertThat(response.workerFio()).isEmpty();
+        assertThat(response.orderComments()).isEmpty();
+        assertThat(response.companyComments()).isEmpty();
+        assertThat(response.reviews().getFirst().botName()).isEmpty();
+    }
+
+    @Test
+    void assignedWorkerCanSaveButCannotApproveOrSendCorrection() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        Authentication worker = authentication("ROLE_WORKER");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(managerAccessService.canAccessOrder(101L, worker)).thenReturn(true);
+
+        ApiReviewCheckController controller = controller();
+        ApiReviewCheckController.ReviewCheckResponse response = controller.getReviewCheck(orderDetailId, worker);
+
+        assertThat(response.permissions().canSeeInternalInfo()).isTrue();
+        assertThat(response.permissions().canSave()).isTrue();
+        assertThat(response.permissions().canApprovePublication()).isFalse();
+        assertThat(response.permissions().canSendCorrection()).isFalse();
+
+        ApiReviewCheckController.ReviewCheckUpdateRequest request = new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                "client comment",
+                List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                        501L,
+                        "worker text",
+                        "worker answer",
+                        null,
+                        null,
+                        null
+                ))
+        );
+
+        assertThatThrownBy(() -> controller.approveReviews(
+                orderDetailId,
+                request,
+                worker,
+                new org.springframework.mock.web.MockHttpServletRequest()
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+        assertThatThrownBy(() -> controller.sendToCorrection(orderDetailId, request, worker))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        verify(publicationApprovalService, never()).approvePreparedOrder(anyLong(), any(), any());
+        verify(orderService, never()).changeStatusForOrder(101L, "Коррекция");
+        verify(reviewService, never()).updateOrderDetailAndReviews(any());
     }
 
     @Test
@@ -134,9 +224,9 @@ class ApiReviewCheckControllerTest {
                 null
         );
 
-        ArgumentCaptor<ReviewDTO> reviewCaptor = ArgumentCaptor.forClass(ReviewDTO.class);
-        verify(reviewService).updateOrderDetailAndReview(any(OrderDetailsDTO.class), reviewCaptor.capture(), eq(501L));
-        ReviewDTO savedReview = reviewCaptor.getValue();
+        ArgumentCaptor<OrderDetailsDTO> detailsCaptor = ArgumentCaptor.forClass(OrderDetailsDTO.class);
+        verify(reviewService).updateOrderDetailAndReviews(detailsCaptor.capture());
+        ReviewDTO savedReview = detailsCaptor.getValue().getReviews().getFirst();
         assertThat(savedReview.getText()).isEqualTo("client text");
         assertThat(savedReview.getAnswer()).isEqualTo("client answer");
         assertThat(savedReview.isPublish()).isFalse();
@@ -145,8 +235,55 @@ class ApiReviewCheckControllerTest {
     }
 
     @Test
+    void publicMutationLocksResourceBeforeReadingAndRejectsDuplicateReviewIds() {
+        UUID orderDetailId = UUID.randomUUID();
+        OrderDetails details = orderDetails(orderDetailId, "На проверке");
+        Review first = details.getReviews().getFirst();
+        Review second = Review.builder()
+                .id(502L)
+                .text("second text")
+                .answer("")
+                .orderDetails(details)
+                .build();
+        details.setReviews(List.of(first, second));
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId)).thenReturn(details);
+
+        ApiReviewCheckController.ReviewCheckReviewUpdateRequest duplicate =
+                new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                        501L,
+                        "text",
+                        "answer",
+                        null,
+                        null,
+                        null
+                );
+
+        assertThatThrownBy(() -> controller().saveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                        "comment",
+                        List.of(duplicate, duplicate)
+                ),
+                null
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(exception -> assertThat(((ResponseStatusException) exception).getStatusCode())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+
+        var ordered = inOrder(mutationLockService, orderDetailsService);
+        ordered.verify(mutationLockService).lock(orderDetailId);
+        ordered.verify(orderDetailsService).getOrderDetailForReviewCheckById(orderDetailId);
+        verify(reviewService, never()).updateOrderDetailAndReviews(any());
+    }
+
+    @Test
     void anonymousApproveAllowsPublicationWithClientTextChanges() throws Exception {
         UUID orderDetailId = UUID.randomUUID();
+        String bearerReferer = "https://o-ogo.ru/review/editReviews/" + orderDetailId;
+        var servletRequest = new org.springframework.mock.web.MockHttpServletRequest();
+        servletRequest.addHeader("Referer", bearerReferer);
+        servletRequest.addHeader("X-Forwarded-For", "198.51.100.99, 203.0.113.10");
+        when(clientIpResolver.resolve(servletRequest)).thenReturn("203.0.113.10");
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
                 .thenReturn(orderDetails(orderDetailId, "На проверке"));
         controller().approveReviews(
@@ -163,19 +300,324 @@ class ApiReviewCheckControllerTest {
                         ))
                 ),
                 null,
-                null
+                servletRequest
         );
 
-        ArgumentCaptor<ReviewDTO> reviewCaptor = ArgumentCaptor.forClass(ReviewDTO.class);
-        verify(reviewService).updateOrderDetailAndReview(any(OrderDetailsDTO.class), reviewCaptor.capture(), eq(501L));
-        assertThat(reviewCaptor.getValue().getText()).isEqualTo("client changed text");
-        assertThat(reviewCaptor.getValue().getAnswer()).isEqualTo("client changed answer");
+        ArgumentCaptor<OrderDetailsDTO> detailsCaptor = ArgumentCaptor.forClass(OrderDetailsDTO.class);
+        verify(reviewService).updateOrderDetailAndReviews(detailsCaptor.capture());
+        assertThat(detailsCaptor.getValue().getReviews().getFirst().getText()).isEqualTo("client changed text");
+        assertThat(detailsCaptor.getValue().getReviews().getFirst().getAnswer()).isEqualTo("client changed answer");
+        ArgumentCaptor<String> auditDetailsCaptor = ArgumentCaptor.forClass(String.class);
         verify(publicationApprovalService).approvePreparedOrder(
                 eq(101L),
                 any(),
-                any()
+                auditDetailsCaptor.capture()
         );
+        assertThat(auditDetailsCaptor.getValue())
+                .contains("ip=203.0.113.10")
+                .doesNotContain(orderDetailId.toString(), bearerReferer, "referer=", "198.51.100.99");
         verify(orderService, never()).changeStatusForOrder(101L, "Коррекция");
+    }
+
+    @Test
+    void approvalAuditBoundsAndSanitizesUntrustedHeaderValues() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        var servletRequest = new org.springframework.mock.web.MockHttpServletRequest();
+        servletRequest.addHeader("User-Agent", "agent=spoof;\u0001\u0085\u2028\u2029" + "x".repeat(400));
+        servletRequest.addHeader("Origin", "https://origin.example/a=b;c");
+        servletRequest.addHeader("Referer", "https://o-ogo.ru/review/editReviews/" + orderDetailId);
+        when(clientIpResolver.resolve(servletRequest)).thenReturn("203.0.113.11");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+
+        controller().approveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                        "client comment",
+                        List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                                501L,
+                                "client text",
+                                "",
+                                null,
+                                null,
+                                null
+                        ))
+                ),
+                null,
+                servletRequest
+        );
+
+        ArgumentCaptor<String> auditCaptor = ArgumentCaptor.forClass(String.class);
+        verify(publicationApprovalService).approvePreparedOrder(eq(101L), any(), auditCaptor.capture());
+        String audit = auditCaptor.getValue();
+        String userAgent = auditValue(audit, "userAgent");
+        String origin = auditValue(audit, "origin");
+
+        assertThat(userAgent.codePointCount(0, userAgent.length())).isLessThanOrEqualTo(256);
+        assertThat(userAgent)
+                .doesNotContain("=", ";", "\u0001", "\u0085", "\u2028", "\u2029");
+        assertThat(origin).isEqualTo("https://origin.example/a,b,c");
+        assertThat(audit)
+                .contains("ip=203.0.113.11;")
+                .doesNotContain("referer=", orderDetailId.toString());
+    }
+
+    @Test
+    void approveRejectsSubsetThatCouldHideAnotherBlankReview() {
+        UUID orderDetailId = UUID.randomUUID();
+        OrderDetails details = orderDetails(orderDetailId, "На проверке");
+        Review omitted = Review.builder()
+                .id(502L)
+                .text("   ")
+                .orderDetails(details)
+                .build();
+        details.setReviews(List.of(details.getReviews().getFirst(), omitted));
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId)).thenReturn(details);
+
+        assertThatThrownBy(() -> controller().approveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                        "client comment",
+                        List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                                501L,
+                                "only submitted review",
+                                "",
+                                false,
+                                null,
+                                ""
+                        ))
+                ),
+                null,
+                new org.springframework.mock.web.MockHttpServletRequest()
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        verify(publicationApprovalService, never()).approvePreparedOrder(anyLong(), any(), any());
+    }
+
+    @Test
+    void foreignWorkerCannotUseInternalSendToCheckAction() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        Authentication worker = authentication("ROLE_WORKER");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(managerAccessService.canAccessOrder(101L, worker)).thenReturn(false);
+
+        assertThatThrownBy(() -> controller().sendToCheck(orderDetailId, null, worker))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        verify(orderService, never()).changeStatusForOrder(101L, "В проверку");
+    }
+
+    @Test
+    void anonymousLinkHolderCanEditReviewTextAndAnswer() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(reviewService.updateReviewTextFromSharedCheck(101L, 501L, "Исправленный текст"))
+                .thenReturn(true);
+        when(reviewService.updateReviewAnswerFromSharedCheck(101L, 501L, "Уточнение клиента"))
+                .thenReturn(true);
+
+        ApiReviewCheckController controller = controller();
+        ApiReviewCheckController.ReviewCheckReviewResponse textResponse = controller.updateReviewText(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewTextUpdateRequest("Исправленный текст"),
+                null
+        );
+        ApiReviewCheckController.ReviewCheckReviewResponse answerResponse = controller.updateReviewAnswer(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewAnswerUpdateRequest("Уточнение клиента"),
+                null
+        );
+
+        assertThat(textResponse.id()).isEqualTo(501L);
+        assertThat(answerResponse.id()).isEqualTo(501L);
+        verify(reviewService).updateReviewTextFromSharedCheck(101L, 501L, "Исправленный текст");
+        verify(reviewService).updateReviewAnswerFromSharedCheck(101L, 501L, "Уточнение клиента");
+    }
+
+    @Test
+    void publicTextAndAnswerAcceptDatabaseBoundaryButRejectOneCodePointMore() {
+        UUID orderDetailId = UUID.randomUUID();
+        String maxText = "т".repeat(5_000);
+        String maxAnswer = "а".repeat(5_000);
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(reviewService.updateReviewTextFromSharedCheck(101L, 501L, maxText)).thenReturn(true);
+        when(reviewService.updateReviewAnswerFromSharedCheck(101L, 501L, maxAnswer)).thenReturn(true);
+
+        controller().updateReviewText(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewTextUpdateRequest(maxText),
+                null
+        );
+        controller().updateReviewAnswer(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewAnswerUpdateRequest(maxAnswer),
+                null
+        );
+
+        assertThatThrownBy(() -> controller().updateReviewText(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewTextUpdateRequest(maxText + "т"),
+                null
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThatThrownBy(() -> controller().updateReviewAnswer(
+                orderDetailId,
+                501L,
+                new ApiReviewCheckController.ReviewCheckReviewAnswerUpdateRequest(maxAnswer + "а"),
+                null
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void sharedFormCommentAndChangedHttpUrlHonorDatabaseBoundaries() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(managerAccessService.canAccessOrder(eq(101L), any(Authentication.class))).thenReturn(true);
+        String prefix = "https://example.com/";
+        String maxUrl = prefix + "a".repeat(2_048 - prefix.length());
+        String maxComment = "к".repeat(5_000);
+        ApiReviewCheckController.ReviewCheckReviewUpdateRequest review =
+                new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                        501L,
+                        "Текст",
+                        "Ответ",
+                        false,
+                        null,
+                        maxUrl
+                );
+
+        controller().saveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(maxComment, List.of(review)),
+                authentication("ROLE_MANAGER")
+        );
+
+        ArgumentCaptor<OrderDetailsDTO> captured = ArgumentCaptor.forClass(OrderDetailsDTO.class);
+        verify(reviewService).updateOrderDetailAndReviews(captured.capture());
+        assertThat(captured.getValue().getReviews().getFirst().getUrl()).isEqualTo(maxUrl);
+
+        assertThatThrownBy(() -> controller().saveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(maxComment + "к", List.of(review)),
+                authentication("ROLE_MANAGER")
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+
+        ApiReviewCheckController.ReviewCheckReviewUpdateRequest oversizedUrl =
+                new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                        501L,
+                        "Текст",
+                        "Ответ",
+                        false,
+                        null,
+                        maxUrl + "a"
+                );
+        assertThatThrownBy(() -> controller().saveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(maxComment, List.of(oversizedUrl)),
+                authentication("ROLE_MANAGER")
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                .isEqualTo(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void changedReviewUrlRejectsNonWebUserinfoAndControlButUnchangedLegacyValueSurvives() {
+        UUID orderDetailId = UUID.randomUUID();
+        OrderDetails details = orderDetails(orderDetailId, "На проверке");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId)).thenReturn(details);
+        when(managerAccessService.canAccessOrder(eq(101L), any(Authentication.class))).thenReturn(true);
+
+        for (String invalidUrl : List.of(
+                "javascript:alert(1)",
+                "https://user:password@example.com/review",
+                "https://example.com/review\nInjected"
+        )) {
+            ApiReviewCheckController.ReviewCheckReviewUpdateRequest changed =
+                    new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                            501L,
+                            "Текст",
+                            "Ответ",
+                            false,
+                            null,
+                            invalidUrl
+                    );
+            assertThatThrownBy(() -> controller().saveReviews(
+                    orderDetailId,
+                    new ApiReviewCheckController.ReviewCheckUpdateRequest("", List.of(changed)),
+                    authentication("ROLE_MANAGER")
+            ))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        details.getReviews().getFirst().setUrl("javascript:legacy-value");
+        ApiReviewCheckController.ReviewCheckReviewUpdateRequest unchanged =
+                new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                        501L,
+                        "Текст",
+                        "Ответ",
+                        false,
+                        null,
+                        "javascript:legacy-value"
+                );
+        controller().saveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest("", List.of(unchanged)),
+                authentication("ROLE_MANAGER")
+        );
+
+        verify(reviewService).updateOrderDetailAndReviews(any(OrderDetailsDTO.class));
+    }
+
+    @Test
+    void anonymousLinkHolderCanSendReviewsToCorrection() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenReturn(orderDetails(orderDetailId, "На проверке"));
+        when(orderService.changeStatusForOrder(101L, "Коррекция")).thenReturn(true);
+
+        controller().sendToCorrection(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                        "Нужна корректировка",
+                        List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                                501L,
+                                "Исправьте текст",
+                                "Комментарий клиента",
+                                false,
+                                null,
+                                ""
+                        ))
+                ),
+                null
+        );
+
+        verify(reviewService).updateOrderDetailAndReviews(any(OrderDetailsDTO.class));
+        verify(orderService).changeStatusForOrder(101L, "Коррекция");
     }
 
     @Test
@@ -325,6 +767,76 @@ class ApiReviewCheckControllerTest {
     }
 
     @Test
+    void archivedInternalFieldsRequireTheArchivedAssignmentScope() {
+        UUID orderDetailId = UUID.randomUUID();
+        Authentication relatedManager = authentication("ROLE_MANAGER");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"));
+        when(reviewCheckArchiveService.findByOrderDetailId(orderDetailId))
+                .thenReturn(Optional.of(archivedReviewCheck(orderDetailId)));
+        when(managerAccessService.canAccessArchivedOrder(707L, 303L, relatedManager)).thenReturn(true);
+
+        ApiReviewCheckController.ReviewCheckResponse related = controller()
+                .getReviewCheck(orderDetailId, relatedManager);
+
+        assertThat(related.workerFio()).isEqualTo("Специалист");
+        assertThat(related.orderComments()).isEqualTo("internal order note");
+        assertThat(related.reviews().getFirst().botName()).isEqualTo("Bot Fio");
+
+        Authentication relatedWorker = authentication("ROLE_WORKER");
+        when(managerAccessService.canAccessArchivedOrder(707L, 303L, relatedWorker)).thenReturn(true);
+        ApiReviewCheckController.ReviewCheckResponse worker = controller()
+                .getReviewCheck(orderDetailId, relatedWorker);
+        assertThat(worker.permissions().canSave()).isTrue();
+        assertThat(worker.permissions().canApprovePublication()).isFalse();
+        assertThat(worker.permissions().canSendCorrection()).isFalse();
+
+        Authentication foreignManager = authentication("ROLE_MANAGER");
+        when(managerAccessService.canAccessArchivedOrder(707L, 303L, foreignManager)).thenReturn(false);
+        ApiReviewCheckController.ReviewCheckResponse foreign = controller()
+                .getReviewCheck(orderDetailId, foreignManager);
+
+        assertThat(foreign.workerFio()).isEmpty();
+        assertThat(foreign.orderComments()).isEmpty();
+        assertThat(foreign.companyComments()).isEmpty();
+        assertThat(foreign.reviews().getFirst().botName()).isEmpty();
+        assertThat(foreign.permissions().canSave()).isTrue();
+        assertThat(foreign.permissions().canApprovePublication()).isTrue();
+        assertThat(foreign.permissions().canSendCorrection()).isTrue();
+    }
+
+    @Test
+    void archivedCurrentCompanyCommentsRequireCurrentCompanyScope() {
+        UUID orderDetailId = UUID.randomUUID();
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"));
+        when(reviewCheckArchiveService.findByOrderDetailId(orderDetailId))
+                .thenReturn(Optional.of(archivedReviewCheck(orderDetailId)));
+
+        Authentication oldManager = authentication("ROLE_MANAGER");
+        when(managerAccessService.canAccessArchivedOrder(707L, 303L, oldManager)).thenReturn(true);
+        when(managerAccessService.canAccessCompany(202L, oldManager)).thenReturn(false);
+
+        ApiReviewCheckController.ReviewCheckResponse oldManagerResponse = controller()
+                .getReviewCheck(orderDetailId, oldManager);
+
+        assertThat(oldManagerResponse.orderComments()).isEqualTo("internal order note");
+        assertThat(oldManagerResponse.companyComments()).isEmpty();
+        assertThat(oldManagerResponse.reviews().getFirst().commentCompany()).isEmpty();
+
+        Authentication currentAdmin = authentication("ROLE_ADMIN");
+        when(managerAccessService.canAccessArchivedOrder(707L, 303L, currentAdmin)).thenReturn(true);
+        when(managerAccessService.canAccessCompany(202L, currentAdmin)).thenReturn(true);
+
+        ApiReviewCheckController.ReviewCheckResponse currentAdminResponse = controller()
+                .getReviewCheck(orderDetailId, currentAdmin);
+
+        assertThat(currentAdminResponse.companyComments()).isEqualTo("internal company note");
+        assertThat(currentAdminResponse.reviews().getFirst().commentCompany())
+                .isEqualTo("internal company note");
+    }
+
+    @Test
     void terminalPaidArchivedResponseIsReadOnly() {
         UUID orderDetailId = UUID.randomUUID();
         when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
@@ -400,11 +912,46 @@ class ApiReviewCheckControllerTest {
                 "Коррекция",
                 "anonymous-review-check"
         );
-        ArgumentCaptor<ReviewDTO> reviewCaptor = ArgumentCaptor.forClass(ReviewDTO.class);
-        verify(reviewService).updateOrderDetailAndReview(any(OrderDetailsDTO.class), reviewCaptor.capture(), eq(501L));
-        assertThat(reviewCaptor.getValue().getText()).isEqualTo("client text");
-        assertThat(reviewCaptor.getValue().getAnswer()).isEqualTo("client answer");
+        ArgumentCaptor<OrderDetailsDTO> detailsCaptor = ArgumentCaptor.forClass(OrderDetailsDTO.class);
+        verify(reviewService).updateOrderDetailAndReviews(detailsCaptor.capture());
+        assertThat(detailsCaptor.getValue().getReviews().getFirst().getText()).isEqualTo("client text");
+        assertThat(detailsCaptor.getValue().getReviews().getFirst().getAnswer()).isEqualTo("client answer");
         assertThat(response.status()).isEqualTo("Коррекция");
+    }
+
+    @Test
+    void anonymousApproveRestoresArchiveToReviewBeforePublishing() throws Exception {
+        UUID orderDetailId = UUID.randomUUID();
+        OrderDetails restoredDetails = orderDetails(orderDetailId, "На проверке");
+        when(orderDetailsService.getOrderDetailForReviewCheckById(orderDetailId))
+                .thenThrow(new UsernameNotFoundException("not live"))
+                .thenReturn(restoredDetails)
+                .thenReturn(restoredDetails);
+
+        ApiReviewCheckController.ReviewCheckResponse response = controller().approveReviews(
+                orderDetailId,
+                new ApiReviewCheckController.ReviewCheckUpdateRequest(
+                        "client comment",
+                        List.of(new ApiReviewCheckController.ReviewCheckReviewUpdateRequest(
+                                501L,
+                                "approved client text",
+                                "",
+                                false,
+                                null,
+                                ""
+                        ))
+                ),
+                null,
+                new org.springframework.mock.web.MockHttpServletRequest()
+        );
+
+        verify(reviewCheckArchiveService).restoreByOrderDetailId(
+                orderDetailId,
+                "На проверке",
+                "anonymous-review-check"
+        );
+        verify(publicationApprovalService).approvePreparedOrder(eq(101L), any(), any());
+        assertThat(response.status()).isEqualTo("На проверке");
     }
 
     @Test
@@ -442,7 +989,11 @@ class ApiReviewCheckControllerTest {
                 companyService,
                 reviewCheckArchiveService,
                 businessAuditService,
-                publicationApprovalService
+                publicationApprovalService,
+                mutationLockService,
+                managerAccessService,
+                clientIpResolver,
+                new ReviewCheckPublicMutationPolicy()
         );
     }
 
@@ -499,6 +1050,8 @@ class ApiReviewCheckControllerTest {
                 orderDetailId,
                 101L,
                 202L,
+                707L,
+                303L,
                 "Company",
                 "Filial",
                 "Архив",
@@ -532,5 +1085,15 @@ class ApiReviewCheckControllerTest {
                         .map(SimpleGrantedAuthority::new)
                         .toList()
         );
+    }
+
+    private String auditValue(String audit, String key) {
+        String prefix = key + "=";
+        int start = audit.indexOf(prefix);
+        assertThat(start).isGreaterThanOrEqualTo(0);
+        int valueStart = start + prefix.length();
+        int end = audit.indexOf(';', valueStart);
+        assertThat(end).isGreaterThanOrEqualTo(valueStart);
+        return audit.substring(valueStart, end);
     }
 }

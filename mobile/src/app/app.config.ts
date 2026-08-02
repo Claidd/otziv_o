@@ -8,6 +8,10 @@ import { routes } from './app.routes';
 import { authInterceptor } from './core/auth.interceptor';
 import { mobileTelemetryInterceptor } from './core/mobile-telemetry.interceptor';
 import { AuthService } from './core/auth.service';
+import { captureReviewCapabilityToken } from './core/review-capability-token';
+
+// Capture before authentication initialization can normalize the URL fragment.
+captureReviewCapabilityToken();
 
 export const appConfig: ApplicationConfig = {
   providers: [

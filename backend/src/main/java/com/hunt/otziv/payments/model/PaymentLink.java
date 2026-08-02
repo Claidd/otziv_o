@@ -16,6 +16,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,7 +32,11 @@ import lombok.Setter;
         },
         indexes = {
                 @Index(name = "idx_payment_links_order", columnList = "order_id"),
-                @Index(name = "idx_payment_links_tbank_payment_id", columnList = "tbank_payment_id")
+                @Index(name = "idx_payment_links_tbank_payment_id", columnList = "tbank_payment_id"),
+                @Index(
+                        name = "idx_payment_links_bank_reconciliation_due",
+                        columnList = "status, bank_reconciliation_attempted_at, updated_at, id"
+                )
         }
 )
 public class PaymentLink {
@@ -39,6 +44,10 @@ public class PaymentLink {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private Long rowVersion;
 
     @Column(nullable = false, length = 96)
     private String token;
@@ -161,6 +170,43 @@ public class PaymentLink {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(name = "bank_reconciliation_attempted_at")
+    private LocalDateTime bankReconciliationAttemptedAt;
+
+    /**
+     * Multi-instance reservation for the non-transactional T-Bank Init/GetQr
+     * exchange. The nonce prevents a delayed provider response from an older
+     * request (ABA) from overwriting a newer payment state.
+     */
+    @Column(name = "bank_init_nonce", length = 36)
+    private String bankInitNonce;
+
+    @Column(name = "bank_init_lease_until")
+    private LocalDateTime bankInitLeaseUntil;
+
+    /**
+     * Durable marker for an in-flight T-Bank Cancel request. The payment is
+     * kept in reconciliation quarantine until an explicit provider result is
+     * applied or a later GetState observation resolves the ambiguity.
+     */
+    @Column(name = "bank_cancel_nonce", length = 36)
+    private String bankCancelNonce;
+
+    @Column(name = "bank_cancel_lease_until")
+    private LocalDateTime bankCancelLeaseUntil;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "bank_cancel_origin_status", length = 32)
+    private PaymentLinkStatus bankCancelOriginStatus;
+
+    /**
+     * Business error/marker that existed before the payment entered Cancel
+     * quarantine. In particular, this preserves the prepayment marker while
+     * an ambiguous provider outcome is reconciled.
+     */
+    @Column(name = "bank_cancel_origin_error", length = 512)
+    private String bankCancelOriginError;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;

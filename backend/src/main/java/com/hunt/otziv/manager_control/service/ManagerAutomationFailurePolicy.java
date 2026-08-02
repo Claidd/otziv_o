@@ -2,6 +2,7 @@ package com.hunt.otziv.manager_control.service;
 
 import com.hunt.otziv.client_messages.model.ScheduledClientMessageState;
 import com.hunt.otziv.client_messages.model.ScheduledMessageStateStatus;
+import com.hunt.otziv.client_messages.service.ClientMessageStateSafety;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Set;
@@ -47,6 +48,12 @@ public class ManagerAutomationFailurePolicy {
             return false;
         }
         LocalDateTime effectiveNow = now == null ? LocalDateTime.now() : now;
+        if (ClientMessageStateSafety.TRANSACTION_OUTCOME_UNCERTAIN.equals(code)) {
+            return true;
+        }
+        if (ClientMessageStateSafety.TRANSACTION_IN_PROGRESS.equals(code)) {
+            return state.getLockedUntil() == null || !state.getLockedUntil().isAfter(effectiveNow);
+        }
         if (TRANSIENT_ERROR_CODES.contains(code)
                 && state.getNextAttemptAt() != null
                 && state.getNextAttemptAt().isAfter(effectiveNow)) {

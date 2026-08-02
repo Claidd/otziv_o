@@ -22,6 +22,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ManagerAccessService {
 
+    private static final String OWNER_CONTROL_ALL_MANAGERS = "ALL_MANAGERS";
+
     private final ManagerPermissionService managerPermissionService;
     private final UserService userService;
     private final ManagerService managerService;
@@ -52,6 +54,9 @@ public class ManagerAccessService {
             return orderRepository.existsById(orderId);
         }
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            if (ownerCanAccessAllManagers(authentication)) {
+                return orderRepository.existsById(orderId);
+            }
             Set<Long> managerIds = ownerManagerIds(authentication);
             return !managerIds.isEmpty() && orderRepository.existsByIdAndManager_IdIn(orderId, managerIds);
         }
@@ -75,6 +80,9 @@ public class ManagerAccessService {
             return companyRepository.existsById(companyId);
         }
         if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            if (ownerCanAccessAllManagers(authentication)) {
+                return companyRepository.existsById(companyId);
+            }
             Set<Long> managerIds = ownerManagerIds(authentication);
             return !managerIds.isEmpty() && companyRepository.existsByIdAndManager_IdIn(companyId, managerIds);
         }
@@ -85,10 +93,72 @@ public class ManagerAccessService {
         return false;
     }
 
+    /** Checks a canonical manager assignment, including the owner's manager scope. */
+    @Transactional(readOnly = true)
+    public boolean canAccessManager(Long managerId, Authentication authentication) {
+        if (managerId == null || authentication == null) {
+            return false;
+        }
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            return true;
+        }
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            if (ownerCanAccessAllManagers(authentication)) {
+                return managerService.getManagerById(managerId) != null;
+            }
+            return ownerManagerIds(authentication).contains(managerId);
+        }
+        if (managerPermissionService.hasRole(authentication, "MANAGER")) {
+            Manager manager = currentManager(authentication);
+            return manager != null && managerId.equals(manager.getId());
+        }
+        return false;
+    }
+
+    /**
+     * Applies the same assignment scope to an archived order whose live row no
+     * longer exists. The assignment ids must come from the archive row itself,
+     * never from a client-controlled request.
+     */
+    @Transactional(readOnly = true)
+    public boolean canAccessArchivedOrder(
+            Long archivedManagerId,
+            Long archivedWorkerId,
+            Authentication authentication
+    ) {
+        if (authentication == null) {
+            return false;
+        }
+        if (managerPermissionService.hasRole(authentication, "ADMIN")) {
+            return true;
+        }
+        if (managerPermissionService.hasRole(authentication, "OWNER")) {
+            if (ownerCanAccessAllManagers(authentication)) {
+                return archivedManagerId != null;
+            }
+            return archivedManagerId != null && ownerManagerIds(authentication).contains(archivedManagerId);
+        }
+        if (managerPermissionService.hasRole(authentication, "MANAGER")) {
+            Manager manager = currentManager(authentication);
+            return manager != null && archivedManagerId != null && archivedManagerId.equals(manager.getId());
+        }
+        if (managerPermissionService.hasRole(authentication, "WORKER")) {
+            Worker worker = currentWorker(authentication);
+            return worker != null && archivedWorkerId != null && archivedWorkerId.equals(worker.getId());
+        }
+        return false;
+    }
+
     private Set<Long> ownerManagerIds(Authentication authentication) {
         return userService.findManagersByUserName(authentication.getName()).stream()
                 .map(Manager::getId)
                 .collect(Collectors.toSet());
+    }
+
+    private boolean ownerCanAccessAllManagers(Authentication authentication) {
+        User owner = currentUser(authentication);
+        String mode = owner == null ? null : owner.getOwnerControlViewMode();
+        return mode != null && OWNER_CONTROL_ALL_MANAGERS.equalsIgnoreCase(mode.trim());
     }
 
     private Manager currentManager(Authentication authentication) {

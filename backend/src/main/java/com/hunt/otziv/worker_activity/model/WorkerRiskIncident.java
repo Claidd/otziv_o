@@ -11,6 +11,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import lombok.Getter;
@@ -24,7 +25,8 @@ import lombok.Setter;
         indexes = {
                 @Index(name = "idx_worker_risk_worker_status_created", columnList = "worker_user_id, status, created_at"),
                 @Index(name = "idx_worker_risk_rule_created", columnList = "rule_code, created_at"),
-                @Index(name = "idx_worker_risk_event", columnList = "activity_event_id")
+                @Index(name = "idx_worker_risk_event", columnList = "activity_event_id"),
+                @Index(name = "idx_worker_risk_sla_cursor", columnList = "status, response_due_at, incident_id")
         }
 )
 public class WorkerRiskIncident {
@@ -33,6 +35,10 @@ public class WorkerRiskIncident {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "incident_id")
     private Long id;
+
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -104,6 +110,15 @@ public class WorkerRiskIncident {
 
     @Column(name = "explanation_reminder_at")
     private LocalDateTime explanationReminderAt;
+
+    @Column(name = "sla_delivery_claim_token", length = 36)
+    private String slaDeliveryClaimToken;
+
+    @Column(name = "sla_delivery_claimed_at")
+    private LocalDateTime slaDeliveryClaimedAt;
+
+    @Column(name = "sla_delivery_claim_kind", length = 16)
+    private String slaDeliveryClaimKind;
 
     @Column(name = "worker_explanation", columnDefinition = "TEXT")
     private String workerExplanation;
